@@ -1,0 +1,29 @@
+# Secrets and local sessions
+.env
+fb_state.json
+ml_state.json
+
+# Runtime data
+*.db
+*.sqlite
+*.sqlite3
+logs/
+*.log
+
+# Python/cache artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+
+# Virtual environments
+.venv/
+venv/
+
+# Local scraper snapshots/debug dumps
+ml_dom.html
+ml_card.html
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
