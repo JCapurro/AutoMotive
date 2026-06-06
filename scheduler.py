@@ -13,7 +13,7 @@ import db
 from config import (
     TICK_INTERVAL_SECONDS,
     ALERT_RESCRAPE_INTERVAL_SECONDS,
-    LISTING_MAX_AGE_HOURS,
+    RECOMMENDED_MAX_AGE_DAYS,
     SOURCES,
 )
 from scrapers import REGISTRY
@@ -55,13 +55,13 @@ def _format_notification(alert_name: str, listing, score) -> str:
     return "\n".join(parts)
 
 
-def _is_recent(listing, max_age_seconds: int) -> bool:
-    """Drop listings published more than `max_age_seconds` ago.
+def _is_recent(listing, max_age_days: int) -> bool:
+    """Drop listings published more than `max_age_days` ago.
     If the scraper couldn't infer a date, accept it — the seen_listings
     table + the per-alert bootstrap flag handle freshness for those."""
     if listing.published_at is None:
         return True
-    return (int(time.time()) - listing.published_at) <= max_age_seconds
+    return (int(time.time()) - listing.published_at) <= max_age_days * 86_400
 
 
 def _expand_filters(f: dict) -> list[dict]:
@@ -115,8 +115,6 @@ async def _run_alert(bot: Bot, alert: dict) -> None:
     f = alert["filters"]
     sources = f.get("sources") or SOURCES
     bootstrapped = bool(alert.get("bootstrapped"))
-    max_age_s = LISTING_MAX_AGE_HOURS * 3600
-
     # All sources in parallel — different hosts so no contention.
     results = await asyncio.gather(
         *[_run_one_source(alert["id"], s, f) for s in sources],
@@ -145,7 +143,7 @@ async def _run_alert(bot: Bot, alert: dict) -> None:
         return
 
     # 4) Drop listings published outside the freshness window (when known).
-    recent_listings = [l for l in fresh_listings if _is_recent(l, max_age_s)]
+    recent_listings = [l for l in fresh_listings if _is_recent(l, RECOMMENDED_MAX_AGE_DAYS)]
 
     # 5) Score and notify.
     sent = 0

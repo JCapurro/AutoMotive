@@ -27,10 +27,10 @@ automática de oportunidades y notificación al Telegram.
    `ALERT_RESCRAPE_INTERVAL_SECONDS` (default 6h). El scheduler tiquea cada
    `TICK_INTERVAL_SECONDS` (default 5min) pero solo corre las alertas que
    ya están "vencidas". Las 4 fuentes se scrapean en paralelo.
-4. **Filtro de recencia**: una vez bootstrapeada, solo se consideran
-   publicaciones cuya fecha conocida sea ≤ `LISTING_MAX_AGE_HOURS` (default
-   6h). Si la fuente no expone la fecha (ej. Kavak, ML), se confía en
-   `seen_listings` para detectar lo nuevo.
+4. **Filtro de recencia**: una vez bootstrapeada, solo se recomiendan
+   publicaciones cuya fecha conocida sea menor o igual a
+   `RECOMMENDED_MAX_AGE_DAYS` (default 15 días). Si la fuente no expone la
+   fecha (ej. Kavak, ML), se confía en `seen_listings` para detectar lo nuevo.
 5. Toda publicación nueva se filtra por distancia: el bot toma tu ubicación
    de Telegram, geocodifica la ubicación textual del aviso y solo conserva los
    autos dentro de `radio_km`. Las geocodificaciones se cachean en SQLite.

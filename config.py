@@ -15,9 +15,9 @@ ALLOWED_USER_IDS = {
 TICK_INTERVAL_SECONDS = int(os.getenv("TICK_INTERVAL_SECONDS", "300"))
 # Each alert is re-scraped at most once per this interval (default 6h).
 ALERT_RESCRAPE_INTERVAL_SECONDS = int(os.getenv("ALERT_RESCRAPE_INTERVAL_SECONDS", str(6 * 3600)))
-# Listings whose `published_at` is older than this are dropped.
+# Recommended listings whose `published_at` is older than this are dropped.
 # When the source doesn't expose a date, only seen_listings + bootstrap apply.
-LISTING_MAX_AGE_HOURS = int(os.getenv("LISTING_MAX_AGE_HOURS", "6"))
+RECOMMENDED_MAX_AGE_DAYS = int(os.getenv("RECOMMENDED_MAX_AGE_DAYS", "15"))
 OPPORTUNITY_MIN_COMPARABLES = int(os.getenv("OPPORTUNITY_MIN_COMPARABLES", "5"))
 DEFAULT_DISCOUNT_PCT = float(os.getenv("DEFAULT_DISCOUNT_PCT", "15"))
 
