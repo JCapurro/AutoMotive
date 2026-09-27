@@ -17,14 +17,16 @@ Notes:
 from __future__ import annotations
 import asyncio
 import re
+import unicodedata
 import urllib.parse
 from pathlib import Path
 
 from playwright.async_api import async_playwright
 
-from .base import BaseScraper, Listing
+from .base import BaseScraper, CollectorBlocked, Listing, ListingDetail
 from ._browser import browser_context
 from ._dates import parse_relative_date
+from ._http import fetch_rendered, soup
 from config import FB_STORAGE_STATE
 from normalization.geo import nearest_known_location_name
 
@@ -186,6 +188,151 @@ def _extract_location(lines: list[str], title: str) -> str | None:
     return None
 
 
+def parse_card(href: str, text: str, label: str = "", img: str | None = None) -> Listing | None:
+    """One marketplace card from its link, visible text and aria-label.
+
+    FB cards typically read: "PRICE\nTITLE\nLOCATION\nHace X días".
+    Make/model are left to normalization: the search query is not evidence.
+    """
+    m = re.search(r"/marketplace/item/(\d+)", href or "")
+    if not m:
+        return None
+    lines = [ln.strip() for ln in (text or "").split("\n") if ln.strip()]
+    price, moneda = _parse_price(text)
+    if price is None:
+        price, moneda = _parse_price(label)
+    title = _title_from_card(label, lines) or (text or "")[:120]
+
+    # Pull publication-date string from any "Hace ..." line
+    date_line = next(
+        (ln for ln in lines if ln.lower().startswith("hace ")
+         or ln.lower() in ("ayer", "hoy", "anteayer")),
+        None,
+    )
+    path = href.split("?")[0]
+    return Listing(
+        source="facebook",
+        listing_id=m.group(1),
+        titulo=title[:200],
+        url=path if path.startswith("http") else "https://www.facebook.com" + path,
+        precio=price,
+        moneda=moneda,
+        anio=_parse_year(text),
+        km=_parse_km(text),
+        ubicacion=_extract_location(lines, title),
+        published_at=parse_relative_date(date_line),
+        imagenes=[img] if img else [],
+    )
+
+
+# ---------- item page (fetch_detail) ----------
+
+_GONE_TEXTS = ("ya no esta disponible", "no longer available", "este articulo se vendio",
+               "this item has been sold", "el contenido no esta disponible")
+_DESCRIPTION_HEADERS = ("descripcion del vendedor", "seller's description")
+_DESCRIPTION_STOP = ("informacion del vendedor", "seller information", "detalles del vendedor",
+                     "ver menos", "see less", "enviar un mensaje", "send seller a message",
+                     "la ubicacion es aproximada", "location is approximate")
+_SELLER_HEADERS = ("informacion del vendedor", "seller information")
+
+
+def _plain(s: str) -> str:
+    return "".join(c for c in unicodedata.normalize("NFD", s.lower())
+                   if unicodedata.category(c) != "Mn")
+
+
+def _after_colon(line: str) -> str:
+    return line.split(":", 1)[1].strip() if ":" in line else line
+
+
+def parse_detail(html: str, url: str, status: int = 200) -> ListingDetail:
+    """An item page, read from the visible text of its main region: FB's
+    class names are generated, so only text cues are stable."""
+    if status == 404:
+        return ListingDetail(url, gone=True, gone_reason="404")
+    doc = soup(html)
+    main = doc.select_one("[role='main']") or doc.body
+    if main is None:
+        raise ValueError(f"facebook detail without content: {url}")
+    lines = [ln.strip() for ln in main.get_text("\n").splitlines() if ln.strip()]
+    plain = [_plain(ln) for ln in lines]
+    joined = " ".join(plain)
+    if reason := next((t for t in _GONE_TEXTS if t in joined), None):
+        return ListingDetail(url, gone=True, gone_reason=reason)
+    m = re.search(r"/marketplace/item/(\d+)", url)
+    h1 = main.select_one("h1")
+    title = (h1.get_text(" ", strip=True) if h1 else None) or (lines[0] if lines else None)
+    if not m or not title:
+        raise ValueError(f"facebook detail without id/title: {url}")
+
+    price = moneda = None
+    for ln in lines:
+        price, moneda = _parse_price(ln)
+        if price is not None:
+            break
+
+    # "Publicado hace 2 días en Vicente López, BA"
+    published_at = location = None
+    for ln, pl in zip(lines, plain):
+        if pl.startswith(("publicado hace", "listed ")):
+            hm = re.match(r"(?:publicado|listed)\s+(.*?)(?:\s+(?:en|in)\s+(.+))?$", ln, re.IGNORECASE)
+            if hm:
+                published_at = parse_relative_date(hm.group(1))
+                location = hm.group(2)
+            break
+
+    # "Acerca de este vehículo": "Conducido 112.000 kilómetros", "Transmisión manual",
+    # "Tipo de combustible: Nafta".
+    km = transmision = combustible = None
+    atributos: dict[str, str] = {}
+    for ln, pl in zip(lines, plain):
+        if km is None and pl.startswith(("conducido", "kilometraje", "driven")):
+            km = _parse_km(re.sub(r"kil[oó]metros", "km", ln, flags=re.IGNORECASE))
+            atributos["Kilometraje"] = ln
+        elif transmision is None and pl.startswith(("transmision", "transmission")):
+            transmision = re.sub(r"^transmis\w+\s*:?\s*", "", ln, flags=re.IGNORECASE) or ln
+            atributos["Transmisión"] = ln
+        elif combustible is None and pl.startswith(("tipo de combustible", "fuel type")):
+            combustible = _after_colon(ln)
+            atributos["Combustible"] = ln
+
+    descripcion = vendedor_nombre = None
+    for i, pl in enumerate(plain):
+        if descripcion is None and pl in _DESCRIPTION_HEADERS:
+            body = []
+            for ln, p2 in zip(lines[i + 1:], plain[i + 1:]):
+                if p2.startswith(_DESCRIPTION_STOP):
+                    break
+                body.append(ln)
+            descripcion = "\n".join(body) or None
+        if vendedor_nombre is None and pl in _SELLER_HEADERS:
+            rest = [ln for ln, p2 in zip(lines[i + 1:], plain[i + 1:])
+                    if p2 not in ("detalles del vendedor", "seller details")]
+            vendedor_nombre = rest[0] if rest else None
+
+    images = [img.get("src") for img in main.select("img[src*='scontent'], img[src*='fbcdn']")]
+    return ListingDetail(url, listing=Listing(
+        source="facebook",
+        listing_id=m.group(1),
+        titulo=title[:200],
+        url=url,
+        precio=price,
+        moneda=moneda,
+        anio=_parse_year(title),
+        km=km,
+        transmision=transmision,
+        combustible=combustible,
+        ubicacion=location,
+        # Marketplace vehicles are overwhelmingly private sellers; dealers say so.
+        vendedor="concesionaria" if "concesionaria" in joined or "dealership" in joined else "particular",
+        vendedor_nombre=vendedor_nombre,
+        descripcion=descripcion,
+        imagenes=list(dict.fromkeys(i for i in images if i)),
+        atributos=atributos,
+        published_at=published_at,
+    ))
+
+
 class FacebookMarketplaceScraper(BaseScraper):
     name = "facebook"
 
@@ -220,9 +367,8 @@ class FacebookMarketplaceScraper(BaseScraper):
 
     async def search(self, filters: dict) -> list[Listing]:
         if not Path(FB_STORAGE_STATE).exists():
-            print(f"[facebook] No session at {FB_STORAGE_STATE}. "
-                  "Run: python -m collectors.facebook   to log in once.")
-            return []
+            raise CollectorBlocked(f"facebook: no session at {FB_STORAGE_STATE}. "
+                                   "Run: python -m collectors.facebook   to log in once.")
 
         url = self._build_url(filters)
         out: list[Listing] = []
@@ -231,6 +377,8 @@ class FacebookMarketplaceScraper(BaseScraper):
             page = await ctx.new_page()
             try:
                 await page.goto(url, timeout=45_000, wait_until="domcontentloaded")
+                if "/login" in page.url or "checkpoint" in page.url:
+                    raise CollectorBlocked("facebook: session expired")
                 # FB renders the feed asynchronously; settle then scroll
                 await page.wait_for_timeout(3_500)
                 for _ in range(3):
@@ -241,33 +389,14 @@ class FacebookMarketplaceScraper(BaseScraper):
                 for a in anchors:
                     href = (await a.get_attribute("href")) or ""
                     m = re.search(r"/marketplace/item/(\d+)", href)
-                    if not m:
+                    if not m or m.group(1) in seen:
                         continue
-                    lid = m.group(1)
-                    if lid in seen:
-                        continue
-                    seen.add(lid)
+                    seen.add(m.group(1))
 
-                    full_url = "https://www.facebook.com" + href.split("?")[0]
                     text = (await a.inner_text()).strip()
                     label = await a.get_attribute("aria-label") or ""
                     if not _matches_query_text(f"{label}\n{text}", filters):
                         continue
-
-                    # FB cards typically read: "PRICE\nTITLE\nLOCATION\nHace X días"
-                    lines = [ln.strip() for ln in text.split("\n") if ln.strip()]
-                    price, moneda = _parse_price(text)
-                    if price is None:
-                        price, moneda = _parse_price(label)
-                    title = _title_from_card(label, lines) or text[:120]
-
-                    # Pull publication-date string from any "Hace ..." line
-                    date_line = next(
-                        (ln for ln in lines if ln.lower().startswith("hace ")
-                         or ln.lower() in ("ayer", "hoy", "anteayer")),
-                        None,
-                    )
-                    published_at = parse_relative_date(date_line)
 
                     # Try to grab thumbnail from the anchor's img
                     img = None
@@ -278,27 +407,23 @@ class FacebookMarketplaceScraper(BaseScraper):
                     except Exception:
                         pass
 
-                    listing = Listing(
-                        source=self.name,
-                        listing_id=lid,
-                        titulo=title[:200],
-                        url=full_url,
-                        precio=price,
-                        moneda=moneda,
-                        marca=filters.get("marca"),
-                        modelo=filters.get("modelo"),
-                        anio=_parse_year(text),
-                        km=_parse_km(text),
-                        ubicacion=_extract_location(lines, title),
-                        published_at=published_at,
-                        extra={"img": img} if img else {},
-                    )
+                    listing = parse_card(href, text, label, img)
+                    if listing is None:
+                        continue
                     self.annotate_partial_price(listing)
                     if self.matches_filters(listing, filters):
                         out.append(listing)
             finally:
                 await page.close()
         return out
+
+    async def fetch_detail(self, url: str) -> ListingDetail:
+        if not Path(FB_STORAGE_STATE).exists():
+            raise CollectorBlocked(f"facebook: no session at {FB_STORAGE_STATE}")
+        page = await fetch_rendered(url, storage_state=FB_STORAGE_STATE, settle_ms=3_500)
+        if "/login" in page.url or "checkpoint" in page.url:
+            raise CollectorBlocked("facebook: session expired")
+        return parse_detail(page.html, url, page.status)
 
 
 # ------ Interactive login: `python -m collectors.facebook` ------

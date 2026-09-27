@@ -7,6 +7,12 @@ from normalization.price_check import keyword_partial
 
 @dataclass
 class Listing:
+    """One ad as a collector read it, before normalization.
+
+    `marca`/`modelo`/`version` are only set when the page states them
+    structurally (a spec table, microdata); otherwise normalization resolves
+    them from the title against vehicle_catalog (sección 5.2).
+    """
     source: str
     listing_id: str
     titulo: str
@@ -30,6 +36,12 @@ class Listing:
     # are excluded from comparables and never flagged as opportunities.
     price_partial: bool = False
     price_partial_reason: str | None = None
+    version: str | None = None
+    descripcion: str | None = None
+    imagenes: list[str] = field(default_factory=list)
+    vendedor_nombre: str | None = None
+    # Raw structured attributes as the page labels them ("Transmisión": "MT").
+    atributos: dict[str, str] = field(default_factory=dict)
     extra: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
@@ -38,10 +50,34 @@ class Listing:
         return d
 
 
+class CollectorBlocked(RuntimeError):
+    """The source answered with a login wall, a security challenge or no
+    session. The run fails (collector_runs) instead of looking like "0 results"."""
+
+
+@dataclass
+class ListingDetail:
+    """What fetch_detail() found at a listing's URL (sección 5.5).
+
+    `gone` means the page proves the ad is over: 404, paused, sold, or the
+    source now serves a different vehicle there. A fetch that merely failed
+    raises instead, so it is never mistaken for a removal.
+    """
+    url: str
+    listing: Listing | None = None
+    gone: bool = False
+    gone_reason: str | None = None
+
+
 class BaseScraper:
     name: str = "base"
 
     async def search(self, filters: dict) -> list[Listing]:
+        raise NotImplementedError
+
+    async def fetch_detail(self, url: str) -> ListingDetail:
+        """Read the ad's own page: description, version, transmission, seller
+        type, every image and the spec attributes."""
         raise NotImplementedError
 
     @staticmethod

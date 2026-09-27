@@ -1,7 +1,7 @@
 # Automotive — Plan técnico del MVP
 
 - **Basado en:** [PRD v1.0](PRD.md). Convención: **§N** siempre es una sección del PRD; las secciones de este documento se citan como "sección N" (y en la columna *Plan* de la trazabilidad, solo el número).
-- **Estado:** propuesta. Todavía no hay código escrito para este plan.
+- **Estado:** F0 y F1 implementadas (worker sobre Supabase Postgres, ingesta por crawl targets). Sigue F2.
 - **Decisiones tomadas:**
   - Web con **Next.js + Supabase**.
   - Base de datos: **Postgres (Supabase)**, que reemplaza a SQLite.

@@ -9,20 +9,26 @@ Year/price/km filters aren't honored server-side, so we apply them
 client-side via BaseScraper.matches_filters.
 
 Card markup uses `tc-v2-*` classes which have been stable since the
-2024 redesign.
+2024 redesign. Item pages (`/auto/<slug>-<id>`) carry schema.org JSON-LD
+server-side, but the description and the spec grid (`v2-*`) render
+client-side, so fetch_detail loads them in the browser.
 """
 from __future__ import annotations
 import re
 import urllib.parse
 
-from .base import BaseScraper, Listing
+from bs4 import BeautifulSoup
+
+from .base import BaseScraper, Listing, ListingDetail
 from ._browser import browser_context
 from ._dates import parse_relative_date
+from ._http import dedupe, fetch_rendered, json_ld_of_type, multiline_text, soup, text_of, to_int
 
 
 _PRICE_RE = re.compile(r"([\d\.\,]+)\s*(USD|U\$S|US\$|\$|ARS)", re.IGNORECASE)
 _KM_RE = re.compile(r"([\d\.\,]+)\s*km", re.IGNORECASE)
 _YEAR_RE = re.compile(r"\b(19[8-9]\d|20[0-3]\d)\b")
+_ID_RE = re.compile(r"-([A-Za-z0-9]{10})$")
 
 
 def _slug(s: str) -> str:
@@ -46,6 +52,134 @@ def _parse_price(txt: str) -> tuple[float | None, str | None]:
     return (float(digits) if digits else None), moneda
 
 
+def _listing_id(path: str) -> str:
+    """Trailing 10-char alphanumeric segment of /auto/<slug>-<id>."""
+    path = path.split("?")[0].rstrip("/")
+    m = _ID_RE.search(path)
+    return m.group(1) if m else path.rsplit("/", 1)[-1]
+
+
+_TRANSMISSION_TAGS = {"mt": "Manual", "manual": "Manual", "at": "Automática",
+                      "automática": "Automática", "automatica": "Automática",
+                      "cvt": "Automática", "dsg": "Automática"}
+_FUEL_TAGS = {"nafta", "diésel", "diesel", "gnc", "híbrido", "hibrido", "eléctrico", "electrico"}
+
+
+def _parse_card(a) -> Listing | None:
+    href = a.get("href") or ""
+    if not href:
+        return None
+    title_el = a.select_one(".tc-v2-title")
+    version = text_of(a.select_one(".tc-v2-version"))
+    title = text_of(title_el) or ""
+    if version and version not in title:
+        # version is nested inside title; tc-v2-title text already includes it.
+        title = f"{title} {version}".strip()
+
+    precio, moneda = _parse_price(text_of(a.select_one(".tc-v2-price")) or "")
+
+    # Detail tags (year, km, transmission, fuel)
+    anio = km = transmision = combustible = None
+    for tag in a.select(".tc-v2-detail-tag"):
+        t = tag.get_text(strip=True)
+        if not anio and (m := _YEAR_RE.search(t)):
+            anio = int(m.group(1)); continue
+        if not km and (m := _KM_RE.search(t)):
+            km = _to_int(m.group(1)); continue
+        tl = t.lower()
+        if not transmision and tl in _TRANSMISSION_TAGS:
+            transmision = _TRANSMISSION_TAGS[tl]; continue
+        if not combustible and tl in _FUEL_TAGS:
+            combustible = t; continue
+
+    img = a.select_one("img.tc-v2-img")
+    days = text_of(a.select_one(".tc-v2-days-badge"))
+
+    return Listing(
+        source="v6",
+        listing_id=_listing_id(href),
+        titulo=title[:200] or "(sin título)",
+        url="https://www.v6.com.ar" + href.split("?")[0],
+        precio=precio,
+        moneda=moneda,
+        anio=anio,
+        km=km,
+        ubicacion=text_of(a.select_one(".tc-v2-location")),
+        combustible=combustible,
+        transmision=transmision,
+        version=version,
+        published_at=parse_relative_date(days) if days else None,
+        imagenes=[img["src"]] if img and img.get("src") else [],
+    )
+
+
+def parse_search(html: str) -> list[Listing]:
+    doc = BeautifulSoup(html, "lxml")
+    out: dict[str, Listing] = {}
+    for a in doc.select("a.tc-v2-link[href^='/auto/']"):
+        listing = _parse_card(a)
+        if listing and listing.listing_id not in out:
+            out[listing.listing_id] = listing
+    return list(out.values())
+
+
+def _label_values(doc, cell: str, label: str, value: str) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for c in doc.select(cell):
+        k, v = text_of(c.select_one(label)), text_of(c.select_one(value))
+        if k and v:
+            out.setdefault(k, v)
+    return out
+
+
+def parse_detail(html: str, url: str, status: int = 200) -> ListingDetail:
+    doc = soup(html)
+    title_tag = text_of(doc.select_one("title")) or ""
+    if status == 404 or "no encontrado" in title_tag.lower():
+        return ListingDetail(url, gone=True, gone_reason="no encontrado")
+
+    ld = json_ld_of_type(doc, "Car", "Vehicle") or {}
+    h1 = doc.select_one("h1")
+    if not ld and not h1:
+        raise ValueError(f"v6 detail without vehicle data: {url}")
+
+    # "Kilometraje", "Año", "Vendedor", "Transmisión", "Combustible" (stats) and
+    # "Marca", "Modelo", "Versión", "Tipo" (data grid).
+    specs = _label_values(doc, ".v2-stat-item", ".v2-stat-label", ".v2-stat-value")
+    specs.update({k: v for k, v in _label_values(doc, ".v2-data-cell", ".v2-data-label",
+                                                 ".v2-data-value").items() if k not in specs})
+
+    precio, moneda = _parse_price(text_of(doc.select_one(".v2-price")) or "")
+    location_row = doc.select_one(".v2-location-row")
+    published = text_of(location_row.select_one(".top-carousel-item-publisheddate")) \
+        if location_row else None
+    mileage = (ld.get("mileageFromOdometer") or {}).get("value")
+    brand = ld.get("brand") or {}
+    images = ld.get("image") or []
+
+    return ListingDetail(url, listing=Listing(
+        source="v6",
+        listing_id=_listing_id(url),
+        titulo=text_of(h1) or ld.get("name") or "(sin título)",
+        url=url,
+        precio=precio,
+        moneda=moneda,
+        marca=specs.get("Marca") or (brand.get("name") if isinstance(brand, dict) else brand) or None,
+        modelo=specs.get("Modelo") or ld.get("model"),
+        version=specs.get("Versión") or text_of(doc.select_one(".v2-version-inline")),
+        anio=to_int(specs.get("Año")) or to_int(ld.get("vehicleModelDate")),
+        km=to_int(specs.get("Kilometraje")) or to_int(mileage),
+        transmision=specs.get("Transmisión"),
+        combustible=specs.get("Combustible"),
+        ubicacion=text_of(location_row.select_one(".top-carousel-item-location")) if location_row else None,
+        vendedor=specs.get("Vendedor") or specs.get("Tipo"),
+        descripcion=multiline_text(doc.select_one(".v2-desc-text")),
+        imagenes=dedupe(images if isinstance(images, list) else [images]),
+        atributos=specs,
+        published_at=parse_relative_date(published) if published else None,
+    ))
+
+
 class V6Scraper(BaseScraper):
     name = "v6"
     BASE = "https://www.v6.com.ar/publicaciones"
@@ -63,7 +197,6 @@ class V6Scraper(BaseScraper):
     async def search(self, filters: dict) -> list[Listing]:
         url = self._build_url(filters)
         out: list[Listing] = []
-        seen: set[str] = set()
         async with browser_context() as ctx:
             page = await ctx.new_page()
             try:
@@ -73,83 +206,15 @@ class V6Scraper(BaseScraper):
                 for _ in range(4):
                     await page.mouse.wheel(0, 5_000)
                     await page.wait_for_timeout(1_000)
-
-                anchors = await page.locator("a.tc-v2-link[href^='/auto/']").all()
-                for a in anchors:
-                    href = (await a.get_attribute("href")) or ""
-                    if not href:
-                        continue
-                    full_url = "https://www.v6.com.ar" + href.split("?")[0]
-                    # listing id = trailing 10-char alphanumeric segment
-                    m = re.search(r"-([A-Za-z0-9]{10})$", href)
-                    lid = m.group(1) if m else href.rsplit("/", 1)[-1]
-                    if lid in seen:
-                        continue
-                    seen.add(lid)
-
-                    # Pull text fields by selector (one DOM round-trip per card)
-                    title_el = a.locator(".tc-v2-title").first
-                    version_el = a.locator(".tc-v2-version").first
-                    price_el = a.locator(".tc-v2-price").first
-                    location_el = a.locator(".tc-v2-location").first
-
-                    title = (await title_el.inner_text()).strip() if await title_el.count() else ""
-                    if await version_el.count():
-                        version = (await version_el.inner_text()).strip()
-                        # version is nested inside title; tc-v2-title text already includes it.
-                        if version not in title:
-                            title = f"{title} {version}".strip()
-
-                    price_txt = (await price_el.inner_text()).strip() if await price_el.count() else ""
-                    precio, moneda = _parse_price(price_txt)
-
-                    location = (await location_el.inner_text()).strip() if await location_el.count() else None
-
-                    # Detail tags (year, km, transmission, fuel)
-                    tags = await a.locator(".tc-v2-detail-tag").all_inner_texts()
-                    anio = km = transmision = combustible = None
-                    for t in tags:
-                        t = t.strip()
-                        if not anio and (m := _YEAR_RE.search(t)):
-                            anio = int(m.group(1)); continue
-                        if not km and (m := _KM_RE.search(t)):
-                            km = _to_int(m.group(1)); continue
-                        tl = t.lower()
-                        if not transmision and tl in ("mt", "manual"):
-                            transmision = "Manual"; continue
-                        if not transmision and tl in ("at", "automática", "automatica", "cvt", "dsg"):
-                            transmision = "Automática"; continue
-                        if not combustible and tl in ("nafta", "diésel", "diesel", "gnc", "híbrido", "hibrido", "eléctrico", "electrico"):
-                            combustible = t; continue
-
-                    img_el = a.locator("img.tc-v2-img").first
-                    img = await img_el.get_attribute("src") if await img_el.count() else None
-
-                    days_el = a.locator(".tc-v2-days-badge").first
-                    published_at = None
-                    if await days_el.count():
-                        published_at = parse_relative_date(await days_el.inner_text())
-
-                    listing = Listing(
-                        source=self.name,
-                        listing_id=lid,
-                        titulo=title[:200] or "(sin título)",
-                        url=full_url,
-                        precio=precio,
-                        moneda=moneda,
-                        marca=filters.get("marca"),
-                        modelo=filters.get("modelo"),
-                        anio=anio,
-                        km=km,
-                        ubicacion=location,
-                        combustible=combustible,
-                        transmision=transmision,
-                        published_at=published_at,
-                        extra={"img": img} if img else {},
-                    )
-                    self.annotate_partial_price(listing)
-                    if self.matches_filters(listing, filters):
-                        out.append(listing)
+                html = await page.content()
             finally:
                 await page.close()
+        for listing in parse_search(html):
+            self.annotate_partial_price(listing)
+            if self.matches_filters(listing, filters):
+                out.append(listing)
         return out
+
+    async def fetch_detail(self, url: str) -> ListingDetail:
+        page = await fetch_rendered(url)
+        return parse_detail(page.html, url, page.status)

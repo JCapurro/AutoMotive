@@ -4,6 +4,10 @@ The Telegram handlers and the scheduler keep working with the dicts they
 always used ("alerts"); this module maps them onto profiles/search_profiles.
 Alert ids are search_profile ids. A wizard alert with several marcas/modelos
 becomes one profile per (marca, modelo), as sección 4.3 asks.
+
+Since F1 profiles no longer have a scrape cadence of their own: they are
+grouped into crawl_targets (pipeline/crawl.py) and a new or edited profile is
+bootstrapped against the listings already stored (pipeline/rematch.py).
 """
 from __future__ import annotations
 
@@ -19,7 +23,7 @@ from db.repos.catalog import resolve_make_model
 
 _SELECT = """
 SELECT sp.id, sp.name, sp.filters, sp.preferences, sp.origin_lat, sp.origin_lon,
-       sp.radius_km, sp.enabled, sp.created_at, sp.bootstrapped_at, sp.last_scraped_at,
+       sp.radius_km, sp.enabled, sp.created_at, sp.bootstrapped_at, sp.rematch_requested_at,
        p.telegram_user_id, p.telegram_chat_id
   FROM search_profiles sp
   JOIN profiles p ON p.id = sp.user_id
@@ -41,7 +45,9 @@ def _to_alert(r: dict) -> dict[str, Any]:
         "active": 1 if r["enabled"] else 0,
         "created_at": _epoch(r["created_at"]),
         "bootstrapped": 1 if r["bootstrapped_at"] else 0,
-        "last_scraped_at": _epoch(r["last_scraped_at"]),
+        "rematch_requested": bool(r["rematch_requested_at"]),
+        "make": r["filters"].get("make"),
+        "model": r["filters"].get("model"),
     }
 
 
@@ -117,7 +123,8 @@ async def update_alert(alert_id: int, name: str, filters: dict) -> list[int]:
     """Apply an edited wizard filter to an existing alert.
 
     Keeps its matches (the "already seen" history), bootstrapped_at and
-    created_at; clears last_scraped_at so the new filters run on the next tick.
+    created_at; requests a rematch so listings the new filters now match are
+    added silently as backfill (sección 5.7).
     The alert keeps the first (marca, modelo); extra ones added while editing
     become new alerts, which bootstrap silently. Returns their ids.
     """
@@ -137,7 +144,7 @@ async def update_alert(alert_id: int, name: str, filters: dict) -> list[int]:
         values["preferences"].update(kept)
         await cx.execute(
             "UPDATE search_profiles SET name = %s, filters = %s, preferences = %s, "
-            "  origin_lat = %s, origin_lon = %s, radius_km = %s, last_scraped_at = NULL "
+            "  origin_lat = %s, origin_lon = %s, radius_km = %s, rematch_requested_at = now() "
             "WHERE id = %s",
             (_profile_name(name, vehicles, make, model), Jsonb(values["filters"]),
              Jsonb(values["preferences"]), values["origin_lat"], values["origin_lon"],
@@ -180,17 +187,40 @@ async def delete_alert(alert_id: int) -> None:
         await cx.execute("DELETE FROM search_profiles WHERE id = %s", (alert_id,))
 
 
-async def mark_scraped(alert_id: int, *, bootstrapped: bool | None = None) -> None:
-    """Stamp last_scraped_at; optionally flip bootstrapped after the first silent run."""
+async def mark_bootstrapped(alert_id: int) -> None:
+    """The profile's backfill is done: later listings may notify."""
     async with connection() as cx:
-        if bootstrapped is None:
-            await cx.execute(
-                "UPDATE search_profiles SET last_scraped_at = now() WHERE id = %s", (alert_id,),
-            )
-        else:
-            await cx.execute(
-                "UPDATE search_profiles SET last_scraped_at = now(), "
-                "  bootstrapped_at = CASE WHEN %s THEN coalesce(bootstrapped_at, now()) END "
-                "WHERE id = %s",
-                (bootstrapped, alert_id),
-            )
+        await cx.execute(
+            "UPDATE search_profiles SET bootstrapped_at = coalesce(bootstrapped_at, now()), "
+            "  rematch_requested_at = NULL WHERE id = %s", (alert_id,))
+
+
+async def enabled_profiles() -> list[dict[str, Any]]:
+    """Every enabled profile, web or Telegram: what crawl targets are derived from."""
+    async with connection() as cx:
+        return await (await cx.execute(
+            "SELECT id, filters, origin_lat, origin_lon FROM search_profiles "
+            " WHERE enabled ORDER BY id")).fetchall()
+
+
+async def pending_rematch() -> list[dict]:
+    """Enabled profiles never bootstrapped, or edited since (sección 5.7)."""
+    async with connection() as cx:
+        rows = await (await cx.execute(
+            _SELECT + " WHERE sp.enabled AND (sp.bootstrapped_at IS NULL "
+                      "   OR sp.rematch_requested_at IS NOT NULL) ORDER BY sp.id")).fetchall()
+    return [_to_alert(r) for r in rows]
+
+
+async def alerts_for_target(source: str, make: str | None, model: str | None) -> list[dict]:
+    """Telegram alerts a crawl target's batch is for: same make/model, and the
+    source among the profile's sources (all of them when it has none)."""
+    async with connection() as cx:
+        rows = await (await cx.execute(
+            _SELECT + " WHERE sp.enabled AND p.telegram_chat_id IS NOT NULL "
+                      "   AND lower(sp.filters->>'make') IS NOT DISTINCT FROM lower(%s) "
+                      "   AND lower(sp.filters->>'model') IS NOT DISTINCT FROM lower(%s) "
+                      "   AND (NOT sp.filters ? 'sources' OR sp.filters->'sources' ? %s) "
+                      " ORDER BY sp.id",
+            (make, model, source))).fetchall()
+    return [_to_alert(r) for r in rows]

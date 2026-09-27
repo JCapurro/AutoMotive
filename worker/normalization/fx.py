@@ -8,6 +8,7 @@ from __future__ import annotations
 import time
 import threading
 import logging
+from typing import NamedTuple
 
 import httpx
 
@@ -19,13 +20,20 @@ _OFICIAL_URL = "https://dolarapi.com/v1/dolares/oficial"
 _FALLBACK_RATE = 1100.0       # used if everything fails — keeps the system working
 _TTL_SECONDS = 3600           # refresh at most once per hour
 
-_cache: dict = {"rate": None, "fetched_at": 0.0}
+_cache: dict = {"quote": None, "fetched_at": 0.0}
 _lock = threading.Lock()
 
 
-def _fetch_rate() -> float | None:
-    """Try blue first, then oficial. Returns the average of buy/sell."""
-    for url in (_BLUE_URL, _OFICIAL_URL):
+class FxQuote(NamedTuple):
+    rate: float
+    # 'blue' | 'oficial'; None for the hardcoded fallback, which is never persisted.
+    kind: str | None
+    source: str | None
+
+
+def _fetch_quote() -> FxQuote | None:
+    """Try blue first, then oficial. The rate is the average of buy/sell."""
+    for kind, url in (("blue", _BLUE_URL), ("oficial", _OFICIAL_URL)):
         try:
             r = httpx.get(url, timeout=8, headers={"User-Agent": "AutoMotive/1.0"})
             r.raise_for_status()
@@ -33,30 +41,34 @@ def _fetch_rate() -> float | None:
             buy = float(data.get("compra") or 0)
             sell = float(data.get("venta") or 0)
             if buy > 0 and sell > 0:
-                return (buy + sell) / 2
+                return FxQuote((buy + sell) / 2, kind, "dolarapi")
             if sell > 0:
-                return sell
+                return FxQuote(sell, kind, "dolarapi")
         except Exception as e:
             log.warning("FX %s failed: %s", url, e)
     return None
 
 
-def usd_ars_rate() -> float:
-    """Return the current USD→ARS rate, cached for `_TTL_SECONDS`.
-    Always returns a positive float (falls back to a hardcoded constant
-    on total failure)."""
+def usd_ars_quote() -> FxQuote:
+    """The current USD→ARS quote, cached for `_TTL_SECONDS`. Always returns a
+    positive rate (a hardcoded constant, kind=None, on total failure)."""
     now = time.time()
     with _lock:
-        if _cache["rate"] and (now - _cache["fetched_at"]) < _TTL_SECONDS:
-            return _cache["rate"]
-        rate = _fetch_rate()
-        if rate and rate > 0:
-            _cache["rate"] = rate
+        if _cache["quote"] and (now - _cache["fetched_at"]) < _TTL_SECONDS:
+            return _cache["quote"]
+        quote = _fetch_quote()
+        if quote and quote.rate > 0:
+            _cache["quote"] = quote
             _cache["fetched_at"] = now
-            return rate
+            return quote
         # API failed — keep last known value if any
-        if _cache["rate"]:
-            log.warning("FX refresh failed; using stale rate %.2f", _cache["rate"])
-            return _cache["rate"]
+        if _cache["quote"]:
+            log.warning("FX refresh failed; using stale rate %.2f", _cache["quote"].rate)
+            return _cache["quote"]
         log.warning("FX refresh failed and no cache; using fallback %.0f", _FALLBACK_RATE)
-        return _FALLBACK_RATE
+        return FxQuote(_FALLBACK_RATE, None, None)
+
+
+def usd_ars_rate() -> float:
+    """Return the current USD→ARS rate (see `usd_ars_quote`)."""
+    return usd_ars_quote().rate

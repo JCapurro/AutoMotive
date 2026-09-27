@@ -44,8 +44,11 @@ except Exception:
 import config
 from aio import run
 from db.pool import connection_kwargs
-from db.repos.listings import listing_row
+from collectors.base import Listing
+from db.repos.catalog import load_models
+from db.repos.listings import COLUMNS
 from db.repos.profiles import ensure_telegram_profile, insert_profiles
+from normalization.listing import Target, attrs_hash, normalize_listing
 
 
 def _ts(epoch: int | None) -> str | None:
@@ -101,8 +104,10 @@ class Migration:
 
     # 1) listings_cache → listings + snapshot 'new'
     async def listings(self) -> None:
+        """Normalized like any crawled listing (sección 5.2). ARS prices keep
+        price_usd empty: today's rate would misstate a price seen months ago."""
         known = {r["id"] for r in await (await self.cx.execute("SELECT id FROM sources")).fetchall()}
-        rows = []
+        catalog = await load_models(self.cx)
         for r in self._table("listings_cache"):
             if r["source"] not in known:
                 self.stats["listings_skipped_unknown_source"] += 1
@@ -110,47 +115,36 @@ class Migration:
             if not r["url"]:
                 self.stats["listings_skipped_no_url"] += 1
                 continue
-            item = {
-                "source": r["source"], "listing_id": r["listing_id"], "url": r["url"],
-                "titulo": r["titulo"] or " ".join(filter(None, [r["marca"], r["modelo"]])) or r["listing_id"],
-                "marca": r["marca"], "modelo": r["modelo"], "anio": r["anio"], "km": r["km"],
-                "precio": r["precio"], "moneda": r["moneda"], "ubicacion": r["ubicacion"],
-                "combustible": r["combustible"], "transmision": r["transmision"],
-                "vendedor": r["vendedor"], "price_partial": bool(r["price_partial"]),
-                "price_partial_reason": r["price_partial_reason"],
-            }
-            row = listing_row(item)
-            row["seen_at"] = _ts(r["scraped_at"])
-            rows.append(row)
-        if not rows:
-            return
-        cur = await self.cx.execute("""
-            WITH v AS (
-                SELECT * FROM jsonb_to_recordset(%s::jsonb) AS v (
-                    source text, external_id text, url text, title text, make text, model text,
-                    year int, price numeric, currency text, mileage_km int, transmission text,
-                    fuel text, location_text text, seller_type text, attributes jsonb,
-                    price_partial boolean, price_partial_reason text, attrs_hash text,
-                    seen_at timestamptz)
-            ),
-            ins AS (
-                INSERT INTO listings (source, external_id, url, title, make, model, year, price,
-                    currency, mileage_km, transmission, fuel, location_text, seller_type,
-                    attributes, price_partial, price_partial_reason, first_seen_at, last_seen_at)
-                SELECT source, external_id, url, title, make, model, year, price, currency,
-                       mileage_km, transmission, fuel, location_text, seller_type, attributes,
-                       price_partial, price_partial_reason, seen_at, seen_at
-                  FROM v
-                ON CONFLICT (source, external_id) DO NOTHING
-                RETURNING id, source, external_id, price, currency, mileage_km
+            item = Listing(
+                source=r["source"], listing_id=str(r["listing_id"]), url=r["url"],
+                titulo=r["titulo"] or " ".join(filter(None, [r["marca"], r["modelo"]])) or r["listing_id"],
+                precio=r["precio"], moneda=r["moneda"], anio=r["anio"], km=r["km"],
+                ubicacion=r["ubicacion"], combustible=r["combustible"],
+                transmision=r["transmision"], vendedor=r["vendedor"],
+                price_partial=bool(r["price_partial"]),
+                price_partial_reason=r["price_partial_reason"],
             )
-            INSERT INTO listing_snapshots (listing_id, observed_at, price, currency, mileage_km,
-                                           attrs_hash, change_kind)
-            SELECT ins.id, v.seen_at, ins.price, ins.currency, ins.mileage_km, v.attrs_hash, 'new'
-              FROM ins JOIN v ON v.source = ins.source AND v.external_id = ins.external_id
-        """, (Jsonb(rows),))
-        self.stats["listings_inserted"] += cur.rowcount
-        self.stats["listings_already_present"] += len(rows) - cur.rowcount
+            # The SQLite cache copied make/model from the alert: only a hint.
+            row = normalize_listing(item, catalog=catalog, target=Target(r["marca"], r["modelo"]))
+            seen_at = _ts(r["scraped_at"])
+            cols = [c for c in COLUMNS if c in row]
+            stored = await (await self.cx.execute(
+                f"INSERT INTO listings ({', '.join(cols)}, first_seen_at, last_seen_at) "
+                f"VALUES ({', '.join(['%s'] * len(cols))}, "
+                "  coalesce(%s::timestamptz, now()), coalesce(%s::timestamptz, now())) "
+                "ON CONFLICT (source, external_id) DO NOTHING RETURNING id",
+                [Jsonb(row[c]) if c in ("images", "attributes") else row[c] for c in cols]
+                + [seen_at, seen_at])).fetchone()
+            if stored is None:
+                self.stats["listings_already_present"] += 1
+                continue
+            await self.cx.execute(
+                "INSERT INTO listing_snapshots (listing_id, observed_at, price, currency, price_usd, "
+                "  mileage_km, attrs_hash, change_kind) "
+                "VALUES (%s, coalesce(%s::timestamptz, now()), %s, %s, %s, %s, %s, 'new')",
+                (stored["id"], seen_at, row["price"], row["currency"], row["price_usd"],
+                 row["mileage_km"], attrs_hash(row)))
+            self.stats["listings_inserted"] += 1
 
     # 2) alerts → profiles + search_profiles
     async def _user(self, telegram_user_id: int, chat_id: int) -> str:
@@ -222,9 +216,9 @@ class Migration:
                                   "(usá --include-unknown para migrarla igual)")
             if ids:
                 await self.cx.execute(
-                    "UPDATE search_profiles SET created_at = coalesce(%s::timestamptz, created_at), "
-                    "  last_scraped_at = %s::timestamptz WHERE id = ANY(%s)",
-                    (_ts(a["created_at"]), _ts(a["last_scraped_at"]), ids))
+                    "UPDATE search_profiles SET created_at = coalesce(%s::timestamptz, created_at) "
+                    "WHERE id = ANY(%s)",
+                    (_ts(a["created_at"]), ids))
             out[a["id"]] = ids
             self.stats["profiles_created"] += len(ids)
             self.stats["profiles_skipped_not_in_catalog"] += len(skipped)
