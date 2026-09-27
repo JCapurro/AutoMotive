@@ -18,7 +18,7 @@ TICK_INTERVAL_SECONDS = int(os.getenv("TICK_INTERVAL_SECONDS", "300"))
 # Each alert is re-scraped at most once per this interval (default 6h).
 ALERT_RESCRAPE_INTERVAL_SECONDS = int(os.getenv("ALERT_RESCRAPE_INTERVAL_SECONDS", str(6 * 3600)))
 # Recommended listings whose `published_at` is older than this are dropped.
-# When the source doesn't expose a date, only seen_listings + bootstrap apply.
+# When the source doesn't expose a date, only the seen set (matches) + bootstrap apply.
 RECOMMENDED_MAX_AGE_DAYS = int(os.getenv("RECOMMENDED_MAX_AGE_DAYS", "15"))
 # Fallbacks only: app_config (recommended_max_age_days, comparables) wins when set.
 OPPORTUNITY_MIN_COMPARABLES = int(os.getenv("OPPORTUNITY_MIN_COMPARABLES", "5"))

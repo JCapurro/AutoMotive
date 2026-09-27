@@ -22,7 +22,7 @@ class Listing:
     transmision: str | None = None
     vendedor: str | None = None
     # When the platform exposes how recently the ad was posted, store it as
-    # a unix timestamp. None = unknown (caller should fall back to seen_listings
+    # a unix timestamp. None = unknown (caller should fall back to the seen set (matches)
     # and the bootstrap flag for freshness).
     published_at: int | None = None
     # True when the advertised price is suspected to be a down payment,

@@ -54,7 +54,8 @@ async def ensure_telegram_profile(cx: AsyncConnection, telegram_user_id: int, ch
 
 async def insert_profiles(cx: AsyncConnection, user_uuid: str, name: str, filters: dict, *,
                           catalog_only: bool = False, enabled: bool = True,
-                          bootstrapped: bool = False) -> tuple[list[int], list[tuple]]:
+                          bootstrapped: bool = False,
+                          extra_preferences: dict | None = None) -> tuple[list[int], list[tuple]]:
     """Insert one search profile per (marca, modelo) of a wizard filter.
 
     Names are canonicalized through vehicle_catalog when they resolve. With
@@ -72,6 +73,7 @@ async def insert_profiles(cx: AsyncConnection, user_uuid: str, name: str, filter
             skipped.append((make, model))
             continue
         values = to_profile(filters, make, model)
+        values["preferences"].update(extra_preferences or {})
         profile_name = name if len(vehicles) == 1 else (f"{make or ''} {model or ''}".strip() or name)
         row = await (await cx.execute(
             "INSERT INTO search_profiles (user_id, name, filters, preferences, origin_lat, "

@@ -3,6 +3,26 @@
 Scraper en tiempo real de plataformas de autos en Argentina con detección
 automática de oportunidades y notificación al Telegram.
 
+El plan del MVP (web + Supabase) está en [docs/TECHNICAL_PLAN.md](docs/TECHNICAL_PLAN.md).
+Estado: **F0** — el bot corre sobre Postgres (Supabase) y el repo ya tiene la
+forma de monorepo.
+
+## Estructura
+
+```
+worker/       bot de Telegram, collectors, pipeline (Python, raíz de imports)
+  collectors/     scrapers por fuente (Playwright)
+  normalization/  normalize, price_check, geo, fx
+  intelligence/   opportunity (motor legacy hasta F2)
+  pipeline/       scheduler
+  bot/            wizard de Telegram
+  db/             psycopg 3 (pool async) + repos por tabla
+  tools/          scraper_cli, migrate_sqlite
+  tests/
+supabase/     migraciones, seed.sql y tests pgTAP (supabase CLI)
+docs/         PRD y plan técnico
+```
+
 ## Fuentes
 
 | Fuente | Tipo | Notas |
@@ -30,10 +50,10 @@ automática de oportunidades y notificación al Telegram.
 4. **Filtro de recencia**: una vez bootstrapeada, solo se recomiendan
    publicaciones cuya fecha conocida sea menor o igual a
    `RECOMMENDED_MAX_AGE_DAYS` (default 15 días). Si la fuente no expone la
-   fecha (ej. Kavak, ML), se confía en `seen_listings` para detectar lo nuevo.
+   fecha (ej. Kavak, ML), se confía en `matches` (lo ya visto) para detectar lo nuevo.
 5. Toda publicación nueva se filtra por distancia: el bot toma tu ubicación
    de Telegram, geocodifica la ubicación textual del aviso y solo conserva los
-   autos dentro de `radio_km`. Las geocodificaciones se cachean en SQLite.
+   autos dentro de `radio_km`. Las geocodificaciones se cachean en Postgres.
 6. Toda publicación nueva pasa por el filtro de **precio trampa** y se
    compara contra la mediana de "comparables" recientes (mismo modelo, año
    ±1, km ±25%, normalizado a USD).
@@ -47,18 +67,52 @@ automática de oportunidades y notificación al Telegram.
 cd C:\Users\Juan\Desktop\AutoMotive
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+pip install -r worker\requirements.txt
 python -m playwright install chromium
 copy .env.example .env
-# editá .env y poné TELEGRAM_TOKEN
+# editá .env: TELEGRAM_TOKEN y DATABASE_URL
 ```
+
+`.env`, `fb_state.json` y `ml_state.json` siguen en la raíz del repo. Los
+comandos de Python se corren desde `worker/`.
+
+### Base de datos (Supabase)
+
+Local, con Docker y la [CLI de Supabase](https://supabase.com/docs/guides/local-development)
+(`npx supabase ...` funciona sin instalarla):
+
+```powershell
+npx supabase start          # levanta Postgres + Auth y aplica migraciones + seed
+npx supabase db reset       # recrea la base desde cero
+npx supabase test db        # tests de RLS (pgTAP)
+```
+
+`DATABASE_URL` local: `postgresql://postgres:postgres@127.0.0.1:54322/postgres`.
+Contra el proyecto hosteado usá la conexión directa o el *session pooler*; con
+el *transaction pooler* (puerto 6543) el worker desactiva los prepared statements.
+
+### Migrar la base SQLite vieja
+
+```powershell
+cd worker
+python -m tools.migrate_sqlite ..\automotive.db --dry-run   # muestra qué haría, no escribe
+python -m tools.migrate_sqlite ..\automotive.db --email 864987866=vos@mail.com
+```
+
+Copia listings (con su snapshot inicial), alertas → `search_profiles` (una por
+marca+modelo del catálogo), `seen_listings` → `matches` de backfill (no se
+re-notifica nada) y el cache de geocoding. Es idempotente. Con `--email` crea
+el usuario vía Admin API (`SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`); sin
+email, el usuario de Telegram queda como usuario anónimo, igual que los que
+crea el bot.
 
 ### Login de Facebook (una vez)
 
 Facebook requiere sesión.
 
 ```powershell
-python -m scrapers.facebook
+cd worker
+python -m collectors.facebook
 ```
 
 Se abre Chromium → entrás a tu cuenta → volvés a la consola → Enter. Genera
@@ -68,6 +122,7 @@ detectando automatización en cuentas con poco historial.
 ### Probar un scraper sin levantar el bot
 
 ```powershell
+cd worker
 python -m tools.scraper_cli mercadolibre marca=Toyota modelo=Corolla anio_min=2018
 python -m tools.scraper_cli v6 marca=Volkswagen modelo=Gol
 python -m tools.scraper_cli kavak marca=Ford modelo=Ranger
@@ -89,7 +144,8 @@ Para que el navegador headless no quede atrapado por la verificacion de cuenta
 de MercadoLibre, guarda una sesion web una vez:
 
 ```powershell
-python -m scrapers.mercadolibre
+cd worker
+python -m collectors.mercadolibre
 ```
 
 Se abre Chromium -> inicia sesion o completa la verificacion -> volve a la
@@ -99,10 +155,21 @@ en modo headless.
 ### Correr el bot
 
 ```powershell
+cd worker
 python main.py
 ```
 
-En Telegram: `/start` → `/nuevaalerta`.
+En Telegram: `/start` → `/nuevaalerta`. Una alerta con varias marcas/modelos se
+guarda como una alerta por combinación (un vehículo por búsqueda); un aviso que
+matchea dos de tus alertas se notifica una sola vez.
+
+### Tests
+
+```powershell
+pytest                                  # desde la raíz o desde worker/
+$env:TEST_DATABASE_URL = "postgresql://postgres:postgres@127.0.0.1:54322/postgres"
+pytest                                  # suma los tests contra Postgres (solo host local)
+```
 
 ## Comandos del bot
 
@@ -119,7 +186,7 @@ En Telegram: `/start` → `/nuevaalerta`.
 
 Para cada listing nuevo:
 
-1. **Filtro de precio trampa** ([price_check.py](price_check.py)): si el título
+1. **Filtro de precio trampa** ([price_check.py](worker/normalization/price_check.py)): si el título
    tiene keywords típicos de anticipos/planes (`anticipo`, `cuota`, `plan
    adjudicado`, `permuta`, `/mes`, `plan rombo`, etc.), el listing se marca
    `price_partial=True`, **no entra en la mediana** y nunca se notifica como
@@ -127,11 +194,11 @@ Para cada listing nuevo:
 2. Se busca cache de comparables (excluyendo los `price_partial`): misma
    `marca` y `modelo` normalizados (`VW`==`Volkswagen`), año ±1, km ±25%,
    scrapeados en los últimos 30 días.
-3. Si hay menos de `OPPORTUNITY_MIN_COMPARABLES` (default 5), se ignora
+3. Si hay menos de `comparables.min_n` de `app_config` (default 5), se ignora
    el listing — no hay datos suficientes para juzgar — salvo que el usuario
    haya seteado `precio_max_oportunidad` (techo duro).
 4. Se calcula la mediana en USD (precios ARS se convierten con `usd_rate_ars`
-   en [opportunity.py](opportunity.py)).
+   en [opportunity.py](worker/intelligence/opportunity.py)).
 5. **Filtro estadístico** post-mediana:
    - Listing **≥65% bajo la mediana** → casi seguro anticipo/plan oculto, se descarta.
    - Listing **50–65% bajo la mediana** → oportunidad pero marcada como
@@ -143,24 +210,25 @@ Las primeras 1-2 corridas son silenciosas mientras se llena el cache.
 ## Limitaciones
 
 - **Facebook**: el DOM cambia seguido. Si los selectores se rompen, el ajuste
-  vive en [scrapers/facebook.py](scrapers/facebook.py). Va contra ToS de FB.
+  vive en [facebook.py](worker/collectors/facebook.py). Va contra ToS de FB.
 - **MercadoLibre**: usa Playwright sobre la búsqueda pública. La API oficial
   `/sites/MLA/search` está bloqueada para apps no-Partner, así que el flujo
   operativo es sesión web guardada en `ml_state.json`.
 - **Tasa USD/ARS**: se toma en vivo del dólar blue ([dolarapi.com](https://dolarapi.com)),
-  con cache de 1h y fallback al oficial. Lógica en [fx.py](fx.py).
+  con cache de 1h y fallback al oficial. Lógica en [fx.py](worker/normalization/fx.py).
 - **Geocodificación**: primero usa una tabla local de ciudades argentinas y
   luego Nominatim/OpenStreetMap con cache en `geocode_cache`. Si un aviso no
   tiene ubicación o no se puede geocodificar, se descarta cuando la alerta usa
   `radio_km`.
 - **Cache de comparables**: vive 30 días. En zonas de inventario chico
-  (modelos raros) puede faltar volumen — bajá `OPPORTUNITY_MIN_COMPARABLES`
-  en `.env` o usá el techo duro `precio_max_oportunidad` por alerta.
+  (modelos raros) puede faltar volumen — bajá `comparables.min_n` en la
+  tabla `app_config` o usá el techo duro `precio_max_oportunidad` por alerta.
 
 ## Agregar una nueva fuente
 
-1. Crear `scrapers/<nombre>.py` con una clase que herede `BaseScraper` y un
+1. Crear `worker/collectors/<nombre>.py` con una clase que herede `BaseScraper` y un
    método async `search(filters) -> list[Listing]`.
-2. Registrarla en [scrapers/__init__.py](scrapers/__init__.py) `REGISTRY`.
-3. Agregarla a `SOURCES` en [config.py](config.py).
+2. Registrarla en [collectors/__init__.py](worker/collectors/__init__.py) `REGISTRY`.
+3. Agregarla a `SOURCES` en [config.py](worker/config.py) y a la tabla `sources`
+   (en `supabase/seed.sql` y con una migración para bases existentes).
 4. Probar con `python -m tools.scraper_cli <nombre> marca=... modelo=...`.

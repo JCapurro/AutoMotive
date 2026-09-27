@@ -71,7 +71,7 @@ def _price_ref(score) -> dict:
 
 def _is_recent(listing, max_age_days: int) -> bool:
     """Drop listings published more than `max_age_days` ago.
-    If the scraper couldn't infer a date, accept it — the seen_listings
+    If the scraper couldn't infer a date, accept it — the matches
     table + the per-alert bootstrap flag handle freshness for those."""
     if listing.published_at is None:
         return True
