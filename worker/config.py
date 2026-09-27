@@ -15,8 +15,8 @@ ALLOWED_USER_IDS = {
 
 # How often the scheduler wakes up to look for due alerts.
 TICK_INTERVAL_SECONDS = int(os.getenv("TICK_INTERVAL_SECONDS", "300"))
-# Each alert is re-scraped at most once per this interval (default 6h).
-ALERT_RESCRAPE_INTERVAL_SECONDS = int(os.getenv("ALERT_RESCRAPE_INTERVAL_SECONDS", str(6 * 3600)))
+# Each alert is re-scraped at most once per this interval (default 3h).
+ALERT_RESCRAPE_INTERVAL_SECONDS = int(os.getenv("ALERT_RESCRAPE_INTERVAL_SECONDS", str(3 * 3600)))
 # Recommended listings whose `published_at` is older than this are dropped.
 # When the source doesn't expose a date, only the seen set (matches) + bootstrap apply.
 RECOMMENDED_MAX_AGE_DAYS = int(os.getenv("RECOMMENDED_MAX_AGE_DAYS", "15"))

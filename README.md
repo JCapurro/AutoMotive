@@ -38,13 +38,15 @@ docs/         PRD y plan técnico
    - **Marcas** (multi-select por botones — podés tildar Toyota + VW + Ford)
    - **Modelos** (texto coma-separado: "Corolla, Hilux, Etios")
    - **Años** (multi-select por pills + texto: tipeá "2018-2022" o tocá los pills)
-   - Versión (opcional), km min/max, precio min/max, moneda, combustible,
-     transmisión, vendedor, ubicación de Telegram, radio en km, % mínimo de
-     descuento, plataformas.
+   - Versión (opcional), km min/max, moneda, combustible, transmisión,
+     vendedor, ubicación de Telegram, radio en km, plataformas.
+   - **% mínimo por debajo del precio de mercado** para alertar — el control
+     central: *no* se fija un precio min/max, cada aviso se compara contra la
+     mediana de comparables y se notifica si está al menos ese % por debajo.
 2. **Bootstrap silencioso**: la primera corrida de una alerta marca todo lo
    que vea como "ya conocido" sin notificar — evita el diluvio inicial.
 3. **Cadencia per-alerta**: cada alerta se re-scrapea a lo sumo cada
-   `ALERT_RESCRAPE_INTERVAL_SECONDS` (default 6h). El scheduler tiquea cada
+   `ALERT_RESCRAPE_INTERVAL_SECONDS` (default 3h). El scheduler tiquea cada
    `TICK_INTERVAL_SECONDS` (default 5min) pero solo corre las alertas que
    ya están "vencidas". Las 4 fuentes se scrapean en paralelo.
 4. **Filtro de recencia**: una vez bootstrapeada, solo se recomiendan
@@ -176,6 +178,7 @@ pytest                                  # suma los tests contra Postgres (solo h
 | Comando | Acción |
 |---------|--------|
 | `/nuevaalerta` | wizard paso a paso |
+| `/editar <id>` | reabre el wizard precargado con los filtros actuales (conserva el historial de vistos; si agregás modelos, se crean alertas nuevas para esos) |
 | `/alertas` | listar tus alertas |
 | `/pausar <id>` | pausar |
 | `/activar <id>` | reactivar |

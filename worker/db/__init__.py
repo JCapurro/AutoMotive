@@ -28,6 +28,7 @@ from db.repos.profiles import (
     list_alerts,
     mark_scraped,
     set_alert_active,
+    update_alert,
 )
 
 __all__ = [
@@ -35,5 +36,5 @@ __all__ = [
     "filter_unseen", "get_alert", "get_config", "get_geocode_cache",
     "has_fresh_geocode_failure", "list_alerts", "mark_scraped", "mark_seen",
     "matched_by_other_profiles", "open_pool", "set_alert_active", "set_geocode_cache",
-    "set_geocode_cache_failure", "upsert_listings",
+    "set_geocode_cache_failure", "update_alert", "upsert_listings",
 ]

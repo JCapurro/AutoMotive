@@ -84,6 +84,36 @@ class AlertRepoTests(PostgresTestCase):
         await db.delete_alert(aid)
         self.assertIsNone(await db.get_alert(aid))
 
+    async def test_edit_keeps_history_and_splits_added_models(self):
+        [aid] = await db.create_alert(user_id=TG_USER, chat_id=TG_USER, name="Ford Fiesta",
+                                      filters={"marcas": ["Ford"], "modelos": ["Fiesta"],
+                                               "descuento_pct": 15})
+        await db.upsert_listings([_listing("1")])
+        await db.mark_seen(aid, [_listing("1")], backfill=True)
+        await db.mark_scraped(aid, bootstrapped=True)
+        async with db.connection() as cx:
+            await cx.execute("UPDATE search_profiles SET preferences = preferences || "
+                             "'{\"sqlite_alert_id\": 5}' WHERE id = %s", (aid,))
+
+        new_ids = await db.update_alert(aid, "Ford Fiesta/Ka", {
+            "marcas": ["Ford"], "modelos": ["Fiesta", "Ka"], "descuento_pct": 20, "km_max": 90000})
+
+        edited = await db.get_alert(aid)
+        self.assertEqual(edited["filters"]["descuento_pct"], 20)
+        self.assertEqual(edited["filters"]["km_max"], 90000)
+        self.assertEqual(edited["filters"]["modelos"], ["Fiesta"])
+        self.assertEqual(edited["name"], "Ford Fiesta")
+        self.assertEqual(edited["bootstrapped"], 1)
+        self.assertIsNone(edited["last_scraped_at"])        # runs on the next tick
+        self.assertEqual(await db.filter_unseen(aid, [_listing("1")]), [])   # history kept
+        self.assertEqual(len(new_ids), 1)
+        added = await db.get_alert(new_ids[0])
+        self.assertEqual((added["name"], added["bootstrapped"]), ("Ford Ka", 0))
+        async with db.connection() as cx:
+            prefs = (await (await cx.execute(
+                "SELECT preferences FROM search_profiles WHERE id = %s", (aid,))).fetchone())["preferences"]
+        self.assertEqual(prefs["sqlite_alert_id"], 5)
+
     async def test_plan_limit_is_measured_but_not_enforced_during_the_pilot(self):
         await db.create_alert(user_id=TG_USER, chat_id=TG_USER, name="a",
                               filters={"marcas": ["Ford"], "modelos": ["Ka", "Fiesta"]})
@@ -211,10 +241,13 @@ class GeocodeAndConfigTests(PostgresTestCase):
 
 
 class _FakeBot:
-    def __init__(self) -> None:
+    def __init__(self, fail: bool = False) -> None:
         self.sent: list[dict] = []
+        self.fail = fail
 
     async def send_message(self, **kwargs) -> None:
+        if self.fail:
+            raise RuntimeError("telegram unavailable")
         self.sent.append(kwargs)
 
 
@@ -261,6 +294,29 @@ class SchedulerOnPostgresTests(PostgresTestCase):
         # Like the SQLite bot, the batch is cached before scoring, so the
         # listing itself counts as a comparable (sección 6.2 fixes this in F2).
         self.assertEqual(deal["price_ref"]["n"], 8)
+
+    async def test_failed_delivery_is_retried_on_the_next_tick(self):
+        from pipeline import scheduler
+
+        results = [Listing(**_listing(f"c{i}", precio=12000.0 + i * 100)) for i in range(6)]
+
+        class FakeScraper:
+            async def search(self, filters):
+                return list(results)
+
+        [aid] = await db.create_alert(user_id=TG_USER, chat_id=4242, name="Ford Fiesta",
+                                      filters={"marcas": ["Ford"], "modelos": ["Fiesta"],
+                                               "sources": ["mercadolibre"], "descuento_pct": 15})
+        with patch.dict(scheduler.REGISTRY, {"mercadolibre": FakeScraper}, clear=True):
+            await scheduler._run_alert(_FakeBot(), await db.get_alert(aid))      # bootstrap
+            results.append(Listing(**_listing("deal", precio=9000.0)))
+            await scheduler._run_alert(_FakeBot(fail=True), await db.get_alert(aid))
+            self.assertEqual(await db.filter_unseen(aid, [_listing("deal")]), [_listing("deal")])
+            ok = _FakeBot()
+            await scheduler._run_alert(ok, await db.get_alert(aid))
+
+        self.assertEqual(len(ok.sent), 1)
+        self.assertIn("Ford Fiesta deal", ok.sent[0]["text"])
 
 
 if __name__ == "__main__":

@@ -55,6 +55,21 @@ class LocationRadiusTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual([item.listing_id for item in kept], ["1"])
 
+    async def test_filter_by_radius_keeps_kavak_listings_without_location(self):
+        listings = [
+            Listing(source="kavak", listing_id="k1", titulo="Kavak sin ubicacion", url="u1", ubicacion=None),
+            Listing(source="test", listing_id="x1", titulo="Otro sin ubicacion", url="u2", ubicacion=None),
+        ]
+        filters = {
+            "origin_lat": -34.6037,
+            "origin_lon": -58.3816,
+            "radio_km": 75,
+        }
+
+        kept = await filter_listings_by_radius(listings, filters)
+
+        self.assertEqual([item.listing_id for item in kept], ["k1"])
+
 
 class LocationLookupTests(unittest.TestCase):
     def test_unknown_buenos_aires_interior_city_does_not_fallback_to_caba(self):
@@ -85,6 +100,20 @@ class LocationLookupTests(unittest.TestCase):
 
 
 class GeocodeNegativeCacheTests(unittest.IsolatedAsyncioTestCase):
+    async def test_vehicle_noise_is_not_sent_to_nominatim(self):
+        for value in ("115 mil km", "2021 Chevrolet Onix LT economico oportunidad"):
+            with self.subTest(value=value), \
+                 mock.patch("normalization.geo._lookup_known_location", return_value=None), \
+                 mock.patch("normalization.geo.db.get_geocode_cache", return_value=None) as get_pos, \
+                 mock.patch("normalization.geo.db.has_fresh_geocode_failure", return_value=False) as neg_check, \
+                 mock.patch("normalization.geo._geocode_nominatim", return_value=None) as nominatim:
+                result = await geocode_location(value)
+
+                self.assertIsNone(result)
+                get_pos.assert_not_called()
+                neg_check.assert_not_called()
+                nominatim.assert_not_called()
+
     async def test_negative_cache_prevents_repeated_nominatim_calls(self):
         with mock.patch("normalization.geo._lookup_known_location", return_value=None), \
              mock.patch("normalization.geo.db.get_geocode_cache", return_value=None) as get_pos, \

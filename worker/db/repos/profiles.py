@@ -52,21 +52,39 @@ async def ensure_telegram_profile(cx: AsyncConnection, telegram_user_id: int, ch
     return row["id"]
 
 
+async def _canonical(cx: AsyncConnection, make: str | None,
+                     model: str | None) -> tuple[str | None, str | None] | None:
+    return await resolve_make_model(cx, make, model) if (make or model) else None
+
+
+def _profile_name(name: str, vehicles: list[tuple], make: str | None, model: str | None) -> str:
+    if len(vehicles) == 1:
+        return name
+    return f"{make or ''} {model or ''}".strip() or name
+
+
+# preferences keys written from the wizard dict; any other key (e.g. the
+# migration's sqlite_alert_id) survives an edit.
+_WIZARD_PREFERENCES = {"seller_type", "legacy_opportunity", "legacy_extra"}
+
+
 async def insert_profiles(cx: AsyncConnection, user_uuid: str, name: str, filters: dict, *,
                           catalog_only: bool = False, enabled: bool = True,
                           bootstrapped: bool = False,
-                          extra_preferences: dict | None = None) -> tuple[list[int], list[tuple]]:
+                          extra_preferences: dict | None = None,
+                          vehicles: list[tuple] | None = None) -> tuple[list[int], list[tuple]]:
     """Insert one search profile per (marca, modelo) of a wizard filter.
 
     Names are canonicalized through vehicle_catalog when they resolve. With
     `catalog_only`, combinations missing from the catalog are skipped and
     returned instead (the SQLite migration does this, sección 4.5).
+    `vehicles` restricts which combinations are inserted (default: all).
     """
-    vehicles = split_vehicles(filters)
+    all_vehicles = split_vehicles(filters)
     ids: list[int] = []
     skipped: list[tuple] = []
-    for make, model in vehicles:
-        resolved = await resolve_make_model(cx, make, model) if (make or model) else None
+    for make, model in (all_vehicles if vehicles is None else vehicles):
+        resolved = await _canonical(cx, make, model)
         if resolved:
             make, model = resolved
         elif catalog_only:
@@ -74,7 +92,7 @@ async def insert_profiles(cx: AsyncConnection, user_uuid: str, name: str, filter
             continue
         values = to_profile(filters, make, model)
         values["preferences"].update(extra_preferences or {})
-        profile_name = name if len(vehicles) == 1 else (f"{make or ''} {model or ''}".strip() or name)
+        profile_name = _profile_name(name, all_vehicles, make, model)
         row = await (await cx.execute(
             "INSERT INTO search_profiles (user_id, name, filters, preferences, origin_lat, "
             "  origin_lon, radius_km, enabled, bootstrapped_at) "
@@ -93,6 +111,40 @@ async def create_alert(user_id: int, chat_id: int, name: str, filters: dict) -> 
         user_uuid = await ensure_telegram_profile(cx, user_id, chat_id)
         ids, _ = await insert_profiles(cx, user_uuid, name, filters)
     return ids
+
+
+async def update_alert(alert_id: int, name: str, filters: dict) -> list[int]:
+    """Apply an edited wizard filter to an existing alert.
+
+    Keeps its matches (the "already seen" history), bootstrapped_at and
+    created_at; clears last_scraped_at so the new filters run on the next tick.
+    The alert keeps the first (marca, modelo); extra ones added while editing
+    become new alerts, which bootstrap silently. Returns their ids.
+    """
+    vehicles = split_vehicles(filters)
+    async with connection() as cx:
+        row = await (await cx.execute(
+            "SELECT user_id, preferences FROM search_profiles WHERE id = %s", (alert_id,),
+        )).fetchone()
+        if not row:
+            return []
+        make, model = vehicles[0]
+        resolved = await _canonical(cx, make, model)
+        if resolved:
+            make, model = resolved
+        values = to_profile(filters, make, model)
+        kept = {k: v for k, v in row["preferences"].items() if k not in _WIZARD_PREFERENCES}
+        values["preferences"].update(kept)
+        await cx.execute(
+            "UPDATE search_profiles SET name = %s, filters = %s, preferences = %s, "
+            "  origin_lat = %s, origin_lon = %s, radius_km = %s, last_scraped_at = NULL "
+            "WHERE id = %s",
+            (_profile_name(name, vehicles, make, model), Jsonb(values["filters"]),
+             Jsonb(values["preferences"]), values["origin_lat"], values["origin_lon"],
+             values["radius_km"], alert_id),
+        )
+        new_ids, _ = await insert_profiles(cx, row["user_id"], name, filters, vehicles=vehicles[1:])
+    return new_ids
 
 
 async def list_alerts(user_id: int | None = None, only_active: bool = False) -> list[dict]:
