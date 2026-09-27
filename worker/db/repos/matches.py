@@ -1,9 +1,12 @@
-"""matches, used in F0 as the bot's "already seen" set.
+"""matches: one row per (profile, listing) that matched, with its score.
 
-A match row means the profile already considered that listing. Until the
-0–100 score exists (F2) rows carry placeholder scoring with
-scoring_version = 'legacy-v0'; a new scoring_version re-scores everything
-(sección 6.1). Bootstrap and migrated rows are is_backfill = true.
+A match row also means the profile already considered that listing (the
+bot's "already seen" set). Since F2 rows carry the 0–100 score, level,
+breakdown, reasons, price_ref and red flags (intelligence/engine.py). Rows
+written before F2 (the SQLite migration, `mark_seen`) keep placeholder
+scoring with scoring_version = 'legacy-v0'; a scoring_version other than the
+current one is re-scored (sección 6.1). Bootstrap and migrated rows are
+is_backfill = true.
 """
 from __future__ import annotations
 
@@ -88,3 +91,62 @@ async def mark_seen(alert_id: int, items: Iterable[dict], *, backfill: bool = Fa
         return
     async with connection() as cx:
         await insert_legacy_matches(cx, alert_id, keys, backfill=backfill, price_refs=price_refs)
+
+
+_EVALUATED = ("score", "level", "score_breakdown", "match_reasons", "price_ref", "red_flags",
+              "scoring_version")
+
+
+async def upsert_scored(cx: AsyncConnection, profile_id: int,
+                        rows: list[tuple[int, dict[str, Any]]], *, backfill: bool) -> set[int]:
+    """Write (listing_id, Evaluation.row()) pairs. New rows get `backfill`;
+    existing ones are re-scored and keep is_backfill and generated_at.
+    Returns the listing ids that were inserted (new matches)."""
+    if not rows:
+        return set()
+    inserted: set[int] = set()
+    for listing_id, row in rows:
+        values = [Jsonb(row[c]) if c in ("score_breakdown", "match_reasons", "red_flags")
+                  or (c == "price_ref" and row[c] is not None) else row[c] for c in _EVALUATED]
+        rec = await (await cx.execute(
+            "INSERT INTO matches (search_profile_id, listing_id, is_backfill, "
+            f"                     {', '.join(_EVALUATED)}) "
+            f"VALUES (%s, %s, %s, {', '.join(['%s'] * len(_EVALUATED))}) "
+            "ON CONFLICT (search_profile_id, listing_id) DO UPDATE SET "
+            + ", ".join(f"{c} = excluded.{c}" for c in _EVALUATED) +
+            " RETURNING (xmax = 0) AS inserted",
+            (profile_id, listing_id, backfill, *values))).fetchone()
+        if rec["inserted"]:
+            inserted.add(listing_id)
+    return inserted
+
+
+async def rescore_queue(*, days: int, scoring_version: str,
+                        outdated_only: bool = False) -> list[dict[str, Any]]:
+    """(match_id, search_profile_id, listing_id) to re-score (sección 6.1): the
+    matches of active listings seen in the last `days` (the median moves), and
+    every match scored by another scoring_version."""
+    recent = "" if outdated_only else (
+        " OR l.last_seen_at >= now() - make_interval(days => %(days)s)")
+    async with connection() as cx:
+        return await (await cx.execute(
+            "SELECT m.id, m.search_profile_id, m.listing_id FROM matches m "
+            "  JOIN listings l ON l.id = m.listing_id "
+            "  JOIN search_profiles sp ON sp.id = m.search_profile_id "
+            " WHERE l.status = 'active' AND sp.enabled "
+            f"  AND (m.scoring_version <> %(version)s{recent}) "
+            " ORDER BY m.search_profile_id, m.listing_id",
+            {"days": days, "version": scoring_version})).fetchall()
+
+
+async def matches_of_listings(listing_ids: Iterable[int]) -> list[dict[str, Any]]:
+    """(match_id, search_profile_id, listing_id) of these listings (re-score after enrichment)."""
+    ids = list(dict.fromkeys(listing_ids))
+    if not ids:
+        return []
+    async with connection() as cx:
+        return await (await cx.execute(
+            "SELECT m.id, m.search_profile_id, m.listing_id FROM matches m "
+            "  JOIN search_profiles sp ON sp.id = m.search_profile_id "
+            " WHERE m.listing_id = ANY(%s) AND sp.enabled "
+            " ORDER BY m.search_profile_id, m.listing_id", (ids,))).fetchall()

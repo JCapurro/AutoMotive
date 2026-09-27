@@ -18,6 +18,7 @@ import collectors
 import db
 from collectors.base import BaseScraper, Listing, ListingDetail
 from pgcase import TEST_FX_RATE, PostgresTestCase, requires_db
+from intelligence import comparables
 from pipeline import crawl, enrich, rematch, scheduler, watchlist
 from pipeline.ingest import ingest
 
@@ -211,8 +212,9 @@ class RepostTests(IngestCase):
         self.assertEqual(b["probable_repost_of"], a["id"])
         self.assertEqual(result.events[0].repost_of, a["id"])
         self.assertIsNone(c["probable_repost_of"])
-        comps = await db.comparables("Ford", "Fiesta", 2017, km=112_000)
-        self.assertEqual(sorted(x["listing_id"] for x in comps), ["A", "C"])
+        async with db.connection() as cx:
+            ref = await comparables.fetch(cx, c["id"], {"min_n": 1})
+        self.assertEqual((ref.n, ref.median), (1, 10_000.0))              # A only: B is A again
 
     async def test_old_listings_are_outside_the_window(self):
         await ingest([card("A", ubicacion="Munro")], geocode=None)
@@ -279,7 +281,7 @@ class CrawlTargetsTests(IngestCase):
 
 class TelegramAlertsTests(IngestCase):
     """The bot keeps alerting through the transition: silent first run, one
-    alert per new opportunity, nothing twice."""
+    alert per new 🔥 high match (sección 6.4), nothing twice."""
 
     async def test_first_target_run_is_silent_then_new_opportunities_alert_once(self):
         aid = await self.fiesta_alert()
@@ -290,19 +292,27 @@ class TelegramAlertsTests(IngestCase):
 
         await self.tick(bot)
         self.assertEqual(bot.sent, [])
-        FakeSource.results["mercadolibre"] += [card("deal", precio=9_000.0),     # 25% below median
+        FakeSource.results["mercadolibre"] += [card("deal", precio=9_000.0),     # 27% below median: high
                                                card("meh", precio=11_800.0, km=120_000),
                                                card("ka", titulo="Ford Ka SE 2017", precio=5_000.0)]
         await self.tick(bot)
         await self.tick(bot)                                                     # nothing new
 
         self.assertEqual(len(bot.sent), 1)
-        self.assertIn("Ford Fiesta Titanium deal", bot.sent[0]["text"])
-        rows = await self.rows("SELECT l.external_id, m.is_backfill, m.price_ref FROM matches m "
+        text = bot.sent[0]["text"]
+        self.assertIn("Ford Fiesta Titanium deal", text)
+        self.assertIn("🔥 Alta oportunidad", text)
+        self.assertIn("debajo del mercado observado · publicaciones comparables (n=7)", text)   # c0–c5 + meh
+        rows = await self.rows("SELECT l.external_id, m.is_backfill, m.price_ref, m.level, m.score, "
+                               "       m.scoring_version, m.match_reasons FROM matches m "
                                "JOIN listings l ON l.id = m.listing_id ORDER BY m.id")
         self.assertEqual({r["external_id"] for r in rows if r["is_backfill"]}, {f"c{i}" for i in range(6)})
         deal = next(r for r in rows if r["external_id"] == "deal")
-        self.assertTrue(deal["price_ref"]["is_opportunity"])
+        self.assertEqual((deal["level"], deal["scoring_version"]), ("high", "f2-v1"))
+        self.assertEqual((deal["price_ref"]["n"], deal["price_ref"]["level_used"]), (7, "model"))
+        self.assertEqual(deal["match_reasons"]["model"]["result"], "ok")
+        meh = next(r for r in rows if r["external_id"] == "meh")
+        self.assertNotEqual(meh["level"], "high")                              # stored, not alerted
         # A Ka found by the Fiesta search is stored as a Ka, not matched to the Fiesta alert.
         self.assertNotIn("ka", {r["external_id"] for r in rows})
         self.assertEqual((await db.get_alert(aid))["bootstrapped"], 1)

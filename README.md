@@ -4,9 +4,11 @@ Scraper en tiempo real de plataformas de autos en Argentina con detección
 automática de oportunidades y notificación al Telegram.
 
 El plan del MVP (web + Supabase) está en [docs/TECHNICAL_PLAN.md](docs/TECHNICAL_PLAN.md).
-Estado: **F1** — ingesta centrada en la publicación: se scrapea por *crawl
-target* (fuente + marca + modelo) y no por alerta, cada publicación se guarda
-una sola vez con su historial, y el bot de Telegram sigue alertando igual que antes.
+Estado: **F2** — intelligence: cada publicación se matchea contra los search
+profiles con razones (ok / fail / unknown), recibe un Opportunity Score 0–100
+con nivel, comparables, red flags y preguntas al vendedor. Desde F1 se scrapea
+por *crawl target* (fuente + marca + modelo) y no por alerta, y cada
+publicación se guarda una sola vez con su historial.
 
 ## Estructura
 
@@ -14,12 +16,12 @@ una sola vez con su historial, y el bot de Telegram sigue alertando igual que an
 worker/       bot de Telegram, collectors, pipeline (Python, raíz de imports)
   collectors/     scrapers por fuente: search() y fetch_detail()
   normalization/  vehicle (catálogo + rapidfuzz), transmission, listing, price_check, geo, fx
-  intelligence/   opportunity (motor legacy hasta F2)
+  intelligence/   matching, comparables, scoring, levels, red_flags, seller_questions (puros)
   pipeline/       crawl (targets + cadencia), ingest (upsert/snapshots/eventos),
-                  enrich, watchlist, rematch, scheduler (loop + alertas de Telegram)
+                  enrich, watchlist, rematch, scoring, rescore, scheduler (loop + alertas de Telegram)
   bot/            wizard de Telegram
   db/             psycopg 3 (pool async) + repos por tabla
-  tools/          scraper_cli, migrate_sqlite
+  tools/          scraper_cli, migrate_sqlite, explain_match
   tests/
 supabase/     migraciones, seed.sql y tests pgTAP (supabase CLI)
 docs/         PRD y plan técnico
@@ -205,30 +207,54 @@ pytest                                  # suma los tests contra Postgres (solo h
 | `/borrar <id>` | borrar |
 | `/cancelar` | abortar wizard |
 
-## Detección de oportunidad
+## Matching y Opportunity Score
 
-Para cada listing nuevo:
+Todo es determinístico y vive en funciones puras en
+[worker/intelligence/](worker/intelligence) (plan técnico, sección 6). Para
+cada publicación nueva o actualizada de un crawl target, y para cada search
+profile de ese modelo:
 
-1. **Filtro de precio trampa** ([price_check.py](worker/normalization/price_check.py)): si el título
-   tiene keywords típicos de anticipos/planes (`anticipo`, `cuota`, `plan
-   adjudicado`, `permuta`, `/mes`, `plan rombo`, etc.), el listing se marca
-   `price_partial=True`, **no entra en la mediana** y nunca se notifica como
-   oportunidad.
-2. Se busca cache de comparables (excluyendo los `price_partial`): misma
-   `marca` y `modelo` normalizados (`VW`==`Volkswagen`), año ±1, km ±25%,
-   scrapeados en los últimos 30 días.
-3. Si hay menos de `comparables.min_n` de `app_config` (default 5), se ignora
-   el listing — no hay datos suficientes para juzgar — salvo que el usuario
-   haya seteado `precio_max_oportunidad` (techo duro).
-4. Se calcula la mediana en USD (precios ARS se convierten con `usd_rate_ars`
-   en [opportunity.py](worker/intelligence/opportunity.py)).
-5. **Filtro estadístico** post-mediana:
-   - Listing **≥65% bajo la mediana** → casi seguro anticipo/plan oculto, se descarta.
-   - Listing **50–65% bajo la mediana** → oportunidad pero marcada como
-     "⚠️ Oportunidad sospechosa" en la notificación.
-6. Si está `>= descuento_pct` por debajo y pasa los filtros → se notifica.
+1. **Matching con razones** ([matching.py](worker/intelligence/matching.py)):
+   cada hard filter da `ok`, `fail` o `unknown`. Un `fail` descarta; un
+   `unknown` (la publicación no lo informa) deja pasar pero baja el score. Los
+   precios se comparan **convirtiendo de moneda** (el `price_usd` congelado del
+   día en que se vio el aviso): un aviso en ARS se compara contra un tope en USD.
+2. **Comparables** (función SQL `public.comparables(listing_id)`): misma marca y
+   modelo, año ±1, km ±25%, vistos en 30 días, sin precios parciales ni
+   re-publicaciones. Cascada: misma versión y transmisión → misma transmisión →
+   solo el modelo; se usa el primer nivel con `n ≥ comparables.min_n`.
+3. **Opportunity Score 0–100** ([scoring.py](worker/intelligence/scoring.py)):
+   precio 35, match 25, km 15, versión 10, recencia 10, completitud 5. Pesos y
+   curvas en `app_config` (`score_weights`, `score_curves`): se ajustan sin deploy.
+   Guardas de [price_check.py](worker/normalization/price_check.py): ≥65% bajo
+   la mediana se trata como anticipo y se excluye; 50–65% queda como máximo en
+   🟢 y con red flag; `price_partial` se excluye.
+4. **Niveles** (`app_config.level_thresholds`): 🔥 ≥85 · 🟢 ≥70 · 🟡 ≥50 · ⚪.
+5. **Red flags** y **preguntas al vendedor** con templates
+   ([red_flags.py](worker/intelligence/red_flags.py),
+   [seller_questions.py](worker/intelligence/seller_questions.py)). Siempre
+   "conviene verificar"; el copy vive en [copy.py](worker/intelligence/copy.py)
+   y un test impide los términos prohibidos del §19 ("vale", "precio real", "tasación").
 
-La primera corrida de cada target es silenciosa mientras se llena el cache.
+Todo se guarda en `matches` (score, level, `score_breakdown`, `match_reasons`,
+`price_ref`, `red_flags`). El bot de Telegram avisa los matches nuevos 🔥 que no
+son backfill (hasta que F3 traiga el motor de notificaciones). Los matches se
+re-scorean después del enrichment, todas las noches (`app_config.rescore`,
+últimos 14 días) y al arrancar si cambió `SCORING_VERSION`.
+
+### Por qué matcheó (o no) un aviso
+
+```powershell
+cd worker
+python -m tools.explain_match 123                       # por id de match
+python -m tools.explain_match --profile 7 --listing 4521
+python -m tools.explain_match 123 --json
+```
+
+Muestra cada razón, los comparables usados, el breakdown del score, los red
+flags y las preguntas, y lo compara con lo guardado.
+
+La primera corrida de cada target es silenciosa (backfill).
 
 ## Limitaciones
 
@@ -241,8 +267,8 @@ La primera corrida de cada target es silenciosa mientras se llena el cache.
   con cache de 1h y fallback al oficial. Lógica en [fx.py](worker/normalization/fx.py).
 - **Geocodificación**: primero usa una tabla local de ciudades argentinas y
   luego Nominatim/OpenStreetMap con cache en `geocode_cache`. Si un aviso no
-  tiene ubicación o no se puede geocodificar, se descarta cuando la alerta usa
-  `radio_km`.
+  tiene ubicación o no se puede geocodificar, la razón `location` queda
+  `unknown`: no se descarta, pero baja el score.
 - **Cache de comparables**: vive 30 días. En zonas de inventario chico
   (modelos raros) puede faltar volumen — bajá `comparables.min_n` en la
   tabla `app_config` o usá el techo duro `precio_max_oportunidad` por alerta.

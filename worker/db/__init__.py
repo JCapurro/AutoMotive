@@ -5,7 +5,8 @@ names (now async); each lives in the repo that owns its table:
 
     alerts           → search_profiles   (repos/profiles.py)
     seen_listings    → matches           (repos/matches.py)
-    listings_cache   → listings          (repos/listings.py; written by pipeline/ingest.py)
+    listings_cache   → listings          (repos/listings.py; written by pipeline/ingest.py;
+                                          comparables are the SQL function public.comparables)
     geocode_cache    → geocode_cache     (repos/geocode.py)
     app_config       → repos/config.py
     crawl_targets    → repos/targets.py
@@ -22,7 +23,6 @@ from db.repos.geocode import (
     set_geocode_cache,
     set_geocode_cache_failure,
 )
-from db.repos.listings import comparables
 from db.repos.matches import filter_unseen, mark_seen, matched_by_other_profiles
 from db.repos.profiles import (
     alerts_for_target,
@@ -38,7 +38,7 @@ from db.repos.profiles import (
 )
 
 __all__ = [
-    "alerts_for_target", "close_pool", "comparables", "connection", "create_alert",
+    "alerts_for_target", "close_pool", "connection", "create_alert",
     "delete_alert", "enabled_profiles", "filter_unseen", "get_alert", "get_config",
     "get_geocode_cache", "has_fresh_geocode_failure", "list_alerts", "mark_bootstrapped",
     "mark_seen", "matched_by_other_profiles", "open_pool", "pending_rematch",

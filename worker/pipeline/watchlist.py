@@ -7,7 +7,7 @@ fetch_detail():
 
   * 404, paused or sold → status 'gone' and a listing_gone event;
   * otherwise the page is ingested with the change detection of sección 5.3
-    (snapshots, listing_updated, price_drop);
+    (snapshots, listing_updated, price_drop) and its matches re-scored;
   * a listing published more than app_config.watchlist_stale_days ago yields
     an informational listing_stale event ("lleva X días").
 
@@ -23,7 +23,7 @@ from typing import Any
 
 import db
 from db.repos import listings as repo
-from pipeline.enrich import drain, refresh_listing, source_intervals
+from pipeline.enrich import drain, refresh_listing, rescore_changed, source_intervals
 from pipeline.ingest import IngestResult, ListingEvent
 
 
@@ -42,6 +42,8 @@ async def refresh_watchlist(stop: asyncio.Event | None = None) -> IngestResult:
     rows = [r for r in rows if r["source"] in intervals]
     result = await drain(rows, lambda r: refresh_listing(r, stage="watchlist"),
                          intervals=intervals, stop=stop)
+
+    await rescore_changed(result)
 
     threshold = int(await db.get_config("watchlist_stale_days", 30))
     gone = {e.listing_id for e in result.events if e.kind == "listing_gone"}

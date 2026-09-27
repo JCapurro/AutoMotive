@@ -25,10 +25,6 @@ WATCHLIST_TICK_SECONDS = int(os.getenv("WATCHLIST_TICK_SECONDS", "3600"))
 # Recommended listings whose `published_at` is older than this are dropped.
 # When the source doesn't expose a date, only the seen set (matches) + bootstrap apply.
 RECOMMENDED_MAX_AGE_DAYS = int(os.getenv("RECOMMENDED_MAX_AGE_DAYS", "15"))
-# Fallbacks only: app_config (recommended_max_age_days, comparables) wins when set.
-OPPORTUNITY_MIN_COMPARABLES = int(os.getenv("OPPORTUNITY_MIN_COMPARABLES", "5"))
-# Deprecated by app_config.level_thresholds once the 0–100 score lands (F2).
-DEFAULT_DISCOUNT_PCT = float(os.getenv("DEFAULT_DISCOUNT_PCT", "15"))
 
 # Geocoding is used to turn listing location text into coordinates and then
 # enforce a user-origin radius in kilometers.
