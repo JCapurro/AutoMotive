@@ -13,12 +13,17 @@ import pytest
 
 import db
 from collectors.base import Listing
+from pipeline.ingest import ingest
 from pgcase import PostgresTestCase, requires_db
 from test_legacy_filters import WIZARD_ALERT
 
 pytestmark = [pytest.mark.db, requires_db]
 
 TG_USER = 864987866
+
+
+async def store(*items: dict) -> None:
+    await ingest([Listing(**it) for it in items], geocode=None)
 
 
 def _listing(listing_id: str, **kw) -> dict:
@@ -41,7 +46,7 @@ class AlertRepoTests(PostgresTestCase):
         self.assertEqual((a["id"], a["user_id"], a["chat_id"], a["name"]),
                          (ids[0], TG_USER, TG_USER, "Ford Fiesta"))
         self.assertEqual(a["filters"], WIZARD_ALERT)
-        self.assertEqual((a["active"], a["bootstrapped"], a["last_scraped_at"]), (1, 0, None))
+        self.assertEqual((a["active"], a["bootstrapped"], a["rematch_requested"]), (1, 0, False))
 
         async with db.connection() as cx:
             row = await (await cx.execute(
@@ -69,17 +74,17 @@ class AlertRepoTests(PostgresTestCase):
             users = await (await cx.execute("SELECT count(*) AS n FROM profiles")).fetchone()
         self.assertEqual(users["n"], 1)
 
-    async def test_pause_resume_delete_and_scrape_stamps(self):
+    async def test_pause_resume_delete_and_bootstrap(self):
         [aid] = await db.create_alert(user_id=TG_USER, chat_id=TG_USER, name="a",
                                       filters={"marcas": ["Ford"], "modelos": ["Ka"]})
 
         await db.set_alert_active(aid, False)
         self.assertEqual(await db.list_alerts(only_active=True), [])
         await db.set_alert_active(aid, True)
-        await db.mark_scraped(aid, bootstrapped=True)
+        await db.mark_bootstrapped(aid)
         a = await db.get_alert(aid)
         self.assertEqual(a["bootstrapped"], 1)
-        self.assertIsInstance(a["last_scraped_at"], int)
+        self.assertEqual(await db.pending_rematch(), [])
 
         await db.delete_alert(aid)
         self.assertIsNone(await db.get_alert(aid))
@@ -88,9 +93,9 @@ class AlertRepoTests(PostgresTestCase):
         [aid] = await db.create_alert(user_id=TG_USER, chat_id=TG_USER, name="Ford Fiesta",
                                       filters={"marcas": ["Ford"], "modelos": ["Fiesta"],
                                                "descuento_pct": 15})
-        await db.upsert_listings([_listing("1")])
+        await store(_listing("1"))
         await db.mark_seen(aid, [_listing("1")], backfill=True)
-        await db.mark_scraped(aid, bootstrapped=True)
+        await db.mark_bootstrapped(aid)
         async with db.connection() as cx:
             await cx.execute("UPDATE search_profiles SET preferences = preferences || "
                              "'{\"sqlite_alert_id\": 5}' WHERE id = %s", (aid,))
@@ -104,7 +109,7 @@ class AlertRepoTests(PostgresTestCase):
         self.assertEqual(edited["filters"]["modelos"], ["Fiesta"])
         self.assertEqual(edited["name"], "Ford Fiesta")
         self.assertEqual(edited["bootstrapped"], 1)
-        self.assertIsNone(edited["last_scraped_at"])        # runs on the next tick
+        self.assertTrue(edited["rematch_requested"])        # backfilled silently next tick
         self.assertEqual(await db.filter_unseen(aid, [_listing("1")]), [])   # history kept
         self.assertEqual(len(new_ids), 1)
         added = await db.get_alert(new_ids[0])
@@ -139,63 +144,12 @@ class AlertRepoTests(PostgresTestCase):
                                  "WHERE key = 'plan_limits'")
 
 
-class ListingRepoTests(PostgresTestCase):
-    async def _snapshots(self) -> list[str]:
-        async with db.connection() as cx:
-            rows = await (await cx.execute(
-                "SELECT change_kind FROM listing_snapshots ORDER BY id")).fetchall()
-        return [r["change_kind"] for r in rows]
-
-    async def _listing_row(self, external_id: str) -> dict:
-        async with db.connection() as cx:
-            return await (await cx.execute(
-                "SELECT * FROM listings WHERE external_id = %s", (external_id,))).fetchone()
-
-    async def test_upsert_keeps_first_seen_and_snapshots_only_changes(self):
-        await db.upsert_listings([_listing("1"), _listing("1")])   # duplicate in batch
-        first = await self._listing_row("1")
-        await db.upsert_listings([_listing("1")])
-        same = await self._listing_row("1")
-        await db.upsert_listings([_listing("1", precio=9500.0)])
-        cheaper = await self._listing_row("1")
-        await db.upsert_listings([_listing("1", precio=9500.0, km=101000)])
-
-        self.assertEqual(await self._snapshots(), ["new", "price", "mileage"])
-        self.assertEqual(first["first_seen_at"], cheaper["first_seen_at"])
-        self.assertGreater(same["last_seen_at"], first["last_seen_at"])
-        self.assertEqual(float(cheaper["price"]), 9500.0)
-        self.assertEqual((first["make"], first["model"]), ("ford", "fiesta"))
-
-    async def test_values_outside_column_domains_are_kept_as_attributes(self):
-        await db.upsert_listings([_listing("2", moneda="U$S", transmision="Automática",
-                                           vendedor="Concesionaria", published_at=1_700_000_000)])
-        row = await self._listing_row("2")
-
-        self.assertIsNone(row["currency"])
-        self.assertEqual(row["transmission"], "automatic")
-        self.assertEqual(row["seller_type"], "dealer")
-        self.assertEqual(row["attributes"]["moneda"], "U$S")
-        self.assertEqual(int(row["published_at"].timestamp()), 1_700_000_000)
-
-    async def test_comparables_use_the_legacy_keys_and_skip_partial_prices(self):
-        await db.upsert_listings([
-            _listing("a", anio=2018), _listing("b", anio=2019, km=None),
-            _listing("c", anio=2021), _listing("d", price_partial=True),
-            _listing("e", modelo="Focus"), _listing("f", km=200000),
-        ])
-        comps = await db.comparables("ford", "FIESTA", 2018, km=100000)
-
-        self.assertEqual(sorted(c["listing_id"] for c in comps), ["a", "b"])
-        self.assertEqual(comps[0]["precio"], 10000.0)
-        self.assertEqual(comps[0]["moneda"], "USD")
-
-
 class SeenMatchesTests(PostgresTestCase):
     async def test_seen_listings_become_matches(self):
         [aid] = await db.create_alert(user_id=TG_USER, chat_id=TG_USER, name="a",
                                       filters={"marcas": ["Ford"], "modelos": ["Fiesta"]})
         items = [_listing("1"), _listing("2")]
-        await db.upsert_listings(items)
+        await store(*items)
 
         self.assertEqual(len(await db.filter_unseen(aid, items)), 2)
         await db.mark_seen(aid, items[:1], backfill=True)
@@ -215,7 +169,7 @@ class SeenMatchesTests(PostgresTestCase):
         [other_user] = await db.create_alert(user_id=1, chat_id=1, name="b",
                                              filters={"marcas": ["Ford"], "modelos": ["Fiesta"]})
         item = [_listing("1")]
-        await db.upsert_listings(item)
+        await store(*item)
         await db.mark_seen(ids[0], item)
         await db.mark_seen(other_user, item)
 
@@ -238,85 +192,6 @@ class GeocodeAndConfigTests(PostgresTestCase):
         self.assertEqual(await db.get_config("recommended_max_age_days"), 15)
         self.assertEqual((await db.get_config("comparables"))["min_n"], 5)
         self.assertEqual(await db.get_config("missing", "fallback"), "fallback")
-
-
-class _FakeBot:
-    def __init__(self, fail: bool = False) -> None:
-        self.sent: list[dict] = []
-        self.fail = fail
-
-    async def send_message(self, **kwargs) -> None:
-        if self.fail:
-            raise RuntimeError("telegram unavailable")
-        self.sent.append(kwargs)
-
-
-class SchedulerOnPostgresTests(PostgresTestCase):
-    """The bot's flow end to end: silent bootstrap, one alert per new
-    opportunity, nothing twice."""
-
-    async def test_bootstrap_then_notify_new_opportunity_once(self):
-        from pipeline import scheduler
-
-        results: list[Listing] = []
-
-        class FakeScraper:
-            async def search(self, filters):
-                return list(results)
-
-        [aid] = await db.create_alert(user_id=TG_USER, chat_id=4242, name="Ford Fiesta",
-                                      filters={"marcas": ["Ford"], "modelos": ["Fiesta"],
-                                               "sources": ["mercadolibre"], "descuento_pct": 15})
-        # Six comparables around USD 12.000 give a market median.
-        results[:] = [Listing(**{**_listing(f"c{i}", precio=12000.0 + i * 100)}) for i in range(6)]
-        bot = _FakeBot()
-
-        with patch.dict(scheduler.REGISTRY, {"mercadolibre": FakeScraper}, clear=True):
-            await scheduler._run_alert(bot, await db.get_alert(aid))       # bootstrap
-            self.assertEqual(bot.sent, [])
-            results.append(Listing(**_listing("deal", precio=9000.0)))    # 25% below median
-            results.append(Listing(**_listing("meh", precio=11800.0)))
-            await scheduler._run_alert(bot, await db.get_alert(aid))
-            await scheduler._run_alert(bot, await db.get_alert(aid))       # nothing new
-
-        self.assertEqual(len(bot.sent), 1)
-        self.assertEqual(bot.sent[0]["chat_id"], 4242)
-        self.assertIn("Ford Fiesta deal", bot.sent[0]["text"])
-        async with db.connection() as cx:
-            rows = await (await cx.execute(
-                "SELECT l.external_id, m.is_backfill, m.price_ref FROM matches m "
-                "JOIN listings l ON l.id = m.listing_id ORDER BY m.id")).fetchall()
-        self.assertEqual(len(rows), 8)
-        self.assertTrue(all(r["is_backfill"] for r in rows[:6]))
-        deal = next(r for r in rows if r["external_id"] == "deal")
-        self.assertFalse(deal["is_backfill"])
-        self.assertTrue(deal["price_ref"]["is_opportunity"])
-        # Like the SQLite bot, the batch is cached before scoring, so the
-        # listing itself counts as a comparable (sección 6.2 fixes this in F2).
-        self.assertEqual(deal["price_ref"]["n"], 8)
-
-    async def test_failed_delivery_is_retried_on_the_next_tick(self):
-        from pipeline import scheduler
-
-        results = [Listing(**_listing(f"c{i}", precio=12000.0 + i * 100)) for i in range(6)]
-
-        class FakeScraper:
-            async def search(self, filters):
-                return list(results)
-
-        [aid] = await db.create_alert(user_id=TG_USER, chat_id=4242, name="Ford Fiesta",
-                                      filters={"marcas": ["Ford"], "modelos": ["Fiesta"],
-                                               "sources": ["mercadolibre"], "descuento_pct": 15})
-        with patch.dict(scheduler.REGISTRY, {"mercadolibre": FakeScraper}, clear=True):
-            await scheduler._run_alert(_FakeBot(), await db.get_alert(aid))      # bootstrap
-            results.append(Listing(**_listing("deal", precio=9000.0)))
-            await scheduler._run_alert(_FakeBot(fail=True), await db.get_alert(aid))
-            self.assertEqual(await db.filter_unseen(aid, [_listing("deal")]), [_listing("deal")])
-            ok = _FakeBot()
-            await scheduler._run_alert(ok, await db.get_alert(aid))
-
-        self.assertEqual(len(ok.sent), 1)
-        self.assertIn("Ford Fiesta deal", ok.sent[0]["text"])
 
 
 if __name__ == "__main__":

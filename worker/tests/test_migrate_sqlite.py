@@ -125,8 +125,7 @@ class MigrateSqliteTests(PostgresTestCase):
         fiesta, gol = by_user[111], by_user[222]
         self.assertEqual(fiesta["filters"]["modelos"], ["Fiesta"])
         self.assertEqual(fiesta["filters"]["descuento_pct"], 15)
-        self.assertEqual((fiesta["active"], fiesta["bootstrapped"], fiesta["last_scraped_at"]),
-                         (1, 1, T0 + 60))
+        self.assertEqual((fiesta["active"], fiesta["bootstrapped"]), (1, 1))
         self.assertEqual(gol["filters"]["marcas"], ["Volkswagen"])
         self.assertEqual((gol["active"], gol["bootstrapped"]), (0, 0))
         # Already-seen listings are backfill: the bot won't alert them again.

@@ -5,10 +5,12 @@ import signal
 
 from telegram.ext import Application
 
-from config import TELEGRAM_TOKEN
+from config import ENRICH_TICK_SECONDS, TELEGRAM_TOKEN, WATCHLIST_TICK_SECONDS
 import db
 from bot.handlers import register
+from pipeline.enrich import enrich_pass
 from pipeline.scheduler import run_loop
+from pipeline.watchlist import refresh_watchlist
 from collectors._browser import shutdown as browser_shutdown
 from collectors._loop import run_collector
 from aio import run
@@ -19,6 +21,19 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
 log = logging.getLogger("main")
+
+
+async def _every(name: str, seconds: int, job, stop: asyncio.Event) -> None:
+    """Run `job(stop)` now and then every `seconds` until stopped; errors are logged."""
+    while not stop.is_set():
+        try:
+            await job(stop)
+        except Exception:
+            log.exception("%s failed", name)
+        try:
+            await asyncio.wait_for(stop.wait(), timeout=seconds)
+        except asyncio.TimeoutError:
+            pass
 
 
 async def amain() -> None:
@@ -52,16 +67,22 @@ async def amain() -> None:
     except Exception:
         pass
 
-    scheduler_task = asyncio.create_task(run_loop(app.bot, stop))
+    tasks = [
+        asyncio.create_task(run_loop(app.bot, stop)),
+        asyncio.create_task(_every("enrichment", ENRICH_TICK_SECONDS, enrich_pass, stop)),
+        asyncio.create_task(_every("watchlist", WATCHLIST_TICK_SECONDS, refresh_watchlist, stop)),
+    ]
 
     try:
         await stop.wait()
     finally:
-        scheduler_task.cancel()
-        try:
-            await scheduler_task
-        except asyncio.CancelledError:
-            pass
+        for task in tasks:
+            task.cancel()
+        for task in tasks:
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
         await app.updater.stop()
         await app.stop()
         await app.shutdown()

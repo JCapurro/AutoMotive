@@ -4,17 +4,19 @@ Scraper en tiempo real de plataformas de autos en Argentina con detección
 automática de oportunidades y notificación al Telegram.
 
 El plan del MVP (web + Supabase) está en [docs/TECHNICAL_PLAN.md](docs/TECHNICAL_PLAN.md).
-Estado: **F0** — el bot corre sobre Postgres (Supabase) y el repo ya tiene la
-forma de monorepo.
+Estado: **F1** — ingesta centrada en la publicación: se scrapea por *crawl
+target* (fuente + marca + modelo) y no por alerta, cada publicación se guarda
+una sola vez con su historial, y el bot de Telegram sigue alertando igual que antes.
 
 ## Estructura
 
 ```
 worker/       bot de Telegram, collectors, pipeline (Python, raíz de imports)
-  collectors/     scrapers por fuente (Playwright)
-  normalization/  normalize, price_check, geo, fx
+  collectors/     scrapers por fuente: search() y fetch_detail()
+  normalization/  vehicle (catálogo + rapidfuzz), transmission, listing, price_check, geo, fx
   intelligence/   opportunity (motor legacy hasta F2)
-  pipeline/       scheduler
+  pipeline/       crawl (targets + cadencia), ingest (upsert/snapshots/eventos),
+                  enrich, watchlist, rematch, scheduler (loop + alertas de Telegram)
   bot/            wizard de Telegram
   db/             psycopg 3 (pool async) + repos por tabla
   tools/          scraper_cli, migrate_sqlite
@@ -31,7 +33,11 @@ docs/         PRD y plan técnico
 | **Facebook Marketplace** | Headless browser + sesión | Particulares — donde aparecen las gangas. Requiere login una vez |
 | **V6** | Headless browser | Particulares + concesionarias, fotos directas |
 | **Kavak** | Headless browser | Inventario certificado, precios estables — buen anclaje para la mediana |
+| **Autocosmos** | HTTP | Mayormente concesionarias; los avisos con solo "Anticipo" quedan como precio parcial |
 
+La cadencia de cada fuente es `sources.crawl_interval_seconds` (ML 10 min,
+Kavak/V6/Autocosmos 30 min, Facebook 60 min) y el ritmo de las fichas,
+`sources.detail_interval_seconds`. Se editan en la base, sin deploy.
 ## Cómo funciona
 
 1. Configurás una alerta desde Telegram (`/nuevaalerta`) eligiendo:
@@ -43,25 +49,39 @@ docs/         PRD y plan técnico
    - **% mínimo por debajo del precio de mercado** para alertar — el control
      central: *no* se fija un precio min/max, cada aviso se compara contra la
      mediana de comparables y se notifica si está al menos ese % por debajo.
-2. **Bootstrap silencioso**: la primera corrida de una alerta marca todo lo
-   que vea como "ya conocido" sin notificar — evita el diluvio inicial.
-3. **Cadencia per-alerta**: cada alerta se re-scrapea a lo sumo cada
-   `ALERT_RESCRAPE_INTERVAL_SECONDS` (default 3h). El scheduler tiquea cada
-   `TICK_INTERVAL_SECONDS` (default 5min) pero solo corre las alertas que
-   ya están "vencidas". Las 4 fuentes se scrapean en paralelo.
-4. **Filtro de recencia**: una vez bootstrapeada, solo se recomiendan
-   publicaciones cuya fecha conocida sea menor o igual a
-   `RECOMMENDED_MAX_AGE_DAYS` (default 15 días). Si la fuente no expone la
-   fecha (ej. Kavak, ML), se confía en `matches` (lo ya visto) para detectar lo nuevo.
-5. Toda publicación nueva se filtra por distancia: el bot toma tu ubicación
-   de Telegram, geocodifica la ubicación textual del aviso y solo conserva los
-   autos dentro de `radio_km`. Las geocodificaciones se cachean en Postgres.
-6. Toda publicación nueva pasa por el filtro de **precio trampa** y se
-   compara contra la mediana de "comparables" recientes (mismo modelo, año
-   ±1, km ±25%, normalizado a USD).
-7. Si la publicación pasa todos los filtros y está al menos `descuento_pct`
-   por debajo de la mediana, te llega al Telegram. Las ya vistas no se
-   re-notifican.
+2. **Crawl targets** ([crawl.py](worker/pipeline/crawl.py)): en cada tick
+   (`TICK_INTERVAL_SECONDS`, 5 min) las búsquedas habilitadas se agrupan por
+   (fuente, marca, modelo) con el rango más amplio de años y km y **sin precio**.
+   Dos usuarios que buscan el mismo modelo comparten un solo scrapeo. Un target
+   corre cuando vence su `next_run_at`; las fuentes van en paralelo y los
+   targets de una fuente en serie, con jitter (`CRAWL_JITTER_SECONDS`).
+3. **Normalización v2**: marca/modelo/versión salen del título y los atributos
+   contra `vehicle_catalog` (alias + `rapidfuzz`), no del filtro de búsqueda; si
+   no se resuelven se usa el del target con `normalization_confidence` baja.
+   También transmisión, combustible, tipo de vendedor y `price_usd` con la
+   cotización del día, que queda congelada en `fx_rates`.
+4. **Upsert canónico** ([ingest.py](worker/pipeline/ingest.py)): una fila por
+   (fuente, id) con `first_seen_at` fijo; `listing_snapshots` solo cuando cambia
+   precio, km, descripción, imágenes o atributos clave, y eventos
+   `listing_new` / `listing_updated` / `price_drop` (baja ≥ `price_drop_min_pct`).
+   Un aviso nuevo con el mismo *fingerprint* que otro de los últimos 60 días y
+   precio ±10% se marca `probable_repost_of` y sale de los comparables.
+5. **Bootstrap silencioso**: la primera corrida de un target, y una búsqueda
+   nueva o editada (se matchea contra lo guardado de los últimos 30 días), quedan
+   como *backfill*: no notifican — evita el diluvio inicial.
+6. **Alertas de Telegram**: cada lote de un target pasa por las alertas de ese
+   modelo con sus filtros, el radio (`radio_km`, geocodificación con cache), la
+   recencia (`RECOMMENDED_MAX_AGE_DAYS`, 15 días, cuando la fuente expone la
+   fecha) y el motor de oportunidad. Lo ya visto (`matches`) no se re-notifica.
+7. **Enrichment** ([enrich.py](worker/pipeline/enrich.py)): las publicaciones
+   con al menos un match se completan con `fetch_detail()` (descripción,
+   versión, transmisión, vendedor, todas las fotos), con una cola por fuente.
+8. **Watchlist** ([watchlist.py](worker/pipeline/watchlist.py)): una vez por día
+   se revisan las publicaciones guardadas o en seguimiento; si dan 404, están
+   pausadas o vendidas pasan a `gone`.
+9. **Observabilidad**: cada corrida queda en `collector_runs` (encontrados,
+   nuevos, actualizados, error) y cada falla de normalización, ingesta,
+   enrichment o notificación en `pipeline_errors`.
 
 ## Setup
 
@@ -208,7 +228,7 @@ Para cada listing nuevo:
      "⚠️ Oportunidad sospechosa" en la notificación.
 6. Si está `>= descuento_pct` por debajo y pasa los filtros → se notifica.
 
-Las primeras 1-2 corridas son silenciosas mientras se llena el cache.
+La primera corrida de cada target es silenciosa mientras se llena el cache.
 
 ## Limitaciones
 
@@ -229,8 +249,10 @@ Las primeras 1-2 corridas son silenciosas mientras se llena el cache.
 
 ## Agregar una nueva fuente
 
-1. Crear `worker/collectors/<nombre>.py` con una clase que herede `BaseScraper` y un
-   método async `search(filters) -> list[Listing]`.
+1. Crear `worker/collectors/<nombre>.py` con una clase que herede `BaseScraper`, un
+   método async `search(filters) -> list[Listing]` y `fetch_detail(url) -> ListingDetail`.
+   Conviene que el parseo sean funciones puras sobre HTML (`parse_search`,
+   `parse_detail`) con un fixture en `worker/tests/fixtures/html/`.
 2. Registrarla en [collectors/__init__.py](worker/collectors/__init__.py) `REGISTRY`.
 3. Agregarla a `SOURCES` en [config.py](worker/config.py) y a la tabla `sources`
    (en `supabase/seed.sql` y con una migración para bases existentes).

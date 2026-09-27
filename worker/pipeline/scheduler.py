@@ -1,6 +1,20 @@
+"""The worker's crawl loop and the Telegram alerts it still sends (F1).
+
+Each tick:
+  1. crawl_targets are re-derived from the enabled profiles (pipeline/crawl.py);
+  2. new or edited profiles are bootstrapped silently (pipeline/rematch.py);
+  3. due targets are crawled and ingested;
+  4. each target's batch goes to the Telegram alerts of that make/model, which
+     keep the pre-F1 behavior: per-profile filters and radius, "already seen"
+     via matches, recency, the legacy opportunity engine and one alert per
+     listing per user. Matching with reasons and the 0–100 score replace this
+     in F2; the notification engine in F3.
+
+Scraping no longer happens per alert: two users searching the same model
+share one crawl.
+"""
 from __future__ import annotations
 import asyncio
-from dataclasses import dataclass
 import logging
 import time
 import traceback
@@ -11,31 +25,14 @@ from telegram import Bot
 from telegram.constants import ParseMode
 
 import db
-from config import (
-    TICK_INTERVAL_SECONDS,
-    ALERT_RESCRAPE_INTERVAL_SECONDS,
-    RECOMMENDED_MAX_AGE_DAYS,
-    SOURCES,
-)
-from collectors import REGISTRY
-from collectors._loop import run_collector
+from config import TICK_INTERVAL_SECONDS, RECOMMENDED_MAX_AGE_DAYS, CRAWL_JITTER_SECONDS
+from collectors.base import Listing
+from db.repos.runs import log_error
 from intelligence.opportunity import evaluate
-from normalization.geo import filter_listings_by_radius
+from pipeline import crawl, rematch
+from pipeline.legacy_match import candidates_for
 
 log = logging.getLogger("scheduler")
-
-
-@dataclass
-class _SourceRun:
-    source: str
-    items: list
-    attempted: int = 0
-    succeeded: int = 0
-    failed: int = 0
-
-    @property
-    def any_success(self) -> bool:
-        return self.succeeded > 0
 
 
 def _format_notification(alert_name: str, listing, score) -> str:
@@ -92,110 +89,39 @@ def _is_recent(listing, max_age_days: int) -> bool:
     return (int(time.time()) - listing.published_at) <= max_age_days * 86_400
 
 
-def _expand_filters(f: dict) -> list[dict]:
-    """Expand a multi-value alert filter into single-vehicle filter dicts.
-
-    Cartesian product of `marcas` × `modelos`. The rest of the filters
-    (km/precio/años/etc.) are copied to each variant. Falls back to the
-    legacy singular `marca`/`modelo` keys for backward compat.
-    """
-    marcas = f.get("marcas") or ([f["marca"]] if f.get("marca") else [None])
-    modelos = f.get("modelos") or ([f["modelo"]] if f.get("modelo") else [None])
-    base = {k: v for k, v in f.items() if k not in ("marcas", "modelos", "marca", "modelo")}
-
-    # If the user picked specific years, narrow the URL with min/max so the
-    # source returns a tight superset; client-side matches_filters then
-    # enforces exact membership in `anios`.
-    anios = f.get("anios") or []
-    if anios and not (base.get("anio_min") or base.get("anio_max")):
-        base["anio_min"] = min(anios)
-        base["anio_max"] = max(anios)
-
-    out: list[dict] = []
-    for marca in marcas:
-        for modelo in modelos:
-            v = dict(base)
-            if marca: v["marca"] = marca
-            if modelo: v["modelo"] = modelo
-            out.append(v)
-    return out or [dict(f)]
-
-
-async def _run_one_source(alert_id: int, src: str, filters: dict) -> _SourceRun:
-    cls = REGISTRY.get(src)
-    if not cls:
-        log.warning("alert=%s src=%s unknown scraper", alert_id, src)
-        return _SourceRun(src, [], attempted=1, failed=1)
-    variants = _expand_filters(filters)
-    scraper = cls()
-    out = []
-    attempted = succeeded = failed = 0
-    for v in variants:
-        attempted += 1
-        try:
-            items = await run_collector(scraper.search(v))
-            succeeded += 1
-            log.info("alert=%s src=%s variant=%s found=%d",
-                     alert_id, src, f"{v.get('marca','*')}/{v.get('modelo','*')}", len(items))
-            out.extend(items)
-        except Exception:
-            failed += 1
-            log.error("scraper %s failed: %s", src, traceback.format_exc())
-    return _SourceRun(src, out, attempted=attempted, succeeded=succeeded, failed=failed)
-
-
-async def _run_alert(bot: Bot, alert: dict) -> None:
-    f = alert["filters"]
-    sources = f.get("sources") or SOURCES
-    bootstrapped = bool(alert.get("bootstrapped"))
-    # All sources in parallel — different hosts so no contention.
-    source_runs = await asyncio.gather(
-        *[_run_one_source(alert["id"], s, f) for s in sources],
-        return_exceptions=False,
-    )
-    attempted_runs = [run for run in source_runs if run.attempted > 0]
-    if attempted_runs and not any(run.any_success for run in attempted_runs):
-        log.warning(
-            "alert=%s no scraper source completed; leaving scrape cadence unchanged",
-            alert["id"],
-        )
-        return
-
-    all_listings = [item for run in source_runs for item in run.items]
-    all_listings = await filter_listings_by_radius(all_listings, f)
-
-    # 1) Cache everything (feeds the median for future opportunity calcs).
-    if all_listings:
-        await db.upsert_listings([l.to_dict() for l in all_listings])
-
-    # 2) Find which of these are NEW for this alert.
-    fresh = await db.filter_unseen(alert["id"], [l.to_dict() for l in all_listings])
+async def notify_alert(bot: Bot, alert: dict, items: list[Listing], *, source: str,
+                       first_run: bool) -> int:
+    """The pre-F1 per-alert flow over one target batch. Returns alerts sent."""
+    listings = await candidates_for(alert, items, source)
+    dicts = [l.to_dict() for l in listings]
+    fresh = await db.filter_unseen(alert["id"], dicts)
     fresh_keys = {(x["source"], x["listing_id"]) for x in fresh}
-    fresh_listings = [l for l in all_listings if (l.source, l.listing_id) in fresh_keys]
+    fresh_listings = [l for l in listings if (l.source, l.listing_id) in fresh_keys]
 
-    # 3) On bootstrap (first run for this alert), mark all as seen and skip
-    #    notifications — prevents flooding when the alert is created.
-    if not bootstrapped:
+    # A target's first run, or an alert not bootstrapped yet: everything is
+    # backfill, nothing is notified (sección 5.7).
+    if first_run or not alert.get("bootstrapped"):
         if fresh_listings:
             await db.mark_seen(alert["id"], [l.to_dict() for l in fresh_listings], backfill=True)
-        await db.mark_scraped(alert["id"], bootstrapped=True)
-        log.info("alert=%s BOOTSTRAP: marked %d as seen, no notifications",
-                 alert["id"], len(fresh_listings))
-        return
+        if not alert.get("bootstrapped"):
+            await db.mark_bootstrapped(alert["id"])
+        log.info("alert=%s %s: %d backfill, no notifications", alert["id"],
+                 "first target run" if first_run else "bootstrap", len(fresh_listings))
+        return 0
 
-    # 4) Drop listings published outside the freshness window (when known).
+    # Drop listings published outside the freshness window (when known).
     max_age_days = int(await db.get_config("recommended_max_age_days", RECOMMENDED_MAX_AGE_DAYS))
     recent_listings = [l for l in fresh_listings if _is_recent(l, max_age_days)]
 
-    # 5) Score and notify. A listing another profile of this user already has
-    #    (the same wizard alert split per model) is not notified twice.
+    # A listing another profile of this user already has (the same wizard
+    # alert split per model) is not notified twice.
     already_matched = await db.matched_by_other_profiles(
         alert["id"], [l.to_dict() for l in recent_listings])
     price_refs: dict[tuple[str, str], dict] = {}
     sent = 0
     failed_delivery_keys: set[tuple[str, str]] = set()
     for l in recent_listings:
-        score = await evaluate(l, f)
+        score = await evaluate(l, alert["filters"])
         price_refs[(l.source, l.listing_id)] = _price_ref(score)
         if not score.is_opportunity or (l.source, l.listing_id) in already_matched:
             continue
@@ -211,48 +137,43 @@ async def _run_alert(bot: Bot, alert: dict) -> None:
             log.warning("send_message failed: %s", e)
             failed_delivery_keys.add((l.source, l.listing_id))
 
-    # 6) Mark all fresh as seen (even non-recent / non-opportunities) so we
-    #    don't reconsider them next tick. Keep failed deliveries unseen so a
-    #    transient Telegram/network outage does not permanently drop a hit.
-    markable_listings = [
-        l for l in fresh_listings
-        if (l.source, l.listing_id) not in failed_delivery_keys
-    ]
-    if markable_listings:
-        await db.mark_seen(alert["id"], [l.to_dict() for l in markable_listings],
-                           price_refs=price_refs)
+    # Mark all fresh as seen (even non-recent / non-opportunities) so we don't
+    # reconsider them. Failed deliveries stay unseen: the target's next run
+    # retries them, so a transient Telegram outage doesn't drop a hit.
+    markable = [l for l in fresh_listings if (l.source, l.listing_id) not in failed_delivery_keys]
+    if markable:
+        await db.mark_seen(alert["id"], [l.to_dict() for l in markable], price_refs=price_refs)
     if failed_delivery_keys:
-        log.warning(
-            "alert=%s delivery failed for %d opportunity listing(s); leaving due for retry",
-            alert["id"],
-            len(failed_delivery_keys),
-        )
-        return
-    await db.mark_scraped(alert["id"])
+        log.warning("alert=%s delivery failed for %d opportunity listing(s); retried next run",
+                    alert["id"], len(failed_delivery_keys))
     log.info("alert=%s fresh=%d recent=%d notified=%d",
              alert["id"], len(fresh_listings), len(recent_listings), sent)
+    return sent
 
 
-def _alert_is_due(alert: dict) -> bool:
-    last = alert.get("last_scraped_at")
-    if not last:
-        return True   # never scraped → run now (covers fresh alerts)
-    return (int(time.time()) - int(last)) >= ALERT_RESCRAPE_INTERVAL_SECONDS
+def batch_handler(bot: Bot) -> crawl.BatchHandler:
+    async def handle(run: crawl.TargetRun) -> None:
+        t = run.target
+        for alert in await db.alerts_for_target(t["source"], t.get("make"), t.get("model")):
+            try:
+                await notify_alert(bot, alert, run.items, source=t["source"],
+                                   first_run=run.first_run)
+            except Exception:
+                await log_error("notify", f"profile:{alert['id']}", traceback.format_exc())
+    return handle
+
+
+async def tick(bot: Bot, stop: asyncio.Event | None = None) -> None:
+    await crawl.sync_targets(await db.enabled_profiles())
+    await rematch.run_pending()
+    due = await crawl.crawl_due(batch_handler(bot), jitter_seconds=CRAWL_JITTER_SECONDS, stop=stop)
+    log.info("crawl tick: %d due targets", due)
 
 
 async def run_loop(bot: Bot, stop_event: asyncio.Event) -> None:
     while not stop_event.is_set():
         try:
-            alerts = await db.list_alerts(only_active=True)
-            due = [a for a in alerts if _alert_is_due(a)]
-            log.info("scheduler tick: %d active alerts, %d due", len(alerts), len(due))
-            for a in due:
-                if stop_event.is_set():
-                    break
-                try:
-                    await _run_alert(bot, a)
-                except Exception:
-                    log.error("alert run failed: %s", traceback.format_exc())
+            await tick(bot, stop_event)
         except Exception:
             log.error("scheduler tick failed: %s", traceback.format_exc())
         try:

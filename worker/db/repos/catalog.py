@@ -1,44 +1,48 @@
-"""Resolve free-text make/model against vehicle_catalog.
+"""vehicle_catalog: canonical make/model/trim names.
 
-The catalog is small (a few hundred rows), so the model-level rows are kept in
-memory and matched in Python with the same normalization the scrapers use.
+The catalog is small (a few hundred rows), so it is kept in memory and matched
+in Python: `match_model` for search profiles (make + model as typed), and
+normalization/vehicle.py for listing titles.
 """
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass
 
 from psycopg import AsyncConnection
 
 from normalization.normalize import normalize_brand, normalize_text
+from normalization.vehicle import CatalogModel
 
 
 _TTL_SECONDS = 600.0
-
-
-@dataclass(frozen=True)
-class CatalogModel:
-    make: str
-    model: str
-    aliases: tuple[str, ...]
-
-    def names(self) -> list[str]:
-        return [normalize_text(self.model), *(normalize_text(a) for a in self.aliases)]
-
 
 _models: list[CatalogModel] = []
 _fetched_at = 0.0
 
 
 async def load_models(cx: AsyncConnection) -> list[CatalogModel]:
+    """Model-level rows with their trims, aliases and production years."""
     global _models, _fetched_at
     if not _models or time.monotonic() - _fetched_at > _TTL_SECONDS:
         rows = await (await cx.execute(
-            "SELECT make, model, aliases FROM vehicle_catalog WHERE trim IS NULL"
+            "SELECT m.make, m.model, m.aliases, m.year_from, m.year_to, "
+            "       coalesce(array_agg(t.trim ORDER BY t.trim) FILTER (WHERE t.trim IS NOT NULL), "
+            "                '{}') AS trims "
+            "  FROM vehicle_catalog m "
+            "  LEFT JOIN vehicle_catalog t ON t.make = m.make AND t.model = m.model "
+            "                             AND t.trim IS NOT NULL "
+            " WHERE m.trim IS NULL "
+            " GROUP BY m.make, m.model, m.aliases, m.year_from, m.year_to"
         )).fetchall()
-        _models = [CatalogModel(r["make"], r["model"], tuple(r["aliases"])) for r in rows]
+        _models = [CatalogModel(r["make"], r["model"], tuple(r["aliases"]), tuple(r["trims"]),
+                                r["year_from"], r["year_to"]) for r in rows]
         _fetched_at = time.monotonic()
     return _models
+
+
+def clear_catalog_cache() -> None:
+    global _fetched_at
+    _fetched_at = 0.0
 
 
 def match_model(models: list[CatalogModel], make: str | None,

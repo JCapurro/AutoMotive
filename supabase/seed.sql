@@ -2,15 +2,15 @@
 -- Every insert is idempotent and never overwrites values already tuned in the database.
 
 -- ---------------------------------------------------------------------------
--- sources (sección 5.1). autocosmos exists in worker/collectors but is not in REGISTRY.
+-- sources (sección 5.1). detail_interval_seconds rate-limits fetch_detail() (sección 5.5).
 -- ---------------------------------------------------------------------------
 
-insert into public.sources (id, name, enabled, crawl_interval_seconds, priority) values
-  ('mercadolibre', 'MercadoLibre',         true,   600, 10),
-  ('kavak',        'Kavak',                true,  1800, 20),
-  ('v6',           'V6',                   true,  1800, 30),
-  ('facebook',     'Facebook Marketplace', true,  3600, 40),
-  ('autocosmos',   'Autocosmos',           false, 1800, 50)
+insert into public.sources (id, name, enabled, crawl_interval_seconds, priority, detail_interval_seconds) values
+  ('mercadolibre', 'MercadoLibre',         true,   600, 10,  8),
+  ('kavak',        'Kavak',                true,  1800, 20,  5),
+  ('v6',           'V6',                   true,  1800, 30,  5),
+  ('facebook',     'Facebook Marketplace', true,  3600, 40, 30),
+  ('autocosmos',   'Autocosmos',           true,  1800, 50,  5)
 on conflict (id) do nothing;
 
 -- ---------------------------------------------------------------------------
@@ -31,7 +31,9 @@ insert into public.app_config (key, value) values
      "enforced": false,
      "free": {"max_profiles": 1, "max_visible_results": 50, "immediate_alerts": false},
      "pro":  {"max_profiles": 10, "immediate_alerts": true, "crawl_priority": "high"}
-   }')
+   }'),
+  ('repost',                        '{"window_days": 60, "price_tol_pct": 10}'),
+  ('enrichment',                    '{"batch_per_source": 20, "max_age_days": 30}')
 on conflict (key) do nothing;
 
 -- ---------------------------------------------------------------------------

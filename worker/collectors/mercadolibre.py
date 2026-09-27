@@ -4,6 +4,8 @@ Uses Playwright against the public search page. The official Mercado Libre
 API exposes /sites/MLA/search but it is gated by their PolicyAgent for
 non-Partner apps (returns 403 for any query, regardless of OAuth scopes),
 so we don't bother with the API path.
+
+Item pages (fetch_detail) are server-rendered and read with a plain GET.
 """
 from __future__ import annotations
 import asyncio
@@ -15,8 +17,10 @@ from bs4 import BeautifulSoup
 from playwright.async_api import async_playwright
 
 import config
-from .base import BaseScraper, Listing
+from .base import BaseScraper, CollectorBlocked, Listing, ListingDetail
 from ._browser import browser_context
+from ._dates import parse_relative_date
+from ._http import dedupe, fetch_page, json_ld_of_type, multiline_text, soup, text_of, to_int
 
 
 log = logging.getLogger("collectors.mercadolibre")
@@ -34,6 +38,8 @@ def _looks_like_login_wall(url: str, body_text: str = "") -> bool:
         "account-verification" in url_l
         or "/login" in url_l
         or ("para continuar" in text_l and "ingresa" in text_l)
+        # Security challenge (captcha): never solved automatically, the run fails.
+        or ("por seguridad" in text_l and "complet" in text_l and "desaf" in text_l)
     )
 
 
@@ -110,7 +116,9 @@ def _extract_id(href: str) -> str | None:
     return f"MLA{m.group(1)}" if m else None
 
 
-def _parse_card(card_html: str, fallback: dict) -> Listing | None:
+def _parse_card(card_html: str) -> Listing | None:
+    """One search result. Make/model are left to normalization (sección 5.2):
+    the card only has the title, and the search filter is not evidence."""
     soup = BeautifulSoup(card_html, "lxml")
 
     a = soup.select_one("a.poly-component__title")
@@ -170,16 +178,119 @@ def _parse_card(card_html: str, fallback: dict) -> Listing | None:
         url=href,
         precio=precio,
         moneda=moneda,
-        marca=fallback.get("marca"),
-        modelo=fallback.get("modelo"),
         anio=anio,
         km=km,
         ubicacion=location,
-        extra={"img": img_url} if img_url else {},
+        imagenes=[img_url] if img_url else [],
     )
 
 
+def parse_search(html: str) -> list[Listing]:
+    """Cards of a search results page, in page order, without duplicates."""
+    doc = BeautifulSoup(html, "lxml")
+    out: dict[str, Listing] = {}
+    for card in doc.select("li.ui-search-layout__item"):
+        listing = _parse_card(str(card))
+        if listing and listing.listing_id not in out:
+            out[listing.listing_id] = listing
+    return list(out.values())
+
+
+# ---------- detail page ----------
+
+_GONE_TEXTS = ("publicacion pausada", "publicacion finalizada", "esta publicacion esta pausada",
+               "esta publicacion finalizo", "publicacion inactiva")
+
+
+def _plain(s: str) -> str:
+    return s.lower().translate(str.maketrans("áéíóú", "aeiou"))
+
+
+def parse_detail(html: str, url: str, status: int = 200) -> ListingDetail:
+    """An item page (auto.mercadolibre.com.ar/MLA-…)."""
+    if status == 404:
+        return ListingDetail(url, gone=True, gone_reason="404")
+    doc = soup(html)
+    page_text = _plain(doc.get_text(" ", strip=True))
+    if reason := next((t for t in _GONE_TEXTS if t in page_text), None):
+        return ListingDetail(url, gone=True, gone_reason=reason)
+
+    ld = json_ld_of_type(doc, "Vehicle", "Car", "Product") or {}
+    offer = ld.get("offers") or {}
+    availability = str(offer.get("availability") or "")
+    if availability and not availability.endswith("InStock"):
+        return ListingDetail(url, gone=True, gone_reason=availability.rsplit("/", 1)[-1])
+
+    title = text_of(doc.select_one("h1.ui-pdp-title")) or ld.get("name")
+    lid = _extract_id(url) or (str(ld["sku"]) if ld.get("sku") else None)
+    if not title or not lid:
+        raise ValueError(f"mercadolibre detail without title/id: {url}")
+
+    # "Características" tables: Marca, Modelo, Año, Versión, Kilómetros, Transmisión…
+    specs: dict[str, str] = {}
+    for row in doc.select("table tr"):
+        th, td = row.select_one("th"), row.select_one("td")
+        if th and td and (k := text_of(th)) and (v := text_of(td)):
+            specs.setdefault(k, v)
+
+    precio = float(offer["price"]) if offer.get("price") else None
+    moneda = {"ARS": "ARS", "USD": "USD"}.get(str(offer.get("priceCurrency") or "").upper())
+    if precio is None:
+        price_el = doc.select_one(".ui-pdp-price__second-line [data-andes-money-amount='true']")
+        meta = price_el.select_one("meta[itemprop='price']") if price_el else None
+        if meta and meta.get("content"):
+            precio = float(meta["content"])
+            sym = text_of(price_el.select_one(".andes-money-amount__currency-symbol")) or ""
+            moneda = "USD" if "US" in sym.upper() else "ARS"
+
+    # "2026 | 0 km · Publicado hace 7 meses"
+    subtitle = text_of(doc.select_one(".ui-pdp-subtitle, .ui-pdp-header__subtitle")) or ""
+    published = re.search(r"publicado\s+(hace\s+.+)$", subtitle, re.IGNORECASE)
+
+    seller_header = _plain(text_of(doc.select_one(".ui-vip-seller-profile__header")) or "")
+    vendedor = ("concesionaria" if "concesionaria" in seller_header or "tienda oficial" in seller_header
+                else "particular" if "vendedor" in seller_header or "particular" in seller_header
+                else None)
+    seller_name = text_of(doc.select_one(".ui-pdp-seller-validated__title"))
+    if seller_name:
+        seller_name = re.sub(r"^publicado por\s+", "", seller_name, flags=re.IGNORECASE)
+
+    images = dedupe([img.get("data-zoom") or img.get("src")
+                     for img in doc.select("figure.ui-pdp-gallery__figure img")])
+    brand = ld.get("brand")
+
+    return ListingDetail(url, listing=Listing(
+        source="mercadolibre",
+        listing_id=lid,
+        titulo=title,
+        url=url,
+        precio=precio,
+        moneda=moneda,
+        marca=specs.get("Marca") or (brand if isinstance(brand, str) else None),
+        modelo=specs.get("Modelo"),
+        version=specs.get("Versión"),
+        anio=to_int(specs.get("Año")),
+        km=to_int(specs.get("Kilómetros")),
+        combustible=specs.get("Tipo de combustible"),
+        transmision=specs.get("Transmisión"),
+        vendedor=vendedor,
+        vendedor_nombre=seller_name,
+        descripcion=multiline_text(doc.select_one(".ui-pdp-description__content")),
+        imagenes=images,
+        atributos=specs,
+        published_at=parse_relative_date(published.group(1)) if published else None,
+    ))
+
+
 # ---------- scraper ----------
+
+def _blocked(page_number: int) -> None:
+    """A wall on the first page fails the run; on a later page, keep what we have."""
+    log.warning("MercadoLibre requires account verification/login. "
+                "Run: python -m collectors.mercadolibre")
+    if page_number == 1:
+        raise CollectorBlocked("mercadolibre: login wall or security challenge")
+
 
 class MercadoLibreScraper(BaseScraper):
     name = "mercadolibre"
@@ -197,47 +308,48 @@ class MercadoLibreScraper(BaseScraper):
             )
         async with browser_context(storage_state=storage_state) as ctx:
             page = await ctx.new_page()
-            for p in range(1, self.MAX_PAGES + 1):
-                url = _build_url(filters, page=p)
-                try:
-                    await page.goto(url, timeout=45_000, wait_until="domcontentloaded")
-                    if await _page_looks_like_login_wall(page):
-                        log.warning(
-                            "MercadoLibre requires account verification/login. Run: python -m collectors.mercadolibre"
-                        )
-                        break
-                    await page.wait_for_selector(
-                        "li.ui-search-layout__item, .ui-search-rescue",
-                        timeout=15_000,
-                    )
-                except Exception as exc:
-                    if await _page_looks_like_login_wall(page):
-                        log.warning(
-                            "MercadoLibre requires account verification/login. Run: python -m collectors.mercadolibre"
-                        )
-                    else:
-                        log.warning("MercadoLibre scrape failed: %s", exc)
-                    break  # no results / blocked
-                if await page.locator(".ui-search-rescue").count() > 0:
-                    # ML's "no results" placeholder
-                    break
-                cards = await page.locator("li.ui-search-layout__item").all()
-                if not cards:
-                    break
-                for c in cards:
+            try:
+                for p in range(1, self.MAX_PAGES + 1):
+                    url = _build_url(filters, page=p)
                     try:
-                        html = await c.inner_html()
-                    except Exception:
-                        continue
-                    listing = _parse_card(html, filters)
-                    if not listing or listing.listing_id in seen_ids:
-                        continue
-                    seen_ids.add(listing.listing_id)
-                    self.annotate_partial_price(listing)
-                    if self.matches_filters(listing, filters):
-                        out.append(listing)
-            await page.close()
+                        await page.goto(url, timeout=45_000, wait_until="domcontentloaded")
+                        if await _page_looks_like_login_wall(page):
+                            _blocked(p)
+                            break
+                        await page.wait_for_selector(
+                            "li.ui-search-layout__item, .ui-search-rescue",
+                            timeout=15_000,
+                        )
+                    except CollectorBlocked:
+                        raise
+                    except Exception as exc:
+                        if await _page_looks_like_login_wall(page):
+                            _blocked(p)
+                        else:
+                            log.warning("MercadoLibre scrape failed: %s", exc)
+                        break  # no results / blocked
+                    if await page.locator(".ui-search-rescue").count() > 0:
+                        # ML's "no results" placeholder
+                        break
+                    cards = parse_search(await page.content())
+                    if not cards:
+                        break
+                    for listing in cards:
+                        if listing.listing_id in seen_ids:
+                            continue
+                        seen_ids.add(listing.listing_id)
+                        self.annotate_partial_price(listing)
+                        if self.matches_filters(listing, filters):
+                            out.append(listing)
+            finally:
+                await page.close()
         return out
+
+    async def fetch_detail(self, url: str) -> ListingDetail:
+        page = await fetch_page(url)
+        if _looks_like_login_wall(page.url, text_of(soup(page.html).body) or ""):
+            raise CollectorBlocked("mercadolibre: login wall or security challenge")
+        return parse_detail(page.html, url, page.status)
 
 
 # ------ Interactive login: `python -m collectors.mercadolibre` ------
