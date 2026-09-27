@@ -2,7 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass, asdict, field
 from typing import Any
 
-from price_check import keyword_partial
+from normalization.price_check import keyword_partial
 
 
 @dataclass

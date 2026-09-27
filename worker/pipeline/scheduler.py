@@ -16,9 +16,10 @@ from config import (
     RECOMMENDED_MAX_AGE_DAYS,
     SOURCES,
 )
-from scrapers import REGISTRY
-from opportunity import evaluate
-from geo import filter_listings_by_radius
+from collectors import REGISTRY
+from collectors._loop import run_collector
+from intelligence.opportunity import evaluate
+from normalization.geo import filter_listings_by_radius
 
 log = logging.getLogger("scheduler")
 
@@ -53,6 +54,19 @@ def _format_notification(alert_name: str, listing, score) -> str:
     parts.append("")
     parts.append(f'🔗 <a href="{e(listing.url)}">{e(listing.url)}</a>')
     return "\n".join(parts)
+
+
+def _price_ref(score) -> dict:
+    """What the legacy engine concluded, kept on the match for later inspection."""
+    return {
+        "legacy": True,
+        "is_opportunity": score.is_opportunity,
+        "median_usd": score.median,
+        "n": score.sample_size,
+        "diff_pct": score.discount_pct,
+        "reason": score.reason,
+        "suspect_partial": score.suspect_partial,
+    }
 
 
 def _is_recent(listing, max_age_days: int) -> bool:
@@ -102,7 +116,7 @@ async def _run_one_source(alert_id: int, src: str, filters: dict) -> list:
     out = []
     for v in variants:
         try:
-            items = await scraper.search(v)
+            items = await run_collector(scraper.search(v))
             log.info("alert=%s src=%s variant=%s found=%d",
                      alert_id, src, f"{v.get('marca','*')}/{v.get('modelo','*')}", len(items))
             out.extend(items)
@@ -125,10 +139,10 @@ async def _run_alert(bot: Bot, alert: dict) -> None:
 
     # 1) Cache everything (feeds the median for future opportunity calcs).
     if all_listings:
-        db.upsert_listings([l.to_dict() for l in all_listings])
+        await db.upsert_listings([l.to_dict() for l in all_listings])
 
     # 2) Find which of these are NEW for this alert.
-    fresh = db.filter_unseen(alert["id"], [l.to_dict() for l in all_listings])
+    fresh = await db.filter_unseen(alert["id"], [l.to_dict() for l in all_listings])
     fresh_keys = {(x["source"], x["listing_id"]) for x in fresh}
     fresh_listings = [l for l in all_listings if (l.source, l.listing_id) in fresh_keys]
 
@@ -136,20 +150,26 @@ async def _run_alert(bot: Bot, alert: dict) -> None:
     #    notifications — prevents flooding when the alert is created.
     if not bootstrapped:
         if fresh_listings:
-            db.mark_seen(alert["id"], [l.to_dict() for l in fresh_listings])
-        db.mark_scraped(alert["id"], bootstrapped=True)
+            await db.mark_seen(alert["id"], [l.to_dict() for l in fresh_listings], backfill=True)
+        await db.mark_scraped(alert["id"], bootstrapped=True)
         log.info("alert=%s BOOTSTRAP: marked %d as seen, no notifications",
                  alert["id"], len(fresh_listings))
         return
 
     # 4) Drop listings published outside the freshness window (when known).
-    recent_listings = [l for l in fresh_listings if _is_recent(l, RECOMMENDED_MAX_AGE_DAYS)]
+    max_age_days = int(await db.get_config("recommended_max_age_days", RECOMMENDED_MAX_AGE_DAYS))
+    recent_listings = [l for l in fresh_listings if _is_recent(l, max_age_days)]
 
-    # 5) Score and notify.
+    # 5) Score and notify. A listing another profile of this user already has
+    #    (the same wizard alert split per model) is not notified twice.
+    already_matched = await db.matched_by_other_profiles(
+        alert["id"], [l.to_dict() for l in recent_listings])
+    price_refs: dict[tuple[str, str], dict] = {}
     sent = 0
     for l in recent_listings:
-        score = evaluate(l, f)
-        if not score.is_opportunity:
+        score = await evaluate(l, f)
+        price_refs[(l.source, l.listing_id)] = _price_ref(score)
+        if not score.is_opportunity or (l.source, l.listing_id) in already_matched:
             continue
         try:
             await bot.send_message(
@@ -165,8 +185,9 @@ async def _run_alert(bot: Bot, alert: dict) -> None:
     # 6) Mark all fresh as seen (even non-recent / non-opportunities) so we
     #    don't reconsider them next tick.
     if fresh_listings:
-        db.mark_seen(alert["id"], [l.to_dict() for l in fresh_listings])
-    db.mark_scraped(alert["id"])
+        await db.mark_seen(alert["id"], [l.to_dict() for l in fresh_listings],
+                           price_refs=price_refs)
+    await db.mark_scraped(alert["id"])
     log.info("alert=%s fresh=%d recent=%d notified=%d",
              alert["id"], len(fresh_listings), len(recent_listings), sent)
 
@@ -181,7 +202,7 @@ def _alert_is_due(alert: dict) -> bool:
 async def run_loop(bot: Bot, stop_event: asyncio.Event) -> None:
     while not stop_event.is_set():
         try:
-            alerts = db.list_alerts(only_active=True)
+            alerts = await db.list_alerts(only_active=True)
             due = [a for a in alerts if _alert_is_due(a)]
             log.info("scheduler tick: %d active alerts, %d due", len(alerts), len(due))
             for a in due:

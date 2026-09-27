@@ -255,13 +255,13 @@ async def geocode_location(location: str) -> Coords | None:
     if known := _lookup_known_location(query):
         return known
 
-    cached = db.get_geocode_cache(query)
+    cached = await db.get_geocode_cache(query)
     if cached:
         return cached
 
     # If we recently tried this query and Nominatim said "no" (or 429'd us),
     # don't keep hammering — the negative cache TTL will let us retry later.
-    if db.has_fresh_geocode_failure(query):
+    if await db.has_fresh_geocode_failure(query):
         return None
 
     if not GEOCODING_ENABLED:
@@ -269,9 +269,9 @@ async def geocode_location(location: str) -> Coords | None:
 
     coords = await _geocode_nominatim(query)
     if coords:
-        db.set_geocode_cache(query, coords[0], coords[1], "nominatim")
+        await db.set_geocode_cache(query, coords[0], coords[1], "nominatim")
     else:
-        db.set_geocode_cache_failure(query, "nominatim")
+        await db.set_geocode_cache_failure(query, "nominatim")
     return coords
 
 

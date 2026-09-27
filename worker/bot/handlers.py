@@ -109,7 +109,7 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 async def cmd_list(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not _allowed(update):
         return
-    rows = db.list_alerts(user_id=update.effective_user.id)
+    rows = await db.list_alerts(user_id=update.effective_user.id)
     if not rows:
         await update.message.reply_text("No tenés alertas. Creá una con /nuevaalerta")
         return
@@ -130,11 +130,11 @@ async def cmd_delete(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Uso: /borrar <id>")
         return
     aid = int(ctx.args[0])
-    a = db.get_alert(aid)
+    a = await db.get_alert(aid)
     if not a or a["user_id"] != update.effective_user.id:
         await update.message.reply_text("Alerta no encontrada.")
         return
-    db.delete_alert(aid)
+    await db.delete_alert(aid)
     await update.message.reply_text(f"Alerta #{aid} eliminada.")
 
 
@@ -145,11 +145,11 @@ async def _set_active(update: Update, ctx, active: bool):
         await update.message.reply_text(f"Uso: /{'activar' if active else 'pausar'} <id>")
         return
     aid = int(ctx.args[0])
-    a = db.get_alert(aid)
+    a = await db.get_alert(aid)
     if not a or a["user_id"] != update.effective_user.id:
         await update.message.reply_text("Alerta no encontrada.")
         return
-    db.set_alert_active(aid, active)
+    await db.set_alert_active(aid, active)
     await update.message.reply_text(f"Alerta #{aid} {'activada' if active else 'pausada'}.")
 
 
@@ -457,7 +457,8 @@ async def _finish(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         f"{'/'.join(marcas[:3])} {'/'.join(modelos[:3])}".strip()
         or "Alerta"
     )
-    aid = db.create_alert(
+    # One alert per (marca, modelo): several models become several alerts.
+    ids = await db.create_alert(
         user_id=update.effective_user.id,
         chat_id=update.effective_chat.id,
         name=name,
@@ -465,8 +466,10 @@ async def _finish(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     )
     target = update.callback_query.message if update.callback_query else update.message
     resumen = "\n".join(f"- {bit}" for bit in _filter_bits(f))
+    creadas = (f"Alerta #{ids[0]} creada" if len(ids) == 1
+               else f"Alertas {', '.join(f'#{i}' for i in ids)} creadas (una por modelo)")
     await target.reply_text(
-        f"Alerta #{aid} creada - {name}\n\n{resumen}\n\n"
+        f"{creadas} - {name}\n\n{resumen}\n\n"
         f"Voy a notificarte cuando aparezcan oportunidades.",
     )
     return ConversationHandler.END

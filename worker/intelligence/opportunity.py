@@ -2,11 +2,11 @@ from __future__ import annotations
 import statistics
 from dataclasses import dataclass
 
-from db import comparables
+import db
 from config import OPPORTUNITY_MIN_COMPARABLES, DEFAULT_DISCOUNT_PCT
-from scrapers.base import Listing
-from price_check import statistical_partial, is_suspicious_discount
-from fx import usd_ars_rate
+from collectors.base import Listing
+from normalization.price_check import statistical_partial, is_suspicious_discount
+from normalization.fx import usd_ars_rate
 
 
 @dataclass
@@ -28,7 +28,7 @@ def _normalize_to_usd(precio: float, moneda: str | None) -> float:
     return precio / usd_ars_rate()
 
 
-def evaluate(listing: Listing, alert_filters: dict) -> OpportunityScore:
+async def evaluate(listing: Listing, alert_filters: dict) -> OpportunityScore:
     """
     Evaluate whether a listing is a real opportunity.
 
@@ -52,11 +52,16 @@ def evaluate(listing: Listing, alert_filters: dict) -> OpportunityScore:
 
     min_disc = float(alert_filters.get("descuento_pct", DEFAULT_DISCOUNT_PCT))
 
-    comps = comparables(
+    cfg = await db.get_config("comparables", {}) or {}
+    min_comparables = int(cfg.get("min_n", OPPORTUNITY_MIN_COMPARABLES))
+    comps = await db.comparables(
         marca=listing.marca or alert_filters.get("marca", ""),
         modelo=listing.modelo or alert_filters.get("modelo", ""),
         anio=listing.anio,
+        anio_tol=int(cfg.get("year_tol", 1)),
         km=listing.km,
+        km_tol_pct=float(cfg.get("km_tol_pct", 25.0)),
+        max_age_days=int(cfg.get("max_age_days", 30)),
     )
     # Normalize all comps + the listing to a common currency before comparing
     prices = []
@@ -66,7 +71,7 @@ def evaluate(listing: Listing, alert_filters: dict) -> OpportunityScore:
 
     listing_usd = _normalize_to_usd(listing.precio, listing.moneda)
 
-    if len(prices) < OPPORTUNITY_MIN_COMPARABLES:
+    if len(prices) < min_comparables:
         # Not enough data — fall back: only consider it a hit if user set a hard
         # discount target via "precio_max_oportunidad"
         cap = alert_filters.get("precio_max_oportunidad")

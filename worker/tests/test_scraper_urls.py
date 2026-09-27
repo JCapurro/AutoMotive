@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import unittest
 
-from scrapers.facebook import FacebookMarketplaceScraper, _matches_query_text, _parse_price
-from scrapers.v6 import V6Scraper
+from collectors.facebook import FacebookMarketplaceScraper, _matches_query_text, _parse_price
+from collectors.v6 import V6Scraper
 
 
 class ScraperUrlTests(unittest.TestCase):

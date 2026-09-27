@@ -5,7 +5,7 @@ import tempfile
 import unittest
 
 import config
-from scrapers.mercadolibre import _browser_storage_state, _build_url, _looks_like_login_wall
+from collectors.mercadolibre import _browser_storage_state, _build_url, _looks_like_login_wall
 
 
 class MercadoLibreUrlTests(unittest.TestCase):

@@ -2,7 +2,7 @@
 
 Requires an authenticated session. Run once interactively to log in:
 
-    python -m scrapers.facebook
+    python -m collectors.facebook
 
 That saves cookies/storage to FB_STORAGE_STATE; subsequent searches reuse
 the session in headless mode via the shared browser instance.
@@ -26,7 +26,7 @@ from .base import BaseScraper, Listing
 from ._browser import browser_context
 from ._dates import parse_relative_date
 from config import FB_STORAGE_STATE
-from geo import nearest_known_location_name
+from normalization.geo import nearest_known_location_name
 
 
 _PRICE_RE = re.compile(r"(US\$|u\$s|USD|ARS|\$)\s*([\d\.\,]+)", re.IGNORECASE)
@@ -221,7 +221,7 @@ class FacebookMarketplaceScraper(BaseScraper):
     async def search(self, filters: dict) -> list[Listing]:
         if not Path(FB_STORAGE_STATE).exists():
             print(f"[facebook] No session at {FB_STORAGE_STATE}. "
-                  "Run: python -m scrapers.facebook   to log in once.")
+                  "Run: python -m collectors.facebook   to log in once.")
             return []
 
         url = self._build_url(filters)
@@ -301,7 +301,7 @@ class FacebookMarketplaceScraper(BaseScraper):
         return out
 
 
-# ------ Interactive login: `python -m scrapers.facebook` ------
+# ------ Interactive login: `python -m collectors.facebook` ------
 async def _login_and_save() -> None:
     async with async_playwright() as pw:
         browser = await pw.chromium.launch(headless=False)

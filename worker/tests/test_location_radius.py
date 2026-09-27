@@ -5,13 +5,13 @@ from unittest import mock
 
 from bot.catalog import WIZARD_STEPS
 from bot.handlers import _coerce
-from geo import (
+from normalization.geo import (
     filter_listings_by_radius,
     geocode_location,
     haversine_km,
     _lookup_known_location,
 )
-from scrapers.base import Listing
+from collectors.base import Listing
 
 
 class LocationRadiusTests(unittest.IsolatedAsyncioTestCase):
@@ -86,10 +86,10 @@ class LocationLookupTests(unittest.TestCase):
 
 class GeocodeNegativeCacheTests(unittest.IsolatedAsyncioTestCase):
     async def test_negative_cache_prevents_repeated_nominatim_calls(self):
-        with mock.patch("geo._lookup_known_location", return_value=None), \
-             mock.patch("geo.db.get_geocode_cache", return_value=None) as get_pos, \
-             mock.patch("geo.db.has_fresh_geocode_failure", return_value=True) as neg_check, \
-             mock.patch("geo._geocode_nominatim") as nominatim:
+        with mock.patch("normalization.geo._lookup_known_location", return_value=None), \
+             mock.patch("normalization.geo.db.get_geocode_cache", return_value=None) as get_pos, \
+             mock.patch("normalization.geo.db.has_fresh_geocode_failure", return_value=True) as neg_check, \
+             mock.patch("normalization.geo._geocode_nominatim") as nominatim:
             result = await geocode_location("villa inventada xyz")
             self.assertIsNone(result)
             neg_check.assert_called_once()

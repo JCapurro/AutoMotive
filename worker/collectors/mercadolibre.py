@@ -19,7 +19,7 @@ from .base import BaseScraper, Listing
 from ._browser import browser_context
 
 
-log = logging.getLogger("scrapers.mercadolibre")
+log = logging.getLogger("collectors.mercadolibre")
 
 
 def _browser_storage_state() -> str | None:
@@ -192,7 +192,7 @@ class MercadoLibreScraper(BaseScraper):
         storage_state = _browser_storage_state()
         if not storage_state:
             log.warning(
-                "MercadoLibre browser session missing at %s. Run: python -m scrapers.mercadolibre",
+                "MercadoLibre browser session missing at %s. Run: python -m collectors.mercadolibre",
                 config.ML_STORAGE_STATE,
             )
         async with browser_context(storage_state=storage_state) as ctx:
@@ -203,7 +203,7 @@ class MercadoLibreScraper(BaseScraper):
                     await page.goto(url, timeout=45_000, wait_until="domcontentloaded")
                     if await _page_looks_like_login_wall(page):
                         log.warning(
-                            "MercadoLibre requires account verification/login. Run: python -m scrapers.mercadolibre"
+                            "MercadoLibre requires account verification/login. Run: python -m collectors.mercadolibre"
                         )
                         break
                     await page.wait_for_selector(
@@ -213,7 +213,7 @@ class MercadoLibreScraper(BaseScraper):
                 except Exception as exc:
                     if await _page_looks_like_login_wall(page):
                         log.warning(
-                            "MercadoLibre requires account verification/login. Run: python -m scrapers.mercadolibre"
+                            "MercadoLibre requires account verification/login. Run: python -m collectors.mercadolibre"
                         )
                     else:
                         log.warning("MercadoLibre scrape failed: %s", exc)
@@ -240,7 +240,7 @@ class MercadoLibreScraper(BaseScraper):
         return out
 
 
-# ------ Interactive login: `python -m scrapers.mercadolibre` ------
+# ------ Interactive login: `python -m collectors.mercadolibre` ------
 async def _login_and_save() -> None:
     async with async_playwright() as pw:
         browser = await pw.chromium.launch(headless=False)

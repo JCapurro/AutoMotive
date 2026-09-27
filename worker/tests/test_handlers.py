@@ -78,7 +78,7 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
             }
         }
 
-        with patch("bot.handlers.db.create_alert", return_value=9):
+        with patch("bot.handlers.db.create_alert", return_value=[9]):
             await _finish(update, ctx)
 
         self.assertEqual(len(update.message.calls), 1)

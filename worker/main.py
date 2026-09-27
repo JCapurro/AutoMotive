@@ -8,7 +8,10 @@ from telegram.ext import Application
 from config import TELEGRAM_TOKEN
 import db
 from bot.handlers import register
-from scheduler import run_loop
+from pipeline.scheduler import run_loop
+from collectors._browser import shutdown as browser_shutdown
+from collectors._loop import run_collector
+from aio import run
 
 
 logging.basicConfig(
@@ -22,7 +25,7 @@ async def amain() -> None:
     if not TELEGRAM_TOKEN:
         raise SystemExit("TELEGRAM_TOKEN no está seteado en .env")
 
-    db.init_db()
+    await db.open_pool()
 
     app = Application.builder().token(TELEGRAM_TOKEN).build()
     register(app)
@@ -62,8 +65,10 @@ async def amain() -> None:
         await app.updater.stop()
         await app.stop()
         await app.shutdown()
+        await run_collector(browser_shutdown())
+        await db.close_pool()
         log.info("bye")
 
 
 if __name__ == "__main__":
-    asyncio.run(amain())
+    run(amain())

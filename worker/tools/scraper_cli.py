@@ -11,7 +11,6 @@ Examples:
     python -m tools.scraper_cli facebook marca=Ford modelo=Ranger
 """
 from __future__ import annotations
-import asyncio
 import sys
 from typing import Any
 
@@ -21,9 +20,11 @@ try:
 except Exception:
     pass
 
-from scrapers import REGISTRY
-from scrapers._browser import shutdown as browser_shutdown
-from geo import filter_listings_by_radius
+from collectors import REGISTRY
+from collectors._browser import shutdown as browser_shutdown
+from collectors._loop import run_collector
+from normalization.geo import filter_listings_by_radius
+from aio import run
 import db
 
 
@@ -62,16 +63,17 @@ async def main() -> None:
     print(f"→ scraper: {src}")
     print(f"→ filtros: {filters}\n")
 
-    db.init_db()
+    await db.open_pool()   # geocode cache for the radius filter
     scraper = REGISTRY[src]()
     try:
-        results = await scraper.search(filters)
+        results = await run_collector(scraper.search(filters))
         results = await filter_listings_by_radius(results, filters)
     except Exception as e:
         print(f"❌ scraper falló: {type(e).__name__}: {e}")
         raise
     finally:
-        await browser_shutdown()
+        await run_collector(browser_shutdown())
+        await db.close_pool()
 
     print(f"✅ {len(results)} resultados\n")
     if not results:
@@ -90,4 +92,4 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    run(main())
