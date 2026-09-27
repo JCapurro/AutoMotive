@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from bot.handlers import _coerce, _finish, cmd_list
+from bot.handlers import _coerce, _finish, cmd_list, cmd_edit_alert
 
 
 class _FakeMessage:
@@ -85,6 +85,79 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
         text, kwargs = update.message.calls[0]
         self.assertIn("#9", text)
         self.assertIn("Fiesta_Kinetic", text)
+        self.assertNotIn("parse_mode", kwargs)
+
+
+    async def test_edit_loads_current_filters_into_wizard(self):
+        update = _FakeUpdate()
+        ctx = type("FakeContext", (), {})()
+        ctx.user_data = {}
+        ctx.args = ["7"]
+        alert = {
+            "id": 7,
+            "user_id": 123,
+            "name": "Ford Fiesta",
+            "filters": {
+                "marcas": ["Ford"],
+                "modelos": ["Fiesta"],
+                "sources": ["mercadolibre"],
+                "descuento_pct": 12,
+            },
+        }
+
+        with patch("bot.handlers._allowed", return_value=True), \
+             patch("bot.handlers.db.get_alert", return_value=alert):
+            await cmd_edit_alert(update, ctx)
+
+        w = ctx.user_data["wizard"]
+        self.assertEqual(w["edit_id"], 7)
+        self.assertEqual(w["step"], 0)
+        self.assertEqual(w["filters"]["marcas"], ["Ford"])
+        self.assertEqual(w["filters"]["descuento_pct"], 12)
+
+    async def test_edit_rejects_other_users_alert(self):
+        update = _FakeUpdate()
+        ctx = type("FakeContext", (), {})()
+        ctx.user_data = {}
+        ctx.args = ["7"]
+        alert = {"id": 7, "user_id": 999, "name": "x", "filters": {}}
+
+        with patch("bot.handlers._allowed", return_value=True), \
+             patch("bot.handlers.db.get_alert", return_value=alert):
+            await cmd_edit_alert(update, ctx)
+
+        self.assertNotIn("wizard", ctx.user_data)
+        text, _ = update.message.calls[0]
+        self.assertIn("no encontrada", text.lower())
+
+    async def test_finish_in_edit_mode_updates_instead_of_creating(self):
+        update = _FakeUpdate()
+        ctx = type("FakeContext", (), {})()
+        ctx.user_data = {
+            "wizard": {
+                "edit_id": 9,
+                "filters": {
+                    "marcas": ["Ford"],
+                    "modelos": ["Fiesta_Kinetic"],
+                    "sources": ["mercadolibre"],
+                    "origin_lat": -34.6037,
+                    "origin_lon": -58.3816,
+                    "radio_km": 75,
+                    "descuento_pct": 15,
+                },
+            }
+        }
+
+        with patch("bot.handlers.db.update_alert") as upd, \
+             patch("bot.handlers.db.create_alert") as create:
+            await _finish(update, ctx)
+
+        create.assert_not_called()
+        upd.assert_called_once()
+        self.assertEqual(upd.call_args.args[0], 9)
+        text, kwargs = update.message.calls[0]
+        self.assertIn("#9", text)
+        self.assertIn("actualizada", text)
         self.assertNotIn("parse_mode", kwargs)
 
 

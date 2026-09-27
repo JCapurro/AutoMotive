@@ -1,5 +1,6 @@
 from __future__ import annotations
 import asyncio
+from dataclasses import dataclass
 import logging
 import time
 import traceback
@@ -22,6 +23,19 @@ from intelligence.opportunity import evaluate
 from normalization.geo import filter_listings_by_radius
 
 log = logging.getLogger("scheduler")
+
+
+@dataclass
+class _SourceRun:
+    source: str
+    items: list
+    attempted: int = 0
+    succeeded: int = 0
+    failed: int = 0
+
+    @property
+    def any_success(self) -> bool:
+        return self.succeeded > 0
 
 
 def _format_notification(alert_name: str, listing, score) -> str:
@@ -107,22 +121,27 @@ def _expand_filters(f: dict) -> list[dict]:
     return out or [dict(f)]
 
 
-async def _run_one_source(alert_id: int, src: str, filters: dict) -> list:
+async def _run_one_source(alert_id: int, src: str, filters: dict) -> _SourceRun:
     cls = REGISTRY.get(src)
     if not cls:
-        return []
+        log.warning("alert=%s src=%s unknown scraper", alert_id, src)
+        return _SourceRun(src, [], attempted=1, failed=1)
     variants = _expand_filters(filters)
     scraper = cls()
     out = []
+    attempted = succeeded = failed = 0
     for v in variants:
+        attempted += 1
         try:
             items = await run_collector(scraper.search(v))
+            succeeded += 1
             log.info("alert=%s src=%s variant=%s found=%d",
                      alert_id, src, f"{v.get('marca','*')}/{v.get('modelo','*')}", len(items))
             out.extend(items)
         except Exception:
+            failed += 1
             log.error("scraper %s failed: %s", src, traceback.format_exc())
-    return out
+    return _SourceRun(src, out, attempted=attempted, succeeded=succeeded, failed=failed)
 
 
 async def _run_alert(bot: Bot, alert: dict) -> None:
@@ -130,11 +149,19 @@ async def _run_alert(bot: Bot, alert: dict) -> None:
     sources = f.get("sources") or SOURCES
     bootstrapped = bool(alert.get("bootstrapped"))
     # All sources in parallel — different hosts so no contention.
-    results = await asyncio.gather(
+    source_runs = await asyncio.gather(
         *[_run_one_source(alert["id"], s, f) for s in sources],
         return_exceptions=False,
     )
-    all_listings = [item for batch in results for item in batch]
+    attempted_runs = [run for run in source_runs if run.attempted > 0]
+    if attempted_runs and not any(run.any_success for run in attempted_runs):
+        log.warning(
+            "alert=%s no scraper source completed; leaving scrape cadence unchanged",
+            alert["id"],
+        )
+        return
+
+    all_listings = [item for run in source_runs for item in run.items]
     all_listings = await filter_listings_by_radius(all_listings, f)
 
     # 1) Cache everything (feeds the median for future opportunity calcs).
@@ -166,6 +193,7 @@ async def _run_alert(bot: Bot, alert: dict) -> None:
         alert["id"], [l.to_dict() for l in recent_listings])
     price_refs: dict[tuple[str, str], dict] = {}
     sent = 0
+    failed_delivery_keys: set[tuple[str, str]] = set()
     for l in recent_listings:
         score = await evaluate(l, f)
         price_refs[(l.source, l.listing_id)] = _price_ref(score)
@@ -181,12 +209,25 @@ async def _run_alert(bot: Bot, alert: dict) -> None:
             sent += 1
         except Exception as e:
             log.warning("send_message failed: %s", e)
+            failed_delivery_keys.add((l.source, l.listing_id))
 
     # 6) Mark all fresh as seen (even non-recent / non-opportunities) so we
-    #    don't reconsider them next tick.
-    if fresh_listings:
-        await db.mark_seen(alert["id"], [l.to_dict() for l in fresh_listings],
+    #    don't reconsider them next tick. Keep failed deliveries unseen so a
+    #    transient Telegram/network outage does not permanently drop a hit.
+    markable_listings = [
+        l for l in fresh_listings
+        if (l.source, l.listing_id) not in failed_delivery_keys
+    ]
+    if markable_listings:
+        await db.mark_seen(alert["id"], [l.to_dict() for l in markable_listings],
                            price_refs=price_refs)
+    if failed_delivery_keys:
+        log.warning(
+            "alert=%s delivery failed for %d opportunity listing(s); leaving due for retry",
+            alert["id"],
+            len(failed_delivery_keys),
+        )
+        return
     await db.mark_scraped(alert["id"])
     log.info("alert=%s fresh=%d recent=%d notified=%d",
              alert["id"], len(fresh_listings), len(recent_listings), sent)

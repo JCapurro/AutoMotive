@@ -5,10 +5,12 @@ browser. Cards have stable per-listing URLs at `/ar/venta/{slug}` which
 encode marca, modelo, version and year.
 """
 from __future__ import annotations
+from dataclasses import replace
 import re
 
 from .base import BaseScraper, Listing
 from ._browser import browser_context
+from normalization.fx import usd_ars_rate
 
 
 _KM_RE = re.compile(r"([\d\.\,]+)\s*km", re.IGNORECASE)
@@ -30,6 +32,19 @@ def _to_int(s: str) -> int | None:
 class KavakScraper(BaseScraper):
     name = "kavak"
     BASE = "https://www.kavak.com/ar/usados"
+
+    @staticmethod
+    def matches_filters(item: Listing, f: dict) -> bool:
+        filters = {k: v for k, v in f.items() if k != "vendedor"}
+        wanted_currency = (filters.get("moneda") or "").upper()
+        item_currency = (item.moneda or "").upper()
+        if item.precio and wanted_currency and item_currency and wanted_currency != item_currency:
+            rate = usd_ars_rate()
+            if wanted_currency == "USD" and item_currency == "ARS":
+                item = replace(item, precio=item.precio / rate, moneda="USD")
+            elif wanted_currency == "ARS" and item_currency == "USD":
+                item = replace(item, precio=item.precio * rate, moneda="ARS")
+        return BaseScraper.matches_filters(item, filters)
 
     def _build_url(self, f: dict) -> str:
         parts = [_slug(f[k]) for k in ("marca", "modelo") if f.get(k)]

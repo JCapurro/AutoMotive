@@ -188,6 +188,25 @@ _PROVINCE_FALLBACKS: set[str] = {
     )
 }
 
+_VEHICLE_TERMS = {
+    "ford", "chevrolet", "volkswagen", "vw", "toyota", "fiat", "renault",
+    "peugeot", "citroen", "honda", "nissan", "jeep", "mercedes", "benz",
+    "audi", "bmw", "fiesta", "onix", "gol", "trend", "ka", "polo",
+    "yaris", "corolla", "ranger", "hilux", "cruze",
+}
+_DISTANCE_NOISE_RE = re.compile(
+    r"\b\d+(?:\s+\d+)?\s*(?:mil\s+)?(?:km|kilometros?|miles?)\b"
+)
+_YEAR_TOKEN_RE = re.compile(r"\b(19[8-9]\d|20[0-3]\d)\b")
+
+
+def _looks_like_non_location_query(normalized: str) -> bool:
+    """Reject card noise before it can spend Nominatim quota."""
+    if _DISTANCE_NOISE_RE.search(normalized):
+        return True
+    tokens = set(normalized.split())
+    return bool(_YEAR_TOKEN_RE.search(normalized) and tokens.intersection(_VEHICLE_TERMS))
+
 
 def _fallback_can_stand_alone(normalized: str, fallback_key: str) -> bool:
     """Allow broad fallbacks only for exact or duplicate broad labels."""
@@ -254,6 +273,9 @@ async def geocode_location(location: str) -> Coords | None:
 
     if known := _lookup_known_location(query):
         return known
+
+    if _looks_like_non_location_query(query):
+        return None
 
     cached = await db.get_geocode_cache(query)
     if cached:
@@ -355,6 +377,8 @@ async def filter_listings_by_radius(
     for item in items:
         location = getattr(item, "ubicacion", None)
         if not location:
+            if getattr(item, "source", None) == "kavak":
+                out.append(item)
             continue
         if location not in cache:
             cache[location] = await geocode_fn(location)

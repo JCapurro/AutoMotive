@@ -88,6 +88,26 @@ def _filter_bits(f: dict) -> list[str]:
     return bits
 
 
+def _md_escape(s: str) -> str:
+    """Escape legacy-Markdown specials so user values (e.g. Fiesta_Kinetic)
+    don't break parsing when echoed back in a wizard prompt."""
+    return re.sub(r"([_*`\[])", r"\\\1", s)
+
+
+def _fmt_current(key: str, f: dict) -> str | None:
+    """Human-readable current value of a single-value filter, or None."""
+    if key == "user_location":
+        if f.get("origin_lat") is not None and f.get("origin_lon") is not None:
+            return f"{f['origin_lat']:.4f}, {f['origin_lon']:.4f}"
+        return None
+    v = f.get(key)
+    if v in (None, "", [], {}):
+        return None
+    if isinstance(v, list):
+        return ", ".join(map(str, v))
+    return str(v)
+
+
 # ---------------- commands ----------------
 
 async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -97,6 +117,7 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         "🚗 *AutoMotive Alerts*\n\n"
         "Comandos:\n"
         "/nuevaalerta — crear alerta paso a paso\n"
+        "/editar <id> — modificar una alerta existente\n"
         "/alertas — listar alertas\n"
         "/borrar <id> — eliminar alerta\n"
         "/pausar <id> — pausar alerta\n"
@@ -168,11 +189,44 @@ async def cmd_new_alert(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     }
     await update.message.reply_text(
         "🆕 *Nueva alerta*\n"
+        "Busco autos *por debajo del precio de mercado*: no fijás un precio, "
+        "yo comparo cada aviso contra la mediana de comparables y te aviso "
+        "cuando aparece una oportunidad.\n\n"
         "Voy a pedirte los filtros uno por uno. En cada paso podés:\n"
         "• tocar un botón sugerido\n"
         "• escribir tu propio valor\n"
         "• mandar */skip* para saltar el filtro\n"
         "• mandar */cancelar* para abortar",
+        parse_mode="Markdown",
+        reply_markup=ReplyKeyboardRemove(),
+    )
+    return await _ask_step(update, ctx)
+
+
+async def cmd_edit_alert(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    if not _allowed(update):
+        return ConversationHandler.END
+    if not ctx.args or not ctx.args[0].isdigit():
+        await update.message.reply_text("Uso: /editar <id>  (los ids salen con /alertas)")
+        return ConversationHandler.END
+    aid = int(ctx.args[0])
+    a = await db.get_alert(aid)
+    if not a or a["user_id"] != update.effective_user.id:
+        await update.message.reply_text("Alerta no encontrada.")
+        return ConversationHandler.END
+    filters = dict(a["filters"])
+    filters.setdefault("sources", list(SOURCES))
+    ctx.user_data["wizard"] = {
+        "step": 0,
+        "filters": filters,
+        "edit_id": aid,
+    }
+    await update.message.reply_text(
+        f"✏️ *Editando alerta #{aid}* — {a['name']}\n\n"
+        "Te muestro cada filtro con su valor actual. En cada paso:\n"
+        "• mandá */skip* para *mantener* el valor actual\n"
+        "• escribí o tocá un botón para cambiarlo\n"
+        "• */cancelar* aborta sin guardar",
         parse_mode="Markdown",
         reply_markup=ReplyKeyboardRemove(),
     )
@@ -209,11 +263,16 @@ async def _ask_step(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     key, label = WIZARD_STEPS[w["step"]]
     f = w["filters"]
+    editing = w.get("edit_id") is not None
+    cur = _fmt_current(key, f)
+    keep_note = "\n_Mandá /skip para mantener el valor actual._" if (editing and cur) else ""
     target = update.callback_query.message if update.callback_query else update.message
     if key == "user_location":
+        actual = f"\n\n_Actual: {_md_escape(cur)}_" if (editing and cur) else ""
         await target.reply_text(
-            f"*Paso {w['step']+1}/{len(WIZARD_STEPS)}* - {label}\n\n"
-            "Toca el boton *Enviar ubicacion* para usar tu ubicacion de Telegram.",
+            f"*Paso {w['step']+1}/{len(WIZARD_STEPS)}* - {label}{actual}\n\n"
+            "Toca el boton *Enviar ubicacion* para usar tu ubicacion de Telegram."
+            + ("\n_O mandá /skip para mantener la ubicacion actual._" if (editing and cur) else ""),
             parse_mode="Markdown",
             reply_markup=ReplyKeyboardMarkup(
                 [[KeyboardButton("Enviar ubicacion", request_location=True)]],
@@ -223,9 +282,10 @@ async def _ask_step(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         )
         return WIZARD
     if key == "radio_km":
+        actual = f"\n\n_Actual: {_md_escape(cur)} km_" if (editing and cur) else ""
         await target.reply_text(
-            f"*Paso {w['step']+1}/{len(WIZARD_STEPS)}* - {label}\n\n"
-            "Mandame el radio en kilometros. Ej: `50` o `75 km`.",
+            f"*Paso {w['step']+1}/{len(WIZARD_STEPS)}* - {label}{actual}\n\n"
+            "Mandame el radio en kilometros. Ej: `50` o `75 km`." + keep_note,
             parse_mode="Markdown",
             reply_markup=ReplyKeyboardRemove(),
         )
@@ -241,21 +301,25 @@ async def _ask_step(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         hint = "  (ej: 1.6 GLP, Style, etc.)"
     elif key == "modelo":
         hint = f"  (ej: Gol Trend, Corolla XEi)"
+    elif key == "descuento_pct":
+        hint = "  (te aviso solo si el aviso está al menos este % bajo la mediana de mercado)"
 
     msg = f"*Paso {w['step']+1}/{len(WIZARD_STEPS)}* — {label}{hint}"
+    if editing and cur:
+        msg += f"\n_Actual: {_md_escape(cur)}_"
     kb = _step_keyboard(key, f)
     if kb and key in MULTI_KEYS:
-        await target.reply_text(
-            msg + "\n\nTocá los que quieras (toggle), o escribí texto libre. Tocá *Listo* para continuar.",
-            parse_mode="Markdown", reply_markup=kb,
+        tail = (
+            "\n\nLos ✅ son tu selección actual. Tocá para cambiar, o tocá *Listo* para mantenerla."
+            if editing else
+            "\n\nTocá los que quieras (toggle), o escribí texto libre. Tocá *Listo* para continuar."
         )
+        await target.reply_text(msg + tail, parse_mode="Markdown", reply_markup=kb)
     elif kb:
-        await target.reply_text(msg, parse_mode="Markdown", reply_markup=kb)
+        await target.reply_text(msg + keep_note, parse_mode="Markdown", reply_markup=kb)
     else:
-        await target.reply_text(
-            msg + "\n\nMandá el valor por chat o /skip para saltar.",
-            parse_mode="Markdown",
-        )
+        tail = "\n\nMandá el valor por chat, o /skip para " + ("mantener el actual." if (editing and cur) else "saltar.")
+        await target.reply_text(msg + tail, parse_mode="Markdown")
     return WIZARD
 
 
@@ -338,8 +402,17 @@ async def wizard_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     key, _ = WIZARD_STEPS[w["step"]]
     if txt.lower() in ("/skip", "skip", "-"):
         if key in ("user_location", "radio_km"):
-            await update.message.reply_text("Este paso es necesario para filtrar por distancia.")
-            return WIZARD
+            # Distance filtering needs both. New alerts must supply them; when
+            # editing, /skip keeps whatever the alert already had.
+            has_value = (
+                (w["filters"].get("origin_lat") is not None
+                 and w["filters"].get("origin_lon") is not None)
+                if key == "user_location"
+                else bool(w["filters"].get("radio_km"))
+            )
+            if not (w.get("edit_id") is not None and has_value):
+                await update.message.reply_text("Este paso es necesario para filtrar por distancia.")
+                return WIZARD
         w["step"] += 1
         return await _ask_step(update, ctx)
 
@@ -457,6 +530,20 @@ async def _finish(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         f"{'/'.join(marcas[:3])} {'/'.join(modelos[:3])}".strip()
         or "Alerta"
     )
+    target = update.callback_query.message if update.callback_query else update.message
+    resumen = "\n".join(f"- {bit}" for bit in _filter_bits(f))
+    edit_id = w.get("edit_id")
+    if edit_id is not None:
+        # Extra marcas/modelos added while editing become new alerts.
+        new_ids = await db.update_alert(edit_id, name, f)
+        extra = (f"\nNuevas alertas por modelo: {', '.join(f'#{i}' for i in new_ids)}"
+                 if new_ids else "")
+        await target.reply_text(
+            f"Alerta #{edit_id} actualizada - {name}{extra}\n\n{resumen}\n\n"
+            f"Los cambios se aplican en el próximo chequeo. "
+            f"Mantengo el historial de avisos ya vistos.",
+        )
+        return ConversationHandler.END
     # One alert per (marca, modelo): several models become several alerts.
     ids = await db.create_alert(
         user_id=update.effective_user.id,
@@ -464,8 +551,6 @@ async def _finish(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         name=name,
         filters=f,
     )
-    target = update.callback_query.message if update.callback_query else update.message
-    resumen = "\n".join(f"- {bit}" for bit in _filter_bits(f))
     creadas = (f"Alerta #{ids[0]} creada" if len(ids) == 1
                else f"Alertas {', '.join(f'#{i}' for i in ids)} creadas (una por modelo)")
     await target.reply_text(
@@ -483,7 +568,10 @@ async def cmd_cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 def build_conversation() -> ConversationHandler:
     return ConversationHandler(
-        entry_points=[CommandHandler("nuevaalerta", cmd_new_alert)],
+        entry_points=[
+            CommandHandler("nuevaalerta", cmd_new_alert),
+            CommandHandler("editar", cmd_edit_alert),
+        ],
         states={
             WIZARD: [
                 CallbackQueryHandler(wizard_callback),
