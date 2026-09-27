@@ -11,7 +11,6 @@ from psycopg import AsyncConnection
 from psycopg.types.json import Jsonb
 
 from db.pool import connection
-from db.repos.catalog import resolve_make_model
 
 
 Key = tuple[str, str]
@@ -129,36 +128,18 @@ async def mark_detail_checked(listing_ids: Iterable[int]) -> None:
             await cx.execute("UPDATE listings SET detail_checked_at = now() WHERE id = ANY(%s)", (ids,))
 
 
-async def comparables(marca: str, modelo: str, anio: int | None,
-                      anio_tol: int = 1, km: int | None = None, km_tol_pct: float = 25.0,
-                      max_age_days: int = 30) -> list[dict]:
-    """Listings comparable to (marca, modelo, anio[, km]) seen in the last
-    `max_age_days`, with the keys the legacy opportunity engine reads.
-    Probable reposts are left out so a car isn't counted twice (sección 5.4)."""
-    if not marca or not modelo:
-        return []
-    async with connection() as cx:
-        resolved = await resolve_make_model(cx, marca, modelo)
-        make, model = resolved if resolved and resolved[1] else (marca, modelo)
-        sql = (
-            "SELECT source, external_id AS listing_id, make AS marca, model AS modelo, "
-            "       year AS anio, mileage_km AS km, price::float AS precio, currency AS moneda, "
-            "       price_usd::float AS precio_usd, title AS titulo, url "
-            "  FROM listings "
-            " WHERE lower(make) = lower(%s) AND lower(model) = lower(%s) "
-            "   AND last_seen_at >= now() - make_interval(days => %s) "
-            "   AND price > 0 "
-            "   AND NOT price_partial "   # never bucket anticipos/cuotas as comparables
-            "   AND probable_repost_of IS NULL"
-        )
-        params: list[Any] = [make, model, max_age_days]
-        if anio is not None:
-            sql += " AND year BETWEEN %s AND %s"
-            params += [anio - anio_tol, anio + anio_tol]
-        if km is not None and km > 0:
-            sql += " AND (mileage_km IS NULL OR mileage_km BETWEEN %s AND %s)"
-            params += [int(km * (1 - km_tol_pct / 100)), int(km * (1 + km_tol_pct / 100))]
-        return await (await cx.execute(sql, params)).fetchall()
+async def rows_for_scoring(cx: AsyncConnection, ids: Iterable[int]) -> dict[int, dict[str, Any]]:
+    """Listings by id as intelligence/ reads them, with the catalog's
+    timing_belt for their model (red flag no_timing_belt, sección 6.5)."""
+    ids = list(dict.fromkeys(ids))
+    if not ids:
+        return {}
+    rows = await (await cx.execute(
+        "SELECT l.*, vc.timing_belt FROM listings l "
+        "  LEFT JOIN vehicle_catalog vc ON lower(vc.make) = lower(l.make) "
+        "        AND lower(vc.model) = lower(l.model) AND vc.trim IS NULL "
+        " WHERE l.id = ANY(%s)", (ids,))).fetchall()
+    return {r["id"]: _pythonic(r) for r in rows}
 
 
 async def recent_active(make: str | None, model: str | None, *, days: int,

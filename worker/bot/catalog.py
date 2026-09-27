@@ -32,6 +32,5 @@ WIZARD_STEPS = [
     ("vendedor",    "Vendedor"),
     ("user_location", "Tu ubicacion"),
     ("radio_km",    "Rango de busqueda en km"),
-    ("descuento_pct", "% mínimo por debajo del precio de mercado para alertar"),
     ("sources",     "Plataformas a monitorear"),
 ]

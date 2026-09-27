@@ -59,9 +59,6 @@ class HandlerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(_coerce("precio_max", "$ 15.000"), 15000.0)
         self.assertEqual(_coerce("precio_max", "USD 15,000"), 15000.0)
 
-    def test_discount_percentage_accepts_decimal_comma(self):
-        self.assertEqual(_coerce("descuento_pct", "12,5"), 12.5)
-
     async def test_finish_alert_uses_plain_text_for_user_supplied_filters(self):
         update = _FakeUpdate()
         ctx = type("FakeContext", (), {})()

@@ -16,7 +16,7 @@ from telegram.ext import (
 
 log = logging.getLogger("bot")
 
-from config import ALLOWED_USER_IDS, SOURCES, DEFAULT_DISCOUNT_PCT
+from config import ALLOWED_USER_IDS, SOURCES
 from bot.catalog import (
     MARCAS_POPULARES, COMBUSTIBLES, TRANSMISIONES, VENDEDORES, MONEDAS,
     WIZARD_STEPS, ANIOS,
@@ -189,9 +189,9 @@ async def cmd_new_alert(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     }
     await update.message.reply_text(
         "🆕 *Nueva alerta*\n"
-        "Busco autos *por debajo del precio de mercado*: no fijás un precio, "
-        "yo comparo cada aviso contra la mediana de comparables y te aviso "
-        "cuando aparece una oportunidad.\n\n"
+        "Cada aviso nuevo recibe un Opportunity Score de 0 a 100: precio contra "
+        "publicaciones comparables, km, versión, antigüedad y datos informados. "
+        "Te aviso cuando aparece una 🔥 alta oportunidad.\n\n"
         "Voy a pedirte los filtros uno por uno. En cada paso podés:\n"
         "• tocar un botón sugerido\n"
         "• escribir tu propio valor\n"
@@ -251,8 +251,6 @@ def _step_keyboard(key: str, current_filters: dict) -> InlineKeyboardMarkup | No
     if key == "sources":
         selected = set(current_filters.get("sources", []))
         return _kb(_toggle_grid(SOURCES, selected, cols=2))
-    if key == "descuento_pct":
-        return _kb([[("10%", "v:10"), ("15%", "v:15"), ("20%", "v:20"), ("25%", "v:25")]])
     return None
 
 
@@ -301,8 +299,6 @@ async def _ask_step(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         hint = "  (ej: 1.6 GLP, Style, etc.)"
     elif key == "modelo":
         hint = f"  (ej: Gol Trend, Corolla XEi)"
-    elif key == "descuento_pct":
-        hint = "  (te aviso solo si el aviso está al menos este % bajo la mediana de mercado)"
 
     msg = f"*Paso {w['step']+1}/{len(WIZARD_STEPS)}* — {label}{hint}"
     if editing and cur:
@@ -339,11 +335,6 @@ def _coerce(key: str, value: str) -> Any:
         if not clean:
             raise ValueError(f"{key} missing")
         return float(clean)
-    if key == "descuento_pct":
-        m = re.search(r"\d+(?:[\.,]\d+)?", value)
-        if not m:
-            raise ValueError("descuento_pct missing")
-        return float(m.group(0).replace(",", "."))
     return value.strip()
 
 
@@ -523,7 +514,6 @@ async def wizard_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 async def _finish(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     w = ctx.user_data.pop("wizard")
     f = w["filters"]
-    f.setdefault("descuento_pct", DEFAULT_DISCOUNT_PCT)
     marcas = f.get("marcas") or []
     modelos = f.get("modelos") or []
     name = (

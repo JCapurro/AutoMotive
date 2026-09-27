@@ -33,7 +33,18 @@ insert into public.app_config (key, value) values
      "pro":  {"max_profiles": 10, "immediate_alerts": true, "crawl_priority": "high"}
    }'),
   ('repost',                        '{"window_days": 60, "price_tol_pct": 10}'),
-  ('enrichment',                    '{"batch_per_source": 20, "max_age_days": 30}')
+  ('enrichment',                    '{"batch_per_source": 20, "max_age_days": 30}'),
+  ('score_curves', '{
+     "price":        {"base": 0.5, "pct_per_unit": 20},
+     "match":        {"unknown_penalty": 0.15},
+     "km":           {"base": 0.5, "slope": 1.25},
+     "trim":         {"preferred": 1, "unknown": 0.5, "other": 0.2, "no_preference": 1},
+     "recency":      {"half_life_hours": 24},
+     "completeness": {"min_description_chars": 150, "min_images": 3},
+     "guards":       {"suspicious_pct": 50, "partial_pct": 65}
+   }'),
+  ('red_flags',                     '{"much_cheaper_pct": 25, "anticipo_pct": 50, "min_km_per_year": 5000, "min_description_chars": 150}'),
+  ('rescore',                       '{"days": 14, "hour": "04:00"}')
 on conflict (key) do nothing;
 
 -- ---------------------------------------------------------------------------
@@ -199,3 +210,23 @@ union all
 select m.make, m.model, t.trim, '{}', null, null, '{}', '{}'
   from models m, unnest(m.trims::text[]) as t (trim)
 on conflict on constraint vehicle_catalog_unique do nothing;
+
+-- Timing belt (true) or chain (false) of the model's usual engines: the
+-- no_timing_belt red flag (sección 6.5). Same list as the F2 migration.
+update public.vehicle_catalog c set timing_belt = v.belt
+  from (values
+    ('Volkswagen', 'Gol', true), ('Volkswagen', 'Gol Trend', true), ('Volkswagen', 'Suran', true),
+    ('Volkswagen', 'Fox', true), ('Volkswagen', 'Saveiro', true), ('Volkswagen', 'Up', true),
+    ('Ford', 'Fiesta', true), ('Ford', 'Ka', true), ('Ford', 'Focus', true), ('Ford', 'EcoSport', true),
+    ('Chevrolet', 'Corsa', true), ('Chevrolet', 'Classic', true), ('Chevrolet', 'Agile', true),
+    ('Chevrolet', 'Prisma', true), ('Chevrolet', 'Onix', true), ('Chevrolet', 'Spin', true),
+    ('Renault', 'Clio', true), ('Renault', 'Sandero', true), ('Renault', 'Stepway', true),
+    ('Renault', 'Logan', true), ('Renault', 'Kangoo', true), ('Renault', 'Duster', true),
+    ('Fiat', 'Palio', true), ('Fiat', 'Siena', true), ('Fiat', 'Uno', true), ('Fiat', 'Punto', true),
+    ('Peugeot', '206', true), ('Peugeot', '207', true), ('Peugeot', '208', true),
+    ('Peugeot', 'Partner', true), ('Citroën', 'C3', true), ('Citroën', 'Berlingo', true),
+    ('Toyota', 'Corolla', false), ('Toyota', 'Etios', false), ('Toyota', 'Yaris', false),
+    ('Toyota', 'Hilux', false), ('Toyota', 'SW4', false), ('Honda', 'Civic', false),
+    ('Honda', 'Fit', false), ('Honda', 'City', false), ('Honda', 'HR-V', false)
+  ) as v (make, model, belt)
+ where c.make = v.make and c.model = v.model and c.trim is null;

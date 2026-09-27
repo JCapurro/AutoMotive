@@ -6,9 +6,9 @@ patience) for listings that matched at least one profile and were never
 enriched. Each source has its own queue, rate-limited by
 sources.detail_interval_seconds; sources drain in parallel.
 
-The re-evaluation of the match after enrichment (transmission or version going
-from unknown to a value, red flags) belongs to F2's matching: the
-listing_updated events returned here are its input.
+After a pass the matches of the listings that changed are re-scored
+(pipeline/rescore.py): transmission or version may go from unknown to a
+value, and the description feeds the red flags (sección 5.5).
 """
 from __future__ import annotations
 
@@ -25,6 +25,7 @@ from db.repos.runs import log_error
 from db.repos.targets import enabled_sources
 from normalization.listing import Target
 from pipeline.ingest import IngestResult, ListingEvent, ingest
+from pipeline.rescore import rescore_listings
 
 
 log = logging.getLogger("enrich")
@@ -108,4 +109,11 @@ async def enrich_pass(stop: asyncio.Event | None = None) -> IngestResult:
     if rows:
         log.info("enrichment: %d listings, %d updated, %d events",
                  len(rows), result.updated, len(result.events))
+    await rescore_changed(result)
     return result
+
+
+async def rescore_changed(result: IngestResult) -> int:
+    """Re-score the matches of the listings a detail pass updated."""
+    changed = [e.listing_id for e in result.events if e.kind == "listing_updated"]
+    return await rescore_listings(changed) if changed else 0

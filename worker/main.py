@@ -9,6 +9,7 @@ from config import ENRICH_TICK_SECONDS, TELEGRAM_TOKEN, WATCHLIST_TICK_SECONDS
 import db
 from bot.handlers import register
 from pipeline.enrich import enrich_pass
+from pipeline.rescore import nightly_loop
 from pipeline.scheduler import run_loop
 from pipeline.watchlist import refresh_watchlist
 from collectors._browser import shutdown as browser_shutdown
@@ -71,6 +72,7 @@ async def amain() -> None:
         asyncio.create_task(run_loop(app.bot, stop)),
         asyncio.create_task(_every("enrichment", ENRICH_TICK_SECONDS, enrich_pass, stop)),
         asyncio.create_task(_every("watchlist", WATCHLIST_TICK_SECONDS, refresh_watchlist, stop)),
+        asyncio.create_task(nightly_loop(stop)),
     ]
 
     try:

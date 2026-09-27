@@ -24,7 +24,7 @@ from db.repos.catalog import resolve_make_model
 _SELECT = """
 SELECT sp.id, sp.name, sp.filters, sp.preferences, sp.origin_lat, sp.origin_lon,
        sp.radius_km, sp.enabled, sp.created_at, sp.bootstrapped_at, sp.rematch_requested_at,
-       p.telegram_user_id, p.telegram_chat_id
+       sp.notify_min_level, p.telegram_user_id, p.telegram_chat_id
   FROM search_profiles sp
   JOIN profiles p ON p.id = sp.user_id
 """
@@ -48,6 +48,16 @@ def _to_alert(r: dict) -> dict[str, Any]:
         "rematch_requested": bool(r["rematch_requested_at"]),
         "make": r["filters"].get("make"),
         "model": r["filters"].get("model"),
+        # The search_profiles row as intelligence/ reads it (sección 4.3).
+        "profile": {
+            "id": r["id"],
+            "filters": r["filters"],
+            "preferences": r["preferences"],
+            "origin_lat": r["origin_lat"],
+            "origin_lon": r["origin_lon"],
+            "radius_km": r["radius_km"],
+            "notify_min_level": r["notify_min_level"],
+        },
     }
 
 
@@ -170,6 +180,16 @@ async def list_alerts(user_id: int | None = None, only_active: bool = False) -> 
     return [_to_alert(r) for r in rows]
 
 
+async def profiles_by_ids(ids: list[int]) -> list[dict]:
+    """Profiles (alert dicts with their "profile" row) by id, enabled or not."""
+    if not ids:
+        return []
+    async with connection() as cx:
+        rows = await (await cx.execute(_SELECT + " WHERE sp.id = ANY(%s) ORDER BY sp.id",
+                                       (list(ids),))).fetchall()
+    return [_to_alert(r) for r in rows]
+
+
 async def get_alert(alert_id: int) -> dict | None:
     async with connection() as cx:
         row = await (await cx.execute(_SELECT + " WHERE sp.id = %s", (alert_id,))).fetchone()
@@ -212,12 +232,15 @@ async def pending_rematch() -> list[dict]:
     return [_to_alert(r) for r in rows]
 
 
-async def alerts_for_target(source: str, make: str | None, model: str | None) -> list[dict]:
-    """Telegram alerts a crawl target's batch is for: same make/model, and the
-    source among the profile's sources (all of them when it has none)."""
+async def alerts_for_target(source: str, make: str | None, model: str | None, *,
+                            telegram_only: bool = True) -> list[dict]:
+    """Enabled profiles a crawl target's batch is for: same make/model, and the
+    source among the profile's sources (all of them when it has none). By
+    default only the Telegram-linked ones; matching (F2) takes every profile."""
+    telegram = " AND p.telegram_chat_id IS NOT NULL" if telegram_only else ""
     async with connection() as cx:
         rows = await (await cx.execute(
-            _SELECT + " WHERE sp.enabled AND p.telegram_chat_id IS NOT NULL "
+            _SELECT + " WHERE sp.enabled" + telegram +
                       "   AND lower(sp.filters->>'make') IS NOT DISTINCT FROM lower(%s) "
                       "   AND lower(sp.filters->>'model') IS NOT DISTINCT FROM lower(%s) "
                       "   AND (NOT sp.filters ? 'sources' OR sp.filters->'sources' ? %s) "
