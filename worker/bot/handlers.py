@@ -22,6 +22,8 @@ from bot.catalog import (
     WIZARD_STEPS, ANIOS,
 )
 import db
+from bot.notification_actions import handler as notification_actions
+from notifications.links import Links
 
 
 # Filter keys that are stored as lists (multi-select).
@@ -576,7 +578,10 @@ def build_conversation() -> ConversationHandler:
     )
 
 
-def register(app):
+def register(app, links: Links | None = None):
+    # Before the wizard: its CallbackQueryHandler takes any callback while a
+    # conversation is open.
+    app.add_handler(notification_actions(links or Links()))
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("help", cmd_start))
     app.add_handler(CommandHandler("alertas", cmd_list))

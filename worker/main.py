@@ -5,9 +5,16 @@ import signal
 
 from telegram.ext import Application
 
-from config import ENRICH_TICK_SECONDS, TELEGRAM_TOKEN, WATCHLIST_TICK_SECONDS
+from config import (EMAIL_FROM, ENRICH_TICK_SECONDS, NOTIFY_TICK_SECONDS, RESEND_API_KEY,
+                    TELEGRAM_TOKEN, WATCHLIST_TICK_SECONDS, WEB_BASE_URL)
 import db
 from bot.handlers import register
+from notifications.channels.email import ResendEmailChannel
+from notifications.channels.telegram import TelegramChannel
+from notifications.channels.web import WebChannel
+from notifications.digest import digest_loop
+from notifications.links import Links
+from notifications.service import Notifier
 from pipeline.enrich import enrich_pass
 from pipeline.rescore import nightly_loop
 from pipeline.scheduler import run_loop
@@ -37,14 +44,35 @@ async def _every(name: str, seconds: int, job, stop: asyncio.Event) -> None:
             pass
 
 
+def build_notifier(bot, links: Links) -> Notifier:
+    """The channels this worker can deliver on (sección 7.2)."""
+    channels = {"telegram": TelegramChannel(bot, links), "web": WebChannel(links)}
+    if RESEND_API_KEY and EMAIL_FROM:
+        channels["email"] = ResendEmailChannel(RESEND_API_KEY, EMAIL_FROM, links)
+    else:
+        log.info("email desactivado: faltan RESEND_API_KEY / EMAIL_FROM")
+    return Notifier(channels)
+
+
+def notifying(job, notifier: Notifier):
+    """A refresh pass whose price_drop / listing_gone events go to the engine."""
+    async def run(stop: asyncio.Event) -> None:
+        result = await job(stop)
+        await notifier.on_listing_events(result.events)
+        await notifier.deliver()
+    return run
+
+
 async def amain() -> None:
     if not TELEGRAM_TOKEN:
         raise SystemExit("TELEGRAM_TOKEN no está seteado en .env")
 
     await db.open_pool()
 
+    links = Links(WEB_BASE_URL)
     app = Application.builder().token(TELEGRAM_TOKEN).build()
-    register(app)
+    register(app, links)
+    notifier = build_notifier(app.bot, links)
 
     await app.initialize()
     await app.start()
@@ -69,9 +97,14 @@ async def amain() -> None:
         pass
 
     tasks = [
-        asyncio.create_task(run_loop(app.bot, stop)),
-        asyncio.create_task(_every("enrichment", ENRICH_TICK_SECONDS, enrich_pass, stop)),
-        asyncio.create_task(_every("watchlist", WATCHLIST_TICK_SECONDS, refresh_watchlist, stop)),
+        asyncio.create_task(run_loop(notifier, stop)),
+        asyncio.create_task(_every("enrichment", ENRICH_TICK_SECONDS,
+                                   notifying(enrich_pass, notifier), stop)),
+        asyncio.create_task(_every("watchlist", WATCHLIST_TICK_SECONDS,
+                                   notifying(refresh_watchlist, notifier), stop)),
+        asyncio.create_task(_every("notifications", NOTIFY_TICK_SECONDS,
+                                   lambda _stop: notifier.deliver(), stop)),
+        asyncio.create_task(digest_loop(notifier, stop)),
         asyncio.create_task(nightly_loop(stop)),
     ]
 

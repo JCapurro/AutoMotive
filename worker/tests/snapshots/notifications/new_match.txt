@@ -1,0 +1,37 @@
+=== telegram ===
+<b>🚗 Nuevo vehículo encontrado</b>
+<b>Ford Fiesta Titanium 2017</b>
+128.000 km
+USD 11.000
+<a href="https://automotive.app/r/42?to=listing">Ver publicación</a>
+
+🟢 Buena coincidencia · 74/100
+🔎 Fiesta Titanium AMBA · 📍 Palermo, Capital Federal · 🏷 mercadolibre
+=== telegram buttons ===
+⭐ Me interesa [nt:interested:42] | ✖ Descartar [nt:discarded:42]
+🔎 Ver en Automotive [https://automotive.app/r/42?to=detail]
+=== email subject ===
+🚗 Nuevo vehículo encontrado: Ford Fiesta Titanium 2017
+=== email text ===
+🚗 Nuevo vehículo encontrado
+Ford Fiesta Titanium 2017
+128.000 km
+USD 11.000
+Ver publicación: https://automotive.app/r/42?to=listing
+🔎 Ver en Automotive: https://automotive.app/r/42?to=detail
+
+🟢 Buena coincidencia · 74/100
+🔎 Fiesta Titanium AMBA · 📍 Palermo, Capital Federal · 🏷 mercadolibre
+
+—
+Recibís este correo porque tenés búsquedas activas en Automotive.
+=== email html ===
+<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.5;color:#1a1a1a">
+<p style="font-size:18px;margin:0 0 8px"><strong>🚗 Nuevo vehículo encontrado</strong></p>
+<p style="font-size:17px;margin:0 0 4px"><strong>Ford Fiesta Titanium 2017</strong></p>
+<p style="margin:0">128.000 km</p>
+<p style="margin:0">USD 11.000</p>
+<p style="margin:16px 0"><a href="https://automotive.app/r/42?to=listing" style="display:inline-block;padding:10px 16px;margin-right:8px;background:#1a1a1a;color:#ffffff;text-decoration:none;border-radius:6px">Ver publicación</a> <a href="https://automotive.app/r/42?to=detail" style="display:inline-block;padding:10px 16px;margin-right:8px;background:#1a1a1a;color:#ffffff;text-decoration:none;border-radius:6px">🔎 Ver en Automotive</a></p>
+<p style="margin:0;color:#555555">🟢 Buena coincidencia · 74/100</p>
+<p style="margin:0;color:#555555">🔎 Fiesta Titanium AMBA · 📍 Palermo, Capital Federal · 🏷 mercadolibre</p>
+<p style="margin:24px 0 0;font-size:12px;color:#888888">Recibís este correo porque tenés búsquedas activas en Automotive.</p></div>

@@ -98,13 +98,13 @@ _EVALUATED = ("score", "level", "score_breakdown", "match_reasons", "price_ref",
 
 
 async def upsert_scored(cx: AsyncConnection, profile_id: int,
-                        rows: list[tuple[int, dict[str, Any]]], *, backfill: bool) -> set[int]:
+                        rows: list[tuple[int, dict[str, Any]]], *, backfill: bool) -> dict[int, int]:
     """Write (listing_id, Evaluation.row()) pairs. New rows get `backfill`;
     existing ones are re-scored and keep is_backfill and generated_at.
-    Returns the listing ids that were inserted (new matches)."""
+    Returns {listing_id: match_id} of the rows that were inserted (new matches)."""
     if not rows:
-        return set()
-    inserted: set[int] = set()
+        return {}
+    inserted: dict[int, int] = {}
     for listing_id, row in rows:
         values = [Jsonb(row[c]) if c in ("score_breakdown", "match_reasons", "red_flags")
                   or (c == "price_ref" and row[c] is not None) else row[c] for c in _EVALUATED]
@@ -114,10 +114,10 @@ async def upsert_scored(cx: AsyncConnection, profile_id: int,
             f"VALUES (%s, %s, %s, {', '.join(['%s'] * len(_EVALUATED))}) "
             "ON CONFLICT (search_profile_id, listing_id) DO UPDATE SET "
             + ", ".join(f"{c} = excluded.{c}" for c in _EVALUATED) +
-            " RETURNING (xmax = 0) AS inserted",
+            " RETURNING id, (xmax = 0) AS inserted",
             (profile_id, listing_id, backfill, *values))).fetchone()
         if rec["inserted"]:
-            inserted.add(listing_id)
+            inserted[listing_id] = rec["id"]
     return inserted
 
 
