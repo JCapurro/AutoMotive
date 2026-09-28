@@ -177,6 +177,67 @@ class SeenMatchesTests(PostgresTestCase):
         self.assertEqual(await db.matched_by_other_profiles(ids[0], item), set())
 
 
+class TelegramLinkTests(PostgresTestCase):
+    """/start <code> (public.link_telegram, F4)."""
+
+    async def web_user(self, email: str) -> tuple[str, str]:
+        async with db.connection() as cx:
+            row = await (await cx.execute(
+                "INSERT INTO auth.users (instance_id, id, aud, role, email, created_at, updated_at) "
+                "VALUES ('00000000-0000-0000-0000-000000000000', gen_random_uuid(), 'authenticated', "
+                "        'authenticated', %s, now(), now()) RETURNING id::text AS id", (email,))).fetchone()
+            code = await (await cx.execute(
+                "SELECT telegram_link_code FROM profiles WHERE id = %s", (row["id"],))).fetchone()
+        return row["id"], code["telegram_link_code"]
+
+    async def profile(self, user_id: str) -> dict:
+        async with db.connection() as cx:
+            return await (await cx.execute(
+                "SELECT telegram_user_id, telegram_chat_id, telegram_link_code FROM profiles WHERE id = %s",
+                (user_id,))).fetchone()
+
+    async def test_links_and_rotates_the_code(self):
+        user, code = await self.web_user("web@automotive.test")
+        self.assertEqual(await db.link_telegram(code, TG_USER, 777), user)
+        p = await self.profile(user)
+        self.assertEqual((p["telegram_user_id"], p["telegram_chat_id"]), (TG_USER, 777))
+        self.assertNotEqual(p["telegram_link_code"], code)
+        self.assertIsNone(await db.link_telegram(code, TG_USER, 777))        # used
+        self.assertIsNone(await db.link_telegram("nope", TG_USER, 777))
+
+    async def test_a_telegram_only_account_folds_into_the_web_account(self):
+        [aid] = await db.create_alert(user_id=TG_USER, chat_id=TG_USER, name="Ford Fiesta",
+                                      filters={"marcas": ["Ford"], "modelos": ["Fiesta"]})
+        await store(_listing("1"))
+        async with db.connection() as cx:
+            anon = (await (await cx.execute("SELECT user_id::text AS id FROM search_profiles WHERE id = %s",
+                                            (aid,))).fetchone())["id"]
+            await cx.execute("INSERT INTO user_listing_interactions (user_id, listing_id, saved) "
+                             "SELECT %s, id, true FROM listings", (anon,))
+        user, code = await self.web_user("web@automotive.test")
+
+        self.assertEqual(await db.link_telegram(code, TG_USER, TG_USER), user)
+
+        async with db.connection() as cx:
+            owner = await (await cx.execute("SELECT user_id::text AS id FROM search_profiles WHERE id = %s",
+                                            (aid,))).fetchone()
+            saved = await (await cx.execute("SELECT user_id::text AS id FROM user_listing_interactions")).fetchall()
+            gone = await (await cx.execute("SELECT 1 FROM auth.users WHERE id = %s", (anon,))).fetchone()
+        self.assertEqual(owner["id"], user)
+        self.assertEqual([s["id"] for s in saved], [user])
+        self.assertIsNone(gone)
+        # The bot keeps finding the same account for this Telegram user.
+        self.assertEqual([a["id"] for a in await db.list_alerts(user_id=TG_USER)], [aid])
+
+    async def test_another_web_account_just_loses_the_link(self):
+        first, first_code = await self.web_user("uno@automotive.test")
+        second, second_code = await self.web_user("dos@automotive.test")
+        await db.link_telegram(first_code, TG_USER, TG_USER)
+        self.assertEqual(await db.link_telegram(second_code, TG_USER, TG_USER), second)
+        self.assertIsNone((await self.profile(first))["telegram_user_id"])
+        self.assertEqual((await self.profile(second))["telegram_user_id"], TG_USER)
+
+
 class GeocodeAndConfigTests(PostgresTestCase):
     async def test_geocode_cache_positive_and_negative(self):
         self.assertIsNone(await db.get_geocode_cache("munro"))

@@ -50,15 +50,10 @@ SOURCES = ["mercadolibre", "facebook", "v6", "kavak", "autocosmos"]
 # Notifications (sección 7). The email channel is on when both are set.
 RESEND_API_KEY = os.getenv("RESEND_API_KEY", "").strip()
 EMAIL_FROM = os.getenv("EMAIL_FROM", "").strip()
-# Base of the tracked links, /r/<notification_id> (sección 7.3). Empty: links
-# go straight to the listing, untracked. tools/redirect_server.py serves /r/
-# until the web does.
+# The web (web/, Next.js): base of the tracked links /r/<notification_id>
+# (sección 7.3), which the web serves, and of the links the bot sends. Empty:
+# alert links go straight to the listing, untracked.
 WEB_BASE_URL = os.getenv("WEB_BASE_URL", "").strip().rstrip("/")
-# Where /r/<id>?to=detail lands, e.g. https://automotive.app/app/listings/{listing_id}.
-# Empty until the web has a detail page (F4): the listing at its source instead.
-WEB_DETAIL_URL = os.getenv("WEB_DETAIL_URL", "").strip()
 # The queue of immediate notifications is drained after every crawl batch and
 # also this often (retries, rows queued by other loops).
 NOTIFY_TICK_SECONDS = int(os.getenv("NOTIFY_TICK_SECONDS", "60"))
-REDIRECT_HOST = os.getenv("REDIRECT_HOST", "127.0.0.1").strip()
-REDIRECT_PORT = int(os.getenv("REDIRECT_PORT", "8787"))

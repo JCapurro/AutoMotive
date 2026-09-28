@@ -3,8 +3,6 @@ from __future__ import annotations
 import unittest
 from unittest import mock
 
-from bot.catalog import WIZARD_STEPS
-from bot.handlers import _coerce
 from normalization.geo import (
     filter_listings_by_radius,
     geocode_location,
@@ -15,15 +13,6 @@ from collectors.base import Listing
 
 
 class LocationRadiusTests(unittest.IsolatedAsyncioTestCase):
-    def test_wizard_uses_user_location_and_radius_instead_of_location_selection(self):
-        keys = [key for key, _ in WIZARD_STEPS]
-
-        self.assertNotIn("ubicacion", keys)
-        self.assertIn("user_location", keys)
-        self.assertIn("radio_km", keys)
-        self.assertLess(keys.index("user_location"), keys.index("radio_km"))
-        self.assertEqual(_coerce("radio_km", "75 km"), 75.0)
-
     def test_haversine_distance_is_in_kilometers(self):
         buenos_aires = (-34.6037, -58.3816)
         la_plata = (-34.9205, -57.9536)

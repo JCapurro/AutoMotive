@@ -136,6 +136,8 @@ class ScoredMatchesTests(IntelligenceCase):
         self.assertEqual(m["match_reasons"]["price"]["detail"], "ARS 10.300.000 ≈ USD 10.300 ≤ USD 11.500")
         self.assertTrue(m["is_backfill"])
         self.assertEqual(m["scoring_version"], SCORING_VERSION)
+        # §25: the questions the web copies are stored with the match.
+        self.assertTrue(m["seller_questions"].startswith("Hola, ¿cómo estás? ¿Lo seguís teniendo?"))
         self.assertIsNone(await self.match_row(aid, dear))
 
     async def test_legacy_matches_are_rescored_and_enrichment_lifts_an_unknown(self):

@@ -41,6 +41,7 @@ class Evaluation:
             "match_reasons": self.match.to_json(),
             "price_ref": self.price_ref.to_json() if self.price_ref else None,
             "red_flags": [f.to_json() for f in self.red_flags],
+            "seller_questions": self.questions,
             "scoring_version": SCORING_VERSION,
         }
 

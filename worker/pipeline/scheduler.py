@@ -110,37 +110,43 @@ async def match_alert(staged: _Staged, scorer: Scorer, *, first_run: bool,
     return candidates
 
 
+async def process_batch(notifier: Notifier, target: dict, listing_ids: list[int], *,
+                        first_run: bool, events: list = ()) -> None:
+    """Steps 4–5 for one batch of a target's listings: match and score them
+    against the target's profiles, then notify. tools/simulate_alert.py runs
+    it for a single listing."""
+    scorer = await Scorer.create()
+    await scorer.prepare(listing_ids)
+    max_age_days = int(await db.get_config("recommended_max_age_days", RECOMMENDED_MAX_AGE_DAYS))
+    staged: list[_Staged] = []
+    for alert in await db.alerts_for_target(target["source"], target.get("make"), target.get("model"),
+                                            telegram_only=False):
+        try:
+            staged.append(await _stage(alert, listing_ids, scorer))
+        except Exception:
+            await log_error("match", f"profile:{alert['id']}", traceback.format_exc())
+    candidates: list[MatchCandidate] = []
+    for s in staged:
+        try:
+            candidates += await match_alert(s, scorer, first_run=first_run, max_age_days=max_age_days)
+        except Exception:
+            await log_error("match", f"profile:{s.alert['id']}", traceback.format_exc())
+    # Matches are stored and re-scored: price drops carry the new score.
+    try:
+        await notifier.on_matches(candidates, scorer.rows)
+        if not first_run:
+            await notifier.on_listing_events(events)
+    except Exception:
+        await log_error("notify", f"target:{target.get('id')}", traceback.format_exc())
+    await notifier.deliver()
+
+
 def batch_handler(notifier: Notifier) -> crawl.BatchHandler:
     async def handle(run: crawl.TargetRun) -> None:
-        t = run.target
         listing_ids = list(dict.fromkeys(run.result.ids.values()))
-        if not listing_ids:
-            return
-        scorer = await Scorer.create()
-        await scorer.prepare(listing_ids)
-        max_age_days = int(await db.get_config("recommended_max_age_days", RECOMMENDED_MAX_AGE_DAYS))
-        staged: list[_Staged] = []
-        for alert in await db.alerts_for_target(t["source"], t.get("make"), t.get("model"),
-                                                telegram_only=False):
-            try:
-                staged.append(await _stage(alert, listing_ids, scorer))
-            except Exception:
-                await log_error("match", f"profile:{alert['id']}", traceback.format_exc())
-        candidates: list[MatchCandidate] = []
-        for s in staged:
-            try:
-                candidates += await match_alert(s, scorer, first_run=run.first_run,
-                                                max_age_days=max_age_days)
-            except Exception:
-                await log_error("match", f"profile:{s.alert['id']}", traceback.format_exc())
-        # Matches are stored and re-scored: price drops carry the new score.
-        try:
-            await notifier.on_matches(candidates, scorer.rows)
-            if not run.first_run:
-                await notifier.on_listing_events(run.result.events)
-        except Exception:
-            await log_error("notify", f"target:{t['id']}", traceback.format_exc())
-        await notifier.deliver()
+        if listing_ids:
+            await process_batch(notifier, run.target, listing_ids, first_run=run.first_run,
+                                events=run.result.events)
     return handle
 
 

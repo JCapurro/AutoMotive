@@ -1,14 +1,18 @@
-# AutoMotive Alerts
+# AutoMotive
 
-Scraper en tiempo real de plataformas de autos en Argentina con detección
-automática de oportunidades y notificación al Telegram.
+Monitorea publicaciones de autos usados en Argentina, detecta las que coinciden
+con tus búsquedas, las prioriza con un Opportunity Score y te avisa por la web,
+Telegram o email.
 
 El plan del MVP (web + Supabase) está en [docs/TECHNICAL_PLAN.md](docs/TECHNICAL_PLAN.md).
-Estado: **F2** — intelligence: cada publicación se matchea contra los search
-profiles con razones (ok / fail / unknown), recibe un Opportunity Score 0–100
-con nivel, comparables, red flags y preguntas al vendedor. Desde F1 se scrapea
-por *crawl target* (fuente + marca + modelo) y no por alerta, y cada
-publicación se guarda una sola vez con su historial.
+Estado: **F4** — la web ([web/](web/README.md), Next.js + Supabase) es donde se
+crean y editan las búsquedas, se ven los resultados, el detalle de cada
+publicación (¿por qué apareció?, análisis de precio, histórico, red flags,
+preguntas al vendedor), los estados, la watchlist y el inbox con Realtime. El
+bot de Telegram ya no tiene wizard: vincula la cuenta (`/start <código>`) y
+resuelve los botones de las alertas. Debajo siguen F1–F3: scraping por *crawl
+target*, matching con razones y Opportunity Score, y el motor de
+notificaciones.
 
 ## Estructura
 
@@ -19,11 +23,12 @@ worker/       bot de Telegram, collectors, pipeline (Python, raíz de imports)
   intelligence/   matching, comparables, scoring, levels, red_flags, seller_questions (puros)
   pipeline/       crawl (targets + cadencia), ingest (upsert/snapshots/eventos),
                   enrich, watchlist, rematch, scoring, rescore, scheduler (loop + alertas de Telegram)
-  bot/            wizard de Telegram
+  bot/            Telegram: /start <código> (vinculación) y botones de las alertas
   db/             psycopg 3 (pool async) + repos por tabla
-  tools/          scraper_cli, migrate_sqlite, explain_match
+  tools/          scraper_cli, migrate_sqlite, explain_match, rematch, simulate_alert
   tests/
-supabase/     migraciones, seed.sql y tests pgTAP (supabase CLI)
+web/          Next.js (App Router) + @supabase/ssr + Tailwind/shadcn: landing, app y /r/<id>
+supabase/     migraciones, seed.sql, templates de email y tests pgTAP (supabase CLI)
 docs/         PRD y plan técnico
 ```
 
@@ -42,15 +47,11 @@ Kavak/V6/Autocosmos 30 min, Facebook 60 min) y el ritmo de las fichas,
 `sources.detail_interval_seconds`. Se editan en la base, sin deploy.
 ## Cómo funciona
 
-1. Configurás una alerta desde Telegram (`/nuevaalerta`) eligiendo:
-   - **Marcas** (multi-select por botones — podés tildar Toyota + VW + Ford)
-   - **Modelos** (texto coma-separado: "Corolla, Hilux, Etios")
-   - **Años** (multi-select por pills + texto: tipeá "2018-2022" o tocá los pills)
-   - Versión (opcional), km min/max, moneda, combustible, transmisión,
-     vendedor, ubicación de Telegram, radio en km, plataformas.
-   - **% mínimo por debajo del precio de mercado** para alertar — el control
-     central: *no* se fija un precio min/max, cada aviso se compara contra la
-     mediana de comparables y se notifica si está al menos ese % por debajo.
+1. Creás una búsqueda en la web (`/app/searches/new`): marca, modelo y versión
+   del catálogo, años, precio máximo (USD o ARS), km, transmisión, combustible,
+   zona + radio (o el preset AMBA), fuentes, preferencias blandas, frecuencia y
+   nivel mínimo de alerta. Mientras la escribís ves cuántas publicaciones
+   actuales coinciden. Un modelo por búsqueda (§13).
 2. **Crawl targets** ([crawl.py](worker/pipeline/crawl.py)): en cada tick
    (`TICK_INTERVAL_SECONDS`, 5 min) las búsquedas habilitadas se agrupan por
    (fuente, marca, modelo) con el rango más amplio de años y km y **sin precio**.
@@ -183,9 +184,21 @@ cd worker
 python main.py
 ```
 
-En Telegram: `/start` → `/nuevaalerta`. Una alerta con varias marcas/modelos se
-guarda como una alerta por combinación (un vehículo por búsqueda); un aviso que
-matchea dos de tus alertas se notifica una sola vez.
+Con `WEB_BASE_URL` apuntando a la web, los links de las alertas pasan por
+`/r/<id>` (clics trackeados) y el bot manda a la web para crear búsquedas.
+
+Sin esperar al loop:
+
+```powershell
+cd worker
+python -m tools.rematch                     # backfill de las búsquedas nuevas o editadas
+python -m tools.simulate_alert <listing_id> # una publicación "recién llegada": match, score y alerta al inbox web
+```
+
+### Correr la web
+
+Ver [web/README.md](web/README.md): `npx supabase start` en la raíz y
+`npm run dev -- --hostname 127.0.0.1` en `web/`.
 
 ### Tests
 
@@ -193,19 +206,21 @@ matchea dos de tus alertas se notifica una sola vez.
 pytest                                  # desde la raíz o desde worker/
 $env:TEST_DATABASE_URL = "postgresql://postgres:postgres@127.0.0.1:54322/postgres"
 pytest                                  # suma los tests contra Postgres (solo host local)
+npx supabase test db                    # pgTAP: RLS y las funciones SQL de la web
+cd web; npm test; npm run e2e           # vitest y Playwright (desktop + 375 px)
 ```
 
 ## Comandos del bot
 
 | Comando | Acción |
 |---------|--------|
-| `/nuevaalerta` | wizard paso a paso |
-| `/editar <id>` | reabre el wizard precargado con los filtros actuales (conserva el historial de vistos; si agregás modelos, se crean alertas nuevas para esos) |
-| `/alertas` | listar tus alertas |
-| `/pausar <id>` | pausar |
-| `/activar <id>` | reactivar |
-| `/borrar <id>` | borrar |
-| `/cancelar` | abortar wizard |
+| `/start <código>` | vincula Telegram con tu cuenta de la web (el link de Ajustes → Telegram) |
+| `/start`, `/help` | qué hace el bot y links a la web |
+| `/nuevaalerta`, `/editar`, `/alertas`, `/pausar`, `/activar`, `/borrar`, `/cancelar` | el wizard se retiró en F4: responden con el link a la web |
+
+Las alertas traen ⭐ Me interesa · ✖ Descartar · 🔎 Ver en Automotive. Si ya
+tenías alertas creadas con el wizard, al vincular la cuenta se pasan a tu
+usuario de la web.
 
 ## Matching y Opportunity Score
 

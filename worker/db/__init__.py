@@ -30,6 +30,7 @@ from db.repos.profiles import (
     delete_alert,
     enabled_profiles,
     get_alert,
+    link_telegram,
     list_alerts,
     mark_bootstrapped,
     pending_rematch,
@@ -40,7 +41,7 @@ from db.repos.profiles import (
 __all__ = [
     "alerts_for_target", "close_pool", "connection", "create_alert",
     "delete_alert", "enabled_profiles", "filter_unseen", "get_alert", "get_config",
-    "get_geocode_cache", "has_fresh_geocode_failure", "list_alerts", "mark_bootstrapped",
-    "mark_seen", "matched_by_other_profiles", "open_pool", "pending_rematch",
+    "get_geocode_cache", "has_fresh_geocode_failure", "link_telegram", "list_alerts",
+    "mark_bootstrapped", "mark_seen", "matched_by_other_profiles", "open_pool", "pending_rematch",
     "set_alert_active", "set_geocode_cache", "set_geocode_cache_failure", "update_alert",
 ]
