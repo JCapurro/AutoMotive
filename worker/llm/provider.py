@@ -4,7 +4,8 @@ The LLM only proposes; everything it returns is validated against the
 schemas in llm/schemas.py and normalized deterministically before the user
 sees it (§44). Providers:
 
-    claude_cli  `claude -p` on the worker's host, for the pilot (llm/claude_cli.py)
+    claude_cli  `claude -p` on the worker's host, for development (llm/claude_cli.py)
+    anthropic   the Claude API with an API key, for the pilot's users (llm/anthropic_api.py)
     local       an OpenAI-compatible local server, for the launch (llm/local.py)
 
 `LLM_PROVIDER` picks one (config.py).
@@ -60,4 +61,8 @@ def build_provider(name: str | None = None) -> LLMProvider:
         from llm.local import LocalProvider
         return LocalProvider(base_url=config.LOCAL_LLM_BASE_URL, model=config.LOCAL_LLM_MODEL,
                              timeout=config.LLM_TIMEOUT_SECONDS)
-    raise ValueError(f"LLM_PROVIDER desconocido: {name!r} (claude_cli | local)")
+    if name == "anthropic":
+        from llm.anthropic_api import AnthropicApiProvider
+        return AnthropicApiProvider(api_key=config.ANTHROPIC_API_KEY, model=config.ANTHROPIC_MODEL,
+                                    timeout=config.LLM_TIMEOUT_SECONDS)
+    raise ValueError(f"LLM_PROVIDER desconocido: {name!r} (claude_cli | anthropic | local)")

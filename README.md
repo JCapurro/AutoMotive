@@ -4,7 +4,8 @@ Monitorea publicaciones de autos usados en Argentina, detecta las que coinciden
 con tus búsquedas, las prioriza con un Opportunity Score y te avisa por la web,
 Telegram o email.
 
-El plan del MVP (web + Supabase) está en [docs/TECHNICAL_PLAN.md](docs/TECHNICAL_PLAN.md).
+El plan del MVP (web + Supabase) está en [docs/TECHNICAL_PLAN.md](docs/TECHNICAL_PLAN.md);
+cómo publicarlo para el piloto, en [docs/PILOT_SETUP.md](docs/PILOT_SETUP.md).
 Estado: **F7 en curso** (puesta en producción del piloto; por ahora corre en local) — la web ([web/](web/README.md), Next.js + Supabase) es donde se
 crean y editan las búsquedas, se ven los resultados, el detalle de cada
 publicación (¿por qué apareció?, análisis de precio, histórico, red flags,
@@ -28,12 +29,14 @@ worker/       bot de Telegram, collectors, pipeline (Python, raíz de imports)
   intelligence/   matching, comparables, scoring, levels, red_flags, seller_questions (puros)
   pipeline/       crawl (targets + cadencia), ingest (upsert/snapshots/eventos),
                   enrich, watchlist, rematch, scoring, rescore, llm_jobs, scheduler (loop + alertas de Telegram)
-  llm/            capa LLM (modo asistido): LLMProvider, claude_cli (claude -p), local (stub), schemas, prompts
+  llm/            capa LLM (modo asistido): LLMProvider, claude_cli (claude -p), anthropic_api (API key), local (stub), schemas, prompts
   bot/            Telegram: /start <código> (vinculación) y botones de las alertas
   db/             psycopg 3 (pool async) + repos por tabla
-  tools/          scraper_cli, migrate_sqlite, explain_match, rematch, simulate_alert, llm_jobs, record_llm, test_db
+  tools/          scraper_cli, migrate_sqlite, explain_match, rematch, simulate_alert, llm_jobs, record_llm,
+                  test_db, watchdog, supabase_keys
   tests/
 web/          Next.js (App Router) + @supabase/ssr + Tailwind/shadcn: landing, app, admin, /r/<id>, legales y /baja
+ops/          el piloto en esta PC (F7): tareas programadas, supervisor, backup y actualización (docs/PILOT_SETUP.md)
 supabase/     migraciones, seed.sql, templates de email y tests pgTAP (supabase CLI)
 docs/         PRD y plan técnico
 ```
@@ -122,7 +125,10 @@ Local, con Docker y la [CLI de Supabase](https://supabase.com/docs/guides/local-
 (`npx supabase ...` funciona sin instalarla):
 
 ```powershell
+copy supabase\.env.example supabase\.env                        # URLs y SMTP (desarrollo: Mailpit)
+cd worker; python -m tools.supabase_keys generate; cd ..         # claves propias en vez de las de demo
 npx supabase start          # levanta Postgres + Auth y aplica migraciones + seed
+cd worker; python -m tools.supabase_keys sync; cd ..             # copia las claves a web\.env.local
 npx supabase db reset       # recrea la base desde cero
 npx supabase test db        # tests de RLS (pgTAP)
 ```
@@ -253,9 +259,11 @@ La pestaña **Asistido** de `/app/searches/new` escribe el texto en `llm_jobs`;
 el worker lo interpreta con `claude -p` (`LLM_PROVIDER=claude_cli`, ver
 `.env.example`), normaliza los borradores contra `vehicle_catalog` y la web
 muestra un formulario editable por vehículo. Si el LLM falla o tarda más de
-60 s, la web cae al formulario estructurado vacío. El host del worker necesita
-Claude Code instalado y logueado (en Windows, `CLAUDE_CLI_PATH` con la ruta a
-`claude.exe`).
+60 s, la web cae al formulario estructurado vacío. Con `claude_cli` el host del
+worker necesita Claude Code instalado y logueado (en Windows, `CLAUDE_CLI_PATH`
+con la ruta a `claude.exe`) y usa esa suscripción; para los usuarios del piloto,
+`LLM_PROVIDER=anthropic` usa la API de Claude con `ANTHROPIC_API_KEY` (Haiku 4.5
+por defecto, `ANTHROPIC_MODEL`), mismo prompt, mismo esquema y mismos tests de contrato.
 
 ```powershell
 cd worker

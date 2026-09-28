@@ -27,3 +27,6 @@ ml_card.html
 # OS/editor noise
 .DS_Store
 Thumbs.db
+
+# Local database backups (ops/backup.ps1)
+backups/

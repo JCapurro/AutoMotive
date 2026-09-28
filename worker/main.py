@@ -5,9 +5,9 @@ import signal
 
 from telegram.ext import Application
 
-from config import (EMAIL_FROM, ENRICH_TICK_SECONDS, NOTIFY_TICK_SECONDS, RESEND_API_KEY,
-                    TELEGRAM_ADMIN_CHAT_ID, TELEGRAM_TOKEN, WATCHLIST_TICK_SECONDS, WEB_BASE_URL,
-                    startup_warnings)
+from config import (EMAIL_FROM, ENRICH_TICK_SECONDS, HEARTBEAT_SECONDS, LOG_FILE, LOG_KEEP_DAYS,
+                    NOTIFY_TICK_SECONDS, RESEND_API_KEY, TELEGRAM_ADMIN_CHAT_ID, TELEGRAM_TOKEN,
+                    WATCHLIST_TICK_SECONDS, WEB_BASE_URL, startup_warnings)
 import db
 from bot.handlers import register
 from llm import build_provider
@@ -18,6 +18,7 @@ from notifications.digest import digest_loop
 from notifications.links import Links
 from notifications.ops import SourceAlerts
 from notifications.service import Notifier
+from pipeline import heartbeat
 from pipeline.enrich import enrich_pass
 from pipeline.llm_jobs import llm_jobs_loop
 from pipeline.rescore import nightly_loop
@@ -28,10 +29,21 @@ from collectors._loop import run_collector
 from aio import run
 
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-)
+def setup_logging() -> None:
+    """stdout, plus LOG_FILE (UTF-8, rotated at midnight, LOG_KEEP_DAYS kept)."""
+    handlers: list[logging.Handler] = [logging.StreamHandler()]
+    if LOG_FILE:
+        from logging.handlers import TimedRotatingFileHandler
+        from pathlib import Path
+
+        Path(LOG_FILE).parent.mkdir(parents=True, exist_ok=True)
+        handlers.append(TimedRotatingFileHandler(LOG_FILE, when="midnight", backupCount=LOG_KEEP_DAYS,
+                                                 encoding="utf-8"))
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+                        handlers=handlers)
+
+
+setup_logging()
 # At INFO httpx logs every request URL, and Telegram's include the bot token.
 logging.getLogger("httpx").setLevel(logging.WARNING)
 log = logging.getLogger("main")
@@ -103,7 +115,10 @@ async def amain() -> None:
     except Exception:
         pass
 
+    started_at = heartbeat.started_now()
     tasks = [
+        asyncio.create_task(_every("heartbeat", HEARTBEAT_SECONDS,
+                                   lambda _stop: heartbeat.beat(started_at), stop)),
         asyncio.create_task(run_loop(notifier, stop, source_alerts.on_health)),
         asyncio.create_task(_every("enrichment", ENRICH_TICK_SECONDS,
                                    notifying(enrich_pass, notifier), stop)),

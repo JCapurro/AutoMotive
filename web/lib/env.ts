@@ -4,3 +4,5 @@ export const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 export const telegramBot = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME ?? "";
 /** Where users write about their data (F7, punto 7): shown in /privacidad and /terminos. */
 export const contactEmail = process.env.NEXT_PUBLIC_CONTACT_EMAIL ?? "";
+/** Public URL of the app (F7): canonical links, sitemap and Open Graph. */
+export const siteUrl = (process.env.SITE_URL ?? "http://127.0.0.1:3000").replace(/\/$/, "");

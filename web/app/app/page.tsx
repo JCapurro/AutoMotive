@@ -58,7 +58,7 @@ export default async function Dashboard() {
             </Link>
           </Button>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {searches.map((s) => {
             const filters = s.filters as Filters;
             return (
@@ -116,7 +116,7 @@ export default async function Dashboard() {
       <section className="space-y-3">
         <h2 className="text-lg font-semibold tracking-tight">Oportunidades recientes</h2>
         {opportunities?.length ? (
-          <div className="grid gap-3 lg:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
             {opportunities.map((card) => (
               <ListingCard key={card.listing_id} card={card} showProfile />
             ))}

@@ -75,7 +75,7 @@ export default async function SavedPage() {
           Las publicaciones que guardaste o seguís. Las revisamos todos los días.
         </p>
       </div>
-      <div className="grid gap-3 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         {(interactions ?? []).map((i) => {
           const l = byId.get(i.listing_id);
           if (!l) return null;

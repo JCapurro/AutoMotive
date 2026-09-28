@@ -6,7 +6,7 @@ By default the provider is ClaudeCliProvider answering from recorded
 `claude -p` envelopes (fixtures/llm/parse_search_recorded.json, made with
 `python -m tools.record_llm`). With LLM_SMOKE=1 the same contract runs
 against the real provider of LLM_PROVIDER (claude_cli: Claude Code installed
-and logged in), which is the smoke test:
+and logged in; anthropic: ANTHROPIC_API_KEY), which is the smoke test:
 
     LLM_SMOKE=1 pytest worker/tests/test_llm_contract.py -k smoke
 """
@@ -82,7 +82,7 @@ def test_recorded(case: dict, recorded: LLMProvider):
     check_contract(case, drafts)
 
 
-@pytest.mark.skipif(not SMOKE, reason="LLM_SMOKE=1 runs the real provider (claude -p)")
+@pytest.mark.skipif(not SMOKE, reason="LLM_SMOKE=1 runs the real provider of LLM_PROVIDER")
 @pytest.mark.parametrize("case", GOLDEN, ids=[c["id"] for c in GOLDEN])
 def test_smoke(case: dict):
     """The real provider, end to end. Slow (~10 s per phrase) and uses the

@@ -834,7 +834,15 @@ Las fases van en orden. Cada una deja el sistema funcionando: el bot de Telegram
 
 F0–F6 dejan el producto completo, pero todo corre en una sola PC con Supabase local: nadie de afuera puede registrarse ni recibir un magic link. F7 es lo mínimo para abrir el piloto del §51 sin perder datos ni métricas. Mientras tanto el sistema corre en local (web en `127.0.0.1:3000`, Supabase local, worker en la PC).
 
-**Estado:** hosting decidido (opción *B*, todo en la PC con Cloudflare Tunnel). Hechos: 4, 5, 7, 10 y 12 (migración `20261004120000_f7_pilot.sql`, `tools/test_db.py`, `/privacidad`, `/terminos`, `/baja`, «Borrar mi cuenta», `pipeline/retention.py`). Pendientes: 1 (túnel), 2, 3, 6, 8, 9 y 11.
+**Estado:** hosting decidido (opción *B*, todo en la PC con Cloudflare Tunnel). El código de los 12 puntos está hecho; lo que falta son cuentas y configuración que solo puede hacer el dueño, paso a paso en [PILOT_SETUP.md](PILOT_SETUP.md):
+
+- **1–3:** `supabase/config.toml` toma la URL pública, el SMTP de Resend y claves propias del stack de `supabase/.env` (`tools/supabase_keys.py` reemplaza las claves de demo de la CLI, que con la API pública dejarían entrar a cualquiera); falta crear el túnel, el dominio y la cuenta de Resend.
+- **6:** `LLM_PROVIDER=anthropic` (`llm/anthropic_api.py`, API de Claude con structured outputs, mismo contrato); falta la API key.
+- **8:** log a archivo UTF-8 con rotación, latido (`worker_heartbeat`, visible en `/admin/sources`), `tools/watchdog.py`, y `ops/` (supervisor con reinicio, tareas programadas, backup diario con restore probado, `update.ps1`); falta instalar las tareas.
+- **9:** Kavak, V6 y Autocosmos OK el 28/09; faltan renovar las sesiones de MercadoLibre (bloqueado) y Facebook (0 resultados).
+- **11:** Open Graph con imagen, `robots.txt` y `sitemap.xml`.
+
+La API se publica solo en `/auth`, `/rest` y `/realtime`: en el mismo puerto están pgMeta (`/pg/*`) y Storage sin autenticación.
 
 - **Alcance:**
   1. **Hosting (decisión abierta, bloquea 2–4 y 8).** La web y la API de Supabase tienen que ser públicas, porque el navegador habla directo con Supabase (Auth, Realtime). Opciones:
