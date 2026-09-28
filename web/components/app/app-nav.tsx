@@ -21,7 +21,7 @@ function active(pathname: string, href: string, exact?: boolean) {
 }
 
 /** Desktop: links in the header. */
-export function TopNav() {
+export function TopNav({ admin = false }: { admin?: boolean }) {
   const pathname = usePathname();
   return (
     <nav aria-label="Principal" className="hidden items-center gap-1 md:flex">
@@ -39,6 +39,11 @@ export function TopNav() {
           {badge ? <UnreadBadge /> : null}
         </Link>
       ))}
+      {admin ? (
+        <Link href="/admin" className="inline-flex h-8 items-center rounded-lg px-3 text-sm text-muted-foreground hover:bg-muted hover:text-foreground">
+          Admin
+        </Link>
+      ) : null}
       <Button asChild size="sm" className="ml-2">
         <Link href="/app/searches/new">
           <Plus aria-hidden /> Nueva búsqueda

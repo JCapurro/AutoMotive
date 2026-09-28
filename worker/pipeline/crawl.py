@@ -22,6 +22,7 @@ from typing import Any, Awaitable, Callable
 from collectors import REGISTRY, Listing
 from collectors._loop import run_collector
 from db.repos import runs, targets as targets_repo
+from db.repos.runs import SourceHealth
 from normalization.listing import Target
 from normalization.normalize import normalize_brand, normalize_text
 from pipeline.ingest import IngestResult, ingest
@@ -51,6 +52,8 @@ class TargetRun:
 
 
 BatchHandler = Callable[[TargetRun], Awaitable[None]]
+# Called with the source's failure streak after every run (the admin alert, sección 10).
+HealthHandler = Callable[[SourceHealth | None], Awaitable[Any]]
 
 
 def _widest(values: list[Any], pick) -> Any:
@@ -108,7 +111,7 @@ def scraper_filters(target: dict[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in f.items() if v is not None}
 
 
-async def run_target(target: dict[str, Any]) -> TargetRun | None:
+async def run_target(target: dict[str, Any], on_health: HealthHandler | None = None) -> TargetRun | None:
     """Scrape and ingest one target, recording a collector_runs row. None if it failed."""
     source = target["source"]
     run_id = await runs.start_run(source, target["id"])
@@ -120,33 +123,46 @@ async def run_target(target: dict[str, Any]) -> TargetRun | None:
     except Exception as exc:
         log.warning("target=%s %s %s/%s failed: %s", target["id"], source, target.get("make"),
                     target.get("model"), exc)
-        await runs.finish_run(run_id, ok=False, error=traceback.format_exc())
+        health = await runs.finish_run(run_id, ok=False, error=traceback.format_exc())
         await targets_repo.finish_target(target["id"], ok=False, retry_seconds=retry)
+        await _report(on_health, health)
         return None
     try:
         result = await ingest(items, target=Target(target.get("make"), target.get("model")))
     except Exception:
         err = traceback.format_exc()
         await runs.log_error("ingest", f"target:{target['id']}", err)
-        await runs.finish_run(run_id, ok=False, found=len(items), error=err)
+        health = await runs.finish_run(run_id, ok=False, found=len(items), error=err)
         await targets_repo.finish_target(target["id"], ok=False, retry_seconds=retry)
+        await _report(on_health, health)
         return None
-    await runs.finish_run(run_id, ok=True, found=result.found, new=result.new,
-                          updated=result.updated)
+    health = await runs.finish_run(run_id, ok=True, found=result.found, new=result.new,
+                                   updated=result.updated)
+    await _report(on_health, health)
     log.info("target=%s %s %s/%s found=%d new=%d updated=%d events=%d", target["id"], source,
              target.get("make") or "*", target.get("model") or "*", result.found, result.new,
              result.updated, len(result.events))
     return TargetRun(target, items, result, first_run=not target["first_run_done"])
 
 
+async def _report(on_health: HealthHandler | None, health: SourceHealth | None) -> None:
+    if on_health is None:
+        return
+    try:
+        await on_health(health)
+    except Exception:
+        log.exception("source health handler failed")
+
+
 async def _run_source(targets: list[dict[str, Any]], on_batch: BatchHandler | None,
-                      jitter_seconds: float, stop: asyncio.Event | None) -> None:
+                      jitter_seconds: float, stop: asyncio.Event | None,
+                      on_health: HealthHandler | None = None) -> None:
     for i, target in enumerate(targets):
         if stop is not None and stop.is_set():
             return
         if i and jitter_seconds > 0:
             await asyncio.sleep(random.uniform(jitter_seconds / 2, jitter_seconds))
-        run = await run_target(target)
+        run = await run_target(target, on_health)
         if run is None:
             continue
         if on_batch is not None:
@@ -159,7 +175,7 @@ async def _run_source(targets: list[dict[str, Any]], on_batch: BatchHandler | No
 
 
 async def crawl_due(on_batch: BatchHandler | None = None, *, jitter_seconds: float = 5.0,
-                    stop: asyncio.Event | None = None) -> int:
+                    stop: asyncio.Event | None = None, on_health: HealthHandler | None = None) -> int:
     """Run every due target: sources in parallel, targets of a source in series.
     Returns how many targets were due."""
     due = await targets_repo.due_targets()
@@ -168,7 +184,7 @@ async def crawl_due(on_batch: BatchHandler | None = None, *, jitter_seconds: flo
         if t["source"] in REGISTRY:
             by_source.setdefault(t["source"], []).append(t)
     if by_source:
-        await asyncio.gather(*(_run_source(ts, on_batch, jitter_seconds, stop)
+        await asyncio.gather(*(_run_source(ts, on_batch, jitter_seconds, stop, on_health)
                                for ts in by_source.values()))
     return len(due)
 

@@ -150,17 +150,20 @@ def batch_handler(notifier: Notifier) -> crawl.BatchHandler:
     return handle
 
 
-async def tick(notifier: Notifier, stop: asyncio.Event | None = None) -> None:
+async def tick(notifier: Notifier, stop: asyncio.Event | None = None,
+               on_health: crawl.HealthHandler | None = None) -> None:
     await crawl.sync_targets(await db.enabled_profiles())
     await rematch.run_pending()
-    due = await crawl.crawl_due(batch_handler(notifier), jitter_seconds=CRAWL_JITTER_SECONDS, stop=stop)
+    due = await crawl.crawl_due(batch_handler(notifier), jitter_seconds=CRAWL_JITTER_SECONDS, stop=stop,
+                                on_health=on_health)
     log.info("crawl tick: %d due targets", due)
 
 
-async def run_loop(notifier: Notifier, stop_event: asyncio.Event) -> None:
+async def run_loop(notifier: Notifier, stop_event: asyncio.Event,
+                   on_health: crawl.HealthHandler | None = None) -> None:
     while not stop_event.is_set():
         try:
-            await tick(notifier, stop_event)
+            await tick(notifier, stop_event, on_health)
         except Exception:
             log.error("scheduler tick failed: %s", traceback.format_exc())
         try:

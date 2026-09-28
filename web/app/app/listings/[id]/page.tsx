@@ -23,7 +23,6 @@ import {
   LEVEL,
   REASON_NAME,
   REASON_OK,
-  REASON_ORDER,
   type RejectionReason,
   SELLER,
   TRANSMISSION,
@@ -32,6 +31,7 @@ import { ageLine, imageUrls, km, money, number, pct, vehicle } from "@/lib/forma
 import { createClient } from "@/lib/supabase/server";
 import type { Component, PriceRef, Reason, RedFlag } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { orderReasons } from "@/lib/why";
 
 export const metadata: Metadata = { title: "Publicación" };
 
@@ -188,7 +188,7 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
             </CardHeader>
             <CardContent>
               <ul className="space-y-2.5" data-testid="match-reasons">
-                {orderedReasons(reasons).map(([key, r]) => (
+                {orderReasons(reasons).map(([key, r]) => (
                   <ReasonRow key={key} name={key} reason={r} />
                 ))}
               </ul>
@@ -314,11 +314,6 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
       <dd className="break-words">{children}</dd>
     </div>
   );
-}
-
-function orderedReasons(reasons: Record<string, Reason>): [string, Reason][] {
-  const rank = (key: string, r: Reason) => (r.kind === "soft" ? 100 : 0) + (REASON_ORDER.indexOf(key) + 1 || 50);
-  return Object.entries(reasons).sort(([a, ra], [b, rb]) => rank(a, ra) - rank(b, rb));
 }
 
 /** ✅ versión buscada · ❔ caja no informada · ➖ preferencia que no se cumple (§23). */

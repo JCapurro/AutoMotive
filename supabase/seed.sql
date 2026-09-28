@@ -30,7 +30,8 @@ insert into public.app_config (key, value) values
   ('plan_limits', '{
      "enforced": false,
      "free": {"max_profiles": 1, "max_visible_results": 50, "immediate_alerts": false},
-     "pro":  {"max_profiles": 10, "immediate_alerts": true, "crawl_priority": "high"}
+     "pro":  {"max_profiles": 10, "immediate_alerts": true, "crawl_priority": "high"},
+     "pass": {"max_profiles": 10, "immediate_alerts": true, "crawl_priority": "high"}
    }'),
   ('repost',                        '{"window_days": 60, "price_tol_pct": 10}'),
   ('enrichment',                    '{"batch_per_source": 20, "max_age_days": 30}'),
@@ -46,7 +47,14 @@ insert into public.app_config (key, value) values
   ('red_flags',                     '{"much_cheaper_pct": 25, "anticipo_pct": 50, "min_km_per_year": 5000, "min_description_chars": 150}'),
   ('rescore',                       '{"days": 14, "hour": "04:00"}'),
   ('digest_top_n',                  '10'),
-  ('llm_limits',                    '{"per_user_hour": 30}')
+  ('llm_limits',                    '{"per_user_hour": 30}'),
+  ('validation_criteria', '{
+     "active_users_min": 30, "alert_open_min_pct": 30, "engagement_min_pct": 15,
+     "retention_weeks": 3, "retention_min_pct": 40, "outcome_min_users": 3,
+     "payment_intent_min_pct": 10, "activation_target_pct": 70
+   }'),
+  ('pro_cta',                       '{"min_alert_clicks": 3, "on_limits": ["max_profiles"]}'),
+  ('pro_offer',                     '{"pro_monthly": {"price_usd": 15}, "pass_30": {"price_usd": 12}, "pass_90": {"price_usd": 25}}')
 on conflict (key) do nothing;
 
 -- ---------------------------------------------------------------------------

@@ -9,6 +9,9 @@ load_dotenv()
 ROOT = Path(__file__).resolve().parent.parent
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "").strip()
+# Operational alerts (sección 10): a collector that keeps failing, and its
+# recovery. Empty: no alerts (the admin still sees it in /admin/sources).
+TELEGRAM_ADMIN_CHAT_ID = os.getenv("TELEGRAM_ADMIN_CHAT_ID", "").strip()
 ALLOWED_USER_IDS = {
     int(x) for x in os.getenv("ALLOWED_USER_IDS", "").split(",") if x.strip().isdigit()
 }

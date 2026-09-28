@@ -6,7 +6,8 @@ import { requestOrigin } from "@/lib/origin";
 
 /**
  * Refreshes the Supabase session on every navigation and keeps /app/** for
- * signed-in users. /r/<id> stays public: an alert link must work (and count)
+ * signed-in users and /admin/** for admins (sección 10; the pages check again
+ * on the server). /r/<id> stays public: an alert link must work (and count)
  * before the user signs in.
  */
 export async function proxy(request: NextRequest) {
@@ -30,9 +31,14 @@ export async function proxy(request: NextRequest) {
   const signedIn = Boolean(data?.claims?.sub);
   const { pathname, search } = request.nextUrl;
 
-  if (!signedIn && pathname.startsWith("/app")) {
+  const admin = pathname === "/admin" || pathname.startsWith("/admin/");
+  if (!signedIn && (pathname.startsWith("/app") || admin)) {
     const url = new URL(`/login?next=${encodeURIComponent(pathname + search)}`, requestOrigin(request));
     return redirectWith(url, response);
+  }
+  if (admin) {
+    const { data: profile } = await supabase.from("profiles").select("role").eq("id", data!.claims!.sub).maybeSingle();
+    if (profile?.role !== "admin") return redirectWith(new URL("/app", requestOrigin(request)), response);
   }
   if (signedIn && pathname === "/login") {
     return redirectWith(new URL("/app", requestOrigin(request)), response);

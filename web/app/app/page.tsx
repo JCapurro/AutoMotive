@@ -3,10 +3,12 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { ListingCard } from "@/components/app/listing-card";
+import { ProBanner } from "@/components/app/pro-cta";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireUser } from "@/lib/auth";
+import type { ProCtaState } from "@/lib/pro";
 import { describeFilters, describeVehicle } from "@/lib/search";
 import { createClient } from "@/lib/supabase/server";
 import type { Filters } from "@/lib/types";
@@ -17,11 +19,14 @@ export const metadata: Metadata = { title: "Inicio" };
 export default async function Dashboard() {
   await requireUser();
   const supabase = await createClient();
-  const [{ data: searches }, { data: opportunities }, { data: profile }] = await Promise.all([
+  const [{ data: searches }, { data: opportunities }, { data: profile }, { data: cta }] = await Promise.all([
     supabase.rpc("dashboard_summary"),
     supabase.rpc("recent_opportunities", { p_limit: 8 }),
     supabase.from("profiles").select("telegram_chat_id").maybeSingle(),
+    supabase.rpc("pro_cta_state"),
   ]);
+  // §52: "Probar Automotive Pro" after real activity or a plan limit.
+  const pro = (cta ?? null) as ProCtaState | null;
   const { data: radii } = await supabase.from("search_profiles").select("id, radius_km");
   const radius = new Map((radii ?? []).map((r) => [r.id, r.radius_km]));
 
@@ -92,6 +97,8 @@ export default async function Dashboard() {
           })}
         </div>
       </section>
+
+      {pro?.show && pro.reason ? <ProBanner placement="dashboard" reason={pro.reason} /> : null}
 
       {!profile?.telegram_chat_id ? (
         <Link

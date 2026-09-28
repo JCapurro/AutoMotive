@@ -23,6 +23,7 @@ from intelligence.config import SCORING_VERSION
 from notifications.channels.telegram import TelegramChannel
 from notifications.channels.web import WebChannel
 from notifications.links import Links
+from notifications.ops import SourceAlerts
 from notifications.service import Notifier
 from pipeline import crawl, enrich, rematch, scheduler, watchlist
 from pipeline.ingest import ingest
@@ -104,7 +105,7 @@ class IngestCase(PostgresTestCase):
         [aid] = await db.create_alert(user_id=user, chat_id=user, name="Ford Fiesta", filters=f)
         return aid
 
-    async def tick(self, bot=None) -> int:
+    async def tick(self, bot=None, on_health=None) -> int:
         """One crawl-loop tick with every target due, no jitter."""
         async with db.connection() as cx:
             await cx.execute("UPDATE crawl_targets SET next_run_at = NULL")
@@ -112,7 +113,7 @@ class IngestCase(PostgresTestCase):
         await rematch.run_pending()
         notifier = Notifier({"telegram": TelegramChannel(bot or _FakeBot(), Links()),
                              "web": WebChannel(Links())})
-        return await crawl.crawl_due(scheduler.batch_handler(notifier), jitter_seconds=0)
+        return await crawl.crawl_due(scheduler.batch_handler(notifier), jitter_seconds=0, on_health=on_health)
 
     async def rows(self, sql: str, *params) -> list[dict]:
         async with db.connection() as cx:
@@ -284,6 +285,38 @@ class CrawlTargetsTests(IngestCase):
         [src] = await self.rows("SELECT consecutive_failures, last_ok_at FROM sources WHERE id = 'mercadolibre'")
         self.assertEqual(src["consecutive_failures"], 0)
         self.assertIsNotNone(src["last_ok_at"])
+
+    async def test_a_failing_source_alerts_the_admin_once_and_again_when_back(self):
+        await self.fiesta_alert()
+        admin = _FakeBot()
+        alerts = SourceAlerts(admin, 777, "https://automotive.test")
+        FakeSource.results["mercadolibre"] = RuntimeError("login wall")
+        for _ in range(4):                                       # seed: alert after 3
+            await self.tick(on_health=alerts.on_health)
+        [src] = await self.rows("SELECT consecutive_failures FROM sources WHERE id = 'mercadolibre'")
+        self.assertEqual(src["consecutive_failures"], 4)
+        [msg] = admin.sent
+        self.assertEqual(msg["chat_id"], 777)
+        self.assertIn("<b>MercadoLibre</b> falló 3 veces seguidas", msg["text"])
+        self.assertIn("RuntimeError: login wall", msg["text"])
+        self.assertIn("https://automotive.test/admin/sources", msg["text"])
+
+        FakeSource.results["mercadolibre"] = [card("1")]
+        await self.tick(on_health=alerts.on_health)
+        await self.tick(on_health=alerts.on_health)
+        self.assertEqual(len(admin.sent), 2)
+        self.assertIn("volvió a funcionar después de 4 fallas seguidas", admin.sent[1]["text"])
+
+    async def test_the_admin_alert_never_breaks_the_crawl(self):
+        await self.fiesta_alert()
+        alerts = SourceAlerts(_FakeBot(fail=True), 777)
+        FakeSource.results["mercadolibre"] = RuntimeError("login wall")
+        for _ in range(3):
+            await self.tick(on_health=alerts.on_health)
+        FakeSource.results["mercadolibre"] = [card("1")]
+        await self.tick(on_health=alerts.on_health)
+        [n] = await self.rows("SELECT count(*) AS n FROM listings")
+        self.assertEqual(n["n"], 1)
 
 
 class TelegramAlertsTests(IngestCase):

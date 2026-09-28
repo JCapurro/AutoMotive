@@ -19,13 +19,16 @@ comunican por tablas (plan técnico, sección 2).
 | `/app/saved` | Watchlist del §30 |
 | `/app/inbox` | Inbox web; el badge se actualiza por Supabase Realtime |
 | `/app/settings` | Vincular Telegram (`t.me/<bot>?start=<código>`), canales, frecuencia y ubicación por defecto |
+| `/app/pro` | «Probar Automotive Pro» (§52): Pro mensual vs Search Pass 30/90 días y la lista de espera. Sin cobro |
 | `/r/[notificationId]` | Redirect con tracking de las alertas (sección 7.3) |
+| `/admin/**` | Backoffice (sección 10), solo `profiles.role = 'admin'`: Resumen con los criterios del §53, Métricas, Notificaciones con el inspector «¿por qué se envió?» (`/admin/notifications/[id]`, `/admin/matches/[id]`), Matches, Usuarios, Búsquedas, Listings, Fuentes, Errores y Config |
 
 Las lecturas agregadas son funciones SQL `security invoker`
 (`dashboard_summary`, `recent_opportunities`, `search_results`,
 `search_result_counts`) sobre la vista `match_cards`; las mutaciones son Server
 Actions con el cliente del usuario (RLS). La service role solo se usa del lado
-del servidor para `/r/` y para leer `app_config`.
+del servidor para `/r/`, para leer `app_config` y en `/admin` (después de
+chequear el rol en el proxy y en cada página y acción).
 
 ## Correrla
 
@@ -60,6 +63,9 @@ El e2e necesita el stack local de Supabase y el entorno Python del worker
 corren el código real del worker. Cubre la aceptación de F4: registro,
 creación de búsqueda, backfill, alerta simulada que llega por Realtime, clic
 (trackeado por `/r/`), "Me interesa" y compra con la pregunta del §38.
+`e2e/admin.spec.ts` cubre la de F6: el inspector en un clic desde
+Notificaciones, los 6 criterios del §53 en el Resumen, `/admin` cerrado a
+quien no es admin y el CTA Pro → planes → lista de espera con sus eventos.
 
 Tipos de la base: `npm run gen:types` (regenera `types/database.ts` desde el
 stack local).

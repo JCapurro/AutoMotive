@@ -2,23 +2,25 @@ import "server-only";
 
 import { cache } from "react";
 
+import { type ProOffer, proOffer } from "@/lib/pro";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
  * app_config is server-only (sección 4.4): read with the service role. Only
  * the few values the web shows are exposed, with the seed's defaults.
  */
-export type WebConfig = { minComparables: number; watchlistStaleDays: number };
+export type WebConfig = { minComparables: number; watchlistStaleDays: number; proOffer: ProOffer };
 
 export const webConfig = cache(async (): Promise<WebConfig> => {
   const { data } = await createAdminClient()
     .from("app_config")
     .select("key, value")
-    .in("key", ["comparables", "watchlist_stale_days"]);
+    .in("key", ["comparables", "watchlist_stale_days", "pro_offer"]);
   const values = Object.fromEntries((data ?? []).map((row) => [row.key, row.value]));
   const comparables = (values.comparables ?? {}) as { min_n?: number };
   return {
     minComparables: Number(comparables.min_n ?? 5),
     watchlistStaleDays: Number(values.watchlist_stale_days ?? 30),
+    proOffer: proOffer(values.pro_offer),
   };
 });

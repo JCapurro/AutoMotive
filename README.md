@@ -5,14 +5,15 @@ con tus búsquedas, las prioriza con un Opportunity Score y te avisa por la web,
 Telegram o email.
 
 El plan del MVP (web + Supabase) está en [docs/TECHNICAL_PLAN.md](docs/TECHNICAL_PLAN.md).
-Estado: **F4** — la web ([web/](web/README.md), Next.js + Supabase) es donde se
+Estado: **F6** — la web ([web/](web/README.md), Next.js + Supabase) es donde se
 crean y editan las búsquedas, se ven los resultados, el detalle de cada
 publicación (¿por qué apareció?, análisis de precio, histórico, red flags,
 preguntas al vendedor), los estados, la watchlist y el inbox con Realtime. El
 bot de Telegram ya no tiene wizard: vincula la cuenta (`/start <código>`) y
 resuelve los botones de las alertas. Debajo siguen F1–F3: scraping por *crawl
 target*, matching con razones y Opportunity Score, y el motor de
-notificaciones.
+notificaciones. F5 suma el modo asistido con LLM y F6 el backoffice
+(`/admin`), las métricas del piloto y el experimento de monetización.
 
 ## Estructura
 
@@ -198,6 +199,42 @@ python -m tools.simulate_alert <listing_id> # una publicación "recién llegada"
 python -m tools.llm_jobs                    # procesa los pedidos del modo asistido en cola (--replay: respuestas grabadas)
 ```
 
+### Backoffice y métricas (F6)
+
+`/admin` es solo para `profiles.role = 'admin'` (proxy + chequeo en el
+servidor; lee con la service role). Para dar acceso:
+
+```sql
+update public.profiles set role = 'admin' where email = 'vos@ejemplo.com';
+```
+
+- **Resumen**: los 6 criterios del §53 (`v_validation_criteria`) contra sus
+  umbrales (`app_config.validation_criteria`), North Star, activación, ruido y
+  estado de las fuentes.
+- **Inspector "¿por qué se envió?"**: desde Notificaciones (o Resumen) un clic
+  en «¿Por qué?» muestra la decisión del motor, el bloque del §45 (`model =
+  true`… `score = 87`), las razones campo por campo, el `score_breakdown`, los
+  comparables con el nivel de la cascada y los red flags. También por match
+  (`/admin/matches/<id>`).
+- **Métricas**: las vistas de la sección 11 (`v_north_star_weekly`,
+  `v_activation`, `v_first_value`, `v_alert_funnel`,
+  `v_high_score_engagement`, `v_alerts_per_user_day`, `v_outcomes`), el embudo
+  del CTA Pro y la latencia del LLM. No cuentan a los admins.
+- **Fuentes, Errores, Usuarios, Búsquedas, Listings, Matches, Config**: la
+  cadencia de cada fuente y todo `app_config` se editan desde ahí.
+- **Alerta de collector caído**: con `TELEGRAM_ADMIN_CHAT_ID` en `.env`, una
+  fuente que falla `collector_failure_alert_after` veces seguidas (3) manda un
+  Telegram al admin, y otro cuando vuelve a funcionar.
+- **Monetización (§52)**: después de 3 alertas clickeadas (o de pasar el
+  límite de búsquedas) el dashboard muestra «Probar Automotive Pro» → planes
+  (Pro mensual, Search Pass 30/90 días) → lista de espera. Eventos
+  `pro_cta_viewed`, `pro_cta_clicked`, `waitlist_joined`. No hay cobro.
+- **Límites de plan** (`app_config.plan_limits`): con `enforced = false` (el
+  piloto) todo está habilitado y cada vez que un usuario free pasa un límite
+  (búsquedas, alertas inmediatas, resultados visibles) se registra
+  `plan_limit_hit`. Con `true` se aplican: la segunda búsqueda se rechaza, las
+  alertas inmediatas pasan a diarias y los resultados se cortan en 50.
+
 ### Modo asistido (LLM)
 
 La pestaña **Asistido** de `/app/searches/new` escribe el texto en `llm_jobs`;
@@ -226,7 +263,7 @@ pytest                                  # desde la raíz o desde worker/
 $env:TEST_DATABASE_URL = "postgresql://postgres:postgres@127.0.0.1:54322/postgres"
 pytest                                  # suma los tests contra Postgres (solo host local)
 $env:LLM_SMOKE = "1"; pytest worker/tests/test_llm_contract.py -k smoke   # las 20 frases contra claude -p real
-npx supabase test db                    # pgTAP: RLS y las funciones SQL de la web
+npx supabase test db                    # pgTAP: RLS, las funciones SQL de la web y las vistas de métricas
 cd web; npm test; npm run e2e           # vitest y Playwright (desktop + 375 px)
 ```
 

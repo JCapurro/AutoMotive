@@ -6,7 +6,7 @@ import signal
 from telegram.ext import Application
 
 from config import (EMAIL_FROM, ENRICH_TICK_SECONDS, NOTIFY_TICK_SECONDS, RESEND_API_KEY,
-                    TELEGRAM_TOKEN, WATCHLIST_TICK_SECONDS, WEB_BASE_URL)
+                    TELEGRAM_ADMIN_CHAT_ID, TELEGRAM_TOKEN, WATCHLIST_TICK_SECONDS, WEB_BASE_URL)
 import db
 from bot.handlers import register
 from llm import build_provider
@@ -15,6 +15,7 @@ from notifications.channels.telegram import TelegramChannel
 from notifications.channels.web import WebChannel
 from notifications.digest import digest_loop
 from notifications.links import Links
+from notifications.ops import SourceAlerts
 from notifications.service import Notifier
 from pipeline.enrich import enrich_pass
 from pipeline.llm_jobs import llm_jobs_loop
@@ -75,6 +76,9 @@ async def amain() -> None:
     app = Application.builder().token(TELEGRAM_TOKEN).build()
     register(app, links)
     notifier = build_notifier(app.bot, links)
+    source_alerts = SourceAlerts(app.bot, TELEGRAM_ADMIN_CHAT_ID, WEB_BASE_URL)
+    if not source_alerts.enabled:
+        log.info("alertas operativas desactivadas: falta TELEGRAM_ADMIN_CHAT_ID")
 
     await app.initialize()
     await app.start()
@@ -99,7 +103,7 @@ async def amain() -> None:
         pass
 
     tasks = [
-        asyncio.create_task(run_loop(notifier, stop)),
+        asyncio.create_task(run_loop(notifier, stop, source_alerts.on_health)),
         asyncio.create_task(_every("enrichment", ENRICH_TICK_SECONDS,
                                    notifying(enrich_pass, notifier), stop)),
         asyncio.create_task(_every("watchlist", WATCHLIST_TICK_SECONDS,
