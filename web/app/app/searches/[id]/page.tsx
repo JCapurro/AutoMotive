@@ -141,7 +141,7 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
       </div>
 
       {shown.length ? (
-        <div className="grid gap-3 lg:grid-cols-2" data-testid="results">
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2" data-testid="results">
           {shown.map((card) => (
             <ListingCard key={card.listing_id} card={card} />
           ))}

@@ -54,7 +54,8 @@ class StartupWarningsTests(unittest.TestCase):
 
     FULL = {"WEB_BASE_URL": "https://automotive.example", "RESEND_API_KEY": "re_x",
             "EMAIL_FROM": "alertas@automotive.example", "TELEGRAM_ADMIN_CHAT_ID": "1",
-            "LLM_PROVIDER": "claude_cli", "CLAUDE_CLI_PATH": "", "GEOCODING_ENABLED": True}
+            "LLM_PROVIDER": "anthropic", "ANTHROPIC_API_KEY": "sk-x", "CLAUDE_CLI_PATH": "",
+            "GEOCODING_ENABLED": True}
 
     def warnings(self, found=True, **changes):
         from config import startup_warnings
@@ -68,6 +69,8 @@ class StartupWarningsTests(unittest.TestCase):
         self.assertIn("https", self.warnings(WEB_BASE_URL="http://127.0.0.1:3000")[0])
         self.assertIn("RESEND_API_KEY", self.warnings(EMAIL_FROM="")[0])
         self.assertIn("TELEGRAM_ADMIN_CHAT_ID", self.warnings(TELEGRAM_ADMIN_CHAT_ID="")[0])
-        self.assertIn("CLAUDE_CLI_PATH", self.warnings(found=False)[0])
+        self.assertIn("suscripción", self.warnings(LLM_PROVIDER="claude_cli")[0])
+        self.assertIn("CLAUDE_CLI_PATH", self.warnings(found=False, LLM_PROVIDER="claude_cli")[1])
+        self.assertIn("ANTHROPIC_API_KEY", self.warnings(ANTHROPIC_API_KEY="")[0])
         self.assertIn("stub", self.warnings(LLM_PROVIDER="local")[0])
         self.assertIn("radio", self.warnings(GEOCODING_ENABLED=False)[0])

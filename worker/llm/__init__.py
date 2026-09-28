@@ -1,7 +1,8 @@
 """The LLM layer (sección 8): providers behind one interface.
 
     provider.py    LLMProvider, LLMError, build_provider (LLM_PROVIDER)
-    claude_cli.py  `claude -p` (pilot)
+    claude_cli.py  `claude -p` (development)
+    anthropic_api.py  the Claude API with an API key (pilot, F7)
     local.py       OpenAI-compatible local server (launch; stub)
     schemas.py     Pydantic models = the JSON Schema sent and the validation
     prompts/       system prompts, shared by the providers

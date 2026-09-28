@@ -534,6 +534,19 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"worker_heartbeat": {
+                  Row: {
+                    "beat_at": string,"host": string | null,"id": number,"pid": number | null,"started_at": string
+                  }
+                  Insert: {
+                    "beat_at"?: string,"host"?: string | null,"id"?: number,"pid"?: number | null,"started_at": string
+                  }
+                  Update: {
+                    "beat_at"?: string,"host"?: string | null,"id"?: number,"pid"?: number | null,"started_at"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 }
           }
           Views: {

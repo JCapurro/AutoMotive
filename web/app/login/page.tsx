@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { Logo } from "@/components/logo";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { localMailbox } from "@/lib/env";
 import { safeNext } from "@/lib/navigation";
 
 import { LoginForm } from "./login-form";
@@ -21,7 +22,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
           <CardDescription>Guardá tus búsquedas y recibí las alertas.</CardDescription>
         </CardHeader>
         <CardContent>
-          <LoginForm next={next} linkError={params.error === "link"} />
+          <LoginForm next={next} linkError={params.error === "link"} mailbox={localMailbox} />
         </CardContent>
       </Card>
       <p className="max-w-sm text-center text-xs text-muted-foreground">

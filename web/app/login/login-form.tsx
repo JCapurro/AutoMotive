@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 
 import { type LoginState, sendMagicLink, verifyCode } from "./actions";
 
-export function LoginForm({ next, linkError }: { next: string; linkError: boolean }) {
+export function LoginForm({ next, linkError, mailbox = "" }: { next: string; linkError: boolean; mailbox?: string }) {
   const [sent, send, sending] = useActionState(sendMagicLink, { step: "email", next } satisfies LoginState);
   const [checked, verify, verifying] = useActionState(verifyCode, { step: "code", next } satisfies LoginState);
 
@@ -26,6 +26,15 @@ export function LoginForm({ next, linkError }: { next: string; linkError: boolea
               Te mandamos un link a <span className="font-medium text-foreground">{sent.email}</span>. Abrilo desde
               este dispositivo para entrar.
             </p>
+            {mailbox ? (
+              <p className="text-muted-foreground" data-testid="local-mailbox">
+                Modo local: el email no sale a Internet, está en{" "}
+                <a href={mailbox} target="_blank" rel="noreferrer" className="font-medium text-foreground underline">
+                  Mailpit
+                </a>
+                .
+              </p>
+            ) : null}
           </div>
         </div>
         <form action={verify} className="space-y-2">

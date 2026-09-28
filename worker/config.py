@@ -71,12 +71,23 @@ CLAUDE_CLI_PATH = os.getenv("CLAUDE_CLI_PATH", "").strip()
 CLAUDE_CLI_MODEL = os.getenv("CLAUDE_CLI_MODEL", "haiku").strip()
 # Budget for one job, retry included (the web gives up a bit after this).
 LLM_TIMEOUT_SECONDS = float(os.getenv("LLM_TIMEOUT_SECONDS", "60"))
+# LLM_PROVIDER=anthropic (F7, punto 6): the Claude API with an API key.
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "").strip()
+ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-haiku-4-5").strip()
 LOCAL_LLM_BASE_URL = os.getenv("LOCAL_LLM_BASE_URL", "http://127.0.0.1:11434/v1").strip()
 LOCAL_LLM_MODEL = os.getenv("LOCAL_LLM_MODEL", "").strip()
 # How often an idle llm_jobs loop looks for queued jobs, and how many jobs run
 # at once (each one is a `claude -p` process).
 LLM_POLL_SECONDS = float(os.getenv("LLM_POLL_SECONDS", "2"))
 LLM_CONCURRENCY = int(os.getenv("LLM_CONCURRENCY", "1"))
+
+# Operation (F7, punto 8). Log file with daily rotation (empty: stdout only),
+# how often the worker writes its heartbeat, and when tools/watchdog.py
+# considers it dead.
+LOG_FILE = os.getenv("LOG_FILE", str(ROOT / "logs" / "worker.log")).strip()
+LOG_KEEP_DAYS = int(os.getenv("LOG_KEEP_DAYS", "14"))
+HEARTBEAT_SECONDS = int(os.getenv("HEARTBEAT_SECONDS", "60"))
+WATCHDOG_STALE_MINUTES = int(os.getenv("WATCHDOG_STALE_MINUTES", "10"))
 
 
 def startup_warnings(env: dict | None = None, which=None) -> list[str]:
@@ -98,9 +109,14 @@ def startup_warnings(env: dict | None = None, which=None) -> list[str]:
     if not g["TELEGRAM_ADMIN_CHAT_ID"]:
         out.append("alertas operativas desactivadas: falta TELEGRAM_ADMIN_CHAT_ID")
     if g["LLM_PROVIDER"] == "claude_cli":
+        out.append("LLM_PROVIDER=claude_cli usa tu suscripción de Claude Code: para usuarios del piloto, "
+                   "LLM_PROVIDER=anthropic con ANTHROPIC_API_KEY")
         if not which(g["CLAUDE_CLI_PATH"] or "claude"):
             out.append("no se encontró el CLI de Claude Code (CLAUDE_CLI_PATH): "
                        "el modo asistido cae siempre al formulario")
+    elif g["LLM_PROVIDER"] == "anthropic":
+        if not g.get("ANTHROPIC_API_KEY"):
+            out.append("LLM_PROVIDER=anthropic sin ANTHROPIC_API_KEY: el modo asistido cae siempre al formulario")
     elif g["LLM_PROVIDER"] == "local":
         out.append("LLM_PROVIDER=local todavía es un stub: el modo asistido cae siempre al formulario")
     if not g["GEOCODING_ENABLED"]:

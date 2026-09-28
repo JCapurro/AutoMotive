@@ -176,7 +176,7 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
         owned={owned ? { id: owned.id, influence: owned.automotive_influence as Influence | null } : null}
       />
 
-      <div className="grid gap-5 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         {best ? (
           <Card>
             <CardHeader>

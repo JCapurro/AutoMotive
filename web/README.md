@@ -71,6 +71,10 @@ quien no es admin y el CTA Pro → planes → lista de espera con sus eventos.
 `e2e/f7-account.spec.ts` cubre F7: las páginas legales, la baja del email
 (página y *one-click*) y el borrado de la cuenta.
 
+Antes del e2e pará el worker (`python main.py` o la tarea *Worker*): si no, toma
+los pedidos del modo asistido que el test simula. Y liberá el puerto 3000: con
+`next dev` el overlay de desarrollo tapa la barra de navegación del celular.
+
 El e2e escribe en la base del stack local (la misma que usa la web), pero solo
 datos con el prefijo `e2e` (usuarios `@e2e.automotive.test`, publicaciones
 `e2e-…`), que el setup borra antes de cada corrida.
