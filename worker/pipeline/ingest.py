@@ -56,6 +56,7 @@ class ListingEvent:
     old_price: float | None = None
     new_price: float | None = None
     currency: str | None = None
+    old_currency: str | None = None
     drop_pct: float | None = None
     repost_of: int | None = None
 
@@ -252,7 +253,7 @@ async def _on_update(cx, old: dict[str, Any], row: dict[str, Any], result: Inges
     base = dict(listing_id=lid, source=old["source"], external_id=old["external_id"],
                 changes=tuple(changes), snapshot_id=snap, old_price=old.get("price"),
                 new_price=values.get("price"), currency=values.get("currency"),
-                repost_of=old.get("probable_repost_of"))
+                old_currency=old.get("currency"), repost_of=old.get("probable_repost_of"))
     result.events.append(ListingEvent("listing_updated", **base))
     if "price" in changes and (drop := price_drop_pct(old, values)) is not None \
             and drop >= config.price_drop_min_pct:

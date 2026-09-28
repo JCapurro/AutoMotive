@@ -1,0 +1,52 @@
+=== telegram ===
+<b>🗓 Tu resumen del día</b>
+1 alerta superó el tope diario de avisos inmediatos y quedó en este resumen.
+
+<b>Publicaciones nuevas</b>
+🔥 86 · <a href="https://automotive.app/r/43?to=listing&amp;l=502">Ford Fiesta Titanium 2017</a> · 98.000 km · USD 10.900
+🟡 58 · <a href="https://automotive.app/r/43?to=listing&amp;l=503">Ford Fiesta 2016</a> · 140.000 km · ARS 12.500.000
+
+<b>Bajaron de precio</b>
+📉 <a href="https://automotive.app/r/43?to=listing&amp;l=501">Ford Fiesta Titanium 2017</a> · USD 11.500 → USD 10.800 (-6,1%)
+
+<b>Ya no están disponibles</b>
+🚫 <a href="https://automotive.app/r/43?to=listing&amp;l=504">Fiesta Kinetic Design 2015</a>
+=== telegram buttons ===
+(none)
+=== email subject ===
+🗓 Tu resumen del día en Automotive: 4 novedades
+=== email text ===
+🗓 Tu resumen del día
+1 alerta superó el tope diario de avisos inmediatos y quedó en este resumen.
+
+Publicaciones nuevas
+🔥 86 · Ford Fiesta Titanium 2017 · 98.000 km · USD 10.900
+  https://automotive.app/r/43?to=listing&l=502
+🟡 58 · Ford Fiesta 2016 · 140.000 km · ARS 12.500.000
+  https://automotive.app/r/43?to=listing&l=503
+
+Bajaron de precio
+📉 Ford Fiesta Titanium 2017 · USD 11.500 → USD 10.800 (-6,1%)
+  https://automotive.app/r/43?to=listing&l=501
+
+Ya no están disponibles
+🚫 Fiesta Kinetic Design 2015
+  https://automotive.app/r/43?to=listing&l=504
+
+—
+Recibís este correo porque tenés búsquedas activas en Automotive.
+=== email html ===
+<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.5;color:#1a1a1a">
+<p style="font-size:18px;margin:0 0 8px"><strong>🗓 Tu resumen del día</strong></p>
+<p style="margin:0">1 alerta superó el tope diario de avisos inmediatos y quedó en este resumen.</p>
+<p style="margin:16px 0 4px"><strong>Publicaciones nuevas</strong></p><ul style="margin:0;padding-left:20px">
+<li>🔥 86 · <a href="https://automotive.app/r/43?to=listing&amp;l=502">Ford Fiesta Titanium 2017</a> · 98.000 km · USD 10.900</li>
+<li>🟡 58 · <a href="https://automotive.app/r/43?to=listing&amp;l=503">Ford Fiesta 2016</a> · 140.000 km · ARS 12.500.000</li>
+</ul>
+<p style="margin:16px 0 4px"><strong>Bajaron de precio</strong></p><ul style="margin:0;padding-left:20px">
+<li>📉 <a href="https://automotive.app/r/43?to=listing&amp;l=501">Ford Fiesta Titanium 2017</a> · USD 11.500 → USD 10.800 (-6,1%)</li>
+</ul>
+<p style="margin:16px 0 4px"><strong>Ya no están disponibles</strong></p><ul style="margin:0;padding-left:20px">
+<li>🚫 <a href="https://automotive.app/r/43?to=listing&amp;l=504">Fiesta Kinetic Design 2015</a></li>
+</ul>
+<p style="margin:24px 0 0;font-size:12px;color:#888888">Recibís este correo porque tenés búsquedas activas en Automotive.</p></div>

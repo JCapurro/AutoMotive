@@ -44,7 +44,8 @@ insert into public.app_config (key, value) values
      "guards":       {"suspicious_pct": 50, "partial_pct": 65}
    }'),
   ('red_flags',                     '{"much_cheaper_pct": 25, "anticipo_pct": 50, "min_km_per_year": 5000, "min_description_chars": 150}'),
-  ('rescore',                       '{"days": 14, "hour": "04:00"}')
+  ('rescore',                       '{"days": 14, "hour": "04:00"}'),
+  ('digest_top_n',                  '10')
 on conflict (key) do nothing;
 
 -- ---------------------------------------------------------------------------

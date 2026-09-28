@@ -19,6 +19,10 @@ import db
 from collectors.base import BaseScraper, Listing, ListingDetail
 from pgcase import TEST_FX_RATE, PostgresTestCase, requires_db
 from intelligence import comparables
+from notifications.channels.telegram import TelegramChannel
+from notifications.channels.web import WebChannel
+from notifications.links import Links
+from notifications.service import Notifier
 from pipeline import crawl, enrich, rematch, scheduler, watchlist
 from pipeline.ingest import ingest
 
@@ -105,7 +109,9 @@ class IngestCase(PostgresTestCase):
             await cx.execute("UPDATE crawl_targets SET next_run_at = NULL")
         await crawl.sync_targets(await db.enabled_profiles())
         await rematch.run_pending()
-        return await crawl.crawl_due(scheduler.batch_handler(bot or _FakeBot()), jitter_seconds=0)
+        notifier = Notifier({"telegram": TelegramChannel(bot or _FakeBot(), Links()),
+                             "web": WebChannel(Links())})
+        return await crawl.crawl_due(scheduler.batch_handler(notifier), jitter_seconds=0)
 
     async def rows(self, sql: str, *params) -> list[dict]:
         async with db.connection() as cx:
@@ -280,8 +286,9 @@ class CrawlTargetsTests(IngestCase):
 
 
 class TelegramAlertsTests(IngestCase):
-    """The bot keeps alerting through the transition: silent first run, one
-    alert per new 🔥 high match (sección 6.4), nothing twice."""
+    """The crawl feeds the notification engine (sección 7): silent first run,
+    one alert per new match at or above notify_min_level (good by default),
+    nothing twice."""
 
     async def test_first_target_run_is_silent_then_new_opportunities_alert_once(self):
         aid = await self.fiesta_alert()
@@ -298,11 +305,12 @@ class TelegramAlertsTests(IngestCase):
         await self.tick(bot)
         await self.tick(bot)                                                     # nothing new
 
-        self.assertEqual(len(bot.sent), 1)
-        text = bot.sent[0]["text"]
-        self.assertIn("Ford Fiesta Titanium deal", text)
-        self.assertIn("🔥 Alta oportunidad", text)
-        self.assertIn("debajo del mercado observado · publicaciones comparables (n=7)", text)   # c0–c5 + meh
+        [text] = [m["text"] for m in bot.sent if "Nueva oportunidad" in m["text"]]
+        self.assertTrue(text.startswith("<b>🔥 Nueva oportunidad</b>\n<b>Ford Fiesta Titanium 2017</b>"))
+        self.assertIn("% debajo de publicaciones comparables.", text)          # n=7: c0–c5 + meh
+        sent = await self.rows("SELECT l.external_id, n.kind::text AS kind, n.status::text AS status "
+                               "  FROM notifications n JOIN listings l ON l.id = n.listing_id "
+                               " WHERE n.channel = 'telegram'")
         rows = await self.rows("SELECT l.external_id, m.is_backfill, m.price_ref, m.level, m.score, "
                                "       m.scoring_version, m.match_reasons FROM matches m "
                                "JOIN listings l ON l.id = m.listing_id ORDER BY m.id")
@@ -312,10 +320,29 @@ class TelegramAlertsTests(IngestCase):
         self.assertEqual((deal["price_ref"]["n"], deal["price_ref"]["level_used"]), (7, "model"))
         self.assertEqual(deal["match_reasons"]["model"]["result"], "ok")
         meh = next(r for r in rows if r["external_id"] == "meh")
-        self.assertNotEqual(meh["level"], "high")                              # stored, not alerted
+        self.assertNotEqual(meh["level"], "high")
+        # 🔥 deal is an opportunity; meh alerts only at notify_min_level (good) or more.
+        expected = {"deal": "opportunity", **({"meh": "new_match"} if meh["level"] == "good" else {})}
+        self.assertEqual({r["external_id"]: r["kind"] for r in sent}, expected)
+        self.assertEqual({r["status"] for r in sent}, {"sent"})
+        self.assertEqual(len(bot.sent), len(expected))
         # A Ka found by the Fiesta search is stored as a Ka, not matched to the Fiesta alert.
         self.assertNotIn("ka", {r["external_id"] for r in rows})
         self.assertEqual((await db.get_alert(aid))["bootstrapped"], 1)
+
+    async def test_a_price_drop_of_a_matched_listing_alerts_through_the_crawl(self):
+        await self.fiesta_alert()
+        FakeSource.results["mercadolibre"] = [card(f"c{i}", precio=12_000.0 + i * 100, km=90_000 + i * 3_000) for i in range(6)]
+        await self.tick()
+        bot = _FakeBot()
+        FakeSource.results["mercadolibre"][0] = card("c0", precio=11_000.0, km=90_000)   # -8,3%
+        await self.tick(bot)
+
+        [msg] = bot.sent
+        self.assertTrue(msg["text"].startswith("<b>📉 Bajó de precio</b>\n<b>Ford Fiesta Titanium 2017</b>\n"
+                                               "Antes: USD 12.000\nAhora: USD 11.000\n-8,3%\n"))
+        await self.tick(bot)                                                     # same price: nothing
+        self.assertEqual(len(bot.sent), 1)
 
     async def test_failed_delivery_is_retried_on_the_next_run(self):
         await self.fiesta_alert()
@@ -328,7 +355,10 @@ class TelegramAlertsTests(IngestCase):
         await self.tick(ok)
 
         self.assertEqual(len(ok.sent), 1)
-        self.assertIn("deal", ok.sent[0]["text"])
+        self.assertIn("Nueva oportunidad", ok.sent[0]["text"])
+        [n] = await self.rows("SELECT status::text AS status, attempts FROM notifications "
+                              "WHERE channel = 'telegram'")
+        self.assertEqual((n["status"], n["attempts"]), ("sent", 2))
 
     async def test_a_new_profile_on_an_existing_target_is_bootstrapped_from_stored_listings(self):
         await self.fiesta_alert()

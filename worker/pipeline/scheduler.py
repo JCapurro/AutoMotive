@@ -1,4 +1,4 @@
-"""The worker's crawl loop and the Telegram alerts it still sends (F2).
+"""The worker's crawl loop.
 
 Each tick:
   1. crawl_targets are re-derived from the enabled profiles (pipeline/crawl.py);
@@ -6,10 +6,9 @@ Each tick:
   3. due targets are crawled and ingested;
   4. each target's batch is matched and scored against every enabled profile
      of that make/model (intelligence/, sección 6): new and updated listings
-     get a match row with reasons, 0–100 score, level, price_ref and red flags.
-     Telegram-linked profiles are alerted for new, recent, non-backfill 🔥 high
-     matches (the `opportunity` kind of sección 7.1), once per listing per user.
-     The notification engine replaces this last step in F3.
+     get a match row with reasons, 0–100 score, level, price_ref and red flags;
+  5. the batch's new matches and price drops go to the notification engine
+     (notifications/, sección 7), which decides, queues and sends them.
 
 Scraping no longer happens per alert: two users searching the same model
 share one crawl.
@@ -19,56 +18,19 @@ import asyncio
 import logging
 import time
 import traceback
+from dataclasses import dataclass
 from datetime import datetime
-
-from html import escape as _html_escape
-
-from telegram import Bot
-from telegram.constants import ParseMode
 
 import db
 from config import TICK_INTERVAL_SECONDS, RECOMMENDED_MAX_AGE_DAYS, CRAWL_JITTER_SECONDS
 from db.repos import matches as matches_repo
 from db.repos.runs import log_error
-from intelligence import copy
 from intelligence.engine import Evaluation
-from intelligence.levels import at_least
+from notifications.service import MatchCandidate, Notifier
 from pipeline import crawl, rematch
 from pipeline.scoring import Scorer
 
 log = logging.getLogger("scheduler")
-
-# Level that triggers a Telegram alert until F3's engine.decide (sección 7.1).
-ALERT_LEVEL = "high"
-# Red flags shown in the Telegram message, warnings first.
-_ALERT_FLAGS = 2
-
-
-def _format_notification(alert_name: str, row: dict, ev: Evaluation) -> str:
-    """Build an HTML-formatted notification.
-
-    HTML parse mode is used (not Markdown) because Mercado Libre URLs end in
-    underscores like `_JM` which break legacy Markdown italics parsing.
-    """
-    e = _html_escape  # only <, >, & need escaping in HTML mode
-    parts = [f"{copy.LEVEL_LABEL[ev.level]} · <b>{ev.score.score}</b> — <i>{e(alert_name)}</i>", ""]
-    parts.append(f"<b>{e(row['title'])}</b>")
-    if row.get("price"):
-        parts.append(f"💰 {e(copy.money(row['price'], row.get('currency')))} (precio publicado)")
-    if row.get("year"):
-        parts.append(f"📅 {row['year']}")
-    if row.get("mileage_km") is not None:
-        parts.append(f"🛣 {copy.number(row['mileage_km'])} km")
-    if row.get("location_text"):
-        parts.append(f"📍 {e(row['location_text'])}")
-    parts.append(f"🏷 {e(row['source'])}")
-    if ev.score.extra.get("diff_pct") is not None:
-        parts.append(f"📉 {e(ev.score.components['price'].explanation)}")
-    for flag in sorted(ev.red_flags, key=lambda f: f.severity != "warning")[:_ALERT_FLAGS]:
-        parts.append(f"⚠️ {e(flag.text)}")
-    parts.append("")
-    parts.append(f'🔗 <a href="{e(row["url"])}">{e(row["url"])}</a>')
-    return "\n".join(parts)
 
 
 def _is_recent(row: dict, max_age_days: int) -> bool:
@@ -85,23 +47,40 @@ def _key(row: dict) -> tuple[str, str]:
     return row["source"], row["external_id"]
 
 
-async def notify_alert(bot: Bot, alert: dict, listing_ids: list[int], scorer: Scorer, *,
-                       first_run: bool) -> int:
-    """Match and score one target batch for one profile; alert what deserves it.
-    Returns alerts sent."""
-    profile, rows = alert["profile"], scorer.rows
+@dataclass
+class _Staged:
+    """One profile's view of a batch, read before any profile stores anything,
+    so "another profile of this user already had it" means before this batch."""
+    alert: dict
+    evaluations: dict[int, Evaluation]
+    fresh: list[int]
+    matched_elsewhere: set[tuple[str, str]]
+
+
+async def _stage(alert: dict, listing_ids: list[int], scorer: Scorer) -> _Staged:
+    rows = scorer.rows
     evaluations: dict[int, Evaluation] = {}
     for lid in listing_ids:
-        if (ev := scorer.evaluate(lid, profile)) is not None:
+        if (ev := scorer.evaluate(lid, alert["profile"])) is not None:
             evaluations[lid] = ev
     items = [{"source": rows[lid]["source"], "listing_id": rows[lid]["external_id"]} for lid in evaluations]
     fresh_keys = {(x["source"], x["listing_id"]) for x in await db.filter_unseen(alert["id"], items)}
     fresh = [lid for lid in evaluations if _key(rows[lid]) in fresh_keys]
+    elsewhere = await db.matched_by_other_profiles(
+        alert["id"], [{"source": rows[l]["source"], "listing_id": rows[l]["external_id"]} for l in fresh])
+    return _Staged(alert, evaluations, fresh, elsewhere)
 
-    async def store(ids: list[int], *, backfill: bool) -> None:
+
+async def match_alert(staged: _Staged, scorer: Scorer, *, first_run: bool,
+                      max_age_days: int) -> list[MatchCandidate]:
+    """Store one profile's matches for a batch. Returns the new matches the
+    notification engine should consider."""
+    alert, evaluations, fresh, rows = staged.alert, staged.evaluations, staged.fresh, scorer.rows
+
+    async def store(ids: list[int], *, backfill: bool) -> dict[int, int]:
         async with db.connection() as cx:
-            await matches_repo.upsert_scored(cx, alert["id"], [(i, evaluations[i].row()) for i in ids],
-                                             backfill=backfill)
+            return await matches_repo.upsert_scored(cx, alert["id"], [(i, evaluations[i].row()) for i in ids],
+                                                    backfill=backfill)
 
     # Listings this profile already matched are re-scored (listing_updated);
     # upsert_scored keeps their is_backfill.
@@ -115,47 +94,23 @@ async def notify_alert(bot: Bot, alert: dict, listing_ids: list[int], scorer: Sc
             await db.mark_bootstrapped(alert["id"])
         log.info("profile=%s %s: %d backfill, no notifications", alert["id"],
                  "first target run" if first_run else "bootstrap", len(fresh))
-        return 0
+        return []
 
-    max_age_days = int(await db.get_config("recommended_max_age_days", RECOMMENDED_MAX_AGE_DAYS))
-    wants_alerts = (alert.get("chat_id") is not None
-                    and at_least(ALERT_LEVEL, profile.get("notify_min_level") or "good"))
-    candidates = [lid for lid in fresh if wants_alerts and evaluations[lid].level == ALERT_LEVEL
-                  and not rows[lid].get("probable_repost_of") and _is_recent(rows[lid], max_age_days)]
-    # A listing another profile of this user already has (the same wizard
-    # alert split per model) is not notified twice.
-    already_matched = await db.matched_by_other_profiles(
-        alert["id"], [{"source": rows[l]["source"], "listing_id": rows[l]["external_id"]} for l in candidates])
-    sent = 0
-    failed: set[int] = set()
-    for lid in candidates:
-        if _key(rows[lid]) in already_matched:
-            continue
-        try:
-            await bot.send_message(
-                chat_id=alert["chat_id"],
-                text=_format_notification(alert["name"], rows[lid], evaluations[lid]),
-                parse_mode=ParseMode.HTML,
-                disable_web_page_preview=False,
-            )
-            sent += 1
-        except Exception as e:
-            log.warning("send_message failed: %s", e)
-            failed.add(lid)
-
-    # Every fresh match is stored, so it isn't new again, except failed
-    # deliveries: the target's next run retries them, so a transient Telegram
-    # outage doesn't drop a hit.
-    await store([lid for lid in fresh if lid not in failed], backfill=False)
-    if failed:
-        log.warning("profile=%s delivery failed for %d listing(s); retried next run",
-                    alert["id"], len(failed))
-    log.info("profile=%s matched=%d fresh=%d notified=%d",
-             alert["id"], len(evaluations), len(fresh), sent)
-    return sent
+    match_ids = await store(fresh, backfill=False)
+    # Old listings aren't news, and one another profile of this user already
+    # had (the same wizard alert split per model) isn't new to the user.
+    candidates = [
+        MatchCandidate(alert["id"], lid, match_ids.get(lid), evaluations[lid].row(),
+                       repost=bool(rows[lid].get("probable_repost_of")))
+        for lid in fresh
+        if _is_recent(rows[lid], max_age_days) and _key(rows[lid]) not in staged.matched_elsewhere
+    ]
+    log.info("profile=%s matched=%d fresh=%d candidates=%d",
+             alert["id"], len(evaluations), len(fresh), len(candidates))
+    return candidates
 
 
-def batch_handler(bot: Bot) -> crawl.BatchHandler:
+def batch_handler(notifier: Notifier) -> crawl.BatchHandler:
     async def handle(run: crawl.TargetRun) -> None:
         t = run.target
         listing_ids = list(dict.fromkeys(run.result.ids.values()))
@@ -163,26 +118,43 @@ def batch_handler(bot: Bot) -> crawl.BatchHandler:
             return
         scorer = await Scorer.create()
         await scorer.prepare(listing_ids)
+        max_age_days = int(await db.get_config("recommended_max_age_days", RECOMMENDED_MAX_AGE_DAYS))
+        staged: list[_Staged] = []
         for alert in await db.alerts_for_target(t["source"], t.get("make"), t.get("model"),
                                                 telegram_only=False):
             try:
-                await notify_alert(bot, alert, listing_ids, scorer, first_run=run.first_run)
+                staged.append(await _stage(alert, listing_ids, scorer))
             except Exception:
                 await log_error("match", f"profile:{alert['id']}", traceback.format_exc())
+        candidates: list[MatchCandidate] = []
+        for s in staged:
+            try:
+                candidates += await match_alert(s, scorer, first_run=run.first_run,
+                                                max_age_days=max_age_days)
+            except Exception:
+                await log_error("match", f"profile:{s.alert['id']}", traceback.format_exc())
+        # Matches are stored and re-scored: price drops carry the new score.
+        try:
+            await notifier.on_matches(candidates, scorer.rows)
+            if not run.first_run:
+                await notifier.on_listing_events(run.result.events)
+        except Exception:
+            await log_error("notify", f"target:{t['id']}", traceback.format_exc())
+        await notifier.deliver()
     return handle
 
 
-async def tick(bot: Bot, stop: asyncio.Event | None = None) -> None:
+async def tick(notifier: Notifier, stop: asyncio.Event | None = None) -> None:
     await crawl.sync_targets(await db.enabled_profiles())
     await rematch.run_pending()
-    due = await crawl.crawl_due(batch_handler(bot), jitter_seconds=CRAWL_JITTER_SECONDS, stop=stop)
+    due = await crawl.crawl_due(batch_handler(notifier), jitter_seconds=CRAWL_JITTER_SECONDS, stop=stop)
     log.info("crawl tick: %d due targets", due)
 
 
-async def run_loop(bot: Bot, stop_event: asyncio.Event) -> None:
+async def run_loop(notifier: Notifier, stop_event: asyncio.Event) -> None:
     while not stop_event.is_set():
         try:
-            await tick(bot, stop_event)
+            await tick(notifier, stop_event)
         except Exception:
             log.error("scheduler tick failed: %s", traceback.format_exc())
         try:
