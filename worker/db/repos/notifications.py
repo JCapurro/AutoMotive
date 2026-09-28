@@ -15,7 +15,7 @@ from psycopg.types.json import Jsonb
 from db.pool import connection
 
 
-_CONTACT = "p.telegram_chat_id, p.email"
+_CONTACT = "p.telegram_chat_id, p.email, p.email_unsubscribe_token::text AS unsubscribe_token "
 
 
 async def profile_audiences(profile_ids: Iterable[int]) -> dict[int, dict[str, Any]]:

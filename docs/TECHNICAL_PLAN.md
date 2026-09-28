@@ -1,7 +1,7 @@
 # Automotive — Plan técnico del MVP
 
 - **Basado en:** [PRD v1.0](PRD.md). Convención: **§N** siempre es una sección del PRD; las secciones de este documento se citan como "sección N" (y en la columna *Plan* de la trazabilidad, solo el número).
-- **Estado:** F0–F6 implementadas (worker sobre Supabase Postgres, ingesta por crawl targets, matching con razones, Opportunity Score, motor de notificaciones, web MVP en `web/`, modo asistido con `claude -p`, backoffice `/admin` con el inspector, vistas de métricas y CTA Pro con lista de espera). Sigue el piloto (§51).
+- **Estado:** F0–F6 implementadas (worker sobre Supabase Postgres, ingesta por crawl targets, matching con razones, Opportunity Score, motor de notificaciones, web MVP en `web/`, modo asistido con `claude -p`, backoffice `/admin` con el inspector, vistas de métricas y CTA Pro con lista de espera). Sigue F7 (puesta en producción para el piloto, §51); mientras tanto corre en local.
 - **Decisiones tomadas:**
   - Web con **Next.js + Supabase**.
   - Base de datos: **Postgres (Supabase)**, que reemplaza a SQLite.
@@ -830,7 +830,38 @@ Las fases van en orden. Cada una deja el sistema funcionando: el bot de Telegram
   - `v_validation_criteria` muestra los 6 criterios del §53 con datos del seed.
 - **Tests:** vistas SQL con eventos del seed.
 
-**Después de F6:** piloto con 20–50 usuarios (§51). Se evalúa con `v_validation_criteria`.
+### F7 · Piloto: puesta en producción (M)
+
+F0–F6 dejan el producto completo, pero todo corre en una sola PC con Supabase local: nadie de afuera puede registrarse ni recibir un magic link. F7 es lo mínimo para abrir el piloto del §51 sin perder datos ni métricas. Mientras tanto el sistema corre en local (web en `127.0.0.1:3000`, Supabase local, worker en la PC).
+
+**Estado:** hosting decidido (opción *B*, todo en la PC con Cloudflare Tunnel). Hechos: 4, 5, 7, 10 y 12 (migración `20261004120000_f7_pilot.sql`, `tools/test_db.py`, `/privacidad`, `/terminos`, `/baja`, «Borrar mi cuenta», `pipeline/retention.py`). Pendientes: 1 (túnel), 2, 3, 6, 8, 9 y 11.
+
+- **Alcance:**
+  1. **Hosting (decisión abierta, bloquea 2–4 y 8).** La web y la API de Supabase tienen que ser públicas, porque el navegador habla directo con Supabase (Auth, Realtime). Opciones:
+     - *A.* Supabase hosteado (`sa-east-1`, ~US$10/mes) + web en Vercel + worker en la PC;
+     - *B.* todo en la PC, expuesto con Cloudflare Tunnel (web `:3000` y API `:54321` en dos subdominios). Costo cero; la disponibilidad depende de la PC.
+     Sea cual sea: `supabase/config.toml` (`site_url`, `additional_redirect_urls`), `SITE_URL` y `NEXT_PUBLIC_SUPABASE_URL` de la web, `WEB_BASE_URL` del worker y una sección de deploy en el README.
+  2. **Dominio con https.** Lo necesitan el remitente verificado de Resend, el botón «Ver en Automotive» de Telegram (solo https) y el `site_url` de Auth.
+  3. **Email de Auth real.** `[auth.email.smtp]` con Resend (hoy los magic links quedan en Inbucket). Subir `auth.rate_limit.email_sent` (hoy 2/hora) y revisar el template `magic_link.html` con el dominio final.
+  4. **Base de tests separada.** Los tests de Postgres hacen `TRUNCATE` de las tablas de datos y hoy apuntan a la misma base que el piloto. Una base `automotive_test` en el mismo Postgres (o un stack aparte) y un guard en `worker/tests/pgcase.py` que se niegue a correr contra la base configurada en `DATABASE_URL`. Actualizar el README.
+  5. **Configuración completa del worker.** `.env` alineado con `.env.example`: `WEB_BASE_URL` (sin esto no hay `/r/<id>` y se rompen «alertas abiertas» y engagement del §53), `RESEND_API_KEY` + `EMAIL_FROM` (email es canal obligatorio del §21), `TELEGRAM_ADMIN_CHAT_ID` y `CLAUDE_CLI_PATH`. Un chequeo al arrancar que loguee en `WARNING` cada canal o métrica que queda apagada.
+  6. **Proveedor LLM para terceros.** Resolver la decisión de la sección 14 sobre `claude -p` con suscripción: agregar un `AnthropicApiProvider` (API key, Haiku, mismo schema y mismos tests de contrato) y/o implementar `LocalProvider` (sección 8.3). `LLM_PROVIDER` elige.
+  7. **Legal y privacidad (Ley 25.326).** Páginas `/privacidad` y `/terminos` enlazadas desde la landing y el login; «Borrar mi cuenta» en `/app/settings` (borra `auth.users` en cascada y registra el evento antes); link de baja en los emails (`List-Unsubscribe` + ruta que saca `email` de los canales).
+  8. **Operación del worker.** Correrlo como servicio que se reinicia solo y arranca con Windows (NSSM o Task Scheduler); logs a archivo con rotación, con el logger `httpx` en `WARNING` (en `INFO` escribe la URL de la API de Telegram, que incluye el token del bot); un *heartbeat* (`app_config` o tabla) que el admin muestre, y una alerta externa si el worker deja de latir (el aviso de fuentes caídas vive dentro del worker y muere con él). Backup diario de la base (`pg_dump`) si se sigue en local.
+  9. **Smoke de fuentes reales.** Correr `tools.scraper_cli` contra las 5 fuentes, renovar `ml_state.json` / `fb_state.json`, y dejar una corrida completa en `collector_runs` sin errores antes de invitar usuarios.
+  10. **Retención de datos** (sección 14): job diario que borra listings `gone` sin interacción de más de 180 días (y sus snapshots). Imprescindible si se elige el free tier hosteado (500 MB).
+  11. **Lanzamiento (§51):** Open Graph + imagen, `robots` y `sitemap` en la landing.
+  12. **Limpieza:** carpetas vacías de la raíz (`scrapers/`, `bot/`, `tests/`, `tools/`), `bot.log`, `ml_dom.html`; README al día (paso 6 de «Cómo funciona» y la nota «hasta que F3…»).
+- **Opcional (no bloquea el piloto):** conectar `polish_questions` y `extract_listing_facts` (F5) al detalle y al enrichment; sumar «ya lo vi» a `rejection_reason` si aparece seguido.
+- **Aceptación:**
+  - una persona desde otra red se registra con un magic link real, crea una búsqueda y recibe una alerta por email y Telegram cuyo clic queda en `notifications.clicked_at`;
+  - correr toda la suite de tests no toca los datos del piloto;
+  - reiniciar la PC deja el worker corriendo sin intervención, y apagarlo dispara una alerta;
+  - un usuario puede leer la política de privacidad, darse de baja del email y borrar su cuenta;
+  - las 5 fuentes tienen una corrida `ok` en `collector_runs` en las últimas 24 h.
+- **Tests:** guard de la base de tests (pytest), borrado de cuenta y baja de email (pgTAP + e2e), retención (Postgres), contrato del nuevo provider LLM.
+
+**Después de F7:** piloto con 20–50 usuarios (§51). Se evalúa con `v_validation_criteria`.
 
 **Correspondencia con la priorización del PRD (§48):**
 - **P0** = F0–F4 (registro/login, profiles, collectors, normalización, nuevos, matching, dedupe, alertas, dashboard, resultados, link original, favoritos, descartados y tracking).

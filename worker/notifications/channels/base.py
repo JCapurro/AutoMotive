@@ -23,6 +23,7 @@ class Notification:
     created_at: datetime | None = None
     telegram_chat_id: int | None = None
     email: str | None = None
+    unsubscribe_token: str | None = None   # profiles.email_unsubscribe_token
 
 
 @dataclass(frozen=True)

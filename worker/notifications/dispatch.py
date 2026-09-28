@@ -26,7 +26,8 @@ def to_notification(row: Mapping) -> Notification:
     return Notification(id=row["id"], user_id=str(row["user_id"]), kind=row["kind"],
                         channel=row["channel"], payload=row["payload"] or {},
                         listing_id=row.get("listing_id"), created_at=row.get("created_at"),
-                        telegram_chat_id=row.get("telegram_chat_id"), email=row.get("email"))
+                        telegram_chat_id=row.get("telegram_chat_id"), email=row.get("email"),
+                        unsubscribe_token=row.get("unsubscribe_token"))
 
 
 async def send_one(channel: Channel | None, n: Notification) -> SendResult:

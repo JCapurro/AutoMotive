@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { DeleteAccount } from "@/components/app/delete-account";
 import { ProCtaButton } from "@/components/app/pro-cta";
 import { ChannelsForm, FrequencyForm, LocationForm, TelegramLink } from "@/components/app/settings-forms";
 import { Button } from "@/components/ui/button";
@@ -92,12 +93,13 @@ export default async function SettingsPage() {
           <CardTitle>Cuenta</CardTitle>
           <CardDescription>{profile?.email ?? user.email}</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex flex-wrap items-center justify-between gap-3">
           <form action="/auth/signout" method="post">
             <Button type="submit" variant="outline">
               Cerrar sesión
             </Button>
           </form>
+          <DeleteAccount />
         </CardContent>
       </Card>
     </div>

@@ -1,6 +1,7 @@
 "use server";
 
 import { refresh } from "next/cache";
+import { redirect } from "next/navigation";
 
 import { requireUser } from "@/lib/auth";
 import type { Frequency } from "@/lib/copy";
@@ -66,4 +67,19 @@ export async function unlinkTelegram(): Promise<void> {
   if (error) throw new Error(error.message);
   await track(supabase, user.id, "telegram_unlinked");
   refresh();
+}
+
+/**
+ * Deletes the account and everything in it (F7, punto 7; Ley 25.326). The SQL
+ * keeps one anonymous account_deleted event; then the session is closed.
+ */
+export async function deleteAccount(): Promise<{ error: string } | void> {
+  await requireUser();
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("delete_my_account");
+  // Returned, not thrown: the client can't tell a throw from this redirect.
+  if (error) return { error: error.message };
+  // The user no longer exists: clear the cookies whatever Auth answers.
+  await supabase.auth.signOut({ scope: "local" }).catch(() => undefined);
+  redirect("/?cuenta=borrada");
 }

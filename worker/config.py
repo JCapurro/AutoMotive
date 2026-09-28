@@ -77,3 +77,32 @@ LOCAL_LLM_MODEL = os.getenv("LOCAL_LLM_MODEL", "").strip()
 # at once (each one is a `claude -p` process).
 LLM_POLL_SECONDS = float(os.getenv("LLM_POLL_SECONDS", "2"))
 LLM_CONCURRENCY = int(os.getenv("LLM_CONCURRENCY", "1"))
+
+
+def startup_warnings(env: dict | None = None, which=None) -> list[str]:
+    """What this configuration leaves off (F7, punto 5): one line per channel,
+    metric or feature that won't work. main.py logs them as WARNING."""
+    import shutil
+
+    g = globals() if env is None else env
+    which = which or shutil.which
+    out = []
+    base = g["WEB_BASE_URL"]
+    if not base:
+        out.append("sin WEB_BASE_URL: los links de las alertas van directo a la publicación, "
+                   "sin /r/<id>; no se miden aperturas ni clics (§53) y no hay «Ver en Automotive»")
+    elif not base.startswith("https://"):
+        out.append("WEB_BASE_URL no es https: Telegram no muestra el botón «Ver en Automotive»")
+    if not (g["RESEND_API_KEY"] and g["EMAIL_FROM"]):
+        out.append("email desactivado: faltan RESEND_API_KEY / EMAIL_FROM (canal obligatorio del §21)")
+    if not g["TELEGRAM_ADMIN_CHAT_ID"]:
+        out.append("alertas operativas desactivadas: falta TELEGRAM_ADMIN_CHAT_ID")
+    if g["LLM_PROVIDER"] == "claude_cli":
+        if not which(g["CLAUDE_CLI_PATH"] or "claude"):
+            out.append("no se encontró el CLI de Claude Code (CLAUDE_CLI_PATH): "
+                       "el modo asistido cae siempre al formulario")
+    elif g["LLM_PROVIDER"] == "local":
+        out.append("LLM_PROVIDER=local todavía es un stub: el modo asistido cae siempre al formulario")
+    if not g["GEOCODING_ENABLED"]:
+        out.append("geocodificación desactivada: el radio de las búsquedas queda sin verificar")
+    return out
