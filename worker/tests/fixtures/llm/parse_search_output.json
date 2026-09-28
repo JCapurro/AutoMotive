@@ -1,0 +1,94 @@
+{
+  "drafts": [
+    {
+      "values": {
+        "make": "Ford",
+        "model": "Fiesta",
+        "trim": "Titanium",
+        "trim_strict": false,
+        "year_min": 2017,
+        "year_max": null,
+        "price_max": 12000,
+        "price_target": null,
+        "currency": "USD",
+        "km_max": null,
+        "km_target": null,
+        "transmission": "",
+        "fuel": "",
+        "seller_type": "",
+        "location": "",
+        "radius_km": null
+      },
+      "resolved": true,
+      "notes": []
+    },
+    {
+      "values": {
+        "make": "Volkswagen",
+        "model": "Polo",
+        "trim": "Highline",
+        "trim_strict": false,
+        "year_min": 2017,
+        "year_max": null,
+        "price_max": 12000,
+        "price_target": null,
+        "currency": "USD",
+        "km_max": null,
+        "km_target": null,
+        "transmission": "",
+        "fuel": "",
+        "seller_type": "",
+        "location": "",
+        "radius_km": null
+      },
+      "resolved": true,
+      "notes": []
+    },
+    {
+      "values": {
+        "make": "",
+        "model": "",
+        "trim": "",
+        "trim_strict": false,
+        "year_min": 2021,
+        "year_max": 2021,
+        "price_max": null,
+        "price_target": null,
+        "currency": "USD",
+        "km_max": null,
+        "km_target": null,
+        "transmission": "",
+        "fuel": "",
+        "seller_type": "",
+        "location": "",
+        "radius_km": null
+      },
+      "resolved": false,
+      "notes": [
+        "No encontramos «Tesla Model 3» en el catálogo: elegí marca y modelo de la lista."
+      ]
+    },
+    {
+      "values": {
+        "make": "Volkswagen",
+        "model": "Vento",
+        "trim": "Highline",
+        "trim_strict": true,
+        "year_min": 2015,
+        "year_max": 2017,
+        "price_max": null,
+        "price_target": null,
+        "currency": "USD",
+        "km_max": null,
+        "km_target": null,
+        "transmission": "",
+        "fuel": "",
+        "seller_type": "",
+        "location": "Córdoba",
+        "radius_km": 50
+      },
+      "resolved": true,
+      "notes": []
+    }
+  ]
+}

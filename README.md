@@ -19,13 +19,15 @@ notificaciones.
 ```
 worker/       bot de Telegram, collectors, pipeline (Python, raíz de imports)
   collectors/     scrapers por fuente: search() y fetch_detail()
-  normalization/  vehicle (catálogo + rapidfuzz), transmission, listing, price_check, geo, fx
+  normalization/  vehicle (catálogo + rapidfuzz), drafts (borradores del LLM), transmission, listing,
+                  price_check, geo, fx
   intelligence/   matching, comparables, scoring, levels, red_flags, seller_questions (puros)
   pipeline/       crawl (targets + cadencia), ingest (upsert/snapshots/eventos),
-                  enrich, watchlist, rematch, scoring, rescore, scheduler (loop + alertas de Telegram)
+                  enrich, watchlist, rematch, scoring, rescore, llm_jobs, scheduler (loop + alertas de Telegram)
+  llm/            capa LLM (modo asistido): LLMProvider, claude_cli (claude -p), local (stub), schemas, prompts
   bot/            Telegram: /start <código> (vinculación) y botones de las alertas
   db/             psycopg 3 (pool async) + repos por tabla
-  tools/          scraper_cli, migrate_sqlite, explain_match, rematch, simulate_alert
+  tools/          scraper_cli, migrate_sqlite, explain_match, rematch, simulate_alert, llm_jobs, record_llm
   tests/
 web/          Next.js (App Router) + @supabase/ssr + Tailwind/shadcn: landing, app y /r/<id>
 supabase/     migraciones, seed.sql, templates de email y tests pgTAP (supabase CLI)
@@ -193,6 +195,23 @@ Sin esperar al loop:
 cd worker
 python -m tools.rematch                     # backfill de las búsquedas nuevas o editadas
 python -m tools.simulate_alert <listing_id> # una publicación "recién llegada": match, score y alerta al inbox web
+python -m tools.llm_jobs                    # procesa los pedidos del modo asistido en cola (--replay: respuestas grabadas)
+```
+
+### Modo asistido (LLM)
+
+La pestaña **Asistido** de `/app/searches/new` escribe el texto en `llm_jobs`;
+el worker lo interpreta con `claude -p` (`LLM_PROVIDER=claude_cli`, ver
+`.env.example`), normaliza los borradores contra `vehicle_catalog` y la web
+muestra un formulario editable por vehículo. Si el LLM falla o tarda más de
+60 s, la web cae al formulario estructurado vacío. El host del worker necesita
+Claude Code instalado y logueado (en Windows, `CLAUDE_CLI_PATH` con la ruta a
+`claude.exe`).
+
+```powershell
+cd worker
+python -m tools.record_llm --text "Busco Fiesta Titanium 2017"  # probar una frase contra claude -p
+python -m tools.record_llm            # regrabar las 20 frases doradas (tras cambiar un prompt o schema)
 ```
 
 ### Correr la web
@@ -206,6 +225,7 @@ Ver [web/README.md](web/README.md): `npx supabase start` en la raíz y
 pytest                                  # desde la raíz o desde worker/
 $env:TEST_DATABASE_URL = "postgresql://postgres:postgres@127.0.0.1:54322/postgres"
 pytest                                  # suma los tests contra Postgres (solo host local)
+$env:LLM_SMOKE = "1"; pytest worker/tests/test_llm_contract.py -k smoke   # las 20 frases contra claude -p real
 npx supabase test db                    # pgTAP: RLS y las funciones SQL de la web
 cd web; npm test; npm run e2e           # vitest y Playwright (desktop + 375 px)
 ```

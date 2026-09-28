@@ -1,9 +1,10 @@
 "use client";
 
-import { Loader2, LocateFixed } from "lucide-react";
+import { Info, Loader2, LocateFixed } from "lucide-react";
 import { useEffect, useMemo, useState, useTransition } from "react";
 
-import { type Preview, previewSearch, saveSearch } from "@/app/app/searches/actions";
+import { type Preview, type SaveOrigin, previewSearch, saveSearch } from "@/app/app/searches/actions";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -133,14 +134,28 @@ export function SearchForm({
   initial,
   profileId,
   defaultOrigin,
+  idPrefix,
+  notes,
+  origin,
+  onSaved,
 }: {
   catalog: Catalog;
   sources: Source[];
   initial: SearchValues;
   profileId: number | null;
   defaultOrigin: Origin;
+  /** Several forms on one page (modo asistido) need distinct element ids. */
+  idPrefix?: string;
+  /** What the assisted parse couldn't settle, shown above the fields. */
+  notes?: string[];
+  origin?: Omit<SaveOrigin, "edited">;
+  /** With origin.stay: the new search's id, instead of navigating to it. */
+  onSaved?: (id: number) => void;
 }) {
+  const fid = (key: string) => (idPrefix ? `${idPrefix}-${key}` : key);
   const [d, setDraft] = useState<Draft>(() => draftFrom(initial, defaultOrigin));
+  // The proposal as it arrived, to record whether the user corrected it.
+  const [pristine] = useState(() => JSON.stringify(toInput(draftFrom(initial, defaultOrigin), defaultOrigin)));
   const [errors, setErrors] = useState<{ error?: string; fields?: Record<string, string> }>({});
   const [saving, startSaving] = useTransition();
   // Tagged with the input it answers, so a stale count never shows for other filters.
@@ -228,8 +243,13 @@ export function SearchForm({
     event.preventDefault();
     setErrors({});
     startSaving(async () => {
-      const result = await saveSearch(profileId, input);
+      const result = await saveSearch(
+        profileId,
+        input,
+        origin ? { ...origin, edited: JSON.stringify(input) !== pristine } : undefined,
+      );
       if (result?.error) setErrors(result);
+      else if (result?.savedId != null) onSaved?.(result.savedId);
     });
   }
 
@@ -243,14 +263,27 @@ export function SearchForm({
   return (
     <form onSubmit={submit} className="grid gap-5 lg:grid-cols-[1fr_300px] lg:items-start">
       <div className="space-y-5">
+        {notes?.length ? (
+          <Alert data-testid="draft-notes">
+            <Info aria-hidden />
+            <AlertTitle>Revisá estos puntos</AlertTitle>
+            <AlertDescription>
+              <ul className="list-disc space-y-0.5 pl-4">
+                {notes.map((n) => (
+                  <li key={n}>{n}</li>
+                ))}
+              </ul>
+            </AlertDescription>
+          </Alert>
+        ) : null}
         <Card>
           <CardHeader>
             <CardTitle>Vehículo</CardTitle>
             <CardDescription>Un modelo por búsqueda. Si buscás varios, creá una búsqueda para cada uno.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
-            <Field id="make" label="Marca" error={fieldError("make")}>
-              <NativeSelect id="make" value={d.make} onChange={(e) => chooseMake(e.target.value)} className="w-full" required>
+            <Field id={fid("make")} label="Marca" error={fieldError("make")}>
+              <NativeSelect id={fid("make")} value={d.make} onChange={(e) => chooseMake(e.target.value)} className="w-full" required>
                 <NativeSelectOption value="">Elegí una marca</NativeSelectOption>
                 {catalog.map((m) => (
                   <NativeSelectOption key={m.make} value={m.make}>
@@ -259,9 +292,9 @@ export function SearchForm({
                 ))}
               </NativeSelect>
             </Field>
-            <Field id="model" label="Modelo" error={fieldError("model")}>
+            <Field id={fid("model")} label="Modelo" error={fieldError("model")}>
               <NativeSelect
-                id="model"
+                id={fid("model")}
                 value={d.model}
                 onChange={(e) => chooseModel(e.target.value)}
                 disabled={!d.make}
@@ -276,9 +309,9 @@ export function SearchForm({
                 ))}
               </NativeSelect>
             </Field>
-            <Field id="trim" label="Versión" hint="Opcional">
+            <Field id={fid("trim")} label="Versión" hint="Opcional">
               {entry?.trims.length ? (
-                <NativeSelect id="trim" value={d.trim} onChange={(e) => set("trim", e.target.value)} className="w-full">
+                <NativeSelect id={fid("trim")} value={d.trim} onChange={(e) => set("trim", e.target.value)} className="w-full">
                   <NativeSelectOption value="">Cualquiera</NativeSelectOption>
                   {entry.trims.map((t) => (
                     <NativeSelectOption key={t} value={t}>
@@ -288,7 +321,7 @@ export function SearchForm({
                 </NativeSelect>
               ) : (
                 <Input
-                  id="trim"
+                  id={fid("trim")}
                   value={d.trim}
                   onChange={(e) => set("trim", e.target.value)}
                   placeholder="Ej.: Highline"
@@ -305,8 +338,8 @@ export function SearchForm({
                 </label>
               ) : null}
             </div>
-            <Field id="year_min" label="Año desde">
-              <NativeSelect id="year_min" value={d.year_min} onChange={(e) => set("year_min", e.target.value)} className="w-full">
+            <Field id={fid("year_min")} label="Año desde">
+              <NativeSelect id={fid("year_min")} value={d.year_min} onChange={(e) => set("year_min", e.target.value)} className="w-full">
                 <NativeSelectOption value="">Cualquiera</NativeSelectOption>
                 {years.map((y) => (
                   <NativeSelectOption key={y} value={String(y)}>
@@ -315,8 +348,8 @@ export function SearchForm({
                 ))}
               </NativeSelect>
             </Field>
-            <Field id="year_max" label="Año hasta" error={fieldError("year_max")}>
-              <NativeSelect id="year_max" value={d.year_max} onChange={(e) => set("year_max", e.target.value)} className="w-full">
+            <Field id={fid("year_max")} label="Año hasta" error={fieldError("year_max")}>
+              <NativeSelect id={fid("year_max")} value={d.year_max} onChange={(e) => set("year_max", e.target.value)} className="w-full">
                 <NativeSelectOption value="">Cualquiera</NativeSelectOption>
                 {years.map((y) => (
                   <NativeSelectOption key={y} value={String(y)}>
@@ -338,8 +371,8 @@ export function SearchForm({
                 ]}
               />
             </fieldset>
-            <Field id="fuel" label="Combustible">
-              <NativeSelect id="fuel" value={d.fuel} onChange={(e) => set("fuel", e.target.value)} className="w-full">
+            <Field id={fid("fuel")} label="Combustible">
+              <NativeSelect id={fid("fuel")} value={d.fuel} onChange={(e) => set("fuel", e.target.value)} className="w-full">
                 <NativeSelectOption value="">Cualquiera</NativeSelectOption>
                 {fuels.map((f) => (
                   <NativeSelectOption key={f} value={f}>
@@ -359,7 +392,7 @@ export function SearchForm({
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
-            <Field id="price_max" label="Precio máximo" error={fieldError("price_max")}>
+            <Field id={fid("price_max")} label="Precio máximo" error={fieldError("price_max")}>
               <div className="flex gap-2">
                 <NativeSelect
                   className="w-24 shrink-0"
@@ -371,7 +404,7 @@ export function SearchForm({
                   <NativeSelectOption value="ARS">ARS</NativeSelectOption>
                 </NativeSelect>
                 <Input
-                  id="price_max"
+                  id={fid("price_max")}
                   inputMode="numeric"
                   value={d.price_max}
                   onChange={(e) => set("price_max", e.target.value)}
@@ -380,9 +413,9 @@ export function SearchForm({
                 />
               </div>
             </Field>
-            <Field id="km_max" label="Kilometraje máximo" error={fieldError("km_max")}>
+            <Field id={fid("km_max")} label="Kilometraje máximo" error={fieldError("km_max")}>
               <Input
-                id="km_max"
+                id={fid("km_max")}
                 inputMode="numeric"
                 value={d.km_max}
                 onChange={(e) => set("km_max", e.target.value)}
@@ -399,8 +432,8 @@ export function SearchForm({
             <CardDescription>Las publicaciones sin ubicación no se descartan: se muestran como «no informado».</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-[1fr_140px]">
-            <Field id="place" label="Zona" error={fieldError("location")}>
-              <NativeSelect id="place" value={d.place} onChange={(e) => choosePlace(e.target.value)} className="w-full">
+            <Field id={fid("place")} label="Zona" error={fieldError("location")}>
+              <NativeSelect id={fid("place")} value={d.place} onChange={(e) => choosePlace(e.target.value)} className="w-full">
                 <NativeSelectOption value="">Todo el país</NativeSelectOption>
                 <NativeSelectOption value={AMBA.id}>AMBA (CABA y 60 km)</NativeSelectOption>
                 {defaultOrigin ? (
@@ -416,8 +449,8 @@ export function SearchForm({
               </NativeSelect>
             </Field>
             {d.place ? (
-              <Field id="radius" label="Radio (km)">
-                <Input id="radius" inputMode="numeric" value={d.radius} onChange={(e) => set("radius", e.target.value)} />
+              <Field id={fid("radius")} label="Radio (km)">
+                <Input id={fid("radius")} inputMode="numeric" value={d.radius} onChange={(e) => set("radius", e.target.value)} />
               </Field>
             ) : null}
             {d.place === "current" ? (
@@ -456,21 +489,21 @@ export function SearchForm({
             <CardDescription>Opcionales: no descartan publicaciones, suben o bajan el Opportunity Score.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-3">
-            <Field id="km_target" label="Kilometraje ideal">
-              <Input id="km_target" inputMode="numeric" value={d.km_target} onChange={(e) => set("km_target", e.target.value)} placeholder="120.000" />
+            <Field id={fid("km_target")} label="Kilometraje ideal">
+              <Input id={fid("km_target")} inputMode="numeric" value={d.km_target} onChange={(e) => set("km_target", e.target.value)} placeholder="120.000" />
             </Field>
-            <Field id="price_target" label={`Precio ideal (${d.currency})`}>
+            <Field id={fid("price_target")} label={`Precio ideal (${d.currency})`}>
               <Input
-                id="price_target"
+                id={fid("price_target")}
                 inputMode="numeric"
                 value={d.price_target}
                 onChange={(e) => set("price_target", e.target.value)}
                 placeholder={d.currency === "USD" ? "10.500" : "14.000.000"}
               />
             </Field>
-            <Field id="seller_type" label="Vendedor">
+            <Field id={fid("seller_type")} label="Vendedor">
               <NativeSelect
-                id="seller_type"
+                id={fid("seller_type")}
                 value={d.seller_type}
                 onChange={(e) => set("seller_type", e.target.value as Draft["seller_type"])}
                 className="w-full"
@@ -501,9 +534,9 @@ export function SearchForm({
               />
               <p className="text-xs text-muted-foreground">{FREQUENCY[d.notification_frequency].hint}</p>
             </fieldset>
-            <Field id="notify_min_level" label="Avisarme de">
+            <Field id={fid("notify_min_level")} label="Avisarme de">
               <NativeSelect
-                id="notify_min_level"
+                id={fid("notify_min_level")}
                 value={d.notify_min_level}
                 onChange={(e) => set("notify_min_level", e.target.value as Draft["notify_min_level"])}
                 className="w-full"
@@ -515,9 +548,9 @@ export function SearchForm({
                 ))}
               </NativeSelect>
             </Field>
-            <Field id="name" label="Nombre de la búsqueda" className="sm:col-span-2">
+            <Field id={fid("name")} label="Nombre de la búsqueda" className="sm:col-span-2">
               <Input
-                id="name"
+                id={fid("name")}
                 value={d.nameTouched ? d.name : autoName}
                 onChange={(e) => setDraft((prev) => ({ ...prev, name: e.target.value, nameTouched: true }))}
                 placeholder="Ej.: Fiesta Titanium"

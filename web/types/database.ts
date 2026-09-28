@@ -374,7 +374,14 @@ isOneToOne: false
                 }
           }
           Views: {
-            "match_cards": {
+            "llm_job_stats": {
+                  Row: {
+                    "day": string | null,"done": number | null,"failed": number | null,"jobs": number | null,"kind": string | null,"latency_max_ms": number | null,"latency_p50_ms": number | null,"latency_p95_ms": number | null,"provider": string | null
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"match_cards": {
                   Row: {
                     "currency": string | null,"first_seen_at": string | null,"fuel": string | null,"generated_at": string | null,"images": Json | null,"is_backfill": boolean | null,"level": Database["public"]['Enums']["match_level"] | null,"listing_id": number | null,"listing_status": Database["public"]['Enums']["listing_status"] | null,"location_text": string | null,"make": string | null,"match_id": number | null,"mileage_km": number | null,"model": string | null,"price": number | null,"price_ref": Json | null,"price_usd": number | null,"probable_repost_of": number | null,"profile_name": string | null,"published_at": string | null,"red_flags": Json | null,"rejection_reason": Database["public"]['Enums']["rejection_reason"] | null,"saved": boolean | null,"score": number | null,"search_profile_id": number | null,"source": string | null,"status": Database["public"]['Enums']["interaction_status"] | null,"title": string | null,"transmission": string | null,"trim": string | null,"user_id": string | null,"year": number | null
                   }
