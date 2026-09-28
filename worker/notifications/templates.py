@@ -49,6 +49,7 @@ DIGEST_SECTIONS = {
 DIGEST_DEGRADED = ("1 alerta superó el tope diario de avisos inmediatos y quedó en este resumen.",
                    "{n} alertas superaron el tope diario de avisos inmediatos y quedaron en este resumen.")
 EMAIL_FOOTER = "Recibís este correo porque tenés búsquedas activas en Automotive."
+UNSUBSCRIBE = "Dejar de recibir estos emails"
 # Red flags shown in an alert, warnings first.
 MAX_FLAGS = 2
 
@@ -289,7 +290,10 @@ def email(n: Notification, links: Links, now: datetime) -> EmailMessage:
         text += [f"{r.prefix}{r.text}{r.suffix}\n  {r.url}" for r in rows]
     if c.notes:
         text += [""] + c.notes
+    unsubscribe = links.unsubscribe(n.unsubscribe_token)
     text += ["", "—", EMAIL_FOOTER]
+    if unsubscribe:
+        text.append(f"{UNSUBSCRIBE}: {unsubscribe}")
 
     e = escape
     html = ['<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.5;color:#1a1a1a">',
@@ -311,7 +315,10 @@ def email(n: Notification, links: Links, now: datetime) -> EmailMessage:
         html.append("</ul>")
     if c.notes:
         html += [f'<p style="margin:0;color:#555555">{e(x)}</p>' for x in c.notes]
-    html.append(f'<p style="margin:24px 0 0;font-size:12px;color:#888888">{e(EMAIL_FOOTER)}</p></div>')
+    footer = e(EMAIL_FOOTER)
+    if unsubscribe:
+        footer += f' <a href="{e(unsubscribe)}" style="color:#888888">{e(UNSUBSCRIBE)}</a>'
+    html.append(f'<p style="margin:24px 0 0;font-size:12px;color:#888888">{footer}</p></div>')
     return EmailMessage(c.subject, "\n".join(text), "\n".join(html))
 
 

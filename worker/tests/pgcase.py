@@ -20,11 +20,30 @@ _TRUNCATE = ("search_profiles, listings, listing_snapshots, matches, geocode_cac
 TEST_FX_RATE = 1_000.0
 
 
-def db_test_skip_reason() -> str | None:
-    if not TEST_DATABASE_URL:
-        return "TEST_DATABASE_URL not set (e.g. the local `supabase start` database)"
-    if urlparse(TEST_DATABASE_URL).hostname not in _LOCAL_HOSTS:
+def _database(url: str) -> tuple[str | None, int, str]:
+    parsed = urlparse(url)
+    return parsed.hostname, parsed.port or 5432, parsed.path.lstrip("/") or "postgres"
+
+
+def db_test_skip_reason(test_url: str | None = None, app_url: str | None = None) -> str | None:
+    """Why the DB tests can't run here, or None. They TRUNCATE tables, so they
+    only run on a local database whose name ends in _test that isn't the one
+    the worker uses (DATABASE_URL): `python -m tools.test_db` creates it."""
+    test_url = TEST_DATABASE_URL if test_url is None else test_url
+    if app_url is None:
+        import config  # loads .env
+
+        app_url = config.DATABASE_URL
+    if not test_url:
+        return "TEST_DATABASE_URL not set (`python -m tools.test_db` creates automotive_test)"
+    host, port, name = _database(test_url)
+    if host not in _LOCAL_HOSTS:
         return "DB tests truncate tables; TEST_DATABASE_URL must point to a local database"
+    if not name.endswith("_test"):
+        return (f"DB tests truncate tables; TEST_DATABASE_URL points to {name!r}, "
+                "use a database whose name ends in _test (`python -m tools.test_db`)")
+    if app_url and _database(app_url) == (host, port, name):
+        return "DB tests truncate tables; TEST_DATABASE_URL is the worker's DATABASE_URL"
     return None
 
 

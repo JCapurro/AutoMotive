@@ -2,6 +2,7 @@ import { BellRing, Clock, SearchCheck, TrendingDown } from "lucide-react";
 import Link from "next/link";
 
 import { Logo } from "@/components/logo";
+import { SiteFooter } from "@/components/site-footer";
 import { Button } from "@/components/ui/button";
 import { currentUser } from "@/lib/auth";
 
@@ -21,8 +22,8 @@ const BENEFITS = [
   { icon: BellRing, title: "Llegá temprano.", text: "Recibí la alerta cuando aparece." },
 ];
 
-export default async function Landing() {
-  const user = await currentUser();
+export default async function Landing({ searchParams }: PageProps<"/">) {
+  const [user, params] = await Promise.all([currentUser(), searchParams]);
   const start = user ? "/app/searches/new" : "/login?next=/app/searches/new";
 
   return (
@@ -35,6 +36,11 @@ export default async function Landing() {
       </header>
 
       <main className="flex-1">
+        {params.cuenta === "borrada" ? (
+          <p role="status" className="mx-auto w-full max-w-5xl px-4 text-sm text-muted-foreground">
+            Borramos tu cuenta y todos tus datos.
+          </p>
+        ) : null}
         <section className="mx-auto grid w-full max-w-5xl items-center gap-10 px-4 pt-8 pb-16 md:grid-cols-[1.1fr_1fr] md:pt-16">
           <div className="space-y-6">
             <h1 className="text-4xl font-semibold tracking-tight text-balance md:text-5xl">
@@ -76,12 +82,7 @@ export default async function Landing() {
         </section>
       </main>
 
-      <footer className="border-t">
-        <div className="mx-auto flex w-full max-w-5xl flex-wrap items-center justify-between gap-2 px-4 py-6 text-xs text-muted-foreground">
-          <span>Automotive · Argentina</span>
-          <span>Comparamos precios publicados contra publicaciones comparables del mercado observado.</span>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { Logo } from "@/components/logo";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,6 +24,17 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
           <LoginForm next={next} linkError={params.error === "link"} />
         </CardContent>
       </Card>
+      <p className="max-w-sm text-center text-xs text-muted-foreground">
+        Al ingresar aceptás los{" "}
+        <Link href="/terminos" className="underline">
+          Términos de uso
+        </Link>{" "}
+        y la{" "}
+        <Link href="/privacidad" className="underline">
+          Política de privacidad
+        </Link>
+        .
+      </p>
     </main>
   );
 }

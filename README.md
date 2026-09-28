@@ -5,15 +5,18 @@ con tus búsquedas, las prioriza con un Opportunity Score y te avisa por la web,
 Telegram o email.
 
 El plan del MVP (web + Supabase) está en [docs/TECHNICAL_PLAN.md](docs/TECHNICAL_PLAN.md).
-Estado: **F6** — la web ([web/](web/README.md), Next.js + Supabase) es donde se
+Estado: **F7 en curso** (puesta en producción del piloto; por ahora corre en local) — la web ([web/](web/README.md), Next.js + Supabase) es donde se
 crean y editan las búsquedas, se ven los resultados, el detalle de cada
 publicación (¿por qué apareció?, análisis de precio, histórico, red flags,
 preguntas al vendedor), los estados, la watchlist y el inbox con Realtime. El
 bot de Telegram ya no tiene wizard: vincula la cuenta (`/start <código>`) y
 resuelve los botones de las alertas. Debajo siguen F1–F3: scraping por *crawl
 target*, matching con razones y Opportunity Score, y el motor de
-notificaciones. F5 suma el modo asistido con LLM y F6 el backoffice
-(`/admin`), las métricas del piloto y el experimento de monetización.
+notificaciones. F5 suma el modo asistido con LLM, F6 el backoffice
+(`/admin`), las métricas del piloto y el experimento de monetización, y F7
+lo necesario para abrirlo a usuarios reales: páginas de privacidad y términos,
+baja del email y borrado de cuenta, retención de datos y una base de tests
+separada de la del piloto.
 
 ## Estructura
 
@@ -28,9 +31,9 @@ worker/       bot de Telegram, collectors, pipeline (Python, raíz de imports)
   llm/            capa LLM (modo asistido): LLMProvider, claude_cli (claude -p), local (stub), schemas, prompts
   bot/            Telegram: /start <código> (vinculación) y botones de las alertas
   db/             psycopg 3 (pool async) + repos por tabla
-  tools/          scraper_cli, migrate_sqlite, explain_match, rematch, simulate_alert, llm_jobs, record_llm
+  tools/          scraper_cli, migrate_sqlite, explain_match, rematch, simulate_alert, llm_jobs, record_llm, test_db
   tests/
-web/          Next.js (App Router) + @supabase/ssr + Tailwind/shadcn: landing, app y /r/<id>
+web/          Next.js (App Router) + @supabase/ssr + Tailwind/shadcn: landing, app, admin, /r/<id>, legales y /baja
 supabase/     migraciones, seed.sql, templates de email y tests pgTAP (supabase CLI)
 docs/         PRD y plan técnico
 ```
@@ -75,10 +78,14 @@ Kavak/V6/Autocosmos 30 min, Facebook 60 min) y el ritmo de las fichas,
 5. **Bootstrap silencioso**: la primera corrida de un target, y una búsqueda
    nueva o editada (se matchea contra lo guardado de los últimos 30 días), quedan
    como *backfill*: no notifican — evita el diluvio inicial.
-6. **Alertas de Telegram**: cada lote de un target pasa por las alertas de ese
-   modelo con sus filtros, el radio (`radio_km`, geocodificación con cache), la
-   recencia (`RECOMMENDED_MAX_AGE_DAYS`, 15 días, cuando la fuente expone la
-   fecha) y el motor de oportunidad. Lo ya visto (`matches`) no se re-notifica.
+6. **Matching y alertas**: cada lote de un target se matchea contra las
+   búsquedas de ese modelo (filtros con razones, radio con geocodificación,
+   recencia `RECOMMENDED_MAX_AGE_DAYS` cuando la fuente expone la fecha) y se
+   puntúa (ver *Matching y Opportunity Score*). Los matches nuevos y las bajas
+   de precio pasan al motor de notificaciones
+   ([notifications/](worker/notifications)), que decide según el nivel mínimo,
+   la frecuencia, el tope diario y el dedupe, y envía por Telegram, email y el
+   inbox web (o los junta en el digest diario). Lo ya visto no se re-notifica.
 7. **Enrichment** ([enrich.py](worker/pipeline/enrich.py)): las publicaciones
    con al menos un match se completan con `fetch_detail()` (descripción,
    versión, transmisión, vendedor, todas las fotos), con una cola por fuente.
@@ -87,7 +94,12 @@ Kavak/V6/Autocosmos 30 min, Facebook 60 min) y el ritmo de las fichas,
    pausadas o vendidas pasan a `gone`.
 9. **Observabilidad**: cada corrida queda en `collector_runs` (encontrados,
    nuevos, actualizados, error) y cada falla de normalización, ingesta,
-   enrichment o notificación en `pipeline_errors`.
+   enrichment o notificación en `pipeline_errors`. Al arrancar, el worker
+   loguea en `WARNING` cada canal o métrica que el `.env` deja apagado.
+10. **Retención** ([retention.py](worker/pipeline/retention.py)): cada noche,
+    después del re-score, se borran las publicaciones que no se ven hace
+    `app_config.retention.listing_days` (180) y que ningún usuario tocó (sin
+    interacción, alerta ni compra), con sus snapshots y matches.
 
 ## Setup
 
@@ -260,12 +272,21 @@ Ver [web/README.md](web/README.md): `npx supabase start` en la raíz y
 
 ```powershell
 pytest                                  # desde la raíz o desde worker/
-$env:TEST_DATABASE_URL = "postgresql://postgres:postgres@127.0.0.1:54322/postgres"
-pytest                                  # suma los tests contra Postgres (solo host local)
+cd worker; python -m tools.test_db; cd ..   # crea/actualiza la base automotive_test (después de cada migración)
+$env:TEST_DATABASE_URL = "postgresql://postgres:postgres@127.0.0.1:54322/automotive_test"
+pytest                                  # suma los tests contra Postgres
 $env:LLM_SMOKE = "1"; pytest worker/tests/test_llm_contract.py -k smoke   # las 20 frases contra claude -p real
 npx supabase test db                    # pgTAP: RLS, las funciones SQL de la web y las vistas de métricas
 cd web; npm test; npm run e2e           # vitest y Playwright (desktop + 375 px)
 ```
+
+Los tests de Postgres vacían las tablas de datos (`listings`, `matches`,
+`notifications`…), así que **nunca corren sobre la base del piloto**: solo
+aceptan una base local cuyo nombre termina en `_test` y que no sea la de
+`DATABASE_URL`; si no, se saltean con el motivo. `tools.test_db` la clona del
+stack local (esquema + `sources`, `app_config` y `vehicle_catalog`, sin datos
+de usuarios). pgTAP corre cada archivo en una transacción que se descarta, y el
+e2e solo toca sus propios datos con prefijo `e2e`.
 
 ## Comandos del bot
 
@@ -309,8 +330,8 @@ profile de ese modelo:
    y un test impide los términos prohibidos del §19 ("vale", "precio real", "tasación").
 
 Todo se guarda en `matches` (score, level, `score_breakdown`, `match_reasons`,
-`price_ref`, `red_flags`). El bot de Telegram avisa los matches nuevos 🔥 que no
-son backfill (hasta que F3 traiga el motor de notificaciones). Los matches se
+`price_ref`, `red_flags`). El motor de notificaciones avisa los matches nuevos
+que no son backfill según el nivel mínimo de cada búsqueda. Los matches se
 re-scorean después del enrichment, todas las noches (`app_config.rescore`,
 últimos 14 días) y al arrancar si cambió `SCORING_VERSION`.
 

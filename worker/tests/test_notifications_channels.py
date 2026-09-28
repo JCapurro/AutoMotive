@@ -95,6 +95,22 @@ class ResendEmailChannelTests(unittest.IsolatedAsyncioTestCase):
                                                 "Antes: USD 11.500\nAhora: USD 10.800\n-6,1%"))
         self.assertIn("<strong>📉 Bajó de precio</strong>", body["html"])
 
+    async def test_every_email_can_unsubscribe(self):
+        """F7, punto 7: a footer link and List-Unsubscribe one-click (RFC 8058)."""
+        from dataclasses import replace
+
+        ch, seen = self.channel(lambda r: httpx.Response(200, json={"id": "email_1"}))
+        await ch.send(replace(PRICE_DROP, unsubscribe_token="tok-123"))
+        body = json.loads(seen[0].content)
+        self.assertEqual(body["headers"], {"List-Unsubscribe": "<https://automotive.app/api/baja?t=tok-123>",
+                                           "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"})
+        self.assertIn("Dejar de recibir estos emails: https://automotive.app/baja?t=tok-123", body["text"])
+        self.assertIn('href="https://automotive.app/baja?t=tok-123"', body["html"])
+
+        ch, seen = self.channel(lambda r: httpx.Response(200, json={"id": "email_2"}))
+        await ch.send(PRICE_DROP)  # no token (e.g. an old row): no link, no header
+        self.assertNotIn("headers", json.loads(seen[0].content))
+
     async def test_rate_limit_and_server_errors_are_retried(self):
         for status, retry in ((429, True), (503, True), (422, False)):
             ch, _ = self.channel(lambda r, s=status: httpx.Response(s, json={"message": "nope"}))

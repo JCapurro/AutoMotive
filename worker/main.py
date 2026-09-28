@@ -6,7 +6,8 @@ import signal
 from telegram.ext import Application
 
 from config import (EMAIL_FROM, ENRICH_TICK_SECONDS, NOTIFY_TICK_SECONDS, RESEND_API_KEY,
-                    TELEGRAM_ADMIN_CHAT_ID, TELEGRAM_TOKEN, WATCHLIST_TICK_SECONDS, WEB_BASE_URL)
+                    TELEGRAM_ADMIN_CHAT_ID, TELEGRAM_TOKEN, WATCHLIST_TICK_SECONDS, WEB_BASE_URL,
+                    startup_warnings)
 import db
 from bot.handlers import register
 from llm import build_provider
@@ -31,6 +32,8 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
+# At INFO httpx logs every request URL, and Telegram's include the bot token.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 log = logging.getLogger("main")
 
 
@@ -52,8 +55,6 @@ def build_notifier(bot, links: Links) -> Notifier:
     channels = {"telegram": TelegramChannel(bot, links), "web": WebChannel(links)}
     if RESEND_API_KEY and EMAIL_FROM:
         channels["email"] = ResendEmailChannel(RESEND_API_KEY, EMAIL_FROM, links)
-    else:
-        log.info("email desactivado: faltan RESEND_API_KEY / EMAIL_FROM")
     return Notifier(channels)
 
 
@@ -77,8 +78,8 @@ async def amain() -> None:
     register(app, links)
     notifier = build_notifier(app.bot, links)
     source_alerts = SourceAlerts(app.bot, TELEGRAM_ADMIN_CHAT_ID, WEB_BASE_URL)
-    if not source_alerts.enabled:
-        log.info("alertas operativas desactivadas: falta TELEGRAM_ADMIN_CHAT_ID")
+    for warning in startup_warnings():
+        log.warning(warning)
 
     await app.initialize()
     await app.start()

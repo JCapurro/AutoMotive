@@ -54,7 +54,8 @@ insert into public.app_config (key, value) values
      "payment_intent_min_pct": 10, "activation_target_pct": 70
    }'),
   ('pro_cta',                       '{"min_alert_clicks": 3, "on_limits": ["max_profiles"]}'),
-  ('pro_offer',                     '{"pro_monthly": {"price_usd": 15}, "pass_30": {"price_usd": 12}, "pass_90": {"price_usd": 25}}')
+  ('pro_offer',                     '{"pro_monthly": {"price_usd": 15}, "pass_30": {"price_usd": 12}, "pass_90": {"price_usd": 25}}'),
+  ('retention',                     '{"listing_days": 180}')
 on conflict (key) do nothing;
 
 -- ---------------------------------------------------------------------------

@@ -6,6 +6,8 @@
   the comparables' median moves (`nightly_loop`, at app_config.rescore.hour ART).
 * When SCORING_VERSION changes, every match (`rescore_outdated`, at startup).
 
+The nightly pass also runs the retention (pipeline/retention.py).
+
 A match that no longer passes its hard filters keeps its last score: the row
 is also the bot's "already seen" record, and deleting it would alert again.
 """
@@ -22,6 +24,7 @@ from db.repos import matches as matches_repo
 from db.repos.profiles import profiles_by_ids
 from db.repos.runs import log_error
 from intelligence.config import DEFAULT_RESCORE, SCORING_VERSION
+from pipeline.retention import purge_stale_listings
 from pipeline.scoring import Scorer
 
 
@@ -84,8 +87,8 @@ def seconds_until(hour: str, now: datetime) -> float:
 
 
 async def nightly_loop(stop: asyncio.Event) -> None:
-    """Re-score matches once a night; also, once at startup, whatever an older
-    SCORING_VERSION scored."""
+    """Re-score matches once a night, then purge stale listings; also, once at
+    startup, whatever an older SCORING_VERSION scored."""
     try:
         await rescore_outdated()
     except Exception:
@@ -102,3 +105,7 @@ async def nightly_loop(stop: asyncio.Event) -> None:
             await rescore_recent()
         except Exception:
             await log_error("rescore", "nightly", traceback.format_exc())
+        try:
+            await purge_stale_listings()
+        except Exception:
+            await log_error("retention", "nightly", traceback.format_exc())
