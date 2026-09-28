@@ -1,12 +1,14 @@
 import { BottomNav, MobileInboxLink, TopNav } from "@/components/app/app-nav";
 import { InboxProvider } from "@/components/app/inbox-provider";
 import { Logo } from "@/components/logo";
+import { isAdmin } from "@/lib/admin";
 import { requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function AppLayout({ children }: LayoutProps<"/app">) {
   const user = await requireUser();
   const supabase = await createClient();
+  const admin = await isAdmin();
   const { count } = await supabase
     .from("notifications")
     .select("id", { count: "exact", head: true })
@@ -20,7 +22,7 @@ export default async function AppLayout({ children }: LayoutProps<"/app">) {
         <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur">
           <div className="mx-auto flex h-14 w-full max-w-5xl items-center justify-between gap-4 px-4">
             <Logo href="/app" />
-            <TopNav />
+            <TopNav admin={admin} />
             <MobileInboxLink />
           </div>
         </header>

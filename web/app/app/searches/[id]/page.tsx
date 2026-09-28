@@ -5,11 +5,13 @@ import { notFound } from "next/navigation";
 
 import { AutoRefresh } from "@/components/app/auto-refresh";
 import { ListingCard } from "@/components/app/listing-card";
+import { ProBanner, VisibleResultsReport } from "@/components/app/pro-cta";
 import { FrequencySelect, PauseButton } from "@/components/app/search-actions";
 import { SortSelect } from "@/components/app/sort-select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth";
+import { type PlanLimits, visibleResults } from "@/lib/pro";
 import { describeFilters, describeVehicle } from "@/lib/search";
 import { isSort, type Sort } from "@/lib/sorts";
 import { createClient } from "@/lib/supabase/server";
@@ -54,7 +56,7 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
 
   const supabase = await createClient();
   const profileId = Number(id);
-  const [{ data: profile }, { data: results }, { data: counts }] = await Promise.all([
+  const [{ data: profile }, { data: results }, { data: counts }, { data: planLimits }] = await Promise.all([
     supabase.from("search_profiles").select("*").eq("id", profileId).maybeSingle(),
     supabase.rpc("search_results", {
       p_profile_id: profileId,
@@ -64,15 +66,20 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
       p_offset: 0,
     }),
     supabase.rpc("search_result_counts", { p_profile_id: profileId }),
+    supabase.rpc("my_plan_limits"),
   ]);
   if (!profile) notFound();
 
   const filters = profile.filters as Filters;
   const pending = !profile.bootstrapped_at || Boolean(profile.rematch_requested_at);
   const count = (counts?.[0] ?? {}) as Record<string, number>;
+  // §33: the free plan's visible results. Not enforced (the pilot): all of
+  // them, and the database records plan_limit_hit. Enforced: capped.
+  const limit = visibleResults(count.all_count ?? 0, (planLimits ?? null) as PlanLimits | null);
   const rows = results ?? [];
-  const more = rows.length > PAGE_SIZE * page;
-  const shown = rows.slice(0, PAGE_SIZE * page);
+  const reach = limit.cap != null ? Math.min(PAGE_SIZE * page, limit.cap) : PAGE_SIZE * page;
+  const more = rows.length > reach && reach === PAGE_SIZE * page;
+  const shown = rows.slice(0, reach);
   const href = (next: Partial<{ f: Filter; s: Sort; p: number }>) => {
     const qs = new URLSearchParams({ f: next.f ?? filter, s: next.s ?? sort });
     if (next.p && next.p > 1) qs.set("p", String(next.p));
@@ -144,6 +151,13 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
           {pending ? "Buscando…" : EMPTY[filter]}
         </p>
       )}
+
+      {limit.over ? (
+        <>
+          <VisibleResultsReport profileId={profileId} total={count.all_count ?? 0} />
+          {limit.cap != null && rows.length > limit.cap ? <ProBanner placement="results" reason="results" /> : null}
+        </>
+      ) : null}
 
       {more ? (
         <div className="text-center">

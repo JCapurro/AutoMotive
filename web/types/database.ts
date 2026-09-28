@@ -33,6 +33,12 @@ export type Database = {
       foreignKeyName: "collector_runs_source_fkey"
       columns: ["source"]
 isOneToOne: false
+      referencedRelation: "admin_source_health"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "collector_runs_source_fkey"
+      columns: ["source"]
+isOneToOne: false
       referencedRelation: "sources"
       referencedColumns: ["id"]
     },{
@@ -58,6 +64,12 @@ isOneToOne: false
       foreignKeyName: "crawl_targets_source_fkey"
       columns: ["source"]
 isOneToOne: false
+      referencedRelation: "admin_source_health"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "crawl_targets_source_fkey"
+      columns: ["source"]
+isOneToOne: false
       referencedRelation: "sources"
       referencedColumns: ["id"]
     }
@@ -74,6 +86,18 @@ isOneToOne: false
                   }
                   Relationships: [
                     {
+      foreignKeyName: "events_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: false
+      referencedRelation: "admin_users"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "events_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: false
+      referencedRelation: "metric_users"
+      referencedColumns: ["id"]
+    },{
       foreignKeyName: "events_user_id_fkey"
       columns: ["user_id"]
 isOneToOne: false
@@ -147,6 +171,12 @@ isOneToOne: false
       foreignKeyName: "listings_source_fkey"
       columns: ["source"]
 isOneToOne: false
+      referencedRelation: "admin_source_health"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "listings_source_fkey"
+      columns: ["source"]
+isOneToOne: false
       referencedRelation: "sources"
       referencedColumns: ["id"]
     }
@@ -163,6 +193,18 @@ isOneToOne: false
                   }
                   Relationships: [
                     {
+      foreignKeyName: "llm_jobs_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: false
+      referencedRelation: "admin_users"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "llm_jobs_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: false
+      referencedRelation: "metric_users"
+      referencedColumns: ["id"]
+    },{
       foreignKeyName: "llm_jobs_user_id_fkey"
       columns: ["user_id"]
 isOneToOne: false
@@ -191,8 +233,20 @@ isOneToOne: false
       foreignKeyName: "matches_search_profile_id_fkey"
       columns: ["search_profile_id"]
 isOneToOne: false
+      referencedRelation: "admin_searches"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "matches_search_profile_id_fkey"
+      columns: ["search_profile_id"]
+isOneToOne: false
       referencedRelation: "search_profiles"
       referencedColumns: ["id"]
+    },{
+      foreignKeyName: "matches_search_profile_id_fkey"
+      columns: ["search_profile_id"]
+isOneToOne: false
+      referencedRelation: "v_first_value"
+      referencedColumns: ["search_profile_id"]
     }
                   ]
                 },"notifications": {
@@ -207,6 +261,12 @@ isOneToOne: false
                   }
                   Relationships: [
                     {
+      foreignKeyName: "notifications_digested_in_fkey"
+      columns: ["digested_in"]
+isOneToOne: false
+      referencedRelation: "metric_alert_rows"
+      referencedColumns: ["notification_id"]
+    },{
       foreignKeyName: "notifications_digested_in_fkey"
       columns: ["digested_in"]
 isOneToOne: false
@@ -234,7 +294,31 @@ isOneToOne: false
       foreignKeyName: "notifications_search_profile_id_fkey"
       columns: ["search_profile_id"]
 isOneToOne: false
+      referencedRelation: "admin_searches"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "notifications_search_profile_id_fkey"
+      columns: ["search_profile_id"]
+isOneToOne: false
       referencedRelation: "search_profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "notifications_search_profile_id_fkey"
+      columns: ["search_profile_id"]
+isOneToOne: false
+      referencedRelation: "v_first_value"
+      referencedColumns: ["search_profile_id"]
+    },{
+      foreignKeyName: "notifications_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: false
+      referencedRelation: "admin_users"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "notifications_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: false
+      referencedRelation: "metric_users"
       referencedColumns: ["id"]
     },{
       foreignKeyName: "notifications_user_id_fkey"
@@ -265,7 +349,31 @@ isOneToOne: false
       foreignKeyName: "owned_vehicles_search_profile_id_fkey"
       columns: ["search_profile_id"]
 isOneToOne: false
+      referencedRelation: "admin_searches"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "owned_vehicles_search_profile_id_fkey"
+      columns: ["search_profile_id"]
+isOneToOne: false
       referencedRelation: "search_profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "owned_vehicles_search_profile_id_fkey"
+      columns: ["search_profile_id"]
+isOneToOne: false
+      referencedRelation: "v_first_value"
+      referencedColumns: ["search_profile_id"]
+    },{
+      foreignKeyName: "owned_vehicles_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: false
+      referencedRelation: "admin_users"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "owned_vehicles_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: false
+      referencedRelation: "metric_users"
       referencedColumns: ["id"]
     },{
       foreignKeyName: "owned_vehicles_user_id_fkey"
@@ -287,6 +395,37 @@ isOneToOne: false
                   }
                   Relationships: [
                     
+                  ]
+                },"pro_waitlist": {
+                  Row: {
+                    "created_at": string,"placement": string | null,"plan": string,"updated_at": string,"user_id": string
+                  }
+                  Insert: {
+                    "created_at"?: string,"placement"?: string | null,"plan": string,"updated_at"?: string,"user_id": string
+                  }
+                  Update: {
+                    "created_at"?: string,"placement"?: string | null,"plan"?: string,"updated_at"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "pro_waitlist_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: true
+      referencedRelation: "admin_users"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "pro_waitlist_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: true
+      referencedRelation: "metric_users"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "pro_waitlist_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: true
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    }
                   ]
                 },"profiles": {
                   Row: {
@@ -313,6 +452,18 @@ isOneToOne: false
                   }
                   Relationships: [
                     {
+      foreignKeyName: "search_profiles_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: false
+      referencedRelation: "admin_users"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "search_profiles_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: false
+      referencedRelation: "metric_users"
+      referencedColumns: ["id"]
+    },{
       foreignKeyName: "search_profiles_user_id_fkey"
       columns: ["user_id"]
 isOneToOne: false
@@ -354,6 +505,18 @@ isOneToOne: false
       foreignKeyName: "user_listing_interactions_user_id_fkey"
       columns: ["user_id"]
 isOneToOne: false
+      referencedRelation: "admin_users"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "user_listing_interactions_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: false
+      referencedRelation: "metric_users"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "user_listing_interactions_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: false
       referencedRelation: "profiles"
       referencedColumns: ["id"]
     }
@@ -374,7 +537,72 @@ isOneToOne: false
                 }
           }
           Views: {
-            "llm_job_stats": {
+            "admin_notification_daily": {
+                  Row: {
+                    "channel": Database["public"]['Enums']["notification_channel"] | null,"clicked": number | null,"day": string | null,"degraded": number | null,"digests_sent": number | null,"failed": number | null,"queued": number | null,"sent": number | null,"to_digest": number | null
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"admin_score_histogram": {
+                  Row: {
+                    "bucket": number | null,"level": Database["public"]['Enums']["match_level"] | null,"matches": number | null,"source": string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "listings_source_fkey"
+      columns: ["source"]
+isOneToOne: false
+      referencedRelation: "admin_source_health"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "listings_source_fkey"
+      columns: ["source"]
+isOneToOne: false
+      referencedRelation: "sources"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"admin_searches": {
+                  Row: {
+                    "alerts": number | null,"bootstrapped_at": string | null,"channels": (string)[] | null,"created_at": string | null,"email": string | null,"enabled": boolean | null,"filters": Json | null,"high_matches": number | null,"id": number | null,"matches": number | null,"name": string | null,"notification_frequency": Database["public"]['Enums']["notify_frequency"] | null,"notify_min_level": Database["public"]['Enums']["match_level"] | null,"rematch_requested_at": string | null,"user_id": string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "search_profiles_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: false
+      referencedRelation: "admin_users"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "search_profiles_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: false
+      referencedRelation: "metric_users"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "search_profiles_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"admin_source_health": {
+                  Row: {
+                    "avg_seconds_24h": number | null,"consecutive_failures": number | null,"crawl_interval_seconds": number | null,"detail_interval_seconds": number | null,"enabled": boolean | null,"failed_24h": number | null,"found_24h": number | null,"id": string | null,"last_error": string | null,"last_ok_at": string | null,"last_run_at": string | null,"last_run_status": Database["public"]['Enums']["run_status"] | null,"name": string | null,"new_24h": number | null,"priority": number | null,"runs_24h": number | null,"updated_24h": number | null
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"admin_users": {
+                  Row: {
+                    "alerts_7d": number | null,"created_at": string | null,"email": string | null,"enabled_searches": number | null,"id": string | null,"last_activity_at": string | null,"plan": Database["public"]['Enums']["user_plan"] | null,"plan_expires_at": string | null,"role": Database["public"]['Enums']["user_role"] | null,"searches": number | null,"telegram_linked": boolean | null,"telegram_only": boolean | null,"waitlist_plan": string | null
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"llm_job_stats": {
                   Row: {
                     "day": string | null,"done": number | null,"failed": number | null,"jobs": number | null,"kind": string | null,"latency_max_ms": number | null,"latency_p50_ms": number | null,"latency_p95_ms": number | null,"provider": string | null
                   }
@@ -396,6 +624,12 @@ isOneToOne: false
       foreignKeyName: "listings_source_fkey"
       columns: ["source"]
 isOneToOne: false
+      referencedRelation: "admin_source_health"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "listings_source_fkey"
+      columns: ["source"]
+isOneToOne: false
       referencedRelation: "sources"
       referencedColumns: ["id"]
     },{
@@ -408,7 +642,31 @@ isOneToOne: false
       foreignKeyName: "matches_search_profile_id_fkey"
       columns: ["search_profile_id"]
 isOneToOne: false
+      referencedRelation: "admin_searches"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "matches_search_profile_id_fkey"
+      columns: ["search_profile_id"]
+isOneToOne: false
       referencedRelation: "search_profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "matches_search_profile_id_fkey"
+      columns: ["search_profile_id"]
+isOneToOne: false
+      referencedRelation: "v_first_value"
+      referencedColumns: ["search_profile_id"]
+    },{
+      foreignKeyName: "search_profiles_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: false
+      referencedRelation: "admin_users"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "search_profiles_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: false
+      referencedRelation: "metric_users"
       referencedColumns: ["id"]
     },{
       foreignKeyName: "search_profiles_user_id_fkey"
@@ -417,6 +675,221 @@ isOneToOne: false
       referencedRelation: "profiles"
       referencedColumns: ["id"]
     }
+                  ]
+                },"metric_alert_rows": {
+                  Row: {
+                    "channel": string | null,"clicked_at": string | null,"dedupe_key": string | null,"delivered_at": string | null,"discarded": boolean | null,"kind": string | null,"level": string | null,"listing_id": number | null,"match_id": number | null,"notification_id": number | null,"opened_at": string | null,"rejection_reason": string | null,"saved": boolean | null,"score": number | null,"search_profile_id": number | null,"user_id": string | null,"via_digest": boolean | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "notifications_listing_id_fkey"
+      columns: ["listing_id"]
+isOneToOne: false
+      referencedRelation: "listings"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "notifications_match_id_fkey"
+      columns: ["match_id"]
+isOneToOne: false
+      referencedRelation: "match_cards"
+      referencedColumns: ["match_id"]
+    },{
+      foreignKeyName: "notifications_match_id_fkey"
+      columns: ["match_id"]
+isOneToOne: false
+      referencedRelation: "matches"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "notifications_search_profile_id_fkey"
+      columns: ["search_profile_id"]
+isOneToOne: false
+      referencedRelation: "admin_searches"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "notifications_search_profile_id_fkey"
+      columns: ["search_profile_id"]
+isOneToOne: false
+      referencedRelation: "search_profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "notifications_search_profile_id_fkey"
+      columns: ["search_profile_id"]
+isOneToOne: false
+      referencedRelation: "v_first_value"
+      referencedColumns: ["search_profile_id"]
+    },{
+      foreignKeyName: "notifications_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: false
+      referencedRelation: "admin_users"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "notifications_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: false
+      referencedRelation: "metric_users"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "notifications_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"metric_alerts": {
+                  Row: {
+                    "channels": (string)[] | null,"clicked_at": string | null,"dedupe_key": string | null,"delivered_at": string | null,"discarded": boolean | null,"kind": string | null,"level": string | null,"listing_id": number | null,"opened_at": string | null,"rejection_reason": string | null,"saved": boolean | null,"score": number | null,"search_profile_id": number | null,"user_id": string | null,"via_digest": boolean | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "notifications_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: false
+      referencedRelation: "admin_users"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "notifications_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: false
+      referencedRelation: "metric_users"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "notifications_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"metric_users": {
+                  Row: {
+                    "created_at": string | null,"email": string | null,"id": string | null,"plan": Database["public"]['Enums']["user_plan"] | null,"plan_expires_at": string | null,"telegram_only": boolean | null
+                  }
+                  Insert: {
+                           "created_at"?: string | null,"email"?: string | null,"id"?: string | null,"plan"?: Database["public"]['Enums']["user_plan"] | null,"plan_expires_at"?: string | null,"telegram_only"?: never
+                         }
+                        Update: {
+                           "created_at"?: string | null,"email"?: string | null,"id"?: string | null,"plan"?: Database["public"]['Enums']["user_plan"] | null,"plan_expires_at"?: string | null,"telegram_only"?: never
+                         }
+                        Relationships: [
+                    
+                  ]
+                },"v_activation": {
+                  Row: {
+                    "activation_pct": number | null,"cohort_week": string | null,"signed_up": number | null,"target_pct": number | null,"with_search": number | null
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"v_alert_funnel": {
+                  Row: {
+                    "channel": string | null,"click_rate_pct": number | null,"clicked": number | null,"discarded": number | null,"dismiss_rate_pct": number | null,"level": string | null,"open_rate_pct": number | null,"opened": number | null,"save_rate_pct": number | null,"saved": number | null,"sent": number | null
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"v_alerts_per_user_day": {
+                  Row: {
+                    "alerts": number | null,"alerts_per_user": number | null,"cap": number | null,"day": string | null,"max_per_user": number | null,"users": number | null
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"v_first_value": {
+                  Row: {
+                    "created_at": string | null,"first_value_at": string | null,"hours_to_first_value": number | null,"is_backfill": boolean | null,"search_profile_id": number | null,"user_id": string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "search_profiles_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: false
+      referencedRelation: "admin_users"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "search_profiles_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: false
+      referencedRelation: "metric_users"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "search_profiles_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"v_high_score_engagement": {
+                  Row: {
+                    "alerts": number | null,"click_rate_pct": number | null,"dismiss_rate_pct": number | null,"engagement_pct": number | null,"open_rate_pct": number | null,"save_rate_pct": number | null,"segment": string | null
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"v_north_star_weekly": {
+                  Row: {
+                    "active_users": number | null,"relevant_opens": number | null,"relevant_opens_per_active_user": number | null,"week": string | null
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"v_outcomes": {
+                  Row: {
+                    "automotive_influence": Database["public"]['Enums']["purchase_influence"] | null,"came_from_alert": boolean | null,"created_at": string | null,"days_since_search": number | null,"days_using_automotive": number | null,"listing_id": number | null,"owned_vehicle_id": number | null,"purchase_currency": string | null,"purchase_date": string | null,"purchase_price": number | null,"search_profile_id": number | null,"title": string | null,"user_id": string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "owned_vehicles_listing_id_fkey"
+      columns: ["listing_id"]
+isOneToOne: false
+      referencedRelation: "listings"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "owned_vehicles_search_profile_id_fkey"
+      columns: ["search_profile_id"]
+isOneToOne: false
+      referencedRelation: "admin_searches"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "owned_vehicles_search_profile_id_fkey"
+      columns: ["search_profile_id"]
+isOneToOne: false
+      referencedRelation: "search_profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "owned_vehicles_search_profile_id_fkey"
+      columns: ["search_profile_id"]
+isOneToOne: false
+      referencedRelation: "v_first_value"
+      referencedColumns: ["search_profile_id"]
+    },{
+      foreignKeyName: "owned_vehicles_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: false
+      referencedRelation: "admin_users"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "owned_vehicles_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: false
+      referencedRelation: "metric_users"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "owned_vehicles_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"v_validation_criteria": {
+                  Row: {
+                    "criterion": string | null,"denominator": number | null,"label": string | null,"met": boolean | null,"metric": string | null,"numerator": number | null,"ordinal": number | null,"threshold": number | null,"unit": string | null,"value": number | null
+                  }
+                  Relationships: [
+                    
                   ]
                 }
           }
@@ -435,11 +908,23 @@ isOneToOne: false
 "haversine_km":
 { Args: { "lat1": number,"lat2": number,"lon1": number,"lon2": number }; Returns: number
                            },
+"join_waitlist":
+{ Args: { "p_placement"?: string,"p_plan": string }; Returns: undefined
+                           },
 "link_telegram":
 { Args: { "p_chat_id": number,"p_code": string,"p_telegram_user_id": number }; Returns: string
                            },
+"my_plan_limits":
+{ Args: Record<PropertyKey, never>; Returns: Json
+                           },
+"plan_limits_for":
+{ Args: { "p_user": string }; Returns: Json
+                           },
 "preview_search":
 { Args: { "p_filters": Json,"p_origin_lat"?: number,"p_origin_lon"?: number,"p_radius_km"?: number }; Returns: Json
+                           },
+"pro_cta_state":
+{ Args: Record<PropertyKey, never>; Returns: Json
                            },
 "recent_opportunities":
 { Args: { "p_limit"?: number }; Returns: {
@@ -482,6 +967,9 @@ isOneToOne: false
         isOneToOne: false
         isSetofReturn: true
       } },
+"record_plan_limit_hit":
+{ Args: { "p_limit": string,"p_props"?: Json }; Returns: boolean
+                           },
 "record_purchase":
 { Args: { "p_currency"?: string,"p_date"?: string,"p_listing_id": number,"p_price"?: number,"p_search_profile_id"?: number }; Returns: number
                            },

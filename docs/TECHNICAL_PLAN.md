@@ -1,7 +1,7 @@
 # Automotive — Plan técnico del MVP
 
 - **Basado en:** [PRD v1.0](PRD.md). Convención: **§N** siempre es una sección del PRD; las secciones de este documento se citan como "sección N" (y en la columna *Plan* de la trazabilidad, solo el número).
-- **Estado:** F0–F5 implementadas (worker sobre Supabase Postgres, ingesta por crawl targets, matching con razones, Opportunity Score, motor de notificaciones, web MVP en `web/` y modo asistido con `claude -p`). Sigue F6.
+- **Estado:** F0–F6 implementadas (worker sobre Supabase Postgres, ingesta por crawl targets, matching con razones, Opportunity Score, motor de notificaciones, web MVP en `web/`, modo asistido con `claude -p`, backoffice `/admin` con el inspector, vistas de métricas y CTA Pro con lista de espera). Sigue el piloto (§51).
 - **Decisiones tomadas:**
   - Web con **Next.js + Supabase**.
   - Base de datos: **Postgres (Supabase)**, que reemplaza a SQLite.
@@ -680,6 +680,15 @@ Mientras no existe la web, hay un inspector por CLI: `python -m tools.explain_ma
 | `v_outcomes` | Compras, influencia y tiempo usando Automotive (§38) |
 | `v_validation_criteria` | Los 6 criterios del §53 contra su umbral: ≥30 usuarios con búsquedas activas, ≥30% de alertas abiertas, ≥15% de click o guardado, retención semanal, contactos o visitas, ≥10% de intención de pago |
 
+**Definiciones operativas (F6).** Todas las vistas excluyen a los admins. Una *alerta* es una fila `(user_id, dedupe_key)` entregada (envío inmediato o dentro de un digest enviado), cualquiera sea la cantidad de canales; se abre o clickea si pasó en cualquiera de ellos. *Usuario activo* de una semana: recibió una alerta o generó cualquier evento que no sea `alert_sent`. En `v_validation_criteria`:
+
+- **Engagement:** publicaciones alertadas (por usuario) con clic en la alerta, clic a la fuente (`listing_outbound_clicked`) o guardadas / «Me interesa».
+- **Retención:** de los usuarios cuya primera búsqueda tiene ≥ `retention_weeks` semanas (3), los que estuvieron activos en los últimos 7 días; umbral 40%. El PRD no da número: es una decisión del piloto.
+- **Outcome:** usuarios que contactaron, agendaron visita o compraron; umbral 3 («algunos»), también una decisión del piloto.
+- **Monetización:** usuarios con búsqueda activa que se sumaron a la lista de espera o tienen un plan pago vigente.
+
+Los umbrales viven en `app_config.validation_criteria` y se editan desde `/admin/config`.
+
 ---
 
 ## 12. Freemium (§33, §34)
@@ -691,11 +700,14 @@ Mientras no existe la web, hay un inspector por CLI: `python -m tools.explain_ma
   {
     "enforced": false,
     "free": {"max_profiles": 1, "max_visible_results": 50, "immediate_alerts": false},
-    "pro":  {"max_profiles": 10, "immediate_alerts": true, "crawl_priority": "high"}
+    "pro":  {"max_profiles": 10, "immediate_alerts": true, "crawl_priority": "high"},
+    "pass": {"max_profiles": 10, "immediate_alerts": true, "crawl_priority": "high"}
   }
   ```
 
 - **Mientras `enforced = false` (el piloto):** todo está habilitado, pero cada vez que un usuario free supera un límite se registra `plan_limit_hit` y se ofrece el CTA de Pro. Así se mide la intención de pago sin frenar la validación.
+- **Dónde se mide cada límite:** `max_profiles` y `immediate_alerts` con triggers en `search_profiles` (con `enforced = true`, la búsqueda de más se rechaza y la inmediata pasa a diaria); `max_visible_results` lo reporta la web a `record_plan_limit_hit()`, que deduplica por búsqueda y día (con `enforced = true`, la web corta los resultados). Un Pro o Search Pass vencido cuenta como free (`plan_limits_for()`).
+- **CTA (§52):** `pro_cta_state()` lo muestra a usuarios free que no están en la lista de espera después de `pro_cta.min_alert_clicks` alertas clickeadas (3) o de pasar un límite a propósito (`pro_cta.on_limits`, por defecto `max_profiles`). Los límites pasivos (alertas inmediatas, resultados) solo se miden, para no mostrarle el CTA a todo usuario nuevo.
 - **Cobro real:** queda fuera de este plan. Se decide con los datos de `waitlist_joined`.
 
 ---
