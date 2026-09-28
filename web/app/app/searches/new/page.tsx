@@ -1,6 +1,7 @@
 import { Sparkles } from "lucide-react";
 import type { Metadata } from "next";
 
+import { AssistedSearch } from "@/components/app/assisted-search";
 import { SearchForm } from "@/components/app/search-form";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { requireUser } from "@/lib/auth";
@@ -61,13 +62,7 @@ export default async function NewSearchPage() {
           />
         </TabsContent>
         <TabsContent value="assisted" className="pt-3">
-          <div className="max-w-xl space-y-2 rounded-xl bg-card p-5 ring-1 ring-foreground/10">
-            <p className="font-medium">Muy pronto: contanos qué buscás con tus palabras.</p>
-            <p className="text-sm text-muted-foreground">
-              «Busco Fiesta Titanium manual 2016 a 2018 hasta USD 11.500 y menos de 150.000 km». Automotive lo va a
-              convertir en filtros que revisás antes de guardar. Mientras tanto, usá el modo estructurado.
-            </p>
-          </div>
+          <AssistedSearch catalog={catalog} sources={sources} base={initial} defaultOrigin={defaultOrigin} />
         </TabsContent>
       </Tabs>
     </div>

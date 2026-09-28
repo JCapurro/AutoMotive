@@ -1,7 +1,7 @@
 # Automotive — Plan técnico del MVP
 
 - **Basado en:** [PRD v1.0](PRD.md). Convención: **§N** siempre es una sección del PRD; las secciones de este documento se citan como "sección N" (y en la columna *Plan* de la trazabilidad, solo el número).
-- **Estado:** F0–F4 implementadas (worker sobre Supabase Postgres, ingesta por crawl targets, matching con razones, Opportunity Score, motor de notificaciones y web MVP en `web/`). Sigue F5.
+- **Estado:** F0–F5 implementadas (worker sobre Supabase Postgres, ingesta por crawl targets, matching con razones, Opportunity Score, motor de notificaciones, web MVP en `web/` y modo asistido con `claude -p`). Sigue F6.
 - **Decisiones tomadas:**
   - Web con **Next.js + Supabase**.
   - Base de datos: **Postgres (Supabase)**, que reemplaza a SQLite.
@@ -565,17 +565,18 @@ class LLMProvider(Protocol):
 ### 8.2 `ClaudeCliProvider` (piloto)
 
 ```
-claude -p "<prompt con el texto del usuario>" \
+claude -p \
   --output-format json \
-  --json-schema '<schema de SearchDraft[]>' \
+  --json-schema '<schema de SearchDrafts>' \
   --system-prompt "<instrucciones + catálogo de marcas/modelos/versiones relevante>" \
   --tools "" \
   --no-session-persistence \
-  --model haiku
+  --strict-mcp-config --setting-sources "" \
+  --model haiku  < "<pedido>texto del usuario</pedido>"
 ```
 
-- Se lanza con `asyncio.create_subprocess_exec`, sin shell, pasando el texto del usuario como argumento y no interpolado en un comando. Tiene un timeout configurable (`LLM_TIMEOUT_SECONDS`, 60 s) y un reintento.
-- De la salida se parsea el campo `result` del envelope JSON y se valida con Pydantic. Si no valida, el job queda `failed` y la web cae al formulario estructurado.
+- Se lanza con `asyncio.create_subprocess_exec`, sin shell. El texto del usuario va por **stdin**, dentro del mensaje (`<pedido>…</pedido>`), nunca en la línea de comandos: así no puede leerse como un flag. Sin tools, sin sesión guardada, sin MCP ni settings, y con el directorio temporal como cwd (no aplica ningún CLAUDE.md del repo). Tiene un presupuesto configurable por job (`LLM_TIMEOUT_SECONDS`, 60 s) con un reintento adentro: una falla rápida se reintenta con el tiempo que queda; un timeout no.
+- De la salida se toma `structured_output` del envelope JSON (o `result`, parseado) y se valida con Pydantic. Si no valida, el job queda `failed` y la web cae al formulario estructurado.
 - Requisitos del host del worker: Claude Code instalado y logueado. La ruta se configura con `CLAUDE_CLI_PATH`.
 - Se registran `provider`, `latency_ms` y el error en `llm_jobs`, para comparar después con el LLM local.
 

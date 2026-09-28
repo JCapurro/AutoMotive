@@ -9,6 +9,7 @@ from config import (EMAIL_FROM, ENRICH_TICK_SECONDS, NOTIFY_TICK_SECONDS, RESEND
                     TELEGRAM_TOKEN, WATCHLIST_TICK_SECONDS, WEB_BASE_URL)
 import db
 from bot.handlers import register
+from llm import build_provider
 from notifications.channels.email import ResendEmailChannel
 from notifications.channels.telegram import TelegramChannel
 from notifications.channels.web import WebChannel
@@ -16,6 +17,7 @@ from notifications.digest import digest_loop
 from notifications.links import Links
 from notifications.service import Notifier
 from pipeline.enrich import enrich_pass
+from pipeline.llm_jobs import llm_jobs_loop
 from pipeline.rescore import nightly_loop
 from pipeline.scheduler import run_loop
 from pipeline.watchlist import refresh_watchlist
@@ -106,6 +108,7 @@ async def amain() -> None:
                                    lambda _stop: notifier.deliver(), stop)),
         asyncio.create_task(digest_loop(notifier, stop)),
         asyncio.create_task(nightly_loop(stop)),
+        asyncio.create_task(llm_jobs_loop(build_provider(), stop)),
     ]
 
     try:

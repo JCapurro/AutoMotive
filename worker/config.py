@@ -57,3 +57,20 @@ WEB_BASE_URL = os.getenv("WEB_BASE_URL", "").strip().rstrip("/")
 # The queue of immediate notifications is drained after every crawl batch and
 # also this often (retries, rows queued by other loops).
 NOTIFY_TICK_SECONDS = int(os.getenv("NOTIFY_TICK_SECONDS", "60"))
+
+# LLM layer (sección 8): the assisted mode's parser. `claude_cli` runs
+# `claude -p` on this host (Claude Code installed and logged in); `local` is an
+# OpenAI-compatible server (Ollama, llama.cpp) for the launch.
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "claude_cli").strip().lower()
+# Empty: `claude` from PATH. On Windows point it at claude.exe (a .cmd shim
+# can't run without a shell).
+CLAUDE_CLI_PATH = os.getenv("CLAUDE_CLI_PATH", "").strip()
+CLAUDE_CLI_MODEL = os.getenv("CLAUDE_CLI_MODEL", "haiku").strip()
+# Budget for one job, retry included (the web gives up a bit after this).
+LLM_TIMEOUT_SECONDS = float(os.getenv("LLM_TIMEOUT_SECONDS", "60"))
+LOCAL_LLM_BASE_URL = os.getenv("LOCAL_LLM_BASE_URL", "http://127.0.0.1:11434/v1").strip()
+LOCAL_LLM_MODEL = os.getenv("LOCAL_LLM_MODEL", "").strip()
+# How often an idle llm_jobs loop looks for queued jobs, and how many jobs run
+# at once (each one is a `claude -p` process).
+LLM_POLL_SECONDS = float(os.getenv("LLM_POLL_SECONDS", "2"))
+LLM_CONCURRENCY = int(os.getenv("LLM_CONCURRENCY", "1"))
