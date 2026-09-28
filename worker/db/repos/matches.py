@@ -2,11 +2,11 @@
 
 A match row also means the profile already considered that listing (the
 bot's "already seen" set). Since F2 rows carry the 0–100 score, level,
-breakdown, reasons, price_ref and red flags (intelligence/engine.py). Rows
-written before F2 (the SQLite migration, `mark_seen`) keep placeholder
-scoring with scoring_version = 'legacy-v0'; a scoring_version other than the
-current one is re-scored (sección 6.1). Bootstrap and migrated rows are
-is_backfill = true.
+breakdown, reasons, price_ref and red flags (intelligence/engine.py), and
+since F4 the seller questions the web copies (§25). Rows written before F2
+(the SQLite migration, `mark_seen`) keep placeholder scoring with
+scoring_version = 'legacy-v0'; a scoring_version other than the current one
+is re-scored (sección 6.1). Bootstrap and migrated rows are is_backfill = true.
 """
 from __future__ import annotations
 
@@ -94,7 +94,7 @@ async def mark_seen(alert_id: int, items: Iterable[dict], *, backfill: bool = Fa
 
 
 _EVALUATED = ("score", "level", "score_breakdown", "match_reasons", "price_ref", "red_flags",
-              "scoring_version")
+              "seller_questions", "scoring_version")
 
 
 async def upsert_scored(cx: AsyncConnection, profile_id: int,
@@ -106,8 +106,9 @@ async def upsert_scored(cx: AsyncConnection, profile_id: int,
         return {}
     inserted: dict[int, int] = {}
     for listing_id, row in rows:
+        # seller_questions is optional (rows built before F4 stored it).
         values = [Jsonb(row[c]) if c in ("score_breakdown", "match_reasons", "red_flags")
-                  or (c == "price_ref" and row[c] is not None) else row[c] for c in _EVALUATED]
+                  or (c == "price_ref" and row[c] is not None) else row.get(c) for c in _EVALUATED]
         rec = await (await cx.execute(
             "INSERT INTO matches (search_profile_id, listing_id, is_backfill, "
             f"                     {', '.join(_EVALUATED)}) "

@@ -19,6 +19,7 @@ import db
 from collectors.base import BaseScraper, Listing, ListingDetail
 from pgcase import TEST_FX_RATE, PostgresTestCase, requires_db
 from intelligence import comparables
+from intelligence.config import SCORING_VERSION
 from notifications.channels.telegram import TelegramChannel
 from notifications.channels.web import WebChannel
 from notifications.links import Links
@@ -316,7 +317,7 @@ class TelegramAlertsTests(IngestCase):
                                "JOIN listings l ON l.id = m.listing_id ORDER BY m.id")
         self.assertEqual({r["external_id"] for r in rows if r["is_backfill"]}, {f"c{i}" for i in range(6)})
         deal = next(r for r in rows if r["external_id"] == "deal")
-        self.assertEqual((deal["level"], deal["scoring_version"]), ("high", "f2-v1"))
+        self.assertEqual((deal["level"], deal["scoring_version"]), ("high", SCORING_VERSION))
         self.assertEqual((deal["price_ref"]["n"], deal["price_ref"]["level_used"]), (7, "model"))
         self.assertEqual(deal["match_reasons"]["model"]["result"], "ok")
         meh = next(r for r in rows if r["external_id"] == "meh")

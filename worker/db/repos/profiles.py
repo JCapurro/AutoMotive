@@ -1,9 +1,11 @@
-"""The bot's alerts, stored as search_profiles.
+"""Search profiles as the pipeline reads them ("alerts").
 
-The Telegram handlers and the scheduler keep working with the dicts they
-always used ("alerts"); this module maps them onto profiles/search_profiles.
-Alert ids are search_profile ids. A wizard alert with several marcas/modelos
-becomes one profile per (marca, modelo), as sección 4.3 asks.
+The scheduler keeps working with the dicts the Telegram bot always used
+("alerts"); this module maps them onto profiles/search_profiles. Alert ids are
+search_profile ids. A legacy alert with several marcas/modelos becomes one
+profile per (marca, modelo), as sección 4.3 asks. Since F4 searches are
+created in the web; create_alert / update_alert remain for the SQLite
+migration and the tests, and link_telegram() serves the bot's /start <code>.
 
 Since F1 profiles no longer have a scrape cadence of their own: they are
 grouped into crawl_targets (pipeline/crawl.py) and a new or edited profile is
@@ -66,6 +68,17 @@ async def ensure_telegram_profile(cx: AsyncConnection, telegram_user_id: int, ch
         "SELECT ensure_telegram_profile(%s, %s) AS id", (telegram_user_id, chat_id),
     )).fetchone()
     return row["id"]
+
+
+async def link_telegram(code: str, telegram_user_id: int, chat_id: int) -> str | None:
+    """/start <code>: link this Telegram user to the web account with that
+    telegram_link_code (public.link_telegram, which also folds a Telegram-only
+    account from the old wizard into it). None for an unknown or used code."""
+    async with connection() as cx:
+        row = await (await cx.execute(
+            "SELECT link_telegram(%s, %s, %s) AS id", (code, telegram_user_id, chat_id),
+        )).fetchone()
+    return str(row["id"]) if row and row["id"] else None
 
 
 async def _canonical(cx: AsyncConnection, make: str | None,

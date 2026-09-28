@@ -7,7 +7,6 @@ the digest, click tracking and the Telegram buttons run for real. Run with
 """
 from __future__ import annotations
 
-import asyncio
 import json
 from datetime import datetime, timedelta, timezone
 
@@ -28,7 +27,6 @@ from notifications.links import Links
 from notifications.service import MatchCandidate, Notifier
 from pgcase import PostgresTestCase, requires_db
 from pipeline.ingest import ListingEvent
-from tools import redirect_server
 
 pytestmark = [pytest.mark.db, requires_db]
 
@@ -304,7 +302,8 @@ class DailyCapAndDigestTests(NotificationsCase):
 
 
 class TrackingTests(NotificationsCase):
-    """/r/<id> (sección 7.3): click = opened; previews don't count."""
+    """public.track_notification_click, what the web's /r/<id> calls (sección 7.3):
+    click = opened. The web's route handler (web/app/r/) and its e2e cover HTTP."""
 
     async def sent(self) -> dict:
         lid = await self.listing()
@@ -312,10 +311,10 @@ class TrackingTests(NotificationsCase):
         [n] = await self.notifications("telegram")
         return n
 
-    async def test_a_click_records_and_redirects(self):
+    async def test_a_click_records_and_returns_the_listing(self):
         n = await self.sent()
-        r = await redirect_server.resolve("GET", f"/r/{n['id']}?to=listing", "Mozilla/5.0")
-        self.assertEqual((r.status, r.location), (302, "https://example.test/n1"))
+        r = await repo.track_click(n["id"], "listing")
+        self.assertEqual((r["listing_id"], r["url"]), (n["listing_id"], "https://example.test/n1"))
         [row] = await self.rows("SELECT clicked_at, opened_at FROM notifications WHERE id = %s", n["id"])
         self.assertIsNotNone(row["clicked_at"])
         self.assertEqual(row["clicked_at"], row["opened_at"])
@@ -323,32 +322,25 @@ class TrackingTests(NotificationsCase):
         self.assertEqual((ev["props"]["notification_id"], ev["props"]["to"]), (n["id"], "listing"))
 
         # The first click stays the "opened" time; later clicks are events.
-        await redirect_server.resolve("GET", f"/r/{n['id']}?to=detail", "Mozilla/5.0")
+        await repo.track_click(n["id"], "detail")
         [again] = await self.rows("SELECT clicked_at FROM notifications WHERE id = %s", n["id"])
         self.assertEqual(again["clicked_at"], row["clicked_at"])
         self.assertEqual(len(await self.rows("SELECT 1 FROM events WHERE name = 'alert_clicked'")), 2)
 
-    async def test_detail_goes_to_the_web_when_it_exists(self):
+    async def test_peek_does_not_count(self):
         n = await self.sent()
-        r = await redirect_server.resolve("GET", f"/r/{n['id']}?to=detail", "Mozilla/5.0",
-                                          detail_url="https://automotive.app/app/listings/{listing_id}")
-        self.assertEqual(r.location, f"https://automotive.app/app/listings/{n['listing_id']}")
-
-    async def test_previews_and_head_do_not_count(self):
-        n = await self.sent()
-        for method, ua in (("GET", "TelegramBot (like TwitterBot)"), ("HEAD", "Mozilla/5.0")):
-            r = await redirect_server.resolve(method, f"/r/{n['id']}", ua)
-            self.assertEqual(r.status, 302)
+        r = await repo.peek_click(n["id"])
+        self.assertEqual(r["url"], "https://example.test/n1")
         [row] = await self.rows("SELECT clicked_at FROM notifications WHERE id = %s", n["id"])
         self.assertIsNone(row["clicked_at"])
+        self.assertEqual(await self.rows("SELECT 1 FROM events WHERE name = 'alert_clicked'"), [])
 
-    async def test_unknown_ids_and_foreign_listings_are_404(self):
+    async def test_unknown_ids_and_foreign_listings_return_nothing(self):
         n = await self.sent()
         other = await self.listing()
-        self.assertEqual((await redirect_server.resolve("GET", "/r/999999", None)).status, 404)
-        self.assertEqual((await redirect_server.resolve("GET", f"/r/{n['id']}?l={other}", None)).status, 404)
-        self.assertEqual((await redirect_server.resolve("GET", "/nope", None)).status, 404)
-        self.assertEqual((await redirect_server.resolve("POST", f"/r/{n['id']}", None)).status, 405)
+        self.assertIsNone(await repo.track_click(999999, "listing"))
+        self.assertIsNone(await repo.track_click(n["id"], "listing", other))
+        self.assertIsNone(await repo.peek_click(n["id"], other))
 
     async def test_a_digest_item_marks_the_row_it_carries(self):
         await self.set_config("alerts_max_per_user_day", 0)
@@ -356,19 +348,11 @@ class TrackingTests(NotificationsCase):
         await self.matched(await self.match(self.profile, lid, "high", 90))
         await run_digest(self.notifier)
         [digest] = [r for r in await self.notifications("telegram") if r["kind"] == "digest"]
-        r = await redirect_server.resolve("GET", f"/r/{digest['id']}?to=listing&l={lid}", "Mozilla/5.0")
-        self.assertEqual(r.status, 302)
+        r = await repo.track_click(digest["id"], "listing", lid)
+        self.assertEqual(r["listing_id"], lid)
         clicked = await self.rows("SELECT kind::text AS kind FROM notifications "
                                   "WHERE channel = 'telegram' AND clicked_at IS NOT NULL ORDER BY id")
         self.assertEqual([c["kind"] for c in clicked], ["opportunity", "digest"])
-
-    async def test_over_http(self):
-        n = await self.sent()
-        server = await asyncio.start_server(redirect_server.handle, "127.0.0.1", 0)
-        port = server.sockets[0].getsockname()[1]
-        async with server, httpx.AsyncClient() as client:
-            r = await client.get(f"http://127.0.0.1:{port}/r/{n['id']}?to=listing")
-        self.assertEqual((r.status_code, r.headers["location"]), (302, "https://example.test/n1"))
 
 
 class TelegramActionTests(NotificationsCase):

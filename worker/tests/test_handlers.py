@@ -1,9 +1,15 @@
+"""The bot after F4: /start <code> links the account, the old wizard commands
+point to the web (bot/handlers.py)."""
 from __future__ import annotations
 
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
-from bot.handlers import _coerce, _finish, cmd_list, cmd_edit_alert
+from bot.handlers import LEGACY_COMMANDS, register, retired, start
+from notifications.links import Links
+
+
+LINKS = Links("https://automotive.app")
 
 
 class _FakeMessage:
@@ -30,132 +36,73 @@ class _FakeUpdate:
         self.callback_query = None
 
 
-class HandlerTests(unittest.IsolatedAsyncioTestCase):
-    async def test_alertas_uses_plain_text_for_user_supplied_filters(self):
+def _ctx(*args: str):
+    ctx = type("FakeContext", (), {})()
+    ctx.args = list(args)
+    ctx.user_data = {}
+    return ctx
+
+
+class StartTests(unittest.IsolatedAsyncioTestCase):
+    async def test_start_with_a_code_links_the_account(self):
         update = _FakeUpdate()
-        rows = [
-            {
-                "id": 7,
-                "active": 1,
-                "name": "Ford_Fiesta",
-                "filters": {
-                    "marcas": ["Ford"],
-                    "modelos": ["Fiesta_Kinetic"],
-                    "sources": ["mercadolibre"],
-                },
-            }
-        ]
-
-        with patch("bot.handlers.db.list_alerts", return_value=rows):
-            await cmd_list(update, None)
-
-        self.assertEqual(len(update.message.calls), 1)
+        with patch("bot.handlers.db.link_telegram", AsyncMock(return_value="uuid-1")) as link:
+            await start(LINKS)(update, _ctx("abc123"))
+        link.assert_awaited_once_with("abc123", 123, 456)
         text, kwargs = update.message.calls[0]
-        self.assertIn("Ford_Fiesta", text)
+        self.assertIn("vinculaste Telegram", text)
+        self.assertIn("https://automotive.app/app", text)
         self.assertNotIn("parse_mode", kwargs)
 
-    def test_price_inputs_accept_argentine_thousands_separators(self):
-        self.assertEqual(_coerce("precio_max", "15.000"), 15000.0)
-        self.assertEqual(_coerce("precio_max", "$ 15.000"), 15000.0)
-        self.assertEqual(_coerce("precio_max", "USD 15,000"), 15000.0)
-
-    async def test_finish_alert_uses_plain_text_for_user_supplied_filters(self):
+    async def test_an_unknown_or_used_code_points_to_settings(self):
         update = _FakeUpdate()
-        ctx = type("FakeContext", (), {})()
-        ctx.user_data = {
-            "wizard": {
-                "filters": {
-                    "marcas": ["Ford"],
-                    "modelos": ["Fiesta_Kinetic"],
-                    "sources": ["mercadolibre"],
-                    "origin_lat": -34.6037,
-                    "origin_lon": -58.3816,
-                    "radio_km": 75,
-                }
-            }
-        }
-
-        with patch("bot.handlers.db.create_alert", return_value=[9]):
-            await _finish(update, ctx)
-
-        self.assertEqual(len(update.message.calls), 1)
-        text, kwargs = update.message.calls[0]
-        self.assertIn("#9", text)
-        self.assertIn("Fiesta_Kinetic", text)
-        self.assertNotIn("parse_mode", kwargs)
-
-
-    async def test_edit_loads_current_filters_into_wizard(self):
-        update = _FakeUpdate()
-        ctx = type("FakeContext", (), {})()
-        ctx.user_data = {}
-        ctx.args = ["7"]
-        alert = {
-            "id": 7,
-            "user_id": 123,
-            "name": "Ford Fiesta",
-            "filters": {
-                "marcas": ["Ford"],
-                "modelos": ["Fiesta"],
-                "sources": ["mercadolibre"],
-                "descuento_pct": 12,
-            },
-        }
-
-        with patch("bot.handlers._allowed", return_value=True), \
-             patch("bot.handlers.db.get_alert", return_value=alert):
-            await cmd_edit_alert(update, ctx)
-
-        w = ctx.user_data["wizard"]
-        self.assertEqual(w["edit_id"], 7)
-        self.assertEqual(w["step"], 0)
-        self.assertEqual(w["filters"]["marcas"], ["Ford"])
-        self.assertEqual(w["filters"]["descuento_pct"], 12)
-
-    async def test_edit_rejects_other_users_alert(self):
-        update = _FakeUpdate()
-        ctx = type("FakeContext", (), {})()
-        ctx.user_data = {}
-        ctx.args = ["7"]
-        alert = {"id": 7, "user_id": 999, "name": "x", "filters": {}}
-
-        with patch("bot.handlers._allowed", return_value=True), \
-             patch("bot.handlers.db.get_alert", return_value=alert):
-            await cmd_edit_alert(update, ctx)
-
-        self.assertNotIn("wizard", ctx.user_data)
+        with patch("bot.handlers.db.link_telegram", AsyncMock(return_value=None)):
+            await start(LINKS)(update, _ctx("expired"))
         text, _ = update.message.calls[0]
-        self.assertIn("no encontrada", text.lower())
+        self.assertIn("no es válido", text)
+        self.assertIn("https://automotive.app/app/settings", text)
 
-    async def test_finish_in_edit_mode_updates_instead_of_creating(self):
+    async def test_start_without_a_code_explains_the_web(self):
         update = _FakeUpdate()
-        ctx = type("FakeContext", (), {})()
-        ctx.user_data = {
-            "wizard": {
-                "edit_id": 9,
-                "filters": {
-                    "marcas": ["Ford"],
-                    "modelos": ["Fiesta_Kinetic"],
-                    "sources": ["mercadolibre"],
-                    "origin_lat": -34.6037,
-                    "origin_lon": -58.3816,
-                    "radio_km": 75,
-                    "descuento_pct": 15,
-                },
-            }
-        }
+        with patch("bot.handlers.db.link_telegram", AsyncMock()) as link:
+            await start(LINKS)(update, _ctx())
+        link.assert_not_awaited()
+        text, _ = update.message.calls[0]
+        self.assertIn("https://automotive.app/app", text)
+        self.assertIn("Ajustes", text)
 
-        with patch("bot.handlers.db.update_alert") as upd, \
-             patch("bot.handlers.db.create_alert") as create:
-            await _finish(update, ctx)
+    async def test_without_a_web_url_there_are_no_links(self):
+        update = _FakeUpdate()
+        await start(Links())(update, _ctx())
+        text, _ = update.message.calls[0]
+        self.assertNotIn("http", text)
 
-        create.assert_not_called()
-        upd.assert_called_once()
-        self.assertEqual(upd.call_args.args[0], 9)
-        text, kwargs = update.message.calls[0]
-        self.assertIn("#9", text)
-        self.assertIn("actualizada", text)
-        self.assertNotIn("parse_mode", kwargs)
+    async def test_users_outside_the_allowlist_are_ignored(self):
+        update = _FakeUpdate()
+        with patch("bot.handlers.ALLOWED_USER_IDS", {999}), \
+             patch("bot.handlers.db.link_telegram", AsyncMock()) as link:
+            await start(LINKS)(update, _ctx("abc123"))
+        link.assert_not_awaited()
+        self.assertEqual(update.message.calls, [])
+
+
+class RetiredWizardTests(unittest.IsolatedAsyncioTestCase):
+    async def test_the_wizard_commands_point_to_the_web(self):
+        update = _FakeUpdate()
+        await retired(LINKS)(update, _ctx())
+        text, _ = update.message.calls[0]
+        self.assertIn("se crean y se editan en la web", text)
+        self.assertIn("https://automotive.app/app/searches/new", text)
+
+    def test_register_has_no_conversation(self):
+        added = []
+        app = type("App", (), {"add_handler": lambda self, h: added.append(h)})()
+        register(app, LINKS)
+        commands = set()
+        for h in added:
+            commands |= set(getattr(h, "commands", ()))
+            self.assertNotEqual(type(h).__name__, "ConversationHandler")
+        self.assertTrue({"start", "help", *LEGACY_COMMANDS} <= commands)
 
 
 if __name__ == "__main__":

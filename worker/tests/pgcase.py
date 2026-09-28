@@ -48,7 +48,7 @@ class PostgresTestCase(unittest.IsolatedAsyncioTestCase):
         async with db.connection() as cx:
             await cx.execute(f"TRUNCATE {_TRUNCATE} RESTART IDENTITY CASCADE")
             await cx.execute("DELETE FROM auth.users WHERE raw_app_meta_data->>'provider' = 'telegram' "
-                             "   OR email LIKE '%@automotive.test'")
+                             "   OR email LIKE '%automotive.test'")
             await cx.execute("UPDATE sources SET last_ok_at = NULL, consecutive_failures = 0")
         app_config.clear_config_cache()
         catalog.clear_catalog_cache()
