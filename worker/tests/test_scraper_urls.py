@@ -37,6 +37,10 @@ class ScraperUrlTests(unittest.TestCase):
         self.assertIn("search=fiesta", url)
         self.assertNotIn("model=fiesta", url)
 
+    def test_v6_asks_for_the_newest_first(self):
+        # `sort=recent` is ignored by the site; the listing's own select sends sortOrder.
+        self.assertIn("sortOrder=publicadoMasNuevo", V6Scraper()._build_url({"marca": "Ford"}))
+
 
 if __name__ == "__main__":
     unittest.main()
