@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Loader2, PenLine, RotateCcw, Sparkles, Trash2 } from "lucide-react";
+import { Check, Loader2, PenLine, Plus, RotateCcw, Sparkles, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useState, useTransition } from "react";
@@ -17,8 +17,10 @@ import {
   ASSISTED_DEADLINE_MS,
   ASSISTED_EXAMPLES,
   ASSISTED_MAX_CHARS,
+  ASSISTED_MAX_VEHICLES,
   ASSISTED_POLL_MS,
   AssistedOutput,
+  addedVehicle,
   draftTitle,
   draftToValues,
 } from "@/lib/assisted";
@@ -36,6 +38,8 @@ type Reviewed = {
   notes: string[];
   state: "pending" | "saved" | "discarded";
   savedId?: number;
+  /** Added by the user on the review screen, not found in the text. */
+  added?: boolean;
 };
 
 type Phase =
@@ -168,6 +172,22 @@ export function AssistedSearch({
     });
   }
 
+  // Another vehicle for the same request: the first proposal's shared filters, make and model to pick.
+  function addVehicle() {
+    setPhase((prev) => {
+      if (prev.kind !== "review" || prev.drafts.length >= ASSISTED_MAX_VEHICLES) return prev;
+      const n = prev.drafts.length + 1;
+      const draft: Reviewed = {
+        title: `Vehículo ${n}`,
+        values: addedVehicle(prev.drafts[0].values),
+        notes: ["Copiamos los años, kilómetros, precio y zona del pedido: elegí marca y modelo."],
+        state: "pending",
+        added: true,
+      };
+      return { ...prev, drafts: [...prev.drafts, draft], active: n - 1 };
+    });
+  }
+
   // Every proposal saved or discarded: back to the dashboard with the new searches.
   const review = phase.kind === "review" ? phase : null;
   const done = review != null && review.drafts.every((d) => d.state !== "pending");
@@ -182,12 +202,19 @@ export function AssistedSearch({
 
   if (phase.kind === "review") {
     const single = phase.drafts.length === 1;
+    const found = phase.drafts.filter((d) => !d.added).length;
+    const canAdd = phase.drafts.length < ASSISTED_MAX_VEHICLES;
+    const addButton = canAdd ? (
+      <Button type="button" size="sm" variant="ghost" onClick={addVehicle}>
+        <Plus aria-hidden /> Agregar otro vehículo
+      </Button>
+    ) : null;
     return (
       <div className="space-y-4">
         <RequestSummary text={text} onEdit={() => setPhase({ kind: "idle" })}>
-          {single
+          {found === 1
             ? "Encontramos este vehículo en tu pedido. Revisá los filtros y corregí lo que haga falta antes de guardar."
-            : `Encontramos ${phase.drafts.length} vehículos: cada uno es una búsqueda. Revisalos y guardá los que quieras.`}
+            : `Encontramos ${found} vehículos: cada uno es una búsqueda. Revisalos y guardá los que quieras.`}
         </RequestSummary>
 
         {!single ? (
@@ -206,8 +233,11 @@ export function AssistedSearch({
                 {i + 1}. {d.title}
               </Button>
             ))}
+            {addButton}
           </nav>
-        ) : null}
+        ) : (
+          <div>{addButton}</div>
+        )}
 
         {phase.drafts.map((d, i) => (
           <section

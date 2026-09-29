@@ -147,6 +147,17 @@ export function draftToValues(draft: AssistedDraft, base: SearchValues): { value
 }
 
 /** "Ford Fiesta Titanium", or a placeholder when the catalog didn't resolve it. */
+/** At most this many vehicles per request, the LLM's and the ones the user adds (worker: MAX_VEHICLES). */
+export const ASSISTED_MAX_VEHICLES = 5;
+
+/**
+ * A vehicle the user adds on the review screen: the request's shared filters
+ * (years, km, price, zone, alerts) from `from`, and the make, model and trim to pick.
+ */
+export function addedVehicle(from: SearchValues): SearchValues {
+  return { ...from, name: "", make: "", model: "", trim: "", trim_strict: false };
+}
+
 export function draftTitle(draft: AssistedDraft, index: number): string {
   const { make, model, trim } = draft.values;
   return [make, model, trim].filter(Boolean).join(" ") || `Vehículo ${index + 1}`;

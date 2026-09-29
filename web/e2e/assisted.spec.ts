@@ -62,7 +62,7 @@ test("F5: dos vehículos en un pedido, revisados y guardados", async ({ page }, 
   await ask(page, TWO_VEHICLES);
 
   const vehicles = page.getByRole("navigation", { name: "Vehículos del pedido" });
-  await expect(vehicles.getByRole("button")).toHaveText(["1. Ford Fiesta Titanium", "2. Volkswagen Polo Highline"]);
+  await expect(vehicles.getByRole("button", { name: /^\d\./ })).toHaveText(["1. Ford Fiesta Titanium", "2. Volkswagen Polo Highline"]);
   await expectNoHorizontalScroll(page);
 
   // The first proposal, pre-filled and editable: the user tightens the years.
@@ -106,6 +106,38 @@ test("F5: dos vehículos en un pedido, revisados y guardados", async ({ page }, 
   );
   expect(job.status).toBe("done");
   expect(job.latency_ms).not.toBeNull();
+});
+
+test("F5: sumar a mano otro vehículo al pedido", async ({ page }, testInfo) => {
+  const email = `assisted-add-${testInfo.project.name}-${Date.now()}@${E2E_EMAIL_DOMAIN}`;
+  await signIn(page, email);
+  await ask(page, "Busco Fiesta Titanium manual 2016 a 2018 hasta USD 11.500 y menos de 150.000 km");
+  await page.getByRole("button", { name: "Agregar otro vehículo" }).click();
+
+  const vehicles = page.getByRole("navigation", { name: "Vehículos del pedido" });
+  await expect(vehicles.getByRole("button", { name: /^\d\./ })).toHaveText(["1. Ford Fiesta Titanium", "2. Vehículo 2"]);
+  const added = page.getByRole("region", { name: "Vehículo 2 de 2: Vehículo 2" });
+  await expect(added.getByLabel("Marca")).toHaveValue("");
+  await expect(added.getByLabel("Año desde")).toHaveValue("2016");
+  await expect(added.getByLabel("Precio máximo")).toHaveValue("11.500");
+  await added.getByLabel("Marca").selectOption("Volkswagen");
+  await added.getByLabel("Modelo").selectOption("Gol Trend");
+  await added.getByRole("button", { name: "Crear búsqueda" }).click();
+  await expect(added).toBeHidden();
+
+  const fiesta = page.getByRole("region", { name: "Vehículo 1 de 2: Ford Fiesta Titanium" });
+  await fiesta.getByRole("button", { name: "Crear búsqueda" }).click();
+  await expect(page).toHaveURL(/\/app$/);
+
+  const saved = await query<{ filters: Record<string, unknown> }>(
+    `select sp.filters from public.search_profiles sp
+       join public.profiles p on p.id = sp.user_id where p.email = $1 order by sp.id`,
+    [email],
+  );
+  expect(saved.map((s) => s.filters)).toEqual([
+    expect.objectContaining({ make: "Volkswagen", model: "Gol Trend", year_min: 2016, year_max: 2018, km_max: 150000 }),
+    expect.objectContaining({ make: "Ford", model: "Fiesta", year_min: 2016, year_max: 2018 }),
+  ]);
 });
 
 test("F5: si el LLM falla, el formulario estructurado vacío", async ({ page }, testInfo) => {
