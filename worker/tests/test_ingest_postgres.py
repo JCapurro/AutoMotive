@@ -26,7 +26,7 @@ from notifications.channels.web import WebChannel
 from notifications.links import Links
 from notifications.ops import SourceAlerts
 from notifications.service import Notifier
-from db.repos import raw_pages
+from db.repos import listings as repo_listings, raw_pages
 from llm.schemas import ListingFacts
 from pipeline import crawl, enrich, rematch, retention, scheduler, watchlist
 from pipeline.ingest import ingest
@@ -670,6 +670,70 @@ class WatchlistTests(IngestCase):
         self.assertEqual([e.kind for e in gone.events], ["listing_gone"])
         self.assertEqual((await self.listing("1"))["status"], "gone")
         self.assertEqual((await watchlist.refresh_watchlist()).events, [])   # gone: not watched
+
+
+class MatchedRecheckTests(IngestCase):
+    """Listings with a match the crawl stopped seeing are checked through their detail page."""
+
+    async def asyncSetUp(self) -> None:
+        await super().asyncSetUp()
+        self.profile = await self.fiesta_alert()
+
+    async def _matched(self, external_id: str, *, level: str | None = "good", unseen_hours: int = 24,
+                       checked_hours_ago: int | None = None, enriched: bool = True, **card_kw) -> str:
+        await ingest([card(external_id, **card_kw)], geocode=None)
+        async with db.connection() as cx:
+            await cx.execute(
+                "UPDATE listings SET last_seen_at = now() - make_interval(hours => %s), "
+                "       enriched_at = CASE WHEN %s THEN now() - interval '2 days' END, "
+                "       detail_checked_at = now() - make_interval(hours => %s) "
+                " WHERE external_id = %s", (unseen_hours, enriched, checked_hours_ago, external_id))
+            if level:
+                await cx.execute(
+                    "INSERT INTO matches (search_profile_id, listing_id, score, level, score_breakdown, "
+                    "                     match_reasons, scoring_version) "
+                    "SELECT %s, id, 75, %s, '{}', '[]', %s FROM listings WHERE external_id = %s",
+                    (self.profile, level, SCORING_VERSION, external_id))
+        return f"https://example.test/mercadolibre/{external_id}"
+
+    async def test_only_matched_listings_the_crawl_stopped_seeing_are_queued(self):
+        await self._matched("1")
+        await self._matched("2", unseen_hours=1)             # still in the search results
+        await self._matched("3", level="low")
+        await self._matched("4", level=None)
+        await self._matched("5", checked_hours_ago=2)        # checked a moment ago
+        await self._matched("6", checked_hours_ago=20)       # checked yesterday: due again
+        await self._matched("7", enriched=False)             # enrichment_queue's
+
+        queue = await watchlist.matched_queue()
+
+        self.assertEqual([r["external_id"] for r in queue], ["1", "6"])
+        capped = await repo_listings.matched_recheck_queue(unseen_hours=6, recheck_hours=12,
+                                                           max_age_days=60, per_source=1)
+        self.assertEqual([r["external_id"] for r in capped], ["1"])      # never checked first
+
+    async def test_price_drop_and_end_of_ad_come_from_the_detail_page(self):
+        long_ago = int((datetime.now(timezone.utc) - timedelta(days=45)).timestamp())
+        url = await self._matched("1", published_at=long_ago)
+        FakeSource.details[url] = ListingDetail(url, listing=card("1", precio=9_000.0,
+                                                                   published_at=long_ago))
+
+        result = await watchlist.refresh_watchlist()
+        again = await watchlist.refresh_watchlist()          # checked: waits recheck_hours
+
+        # Not saved nor followed: no "lleva X días".
+        self.assertEqual([e.kind for e in result.events], ["listing_updated", "price_drop"])
+        self.assertEqual(again.events, [])
+        self.assertEqual(await self.snapshots("1"), ["new", "price"])
+        self.assertEqual(await self.rows("SELECT * FROM pipeline_errors"), [])
+
+        async with db.connection() as cx:
+            await cx.execute("UPDATE listings SET last_seen_at = now() - interval '1 day', "
+                             "       detail_checked_at = now() - interval '1 day'")
+        FakeSource.details[url] = ListingDetail(url, gone=True, gone_reason="404")
+        gone = await watchlist.refresh_watchlist()
+        self.assertEqual([e.kind for e in gone.events], ["listing_gone"])
+        self.assertEqual((await self.listing("1"))["status"], "gone")
 
 
 if __name__ == "__main__":

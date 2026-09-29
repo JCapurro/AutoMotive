@@ -367,6 +367,8 @@ Que un aviso no aparezca en el listado **no prueba** que se haya ido: solo se le
 
 Además, cuando la publicación lleva X días publicada (`app_config.watchlist_stale_days`), emite un evento informativo.
 
+La misma pasada revisa los listings con un match (nivel mayor que `low`) que el crawl dejó de ver: pasaron las páginas que lee la búsqueda, así que solo la ficha dice si bajaron de precio o terminaron. Entran si no se vieron en `unseen_hours`, a lo sumo cada `recheck_hours`, con hasta `per_source` por pasada y fuente, y solo los vistos por primera vez hace menos de `max_age_days` (`app_config.watchlist_matched`). No emiten el evento "lleva X días".
+
 ### 5.7 Bootstrap (evita el diluvio inicial; se conserva la idea actual)
 
 - **Profile nuevo o editado:** la web marca `rematch_requested_at`. El worker corre el matching contra `listings` activos de los últimos 30 días y crea `matches` con `is_backfill = true`, que **no se notifican**. El usuario ve resultados en la web enseguida ("first value", §36).
@@ -1046,6 +1048,7 @@ F8 separa la captura de la demanda. Por fuente, se recorre el catálogo de usado
 | `alerts_max_per_user_day` | `10` | — |
 | `digest_hour` | `"20:00"` (ART) | — |
 | `watchlist_stale_days` | `30` | — |
+| `watchlist_matched` | `{enabled:true, unseen_hours:6, recheck_hours:12, max_age_days:60, per_source:20}` | — |
 | `collector_failure_alert_after` | `3` | — |
 | `plan_limits` | ver sección 12 | — |
 | — (`sources.crawl_interval_seconds`) | ver sección 5.1 | `ALERT_RESCRAPE_INTERVAL_SECONDS` |

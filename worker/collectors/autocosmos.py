@@ -8,8 +8,16 @@ because the site's server-side filters aren't always honored via URL params.
 Many dealer ads show only the down payment ("Anticipo") and the installment:
 those cards are kept but flagged as partial prices, so they never feed
 comparables or opportunities.
+
+The site has no newest-first order (only relevance, price, cuota and
+anticipo), so a new ad can land on any page: search() walks every page of
+the model (48 cards each, `?pidx=N`, `<link rel="next">` while there are
+more). The site is slow and answers 503 now and then, so each page is
+retried before the run gives up.
 """
 from __future__ import annotations
+import asyncio
+import logging
 import re
 import urllib.parse
 
@@ -18,6 +26,11 @@ from bs4 import BeautifulSoup
 
 from .base import BaseScraper, Listing, ListingDetail
 from ._http import HEADERS, Page, dedupe, fetch_page, multiline_text, soup, text_of, to_int
+
+
+log = logging.getLogger("collectors.autocosmos")
+
+_NEXT_PAGE_RE = re.compile(r"<link[^>]*\brel=['\"]?next\b", re.IGNORECASE)
 
 
 def _slug(s: str) -> str:
@@ -57,7 +70,13 @@ def _price(container, block: str) -> tuple[float | None, str | None, str | None]
 class AutoCosmosScraper(BaseScraper):
     name = "autocosmos"
     BASE = "https://www.autocosmos.com.ar"
-    MAX_PAGES = 2
+    MAX_PAGES = 20             # 960 cards: a safety cap, no model comes close today
+    PAGE_PAUSE_SECONDS = 2.0
+    RETRIES = 2
+    RETRY_PAUSE_SECONDS = 10.0
+    # Pages take up to a minute to come back when the site is loaded.
+    TIMEOUT = httpx.Timeout(60.0, connect=15.0)
+    transport: httpx.AsyncBaseTransport | None = None     # tests
 
     def _build_url(self, f: dict, page: int = 1) -> str:
         marca = _slug(f.get("marca", "")) if f.get("marca") else ""
@@ -72,7 +91,7 @@ class AutoCosmosScraper(BaseScraper):
 
         qs: dict[str, str] = {}
         if page > 1:
-            qs["page"] = str(page)
+            qs["pidx"] = str(page)
         if f.get("anio_min"):
             qs["yearMin"] = str(int(f["anio_min"]))
         if f.get("anio_max"):
@@ -212,34 +231,56 @@ class AutoCosmosScraper(BaseScraper):
             price_partial_reason=partial,
         ))
 
+    async def _get(self, cx: httpx.AsyncClient, url: str) -> httpx.Response:
+        """GET, retried on a network error or a 5xx; the last answer or error wins."""
+        for attempt in range(self.RETRIES + 1):
+            if attempt:
+                await asyncio.sleep(self.RETRY_PAUSE_SECONDS * attempt)
+            try:
+                r = await cx.get(url)
+            except httpx.TransportError:
+                if attempt == self.RETRIES:
+                    raise
+                continue
+            if r.status_code < 500 or attempt == self.RETRIES:
+                return r
+        raise AssertionError("unreachable")
+
     async def search(self, filters: dict) -> list[Listing]:
         out: list[Listing] = []
         seen: set[str] = set()
         async with httpx.AsyncClient(
-            timeout=20, headers=HEADERS, follow_redirects=True, verify=True
+            timeout=self.TIMEOUT, headers=HEADERS, follow_redirects=True, verify=True,
+            transport=self.transport,
         ) as cx:
             for p in range(1, self.MAX_PAGES + 1):
+                if p > 1:
+                    await asyncio.sleep(self.PAGE_PAUSE_SECONDS)
                 url = self._build_url(filters, page=p)
                 try:
-                    r = await cx.get(url)
+                    r = await self._get(cx, url)
                 except httpx.HTTPError:
                     if p == 1:
                         raise
+                    log.warning("autocosmos: %s failed, keeping the %d cards read", url, len(seen))
                     break
                 if r.status_code != 200:
                     if p == 1 and r.status_code >= 500:
                         r.raise_for_status()
+                    if p > 1:
+                        log.warning("autocosmos: %s answered %d, keeping the %d cards read",
+                                    url, r.status_code, len(seen))
                     break
-                listings = self.parse_search(r.text)
+                listings = [l for l in self.parse_search(r.text) if l.listing_id not in seen]
                 if not listings:
                     break
                 for listing in listings:
-                    if listing.listing_id in seen:
-                        continue
                     seen.add(listing.listing_id)
                     self.annotate_partial_price(listing)
                     if self.matches_filters(listing, filters):
                         out.append(listing)
+                if not _NEXT_PAGE_RE.search(r.text):
+                    break
         return out
 
     async def fetch_detail_page(self, url: str) -> Page:
