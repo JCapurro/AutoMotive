@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Loader2, PenLine, RotateCcw, Sparkles, Trash2 } from "lucide-react";
+import { Check, Loader2, PenLine, Plus, RotateCcw, Sparkles, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useState, useTransition } from "react";
@@ -17,8 +17,10 @@ import {
   ASSISTED_DEADLINE_MS,
   ASSISTED_EXAMPLES,
   ASSISTED_MAX_CHARS,
+  ASSISTED_MAX_VEHICLES,
   ASSISTED_POLL_MS,
   AssistedOutput,
+  addedVehicle,
   draftTitle,
   draftToValues,
 } from "@/lib/assisted";
@@ -36,13 +38,15 @@ type Reviewed = {
   notes: string[];
   state: "pending" | "saved" | "discarded";
   savedId?: number;
+  /** Added by the user on the review screen, not found in the text. */
+  added?: boolean;
 };
 
 type Phase =
   | { kind: "idle" }
   | { kind: "waiting"; jobId: number }
   | { kind: "review"; jobId: number; drafts: Reviewed[]; active: number }
-  | { kind: "failed"; jobId: number | null; reason: "error" | "empty" | "manual" };
+  | { kind: "failed"; jobId: number | null; reason: "error" | "empty" | "manual" | "unavailable" };
 
 type JobRow = { status: string; output: unknown };
 
@@ -51,6 +55,7 @@ const FALLBACK_TITLE = {
   error: "No pude interpretarlo, completá los filtros",
   empty: "No encontramos un vehículo en tu pedido, completá los filtros",
   manual: "Completá los filtros",
+  unavailable: "El intérprete no está disponible ahora, completá los filtros",
 } as const;
 
 /**
@@ -153,6 +158,7 @@ export function AssistedSearch({
     startSending(async () => {
       const result = await startAssisted(text);
       if (result.jobId != null) setPhase({ kind: "waiting", jobId: result.jobId });
+      else if (result.unavailable) setPhase({ kind: "failed", jobId: null, reason: "unavailable" });
       else setError(result.error ?? "No pudimos enviar tu búsqueda.");
     });
   }
@@ -163,6 +169,22 @@ export function AssistedSearch({
       const drafts = prev.drafts.map((d, i) => (i === index ? { ...d, ...patch } : d));
       const next = drafts.findIndex((d) => d.state === "pending");
       return { ...prev, drafts, active: patch.state && patch.state !== "pending" && next >= 0 ? next : prev.active };
+    });
+  }
+
+  // Another vehicle for the same request: the first proposal's shared filters, make and model to pick.
+  function addVehicle() {
+    setPhase((prev) => {
+      if (prev.kind !== "review" || prev.drafts.length >= ASSISTED_MAX_VEHICLES) return prev;
+      const n = prev.drafts.length + 1;
+      const draft: Reviewed = {
+        title: `Vehículo ${n}`,
+        values: addedVehicle(prev.drafts[0].values),
+        notes: ["Copiamos los años, kilómetros, precio y zona del pedido: elegí marca y modelo."],
+        state: "pending",
+        added: true,
+      };
+      return { ...prev, drafts: [...prev.drafts, draft], active: n - 1 };
     });
   }
 
@@ -180,12 +202,19 @@ export function AssistedSearch({
 
   if (phase.kind === "review") {
     const single = phase.drafts.length === 1;
+    const found = phase.drafts.filter((d) => !d.added).length;
+    const canAdd = phase.drafts.length < ASSISTED_MAX_VEHICLES;
+    const addButton = canAdd ? (
+      <Button type="button" size="sm" variant="ghost" onClick={addVehicle}>
+        <Plus aria-hidden /> Agregar otro vehículo
+      </Button>
+    ) : null;
     return (
       <div className="space-y-4">
         <RequestSummary text={text} onEdit={() => setPhase({ kind: "idle" })}>
-          {single
+          {found === 1
             ? "Encontramos este vehículo en tu pedido. Revisá los filtros y corregí lo que haga falta antes de guardar."
-            : `Encontramos ${phase.drafts.length} vehículos: cada uno es una búsqueda. Revisalos y guardá los que quieras.`}
+            : `Encontramos ${found} vehículos: cada uno es una búsqueda. Revisalos y guardá los que quieras.`}
         </RequestSummary>
 
         {!single ? (
@@ -204,8 +233,11 @@ export function AssistedSearch({
                 {i + 1}. {d.title}
               </Button>
             ))}
+            {addButton}
           </nav>
-        ) : null}
+        ) : (
+          <div>{addButton}</div>
+        )}
 
         {phase.drafts.map((d, i) => (
           <section

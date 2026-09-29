@@ -17,6 +17,20 @@ test.describe.configure({ mode: "serial" });
 // A golden phrase with a recorded answer (worker/tests/fixtures/llm/).
 const TWO_VEHICLES = "Fiesta Titanium o Polo Highline, 2017 en adelante, hasta 12 mil dólares";
 
+/** The web only queues a job if the worker beat recently; `tools.llm_jobs --replay` doesn't beat. */
+async function setHeartbeat(ago: string) {
+  await query(
+    `insert into public.worker_heartbeat (id, started_at, beat_at, host, pid)
+     values (1, now() - $1::interval, now() - $1::interval, 'e2e', 0)
+     on conflict (id) do update set beat_at = excluded.beat_at`,
+    [ago],
+  );
+}
+
+test.beforeEach(async () => {
+  await setHeartbeat("0 seconds");
+});
+
 async function signIn(page: Page, email: string) {
   const since = new Date();
   await page.goto("/login?next=/app/searches/new");
@@ -48,7 +62,7 @@ test("F5: dos vehículos en un pedido, revisados y guardados", async ({ page }, 
   await ask(page, TWO_VEHICLES);
 
   const vehicles = page.getByRole("navigation", { name: "Vehículos del pedido" });
-  await expect(vehicles.getByRole("button")).toHaveText(["1. Ford Fiesta Titanium", "2. Volkswagen Polo Highline"]);
+  await expect(vehicles.getByRole("button", { name: /^\d\./ })).toHaveText(["1. Ford Fiesta Titanium", "2. Volkswagen Polo Highline"]);
   await expectNoHorizontalScroll(page);
 
   // The first proposal, pre-filled and editable: the user tightens the years.
@@ -94,6 +108,38 @@ test("F5: dos vehículos en un pedido, revisados y guardados", async ({ page }, 
   expect(job.latency_ms).not.toBeNull();
 });
 
+test("F5: sumar a mano otro vehículo al pedido", async ({ page }, testInfo) => {
+  const email = `assisted-add-${testInfo.project.name}-${Date.now()}@${E2E_EMAIL_DOMAIN}`;
+  await signIn(page, email);
+  await ask(page, "Busco Fiesta Titanium manual 2016 a 2018 hasta USD 11.500 y menos de 150.000 km");
+  await page.getByRole("button", { name: "Agregar otro vehículo" }).click();
+
+  const vehicles = page.getByRole("navigation", { name: "Vehículos del pedido" });
+  await expect(vehicles.getByRole("button", { name: /^\d\./ })).toHaveText(["1. Ford Fiesta Titanium", "2. Vehículo 2"]);
+  const added = page.getByRole("region", { name: "Vehículo 2 de 2: Vehículo 2" });
+  await expect(added.getByLabel("Marca")).toHaveValue("");
+  await expect(added.getByLabel("Año desde")).toHaveValue("2016");
+  await expect(added.getByLabel("Precio máximo")).toHaveValue("11.500");
+  await added.getByLabel("Marca").selectOption("Volkswagen");
+  await added.getByLabel("Modelo").selectOption("Gol Trend");
+  await added.getByRole("button", { name: "Crear búsqueda" }).click();
+  await expect(added).toBeHidden();
+
+  const fiesta = page.getByRole("region", { name: "Vehículo 1 de 2: Ford Fiesta Titanium" });
+  await fiesta.getByRole("button", { name: "Crear búsqueda" }).click();
+  await expect(page).toHaveURL(/\/app$/);
+
+  const saved = await query<{ filters: Record<string, unknown> }>(
+    `select sp.filters from public.search_profiles sp
+       join public.profiles p on p.id = sp.user_id where p.email = $1 order by sp.id`,
+    [email],
+  );
+  expect(saved.map((s) => s.filters)).toEqual([
+    expect.objectContaining({ make: "Volkswagen", model: "Gol Trend", year_min: 2016, year_max: 2018, km_max: 150000 }),
+    expect.objectContaining({ make: "Ford", model: "Fiesta", year_min: 2016, year_max: 2018 }),
+  ]);
+});
+
 test("F5: si el LLM falla, el formulario estructurado vacío", async ({ page }, testInfo) => {
   const email = `assisted-fail-${testInfo.project.name}-${Date.now()}@${E2E_EMAIL_DOMAIN}`;
   await signIn(page, email);
@@ -118,4 +164,21 @@ test("F5: si el LLM falla, el formulario estructurado vacío", async ({ page }, 
     [email],
   );
   expect(job.status).toBe("failed");
+});
+
+test("F5: con el worker caído, el formulario sin encolar nada", async ({ page }, testInfo) => {
+  const email = `assisted-down-${testInfo.project.name}-${Date.now()}@${E2E_EMAIL_DOMAIN}`;
+  await signIn(page, email);
+  await setHeartbeat("1 hour");
+  await page.getByRole("tab", { name: "Asistido" }).click();
+  await page.getByLabel("¿Qué auto buscás?").fill(TWO_VEHICLES);
+  await page.getByRole("button", { name: "Interpretar" }).click();
+
+  await expect(page.getByTestId("assisted-fallback")).toContainText("El intérprete no está disponible ahora");
+  await expect(page.getByLabel("Marca")).toHaveValue("");
+  const jobs = await query(
+    `select j.id from public.llm_jobs j join public.profiles p on p.id = j.user_id where p.email = $1`,
+    [email],
+  );
+  expect(jobs).toEqual([]);
 });

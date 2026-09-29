@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { AssistedOutput, draftTitle, draftToValues, placeFromText } from "./assisted";
+import { AssistedOutput, addedVehicle, draftTitle, draftToValues, placeFromText } from "./assisted";
 import { SearchInput, type SearchValues, toFilters } from "./search-form";
 
 // What the worker writes to llm_jobs.output, kept current by
@@ -80,6 +80,18 @@ describe("draft → structured form", () => {
     const { values, notes } = draftToValues(draft, BASE);
     expect(values.location).toEqual(BASE.location);
     expect(notes).toEqual(["No reconocimos la zona «Ushuaia»: elegila de la lista."]);
+  });
+});
+
+describe("a vehicle the user adds on the review screen", () => {
+  it("keeps the request's shared filters and blanks the vehicle", () => {
+    const { values } = draftToValues(AssistedOutput.parse(WORKER_OUTPUT).drafts[0], BASE);
+    const added = addedVehicle(values);
+    expect(added).toMatchObject({ make: "", model: "", trim: "", trim_strict: false, name: "" });
+    expect(added.year_min).toBe(values.year_min);
+    expect(added.price_max).toBe(values.price_max);
+    expect(added.location).toEqual(values.location);
+    expect(added.sources).toEqual(values.sources);
   });
 });
 
