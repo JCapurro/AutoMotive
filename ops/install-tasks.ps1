@@ -4,12 +4,12 @@
 
     powershell -ExecutionPolicy Bypass -File ops\install-tasks.ps1 -BackupDest "$env:OneDrive\AutoMotive\backups"
 
-  Tasks (all under \AutoMotive\):
-    Supabase   at logon: Docker Desktop + npx supabase start
+  The database is the hosted Supabase project (DATABASE_URL in .env): nothing
+  of Supabase runs on this PC. Tasks (all under \AutoMotive\):
     Web        at logon: next start on 127.0.0.1:3000 (supervised, restarts)
     Worker     at logon: python main.py (supervised, restarts)
     Watchdog   every 5 min: python -m tools.watchdog (Telegram to the admin)
-    Backup     daily 03:30: ops\backup.ps1
+    Backup     daily 03:30: ops\backup.ps1 (pg_dump of the hosted database, via Docker)
   Remove them with ops\uninstall-tasks.ps1.
 #>
 param(
@@ -44,7 +44,6 @@ $short = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes
 $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited
 
 $tasks = @(
-  @{ Name = "Supabase"; Action = (PsTaskAction "start-supabase.ps1"); Trigger = $logon; Settings = $short },
   @{ Name = "Web"; Trigger = $logon; Settings = $longRunning;
      Action = (PsTaskAction "run-forever.ps1" "-Name web -WorkDir web -Command `"npm run start -- --hostname 127.0.0.1 --port 3000`"") },
   @{ Name = "Worker"; Trigger = $logon; Settings = $longRunning;
@@ -56,6 +55,8 @@ $tasks = @(
   @{ Name = "Backup"; Settings = $short; Trigger = (New-ScheduledTaskTrigger -Daily -At "03:30");
      Action = (PsTaskAction "backup.ps1" "-Dest `"$BackupDest`"") }
 )
+# Before the hosted database, a Supabase task started the local stack at logon.
+Unregister-ScheduledTask -TaskPath $folder -TaskName "Supabase" -Confirm:$false -ErrorAction SilentlyContinue
 foreach ($t in $tasks) {
   Register-ScheduledTask -TaskPath $folder -TaskName $t.Name -Action $t.Action -Trigger $t.Trigger `
     -Settings $t.Settings -Principal $principal -Force | Out-Null
