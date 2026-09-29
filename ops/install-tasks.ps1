@@ -29,7 +29,8 @@ if (-not $SkipBuild) {
   Pop-Location
 }
 
-function PS([string]$script, [string]$arguments = "") {
+# Not "PS": aliases beat functions, and `ps` is Get-Process.
+function PsTaskAction([string]$script, [string]$arguments = "") {
   New-ScheduledTaskAction -Execute "powershell.exe" -WorkingDirectory $root `
     -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$(Join-Path $PSScriptRoot $script)`" $arguments"
 }
@@ -43,17 +44,17 @@ $short = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes
 $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited
 
 $tasks = @(
-  @{ Name = "Supabase"; Action = (PS "start-supabase.ps1"); Trigger = $logon; Settings = $short },
+  @{ Name = "Supabase"; Action = (PsTaskAction "start-supabase.ps1"); Trigger = $logon; Settings = $short },
   @{ Name = "Web"; Trigger = $logon; Settings = $longRunning;
-     Action = (PS "run-forever.ps1" "-Name web -WorkDir web -Command `"npm run start -- --hostname 127.0.0.1 --port 3000`"") },
+     Action = (PsTaskAction "run-forever.ps1" "-Name web -WorkDir web -Command `"npm run start -- --hostname 127.0.0.1 --port 3000`"") },
   @{ Name = "Worker"; Trigger = $logon; Settings = $longRunning;
-     Action = (PS "run-forever.ps1" "-Name worker -WorkDir worker -Command `"$Python main.py`"") },
+     Action = (PsTaskAction "run-forever.ps1" "-Name worker -WorkDir worker -Command `"$Python main.py`"") },
   @{ Name = "Watchdog"; Settings = $short;
      Trigger = (New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(10) -RepetitionInterval (New-TimeSpan -Minutes 5));
      Action = (New-ScheduledTaskAction -Execute "cmd.exe" -WorkingDirectory (Join-Path $root "worker") `
                -Argument "/c $Python -m tools.watchdog >> `"$(Join-Path $root 'logs\watchdog.log')`" 2>&1") },
   @{ Name = "Backup"; Settings = $short; Trigger = (New-ScheduledTaskTrigger -Daily -At "03:30");
-     Action = (PS "backup.ps1" "-Dest `"$BackupDest`"") }
+     Action = (PsTaskAction "backup.ps1" "-Dest `"$BackupDest`"") }
 )
 foreach ($t in $tasks) {
   Register-ScheduledTask -TaskPath $folder -TaskName $t.Name -Action $t.Action -Trigger $t.Trigger `
