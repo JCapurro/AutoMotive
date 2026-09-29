@@ -224,3 +224,28 @@ async def watchlist_queue(*, min_hours_between_checks: int = 20) -> list[dict]:
             "                      ('interested', 'contacted', 'visit_scheduled'))) "
             " ORDER BY l.source, l.detail_checked_at NULLS FIRST, l.id",
             (min_hours_between_checks,))).fetchall()
+
+
+async def matched_recheck_queue(*, unseen_hours: int, recheck_hours: int, max_age_days: int,
+                                per_source: int) -> list[dict]:
+    """Active listings with a match (above 'low') that the crawl stopped
+    seeing: past the pages a search reads, only their detail page tells a
+    price drop or the end of the ad (sección 5.6). Per source, the ones
+    checked longest ago first; enrichment_queue takes the never enriched."""
+    async with connection() as cx:
+        return await (await cx.execute(
+            "SELECT * FROM ("
+            "  SELECT l.id, l.source, l.external_id, l.url, l.make, l.model, l.published_at, "
+            "         l.first_seen_at, "
+            "         row_number() OVER (PARTITION BY l.source "
+            "           ORDER BY l.detail_checked_at NULLS FIRST, l.id) AS n "
+            "    FROM listings l "
+            "   WHERE l.status = 'active' AND l.enriched_at IS NOT NULL "
+            "     AND l.last_seen_at < now() - make_interval(hours => %s) "
+            "     AND (l.detail_checked_at IS NULL "
+            "          OR l.detail_checked_at < now() - make_interval(hours => %s)) "
+            "     AND l.first_seen_at >= now() - make_interval(days => %s) "
+            "     AND EXISTS (SELECT 1 FROM matches m "
+            "                  WHERE m.listing_id = l.id AND m.level <> 'low')) q "
+            "WHERE n <= %s ORDER BY source, n",
+            (unseen_hours, recheck_hours, max_age_days, per_source))).fetchall()

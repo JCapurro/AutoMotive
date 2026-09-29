@@ -26,6 +26,7 @@ insert into public.app_config (key, value) values
   ('alerts_max_per_user_day',       '10'),
   ('digest_hour',                   '"20:00"'),
   ('watchlist_stale_days',          '30'),
+  ('watchlist_matched',             '{"enabled": true, "unseen_hours": 6, "recheck_hours": 12, "max_age_days": 60, "per_source": 20}'),
   ('collector_failure_alert_after', '3'),
   ('plan_limits', '{
      "enforced": false,

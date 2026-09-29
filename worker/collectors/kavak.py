@@ -1,7 +1,9 @@
 """Kavak Argentina scraper.
 
 Kavak is a SPA — search results render via JS only, so search uses the
-shared headless browser. Each card links to `/ar/venta/{slug}` (marca,
+shared headless browser, scrolling until no more cards load: the model page
+lists every car of the model, whatever its order, so reading all of it
+misses no new arrival. Each card links to `/ar/venta/{slug}` (marca,
 modelo, version, year) and carries the car's numeric id in `data-testid`;
 the slug is shared by every car of the same version and year, so the id is
 the listing id and the detail URL is `/ar/venta/{slug}?id={id}`.
@@ -27,6 +29,7 @@ _KM_RE = re.compile(r"([\d\.\,]+)\s*km", re.IGNORECASE)
 _YEAR_RE = re.compile(r"\b(19[8-9]\d|20[0-3]\d)\b")
 _PRICE_RE = re.compile(r"(US\$|u\$s|\$)\s*([\d\.\,]+)", re.IGNORECASE)
 _TESTID_RE = re.compile(r"(\d{4,})$")
+_CARD_SELECTOR = "a[data-testid][href*='/ar/venta/']"
 
 
 def _slug(s: str) -> str:
@@ -106,7 +109,7 @@ def _parse_card(a) -> Listing | None:
 def parse_search(html: str) -> list[Listing]:
     doc = BeautifulSoup(html, "lxml")
     out: dict[str, Listing] = {}
-    for a in doc.select("a[data-testid][href*='/ar/venta/']"):
+    for a in doc.select(_CARD_SELECTOR):
         listing = _parse_card(a)
         if listing and listing.listing_id not in out:
             out[listing.listing_id] = listing
@@ -169,6 +172,7 @@ def parse_detail(html: str, url: str, status: int = 200) -> ListingDetail:
 class KavakScraper(BaseScraper):
     name = "kavak"
     BASE = "https://www.kavak.com/ar/usados"
+    MAX_SCROLLS = 30
 
     @staticmethod
     def matches_filters(item: Listing, f: dict) -> bool:
@@ -196,10 +200,14 @@ class KavakScraper(BaseScraper):
             page = await ctx.new_page()
             try:
                 await page.goto(url, timeout=45_000, wait_until="domcontentloaded")
-                # Kavak lazy-loads via scroll
-                for _ in range(4):
+                # Kavak lazy-loads via scroll: stop once two scrolls in a row add no card.
+                counts: list[int] = []
+                for _ in range(self.MAX_SCROLLS):
                     await page.mouse.wheel(0, 4000)
                     await page.wait_for_timeout(900)
+                    counts.append(await page.locator(_CARD_SELECTOR).count())
+                    if len(counts) >= 4 and counts[-1] == counts[-2] == counts[-3]:
+                        break
                 html = await page.content()
             finally:
                 await page.close()
