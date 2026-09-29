@@ -1,6 +1,6 @@
 <#
   Deploys a new version on the pilot PC (F7, punto 8), from the repo root after
-  `git pull`: migrations, Python and web dependencies, web build, and a restart
+  `git pull`: migrations (to the hosted Supabase database), Python and web dependencies, web build, and a restart
   of the Web and Worker tasks.
 
     powershell -ExecutionPolicy Bypass -File ops\update.ps1
@@ -13,8 +13,11 @@ Set-Location $root
 
 Write-Output "1/4 backup previo"
 & (Join-Path $PSScriptRoot "backup.ps1")
-Write-Output "2/4 migraciones"
-cmd /c "npx supabase migration up"
+Write-Output "2/4 migraciones (base de Supabase en la nube)"
+$line = Get-Content (Join-Path $root ".env") | Where-Object { $_ -match '^DATABASE_URL=' } | Select-Object -First 1
+if (-not $line) { throw "falta DATABASE_URL en .env" }
+# Only the pending migrations; seed.sql is idempotent and never overwrites tuned values.
+cmd /c "npx supabase db push --yes --include-seed --db-url `"$($line.Substring('DATABASE_URL='.Length).Trim())`""
 if ($LASTEXITCODE -ne 0) { throw "migraciones: fallo" }
 Write-Output "3/4 dependencias y build"
 cmd /c "$Python -m pip install -q -r worker\requirements.txt"

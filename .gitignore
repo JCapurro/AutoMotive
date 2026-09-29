@@ -30,3 +30,6 @@ Thumbs.db
 
 # Local database backups (ops/backup.ps1)
 backups/
+.vercel
+.env*
+!.env.example

@@ -834,7 +834,7 @@ Las fases van en orden. Cada una deja el sistema funcionando: el bot de Telegram
 
 F0–F6 dejan el producto completo, pero todo corre en una sola PC con Supabase local: nadie de afuera puede registrarse ni recibir un magic link. F7 es lo mínimo para abrir el piloto del §51 sin perder datos ni métricas. Mientras tanto el sistema corre en local (web en `127.0.0.1:3000`, Supabase local, worker en la PC).
 
-**Estado:** hosting decidido (opción *B*, todo en la PC con Cloudflare Tunnel). El código de los 12 puntos está hecho; lo que falta son cuentas y configuración que solo puede hacer el dueño, paso a paso en [PILOT_SETUP.md](PILOT_SETUP.md):
+**Estado:** hosting decidido (opción *B*, web y worker en la PC con Cloudflare Tunnel). **Cambio del 29/09:** la base pasó a Supabase en la nube, en una organización Free (US$0; el costo de ~US$10/mes de la opción *A* era por crear el proyecto en una organización Pro): proyecto `dnqyravczgcpuowijbja`, `sa-east-1`, con migraciones y seed aplicados. El túnel solo publica la web; Auth, SMTP y claves se configuran en el dashboard y no en `config.toml`/`supabase/.env` (que quedan para el stack local de desarrollo y tests), y la tarea *Supabase* ya no existe. El backup hace `pg_dump` de la nube con Docker. El código de los 12 puntos está hecho; lo que falta son cuentas y configuración que solo puede hacer el dueño, paso a paso en [PILOT_SETUP.md](PILOT_SETUP.md):
 
 - **1–3:** `supabase/config.toml` toma la URL pública, el SMTP de Resend y claves propias del stack de `supabase/.env` (`tools/supabase_keys.py` reemplaza las claves de demo de la CLI, que con la API pública dejarían entrar a cualquiera); falta crear el túnel, el dominio y la cuenta de Resend.
 - **6:** `LLM_PROVIDER=anthropic` (`llm/anthropic_api.py`, API de Claude con structured outputs, mismo contrato); falta la API key.
@@ -842,7 +842,7 @@ F0–F6 dejan el producto completo, pero todo corre en una sola PC con Supabase 
 - **9:** Kavak, V6 y Autocosmos OK el 28/09; faltan renovar las sesiones de MercadoLibre (bloqueado) y Facebook (0 resultados).
 - **11:** Open Graph con imagen, `robots.txt` y `sitemap.xml`.
 
-La API se publica solo en `/auth`, `/rest` y `/realtime`: en el mismo puerto están pgMeta (`/pg/*`) y Storage sin autenticación.
+~~La API se publica solo en `/auth`, `/rest` y `/realtime`: en el mismo puerto están pgMeta (`/pg/*`) y Storage sin autenticación.~~ Ya no aplica: la API es la de Supabase en la nube.
 
 - **Alcance:**
   1. **Hosting (decisión abierta, bloquea 2–4 y 8).** La web y la API de Supabase tienen que ser públicas, porque el navegador habla directo con Supabase (Auth, Realtime). Opciones:
