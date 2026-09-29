@@ -22,7 +22,7 @@ from bs4 import BeautifulSoup
 from .base import BaseScraper, Listing, ListingDetail
 from ._browser import browser_context
 from ._dates import parse_relative_date
-from ._http import dedupe, fetch_rendered, json_ld_of_type, multiline_text, soup, text_of, to_int
+from ._http import Page, dedupe, fetch_rendered, json_ld_of_type, multiline_text, soup, text_of, to_int
 
 
 _PRICE_RE = re.compile(r"([\d\.\,]+)\s*(USD|U\$S|US\$|\$|ARS)", re.IGNORECASE)
@@ -215,6 +215,7 @@ class V6Scraper(BaseScraper):
                 out.append(listing)
         return out
 
-    async def fetch_detail(self, url: str) -> ListingDetail:
-        page = await fetch_rendered(url)
-        return parse_detail(page.html, url, page.status)
+    parse_detail = staticmethod(parse_detail)
+
+    async def fetch_detail_page(self, url: str) -> Page:
+        return await fetch_rendered(url)

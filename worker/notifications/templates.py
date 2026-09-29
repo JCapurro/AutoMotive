@@ -94,6 +94,16 @@ def km(listing: Mapping[str, Any]) -> str | None:
     return None if value is None else f"{copy.number(value)} km"
 
 
+CASH, FINANCEABLE = "de contado", "💳 También se puede financiar."
+
+
+def price(listing: Mapping[str, Any]) -> str:
+    """USD 10.900, or "USD 10.900 de contado" when the description says so."""
+    text = copy.money(listing.get("price"), listing.get("currency"))
+    cash = listing.get("price") is not None and listing.get("price_kind") == "cash"
+    return f"{text} {CASH}" if cash else text
+
+
 def _ts(value: Any) -> datetime | None:
     if value is None or isinstance(value, datetime):
         return value
@@ -162,7 +172,9 @@ def content(n: Notification, links: Links, now: datetime) -> Content:
                 notes=_notes(p, listing))
 
     if n.kind in ("new_match", "opportunity"):
-        c.lines += [x for x in (km(listing), copy.money(listing.get("price"), listing.get("currency"))) if x]
+        c.lines += [x for x in (km(listing), price(listing)) if x]
+        if listing.get("financing"):
+            c.notes.append(FINANCEABLE)
         if n.kind == "opportunity":
             c.subject += f" · {match.get('score')}/100"
             c.lines.append(f"Opportunity Score {match.get('score')}/100")
@@ -203,7 +215,7 @@ def _digest(n: Notification, links: Links) -> Content:
                               f" · {before} → {after} (-{pct(drop.get('drop_pct') or 0)}%)")
         if it["section"] == "gone":
             return DigestItem(vehicle(listing), url, "🚫 ")
-        extra = [x for x in (km(listing), copy.money(listing.get("price"), listing.get("currency"))) if x]
+        extra = [x for x in (km(listing), price(listing)) if x]
         prefix = f"{_level_emoji(match.get('level'))} {match.get('score')} · " if match else ""
         return DigestItem(vehicle(listing), url, prefix, "".join(f" · {x}" for x in extra))
 

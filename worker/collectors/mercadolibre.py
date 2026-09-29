@@ -20,7 +20,7 @@ import config
 from .base import BaseScraper, CollectorBlocked, Listing, ListingDetail
 from ._browser import browser_context
 from ._dates import parse_relative_date
-from ._http import dedupe, fetch_page, json_ld_of_type, multiline_text, soup, text_of, to_int
+from ._http import Page, dedupe, fetch_page, json_ld_of_type, multiline_text, soup, text_of, to_int
 
 
 log = logging.getLogger("collectors.mercadolibre")
@@ -345,11 +345,13 @@ class MercadoLibreScraper(BaseScraper):
                 await page.close()
         return out
 
-    async def fetch_detail(self, url: str) -> ListingDetail:
+    parse_detail = staticmethod(parse_detail)
+
+    async def fetch_detail_page(self, url: str) -> Page:
         page = await fetch_page(url)
         if _looks_like_login_wall(page.url, text_of(soup(page.html).body) or ""):
             raise CollectorBlocked("mercadolibre: login wall or security challenge")
-        return parse_detail(page.html, url, page.status)
+        return page
 
 
 # ------ Interactive login: `python -m collectors.mercadolibre` ------

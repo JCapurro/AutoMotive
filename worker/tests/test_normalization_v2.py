@@ -189,6 +189,48 @@ class MergeTests(unittest.TestCase):
         self.assertEqual(changes, ["price"])
         self.assertEqual((values["title"], len(values["images"])), ("Ford Fiesta Titanium Hatchback", 3))
 
+    def test_a_card_after_the_description_keeps_the_cash_price(self):
+        item = _item(precio=11_500.0, descripcion="PRECIO CONTADO U$S 10.900\nPRECIO DE LISTA U$S 11.500")
+        detail = normalize_listing(item, catalog=CATALOG, fx=FxQuote(1_000.0, "blue", "test"))
+        self.assertEqual((detail["price"], detail["price_published"], detail["price_source"]),
+                         (10_900.0, 11_500.0, "description"))
+        old = _stored(price=11_500.0, price_usd=11_500.0)
+        values, changes = merge(old, detail, detail=True)
+        self.assertEqual((values["price"], values["price_usd"], values["price_published"]),
+                         (10_900.0, 10_900.0, 11_500.0))
+        self.assertIn("description", changes)
+        self.assertNotIn("price", changes)          # the published price didn't move: no price drop
+
+        enriched = dict(old, **values, enriched_at=datetime.now(timezone.utc))
+        card = normalize_listing(_item(precio=11_500.0), catalog=CATALOG, fx=FxQuote(1_000.0, "blue", "test"))
+        values, changes = merge(enriched, card, detail=False)
+        self.assertEqual((values["price"], values["price_source"], changes), (10_900.0, "description", []))
+
+        card = normalize_listing(_item(precio=11_000.0), catalog=CATALOG, fx=FxQuote(1_000.0, "blue", "test"))
+        values, changes = merge(enriched, card, detail=False)
+        self.assertEqual((values["price"], values["price_published"], changes), (10_900.0, 11_000.0, ["price"]))
+
+    def test_the_description_clears_a_partial_price_from_the_title(self):
+        fx = FxQuote(1_000.0, "blue", "test")
+        title = "Ford Fiesta Titanium $5.000.000 y cuotas"
+        card = normalize_listing(_item(titulo=title, precio=5_000_000.0, moneda="ARS"), catalog=CATALOG, fx=fx)
+        self.assertTrue(card["price_partial"])
+        old = dict(_stored(), **{k: card[k] for k in ("price", "currency", "price_usd", "price_partial",
+                                                      "price_partial_reason", "price_published",
+                                                      "price_published_currency", "description_facts")})
+        detail = normalize_listing(_item(titulo=title, precio=5_000_000.0, moneda="ARS",
+                                         descripcion="Precio final $15.000.000"), catalog=CATALOG, fx=fx)
+        values, _ = merge(old, detail, detail=True)
+        self.assertEqual((values["price"], values["price_partial"], values["price_usd"]),
+                         (15_000_000.0, False, 15_000.0))
+
+    def test_year_and_km_come_from_the_description_when_missing(self):
+        row = normalize_listing(_item(anio=None, km=None, descripcion="Año: 2016. Km: 98.000 reales"),
+                                catalog=CATALOG)
+        self.assertEqual((row["year"], row["mileage_km"]), (2016, 98_000))
+        row = normalize_listing(_item(descripcion="Año: 2016. Km: 98.000 reales"), catalog=CATALOG)
+        self.assertEqual(row["year"], 2017)          # the published one stands; red flags compare them
+
     def test_better_resolved_make_model_is_kept(self):
         old = _stored(make="Ford", model="Fiesta", normalization_confidence=0.95)
         values, _ = merge(old, dict(old, make="Ford", model="Ka", trim=None,

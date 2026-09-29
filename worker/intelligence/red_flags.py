@@ -32,6 +32,9 @@ class RedFlag:
 _OWNERS = re.compile(r"\b(duen[oa]s?|titular(es)?|unico dueno|primer dueno|1 dueno|(unica|primera|segunda) mano)\b")
 _SERVICE = re.compile(r"\b(services?|servicios? oficial\w*|mantenimiento|service oficial)\b")
 _TIMING_BELT = re.compile(r"\b(distribucion|correa|kit de distribucion)\b")
+# km the description and the listing may disagree on before it's worth a flag.
+_KM_MISMATCH_MIN = 5_000
+_KM_MISMATCH_SHARE = 0.10
 
 
 def description_known(listing: Mapping[str, Any]) -> bool:
@@ -78,4 +81,23 @@ def red_flags(listing: Mapping[str, Any], *, diff_pct: float | None, guard: str 
 
     if listing.get("probable_repost_of"):
         flags.append(RedFlag("repost", copy.RED_FLAG["repost"], "info"))
+    flags += description_mismatches(listing)
     return flags
+
+
+def description_mismatches(listing: Mapping[str, Any]) -> list[RedFlag]:
+    """What the description states against what the listing publishes
+    (normalization/description_facts.py): another price, year or km."""
+    facts = listing.get("description_facts") or {}
+    out: list[RedFlag] = []
+    mismatch = (facts.get("price_check") or {}).get("mismatch")
+    if mismatch and mismatch.get("amount"):
+        out.append(RedFlag("price_mismatch", copy.RED_FLAG["price_mismatch"].format(
+            price=copy.money(mismatch["amount"], mismatch.get("currency"))), "info"))
+    year, stated_year = listing.get("year"), facts.get("year")
+    if year and stated_year and int(year) != int(stated_year):
+        out.append(RedFlag("year_mismatch", copy.RED_FLAG["year_mismatch"].format(year=stated_year), "info"))
+    km, stated_km = listing.get("mileage_km"), facts.get("mileage_km")
+    if km and stated_km and abs(km - stated_km) > max(_KM_MISMATCH_MIN, _KM_MISMATCH_SHARE * max(km, stated_km)):
+        out.append(RedFlag("km_mismatch", copy.RED_FLAG["km_mismatch"].format(km=copy.number(stated_km)), "info"))
+    return out

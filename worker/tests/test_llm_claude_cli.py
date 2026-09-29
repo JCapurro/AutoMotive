@@ -193,11 +193,15 @@ def test_no_retry_when_the_budget_is_spent():
 
 def test_optional_tasks_use_their_own_schema():
     facts = {"transmission": None, "fuel": "gnc", "single_owner": True, "service_history": None,
-             "timing_belt_changed": True, "accepts_trade_in": None, "financing": False, "damage_mentioned": None}
+             "timing_belt_changed": True, "accepts_trade_in": None, "financing": False, "damage_mentioned": None,
+             "cash_price": 10900, "list_price": None, "down_payment": None, "installment_amount": None,
+             "installment_count": None, "price_currency": "USD", "published_price_kind": None,
+             "mileage_km": 90000, "year": None}
     runner = FakeRunner(envelope(facts), envelope({"text": "¡Hola! ¿Lo seguís teniendo?"}))
     p = provider(runner)
     got = asyncio.run(p.extract_listing_facts("Gol Trend GNC", "Único dueño, distribución hecha."))
     assert got.single_owner and got.timing_belt_changed and got.fuel == "gnc"
+    assert (got.cash_price, got.price_currency, got.mileage_km) == (10900, "USD", 90000)
     assert asyncio.run(p.polish_questions(["¿Lo seguís teniendo?"], {"title": "Gol Trend"})).startswith("¡Hola!")
     assert "<publicacion>" in runner.calls[0][1] and "<preguntas>" in runner.calls[1][1]
 

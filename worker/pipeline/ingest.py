@@ -14,6 +14,13 @@ Cards and detail pages disagree on details (Kavak's card title has no body
 type, the detail's does). So that a listing doesn't flip between the two on
 every crawl, once a listing is enriched only fetch_detail() rewrites its
 descriptive fields; cards keep refreshing price and mileage.
+
+Prices (normalization v3): cards and detail pages report the *published*
+price (price_published); the effective one (price) is re-resolved on every
+merge against the stored description facts, so a card showing the list
+price doesn't undo the cash price a detail page's description gave. The
+'price' change kind, snapshots and price drops follow the published price:
+what the seller moved, not how we read the text.
 """
 from __future__ import annotations
 
@@ -29,6 +36,7 @@ from db.repos import listings as repo
 from db.repos.catalog import load_models
 from db.repos.fx import quote_for_today
 from db.repos.runs import log_error
+from normalization.description_facts import DescriptionFacts, resolve_price
 from normalization.geo import geocode_location
 from normalization.listing import Target, attrs_hash, fingerprint, normalize_listing
 
@@ -107,6 +115,49 @@ def _same_number(a: Any, b: Any) -> bool:
     return math.isclose(float(a), float(b), abs_tol=0.005)
 
 
+def _published(row: dict[str, Any]) -> tuple[float | None, str | None]:
+    """The source's own price. Rows stored before normalization v3 (or by a
+    worker that predates it, and tests' hand-made rows) only have price/currency."""
+    if row.get("price_published") is not None:
+        return row["price_published"], row.get("price_published_currency") or row.get("currency")
+    return row.get("price"), row.get("currency")
+
+
+def _usd_rate(row: dict[str, Any]) -> float | None:
+    """ARS per USD: the day's quote normalization used, or the one that
+    produced a stored ARS price_usd."""
+    if row.get("usd_rate"):
+        return float(row["usd_rate"])
+    if row.get("currency") == "ARS" and row.get("price") and row.get("price_usd"):
+        return float(row["price"]) / float(row["price_usd"])
+    return None
+
+
+def _to_usd(price: float | None, currency: str | None, rate: float | None) -> float | None:
+    if not price or price <= 0 or not currency:
+        return None
+    if currency == "USD":
+        return round(float(price), 2)
+    return round(float(price) / rate, 2) if currency == "ARS" and rate else None
+
+
+def _facts(existing: dict[str, Any], incoming: dict[str, Any], *,
+           authoritative: bool) -> dict[str, Any] | None:
+    """Which reading of the text stands: the authoritative side's, but a
+    card's title-only reading never replaces one of the description, and
+    the LLM's reading of the same text is kept."""
+    new, old = incoming.get("description_facts"), existing.get("description_facts")
+    if new is None or old is None:
+        return old if new is None else new
+    if not authoritative:
+        return old
+    if not incoming.get("description") and existing.get("description"):
+        return old
+    if old.get("source") == "llm" and new.get("source") != "llm"             and (incoming.get("description") or None) == (existing.get("description") or None):
+        return old
+    return new
+
+
 def merge(existing: dict[str, Any], incoming: dict[str, Any], *,
           detail: bool) -> tuple[dict[str, Any], list[str]]:
     """Values to write over `existing` and the change kinds they amount to.
@@ -141,42 +192,63 @@ def merge(existing: dict[str, Any], incoming: dict[str, Any], *,
     attrs_old, attrs_new = existing.get("attributes") or {}, incoming.get("attributes") or {}
     out["attributes"] = {**attrs_old, **attrs_new} if authoritative else {**attrs_new, **attrs_old}
 
-    # Price and mileage are what cards are for: the newest non-empty value wins.
-    price_changed = incoming.get("price") is not None and (
-        not _same_number(incoming["price"], existing.get("price"))
-        or (incoming.get("currency") or existing.get("currency")) != existing.get("currency"))
-    if price_changed:
-        out["price"] = incoming["price"]
-        out["currency"] = incoming.get("currency") or existing.get("currency")
-        out["price_usd"] = incoming.get("price_usd")
-        out["price_partial"] = bool(incoming.get("price_partial"))
-        out["price_partial_reason"] = incoming.get("price_partial_reason")
-    else:
-        out["price"] = existing.get("price")
-        out["currency"] = existing.get("currency")
+    # Price: the newest published value wins (cards are for that); the
+    # effective one is resolved again from it and the stored facts.
+    old_pub, old_pub_cur = _published(existing)
+    new_pub, new_pub_cur = _published(incoming)
+    published_changed = new_pub is not None and (
+        not _same_number(new_pub, old_pub) or (new_pub_cur or old_pub_cur) != old_pub_cur)
+    pub, pub_cur = (new_pub, new_pub_cur or old_pub_cur) if published_changed else (old_pub, old_pub_cur)
+    out["price_published"], out["price_published_currency"] = pub, pub_cur
+    facts_json = _facts(existing, incoming, authoritative=authoritative)
+    out["description_facts"] = facts_json
+    facts = DescriptionFacts.from_json(facts_json)
+    rate = _usd_rate(incoming) if published_changed else (_usd_rate(existing) or _usd_rate(incoming))
+    partial_reason = incoming["published_partial_reason"] if "published_partial_reason" in incoming         else (incoming.get("price_partial_reason") or "parcial" if incoming.get("price_partial") else None)
+    if not published_changed and partial_reason is None and "published_partial_reason" not in incoming:
+        # A legacy row without the reason: keep what was stored.
+        partial_reason = existing.get("price_partial_reason") if existing.get("price_partial") else None
+    price = resolve_price(pub, pub_cur, partial_reason=partial_reason, facts=facts, usd_rate=rate)
+    if facts is not None:
+        out["description_facts"] = {**facts_json, "price_check": price.check()}
+    out["price"], out["currency"], out["price_source"] = price.price, price.currency, price.source
+    out["price_partial"], out["price_partial_reason"] = price.partial, price.partial_reason
+    effective_changed = not _same_number(price.price, existing.get("price"))         or price.currency != existing.get("currency")
+    if not effective_changed and existing.get("price_usd") is not None:
         # Frozen at the rate of the day it was first observed (sección 14).
-        out["price_usd"] = existing.get("price_usd") if existing.get("price_usd") is not None \
-            else incoming.get("price_usd")
-        partial = bool(incoming.get("price_partial") or existing.get("price_partial"))
-        out["price_partial"] = partial
-        out["price_partial_reason"] = (incoming.get("price_partial_reason")
-                                       or existing.get("price_partial_reason")) if partial else None
+        out["price_usd"] = existing["price_usd"]
+    elif published_changed and _same_number(price.price, incoming.get("price"))             and price.currency == incoming.get("currency") and incoming.get("price_usd") is not None:
+        out["price_usd"] = incoming["price_usd"]
+    else:
+        out["price_usd"] = _to_usd(price.price, price.currency, rate)
     new_km = incoming.get("mileage_km")
     out["mileage_km"] = new_km if new_km is not None else existing.get("mileage_km")
     out["fingerprint"] = fingerprint(out)
 
     changes: list[str] = []
-    if price_changed:
+    if published_changed:
         changes.append("price")
     if new_km is not None and new_km != existing.get("mileage_km"):
         changes.append("mileage")
-    if not _empty(out["description"]) and out["description"] != existing.get("description"):
+    if (not _empty(out["description"]) and out["description"] != existing.get("description"))             or (effective_changed and not published_changed):
+        # The effective price moved because of how the text reads.
         changes.append("description")
     if not _empty(out["images"]) and out["images"] != (existing.get("images") or []):
         changes.append("images")
     if attrs_hash(out) != attrs_hash(existing):
         changes.append("attrs")
     return out, changes
+
+
+def published_view(row: dict[str, Any]) -> dict[str, Any]:
+    """The row with its published price as price/currency/price_usd: what
+    snapshots store and price drops compare."""
+    pub, cur = _published(row)
+    if _same_number(pub, row.get("price")) and cur == row.get("currency"):
+        pub_usd = row.get("price_usd")
+    else:
+        pub_usd = _to_usd(pub, cur, _usd_rate(row))
+    return {**row, "price": pub, "currency": cur, "price_usd": pub_usd}
 
 
 def price_drop_pct(old: dict[str, Any], new: dict[str, Any]) -> float | None:
@@ -197,7 +269,7 @@ def price_drop_pct(old: dict[str, Any], new: dict[str, Any]) -> float | None:
 # ---------------------------------------------------------------------------
 
 async def ingest_rows(rows: Iterable[dict[str, Any]], *, detail: bool = False,
-                      config: IngestConfig | None = None) -> IngestResult:
+                      config: IngestConfig | None = None, seen: bool = True) -> IngestResult:
     """Upsert normalized rows in one transaction. Duplicates in the batch (the
     same ad returned by two search pages) collapse to the last one."""
     config = config or IngestConfig()
@@ -220,14 +292,14 @@ async def ingest_rows(rows: Iterable[dict[str, Any]], *, detail: bool = False,
                 else:
                     await _on_insert(cx, stored, row, result, config)
                     continue
-            await _on_update(cx, old, row, result, config, detail=detail)
+            await _on_update(cx, old, row, result, config, detail=detail, seen=seen)
     return result
 
 
 async def _on_insert(cx, stored: dict[str, Any], row: dict[str, Any], result: IngestResult,
                      config: IngestConfig) -> None:
     lid = stored["id"]
-    snap = await repo.insert_snapshot(cx, lid, stored, "new", attrs_hash(stored))
+    snap = await repo.insert_snapshot(cx, lid, published_view(stored), "new", attrs_hash(stored))
     original = await repo.find_repost_of(
         cx, listing_id=lid, fingerprint=stored.get("fingerprint"), price_usd=stored.get("price_usd"),
         window_days=config.repost_window_days, price_tol_pct=config.repost_price_tol_pct)
@@ -241,21 +313,22 @@ async def _on_insert(cx, stored: dict[str, Any], row: dict[str, Any], result: In
 
 
 async def _on_update(cx, old: dict[str, Any], row: dict[str, Any], result: IngestResult,
-                     config: IngestConfig, *, detail: bool) -> None:
+                     config: IngestConfig, *, detail: bool, seen: bool = True) -> None:
     lid = old["id"]
     values, changes = merge(old, row, detail=detail)
-    await repo.update_listing(cx, lid, values, detail=detail)
+    await repo.update_listing(cx, lid, values, detail=detail, seen=seen)
     result.ids[(old["source"], old["external_id"])] = lid
     if not changes:
         return
-    snap = await repo.insert_snapshot(cx, lid, values, changes[0], attrs_hash(values))
+    before, after = published_view(old), published_view(values)
+    snap = await repo.insert_snapshot(cx, lid, after, changes[0], attrs_hash(values))
     result.updated += 1
     base = dict(listing_id=lid, source=old["source"], external_id=old["external_id"],
-                changes=tuple(changes), snapshot_id=snap, old_price=old.get("price"),
-                new_price=values.get("price"), currency=values.get("currency"),
-                old_currency=old.get("currency"), repost_of=old.get("probable_repost_of"))
+                changes=tuple(changes), snapshot_id=snap, old_price=before.get("price"),
+                new_price=after.get("price"), currency=after.get("currency"),
+                old_currency=before.get("currency"), repost_of=old.get("probable_repost_of"))
     result.events.append(ListingEvent("listing_updated", **base))
-    if "price" in changes and (drop := price_drop_pct(old, values)) is not None \
+    if "price" in changes and (drop := price_drop_pct(before, after)) is not None \
             and drop >= config.price_drop_min_pct:
         result.events.append(ListingEvent("price_drop", drop_pct=drop, **base))
 
@@ -299,12 +372,13 @@ async def normalize_items(items: Iterable[Listing], *, target: Target | None = N
 
 
 async def ingest(items: Iterable[Listing], *, target: Target | None = None, detail: bool = False,
+                 seen: bool = True,
                  geocode: GeocodeFn | None = geocode_location,
                  config: IngestConfig | None = None) -> IngestResult:
     """normalize → geocode → upsert. The whole batch is one transaction."""
     items = list(items)
     rows = await normalize_items(items, target=target, geocode=geocode)
-    result = await ingest_rows(rows, detail=detail, config=config or await IngestConfig.load())
+    result = await ingest_rows(rows, detail=detail, config=config or await IngestConfig.load(), seen=seen)
     # Legacy consumers (the Telegram opportunity engine) read make/model from
     # the Listing: give them the catalog's names instead of the raw ones.
     by_key = {(r["source"], r["external_id"]): r for r in rows}

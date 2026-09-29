@@ -26,14 +26,13 @@ from playwright.async_api import async_playwright
 from .base import BaseScraper, CollectorBlocked, Listing, ListingDetail
 from ._browser import browser_context
 from ._dates import parse_relative_date
-from ._http import fetch_rendered, soup
+from ._http import Page, fetch_rendered, slim_html, soup
 from config import FB_STORAGE_STATE
 from normalization.geo import nearest_known_location_name
+from normalization.money import MIN_ARS_VEHICLE_PRICE, MIN_USD_VEHICLE_PRICE, plain_dollar_currency
 
 
 _PRICE_RE = re.compile(r"(US\$|u\$s|USD|ARS|\$)\s*([\d\.\,]+)", re.IGNORECASE)
-_MIN_USD_VEHICLE_PRICE = 1_000
-_MIN_ARS_VEHICLE_PRICE = 500_000
 # FB renders kms as "115 km", "115.000 km" or "115 mil km" (= 115.000 km).
 _KM_RE = re.compile(r"(\d[\d\.\,]*)\s*(mil\s+)?km", re.IGNORECASE)
 _YEAR_RE = re.compile(r"\b(19[8-9]\d|20[0-3]\d)\b")
@@ -95,10 +94,10 @@ def _parse_price(txt: str) -> tuple[float | None, str | None]:
     else:
         # FB Argentina commonly renders USD listings as "$ 11,900" and ARS
         # vehicle listings as "$ 11,900,000". Treat plain "$" in millions as ARS.
-        moneda = "ARS" if amount >= 1_000_000 else "USD"
-    if moneda == "USD" and amount < _MIN_USD_VEHICLE_PRICE:
+        moneda = plain_dollar_currency(amount)
+    if moneda == "USD" and amount < MIN_USD_VEHICLE_PRICE:
         return None, None
-    if moneda == "ARS" and amount < _MIN_ARS_VEHICLE_PRICE:
+    if moneda == "ARS" and amount < MIN_ARS_VEHICLE_PRICE:
         return None, None
     return amount, moneda
 
@@ -230,19 +229,42 @@ def parse_card(href: str, text: str, label: str = "", img: str | None = None) ->
 _GONE_TEXTS = ("ya no esta disponible", "no longer available", "este articulo se vendio",
                "this item has been sold", "el contenido no esta disponible")
 _DESCRIPTION_HEADERS = ("descripcion del vendedor", "seller's description")
+# Where the description ends: the seller box, the "Ver más" of a text that
+# wasn't expanded, the map ("· La ubicación es aproximada") and the other
+# ads Facebook suggests below ("Sugerencias de hoy", with their prices).
 _DESCRIPTION_STOP = ("informacion del vendedor", "seller information", "detalles del vendedor",
                      "ver menos", "see less", "enviar un mensaje", "send seller a message",
-                     "la ubicacion es aproximada", "location is approximate")
+                     "la ubicacion es aproximada", "location is approximate",
+                     "sugerencias de hoy", "today's picks")
+# Buttons: a whole line, so "Ver más fotos en Instagram" stays in the text.
+_DESCRIPTION_STOP_LINES = ("ver mas", "see more", "enviar mensaje", "send message")
+_EXPAND = ("Ver más", "See more")
+_SUGGESTIONS = ("sugerencias de hoy", "today's picks")
+_DETAILS_HEADERS = ("acerca de este vehiculo", "about this vehicle")
 _SELLER_HEADERS = ("informacion del vendedor", "seller information")
 
 
 def _plain(s: str) -> str:
-    return "".join(c for c in unicodedata.normalize("NFD", s.lower())
-                   if unicodedata.category(c) != "Mn")
+    """Lowercase, no accents, no leading bullet ("· La ubicación es aproximada")."""
+    s = "".join(c for c in unicodedata.normalize("NFD", s.lower())
+                if unicodedata.category(c) != "Mn")
+    return s.lstrip("·•-–— \t")
 
 
 def _after_colon(line: str) -> str:
     return line.split(":", 1)[1].strip() if ":" in line else line
+
+
+def _own_images(main) -> list[str | None]:
+    """The listing's photos: the CDN images above "Sugerencias de hoy"."""
+    out: list[str | None] = []
+    for node in main.descendants:
+        if isinstance(node, str):
+            if _plain(node.strip()).startswith(_SUGGESTIONS):
+                break
+        elif node.name == "img" and re.search(r"scontent|fbcdn", node.get("src") or ""):
+            out.append(node.get("src"))
+    return out
 
 
 def parse_detail(html: str, url: str, status: int = 200) -> ListingDetail:
@@ -256,6 +278,10 @@ def parse_detail(html: str, url: str, status: int = 200) -> ListingDetail:
         raise ValueError(f"facebook detail without content: {url}")
     lines = [ln.strip() for ln in main.get_text("\n").splitlines() if ln.strip()]
     plain = [_plain(ln) for ln in lines]
+    # Below "Sugerencias de hoy" are other ads: their prices, titles and
+    # words ("concesionaria", "vendido") aren't this listing's.
+    if (end := next((i for i, p in enumerate(plain) if p.startswith(_SUGGESTIONS)), None)) is not None:
+        lines, plain = lines[:end], plain[:end]
     joined = " ".join(plain)
     if reason := next((t for t in _GONE_TEXTS if t in joined), None):
         return ListingDetail(url, gone=True, gone_reason=reason)
@@ -265,8 +291,11 @@ def parse_detail(html: str, url: str, status: int = 200) -> ListingDetail:
     if not m or not title:
         raise ValueError(f"facebook detail without id/title: {url}")
 
+    # The price sits by the title; the description below may quote others.
     price = moneda = None
-    for ln in lines:
+    head = next((i for i, p in enumerate(plain) if p in _DESCRIPTION_HEADERS or p in _DETAILS_HEADERS),
+                len(lines))
+    for ln in lines[:head]:
         price, moneda = _parse_price(ln)
         if price is not None:
             break
@@ -301,7 +330,7 @@ def parse_detail(html: str, url: str, status: int = 200) -> ListingDetail:
         if descripcion is None and pl in _DESCRIPTION_HEADERS:
             body = []
             for ln, p2 in zip(lines[i + 1:], plain[i + 1:]):
-                if p2.startswith(_DESCRIPTION_STOP):
+                if p2.startswith(_DESCRIPTION_STOP) or p2 in _DESCRIPTION_STOP_LINES:
                     break
                 body.append(ln)
             descripcion = "\n".join(body) or None
@@ -310,7 +339,7 @@ def parse_detail(html: str, url: str, status: int = 200) -> ListingDetail:
                     if p2 not in ("detalles del vendedor", "seller details")]
             vendedor_nombre = rest[0] if rest else None
 
-    images = [img.get("src") for img in main.select("img[src*='scontent'], img[src*='fbcdn']")]
+    images = _own_images(main)
     return ListingDetail(url, listing=Listing(
         source="facebook",
         listing_id=m.group(1),
@@ -417,13 +446,20 @@ class FacebookMarketplaceScraper(BaseScraper):
                 await page.close()
         return out
 
-    async def fetch_detail(self, url: str) -> ListingDetail:
+    # 2: "Ver más" is expanded and the description stops before the page around it.
+    DETAIL_PARSER_VERSION = 2
+    parse_detail = staticmethod(parse_detail)
+
+    async def fetch_detail_page(self, url: str) -> Page:
         if not Path(FB_STORAGE_STATE).exists():
             raise CollectorBlocked(f"facebook: no session at {FB_STORAGE_STATE}")
-        page = await fetch_rendered(url, storage_state=FB_STORAGE_STATE, settle_ms=3_500)
+        page = await fetch_rendered(url, storage_state=FB_STORAGE_STATE, settle_ms=3_500, expand=_EXPAND)
         if "/login" in page.url or "checkpoint" in page.url:
             raise CollectorBlocked("facebook: session expired")
-        return parse_detail(page.html, url, page.status)
+        return page
+
+    def slim_page(self, page: Page) -> str:
+        return slim_html(page.html, keep="[role='main']")
 
 
 # ------ Interactive login: `python -m collectors.facebook` ------

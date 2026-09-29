@@ -13,9 +13,11 @@ from typing import Any
 
 from collectors.base import Listing
 from normalization import transmission as tx
+from normalization.description_facts import DescriptionFacts, parse as parse_facts, resolve_price
 from normalization.fx import FxQuote
 from normalization.geo import normalize_location_query
 from normalization.normalize import normalize_text
+from normalization.price_check import keyword_partial
 from normalization.vehicle import CatalogModel, resolve_vehicle
 
 
@@ -75,12 +77,25 @@ def price_usd(price: float | None, currency: str | None, fx: FxQuote | None) -> 
     return None
 
 
+def listing_facts(item: Listing, *, now_year: int | None = None) -> DescriptionFacts | None:
+    """What the item's title and description state, or what the LLM already
+    read from them (item.extra["description_facts"], pipeline/enrich.py)."""
+    if pre := item.extra.get("description_facts"):
+        return DescriptionFacts.from_json(pre)
+    return parse_facts(item.descripcion, item.titulo, now_year=now_year)
+
+
 def normalize_listing(item: Listing, *, catalog: list[CatalogModel], target: Target | None = None,
                       fx: FxQuote | None = None) -> dict[str, Any]:
     """Map one scraped (or detail) Listing onto `listings` columns.
 
     Values that don't fit a column's domain are kept in `attributes`, like
     the F0 mapping did, together with how make/model were resolved.
+
+    The price is the effective one (normalization v3): the description may
+    say the published number is a list price (the cash one wins) or a down
+    payment (the total wins). The published number goes to price_published.
+    Year, km, transmission and fuel fall back to what the description says.
     """
     target = target or Target()
     vehicle = resolve_vehicle(
@@ -90,6 +105,7 @@ def normalize_listing(item: Listing, *, catalog: list[CatalogModel], target: Tar
     )
     raw_currency = (item.moneda or "").strip().upper() or None
     currency = _CURRENCIES.get(raw_currency) if raw_currency else None
+    facts = listing_facts(item, now_year=datetime.now(timezone.utc).year)
 
     attributes: dict[str, Any] = dict(item.atributos)
     for key, value in (("transmision", item.transmision), ("vendedor", item.vendedor),
@@ -98,6 +114,16 @@ def normalize_listing(item: Listing, *, catalog: list[CatalogModel], target: Tar
         if value:
             attributes.setdefault(key, value)
     attributes["_normalization"] = {"method": vehicle.method, "notes": list(vehicle.notes)}
+
+    published = item.precio if item.precio and item.precio > 0 else None
+    # Why the title or the page's structure (Autocosmos' "Anticipo" block)
+    # already say the published number isn't the total.
+    partial_reason = (item.price_partial_reason or "parcial") if item.price_partial         else keyword_partial(item.titulo)
+    usd_rate = fx.rate if fx and fx.rate > 0 else None
+    price = resolve_price(published, currency, partial_reason=partial_reason, facts=facts,
+                          usd_rate=usd_rate)
+    if facts is not None:
+        facts.price_check = price.check()
 
     row: dict[str, Any] = {
         "source": item.source,
@@ -108,12 +134,16 @@ def normalize_listing(item: Listing, *, catalog: list[CatalogModel], target: Tar
         "make": vehicle.make,
         "model": vehicle.model,
         "trim": vehicle.trim,
-        "year": item.anio,
-        "price": item.precio if item.precio and item.precio > 0 else None,
-        "currency": currency,
-        "mileage_km": item.km,
-        "transmission": tx.transmission(item.transmision, item.version, item.titulo),
-        "fuel": tx.fuel(item.combustible, item.version, item.titulo),
+        "year": item.anio or (facts.year if facts else None),
+        "price": price.price,
+        "currency": price.currency,
+        "price_published": published,
+        "price_published_currency": currency,
+        "price_source": price.source,
+        "mileage_km": item.km if item.km is not None else (facts.mileage_km if facts else None),
+        "transmission": tx.transmission(item.transmision, item.version, item.titulo)
+                        or (facts.transmission if facts else None),
+        "fuel": tx.fuel(item.combustible, item.version, item.titulo) or (facts.fuel if facts else None),
         "location_text": item.ubicacion or None,
         "seller_name": item.vendedor_nombre or None,
         "seller_type": tx.seller_type(item.vendedor),
@@ -121,11 +151,15 @@ def normalize_listing(item: Listing, *, catalog: list[CatalogModel], target: Tar
         "attributes": attributes,
         "published_at": (datetime.fromtimestamp(item.published_at, tz=timezone.utc)
                          if item.published_at else None),
-        "price_partial": bool(item.price_partial),
-        "price_partial_reason": item.price_partial_reason,
+        "price_partial": price.partial,
+        "price_partial_reason": price.partial_reason,
+        "description_facts": facts.to_json() if facts is not None and not facts.is_empty() else None,
         "normalization_confidence": vehicle.confidence,
     }
-    row["price_usd"] = price_usd(row["price"], currency, fx)
-    row["fx_rate"] = fx.rate if fx and currency == "ARS" and row["price_usd"] else None
+    row["price_usd"] = price_usd(row["price"], row["currency"], fx)
+    row["fx_rate"] = fx.rate if fx and row["currency"] == "ARS" and row["price_usd"] else None
+    # Not columns: what merge() needs to re-resolve the price against stored facts.
+    row["usd_rate"] = usd_rate
+    row["published_partial_reason"] = partial_reason
     row["fingerprint"] = fingerprint(row)
     return row

@@ -3,6 +3,7 @@ from dataclasses import dataclass, asdict, field
 from typing import Any
 
 from normalization.price_check import keyword_partial
+from ._http import Page, slim_html
 
 
 @dataclass
@@ -71,14 +72,32 @@ class ListingDetail:
 
 class BaseScraper:
     name: str = "base"
+    # Bump when parse_detail() changes what it reads: tools/reprocess.py --raw
+    # --outdated re-parses the raw_pages stored with an older version.
+    DETAIL_PARSER_VERSION: int = 1
 
     async def search(self, filters: dict) -> list[Listing]:
         raise NotImplementedError
 
-    async def fetch_detail(self, url: str) -> ListingDetail:
-        """Read the ad's own page: description, version, transmission, seller
+    async def fetch_detail_page(self, url: str) -> Page:
+        """Download the ad's own page, with the source's login-wall and session
+        checks, without parsing it (pipeline/enrich.py keeps it in raw_pages
+        first, so a page the parser chokes on is still there to look at)."""
+        raise NotImplementedError
+
+    @staticmethod
+    def parse_detail(html: str, url: str, status: int = 200) -> ListingDetail:
+        """Read the ad's page: description, version, transmission, seller
         type, every image and the spec attributes."""
         raise NotImplementedError
+
+    def slim_page(self, page: Page) -> str:
+        """What raw_pages keeps of a detail page: enough for parse_detail()."""
+        return slim_html(page.html)
+
+    async def fetch_detail(self, url: str) -> ListingDetail:
+        page = await self.fetch_detail_page(url)
+        return self.parse_detail(page.html, url, page.status)
 
     @staticmethod
     def annotate_partial_price(item: Listing) -> Listing:

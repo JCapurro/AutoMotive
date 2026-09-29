@@ -34,7 +34,8 @@ export function ListingCard({
     | "profile_name"
     | "listing_status"
     | "probable_repost_of"
-  >;
+  > &
+    Partial<Pick<MatchCard, "price_kind" | "financing_offered">>;
   showProfile?: boolean;
   footer?: React.ReactNode;
 }) {
@@ -65,7 +66,17 @@ export function ListingCard({
           </h3>
           <LevelBadge level={card.level} score={card.score} />
         </div>
-        <p className="text-base font-semibold tabular-nums">{money(card.price, card.currency)}</p>
+        <p className="text-base font-semibold tabular-nums">
+          {money(card.price, card.currency)}
+          {card.price_kind === "cash" && card.price != null ? (
+            <span className="ml-1.5 text-xs font-normal text-muted-foreground">de contado</span>
+          ) : null}
+          {card.financing_offered ? (
+            <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-normal text-muted-foreground">
+              💳 financiable
+            </span>
+          ) : null}
+        </p>
         {meta.length ? (
           <p className="flex min-w-0 items-center gap-1 truncate text-xs text-muted-foreground">
             {card.location_text ? <MapPin className="size-3 shrink-0" aria-hidden /> : null}
