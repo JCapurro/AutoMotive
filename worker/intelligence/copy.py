@@ -115,6 +115,9 @@ RED_FLAG = {
                        "conviene verificar que sea el original."),
     "partial_price_suspect": "Conviene verificar que el precio publicado sea el total y no un anticipo.",
     "repost": "Parece una publicación re-publicada: conviene verificar hace cuánto está a la venta.",
+    "price_mismatch": "La descripción menciona otro precio ({price}): conviene verificar cuál está vigente.",
+    "year_mismatch": "La descripción dice año {year}, distinto del publicado: conviene verificarlo.",
+    "km_mismatch": "La descripción dice {km} km, distinto de lo publicado: conviene verificarlo.",
 }
 
 # ---------------------------------------------------------------------------
@@ -134,5 +137,8 @@ QUESTION = {
     "km_original": "¿El kilometraje es original? ¿Tenés cómo acreditarlo?",
     "transmission": "¿Es manual o automático?",
     "total_price": "¿El precio publicado es el total o es un anticipo?",
+    "price_confirm": "¿Me confirmás el precio? En la descripción figura otro.",
+    "year_confirm": "¿De qué año es? La publicación y la descripción no coinciden.",
+    "km_confirm": "¿Cuántos km tiene? La publicación y la descripción no coinciden.",
     "trim": "¿Qué versión es?",
 }

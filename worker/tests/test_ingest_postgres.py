@@ -10,12 +10,13 @@ from __future__ import annotations
 import unittest
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
 import collectors
 import db
+from collectors._http import Page
 from collectors.base import BaseScraper, Listing, ListingDetail
 from pgcase import TEST_FX_RATE, PostgresTestCase, requires_db
 from intelligence import comparables
@@ -25,8 +26,11 @@ from notifications.channels.web import WebChannel
 from notifications.links import Links
 from notifications.ops import SourceAlerts
 from notifications.service import Notifier
-from pipeline import crawl, enrich, rematch, scheduler, watchlist
+from db.repos import raw_pages
+from llm.schemas import ListingFacts
+from pipeline import crawl, enrich, rematch, retention, scheduler, watchlist
 from pipeline.ingest import ingest
+from tools import reprocess
 
 pytestmark = [pytest.mark.db, requires_db]
 
@@ -42,9 +46,11 @@ def card(listing_id: str, source: str = "mercadolibre", **kw) -> Listing:
 
 
 class FakeSource(BaseScraper):
-    """Stands in for a collector: returns `results[name]`, serves `details[url]`."""
+    """Stands in for a collector: returns `results[name]`, serves `details[url]`
+    (an exception there fails the fetch; one in `parse_errors[url]`, the parse)."""
     results: dict[str, list[Listing]] = {}
     details: dict[str, ListingDetail | Exception] = {}
+    parse_errors: dict[str, Exception] = {}
     searches: list[tuple[str, dict]] = []
 
     async def search(self, filters: dict) -> list[Listing]:
@@ -54,11 +60,17 @@ class FakeSource(BaseScraper):
             raise outcome
         return [replace(l) for l in outcome]
 
-    async def fetch_detail(self, url: str) -> ListingDetail:
+    async def fetch_detail_page(self, url: str) -> Page:
         outcome = FakeSource.details[url]
         if isinstance(outcome, Exception):
             raise outcome
-        return outcome
+        return Page(200, url, f"<html><body><script>x()</script><p>detalle {url}</p></body></html>")
+
+    @staticmethod
+    def parse_detail(html: str, url: str, status: int = 200) -> ListingDetail:
+        if url in FakeSource.parse_errors:
+            raise FakeSource.parse_errors[url]
+        return replace(FakeSource.details[url])
 
 
 def fake(name: str) -> type[FakeSource]:
@@ -82,6 +94,7 @@ class IngestCase(PostgresTestCase):
     async def asyncSetUp(self) -> None:
         await super().asyncSetUp()
         FakeSource.results, FakeSource.details, FakeSource.searches = {}, {}, []
+        FakeSource.parse_errors = {}
         for p in (patch.dict(collectors.REGISTRY, {s: fake(s) for s in self.SOURCES}, clear=True),
                   patch("normalization.geo.GEOCODING_ENABLED", False)):
             p.start()
@@ -483,6 +496,140 @@ class EnrichmentTests(IngestCase):
         self.assertEqual(row["title"], "Ford Fiesta 1.6 Titanium")
         self.assertEqual(len(row["images"]), 3)
         self.assertEqual(result.events[0].changes, ("price",))
+
+
+class DescriptionFactsTests(IngestCase):
+    """Normalization v3: the description as a source of the price."""
+
+    def _detail(self, listing_id: str, descripcion: str, **kw) -> str:
+        url = f"https://example.test/mercadolibre/{listing_id}"
+        FakeSource.details[url] = ListingDetail(url, listing=card(listing_id, descripcion=descripcion, **kw))
+        return url
+
+    async def test_a_partial_price_is_enriched_and_the_description_gives_the_total(self):
+        await self.fiesta_alert()
+        down = dict(titulo="Ford Fiesta Titanium retirá con $5.000.000 y cuotas", precio=5_000_000.0, moneda="ARS")
+        await ingest([card("1", **down)], geocode=None)
+        row = await self.listing("1")
+        self.assertTrue(row["price_partial"])                    # no match: only the partial flag
+
+        self._detail("1", "Precio final $15.000.000. Retirá con $5.000.000 y cuotas fijas.", **down)
+        result = await enrich.enrich_pass()
+
+        row = await self.listing("1")
+        self.assertEqual((float(row["price"]), row["currency"], row["price_partial"], row["price_source"]),
+                         (15_000_000.0, "ARS", False, "description"))
+        self.assertEqual(float(row["price_published"]), 5_000_000.0)
+        self.assertEqual(float(row["price_usd"]), 15_000_000 / TEST_FX_RATE)
+        self.assertEqual(row["description_facts"]["financing"]["down_payment"],
+                         {"amount": 5_000_000.0, "currency": "ARS"})
+        self.assertEqual([e.kind for e in result.events], ["listing_updated"])      # no price_drop
+        self.assertEqual(await self.snapshots("1"), ["new", "description"])
+
+        await ingest([card("1", **down)], geocode=None)          # the card again: the total stays
+        self.assertEqual(float((await self.listing("1"))["price"]), 15_000_000.0)
+
+    async def test_the_cash_price_wins_and_price_drops_follow_the_published_one(self):
+        await ingest([card("1", precio=11_500.0)], geocode=None)
+        await ingest([card("1", precio=11_500.0,
+                           descripcion="PRECIO DE CONTADO U$S 10.900\nPRECIO DE LISTA/PERMUTA U$S 11.500")],
+                     geocode=None)
+        row = await self.listing("1")
+        self.assertEqual((float(row["price"]), row["price_source"], float(row["price_published"])),
+                         (10_900.0, "description", 11_500.0))
+        self.assertEqual(row["description_facts"]["price_check"]["effective_kind"], "cash")
+
+        drop = await ingest([card("1", precio=11_000.0)], geocode=None)    # the seller lowers the list price
+        self.assertEqual([e.kind for e in drop.events], ["listing_updated", "price_drop"])
+        self.assertEqual((drop.events[1].old_price, drop.events[1].new_price), (11_500.0, 11_000.0))
+        self.assertEqual(float((await self.listing("1"))["price"]), 10_900.0)
+        [snap] = await self.rows("SELECT price FROM listing_snapshots ORDER BY id DESC LIMIT 1")
+        self.assertEqual(float(snap["price"]), 11_000.0)
+
+    async def test_the_raw_page_is_kept_even_when_the_parser_fails(self):
+        await ingest([card("1")], geocode=None)
+        await db.mark_seen(await self.fiesta_alert(), [card("1").to_dict()], backfill=False)
+        url = self._detail("1", "Único dueño")
+        FakeSource.parse_errors[url] = ValueError("layout changed")
+
+        await enrich.enrich_pass()
+
+        [err] = await self.rows("SELECT stage FROM pipeline_errors")
+        self.assertEqual(err["stage"], "enrich")
+        [page] = await self.rows("SELECT url, status, parser_version, html_gz FROM raw_pages")
+        html = raw_pages.decompress(page["html_gz"])
+        self.assertIn(f"detalle {url}", html)
+        self.assertNotIn("<script>", html)                       # slimmed
+        self.assertEqual((page["url"], page["status"], page["parser_version"]), (url, 200, 1))
+
+    async def test_reprocess_reads_stored_pages_and_texts_again(self):
+        await ingest([card("1")], geocode=None)
+        await db.mark_seen(await self.fiesta_alert(), [card("1").to_dict()], backfill=False)
+        url = self._detail("1", "Único dueño")
+        await enrich.enrich_pass()
+        before = await self.listing("1")
+
+        # A better parser now reads a cash price from the same page.
+        self._detail("1", "Contado U$S 9.500, único dueño")
+        with patch.object(FakeSource, "DETAIL_PARSER_VERSION", 2):
+            result = await reprocess.reprocess_raw(dry_run=False, outdated=True)
+            again = await reprocess.reprocess_raw(dry_run=False, outdated=True)
+        after = await self.listing("1")
+        self.assertEqual(float(after["price"]), 9_500.0)
+        self.assertEqual(after["last_seen_at"], before["last_seen_at"])       # no sighting
+        self.assertEqual(result.updated, 1)
+        self.assertEqual(again.updated, 0)                                    # already at version 2
+
+        async with db.connection() as cx:
+            await cx.execute("UPDATE listings SET price = 10000, price_source = 'published', "
+                             "description_facts = NULL WHERE id = %s", (after["id"],))
+        self.assertEqual(await reprocess.reprocess_facts(dry_run=True, llm=False), [after["id"]])
+        self.assertEqual(float((await self.listing("1"))["price"]), 10_000.0)  # dry run
+        await reprocess.reprocess_facts(dry_run=False, llm=False)
+        self.assertEqual(float((await self.listing("1"))["price"]), 9_500.0)
+        self.assertEqual(await reprocess.reprocess_facts(dry_run=True, llm=False), [])
+
+    async def test_retention_drops_old_pages_and_listings_take_theirs(self):
+        await ingest([card("1"), card("2")], geocode=None)
+        one, two = await self.listing("1"), await self.listing("2")
+        for lid in (one["id"], two["id"]):
+            await raw_pages.save(lid, url="u", status=200, parser_version=1, html="<p>x</p>")
+        async with db.connection() as cx:
+            await cx.execute("UPDATE raw_pages SET fetched_at = now() - interval '91 days' WHERE listing_id = %s",
+                             (one["id"],))
+        self.assertEqual(await retention.purge_raw_pages(), 1)
+        async with db.connection() as cx:
+            await cx.execute("DELETE FROM listings WHERE id = %s", (two["id"],))
+        self.assertEqual(await self.rows("SELECT listing_id FROM raw_pages"), [])
+
+    async def test_ambiguous_descriptions_ask_the_llm_once(self):
+        await ingest([card("1")], geocode=None)
+        await db.mark_seen(await self.fiesta_alert(), [card("1").to_dict()], backfill=False)
+        self._detail("1", "Precio U$S 12.000. Otro precio U$S 13.000")        # two plain prices
+
+        class FakeLLM:
+            calls = 0
+
+            async def extract_listing_facts(self, title, description):
+                FakeLLM.calls += 1
+                return ListingFacts(transmission=None, fuel=None, single_owner=None, service_history=None,
+                                    timing_belt_changed=None, accepts_trade_in=None, financing=None,
+                                    damage_mentioned=None, cash_price=9_800, list_price=None, down_payment=None,
+                                    installment_amount=None, installment_count=None, price_currency="USD",
+                                    published_price_kind="list", mileage_km=None, year=None)
+
+        llm = enrich.DescriptionLLM(FakeLLM(), daily_cap=5)
+        with patch.object(enrich.DescriptionLLM, "create", AsyncMock(return_value=llm)):
+            await enrich.enrich_pass()
+        row = await self.listing("1")
+        self.assertEqual((row["description_facts"]["source"], float(row["price"])), ("llm", 9_800.0))
+
+        async with db.connection() as cx:              # the watchlist reads the same text again
+            await cx.execute("UPDATE listings SET enriched_at = NULL, detail_checked_at = NULL")
+        with patch.object(enrich.DescriptionLLM, "create", AsyncMock(return_value=llm)):
+            await enrich.enrich_pass()
+        self.assertEqual(FakeLLM.calls, 1)
+        self.assertEqual((await self.listing("1"))["description_facts"]["source"], "llm")
 
 
 class WatchlistTests(IngestCase):

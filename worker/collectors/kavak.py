@@ -19,7 +19,7 @@ from bs4 import BeautifulSoup
 
 from .base import BaseScraper, Listing, ListingDetail
 from ._browser import browser_context
-from ._http import dedupe, fetch_page, json_ld_of_type, soup, text_of, to_int
+from ._http import Page, dedupe, fetch_page, slim_html, json_ld_of_type, soup, text_of, to_int
 from normalization.fx import usd_ars_rate
 
 
@@ -209,6 +209,11 @@ class KavakScraper(BaseScraper):
                 out.append(listing)
         return out
 
-    async def fetch_detail(self, url: str) -> ListingDetail:
-        page = await fetch_page(url)
-        return parse_detail(page.html, url, page.status)
+    parse_detail = staticmethod(parse_detail)
+
+    async def fetch_detail_page(self, url: str) -> Page:
+        return await fetch_page(url)
+
+    def slim_page(self, page: Page) -> str:
+        # parse_detail() checks the car_id in the page's data script.
+        return slim_html(page.html, scripts_with="car_id")

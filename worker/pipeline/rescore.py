@@ -24,7 +24,7 @@ from db.repos import matches as matches_repo
 from db.repos.profiles import profiles_by_ids
 from db.repos.runs import log_error
 from intelligence.config import DEFAULT_RESCORE, SCORING_VERSION
-from pipeline.retention import purge_stale_listings
+from pipeline.retention import purge_raw_pages, purge_stale_listings
 from pipeline.scoring import Scorer
 
 
@@ -107,5 +107,6 @@ async def nightly_loop(stop: asyncio.Event) -> None:
             await log_error("rescore", "nightly", traceback.format_exc())
         try:
             await purge_stale_listings()
+            await purge_raw_pages()
         except Exception:
             await log_error("retention", "nightly", traceback.format_exc())

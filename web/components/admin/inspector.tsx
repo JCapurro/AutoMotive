@@ -63,6 +63,9 @@ export function Inspector({ data }: { data: Inspection }) {
                 {money(listing.price, listing.currency)}
                 {listing.currency === "ARS" && listing.price_usd ? ` (≈ ${money(listing.price_usd, "USD")})` : ""}
                 {listing.price_partial ? ` · parcial: ${listing.price_partial_reason ?? "sí"}` : ""}
+                {listing.price_source === "description"
+                  ? ` · de la descripción (publicado ${money(listing.price_published, listing.price_published_currency)})`
+                  : ""}
               </Row>
               <Row label="Km · caja">
                 {listing.mileage_km != null ? `${number(listing.mileage_km)} km` : "km ?"} · {listing.transmission ?? "caja ?"}

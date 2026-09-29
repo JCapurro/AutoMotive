@@ -9,6 +9,8 @@ import unittest
 from pathlib import Path
 
 from collectors import autocosmos, facebook, kavak, mercadolibre, v6
+from collectors._http import Page
+from db.repos import raw_pages
 
 FIXTURES = Path(__file__).parent / "fixtures" / "html"
 
@@ -188,6 +190,60 @@ class FacebookParserTests(unittest.TestCase):
     def test_detail_gone(self):
         page = "<div role='main'><span>Este artículo ya no está disponible</span></div>"
         self.assertTrue(facebook.parse_detail(page, "https://www.facebook.com/marketplace/item/1/").gone)
+
+    def test_description_stops_before_the_page_around_it(self):
+        # Not expanded ("Ver más"), then the map and the ads Facebook suggests, with their prices.
+        page = """<div role='main'><h1><span>2018 Ford Fiesta Kinetic</span></h1><span>$10.900</span>
+          <h2><span>Descripción del vendedor</span></h2>
+          <span>-PROMOCION DE CONTADO U$s10.900</span><span>-PRECIO DE PERMUTA U$s11.500</span>
+          <span>Ver más fotos en Instagram</span>
+          <span>Ver más</span><span>Ciudad de Buenos Aires, CF</span><span>· La ubicación es aproximada</span>
+          <span>Enviar mensaje</span><span>Sugerencias de hoy</span><span>$6.900.000</span>
+          <span>2001 Peugeot 306 1.9 xrd</span></div>"""
+        l = facebook.parse_detail(page, "https://www.facebook.com/marketplace/item/9/").listing
+        self.assertEqual(l.descripcion, "-PROMOCION DE CONTADO U$s10.900\n-PRECIO DE PERMUTA U$s11.500\n"
+                                        "Ver más fotos en Instagram")
+
+
+    def test_suggested_ads_never_lend_their_price_or_words(self):
+        page = """<div role='main'><h1><span>2020 Ford Ka S</span></h1><span>Consultá precio</span>
+          <h2><span>Descripción del vendedor</span></h2><span>Consultá precio y coordinamos.</span>
+          <img src="https://scontent.example.fbcdn.net/own.jpg">
+          <span>Sugerencias de hoy</span><span>$6.900.000</span><span>2001 Peugeot 306 1.9 xrd</span>
+          <img src="https://scontent.example.fbcdn.net/peugeot.jpg"><span>Concesionaria Ejemplo</span></div>"""
+        l = facebook.parse_detail(page, "https://www.facebook.com/marketplace/item/9/").listing
+        self.assertEqual((l.precio, l.moneda, l.vendedor), (None, None, "particular"))
+        self.assertEqual(l.imagenes, ["https://scontent.example.fbcdn.net/own.jpg"])
+
+
+class RawPageTests(unittest.TestCase):
+    """raw_pages keep a slimmed page: every parser reads the same from it."""
+
+    CASES = [
+        (mercadolibre.MercadoLibreScraper, "mercadolibre_detail.html",
+         "https://auto.mercadolibre.com.ar/MLA-1675249827-toyota-corolla-cross-18-hev-seg-ecvt-_JM"),
+        (v6.V6Scraper, "v6_detail.html", "https://www.v6.com.ar/auto/ford-fiesta-kinetic-s-1-6-mt-5p-2015-8IAYEN5khz"),
+        (kavak.KavakScraper, "kavak_detail.html",
+         "https://www.kavak.com/ar/venta/ford-fiesta_kinetic_design-16_se-hatchback-2018?id=549997"),
+        (autocosmos.AutoCosmosScraper, "autocosmos_detail.html",
+         "https://www.autocosmos.com.ar/auto/usado/ford/ecosport/s-15l/ba86b1d019c849fc9f8c07b0d5e1de16"),
+        (facebook.FacebookMarketplaceScraper, "facebook_detail.html",
+         "https://www.facebook.com/marketplace/item/123456789/"),
+    ]
+
+    def test_the_slimmed_page_parses_the_same(self):
+        for cls, name, url in self.CASES:
+            with self.subTest(cls.name):
+                scraper = cls()
+                full = html(name)
+                slim = scraper.slim_page(Page(200, url, full))
+                self.assertLessEqual(len(slim), len(full))
+                a, b = scraper.parse_detail(full, url), scraper.parse_detail(slim, url)
+                self.assertEqual(a.gone, b.gone)
+                da, db = a.listing.to_dict(), b.listing.to_dict()
+                da.pop("published_at"), db.pop("published_at")      # "hace 2 días" is relative to now
+                self.assertEqual(da, db)
+                self.assertEqual(raw_pages.decompress(raw_pages.compress(slim)), slim)
 
 
 if __name__ == "__main__":

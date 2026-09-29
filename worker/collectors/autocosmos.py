@@ -17,7 +17,7 @@ import httpx
 from bs4 import BeautifulSoup
 
 from .base import BaseScraper, Listing, ListingDetail
-from ._http import HEADERS, dedupe, fetch_page, multiline_text, soup, text_of, to_int
+from ._http import HEADERS, Page, dedupe, fetch_page, multiline_text, soup, text_of, to_int
 
 
 def _slug(s: str) -> str:
@@ -242,8 +242,8 @@ class AutoCosmosScraper(BaseScraper):
                         out.append(listing)
         return out
 
-    async def fetch_detail(self, url: str) -> ListingDetail:
+    async def fetch_detail_page(self, url: str) -> Page:
         page = await fetch_page(url)
         if page.status >= 500:
             raise RuntimeError(f"autocosmos {page.status} for {url}")
-        return self.parse_detail(page.html, url, page.status)
+        return page

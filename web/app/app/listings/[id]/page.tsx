@@ -28,6 +28,7 @@ import {
   TRANSMISSION,
 } from "@/lib/copy";
 import { ageLine, imageUrls, km, money, number, pct, vehicle } from "@/lib/format";
+import { financingOffered, financingTerms, isCashPrice, publishedKind } from "@/lib/price";
 import { createClient } from "@/lib/supabase/server";
 import type { Component, PriceRef, Reason, RedFlag } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -143,12 +144,29 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
       )}
 
       <dl className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-xl bg-card p-4 text-sm ring-1 ring-foreground/10 sm:grid-cols-4">
-        <Fact label="Precio publicado">
-          <span className="text-lg font-semibold tabular-nums">{money(listing.price, listing.currency)}</span>
+        <Fact label={isCashPrice(listing.description_facts) ? "Precio de contado" : "Precio publicado"}>
+          <span className="text-lg font-semibold tabular-nums" data-testid="price">
+            {money(listing.price, listing.currency)}
+          </span>
           {listing.currency === "ARS" && listing.price_usd ? (
             <span className="block text-xs text-muted-foreground">≈ {money(listing.price_usd, "USD")}</span>
           ) : null}
+          {listing.price_source === "description" && listing.price_published != null ? (
+            <span className="block text-xs text-muted-foreground">
+              Publicado {money(listing.price_published, listing.price_published_currency)}
+              {publishedKind(listing.description_facts) ? ` (${publishedKind(listing.description_facts)})` : ""} · el
+              precio sale de la descripción
+            </span>
+          ) : null}
           {listing.price_partial ? <span className="block text-xs text-destructive">Parece un anticipo o una cuota</span> : null}
+          {financingOffered(listing.description_facts) ? (
+            <span className="mt-1 block text-xs" data-testid="financing">
+              💳 También se puede financiar
+              {financingTerms(listing.description_facts) ? (
+                <span className="block text-muted-foreground">{financingTerms(listing.description_facts)}</span>
+              ) : null}
+            </span>
+          ) : null}
         </Fact>
         <Fact label="Kilometraje">{km(listing.mileage_km) ?? "No informado"}</Fact>
         <Fact label="Año">{listing.year ?? "No informado"}</Fact>

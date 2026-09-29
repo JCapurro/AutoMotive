@@ -34,8 +34,12 @@ def question_keys(listing: Mapping[str, Any], flags: Iterable[RedFlag], *,
         keys.append("crashes")
     if "no_service" in ids or not listing.get("description"):
         keys.append("services")
+    if "year_mismatch" in ids:
+        keys.append("year_confirm")
     if listing.get("mileage_km") is None:
         keys.append("km_unknown")
+    elif "km_mismatch" in ids:
+        keys.append("km_confirm")
     elif "low_km_for_age" in ids:
         keys.append("km_original")
     if not listing.get("transmission"):
@@ -44,6 +48,8 @@ def question_keys(listing: Mapping[str, Any], flags: Iterable[RedFlag], *,
         keys.append("trim")
     if ids & {"partial_price_suspect"} or listing.get("price_partial"):
         keys.append("total_price")
+    elif "price_mismatch" in ids:
+        keys.append("price_confirm")
     return keys
 
 

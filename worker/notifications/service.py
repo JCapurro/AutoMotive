@@ -80,6 +80,13 @@ def listing_payload(row: Mapping[str, Any]) -> dict[str, Any]:
     if out["price"] is not None:
         out["price"] = float(out["price"])
     out["id"] = row.get("id")
+    # What the description says (normalization/description_facts.py): the
+    # price is the cash one, the car can be financed.
+    facts = row.get("description_facts") or {}
+    if (facts.get("price_check") or {}).get("effective_kind") == "cash":
+        out["price_kind"] = "cash"
+    if (facts.get("financing") or {}).get("offered"):
+        out["financing"] = True
     return out
 
 

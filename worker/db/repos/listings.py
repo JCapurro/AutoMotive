@@ -20,9 +20,10 @@ COLUMNS = ("source", "external_id", "url", "title", "description", "make", "mode
            "year", "price", "currency", "price_usd", "mileage_km", "transmission", "fuel",
            "location_text", "lat", "lon", "seller_name", "seller_type", "images", "attributes",
            "published_at", "price_partial", "price_partial_reason", "normalization_confidence",
-           "fingerprint", "probable_repost_of")
-_JSON = {"images", "attributes"}
-_NUMERIC = ("price", "price_usd")
+           "fingerprint", "probable_repost_of", "price_published", "price_published_currency",
+           "price_source", "description_facts")
+_JSON = {"images", "attributes", "description_facts"}
+_NUMERIC = ("price", "price_usd", "price_published")
 
 
 def _param(column: str, value: Any) -> Any:
@@ -65,11 +66,14 @@ async def insert_listing(cx: AsyncConnection, row: dict[str, Any], *,
 
 
 async def update_listing(cx: AsyncConnection, listing_id: int, values: dict[str, Any], *,
-                         detail: bool = False) -> None:
-    """Write merged values and mark the listing seen (and active) now."""
+                         detail: bool = False, seen: bool = True) -> None:
+    """Write merged values and mark the listing seen (and active) now.
+    `seen=False` (tools/reprocess.py): a stored page read again is no sighting."""
     cols = [c for c in COLUMNS if c in values and c not in ("source", "external_id")]
-    sets = [f"{c} = %s" for c in cols] + ["last_seen_at = now()", "status = 'active'"]
-    if detail:
+    sets = [f"{c} = %s" for c in cols]
+    if seen:
+        sets += ["last_seen_at = now()", "status = 'active'"]
+    if detail and seen:
         sets += ["enriched_at = coalesce(enriched_at, now())", "detail_checked_at = now()"]
     await cx.execute(f"UPDATE listings SET {', '.join(sets)} WHERE id = %s",
                      [*(_param(c, values[c]) for c in cols), listing_id])
@@ -121,6 +125,24 @@ async def mark_gone(cx: AsyncConnection, listing_id: int) -> bool:
     return cur.rowcount > 0
 
 
+async def stored_description(listing_id: int) -> dict[str, Any] | None:
+    """The description and its facts as stored, to reuse the LLM's reading of the same text."""
+    async with connection() as cx:
+        return await (await cx.execute(
+            "SELECT description, description_facts FROM listings WHERE id = %s",
+            (listing_id,))).fetchone()
+
+
+async def llm_facts_last_day() -> int:
+    """Descriptions the LLM read in the last 24 h (app_config.description_facts.llm_daily_cap)."""
+    async with connection() as cx:
+        row = await (await cx.execute(
+            "SELECT count(*) AS n FROM listings "
+            " WHERE description_facts ->> 'source' = 'llm' "
+            "   AND (description_facts ->> 'llm_at')::timestamptz > now() - interval '1 day'")).fetchone()
+    return int(row["n"])
+
+
 async def mark_detail_checked(listing_ids: Iterable[int]) -> None:
     ids = list(listing_ids)
     if ids:
@@ -165,19 +187,24 @@ _DETAIL_RETRY = "6 hours"
 
 
 async def enrichment_queue(*, per_source: int, max_age_days: int) -> list[dict]:
-    """Listings with at least one match and no enrichment yet (sección 5.5), per
-    source newest first, the ones with a live (non-backfill) match ahead."""
+    """Listings to read the detail page of (sección 5.5), per source newest
+    first: the ones with a live (non-backfill) match, then backfill matches,
+    then listings without a match whose published price looks partial (an
+    anticipo or a cuota): only their description can give the total that
+    would let them match."""
     async with connection() as cx:
         return await (await cx.execute(
             "SELECT * FROM ("
             "  SELECT l.id, l.source, l.external_id, l.url, l.make, l.model, "
             "         row_number() OVER (PARTITION BY l.source "
-            "           ORDER BY bool_or(NOT m.is_backfill) DESC, l.first_seen_at DESC) AS n "
-            "    FROM listings l JOIN matches m ON m.listing_id = l.id "
+            "           ORDER BY coalesce(bool_or(NOT m.is_backfill), false) DESC, "
+            "                    count(m.listing_id) > 0 DESC, l.first_seen_at DESC) AS n "
+            "    FROM listings l LEFT JOIN matches m ON m.listing_id = l.id "
             "   WHERE l.enriched_at IS NULL AND l.status = 'active' "
             "     AND l.last_seen_at >= now() - make_interval(days => %s) "
             f"    AND (l.detail_checked_at IS NULL OR l.detail_checked_at < now() - interval '{_DETAIL_RETRY}') "
-            "   GROUP BY l.id) q "
+            "   GROUP BY l.id "
+            "  HAVING count(m.listing_id) > 0 OR l.price_partial) q "
             "WHERE n <= %s ORDER BY source, n",
             (max_age_days, per_source))).fetchall()
 

@@ -58,8 +58,15 @@ class SearchDrafts(_Strict):
     )
 
 
+PriceKind = Literal["cash", "list", "down_payment", "installment"]
+
+
 class ListingFacts(_Strict):
-    """Facts a listing's text states that the structured fields miss (optional, sección 8.1)."""
+    """Facts a listing's text states that the structured fields miss (sección 8.1).
+
+    The worker asks for them when the rules of normalization/description_facts.py
+    can't settle a description (several prices, several km): pipeline/enrich.py.
+    """
 
     transmission: Transmission | None
     fuel: Fuel | None
@@ -69,6 +76,17 @@ class ListingFacts(_Strict):
     accepts_trade_in: bool | None = Field(description="true si acepta permuta.")
     financing: bool | None = Field(description="true si ofrece financiación o anticipo + cuotas.")
     damage_mentioned: bool | None = Field(description="true si menciona choques, granizo, detalles de chapa.")
+    cash_price: float | None = Field(description="Precio de contado / efectivo / final del auto, sin abreviar.")
+    list_price: float | None = Field(description="Precio de lista, de permuta o financiado, si lo distingue del de contado.")
+    down_payment: float | None = Field(description="Anticipo o entrega mínima para retirarlo, si lo dice.")
+    installment_amount: float | None = Field(description="Monto de cada cuota, si lo dice.")
+    installment_count: int | None = Field(description="Cantidad de cuotas (la máxima si da varias).")
+    price_currency: Currency | None = Field(description="Moneda de esos montos: USD si dice U$S/USD/dólares, "
+                                                        "ARS si dice pesos o «$» en millones.")
+    published_price_kind: PriceKind | None = Field(
+        description="Qué es el precio publicado según el texto, si lo aclara: contado, lista, anticipo o cuota.")
+    mileage_km: int | None = Field(description="Kilometraje actual del auto (no el de un service o una pieza).")
+    year: int | None = Field(description="Año modelo del auto.")
 
 
 class PolishedQuestions(_Strict):

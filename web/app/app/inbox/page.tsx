@@ -19,7 +19,16 @@ type WebPayload = {
 type DigestItem = {
   section: "matches" | "price_drops" | "gone";
   listing_id: number;
-  listing?: { make?: string; model?: string; trim?: string; year?: number; title?: string; price?: number; currency?: string };
+  listing?: {
+    make?: string;
+    model?: string;
+    trim?: string;
+    year?: number;
+    title?: string;
+    price?: number;
+    currency?: string;
+    price_kind?: string;
+  };
   match?: { score?: number; level?: string };
 };
 
@@ -75,7 +84,11 @@ export default async function InboxPage() {
                                 {vehicle(item.listing ?? {})}
                               </a>
                               {item.listing?.price != null ? (
-                                <span className="text-muted-foreground"> · {money(item.listing.price, item.listing.currency)}</span>
+                                <span className="text-muted-foreground">
+                                  {" "}
+                                  · {money(item.listing.price, item.listing.currency)}
+                                  {item.listing.price_kind === "cash" ? " de contado" : ""}
+                                </span>
                               ) : null}
                             </li>
                           ))}
