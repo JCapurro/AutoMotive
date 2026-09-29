@@ -1,7 +1,7 @@
 # Automotive — Plan técnico del MVP
 
 - **Basado en:** [PRD v1.0](PRD.md). Convención: **§N** siempre es una sección del PRD; las secciones de este documento se citan como "sección N" (y en la columna *Plan* de la trazabilidad, solo el número).
-- **Estado:** F0–F6 implementadas (worker sobre Supabase Postgres, ingesta por crawl targets, matching con razones, Opportunity Score, motor de notificaciones, web MVP en `web/`, modo asistido con `claude -p`, backoffice `/admin` con el inspector, vistas de métricas y CTA Pro con lista de espera). Sigue F7 (puesta en producción para el piloto, §51); mientras tanto corre en local.
+- **Estado:** F0–F6 implementadas (worker sobre Supabase Postgres, ingesta por crawl targets, matching con razones, Opportunity Score, motor de notificaciones, web MVP en `web/`, modo asistido con `claude -p`, backoffice `/admin` con el inspector, vistas de métricas y CTA Pro con lista de espera). Sigue F7 (puesta en producción para el piloto, §51); mientras tanto corre en local. Planificada: F8 (barrido por recencia: la captura deja de depender de los modelos buscados).
 - **Decisiones tomadas:**
   - Web con **Next.js + Supabase**.
   - Base de datos: **Postgres (Supabase)**, que reemplaza a SQLite.
@@ -870,6 +870,74 @@ La API se publica solo en `/auth`, `/rest` y `/realtime`: en el mismo puerto est
 - **Tests:** guard de la base de tests (pytest), borrado de cuenta y baja de email (pgTAP + e2e), retención (Postgres), contrato del nuevo provider LLM.
 
 **Después de F7:** piloto con 20–50 usuarios (§51). Se evalúa con `v_validation_criteria`.
+
+### F8 · Barrido por recencia (M–L)
+
+**Por qué:** hoy se scrapea por crawl target (fuente × marca × modelo). Ese esquema escala con los usuarios, pero no con los modelos: el costo es modelos distintos × fuentes × frecuencia. Además, los datos dependen de lo que alguien buscó. Un modelo nuevo arranca sin historia y sin mediana de comparables, y el Opportunity Score depende de esa mediana.
+
+F8 separa la captura de la demanda. Por fuente, se recorre el catálogo de usados completo o «más nuevos primero». Así:
+
+- el costo pasa a ser proporcional a los avisos nuevos o al tamaño del catálogo, no a los modelos buscados;
+- la base tiene todo el mercado para comparables desde el día uno;
+- un aviso que deja de aparecer en barridos completos se puede dar de baja sin pedir su ficha.
+
+**Qué ofrece cada fuente** (relevado en vivo el 29/09/2026):
+
+| Fuente | Catálogo de usados | Orden «más nuevos» | Barrido propuesto |
+|---|---|---|---|
+| V6 | ~170 avisos, 20 por página, render en el navegador | Sí: `sortOrder=publicadoMasNuevo`. **Hoy el colector usa `sort=recent`, que no ordena** | Incremental cada 30 min hasta llegar a un aviso conocido, y completo cada 24 h (unas 9 páginas) |
+| Autocosmos | ~6.024 avisos, 48 por página, HTTP (~126 páginas) | No: solo relevancia, precio, cuota y anticipo. Las cards no traen fecha | Completo cada 6 h por HTTP, una página cada 3 s (unos 7 min). Los targets siguen para los modelos buscados, que necesitan avisos rápidos |
+| Kavak | ~1.260 autos, 30 por página, 42 páginas, render en el navegador | Tiene «Más nuevo», pero no cambia la URL. Hay que verificar si ordena por ingreso o por año. Los ids son numéricos y crecientes | Completo cada 6 h. Incremental solo si «Más nuevo» es por ingreso |
+| Facebook | Por ciudad, con scroll infinito y sesión | Sí: el feed `/marketplace/<ciudad>/vehicles?sortBy=creation_time_descend` (el colector ya lo arma sin query) | Incremental por ciudad de las búsquedas activas. No se puede recorrer el país entero |
+| MercadoLibre | El más grande. El web corta en ~2.000 resultados por consulta | Hay que verificar si `_OrderId_BEGIN` es «más recientes» | **Bloqueado** (login wall, 146 corridas fallidas). Queda con targets hasta resolver la sesión o la API oficial (fuera de F8) |
+
+**Alcance:**
+
+0. **Relevamiento (1–2 días, antes de codificar):**
+   - confirmar qué ordena «Más nuevo» en Kavak y cómo pedirlo (parámetro o API interna del front);
+   - con la sesión de Facebook renovada: cuántos avisos da el feed por ciudad antes de repetirse, y qué radio cubre;
+   - medir avisos nuevos por día por fuente, con un barrido manual con `scraper_cli sweep <fuente> --dry-run`, para fijar las cadencias con datos.
+1. **Modelo:**
+   - `crawl_targets.kind` (`model` | `sweep`): un barrido es un target con make/model null y `query` = `{mode: incremental|full, city?}`. Así reusa la cadencia, `collector_runs`, la salud de fuentes y las alertas al admin.
+   - En `sources`: `ingest_mode` (`targets` | `sweep` | `both`), `sweep_incremental_seconds`, `sweep_full_seconds`, `sweep_page_interval_seconds` y `sweep_max_pages`. Se editan en la base, sin deploy.
+   - `listings.last_full_sweep_at`: el último barrido completo que lo vio.
+2. **Colectores:**
+   - `BaseScraper.sweep(mode, known)` devuelve un iterador async de páginas de `Listing`. `known` es el conjunto de ids ya vistos: el incremental corta en la primera página sin avisos nuevos.
+   - Implementar V6 (y corregir ya su `sortOrder` en los targets), Autocosmos y Kavak; Facebook por ciudad después.
+   - Un `CollectorBlocked` corta el barrido y aplica el backoff de la fuente.
+   - Tests con fixtures HTML de dos páginas.
+3. **Pipeline:**
+   - `crawl.py` corre los barridos como cualquier target, con una transacción de ingesta por página. Si se corta a mitad de camino, no se pierde lo ingestado.
+   - El matching pasa a hacerse **por aviso**: `process_batch` agrupa los ids por (make, model) del aviso y busca los perfiles de cada grupo (`alerts_for_model`), en vez de los perfiles del target.
+   - El primer barrido de una fuente es silencioso (backfill), igual que el primer run de un target.
+   - Baja por ausencia: un aviso activo que no aparece en 2 barridos completos seguidos de su fuente pasa a `gone`, con el evento `listing_gone` y la razón «no aparece en la fuente». Solo aplica a fuentes con barrido completo y solo si el barrido terminó sin errores.
+   - El enriquecimiento sigue según la demanda (matches y precios parciales). Barrer no implica pedir fichas.
+4. **Comparables:** con el mercado completo, revisar `min_n` y la ventana de `comparables` (hoy 30 días) y el nivel `model` frente a `trim`. Tiene que medirse, no suponerse: `admin_score_histogram` antes y después.
+5. **Backoffice y métricas:**
+   - `/admin/sources` muestra por fuente el último barrido completo, las páginas, los nuevos por día, la cobertura (avisos vistos en el último completo frente a los activos) y las bajas por ausencia.
+   - Una alerta al admin si un barrido completo trae menos del 50% de lo habitual: suele ser un cambio de layout.
+6. **Rollout por fuente:**
+   - Una semana con `ingest_mode=both` (targets y barrido en paralelo), comparando qué encontró cada uno.
+   - Después, `sweep` donde el barrido cubre lo mismo o más con el mismo aviso rápido (V6; Kavak si tiene incremental).
+   - Autocosmos y Facebook quedan en `both`; MercadoLibre en `targets`.
+
+**Fuera de alcance:** una cola de trabajos con rate limit y varios workers, MercadoLibre por API oficial y hosting. Se retoman si el volumen lo pide.
+
+**Aceptación:**
+- con V6, Autocosmos y Kavak barridos, una búsqueda nueva de un modelo que nadie buscaba muestra resultados y una mediana de comparables al instante, sin esperar un crawl;
+- un aviso nuevo de V6 aparece en menos de 30 min, y en Autocosmos y Kavak en menos de 6 h, además de los targets;
+- un aviso borrado en la fuente pasa a `gone` en menos de 2 barridos completos, sin pedir su ficha;
+- el costo en requests por día de cada fuente no cambia al sumar 50 modelos buscados nuevos;
+- `/admin/sources` muestra la cobertura y ninguna fuente barrida tiene errores en 24 h.
+
+**Tests:**
+- barrido incremental que corta en un id conocido y barrido completo con baja por ausencia (Postgres);
+- barrido cortado a la mitad: lo ingestado queda y no hay bajas;
+- matching por aviso de otro modelo que el del target;
+- primer barrido silencioso;
+- colectores con fixtures de dos páginas.
+
+**Costo:** US$0. Todo corre en la PC del piloto, y la base crece unos 15–20 MB por el catálogo de Autocosmos y Kavak.
 
 **Correspondencia con la priorización del PRD (§48):**
 - **P0** = F0–F4 (registro/login, profiles, collectors, normalización, nuevos, matching, dedupe, alertas, dashboard, resultados, link original, favoritos, descartados y tracking).
