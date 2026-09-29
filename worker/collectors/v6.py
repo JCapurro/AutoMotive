@@ -4,7 +4,7 @@ Listings render client-side via JS. Filters supported via URL:
     brand=<marca>      — e.g. brand=toyota
     model=<modelo>     — e.g. model=corolla
     search=<query>     — free-text fallback
-    sort=recent        — newest first
+    sortOrder=publicadoMasNuevo — newest first (`sort=recent` is ignored)
 Year/price/km filters aren't honored server-side, so we apply them
 client-side via BaseScraper.matches_filters.
 
@@ -185,7 +185,7 @@ class V6Scraper(BaseScraper):
     BASE = "https://www.v6.com.ar/publicaciones"
 
     def _build_url(self, f: dict) -> str:
-        qs: dict[str, str] = {"sort": "recent"}
+        qs: dict[str, str] = {"sortOrder": "publicadoMasNuevo"}
         if f.get("marca"):
             qs["brand"] = _slug(f["marca"])
         q_keys = ("modelo", "version") if qs.get("brand") else ("marca", "modelo", "version")
