@@ -42,7 +42,7 @@ type Phase =
   | { kind: "idle" }
   | { kind: "waiting"; jobId: number }
   | { kind: "review"; jobId: number; drafts: Reviewed[]; active: number }
-  | { kind: "failed"; jobId: number | null; reason: "error" | "empty" | "manual" };
+  | { kind: "failed"; jobId: number | null; reason: "error" | "empty" | "manual" | "unavailable" };
 
 type JobRow = { status: string; output: unknown };
 
@@ -51,6 +51,7 @@ const FALLBACK_TITLE = {
   error: "No pude interpretarlo, completá los filtros",
   empty: "No encontramos un vehículo en tu pedido, completá los filtros",
   manual: "Completá los filtros",
+  unavailable: "El intérprete no está disponible ahora, completá los filtros",
 } as const;
 
 /**
@@ -153,6 +154,7 @@ export function AssistedSearch({
     startSending(async () => {
       const result = await startAssisted(text);
       if (result.jobId != null) setPhase({ kind: "waiting", jobId: result.jobId });
+      else if (result.unavailable) setPhase({ kind: "failed", jobId: null, reason: "unavailable" });
       else setError(result.error ?? "No pudimos enviar tu búsqueda.");
     });
   }

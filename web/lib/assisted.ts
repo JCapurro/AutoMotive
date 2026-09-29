@@ -16,6 +16,11 @@ export const ASSISTED_MAX_CHARS = 1000;
 export const ASSISTED_DEADLINE_MS = 75_000;
 /** Realtime delivers the result; this poll covers a dropped subscription. */
 export const ASSISTED_POLL_MS = 2_000;
+/**
+ * The worker beats every minute (worker_heartbeat, HEARTBEAT_SECONDS); an
+ * older beat means nobody will answer the job, so the form takes over at once.
+ */
+export const ASSISTED_WORKER_STALE_MS = 3 * 60_000;
 
 export const ASSISTED_EXAMPLES = [
   "Busco Fiesta Titanium manual 2016 a 2018 hasta USD 11.500 y menos de 150.000 km",

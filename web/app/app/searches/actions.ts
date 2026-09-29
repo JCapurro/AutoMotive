@@ -3,11 +3,12 @@
 import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { ASSISTED_MAX_CHARS, ASSISTED_MIN_CHARS } from "@/lib/assisted";
+import { ASSISTED_MAX_CHARS, ASSISTED_MIN_CHARS, ASSISTED_WORKER_STALE_MS } from "@/lib/assisted";
 import { requireUser } from "@/lib/auth";
 import type { Frequency } from "@/lib/copy";
 import { track } from "@/lib/events";
 import { SearchInput, type SearchValues, matchingChanged, toColumns, toFilters } from "@/lib/search-form";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { Json } from "@/types/database";
 
@@ -24,7 +25,8 @@ export type SaveOrigin = {
   edited: boolean;
   stay: boolean;
 };
-export type AssistedStart = { jobId?: number; error?: string };
+/** `unavailable`: the worker isn't running, so no job was queued. */
+export type AssistedStart = { jobId?: number; error?: string; unavailable?: boolean };
 export type Preview = { count: number; sample: PreviewListing[] };
 export type PreviewListing = {
   id: number;
@@ -143,6 +145,7 @@ export async function startAssisted(text: string): Promise<AssistedStart> {
   const clean = text.trim();
   if (clean.length < ASSISTED_MIN_CHARS) return { error: "Contanos qué auto buscás: modelo, años, presupuesto…" };
   if (clean.length > ASSISTED_MAX_CHARS) return { error: `Usá menos de ${ASSISTED_MAX_CHARS} caracteres.` };
+  if (!(await workerAlive())) return { unavailable: true };
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("llm_jobs")
@@ -157,6 +160,16 @@ export async function startAssisted(text: string): Promise<AssistedStart> {
   }
   await track(supabase, user.id, "assisted_search_requested", { llm_job_id: data.id, chars: clean.length });
   return { jobId: data.id };
+}
+
+/**
+ * Whether the worker beat recently (worker_heartbeat is server-only). If the
+ * heartbeat can't be read, assume it's alive: the wait's deadline still covers it.
+ */
+async function workerAlive(): Promise<boolean> {
+  const { data, error } = await createAdminClient().from("worker_heartbeat").select("beat_at").maybeSingle();
+  if (error) return true;
+  return data != null && Date.now() - new Date(data.beat_at).getTime() < ASSISTED_WORKER_STALE_MS;
 }
 
 /** "N publicaciones actuales coinciden": the hard filters over the last 30 days (preview_search). */

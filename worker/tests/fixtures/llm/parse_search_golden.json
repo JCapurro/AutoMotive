@@ -148,5 +148,13 @@
     "drafts": [
       {"make": "Ford", "model": "Ka", "trim": "SE", "year_min": 2018, "year_max": 2018}
     ]
+  },
+  {
+    "id": "tope-de-gama-de-cada-uno",
+    "text": "quiero un ford fiesta o un gol trend de 2015 en adelante en el tope de gama de cada uno con menos de 100 mil km",
+    "drafts": [
+      {"make": "Ford", "model": "Fiesta", "trim": "Titanium", "year_min": 2015, "year_max": null, "km_max": 100000},
+      {"make": "Volkswagen", "model": "Gol Trend", "trim": "Highline", "year_min": 2015, "year_max": null, "km_max": 100000}
+    ]
   }
 ]

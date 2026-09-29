@@ -17,6 +17,20 @@ test.describe.configure({ mode: "serial" });
 // A golden phrase with a recorded answer (worker/tests/fixtures/llm/).
 const TWO_VEHICLES = "Fiesta Titanium o Polo Highline, 2017 en adelante, hasta 12 mil dólares";
 
+/** The web only queues a job if the worker beat recently; `tools.llm_jobs --replay` doesn't beat. */
+async function setHeartbeat(ago: string) {
+  await query(
+    `insert into public.worker_heartbeat (id, started_at, beat_at, host, pid)
+     values (1, now() - $1::interval, now() - $1::interval, 'e2e', 0)
+     on conflict (id) do update set beat_at = excluded.beat_at`,
+    [ago],
+  );
+}
+
+test.beforeEach(async () => {
+  await setHeartbeat("0 seconds");
+});
+
 async function signIn(page: Page, email: string) {
   const since = new Date();
   await page.goto("/login?next=/app/searches/new");
@@ -118,4 +132,21 @@ test("F5: si el LLM falla, el formulario estructurado vacío", async ({ page }, 
     [email],
   );
   expect(job.status).toBe("failed");
+});
+
+test("F5: con el worker caído, el formulario sin encolar nada", async ({ page }, testInfo) => {
+  const email = `assisted-down-${testInfo.project.name}-${Date.now()}@${E2E_EMAIL_DOMAIN}`;
+  await signIn(page, email);
+  await setHeartbeat("1 hour");
+  await page.getByRole("tab", { name: "Asistido" }).click();
+  await page.getByLabel("¿Qué auto buscás?").fill(TWO_VEHICLES);
+  await page.getByRole("button", { name: "Interpretar" }).click();
+
+  await expect(page.getByTestId("assisted-fallback")).toContainText("El intérprete no está disponible ahora");
+  await expect(page.getByLabel("Marca")).toHaveValue("");
+  const jobs = await query(
+    `select j.id from public.llm_jobs j join public.profiles p on p.id = j.user_id where p.email = $1`,
+    [email],
+  );
+  expect(jobs).toEqual([]);
 });

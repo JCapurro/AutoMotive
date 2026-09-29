@@ -61,9 +61,9 @@ def check_contract(case: dict, drafts: list[SearchDraft]) -> None:
         assert values["model"] == "" or resolved
 
 
-def test_there_are_20_golden_phrases():
-    assert len(GOLDEN) == 20
-    assert len({c["id"] for c in GOLDEN}) == 20
+def test_there_are_21_golden_phrases():
+    assert len(GOLDEN) == 21
+    assert len({c["id"] for c in GOLDEN}) == 21
 
 
 def test_every_golden_phrase_has_a_recording():
