@@ -3,25 +3,41 @@ import Link from "next/link";
 
 import { Contact, LegalPage } from "@/components/legal-page";
 import { contactEmail } from "@/lib/env";
+import { webConfig } from "@/lib/config";
+import { planPrice } from "@/lib/pro";
 
 export const metadata: Metadata = { title: "Términos de uso" };
 
 // F7, punto 7. A first version for the pilot: have it reviewed before a
 // public launch.
-export default function TermsPage() {
+export default async function TermsPage() {
+  const { proOffer } = await webConfig();
   return (
-    <LegalPage title="Términos de uso" updated="28 de septiembre de 2026">
+    <LegalPage title="Términos de uso" updated="2 de octubre de 2026">
       <p>
-        Al crear una cuenta en Automotive aceptás estos términos. Si no estás de acuerdo, no uses el servicio.
+        Al crear una cuenta en Ese Auto aceptás estos términos. Si no estás de acuerdo, no uses el servicio.
       </p>
 
       <h2>El servicio</h2>
       <p>
-        Automotive monitorea publicaciones de autos usados en sitios de terceros, te avisa cuando aparece una que
-        coincide con tus búsquedas y te muestra información para evaluarla. Está en etapa de piloto: es gratuito,
-        puede cambiar, tener interrupciones o dejar de funcionar, y te avisaremos por email antes de cobrar por
-        cualquier parte.
+        Ese Auto monitorea publicaciones de autos usados en sitios de terceros, te avisa cuando aparece una que
+        coincide con tus búsquedas y te muestra información para evaluarla. La disponibilidad de las fuentes
+        y la frecuencia de detección pueden variar. Los precios comparados corresponden a publicaciones observadas.
       </p>
+
+      <h2>Prueba y planes</h2>
+      <p>La prueba gratis permite una búsqueda activa durante 72 horas corridas desde su primera activación,
+        una sola vez por cuenta, hasta 50 resultados y resumen diario. Editar, pausar o reemplazar la búsqueda no reinicia el plazo.</p>
+      <p>Particular cuesta {planPrice(proOffer.pass_30.amount)} ARS por 30 días y permite 3 búsquedas activas. Agencia cuesta {planPrice(proOffer.pro_monthly.amount)} ARS por período
+        y permite 10 búsquedas activas en una cuenta. En el piloto, Agencia se activa por 30 días con renovación manual.
+        La administración confirma el pago externo antes de activar el período. No hay cobros ni débitos automáticos.</p>
+      <p>Al vencer el acceso se detienen nuevas coincidencias y alertas, incluidos los favoritos; se conserva el historial.
+        Pausar una búsqueda libera capacidad. Cada modelo guardado consume una búsqueda.
+        Los planes pagos incluyen hasta 10 avisos inmediatos de nuevas coincidencias por día y cuenta;
+        los restantes van al resumen. Las bajas de precio de favoritos mantienen su aviso inmediato con acceso vigente.</p>
+      <p>Podés avisar que no querés renovar desde Ajustes. Tu período ya pagado sigue vigente hasta su vencimiento.
+        Para consultar un cobro o solicitar una devolución, contactá a <Contact email={contactEmail} />.
+        Los cambios de precio se comunican antes de contratar otro período y no modifican un período ya comprado.</p>
 
       <h2>La información que mostramos</h2>
       <ul>
@@ -41,7 +57,7 @@ export default function TermsPage() {
 
       <h2>Tu compra es entre vos y el vendedor</h2>
       <p>
-        Automotive no vende vehículos, no intermedia en la operación ni contacta a los vendedores. Cualquier trato,
+        Ese Auto no vende vehículos, no intermedia en la operación ni contacta a los vendedores. Cualquier trato,
         pago o reclamo es entre vos y el vendedor, por los canales del sitio donde está la publicación.
       </p>
 

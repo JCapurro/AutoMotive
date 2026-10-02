@@ -1,27 +1,36 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { DeleteAccount } from "@/components/app/delete-account";
+import { RenewalButton } from "@/components/app/renewal-button";
 import { ProCtaButton } from "@/components/app/pro-cta";
 import { ChannelsForm, FrequencyForm, LocationForm, TelegramLink } from "@/components/app/settings-forms";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireUser } from "@/lib/auth";
 import { telegramBot } from "@/lib/env";
-import { isWaitlistPlan, PLAN_COPY } from "@/lib/pro";
+import { webConfig } from "@/lib/config";
+import { isWaitlistPlan, PLAN_COPY, PLAN_NAMES, accessDescription, accessDate, planPrice, type PlanLimits } from "@/lib/pro";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = { title: "Ajustes" };
 
 export default async function SettingsPage() {
   const user = await requireUser();
+  const cfg = await webConfig();
   const supabase = await createClient();
-  const [{ data: profile }, { data: waitlist }] = await Promise.all([
+  const [{ data: profile }, { data: waitlist }, { data: rawAccess }, { data: payments }, { data: declines }] = await Promise.all([
     supabase
       .from("profiles")
       .select("email, plan, telegram_chat_id, telegram_link_code, default_channels, default_notification_frequency, default_origin_label")
       .single(),
     supabase.from("pro_waitlist").select("plan").maybeSingle(),
+    supabase.rpc("my_plan_limits"),
+    supabase.from("commercial_payments").select("id,offer,amount,currency,period_start,period_end,refunded_at").order("verified_at", { ascending: false }).limit(10),
+    supabase.from("events").select("props").eq("name", "renewal_declined").order("created_at", { ascending: false }).limit(10),
   ]);
+  const access = rawAccess as PlanLimits | null;
+  const declined = (declines ?? []).some((d) => (d.props as { period_end?: string })?.period_end === access?.expires_at);
 
   return (
     <div className="mx-auto max-w-2xl space-y-5">
@@ -58,6 +67,7 @@ export default async function SettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle>Preferencias</CardTitle>
+          {access?.enforced && access.plan === "free" ? <CardDescription>Durante la prueba, las nuevas coincidencias llegan en el resumen diario. Tu preferencia se aplica al activar un plan pago.</CardDescription> : null}
         </CardHeader>
         <CardContent className="grid gap-5 sm:grid-cols-2">
           <FrequencyForm value={profile?.default_notification_frequency ?? "immediate"} />
@@ -69,23 +79,33 @@ export default async function SettingsPage() {
         <CardHeader>
           <CardTitle>Plan</CardTitle>
           <CardDescription>
-            {profile?.plan === "free"
-              ? "Gratuito. Durante el piloto tenés todo habilitado."
-              : profile?.plan === "pass"
-                ? "Search Pass"
-                : "Automotive Pro"}
+            {access ? accessDescription(access) : "Consultá los planes disponibles."}
           </CardDescription>
         </CardHeader>
-        {profile?.plan === "free" ? (
           <CardContent className="space-y-3">
+            {access ? <p className="text-sm">{PLAN_NAMES[access.plan]} · {access.active_searches ?? 0} búsquedas activas
+              {access.enforced ? ` de ${access.limits.max_profiles ?? "sin límite"}` : ""}.</p> : null}
+            {access?.plan === "pro" && access.active ? <>
+              <p className="text-sm text-muted-foreground">Renovación manual por 30 días. No hay débitos automáticos.
+                Podés avisar que no vas a renovar; el período pagado sigue vigente.</p>
+              <RenewalButton declined={declined} />
+            </> : null}
+            {access?.state === "expired" ? <p className="text-sm text-muted-foreground">Después de activar un plan, reanudá las búsquedas que quieras seguir desde sus resultados.</p> : null}
             {waitlist?.plan ? (
               <p className="text-sm text-muted-foreground">
-                Estás en la lista de espera de {isWaitlistPlan(waitlist.plan) ? PLAN_COPY[waitlist.plan].name : waitlist.plan}.
+                {cfg.commercialPilot ? "Solicitaste" : "Estás en la lista de espera de"} {isWaitlistPlan(waitlist.plan) ? PLAN_COPY[waitlist.plan].name : waitlist.plan}.
               </p>
             ) : null}
             <ProCtaButton placement="settings" variant="outline" />
+            {payments?.length ? <div className="border-t pt-3">
+              <h2 className="text-sm font-medium">Períodos pagados</h2>
+              <ul className="mt-2 space-y-2 text-sm text-muted-foreground">{payments.map((p) => <li key={p.id}>
+                {isWaitlistPlan(p.offer) ? PLAN_COPY[p.offer].name : p.offer} · {planPrice(p.amount)} ARS · hasta {accessDate(p.period_end)}
+                {p.refunded_at ? " · devolución registrada" : ""}
+              </li>)}</ul>
+            </div> : null}
+            <p className="text-sm text-muted-foreground">Ayuda para pagos y devoluciones: <Link href="/terminos" className="underline">contacto y condiciones</Link>.</p>
           </CardContent>
-        ) : null}
       </Card>
 
       <Card>

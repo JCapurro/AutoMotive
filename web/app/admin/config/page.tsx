@@ -11,8 +11,9 @@ export const metadata: Metadata = { title: "Config" };
 const HINTS: Record<string, string> = {
   plan_limits: "Límites por plan (§33). Con enforced = false solo se mide plan_limit_hit; con true se aplican.",
   validation_criteria: "Umbrales de los 6 criterios del §53 (v_validation_criteria) y el objetivo de activación.",
-  pro_cta: "Cuándo aparece «Probar Automotive Pro»: alertas clickeadas o límites alcanzados (§52).",
-  pro_offer: "Precios que muestra la pantalla de planes (hipótesis, sin cobro).",
+  pro_cta: "Cuándo se ofrece ver planes: alertas clickeadas o límites alcanzados (§52).",
+  pro_offer: "Oferta en ARS por 30 días y versión. Las nuevas confirmaciones usan estos importes; los pagos anteriores conservan su precio.",
+  commercial_pilot: "Habilitar desde Cobros para iniciar las pruebas existentes y aplicar límites en la misma operación.",
   collector_failure_alert_after: "Fallas seguidas de una fuente antes de avisar por Telegram al admin.",
   alerts_max_per_user_day: "Tope diario de alertas inmediatas; el resto va al digest.",
   score_weights: "Pesos del Opportunity Score (sección 6.3).",

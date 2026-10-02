@@ -77,7 +77,7 @@ export async function setDiscardReason(listingId: number, reason: RejectionReaso
   refresh();
 }
 
-/** Watchlist (§30): Automotive keeps checking a saved listing. */
+/** Watchlist (§30): Ese Auto keeps checking a saved listing. */
 export async function setSaved(listingId: number, saved: boolean) {
   const user = await requireUser();
   const supabase = await createClient();
@@ -116,7 +116,7 @@ export async function recordPurchase(input: z.input<typeof Purchase>): Promise<{
   return { ownedId: data };
 }
 
-/** §38: "¿Automotive influyó en que encontraras este vehículo?" */
+/** §38: "¿Ese Auto influyó en que encontraras este vehículo?" */
 export async function answerInfluence(ownedId: number, influence: (typeof INFLUENCES)[number]) {
   const user = await requireUser();
   if (!INFLUENCES.includes(influence)) throw new Error("invalid answer");

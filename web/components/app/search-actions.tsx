@@ -2,6 +2,7 @@
 
 import { Pause, Play, Trash2 } from "lucide-react";
 import { useTransition } from "react";
+import { toast } from "sonner";
 
 import { deleteSearch, setSearchEnabled, setSearchFrequency } from "@/app/app/searches/actions";
 import { Button } from "@/components/ui/button";
@@ -21,21 +22,25 @@ import { FREQUENCY, type Frequency } from "@/lib/copy";
 export function PauseButton({ id, enabled }: { id: number; enabled: boolean }) {
   const [pending, start] = useTransition();
   return (
-    <Button variant="outline" size="sm" disabled={pending} onClick={() => start(() => setSearchEnabled(id, !enabled))}>
+    <Button variant="outline" size="sm" disabled={pending} onClick={() => start(async () => {
+      const result = await setSearchEnabled(id, !enabled);
+      if (result.error) toast.error(result.error);
+    })}>
       {enabled ? <Pause aria-hidden /> : <Play aria-hidden />}
       {enabled ? "Pausar" : "Reanudar"}
     </Button>
   );
 }
 
-export function FrequencySelect({ id, value }: { id: number; value: Frequency }) {
+export function FrequencySelect({ id, value, dailyOnly = false }: { id: number; value: Frequency; dailyOnly?: boolean }) {
   const [pending, start] = useTransition();
   return (
     <NativeSelect
       size="sm"
       aria-label="Frecuencia de alertas"
-      value={value}
-      disabled={pending}
+      value={dailyOnly ? "daily" : value}
+      disabled={pending || dailyOnly}
+      title={dailyOnly ? "La prueba gratis incluye resumen diario. Tu preferencia se conserva para el plan pago." : undefined}
       onChange={(e) => {
         const next = e.target.value as Frequency;
         start(() => setSearchFrequency(id, next));

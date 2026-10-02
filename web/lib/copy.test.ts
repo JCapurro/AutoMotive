@@ -27,7 +27,7 @@ describe("copy lint (§19)", () => {
         .replace(/FORBIDDEN_TERMS = \[[^\]]*\]/, "")
         .toLowerCase();
       for (const term of FORBIDDEN_TERMS) {
-        if (new RegExp(`(^|[^\p{L}])${term}([^\p{L}]|$)`, "u").test(text)) {
+        if (new RegExp(`(^|[^\\p{L}\\p{N}_])${term}([^\\p{L}\\p{N}_]|$)`, "u").test(text)) {
           offenders.push(`${path.relative(ROOT, file)}: ${term}`);
         }
       }

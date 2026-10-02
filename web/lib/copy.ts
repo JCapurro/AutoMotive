@@ -72,10 +72,10 @@ export const FREQUENCY: Record<Frequency, { label: string; hint: string }> = {
 };
 
 export const MIN_LEVEL_OPTIONS: { value: Level; label: string }[] = [
-  { value: "high", label: "🔥 Solo altas oportunidades" },
-  { value: "good", label: "🟢 Buenas coincidencias o mejores" },
-  { value: "match", label: "🟡 Cualquier coincidencia" },
-  { value: "low", label: "⚪ Todo lo que coincida" },
+  { value: "high", label: "Solo altas oportunidades" },
+  { value: "good", label: "Buenas coincidencias o mejores" },
+  { value: "match", label: "Cualquier coincidencia" },
+  { value: "low", label: "Todo lo que coincida" },
 ];
 
 export const TRANSMISSION: Record<string, string> = { manual: "Manual", automatic: "Automática" };

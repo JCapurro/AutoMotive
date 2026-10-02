@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Automotive · Variantes</title>
+<style>
+/* Comparison board: deliberately plain so the four variants do the talking. */
+:root { --bg: #f6f6f4; --card: #fff; --ink: #1b1b1b; --ink-2: #5d5d5d; --line: #e2e2de; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+a { color: inherit; }
+:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+.wrap { max-width: 1320px; margin: 0 auto; padding: 32px clamp(16px, 3vw, 32px) 64px; }
+header h1 { margin: 0; font-size: 26px; letter-spacing: -.01em; }
+header p { margin: 6px 0 0; color: var(--ink-2); max-width: 75ch; }
+.grid { margin-top: 28px; display: grid; gap: 24px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 560px), 1fr)); }
+.v { background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; }
+.shot { position: relative; aspect-ratio: 16 / 10; overflow: hidden; background: #ddd; border-bottom: 1px solid var(--line); }
+.shot iframe { position: absolute; left: 0; top: 0; width: 1280px; height: 800px; border: 0; transform-origin: 0 0; pointer-events: none; }
+.shot a { position: absolute; inset: 0; }
+.body { padding: 18px 20px 20px; display: grid; gap: 12px; }
+.body h2 { margin: 0; font-size: 20px; display: flex; align-items: baseline; gap: 10px; }
+.body h2 small { font-weight: 500; font-size: 14px; color: var(--ink-2); }
+.thesis { margin: 0; font-size: 16px; }
+dl { margin: 0; display: grid; grid-template-columns: 96px 1fr; gap: 6px 12px; font-size: 14px; }
+dt { color: var(--ink-2); }
+dd { margin: 0; }
+.chips { display: flex; gap: 4px; }
+.chips span { width: 22px; height: 22px; border-radius: 5px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); }
+.links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.links a { text-decoration: none; padding: 7px 12px; border-radius: 8px; border: 1px solid var(--line); font-weight: 600; font-size: 14px; }
+.links a:hover { background: var(--bg); }
+.links a.main { background: var(--ink); color: #fff; border-color: var(--ink); }
+.notes { margin-top: 36px; display: grid; gap: 24px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.notes section { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; }
+.notes h3 { margin: 0 0 8px; font-size: 16px; }
+.notes ul { margin: 0; padding-left: 18px; color: var(--ink-2); font-size: 14px; display: grid; gap: 6px; }
+.notes b { color: var(--ink); font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Automotive: cuatro direcciones de frontend</h1>
+    <p>Las cuatro usan los mismos datos (búsqueda «Ford Focus» del Supabase local) y los mismos textos del producto, en tres pantallas: landing, inicio y detalle de una publicación. Cada una sale de un objeto que el comprador de autos usados en Argentina ya conoce, no del look genérico de «app de autos».</p>
+  </header>
+
+  <div class="grid">
+    <article class="v">
+      <div class="shot"><iframe src="a-guia.html?bare#landing" title="Vista previa de Guía" loading="lazy" tabindex="-1"></iframe><a href="a-guia.html#landing" aria-label="Abrir Guía"></a></div>
+      <div class="body">
+        <h2>A · Guía <small>clara, para cualquiera (elegida, sin gráficos)</small></h2>
+        <p class="thesis">La guía de precios impresa que se lee con resaltador: Automotive marca en amarillo lo que conviene mirar.</p>
+        <dl>
+          <dt>Tipografía</dt><dd>Archivo (Omnibus-Type, Buenos Aires), ancha en títulos y angosta en tablas</dd>
+          <dt>Paleta</dt><dd class="chips"><span style="background:#ffffff"></span><span style="background:#f1f3f7"></span><span style="background:#14213d"></span><span style="background:#4e5a73"></span><span style="background:#ffe14d"></span></dd>
+          <dt>Firma</dt><dd>Una lista de precios real, del más barato al más caro, con el aviso resaltado con marcador. En el aviso, «¿Está bien de precio?» y «¿Por qué tiene 88?» responden en palabras</dd>
+          <dt>Riesgo</dt><dd>La más sobria de las cuatro: su personalidad depende de que el resaltador se use solo para lo importante</dd>
+        </dl>
+        <div class="links"><a class="main" href="a-guia.html#landing">Landing</a><a href="a-guia.html#inicio">Inicio</a><a href="a-guia.html#aviso">Aviso</a></div>
+      </div>
+    </article>
+
+    <article class="v">
+      <div class="shot"><iframe src="b-parabrisas.html?bare#landing" title="Vista previa de Parabrisas" loading="lazy" tabindex="-1"></iframe><a href="b-parabrisas.html#landing" aria-label="Abrir Parabrisas"></a></div>
+      <div class="body">
+        <h2>B · Parabrisas <small>callejero, con mano</small></h2>
+        <p class="thesis">El auto en venta en la vereda, con el precio escrito en fibrón sobre el vidrio. Lo blanco es del vendedor; lo naranja, las notas de Automotive.</p>
+        <dl>
+          <dt>Tipografía</dt><dd>Encode Sans (Impallari, Rosario) más Permanent Marker solo para lo escrito a mano</dd>
+          <dt>Paleta</dt><dd class="chips"><span style="background:#e6eae9"></span><span style="background:#b9c2c6"></span><span style="background:#143b43"></span><span style="background:#f7f8f3"></span><span style="background:#ff7a1a"></span></dd>
+          <dt>Firma</dt><dd>La franja polarizada arriba de cada foto, con el score encerrado en un círculo y el precio en U$S a mano</dd>
+          <dt>Riesgo</dt><dd>La letra a mano cansa si se abusa; hay que contenerla a números y frases cortas</dd>
+        </dl>
+        <div class="links"><a class="main" href="b-parabrisas.html#landing">Landing</a><a href="b-parabrisas.html#inicio">Inicio</a><a href="b-parabrisas.html#aviso">Aviso</a></div>
+      </div>
+    </article>
+
+    <article class="v">
+      <div class="shot"><iframe src="c-patente.html?bare#landing" title="Vista previa de Patente" loading="lazy" tabindex="-1"></iframe><a href="c-patente.html#landing" aria-label="Abrir Patente"></a></div>
+      <div class="body">
+        <h2>C · Patente <small>institucional, confiable</small></h2>
+        <p class="thesis">Los papeles del auto: la patente Mercosur nombra cada búsqueda, la oblea de la VTV lleva el score y la cédula verde es la ficha de la publicación.</p>
+        <dl>
+          <dt>Tipografía</dt><dd>Saira (Omnibus-Type), muy angosta en mayúsculas como en la patente</dd>
+          <dt>Paleta</dt><dd class="chips"><span style="background:#f2f4f7"></span><span style="background:#1f3f99"></span><span style="background:#000000"></span><span style="background:#dcebd4"></span><span style="background:#e4472b"></span></dd>
+          <dt>Firma</dt><dd>La oblea: un sticker redondo con el color del nivel, pegado en la esquina de cada foto</dd>
+          <dt>Riesgo</dt><dd>Usa símbolos oficiales (patente, oblea); conviene que no parezca un trámite</dd>
+        </dl>
+        <div class="links"><a class="main" href="c-patente.html#landing">Landing</a><a href="c-patente.html#inicio">Inicio</a><a href="c-patente.html#aviso">Aviso</a></div>
+      </div>
+    </article>
+
+    <article class="v">
+      <div class="shot"><iframe src="d-ruta.html?bare#landing" title="Vista previa de Ruta" loading="lazy" tabindex="-1"></iframe><a href="d-ruta.html#landing" aria-label="Abrir Ruta"></a></div>
+      <div class="body">
+        <h2>D · Ruta <small>oscuro, de noche</small></h2>
+        <p class="thesis">La cartelería vial de noche, cuando llegan las alertas: carteles verdes con borde reflectivo, el score como número de salida y los km como distancia.</p>
+        <dl>
+          <dt>Tipografía</dt><dd>Overpass, heredera de la Highway Gothic de los carteles</dd>
+          <dt>Paleta</dt><dd class="chips"><span style="background:#25282c"></span><span style="background:#0b6e46"></span><span style="background:#f3f4ef"></span><span style="background:#f5c518"></span><span style="background:#f08a24"></span></dd>
+          <dt>Firma</dt><dd>Cartel con solapa de salida; las búsquedas pendientes son carteles de obra; las comparables, tachas reflectivas</dd>
+          <dt>Riesgo</dt><dd>Solo oscuro; para uso de día al sol habría que diseñar un modo claro</dd>
+        </dl>
+        <div class="links"><a class="main" href="d-ruta.html#landing">Landing</a><a href="d-ruta.html#inicio">Inicio</a><a href="d-ruta.html#aviso">Aviso</a></div>
+      </div>
+    </article>
+  </div>
+
+  <div class="notes">
+    <section>
+      <h3>Igual en las cuatro</h3>
+      <ul>
+        <li>Publicaciones, fotos, scores, desglose, comparables y red flags salen del Supabase local (Ford Focus, 28/09).</li>
+        <li><b>Ilustrativo:</b> la antigüedad de cada aviso, los precios individuales de las 10 comparables (respetan la mediana y los cuartiles guardados) y los scores de ejemplo de la leyenda en C.</li>
+        <li>Mobile con barra de pestañas abajo, foco visible y animación única que respeta «reducir movimiento».</li>
+      </ul>
+    </section>
+    <section>
+      <h3>Cambios respecto de la web actual</h3>
+      <ul>
+        <li>Los emojis de nivel (🔥🟢🟡⚪) se reemplazan por la marca de cada mundo: resaltador, círculo a mano, color de oblea, color de solapa.</li>
+        <li>«vale la pena mirar» pasa a «conviene mirar»: «vale» está en <code>FORBIDDEN_TERMS</code>.</li>
+        <li>Las cadenas «A · B · C» pasan a campos separados.</li>
+      </ul>
+    </section>
+    <section>
+      <h3>Para elegir</h3>
+      <ul>
+        <li>Mirá primero el <b>Aviso</b>: es la pantalla donde se decide si llamar al vendedor.</li>
+        <li>Se pueden mezclar: por ejemplo, el gráfico de A dentro del mundo de C.</li>
+        <li>La elegida se pasa a <code>web/</code> como tokens en <code>globals.css</code> y componentes con Tailwind.</li>
+      </ul>
+    </section>
+  </div>
+</div>
+<script>
+// Scale each 1280×800 live preview to its card.
+const fit = () => document.querySelectorAll(".shot").forEach((s) => {
+  s.querySelector("iframe").style.transform = `scale(${s.clientWidth / 1280})`;
+});
+new ResizeObserver(fit).observe(document.body);
+fit();
+</script>
+</body>
+</html>

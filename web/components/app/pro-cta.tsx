@@ -26,7 +26,7 @@ function useViewed(placement: Placement) {
   }, [placement]);
 }
 
-/** "Probar Automotive Pro": records pro_cta_clicked, then opens the plans. */
+/** "Ver planes": records pro_cta_clicked, then opens the plans. */
 export function ProCtaButton({
   placement,
   variant = "default",
@@ -50,23 +50,23 @@ export function ProCtaButton({
         })
       }
     >
-      Probar Automotive Pro <ArrowRight aria-hidden />
+      Ver planes <ArrowRight aria-hidden />
     </Button>
   );
 }
 
 const COPY = {
   activity: {
-    title: "¿Querés enterarte antes?",
-    body: "Con Pro buscamos cada pocos minutos y te avisamos al instante, en todas tus búsquedas.",
+    title: "Seguí buscando con Ese Auto",
+    body: "Particular y Agencia suman búsquedas activas y avisos cuando detectamos coincidencias.",
   },
   plan_limit: {
-    title: "Pasaste el límite del plan gratuito",
-    body: "Durante el piloto no cortamos nada. Con Pro vas a tener varias búsquedas y alertas inmediatas.",
+    title: "Elegí capacidad para tus búsquedas",
+    body: "La prueba incluye una búsqueda por 3 días. Particular permite 3 activas y Agencia, 10.",
   },
   results: {
     title: "¿Querés ver todos los resultados?",
-    body: "El plan gratuito va a mostrar hasta 50 publicaciones por búsqueda. Pro las muestra todas.",
+    body: "La prueba gratuita muestra hasta 50 publicaciones. Particular y Agencia muestran todos los resultados disponibles.",
   },
 } as const;
 
@@ -84,7 +84,7 @@ export function ProBanner({
   const copy = COPY[reason];
   return (
     <aside
-      aria-label="Automotive Pro"
+      aria-label="Planes de Ese Auto"
       data-testid="pro-banner"
       className={cn(
         "flex flex-col gap-3 rounded-xl bg-amber-50 p-4 text-amber-950 ring-1 ring-amber-200 sm:flex-row sm:items-center",

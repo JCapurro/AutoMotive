@@ -7,12 +7,12 @@ import { webConfig } from "@/lib/config";
 import { isPlacement, isWaitlistPlan, PRO_BENEFITS } from "@/lib/pro";
 import { createClient } from "@/lib/supabase/server";
 
-export const metadata: Metadata = { title: "Automotive Pro" };
+export const metadata: Metadata = { title: "Planes" };
 
 // §52 / sección 9: the plans screen. No charge yet: it measures intent with the waitlist.
 export default async function ProPage({ searchParams }: PageProps<"/app/pro">) {
   await requireUser();
-  const { from } = await searchParams;
+  const { from, plan } = await searchParams;
   const supabase = await createClient();
   const [{ data: waitlist }, cfg] = await Promise.all([
     supabase.from("pro_waitlist").select("plan").maybeSingle(),
@@ -22,13 +22,20 @@ export default async function ProPage({ searchParams }: PageProps<"/app/pro">) {
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <header className="space-y-2">
-        <p className="text-sm font-medium text-amber-700">Automotive Pro</p>
-        <h1 className="text-2xl font-semibold tracking-tight">¿Querés enterarte antes?</h1>
+        <p className="text-sm font-medium text-amber-700">Planes de Ese Auto</p>
+        <h1 className="text-2xl font-semibold tracking-tight">Elegí cuánto querés buscar</h1>
         <p className="text-muted-foreground">
-          Todavía no cobramos. Elegí el plan que te sirve y sumate a la lista de espera: te avisamos cuando esté disponible.
-          Mientras dure el piloto, tenés todo habilitado.
+          Particular acompaña la compra de tu próximo auto. Agencia sirve para buscar vehículos habitualmente.
+          {cfg.commercialPilot ? " Coordinamos el pago y verificamos cada alta durante este piloto." : " Las altas pagas todavía están en lista de espera."}
         </p>
       </header>
+
+      <section className="rounded-xl border bg-card p-5 text-sm">
+        <h2 className="font-semibold">Prueba gratis por 3 días</h2>
+        <p className="mt-1 text-muted-foreground">Una búsqueda activa, hasta 50 resultados y resumen diario.
+          Las 72 horas empiezan al activar la primera búsqueda; pausar, editar o reemplazarla no reinicia el plazo.
+          Sin tarjeta ni cobro automático. Al vencer, conservamos historial y favoritos.</p>
+      </section>
 
       <ul className="grid gap-2 sm:grid-cols-2">
         {PRO_BENEFITS.map((b) => (
@@ -42,8 +49,14 @@ export default async function ProPage({ searchParams }: PageProps<"/app/pro">) {
       <ProPlans
         offer={cfg.proOffer}
         current={isWaitlistPlan(waitlist?.plan) ? waitlist.plan : null}
+        recommended={isWaitlistPlan(plan) ? plan : undefined}
         placement={isPlacement(from) ? from : "plans"}
+        pilot={cfg.commercialPilot}
       />
+      <p className="text-sm text-muted-foreground">Cada modelo guardado cuenta como una búsqueda; pausar libera capacidad.
+        Hasta 10 avisos inmediatos de nuevas coincidencias por día y cuenta; los restantes van al resumen.
+        Las bajas de precio de favoritos pueden avisarse de inmediato mientras tu acceso siga vigente.
+        La detección depende de la disponibilidad de cada fuente.</p>
     </div>
   );
 }

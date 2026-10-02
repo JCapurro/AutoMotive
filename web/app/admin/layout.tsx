@@ -5,7 +5,7 @@ import { AdminNav } from "@/components/admin/admin-nav";
 import { Logo } from "@/components/logo";
 import { requireAdmin } from "@/lib/admin";
 
-export const metadata: Metadata = { title: { default: "Admin", template: "%s · Admin · Automotive" }, robots: { index: false } };
+export const metadata: Metadata = { title: { default: "Admin", template: "%s · Admin · Ese Auto" }, robots: { index: false } };
 
 // Backoffice (sección 10): role = 'admin' checked by the proxy and here; the
 // pages read with the service role, server-side only.

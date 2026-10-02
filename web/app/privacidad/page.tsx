@@ -12,7 +12,7 @@ export default function PrivacyPage() {
   return (
     <LegalPage title="Política de privacidad" updated="28 de septiembre de 2026">
       <p>
-        Automotive es un servicio en etapa de piloto que monitorea publicaciones de autos usados y te avisa cuando
+        Ese Auto es un servicio en etapa de piloto que monitorea publicaciones de autos usados y te avisa cuando
         aparece una que coincide con tu búsqueda. Esta política explica qué datos tuyos usamos, para qué y cómo
         podés ejercer tus derechos.
       </p>

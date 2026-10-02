@@ -4,6 +4,7 @@ import { refresh } from "next/cache";
 import { z } from "zod";
 
 import { requireAdmin } from "@/lib/admin";
+import { CommercialOfferInput } from "@/lib/commercial";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Json } from "@/types/database";
 
@@ -38,6 +39,7 @@ function shape(value: unknown): string {
  */
 export async function updateConfig(key: string, text: string): Promise<ActionResult> {
   await requireAdmin();
+  if (key === "commercial_pilot") return { error: "Habilitá el piloto desde Cobros para iniciar las pruebas y aplicar límites juntos." };
   let value: Json;
   try {
     value = JSON.parse(text) as Json;
@@ -48,6 +50,7 @@ export async function updateConfig(key: string, text: string): Promise<ActionRes
   const { data: current } = await admin.from("app_config").select("value").eq("key", key).maybeSingle();
   if (!current) return { error: `La clave ${key} no existe.` };
   if (value === null) return { error: "El valor no puede ser null." };
+  if (key === "pro_offer" && !CommercialOfferInput.safeParse(value).success) return { error: "La oferta requiere una versión y los dos planes con importe entero positivo, moneda ARS y 30 días." };
   if (shape(current.value) !== shape(value)) {
     return { error: `El valor tiene que ser ${shape(current.value)}, como el actual.` };
   }

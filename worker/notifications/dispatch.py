@@ -44,6 +44,8 @@ async def deliver_pending(channels: Mapping[str, Channel], *, limit: int = 200) 
     async with _lock:
         sent = 0
         for row in await repo.queued(limit):
+            if not await repo.prepare_delivery(row["id"]):
+                continue
             n = to_notification(row)
             result = await send_one(channels.get(n.channel), n)
             if result.ok:

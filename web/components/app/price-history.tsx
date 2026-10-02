@@ -1,43 +1,33 @@
-"use client";
-
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-
 import { dayMonth, money } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
 export type PricePoint = { at: string; price: number; currency: string };
 
-/** §31: the published price over time (one point per observed change). */
+/**
+ * §31: every published price we saw, oldest first, in plain words — no chart:
+ * "Bajó USD 500 desde que la vimos" and the dated list under it.
+ */
 export function PriceHistory({ points }: { points: PricePoint[] }) {
-  const currency = points[points.length - 1]?.currency ?? "USD";
-  const data = points.map((p) => ({ ...p, label: dayMonth(p.at) }));
+  const first = points[0];
+  const last = points[points.length - 1];
+  const change = last.price - first.price;
   return (
-    <div className="space-y-3">
-      <div className="h-44 w-full" aria-hidden>
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
-            <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} />
-            <YAxis
-              width={64}
-              tickLine={false}
-              axisLine={false}
-              fontSize={12}
-              domain={["auto", "auto"]}
-              tickFormatter={(v: number) => money(v, "").trim()}
-            />
-            <Tooltip
-              formatter={(v) => [money(Number(v), currency), "Precio publicado"]}
-              labelFormatter={(label) => String(label)}
-            />
-            <Line type="stepAfter" dataKey="price" stroke="var(--foreground)" strokeWidth={2} dot={{ r: 3 }} />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-      <ul className="space-y-1 text-sm tabular-nums" aria-label="Histórico de precios">
+    <div>
+      {change !== 0 ? (
+        <p className="text-[15px]">
+          <span className={change < 0 ? "mark" : undefined}>
+            {change < 0 ? "Bajó" : "Subió"} {money(Math.abs(change), last.currency)}
+          </span>{" "}
+          desde que la vimos por primera vez.
+        </p>
+      ) : null}
+      <ul className="mt-2" aria-label="Histórico de precios">
         {points.map((p, i) => (
-          <li key={`${p.at}-${i}`} className="flex justify-between gap-3">
-            <span className="text-muted-foreground">{dayMonth(p.at)}</span>
-            <span>{money(p.price, p.currency)}</span>
+          <li key={`${p.at}-${i}`} className="flex justify-between gap-3 border-b py-2 text-[15px] last:border-b-0">
+            <span className="text-muted-foreground">{i === points.length - 1 ? `${dayMonth(p.at)}, ahora` : dayMonth(p.at)}</span>
+            <span className={cn("type-figure", i === points.length - 1 ? "text-base" : "font-semibold text-muted-foreground")}>
+              {money(p.price, p.currency)}
+            </span>
           </li>
         ))}
       </ul>

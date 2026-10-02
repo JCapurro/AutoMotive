@@ -12,7 +12,7 @@ Publicado hace 4 minutos.
 ⚠️ No especifica cantidad de dueños: conviene verificar.
 === telegram buttons ===
 ⭐ Me interesa [nt:interested:42] | ✖ Descartar [nt:discarded:42]
-🔎 Ver en Automotive [https://automotive.app/r/42?to=detail]
+🔎 Ver en Ese Auto [https://automotive.app/r/42?to=detail]
 === email subject ===
 🔥 Nueva oportunidad: Ford Fiesta Titanium 2017 · 88/100
 === email text ===
@@ -24,13 +24,13 @@ Opportunity Score 88/100
 8% debajo de publicaciones comparables.
 Publicado hace 4 minutos.
 Ver publicación: https://automotive.app/r/42?to=listing
-🔎 Ver en Automotive: https://automotive.app/r/42?to=detail
+🔎 Ver en Ese Auto: https://automotive.app/r/42?to=detail
 
 🔎 Fiesta Titanium AMBA · 📍 Palermo, Capital Federal · 🏷 mercadolibre
 ⚠️ No especifica cantidad de dueños: conviene verificar.
 
 —
-Recibís este correo porque tenés búsquedas activas en Automotive.
+Recibís este correo porque tenés búsquedas activas en Ese Auto.
 === email html ===
 <div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.5;color:#1a1a1a">
 <p style="font-size:18px;margin:0 0 8px"><strong>🔥 Nueva oportunidad</strong></p>
@@ -40,7 +40,7 @@ Recibís este correo porque tenés búsquedas activas en Automotive.
 <p style="margin:0">Opportunity Score 88/100</p>
 <p style="margin:0">8% debajo de publicaciones comparables.</p>
 <p style="margin:0">Publicado hace 4 minutos.</p>
-<p style="margin:16px 0"><a href="https://automotive.app/r/42?to=listing" style="display:inline-block;padding:10px 16px;margin-right:8px;background:#1a1a1a;color:#ffffff;text-decoration:none;border-radius:6px">Ver publicación</a> <a href="https://automotive.app/r/42?to=detail" style="display:inline-block;padding:10px 16px;margin-right:8px;background:#1a1a1a;color:#ffffff;text-decoration:none;border-radius:6px">🔎 Ver en Automotive</a></p>
+<p style="margin:16px 0"><a href="https://automotive.app/r/42?to=listing" style="display:inline-block;padding:10px 16px;margin-right:8px;background:#1a1a1a;color:#ffffff;text-decoration:none;border-radius:6px">Ver publicación</a> <a href="https://automotive.app/r/42?to=detail" style="display:inline-block;padding:10px 16px;margin-right:8px;background:#1a1a1a;color:#ffffff;text-decoration:none;border-radius:6px">🔎 Ver en Ese Auto</a></p>
 <p style="margin:0;color:#555555">🔎 Fiesta Titanium AMBA · 📍 Palermo, Capital Federal · 🏷 mercadolibre</p>
 <p style="margin:0;color:#555555">⚠️ No especifica cantidad de dueños: conviene verificar.</p>
-<p style="margin:24px 0 0;font-size:12px;color:#888888">Recibís este correo porque tenés búsquedas activas en Automotive.</p></div>
+<p style="margin:24px 0 0;font-size:12px;color:#888888">Recibís este correo porque tenés búsquedas activas en Ese Auto.</p></div>

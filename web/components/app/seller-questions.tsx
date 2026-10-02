@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { trackSellerQuestions } from "@/app/app/listings/actions";
 import { Button } from "@/components/ui/button";
 
-/** §25 "¿Qué le pregunto al vendedor?": Automotive only drafts the message; the user copies it. */
+/** §25 "¿Qué le pregunto al vendedor?": Ese Auto only drafts the message; the user copies it. */
 export function SellerQuestions({ listingId, text }: { listingId: number; text: string }) {
   const [open, setOpen] = useState(false);
 
@@ -43,7 +43,7 @@ export function SellerQuestions({ listingId, text }: { listingId: number; text: 
         <Button onClick={copy}>
           <Copy aria-hidden /> Copiar mensaje
         </Button>
-        <span className="text-xs text-muted-foreground">Automotive no contacta al vendedor: vos decidís si mandarlo.</span>
+        <span className="text-xs text-muted-foreground">Ese Auto no contacta al vendedor: vos decidís si mandarlo.</span>
       </div>
     </div>
   );

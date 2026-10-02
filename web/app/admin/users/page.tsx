@@ -3,10 +3,11 @@ import type { Metadata } from "next";
 import { EmptyRow, PageHeader, Pill, Table, Td, Th } from "@/components/admin/ui";
 import { count, isPast, when } from "@/lib/admin-format";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { PLAN_NAMES } from "@/lib/pro";
 
 export const metadata: Metadata = { title: "Usuarios" };
 
-const WAITLIST: Record<string, string> = { pro_monthly: "Pro mensual", pass_30: "Pass 30 días", pass_90: "Pass 90 días" };
+const WAITLIST: Record<string, string> = { pro_monthly: "Agencia", pass_30: "Particular", pass_90: "Pase anterior 90 días" };
 
 // sección 10, "Usuarios": plan, searches, alerts per day, last activity.
 export default async function UsersPage() {
@@ -42,7 +43,7 @@ export default async function UsersPage() {
                   {u.role === "admin" ? <Pill tone="warn">admin</Pill> : null}
                 </Td>
                 <Td className="whitespace-nowrap">
-                  {u.plan}
+                  {u.plan ? PLAN_NAMES[u.plan] : "—"}
                   {u.plan_expires_at ? (
                     <span className="block text-xs text-muted-foreground">
                       {expired ? "venció" : "vence"} {when(u.plan_expires_at)}

@@ -11,6 +11,7 @@ export const ADMIN_SECTIONS = [
   { href: "/admin/notifications", label: "Notificaciones" },
   { href: "/admin/matches", label: "Matches" },
   { href: "/admin/users", label: "Usuarios" },
+  { href: "/admin/billing", label: "Cobros" },
   { href: "/admin/searches", label: "Búsquedas" },
   { href: "/admin/listings", label: "Listings" },
   { href: "/admin/sources", label: "Fuentes" },

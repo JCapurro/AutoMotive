@@ -296,10 +296,10 @@ function PurchasedBanner({ owned }: { owned: { id: number; influence: Influence 
     <div className="space-y-3 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-950 ring-1 ring-emerald-200" data-testid="purchased">
       <p className="font-medium">🔑 Compraste este vehículo.</p>
       {owned.influence ? (
-        <p>¡Gracias por contarnos! Nos dijiste que Automotive influyó: {INFLUENCE[owned.influence].toLowerCase()}.</p>
+        <p>¡Gracias por contarnos! Nos dijiste que Ese Auto influyó: {INFLUENCE[owned.influence].toLowerCase()}.</p>
       ) : (
         <div className="space-y-2">
-          <p id="influence-question">¿Automotive influyó en que encontraras este vehículo?</p>
+          <p id="influence-question">¿Ese Auto influyó en que encontraras este vehículo?</p>
           <div role="group" aria-labelledby="influence-question" className="flex flex-wrap gap-2">
             {(Object.keys(INFLUENCE) as Influence[]).map((i) => (
               <Button

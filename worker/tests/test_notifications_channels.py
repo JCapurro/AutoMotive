@@ -43,14 +43,14 @@ class TelegramChannelTests(unittest.IsolatedAsyncioTestCase):
         rows = [[(b.text, b.callback_data, b.url) for b in row] for row in markup.inline_keyboard]
         self.assertEqual(rows, [
             [("⭐ Me interesa", "nt:interested:42", None), ("✖ Descartar", "nt:discarded:42", None)],
-            [("🔎 Ver en Automotive", None, "https://automotive.app/r/42?to=detail")],
+            [("🔎 Ver en Ese Auto", None, "https://automotive.app/r/42?to=detail")],
         ])
 
     async def test_no_url_button_without_a_public_https_base(self):
         bot = FakeBot()
         await TelegramChannel(bot, Links("http://127.0.0.1:8787"), clock=lambda: NOW).send(OPPORTUNITY)
         buttons = [b.text for row in bot.sent[0]["reply_markup"].inline_keyboard for b in row]
-        self.assertNotIn("🔎 Ver en Automotive", buttons)
+        self.assertNotIn("🔎 Ver en Ese Auto", buttons)
 
     async def test_blocked_bot_is_permanent_network_error_is_retried(self):
         blocked = await TelegramChannel(FakeBot(Forbidden("bot was blocked by the user")), LINKS).send(OPPORTUNITY)

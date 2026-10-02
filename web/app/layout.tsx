@@ -1,27 +1,28 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Archivo, Geist_Mono } from "next/font/google";
 
 import { Toaster } from "@/components/ui/sonner";
 import { siteUrl } from "@/lib/env";
 
 import "./globals.css";
 
-const sans = Geist({ variable: "--font-sans", subsets: ["latin"] });
+// Archivo (Omnibus-Type, Buenos Aires) with its width axis: wide headlines, narrow figures.
+const sans = Archivo({ variable: "--font-sans", subsets: ["latin"], axes: ["wdth"] });
 const mono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 const DESCRIPTION =
-  "Decinos qué auto estás buscando. Automotive monitorea las publicaciones y te avisa cuando aparece uno que vale la pena mirar.";
+  "Decinos qué auto estás buscando. Ese Auto monitorea las publicaciones y te avisa cuando aparece uno que vale la pena mirar.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
-  title: { default: "Automotive — Encontrá las oportunidades antes que los demás", template: "%s · Automotive" },
+  title: { default: "eseauto.com.ar — Decinos cuál. Te avisamos cuando aparezca.", template: "%s · eseauto.com.ar" },
   description: DESCRIPTION,
   // The image comes from app/opengraph-image.tsx.
   openGraph: {
     type: "website",
     locale: "es_AR",
-    siteName: "Automotive",
-    title: "Automotive — Encontrá las oportunidades antes que los demás",
+    siteName: "eseauto.com.ar",
+    title: "eseauto.com.ar — Decinos cuál. Te avisamos cuando aparezca.",
     description: DESCRIPTION,
   },
   twitter: { card: "summary_large_image" },

@@ -2,7 +2,7 @@ import { ImageResponse } from "next/og";
 
 // F7, punto 11: the preview when the landing is shared (§51: comunidades,
 // grupos, contenido corto). The §50 example alert.
-export const alt = "Automotive: 🔥 Nueva oportunidad — Ford Fiesta Titanium 2017, 88/100, 8% debajo de publicaciones comparables";
+export const alt = "S Auto · eseauto.com.ar: 🔥 Nueva oportunidad — Ford Fiesta Titanium 2017, 88/100, 8% debajo de publicaciones comparables";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -36,12 +36,13 @@ export default function Image() {
                 color: "#ffffff",
               }}
             >
-              A
+              S
             </div>
-            Automotive
+            S Auto
           </div>
+          <div style={{ marginTop: 10, fontSize: 22, color: "#525252" }}>eseauto.com.ar</div>
           <div style={{ marginTop: 40, fontSize: 60, fontWeight: 700, lineHeight: 1.1 }}>
-            Encontrá las oportunidades antes que los demás.
+            Decinos cuál. Te avisamos cuando aparezca.
           </div>
           <div style={{ marginTop: 24, fontSize: 28, color: "#525252" }}>
             Te avisamos cuando aparece un auto que vale la pena mirar.

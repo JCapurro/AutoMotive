@@ -43,7 +43,7 @@ export default async function NewSearchPage() {
     <div className="space-y-5">
       <div className="space-y-1">
         <h1 className="text-xl font-semibold tracking-tight">Nueva búsqueda</h1>
-        <p className="text-sm text-muted-foreground">Decinos qué auto estás buscando. Automotive monitorea por vos.</p>
+        <p className="text-sm text-muted-foreground">Decinos qué auto estás buscando. Ese Auto monitorea por vos.</p>
       </div>
       <Tabs defaultValue="structured">
         <TabsList>

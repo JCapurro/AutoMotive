@@ -1,14 +1,12 @@
 import { LEVEL, type InteractionStatus, type Level, STATUS } from "@/lib/copy";
 import { cn } from "@/lib/utils";
 
-const LEVEL_STYLE: Record<Level, string> = {
-  high: "bg-orange-100 text-orange-900 ring-orange-200",
-  good: "bg-emerald-100 text-emerald-900 ring-emerald-200",
-  match: "bg-amber-100 text-amber-900 ring-amber-200",
-  low: "bg-muted text-muted-foreground ring-border",
-};
-
-/** 🔥 88 — the level (§20) and the Opportunity Score. */
+/**
+ * The Opportunity Score marked like the level (§20): an opportunity gets the
+ * full highlighter, a good match a stroke underneath, a plain match nothing and
+ * low priority fades. The level's name goes next to it (`long`) or, read aloud
+ * only, inside the number's label.
+ */
 export function LevelBadge({
   level,
   score,
@@ -21,38 +19,37 @@ export function LevelBadge({
   className?: string;
 }) {
   if (!level) return null;
-  const { emoji, label } = LEVEL[level];
+  const { label } = LEVEL[level];
   return (
     <span
       title={`${label} · Opportunity Score ${score}/100`}
-      className={cn(
-        "inline-flex h-6 shrink-0 items-center gap-1 rounded-full px-2 text-xs font-semibold tabular-nums ring-1",
-        LEVEL_STYLE[level],
-        className,
-      )}
+      className={cn("inline-flex shrink-0 flex-col items-end gap-1 text-right", className)}
     >
-      <span aria-hidden>{emoji}</span>
-      {long ? `${label} · ${score}/100` : score}
+      <span className={cn("type-figure text-[22px] leading-none", level === "low" && "text-faint")}>
+        <span className={level === "high" ? "mark" : level === "good" ? "mark-under" : undefined}>{score}</span>
+        {long ? null : <span className="sr-only"> {label}</span>}
+      </span>
+      {long ? <span className="text-xs font-medium text-muted-foreground">{label}</span> : null}
     </span>
   );
 }
 
 const STATUS_STYLE: Partial<Record<InteractionStatus, string>> = {
-  interested: "bg-sky-100 text-sky-900",
-  contacted: "bg-violet-100 text-violet-900",
-  visit_scheduled: "bg-violet-100 text-violet-900",
-  purchased: "bg-emerald-100 text-emerald-900",
-  discarded: "bg-muted text-muted-foreground line-through",
+  interested: "ring-1 ring-foreground ring-inset",
+  contacted: "bg-panel-2",
+  visit_scheduled: "bg-panel-2",
+  purchased: "bg-ok text-white",
+  discarded: "px-0 text-faint line-through",
 };
 
 /** The user's state of a listing (§26). "Nuevo" and "Visto" are quiet on purpose. */
 export function StatusBadge({ status }: { status: InteractionStatus | null }) {
   if (!status || status === "seen") return null;
   if (status === "new") {
-    return <span className="inline-flex h-5 items-center rounded-full bg-primary px-2 text-[11px] font-medium text-primary-foreground">Nuevo</span>;
+    return <span className="inline-flex h-5.5 items-center rounded px-2 text-xs font-semibold bg-primary text-primary-foreground">Nuevo</span>;
   }
   return (
-    <span className={cn("inline-flex h-5 items-center rounded-full px-2 text-[11px] font-medium", STATUS_STYLE[status])}>
+    <span className={cn("inline-flex h-5.5 items-center rounded px-2 text-xs font-semibold", STATUS_STYLE[status])}>
       {STATUS[status]}
     </span>
   );

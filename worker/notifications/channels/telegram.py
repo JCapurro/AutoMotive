@@ -1,5 +1,5 @@
 """Telegram (§21, canal existente): the §22 copy in HTML plus the inline
-buttons ⭐ Me interesa · ✖ Descartar · 🔎 Ver en Automotive."""
+buttons ⭐ Me interesa · ✖ Descartar · 🔎 Ver en Ese Auto."""
 from __future__ import annotations
 
 from datetime import datetime, timezone

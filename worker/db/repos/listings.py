@@ -199,7 +199,7 @@ async def enrichment_queue(*, per_source: int, max_age_days: int) -> list[dict]:
             "         row_number() OVER (PARTITION BY l.source "
             "           ORDER BY coalesce(bool_or(NOT m.is_backfill), false) DESC, "
             "                    count(m.listing_id) > 0 DESC, l.first_seen_at DESC) AS n "
-            "    FROM listings l LEFT JOIN matches m ON m.listing_id = l.id "
+            "    FROM listings l LEFT JOIN matches m ON m.listing_id = l.id AND public.search_access_active(m.search_profile_id) "
             "   WHERE l.enriched_at IS NULL AND l.status = 'active' "
             "     AND l.last_seen_at >= now() - make_interval(days => %s) "
             f"    AND (l.detail_checked_at IS NULL OR l.detail_checked_at < now() - interval '{_DETAIL_RETRY}') "
@@ -220,7 +220,8 @@ async def watchlist_queue(*, min_hours_between_checks: int = 20) -> list[dict]:
             "   AND (l.detail_checked_at IS NULL "
             "        OR l.detail_checked_at < now() - make_interval(hours => %s)) "
             "   AND EXISTS (SELECT 1 FROM user_listing_interactions i "
-            "                WHERE i.listing_id = l.id AND (i.saved OR i.status IN "
+            "                WHERE i.listing_id = l.id AND public.commercial_access_active(i.user_id) "
+            "                  AND (i.saved OR i.status IN "
             "                      ('interested', 'contacted', 'visit_scheduled'))) "
             " ORDER BY l.source, l.detail_checked_at NULLS FIRST, l.id",
             (min_hours_between_checks,))).fetchall()
@@ -246,6 +247,7 @@ async def matched_recheck_queue(*, unseen_hours: int, recheck_hours: int, max_ag
             "          OR l.detail_checked_at < now() - make_interval(hours => %s)) "
             "     AND l.first_seen_at >= now() - make_interval(days => %s) "
             "     AND EXISTS (SELECT 1 FROM matches m "
-            "                  WHERE m.listing_id = l.id AND m.level <> 'low')) q "
+            "                  WHERE m.listing_id = l.id AND m.level <> 'low' "
+            "                    AND public.search_access_active(m.search_profile_id))) q "
             "WHERE n <= %s ORDER BY source, n",
             (unseen_hours, recheck_hours, max_age_days, per_source))).fetchall()

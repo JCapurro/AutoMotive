@@ -117,7 +117,7 @@ async def upsert_scored(cx: AsyncConnection, profile_id: int,
             + ", ".join(f"{c} = excluded.{c}" for c in _EVALUATED) +
             " RETURNING id, (xmax = 0) AS inserted",
             (profile_id, listing_id, backfill, *values))).fetchone()
-        if rec["inserted"]:
+        if rec and rec["inserted"]:
             inserted[listing_id] = rec["id"]
     return inserted
 
@@ -134,7 +134,7 @@ async def rescore_queue(*, days: int, scoring_version: str,
             "SELECT m.id, m.search_profile_id, m.listing_id FROM matches m "
             "  JOIN listings l ON l.id = m.listing_id "
             "  JOIN search_profiles sp ON sp.id = m.search_profile_id "
-            " WHERE l.status = 'active' AND sp.enabled "
+            " WHERE l.status = 'active' AND public.search_access_active(sp.id) "
             f"  AND (m.scoring_version <> %(version)s{recent}) "
             " ORDER BY m.search_profile_id, m.listing_id",
             {"days": days, "version": scoring_version})).fetchall()
@@ -149,5 +149,5 @@ async def matches_of_listings(listing_ids: Iterable[int]) -> list[dict[str, Any]
         return await (await cx.execute(
             "SELECT m.id, m.search_profile_id, m.listing_id FROM matches m "
             "  JOIN search_profiles sp ON sp.id = m.search_profile_id "
-            " WHERE m.listing_id = ANY(%s) AND sp.enabled "
+            " WHERE m.listing_id = ANY(%s) AND public.search_access_active(sp.id) "
             " ORDER BY m.search_profile_id, m.listing_id", (ids,))).fetchall()

@@ -42,7 +42,7 @@ def _web(links: Links, path: str) -> str | None:
 
 
 def welcome_text(links: Links) -> str:
-    lines = ["🚗 Automotive", "",
+    lines = ["🚗 Ese Auto", "",
              "Te aviso por acá cuando aparece un auto que coincide con tus búsquedas."]
     if app := _web(links, "/app"):
         lines += ["", f"Creá y editá tus búsquedas en la web: {app}"]
@@ -52,7 +52,7 @@ def welcome_text(links: Links) -> str:
 
 
 def linked_text(links: Links) -> str:
-    text = "✅ Listo, vinculaste Telegram con tu cuenta de Automotive. Las alertas van a llegar a este chat."
+    text = "✅ Listo, vinculaste Telegram con tu cuenta de Ese Auto. Las alertas van a llegar a este chat."
     if app := _web(links, "/app"):
         text += f"\n\nTus búsquedas: {app}"
     return text

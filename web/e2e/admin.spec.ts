@@ -9,7 +9,7 @@ import { magicLink } from "./support/mail";
  *   * from the admin, "¿por qué se envió esta alerta?" in one click;
  *   * v_validation_criteria shows the six §53 criteria;
  *   * /admin is closed to non-admins;
- *   * "Probar Automotive Pro" → plans → waitlist, with its events.
+ *   * "Ver planes" → Particular → waitlist, with its events.
  * On desktop and on a 375 px phone (the `mobile` project).
  */
 
@@ -122,7 +122,7 @@ test("F6: el admin responde «¿por qué se envió esta alerta?» en un clic", a
   });
 });
 
-test("F6: «Probar Automotive Pro» → planes → lista de espera", async ({ page }, testInfo) => {
+test("F6: «Ver planes» → Particular → lista de espera", async ({ page }, testInfo) => {
   const run = `${testInfo.project.name}-${Date.now()}`;
   const email = `pro-${run}@${E2E_EMAIL_DOMAIN}`;
   await signIn(page, email);
@@ -148,25 +148,25 @@ test("F6: «Probar Automotive Pro» → planes → lista de espera", async ({ pa
   await test.step("el banner aparece en el dashboard", async () => {
     await page.goto("/app");
     const banner = page.getByTestId("pro-banner");
-    await expect(banner).toContainText("¿Querés enterarte antes?");
+    await expect(banner).toContainText("Seguí buscando con Ese Auto");
     await expect.poll(async () => (await events("pro_cta_viewed")).map((e) => e.props.placement)).toEqual(["dashboard"]);
     await expectNoHorizontalScroll(page);
-    await banner.getByRole("button", { name: "Probar Automotive Pro" }).click();
+    await banner.getByRole("button", { name: "Ver planes" }).click();
     await expect(page).toHaveURL(/\/app\/pro\?from=dashboard$/);
     expect((await events("pro_cta_clicked")).map((e) => e.props.placement)).toEqual(["dashboard"]);
   });
 
-  await test.step("elige Search Pass 90 días y se suma a la lista", async () => {
-    await expect(page.getByRole("heading", { name: "¿Querés enterarte antes?" })).toBeVisible();
+  await test.step("elige Particular y se suma a la lista", async () => {
+    await expect(page.getByRole("heading", { name: "Elegí cuánto querés buscar" })).toBeVisible();
     await expectNoHorizontalScroll(page);
-    await page.getByText("Search Pass 90 días").click();
+    await page.getByRole("radio", { name: /Particular/ }).check();
     await page.getByRole("button", { name: "Sumarme a la lista de espera" }).click();
-    await expect(page.getByTestId("waitlist-joined")).toContainText("Search Pass 90 días");
+    await expect(page.getByTestId("waitlist-joined")).toContainText("Particular");
     const [row] = await query<{ plan: string; placement: string }>(`select plan, placement from public.pro_waitlist where user_id = $1`, [
       user.id,
     ]);
-    expect(row).toEqual({ plan: "pass_90", placement: "dashboard" });
-    expect((await events("waitlist_joined")).map((e) => e.props.plan)).toEqual(["pass_90"]);
+    expect(row).toEqual({ plan: "pass_30", placement: "dashboard" });
+    expect((await events("waitlist_joined")).map((e) => e.props.plan)).toEqual(["pass_30"]);
   });
 
   await test.step("ya en la lista, el banner no vuelve", async () => {

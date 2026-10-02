@@ -1,0 +1,534 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Automotive · Ruta</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Overpass:ital,wght@0,300..900;1,300..900&display=swap" rel="stylesheet">
+<script src="data.js"></script>
+<script src="icons.js"></script>
+<script src="proto.js"></script>
+<style>
+/* D · Ruta — highway signage at night, when the alerts arrive. Guide signs
+   are green with a retroreflective border; the score rides on the sign's
+   tab like an exit number; km are road distances; warnings are the yellow
+   diamond; a search still being built is a work-zone sign. Overpass carries
+   the Highway Gothic lineage the signs are lettered in. */
+:root {
+  --asphalt: #25282c;
+  --asphalt-2: #2f3338;
+  --asphalt-3: #3d4248;
+  --white: #f3f4ef;
+  --grey: #b9bec4;
+  --grey-2: #8e959c;
+  --sign: #0b6e46;
+  --sign-2: #0e8053;
+  --blue: #1d5aa6;
+  --lane: #f5c518;
+  --work: #f08a24;
+  --black: #15171a;
+  --r: 12px;
+  --wrap: 1200px;
+  --gut: clamp(16px, 4vw, 40px);
+  --noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .07 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; scrollbar-color: var(--asphalt-3) var(--asphalt); color-scheme: dark; }
+body {
+  margin: 0; background: var(--asphalt) var(--noise); color: var(--white);
+  font: 400 16px/1.5 "Overpass", system-ui, sans-serif; font-variant-numeric: tabular-nums;
+  caret-color: var(--lane); -webkit-font-smoothing: antialiased;
+}
+::selection { background: var(--lane); color: var(--black); }
+a { color: inherit; text-underline-offset: 3px; }
+:focus-visible { outline: 3px solid var(--lane); outline-offset: 2px; border-radius: 4px; }
+h1, h2, h3, p, ul, ol, dl, dd, figure { margin: 0; padding: 0; }
+ul, ol { list-style: none; }
+.icon { width: 18px; height: 18px; stroke-width: 2; flex: none; }
+.wrap { max-width: var(--wrap); margin: 0 auto; padding-left: var(--gut); padding-right: var(--gut); }
+
+/* A guide sign: green field, white border line set in from the edge. */
+.sign {
+  position: relative; background: var(--sign); color: var(--white); border-radius: var(--r);
+  outline: 2.5px solid var(--white); outline-offset: -7px;
+  box-shadow: 0 14px 28px -14px rgba(0,0,0,.7);
+}
+.sign.blue { background: var(--blue); }
+.sign.work { background: var(--work); color: var(--black); outline-color: var(--black); }
+.sign.off { background: var(--asphalt-3); color: var(--grey); outline-color: var(--grey-2); }
+/* The tab on top of the sign carries the score, like an exit number. */
+.tab {
+  position: absolute; left: 20px; bottom: calc(100% - 2px); display: inline-flex; align-items: baseline; gap: 6px;
+  padding: 5px 12px 3px; border-radius: 8px 8px 0 0; background: var(--lane); color: var(--black);
+  font-weight: 800; font-size: 13px; line-height: 1.2; white-space: nowrap;
+}
+.tab b { font-size: 20px; font-weight: 900; line-height: 1; }
+.tab.good { background: var(--white); }
+.tab.match { background: var(--grey); }
+.tab.low { background: var(--asphalt-3); color: var(--grey); }
+.arrow { width: 34px; height: 34px; flex: none; fill: currentColor; }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 8px; height: 48px; padding: 0 22px; border: 0; border-radius: 10px;
+  background: var(--sign); color: var(--white); outline: 2px solid var(--white); outline-offset: -5px;
+  font: 800 15px/1 "Overpass", sans-serif; text-decoration: none; cursor: pointer; white-space: nowrap; padding-top: 2px;
+  transition: background-color .15s, transform .1s;
+}
+.btn:hover { background: var(--sign-2); }
+.btn:active { transform: translateY(1px); }
+.btn:focus-visible { outline: 3px solid var(--lane); outline-offset: 2px; }
+.btn.ghost { background: transparent; outline: 1.5px solid var(--grey-2); outline-offset: -1.5px; color: var(--white); }
+.btn.ghost:hover { background: var(--asphalt-2); }
+.btn.sm { height: 38px; padding: 0 14px; font-size: 14px; }
+
+.wordmark { display: inline-flex; align-items: center; height: 34px; padding: 3px 14px 0; border-radius: 7px; background: var(--sign); outline: 1.5px solid var(--white); outline-offset: -4px; font-weight: 800; font-size: 18px; letter-spacing: .005em; text-decoration: none; }
+
+/* Lane line: dashes, the page's only motion. */
+.lane { height: 6px; background: repeating-linear-gradient(90deg, var(--white) 0 46px, transparent 46px 86px); opacity: .85; }
+.lane.yellow { background: repeating-linear-gradient(90deg, var(--lane) 0 46px, transparent 46px 86px); }
+@media (prefers-reduced-motion: no-preference) {
+  .lane.drive { animation: drive 1.6s cubic-bezier(.16, 1, .3, 1) .2s both; }
+  @keyframes drive { from { background-position: 1200px 0; } to { background-position: 0 0; } }
+}
+
+/* ---------- Landing ---------- */
+.site-head { display: flex; align-items: center; justify-content: space-between; height: 76px; }
+.site-head .login { font-weight: 700; text-decoration: none; padding: 8px 4px; color: var(--grey); }
+.site-head .login:hover { color: var(--white); }
+.hero { padding-top: clamp(16px, 4vw, 56px); }
+.hero h1 { font-weight: 800; font-size: clamp(2.5rem, 6.2vw, 5.4rem); line-height: 1; letter-spacing: -.02em; max-width: 15ch; text-wrap: balance; }
+.hero-row { margin-top: 24px; display: flex; flex-wrap: wrap; gap: 20px 32px; align-items: center; justify-content: space-between; }
+.hero-row p { font-size: 19px; line-height: 1.45; color: var(--grey); max-width: 46ch; }
+.hero-row .cta { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.hero-row small { color: var(--grey-2); font-size: 14px; }
+
+.gantry { position: relative; margin-top: clamp(48px, 7vw, 88px); padding-top: 34px; }
+.truss {
+  position: absolute; left: -8px; right: -8px; top: 0; height: 24px; border-top: 3px solid #6b7178; border-bottom: 3px solid #6b7178;
+  background: repeating-linear-gradient(60deg, transparent 0 14px, #6b7178 14px 16px, transparent 16px 30px), repeating-linear-gradient(-60deg, transparent 0 14px, #6b7178 14px 16px, transparent 16px 30px);
+}
+.hangers { display: grid; gap: 52px 24px; grid-template-columns: 1fr; padding-top: 30px; }
+@media (min-width: 860px) { .hangers { grid-template-columns: 1.15fr 1fr; } }
+.hangers .sign { padding: 32px 34px 30px; display: flex; gap: 18px; align-items: start; text-decoration: none; transition: transform .2s; }
+.hangers .sign:hover { transform: translateY(-2px); }
+.hangers .sign::before, .hangers .sign::after { content: ""; position: absolute; top: -62px; width: 6px; height: 62px; background: #6b7178; }
+.hangers .sign::before { left: 22%; } .hangers .sign::after { right: 22%; }
+.hangers .sign > div { flex: 1; min-width: 0; }
+.hangers .name { font-weight: 800; font-size: clamp(1.5rem, 3vw, 2.4rem); line-height: 1.08; }
+.hangers .price { margin-top: 10px; font-weight: 800; font-size: clamp(1.3rem, 2.4vw, 1.8rem); }
+.hangers .why { margin-top: 4px; font-size: 17px; opacity: .92; }
+.road { margin-top: 56px; padding: 26px 0; background: #1f2225 var(--noise); border-top: 4px solid #e8e8e2; border-bottom: 4px solid var(--lane); }
+
+.section { padding-top: 80px; padding-bottom: 80px; }
+.section h2 { font-weight: 800; font-size: clamp(1.9rem, 3.8vw, 3rem); line-height: 1.05; letter-spacing: -.015em; max-width: 22ch; }
+.section .lede { margin-top: 14px; font-size: 18px; color: var(--grey); max-width: 60ch; }
+
+/* Destinations board: name, distance, and price per line. */
+.board { margin-top: 40px; padding: 30px clamp(18px, 3vw, 36px) 26px; }
+.board-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 18px; align-items: baseline; padding: 12px 0; border-bottom: 1.5px solid rgba(243,244,239,.28); text-decoration: none; }
+.board-row:last-child { border-bottom: 0; }
+.board-row .n { font-weight: 700; font-size: clamp(1.05rem, 2vw, 1.45rem); line-height: 1.2; }
+.board-row .k { grid-row: 2; font-size: 14px; opacity: .85; }
+.board-row .p { grid-row: 1 / span 2; grid-column: 2; display: flex; align-items: center; gap: 14px; font-weight: 800; font-size: clamp(1.05rem, 2vw, 1.45rem); }
+.board-row:hover .n { text-decoration: underline; }
+.score-chip { display: inline-grid; place-items: center; min-width: 46px; height: 32px; padding: 3px 8px 0; border-radius: 6px; font-weight: 900; font-size: 19px; background: var(--lane); color: var(--black); }
+.score-chip.good { background: var(--white); }
+.score-chip.match { background: var(--grey); }
+@media (min-width: 760px) {
+  .board-row { grid-template-columns: minmax(0, 1fr) 150px 190px; }
+  .board-row .k { grid-row: auto; text-align: right; font-size: 17px; }
+  .board-row .p { grid-row: auto; grid-column: auto; justify-content: end; }
+}
+
+.benefits { margin-top: 36px; }
+.benefits li { padding: 22px 0; display: grid; gap: 4px; }
+.benefits li + li { border-top: 0; background: repeating-linear-gradient(90deg, var(--lane) 0 28px, transparent 28px 50px) top / 100% 3px no-repeat; }
+.benefits b { font-weight: 800; font-size: clamp(1.25rem, 2.4vw, 1.7rem); line-height: 1.15; }
+.benefits span { color: var(--grey); font-size: 17px; }
+@media (min-width: 860px) { .benefits li { grid-template-columns: 1fr 1fr; align-items: baseline; gap: 32px; } }
+.closing { padding-top: 40px; padding-bottom: 96px; }
+.closing h2 { font-weight: 800; font-size: clamp(1.9rem, 4vw, 3.2rem); line-height: 1.05; max-width: 20ch; letter-spacing: -.015em; }
+.closing .btn { margin-top: 28px; }
+.site-foot { border-top: 1px solid var(--asphalt-3); padding-top: 22px; padding-bottom: 40px; font-size: 14px; color: var(--grey-2); }
+.site-foot .wrap { display: flex; gap: 8px 24px; flex-wrap: wrap; }
+
+/* ---------- App ---------- */
+.app-head { position: sticky; top: 0; z-index: 30; background: var(--asphalt-2); box-shadow: 0 1px 0 var(--asphalt-3); }
+.app-head .wrap { display: flex; align-items: center; gap: 26px; height: 64px; }
+.app-nav { display: none; gap: 4px; height: 100%; }
+.app-nav a { display: inline-flex; align-items: center; gap: 6px; padding: 3px 12px 0; color: var(--grey); text-decoration: none; font-weight: 700; font-size: 15px; border-bottom: 4px solid transparent; border-top: 4px solid transparent; }
+.app-nav a:hover { color: var(--white); }
+.app-nav a[aria-current="page"] { color: var(--white); border-bottom-color: var(--lane); }
+.count { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 2px 6px 0; border-radius: 10px; background: var(--lane); color: var(--black); font-size: 12px; font-weight: 900; }
+.app-head .btn { margin-left: auto; display: none; }
+.bell { margin-left: auto; position: relative; display: inline-grid; place-items: center; width: 42px; height: 42px; }
+.bell .icon { width: 22px; height: 22px; }
+.bell .count { position: absolute; top: 2px; right: 0; min-width: 18px; height: 18px; font-size: 11px; }
+@media (min-width: 900px) { .app-nav, .app-head .btn { display: flex; } .bell { display: none; } }
+.tabbar { position: fixed; inset: auto 0 0; z-index: 30; background: var(--asphalt-2); box-shadow: 0 -1px 0 var(--asphalt-3); padding-bottom: env(safe-area-inset-bottom); }
+.tabbar ul { display: grid; grid-template-columns: repeat(4, 1fr); max-width: 480px; margin: 0 auto; }
+.tabbar a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; height: 60px; font-size: 11px; font-weight: 700; color: var(--grey-2); text-decoration: none; }
+.tabbar a[aria-current="page"] { color: var(--lane); }
+.tabbar .icon { width: 22px; height: 22px; }
+@media (min-width: 900px) { .tabbar { display: none; } }
+.app-main { padding-top: 36px; padding-bottom: 120px; }
+@media (min-width: 900px) { .app-main { padding-bottom: 96px; } }
+.title { font-weight: 800; font-size: 36px; line-height: 1.05; letter-spacing: -.015em; }
+.h2 { font-weight: 800; font-size: 26px; line-height: 1.1; letter-spacing: -.01em; }
+.sub { font-size: 14px; color: var(--grey); margin-top: 4px; }
+.block { margin-top: 52px; }
+
+.searches { margin-top: 44px; display: grid; gap: 44px 22px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); }
+.search { padding: 24px 24px 22px; display: grid; gap: 10px; }
+.search .top { display: flex; gap: 16px; align-items: start; justify-content: space-between; }
+.search .name { font-weight: 800; font-size: 26px; line-height: 1.1; text-decoration: none; }
+.search .name:hover { text-decoration: underline; }
+.search .filters { display: flex; flex-wrap: wrap; gap: 2px 14px; font-size: 15px; opacity: .92; }
+.search .figs { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 15px; padding-top: 10px; border-top: 1.5px solid rgba(243,244,239,.3); }
+.search .figs b { font-weight: 900; font-size: 18px; }
+.search.work .figs { border-top-color: rgba(0,0,0,.25); }
+.search .arrow { width: 30px; height: 30px; }
+.diamond { display: inline-grid; place-items: center; width: 22px; height: 22px; transform: rotate(45deg); border-radius: 3px; background: var(--black); flex: none; }
+.diamond::after { content: ""; width: 8px; height: 8px; transform: rotate(-45deg); background: var(--work); border-radius: 1px; }
+
+.telegram { margin-top: 26px; display: flex; gap: 14px; align-items: center; padding: 18px 22px; text-decoration: none; }
+.telegram b { font-weight: 800; }
+.telegram .go { margin-left: auto; font-weight: 800; white-space: nowrap; }
+
+.rows { margin-top: 20px; display: grid; gap: 12px; }
+@media (min-width: 1000px) { .rows { grid-template-columns: 1fr 1fr; } }
+.row { position: relative; display: grid; grid-template-columns: 136px minmax(0, 1fr) auto; gap: 4px 16px; padding: 12px; border-radius: var(--r); background: var(--asphalt-2); box-shadow: inset 0 0 0 1px var(--asphalt-3); align-items: start; }
+.row:hover { box-shadow: inset 0 0 0 1px var(--grey-2); }
+.row img { width: 136px; height: 96px; object-fit: cover; border-radius: 8px; grid-row: span 3; display: block; }
+.row h3 { font-weight: 700; font-size: 17px; line-height: 1.25; }
+.row h3 a { text-decoration: none; }
+.row h3 a::after { content: ""; position: absolute; inset: 0; }
+.row:hover h3 a { text-decoration: underline; }
+.row .price { font-weight: 800; font-size: 20px; line-height: 1.2; }
+.row .price small { font-weight: 400; font-size: 13px; color: var(--grey); margin-left: 6px; }
+.row .meta { display: flex; flex-wrap: wrap; gap: 2px 14px; font-size: 13px; color: var(--grey); }
+.row .side { grid-row: 1 / span 3; grid-column: 3; display: flex; flex-direction: column; align-items: end; gap: 8px; }
+.row .side .age { font-size: 12px; color: var(--grey-2); }
+.status { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 2px 8px 0; border-radius: 4px; font-size: 12px; font-weight: 800; }
+.st-new { background: var(--white); color: var(--black); }
+.st-interested { background: var(--sign); outline: 1px solid var(--white); outline-offset: -3px; }
+.st-contacted { background: var(--blue); }
+.st-discarded { color: var(--grey-2); text-decoration: line-through; padding: 0; }
+.saved { color: var(--lane); padding: 0; }
+.saved .icon { width: 13px; height: 13px; fill: var(--lane); }
+@media (max-width: 560px) {
+  .row { grid-template-columns: 104px minmax(0, 1fr); }
+  .row img { width: 104px; height: 78px; }
+  .row .side { grid-row: auto; grid-column: 2; flex-direction: row; align-items: center; flex-wrap: wrap; }
+}
+
+/* ---------- Listing ---------- */
+.back { display: inline-flex; gap: 6px; align-items: center; font-weight: 700; font-size: 14px; color: var(--grey); text-decoration: none; }
+.back:hover { color: var(--white); text-decoration: underline; }
+.d-sign { margin-top: 44px; padding: 30px clamp(20px, 3vw, 34px) 26px; display: grid; gap: 14px 28px; }
+@media (min-width: 760px) { .d-sign { grid-template-columns: 1fr auto; align-items: end; } }
+.d-sign h1 { font-weight: 800; font-size: clamp(2rem, 4.4vw, 3.4rem); line-height: 1.02; letter-spacing: -.015em; }
+.d-sign .where { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 16px; opacity: .92; }
+.d-sign .price { text-align: left; }
+@media (min-width: 760px) { .d-sign .price { text-align: right; } }
+.d-sign .price b { display: block; font-weight: 900; font-size: clamp(1.8rem, 3.6vw, 2.6rem); line-height: 1; }
+.d-sign .price span { font-size: 15px; opacity: .92; }
+.d-sign .tab { font-size: 15px; }
+.d-sign .tab b { font-size: 26px; }
+
+.gallery { margin-top: 20px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.gallery img { width: 100%; height: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 8px; display: block; }
+.gallery img:first-child { grid-column: 1 / -1; aspect-ratio: 16 / 9; }
+@media (min-width: 900px) {
+  .gallery { grid-template-columns: 2.2fr 1fr 1fr; grid-template-rows: 1fr 1fr; }
+  .gallery img:first-child { grid-column: 1; grid-row: 1 / span 2; aspect-ratio: auto; }
+  .gallery img { aspect-ratio: auto; min-height: 160px; }
+  .gallery img:nth-child(n+6) { display: none; }
+}
+
+.facts { margin-top: 20px; display: grid; gap: 16px; align-items: stretch; }
+@media (min-width: 760px) { .facts { grid-template-columns: auto 1fr; } }
+.mojon { display: grid; place-items: center; align-content: center; gap: 2px; padding: 22px 26px 18px; border-radius: 40px 40px 8px 8px; background: var(--white); color: var(--black); text-align: center; min-width: 170px; box-shadow: inset 0 -16px 0 #e3e4de; }
+.mojon small { font-weight: 800; font-size: 13px; }
+.mojon b { font-weight: 900; font-size: 34px; line-height: 1; }
+.mojon span { font-size: 13px; font-weight: 700; color: #4a4f55; }
+.facts dl { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0 20px; padding: 6px 20px; border-radius: var(--r); background: var(--asphalt-2); box-shadow: inset 0 0 0 1px var(--asphalt-3); }
+.facts dl div { padding: 10px 0; border-bottom: 1px solid var(--asphalt-3); }
+.facts dt { font-size: 13px; color: var(--grey); }
+.facts dd { font-weight: 700; }
+@media (min-width: 1000px) { .facts dl { grid-template-columns: repeat(3, 1fr); } }
+.actions { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.seg { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.seg button { height: 40px; padding: 2px 14px 0; border-radius: 8px; border: 0; background: var(--asphalt-2); box-shadow: inset 0 0 0 1px var(--asphalt-3); color: var(--white); font: 700 14px/1 "Overpass", sans-serif; cursor: pointer; }
+.seg button:hover { box-shadow: inset 0 0 0 1px var(--grey-2); }
+.seg button[aria-pressed="true"] { background: var(--white); color: var(--black); }
+.actions .go { margin-left: auto; }
+@media (max-width: 759px) { .actions .go { margin-left: 0; } }
+
+.d-grid { margin-top: 36px; display: grid; gap: 20px; }
+@media (min-width: 1000px) { .d-grid { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 28px; } }
+.panel { border-radius: var(--r); background: var(--asphalt-2); box-shadow: inset 0 0 0 1px var(--asphalt-3); padding: 22px; }
+.panel + .panel { margin-top: 20px; }
+.panel h2 { font-weight: 800; font-size: 21px; line-height: 1.2; }
+.panel .sub { margin-bottom: 2px; }
+
+/* The price road: comparables are road studs, ours the yellow car. */
+.proad { position: relative; margin: 34px 0 6px; height: 104px; }
+.proad .asph { position: absolute; left: 0; right: 0; top: 22px; height: 44px; border-radius: 4px; background: #1d2023 var(--noise); border-top: 3px solid #e8e8e2; border-bottom: 3px solid #e8e8e2; }
+.proad .center { position: absolute; left: 0; right: 0; top: 42px; height: 3px; background: repeating-linear-gradient(90deg, var(--lane) 0 18px, transparent 18px 30px); }
+.proad .iqr { position: absolute; top: 25px; height: 38px; background: rgba(243,244,239,.12); }
+.proad .stud { position: absolute; top: 39px; width: 10px; height: 10px; margin-left: -5px; border-radius: 2px; background: var(--white); box-shadow: 0 0 6px rgba(255,255,255,.7); }
+.proad .med { position: absolute; top: 4px; width: 3px; height: 66px; margin-left: -1.5px; background: var(--white); }
+.proad .med span { position: absolute; bottom: calc(100% + 2px); left: 50%; transform: translateX(-50%); white-space: nowrap; font-size: 12px; font-weight: 800; }
+.proad .me { position: absolute; top: 32px; width: 26px; height: 26px; margin-left: -13px; border-radius: 6px; background: var(--lane); box-shadow: 0 0 0 3px #1d2023; }
+.proad .me span { position: absolute; bottom: calc(100% + 14px); left: -2px; white-space: nowrap; font-size: 14px; font-weight: 900; color: var(--lane); }
+.proad .t { position: absolute; top: 76px; transform: translateX(-50%); font-size: 12px; color: var(--grey); }
+.proad .t.hide { visibility: hidden; }
+.trio { margin-top: 24px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.trio div { padding: 10px 12px 8px; border-radius: 8px; background: var(--asphalt); }
+.trio dt { font-size: 12px; color: var(--grey); }
+.trio dd { font-weight: 800; font-size: clamp(15px, 2.2vw, 18px); white-space: nowrap; }
+
+.parts { margin-top: 16px; display: grid; gap: 16px; }
+.parts li { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; }
+.parts b { font-weight: 700; }
+.parts em { font-style: normal; font-weight: 900; }
+.parts em small { font-weight: 400; color: var(--grey); }
+.parts .dash { grid-column: 1 / -1; position: relative; height: 6px; background: repeating-linear-gradient(90deg, var(--asphalt-3) 0 22px, transparent 22px 32px); }
+.parts .dash i { position: absolute; inset: 0 auto 0 0; background: repeating-linear-gradient(90deg, var(--lane) 0 22px, transparent 22px 32px); }
+.parts span { grid-column: 1 / -1; font-size: 13px; color: var(--grey); }
+
+.checks { margin-top: 12px; display: grid; gap: 12px; }
+.checks li { display: grid; grid-template-columns: 26px 1fr; gap: 10px; align-items: start; }
+.ok-dot { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--sign); outline: 1.5px solid var(--white); outline-offset: -4px; }
+.ok-dot .icon { width: 13px; height: 13px; stroke-width: 3.2; }
+.checks b { display: block; font-weight: 700; }
+.checks span { font-size: 14px; color: var(--grey); }
+.flags { margin-top: 12px; display: grid; gap: 12px; }
+.flags li { display: grid; grid-template-columns: 26px 1fr; gap: 10px; align-items: start; font-size: 15px; }
+.warn-sign { display: grid; place-items: center; width: 22px; height: 22px; margin: 2px 0 0 2px; transform: rotate(45deg); border-radius: 3px; background: var(--lane); box-shadow: inset 0 0 0 1.5px var(--black), inset 0 0 0 3px var(--lane); }
+.warn-sign::after { content: "!"; transform: rotate(-45deg); color: var(--black); font-weight: 900; font-size: 14px; line-height: 1; padding-top: 2px; }
+.info-sign { display: grid; place-items: center; width: 22px; height: 22px; margin-top: 1px; border-radius: 4px; background: var(--blue); outline: 1px solid var(--white); outline-offset: -3px; font-weight: 900; font-size: 13px; padding-top: 2px; }
+.flags .warn { font-weight: 700; color: var(--lane); }
+.questions { margin-top: 12px; padding: 14px 16px; border-radius: 8px; background: var(--asphalt); font-size: 15px; line-height: 1.55; }
+.panel .btn.ghost { margin-top: 12px; }
+</style>
+</head>
+<body>
+
+<!-- ================= LANDING ================= -->
+<section data-screen="landing">
+  <header class="wrap site-head">
+    <a class="wordmark" href="#landing">Automotive</a>
+    <a class="login" href="#inicio">Ingresar</a>
+  </header>
+  <main>
+    <section class="wrap hero">
+      <h1>Encontrá las oportunidades antes que los demás.</h1>
+      <div class="hero-row">
+        <p>Decinos qué auto estás buscando. Automotive monitorea las publicaciones y te avisa cuando aparece uno que conviene mirar.</p>
+        <div class="cta"><a class="btn" href="#inicio">Crear mi búsqueda</a><small>Gratis durante el piloto.</small></div>
+      </div>
+      <div class="gantry" aria-label="Dos oportunidades de ejemplo">
+        <div class="truss" aria-hidden="true"></div>
+        <div class="hangers" id="hangers"></div>
+      </div>
+    </section>
+    <div class="road" aria-hidden="true"><div class="lane drive"></div></div>
+
+    <section class="wrap section">
+      <h2>Cada publicación, comparada contra vehículos similares.</h2>
+      <p class="lede">Revisamos MercadoLibre, Facebook Marketplace, Kavak, V6 y Autocosmos. Esta es la semana de una búsqueda real de Ford Focus en el AMBA, ordenada por Opportunity Score.</p>
+      <div class="sign board" id="board"></div>
+    </section>
+
+    <section class="wrap section" style="padding-top:0">
+      <h2>Lo que hacemos mientras hacés otra cosa.</h2>
+      <ul class="benefits">
+        <li><b>No busques todo el día.</b><span>Automotive monitorea por vos, de día y de noche.</span></li>
+        <li><b>No revises cientos de publicaciones.</b><span>Filtramos según lo que realmente buscás.</span></li>
+        <li><b>Detectá oportunidades.</b><span>Comparamos cada publicación contra vehículos similares.</span></li>
+        <li><b>Llegá temprano.</b><span>Recibí la alerta por Telegram o email cuando aparece.</span></li>
+      </ul>
+    </section>
+
+    <section class="wrap closing">
+      <h2>Vos elegís qué auto querés. Automotive busca por vos.</h2>
+      <a class="btn" href="#inicio">Crear mi búsqueda</a>
+    </section>
+  </main>
+  <footer class="site-foot"><div class="wrap"><span>Automotive</span><a href="#">Privacidad</a><a href="#">Términos</a></div></footer>
+</section>
+
+<!-- ================= INICIO ================= -->
+<section data-screen="inicio">
+  <header class="app-head"><div class="wrap">
+    <a class="wordmark" href="#landing">Automotive</a>
+    <nav class="app-nav" aria-label="Principal"><a href="#inicio" aria-current="page">Inicio</a><a href="#inicio">Guardados</a><a href="#inicio">Alertas <span class="count">3</span></a><a href="#inicio">Ajustes</a></nav>
+    <a class="btn sm" href="#inicio"><i data-icon="plus"></i>Nueva búsqueda</a>
+    <a class="bell" href="#inicio" aria-label="Alertas, 3 sin leer"><i data-icon="bell"></i><span class="count">3</span></a>
+  </div></header>
+  <main class="wrap app-main">
+    <h1 class="title">Mis búsquedas</h1>
+    <div class="searches" id="searches"></div>
+    <a class="sign blue telegram" href="#inicio"><i data-icon="send"></i><p><b>Recibí las alertas en Telegram.</b> Vinculá tu cuenta en un paso.</p><span class="go">Vincular</span></a>
+    <section class="block">
+      <h2 class="h2">Oportunidades recientes</h2>
+      <p class="sub">Las de los últimos 14 días, por Opportunity Score.</p>
+      <div class="rows" id="rows"></div>
+    </section>
+  </main>
+  <nav class="tabbar" aria-label="Principal"><ul>
+    <li><a href="#inicio" aria-current="page"><i data-icon="home"></i>Inicio</a></li>
+    <li><a href="#inicio"><i data-icon="bookmark"></i>Guardados</a></li>
+    <li><a href="#inicio"><i data-icon="bell"></i>Alertas</a></li>
+    <li><a href="#inicio"><i data-icon="sliders"></i>Ajustes</a></li>
+  </ul></nav>
+</section>
+
+<!-- ================= AVISO ================= -->
+<section data-screen="aviso">
+  <header class="app-head"><div class="wrap">
+    <a class="wordmark" href="#landing">Automotive</a>
+    <nav class="app-nav" aria-label="Principal"><a href="#inicio" aria-current="page">Inicio</a><a href="#inicio">Guardados</a><a href="#inicio">Alertas <span class="count">3</span></a><a href="#inicio">Ajustes</a></nav>
+    <a class="btn sm" href="#inicio"><i data-icon="plus"></i>Nueva búsqueda</a>
+    <a class="bell" href="#inicio" aria-label="Alertas, 3 sin leer"><i data-icon="bell"></i><span class="count">3</span></a>
+  </div></header>
+  <main class="wrap app-main" id="detail"></main>
+  <nav class="tabbar" aria-label="Principal"><ul>
+    <li><a href="#inicio" aria-current="page"><i data-icon="home"></i>Inicio</a></li>
+    <li><a href="#inicio"><i data-icon="bookmark"></i>Guardados</a></li>
+    <li><a href="#inicio"><i data-icon="bell"></i>Alertas</a></li>
+    <li><a href="#inicio"><i data-icon="sliders"></i>Ajustes</a></li>
+  </ul></nav>
+</section>
+
+<script>
+const { searches, listings, detail: d, LEVEL, STATUS } = AM;
+const usd = (n) => n.toLocaleString("es-AR");
+// Guide-sign arrow (thick shaft, wide head), pointing up-right like "next exit".
+const ARROW = '<svg class="arrow" viewBox="0 0 24 24" aria-hidden="true"><path transform="rotate(45 12 12)" d="M12 1.5 22 12h-6.2v10.5H8.2V12H2z"/></svg>';
+const tab = (l) => `<span class="tab ${l.level === "high" ? "" : l.level}" title="${LEVEL[l.level].label}">Score <b>${l.score}</b></span>`;
+
+document.getElementById("hangers").innerHTML = [
+  { l: listings[1], why: "34% debajo de 10 publicaciones comparables" },
+  { l: listings[6], why: "Buena coincidencia, 84.310 km" },
+].map(({ l, why }) => `
+  <a class="sign" href="#aviso">${tab(l)}
+    <div><p class="name">${l.name}</p><p class="price">U$S ${l.usd}</p><p class="why">${why}</p></div>${ARROW}
+  </a>`).join("");
+
+document.getElementById("board").innerHTML = [0, 1, 2, 3, 6, 7].map((i) => listings[i]).map((l) => `
+  <a class="board-row" href="#aviso">
+    <span class="n">${l.name}</span>
+    <span class="k">${l.km}</span>
+    <span class="p">U$S ${l.usd}<span class="score-chip ${l.level === "high" ? "" : l.level}" title="${LEVEL[l.level].label}">${l.score}</span></span>
+  </a>`).join("");
+
+document.getElementById("searches").innerHTML = searches.map((s) => {
+  const cls = s.state === "pending" ? "work" : s.state === "paused" ? "off" : "";
+  const figs = s.state === "pending"
+    ? `<span class="diamond" aria-hidden="true"></span><span>En obra: buscando publicaciones…</span>`
+    : s.state === "paused"
+      ? `<span><b>Pausada.</b> No te avisamos de esta búsqueda.</span>`
+      : `<span><b>${s.fresh}</b> nuevos esta semana</span><span><b>${s.opps}</b> ${s.opps === 1 ? "oportunidad" : "oportunidades"}</span>`;
+  return `<article class="sign search ${cls}">
+    ${s.opps ? `<span class="tab">${s.opps} ${s.opps === 1 ? "oportunidad" : "oportunidades"}</span>` : ""}
+    <div class="top"><a class="name" href="#inicio">${s.name}</a>${ARROW}</div>
+    <p class="filters">${s.filters.map((f) => `<span>${f}</span>`).join("")}</p>
+    <p class="figs">${figs}</p>
+  </article>`;
+}).join("");
+
+document.getElementById("rows").innerHTML = listings.map((l) => `
+  <article class="row">
+    <img src="${l.img}" alt="" loading="lazy">
+    <h3><a href="#aviso">${l.name}</a></h3>
+    <p class="price">U$S ${l.usd}<small>$ ${l.ars}</small></p>
+    <p class="meta"><span>${l.km}</span><span>${l.place}</span><span>${l.source}</span></p>
+    <div class="side">
+      <span class="score-chip ${l.level === "high" ? "" : l.level}" title="${LEVEL[l.level].label}">${l.score}</span>
+      ${l.status !== "seen" ? `<span class="status st-${l.status}">${STATUS[l.status]}</span>` : ""}
+      ${l.saved ? `<span class="status saved">${AM_ICON("star")}Guardado</span>` : ""}
+      <span class="age">${l.age}</span>
+    </div>
+  </article>`).join("");
+
+const min = 6000, max = 12500, x = (v) => ((v - min) / (max - min)) * 100;
+const narrow = window.innerWidth < 560;
+let road = `<div class="asph"></div><div class="iqr" style="left:${x(d.priceRef.p25)}%;width:${x(d.priceRef.p75) - x(d.priceRef.p25)}%"></div><div class="center"></div>`;
+road += d.comparables.map((v) => `<span class="stud" style="left:${x(v)}%"></span>`).join("");
+road += `<span class="med" style="left:${x(d.priceRef.median)}%"><span>Mediana U$S ${usd(d.priceRef.median)}</span></span>`;
+road += `<span class="me" style="left:${x(d.usdN)}%"><span>U$S ${usd(d.usdN)}, 34% debajo</span></span>`;
+for (let t = 7000; t <= 12000; t += 1000) road += `<span class="t${narrow && t % 2000 ? " hide" : ""}${Math.abs(t - d.usdN) < 400 ? " hide" : ""}" style="left:${x(t)}%">${usd(t)}</span>`;
+
+document.getElementById("detail").innerHTML = `
+  <a class="back" href="#inicio">${AM_ICON("arrow-left")}${d.search}</a>
+  <header class="sign d-sign">
+    <span class="tab">${LEVEL[d.level].label} <b>${d.score}</b></span>
+    <div><h1>${d.name}</h1><p class="where"><span>${d.source}</span><span>${d.place}</span><span>Detectado ${d.age}</span></p></div>
+    <p class="price"><b>U$S ${d.usd}</b><span>$ ${d.ars} publicado</span></p>
+  </header>
+  <div class="gallery">${d.photos.map((p, i) => `<img src="${p}" alt="${i ? "" : d.name}" ${i > 1 ? 'loading="lazy"' : ""}>`).join("")}</div>
+  <div class="facts">
+    <div class="mojon"><small>Kilometraje</small><b>${d.km.replace(" km", "")}</b><span>km recorridos</span></div>
+    <dl>
+      <div><dt>Año</dt><dd>${d.year}</dd></div>
+      <div><dt>Caja</dt><dd>${d.box}</dd></div>
+      <div><dt>Combustible</dt><dd>${d.fuel}</dd></div>
+      <div><dt>Vendedor</dt><dd>${d.seller}, ${d.sellerName}</dd></div>
+      <div><dt>Ubicación</dt><dd>${d.place}</dd></div>
+      <div><dt>Precio publicado</dt><dd>$ ${d.ars}</dd></div>
+    </dl>
+  </div>
+  <div class="actions">
+    <div class="seg" role="group" aria-label="Estado"><button aria-pressed="false">Me interesa</button><button aria-pressed="false">Contactado</button><button aria-pressed="false">Visita agendada</button><button aria-pressed="false">Descartar</button></div>
+    <button class="btn ghost">${AM_ICON("star")}Guardar</button>
+    <a class="btn go" href="#aviso">Ver en ${d.source}${AM_ICON("external")}</a>
+  </div>
+
+  <div class="d-grid">
+    <div>
+      <section class="panel">
+        <h2>Precio frente a ${d.priceRef.n} publicaciones comparables</h2>
+        <p class="sub">Ford Focus de ${d.priceRef.level}, mercado observado en dólares. Cada tacha es una comparable.</p>
+        <div class="proad">${road}</div>
+        <dl class="trio">
+          <div><dt>Cuarto más barato hasta</dt><dd>U$S ${usd(d.priceRef.p25)}</dd></div>
+          <div><dt>Mediana</dt><dd>U$S ${usd(d.priceRef.median)}</dd></div>
+          <div><dt>Cuarto más caro desde</dt><dd>U$S ${usd(d.priceRef.p75)}</dd></div>
+        </dl>
+      </section>
+      <section class="panel">
+        <h2>Cómo se compone el ${d.score}</h2>
+        <ul class="parts">${d.breakdown.map((c) => `
+          <li><b>${c.name}</b><em>${String(+c.got.toFixed(1)).replace(".", ",")} <small>de ${c.of}</small></em>
+            <div class="dash"><i style="width:${(c.got / c.of) * 100}%"></i></div><span>${c.why}</span></li>`).join("")}
+        </ul>
+      </section>
+    </div>
+    <div>
+      <section class="panel">
+        <h2>¿Por qué apareció?</h2>
+        <p class="sub">Coincide con tu búsqueda «${d.search}».</p>
+        <ul class="checks">${d.reasons.map((r) => `<li><span class="ok-dot">${AM_ICON("check")}</span><p><b>${r.ok}</b><span>${r.detail}</span></p></li>`).join("")}</ul>
+      </section>
+      <section class="panel">
+        <h2>Conviene verificar</h2>
+        <p class="sub">Información que conviene confirmar. No indica un problema.</p>
+        <ul class="flags">${d.flags.map((f) => `<li class="${f.warn ? "warn" : ""}">${f.warn ? '<span class="warn-sign" aria-hidden="true"></span>' : '<span class="info-sign" aria-hidden="true">i</span>'}<span>${f.text}</span></li>`).join("")}</ul>
+      </section>
+      <section class="panel">
+        <h2>Preguntas para el vendedor</h2>
+        <p class="questions">${d.questions}</p>
+        <button class="btn ghost sm">${AM_ICON("copy")}Copiar preguntas</button>
+      </section>
+    </div>
+  </div>`;
+
+AM_ICONS();
+</script>
+</body>
+</html>

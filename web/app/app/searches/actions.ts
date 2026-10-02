@@ -99,6 +99,7 @@ export async function saveSearch(id: number | null, raw: SearchInput, origin?: S
       .select("id")
       .single();
     if (error) {
+      if (error.message.includes("plan_access_expired")) return { error: "Tu acceso venció. Elegí Particular o Agencia en Planes para volver a buscar." };
       if (error.message.includes("plan_limit_exceeded")) {
         return { error: "Llegaste al máximo de búsquedas de tu plan." };
       }
@@ -153,6 +154,7 @@ export async function startAssisted(text: string): Promise<AssistedStart> {
     .select("id")
     .single();
   if (error) {
+    if (error.message.includes("plan_access_expired")) return { error: "Tu acceso venció. Elegí un plan para volver a buscar." };
     if (error.message.includes("llm_rate_limited")) {
       return { error: "Hiciste muchas consultas seguidas. Probá en un rato o completá el formulario." };
     }
@@ -190,14 +192,18 @@ export async function previewSearch(raw: SearchInput): Promise<Preview | null> {
   return data as unknown as Preview;
 }
 
-export async function setSearchEnabled(id: number, enabled: boolean): Promise<void> {
+export async function setSearchEnabled(id: number, enabled: boolean): Promise<SaveResult> {
   const user = await requireUser();
   const supabase = await createClient();
   const { error } = await supabase.from("search_profiles").update({ enabled }).eq("id", id);
   if (!error) {
     await track(supabase, user.id, enabled ? "search_profile_resumed" : "search_profile_paused", { profile_id: id });
   }
+  if (error?.message.includes("plan_access_expired")) return { error: "Tu acceso venció. Elegí un plan para reanudar." };
+  if (error?.message.includes("plan_limit_exceeded")) return { error: "Llegaste al máximo de búsquedas activas. Pausá otra o elegí un plan con más capacidad." };
+  if (error) return { error: "No pudimos cambiar el estado. Probá de nuevo." };
   refresh();
+  return {};
 }
 
 export async function setSearchFrequency(id: number, frequency: Frequency): Promise<void> {

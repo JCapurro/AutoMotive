@@ -1,7 +1,7 @@
 """Tracked links (sección 7.3): every link in an alert is /r/<notification_id>.
 
     <WEB_BASE_URL>/r/<id>?to=listing        → the listing at its source
-    <WEB_BASE_URL>/r/<id>?to=detail         → the listing's page in Automotive
+    <WEB_BASE_URL>/r/<id>?to=detail         → the listing's page in Ese Auto
     <WEB_BASE_URL>/r/<id>?to=listing&l=<listing_id>   (one item of a digest)
 
 and every email carries the user's unsubscribe link (F7, punto 7):
@@ -10,7 +10,7 @@ and every email carries the user's unsubscribe link (F7, punto 7):
     <WEB_BASE_URL>/api/baja?t=<token>       → one-click POST (RFC 8058)
 
 Without WEB_BASE_URL links go straight to the listing, untracked, and there is
-no "Ver en Automotive".
+no "Ver en Ese Auto".
 """
 from __future__ import annotations
 

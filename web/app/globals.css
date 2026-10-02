@@ -39,6 +39,13 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  --color-mark: var(--mark);
+  --color-mark-soft: var(--mark-soft);
+  --color-faint: var(--faint);
+  --color-panel-2: var(--panel-2);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -48,73 +55,91 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* "Guía": the printed used-car price guide, read with a highlighter. Navy ink
+   on white, cool grey panels, and one yellow that only ever means "marcado"
+   (the opportunity, the unread count, the part that matters). */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --background: #ffffff;
+  --foreground: #14213d;
+  --card: #ffffff;
+  --card-foreground: #14213d;
+  --popover: #ffffff;
+  --popover-foreground: #14213d;
+  --primary: #14213d;
+  --primary-foreground: #ffffff;
+  --secondary: #f1f3f7;
+  --secondary-foreground: #14213d;
+  --muted: #f1f3f7;
+  --muted-foreground: #4e5a73;
+  --accent: #f1f3f7;
+  --accent-foreground: #14213d;
+  --destructive: #b42318;
+  --border: #d8dde6;
+  --input: #d8dde6;
+  --ring: #4e5a73;
+  --chart-1: #14213d;
+  --chart-2: #44557a;
+  --chart-3: #7c8aa8;
+  --chart-4: #b5bfd1;
+  --chart-5: #ffe14d;
+  --radius: 0.375rem;
+  --sidebar: #f1f3f7;
+  --sidebar-foreground: #14213d;
+  --sidebar-primary: #14213d;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e5e9f0;
+  --sidebar-accent-foreground: #14213d;
+  --sidebar-border: #d8dde6;
+  --sidebar-ring: #4e5a73;
+  /* Guía-only */
+  --mark: #ffe14d;
+  --mark-soft: #fff2a6;
+  --faint: #8a93a6;
+  --panel-2: #e5e9f0;
+  --ok: #1e6e47;
+  --warn: #a8430b;
+  --warn-soft: #fff4ec;
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --background: #0f1a31;
+  --foreground: #eef1f7;
+  --card: #16233f;
+  --card-foreground: #eef1f7;
+  --popover: #16233f;
+  --popover-foreground: #eef1f7;
+  --primary: #eef1f7;
+  --primary-foreground: #14213d;
+  --secondary: #1d2b4a;
+  --secondary-foreground: #eef1f7;
+  --muted: #1d2b4a;
+  --muted-foreground: #aab4c8;
+  --accent: #1d2b4a;
+  --accent-foreground: #eef1f7;
+  --destructive: #f97066;
+  --border: rgb(255 255 255 / 12%);
+  --input: rgb(255 255 255 / 16%);
+  --ring: #aab4c8;
+  --chart-1: #eef1f7;
+  --chart-2: #aab4c8;
+  --chart-3: #7c8aa8;
+  --chart-4: #44557a;
+  --chart-5: #ffe14d;
+  --sidebar: #16233f;
+  --sidebar-foreground: #eef1f7;
+  --sidebar-primary: #ffe14d;
+  --sidebar-primary-foreground: #14213d;
+  --sidebar-accent: #1d2b4a;
+  --sidebar-accent-foreground: #eef1f7;
+  --sidebar-border: rgb(255 255 255 / 12%);
+  --sidebar-ring: #aab4c8;
+  --mark: #ffe14d;
+  --mark-soft: #4a4420;
+  --faint: #7c8aa8;
+  --panel-2: #24365c;
+  --ok: #6fcf97;
+  --warn: #f6a96b;
+  --warn-soft: #3a2614;
 }
 
 @layer base {
@@ -123,6 +148,15 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-variant-numeric: tabular-nums lining-nums;
+    caret-color: var(--foreground);
+  }
+  ::selection {
+    background: var(--mark);
+    color: #14213d;
+  }
+  html {
+    scrollbar-color: var(--faint) var(--muted);
   }
   button:not(:disabled), [role="button"]:not(:disabled) {
     cursor: pointer;
@@ -130,4 +164,79 @@
   html {
     @apply font-sans;
   }
+}
+
+/* The highlighter: a swipe behind text with uneven ends, the way you'd mark a
+   printed guide. .mark is a full swipe (an opportunity), .mark-under a lower
+   stroke (a good match), .mark-row a whole line in a list. */
+@layer components {
+  .mark {
+    background-image: linear-gradient(100deg, transparent 0 0.2em, var(--mark) 0.3em calc(100% - 0.35em), transparent calc(100% - 0.2em));
+    background-repeat: no-repeat;
+    background-size: 100% 78%;
+    background-position: 0 62%;
+    padding: 0 0.3em;
+    margin: 0 -0.12em;
+    border-radius: 0.2em 0.5em 0.25em 0.6em;
+    color: #14213d;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+  }
+  .mark-under {
+    background-image: linear-gradient(100deg, transparent 0 0.2em, var(--mark) 0.3em calc(100% - 0.35em), transparent calc(100% - 0.2em));
+    background-repeat: no-repeat;
+    background-size: 100% 36%;
+    background-position: 0 94%;
+    padding: 0 0.25em;
+    margin: 0 -0.1em;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+  }
+  .mark-row {
+    position: relative;
+    isolation: isolate;
+  }
+  .mark-row::before {
+    content: "";
+    position: absolute;
+    inset: 2px 0;
+    z-index: -1;
+    border-radius: 0.35em 1em 0.45em 1.1em;
+    background: linear-gradient(100deg, transparent 0 4px, var(--mark) 12px calc(100% - 14px), transparent calc(100% - 3px));
+  }
+  .mark-row,
+  .mark-row * {
+    color: #14213d;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .mark-row.draw::before {
+      animation: mark-swipe 0.9s cubic-bezier(0.16, 1, 0.3, 1) 0.4s both;
+    }
+  }
+  @keyframes mark-swipe {
+    from {
+      clip-path: inset(0 100% 0 0);
+    }
+    to {
+      clip-path: inset(0 0 0 0);
+    }
+  }
+}
+
+/* Archivo's width axis does the hierarchy: wide for headlines, narrow for
+   figures in tables. */
+@utility type-display {
+  font-weight: 800;
+  font-stretch: 110%;
+  letter-spacing: -0.03em;
+}
+@utility type-heading {
+  font-weight: 800;
+  font-stretch: 106%;
+  letter-spacing: -0.02em;
+}
+@utility type-figure {
+  font-weight: 800;
+  font-stretch: 90%;
+  font-variant-numeric: tabular-nums lining-nums;
 }

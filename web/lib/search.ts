@@ -4,6 +4,11 @@ import type { Filters } from "@/lib/types";
 
 /** "2016–2018 · hasta USD 11.500 · hasta 150.000 km · Manual · AMBA (60 km)" */
 export function describeFilters(filters: Filters, radiusKm?: number | null): string {
+  return filterParts(filters, radiusKm).join(" · ") || "Sin filtros adicionales";
+}
+
+/** The same, one item per filter (shown as chips). */
+export function filterParts(filters: Filters, radiusKm?: number | null): string[] {
   const parts: string[] = [];
   const { year_min: lo, year_max: hi } = filters;
   if (lo && hi) parts.push(lo === hi ? String(lo) : `${lo}–${hi}`);
@@ -18,7 +23,7 @@ export function describeFilters(filters: Filters, radiusKm?: number | null): str
   } else if (radiusKm) {
     parts.push(`a ${number(radiusKm)} km`);
   }
-  return parts.join(" · ") || "Sin filtros adicionales";
+  return parts;
 }
 
 /** "Ford Fiesta · Titanium" */

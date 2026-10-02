@@ -2,7 +2,7 @@
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
 
 export type Database = {
-  
+
   "public": {
           Tables: {
             "app_config": {
@@ -16,7 +16,7 @@ export type Database = {
                     "key"?: string,"updated_at"?: string,"value"?: NonNullable<Json>
                   }
                   Relationships: [
-                    
+
                   ]
                 },"collector_runs": {
                   Row: {
@@ -46,6 +46,73 @@ isOneToOne: false
       columns: ["target_id"]
 isOneToOne: false
       referencedRelation: "crawl_targets"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"commercial_payments": {
+                  Row: {
+                    "amount": number,"currency": string,"id": number,"note": string | null,"offer": string,"offer_version": string,"paid_at": string,"period_end": string,"period_start": string,"provider": string,"reference": string,"refund_reference": string | null,"refunded_at": string | null,"refunded_by": string | null,"user_id": string,"verified_at": string,"verified_by": string | null
+                  }
+                  Insert: {
+                    "amount": number,"currency": string,"id"?: never,"note"?: string | null,"offer": string,"offer_version": string,"paid_at": string,"period_end": string,"period_start": string,"provider": string,"reference": string,"refund_reference"?: string | null,"refunded_at"?: string | null,"refunded_by"?: string | null,"user_id": string,"verified_at"?: string,"verified_by"?: string | null
+                  }
+                  Update: {
+                    "amount"?: number,"currency"?: string,"id"?: never,"note"?: string | null,"offer"?: string,"offer_version"?: string,"paid_at"?: string,"period_end"?: string,"period_start"?: string,"provider"?: string,"reference"?: string,"refund_reference"?: string | null,"refunded_at"?: string | null,"refunded_by"?: string | null,"user_id"?: string,"verified_at"?: string,"verified_by"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "commercial_payments_refunded_by_fkey"
+      columns: ["refunded_by"]
+isOneToOne: false
+      referencedRelation: "admin_users"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "commercial_payments_refunded_by_fkey"
+      columns: ["refunded_by"]
+isOneToOne: false
+      referencedRelation: "metric_users"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "commercial_payments_refunded_by_fkey"
+      columns: ["refunded_by"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "commercial_payments_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: false
+      referencedRelation: "admin_users"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "commercial_payments_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: false
+      referencedRelation: "metric_users"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "commercial_payments_user_id_fkey"
+      columns: ["user_id"]
+isOneToOne: false
+      referencedRelation: "profiles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "commercial_payments_verified_by_fkey"
+      columns: ["verified_by"]
+isOneToOne: false
+      referencedRelation: "admin_users"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "commercial_payments_verified_by_fkey"
+      columns: ["verified_by"]
+isOneToOne: false
+      referencedRelation: "metric_users"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "commercial_payments_verified_by_fkey"
+      columns: ["verified_by"]
+isOneToOne: false
+      referencedRelation: "profiles"
       referencedColumns: ["id"]
     }
                   ]
@@ -116,7 +183,7 @@ isOneToOne: false
                     "date"?: string,"fetched_at"?: string,"kind"?: string,"rate"?: number,"source"?: string | null
                   }
                   Relationships: [
-                    
+
                   ]
                 },"geocode_cache": {
                   Row: {
@@ -129,7 +196,7 @@ isOneToOne: false
                     "lat"?: number,"lon"?: number,"not_found"?: boolean,"query"?: string,"source"?: string,"updated_at"?: string
                   }
                   Relationships: [
-                    
+
                   ]
                 },"listing_snapshots": {
                   Row: {
@@ -394,7 +461,7 @@ isOneToOne: false
                     "created_at"?: string,"error"?: string,"id"?: never,"ref"?: string | null,"stage"?: string
                   }
                   Relationships: [
-                    
+
                   ]
                 },"pro_waitlist": {
                   Row: {
@@ -429,16 +496,16 @@ isOneToOne: true
                   ]
                 },"profiles": {
                   Row: {
-                    "created_at": string,"default_channels": (string)[],"default_notification_frequency": Database["public"]['Enums']["notify_frequency"],"default_origin_label": string | null,"default_origin_lat": number | null,"default_origin_lon": number | null,"email": string | null,"email_unsubscribe_token": string,"id": string,"phone": string | null,"plan": Database["public"]['Enums']["user_plan"],"plan_expires_at": string | null,"role": Database["public"]['Enums']["user_role"],"telegram_chat_id": number | null,"telegram_link_code": string,"telegram_user_id": number | null,"updated_at": string
+                    "created_at": string,"default_channels": (string)[],"default_notification_frequency": Database["public"]['Enums']["notify_frequency"],"default_origin_label": string | null,"default_origin_lat": number | null,"default_origin_lon": number | null,"email": string | null,"email_unsubscribe_token": string,"free_trial_started_at": string | null,"id": string,"phone": string | null,"plan": Database["public"]['Enums']["user_plan"],"plan_expires_at": string | null,"role": Database["public"]['Enums']["user_role"],"telegram_chat_id": number | null,"telegram_link_code": string,"telegram_user_id": number | null,"updated_at": string
                   }
                   Insert: {
-                    "created_at"?: string,"default_channels"?: (string)[],"default_notification_frequency"?: Database["public"]['Enums']["notify_frequency"],"default_origin_label"?: string | null,"default_origin_lat"?: number | null,"default_origin_lon"?: number | null,"email"?: string | null,"email_unsubscribe_token"?: string,"id": string,"phone"?: string | null,"plan"?: Database["public"]['Enums']["user_plan"],"plan_expires_at"?: string | null,"role"?: Database["public"]['Enums']["user_role"],"telegram_chat_id"?: number | null,"telegram_link_code"?: string,"telegram_user_id"?: number | null,"updated_at"?: string
+                    "created_at"?: string,"default_channels"?: (string)[],"default_notification_frequency"?: Database["public"]['Enums']["notify_frequency"],"default_origin_label"?: string | null,"default_origin_lat"?: number | null,"default_origin_lon"?: number | null,"email"?: string | null,"email_unsubscribe_token"?: string,"free_trial_started_at"?: string | null,"id": string,"phone"?: string | null,"plan"?: Database["public"]['Enums']["user_plan"],"plan_expires_at"?: string | null,"role"?: Database["public"]['Enums']["user_role"],"telegram_chat_id"?: number | null,"telegram_link_code"?: string,"telegram_user_id"?: number | null,"updated_at"?: string
                   }
                   Update: {
-                    "created_at"?: string,"default_channels"?: (string)[],"default_notification_frequency"?: Database["public"]['Enums']["notify_frequency"],"default_origin_label"?: string | null,"default_origin_lat"?: number | null,"default_origin_lon"?: number | null,"email"?: string | null,"email_unsubscribe_token"?: string,"id"?: string,"phone"?: string | null,"plan"?: Database["public"]['Enums']["user_plan"],"plan_expires_at"?: string | null,"role"?: Database["public"]['Enums']["user_role"],"telegram_chat_id"?: number | null,"telegram_link_code"?: string,"telegram_user_id"?: number | null,"updated_at"?: string
+                    "created_at"?: string,"default_channels"?: (string)[],"default_notification_frequency"?: Database["public"]['Enums']["notify_frequency"],"default_origin_label"?: string | null,"default_origin_lat"?: number | null,"default_origin_lon"?: number | null,"email"?: string | null,"email_unsubscribe_token"?: string,"free_trial_started_at"?: string | null,"id"?: string,"phone"?: string | null,"plan"?: Database["public"]['Enums']["user_plan"],"plan_expires_at"?: string | null,"role"?: Database["public"]['Enums']["user_role"],"telegram_chat_id"?: number | null,"telegram_link_code"?: string,"telegram_user_id"?: number | null,"updated_at"?: string
                   }
                   Relationships: [
-                    
+
                   ]
                 },"raw_pages": {
                   Row: {
@@ -501,7 +568,7 @@ isOneToOne: false
                     "consecutive_failures"?: number,"crawl_interval_seconds"?: number,"created_at"?: string,"detail_interval_seconds"?: number,"enabled"?: boolean,"id"?: string,"last_ok_at"?: string | null,"name"?: string,"priority"?: number,"updated_at"?: string
                   }
                   Relationships: [
-                    
+
                   ]
                 },"user_listing_interactions": {
                   Row: {
@@ -551,7 +618,7 @@ isOneToOne: false
                     "aliases"?: (string)[],"created_at"?: string,"fuels"?: (string)[],"id"?: never,"make"?: string,"model"?: string,"timing_belt"?: boolean | null,"transmissions"?: (string)[],"trim"?: string | null,"year_from"?: number | null,"year_to"?: number | null
                   }
                   Relationships: [
-                    
+
                   ]
                 },"worker_heartbeat": {
                   Row: {
@@ -564,7 +631,7 @@ isOneToOne: false
                     "beat_at"?: string,"host"?: string | null,"id"?: number,"pid"?: number | null,"started_at"?: string
                   }
                   Relationships: [
-                    
+
                   ]
                 }
           }
@@ -574,7 +641,7 @@ isOneToOne: false
                     "channel": Database["public"]['Enums']["notification_channel"] | null,"clicked": number | null,"day": string | null,"degraded": number | null,"digests_sent": number | null,"failed": number | null,"queued": number | null,"sent": number | null,"to_digest": number | null
                   }
                   Relationships: [
-                    
+
                   ]
                 },"admin_score_histogram": {
                   Row: {
@@ -625,21 +692,28 @@ isOneToOne: false
                     "avg_seconds_24h": number | null,"consecutive_failures": number | null,"crawl_interval_seconds": number | null,"detail_interval_seconds": number | null,"enabled": boolean | null,"failed_24h": number | null,"found_24h": number | null,"id": string | null,"last_error": string | null,"last_ok_at": string | null,"last_run_at": string | null,"last_run_status": Database["public"]['Enums']["run_status"] | null,"name": string | null,"new_24h": number | null,"priority": number | null,"runs_24h": number | null,"updated_24h": number | null
                   }
                   Relationships: [
-                    
+
                   ]
                 },"admin_users": {
                   Row: {
                     "alerts_7d": number | null,"created_at": string | null,"email": string | null,"enabled_searches": number | null,"id": string | null,"last_activity_at": string | null,"plan": Database["public"]['Enums']["user_plan"] | null,"plan_expires_at": string | null,"role": Database["public"]['Enums']["user_role"] | null,"searches": number | null,"telegram_linked": boolean | null,"telegram_only": boolean | null,"waitlist_plan": string | null
                   }
                   Relationships: [
-                    
+
+                  ]
+                },"commercial_revenue": {
+                  Row: {
+                    "agency_accounts": number | null,"agency_monthly_equivalent": number | null,"confirmed_revenue": number | null,"particular_sales": number | null,"refunds": number | null
+                  }
+                  Relationships: [
+
                   ]
                 },"llm_job_stats": {
                   Row: {
                     "day": string | null,"done": number | null,"failed": number | null,"jobs": number | null,"kind": string | null,"latency_max_ms": number | null,"latency_p50_ms": number | null,"latency_p95_ms": number | null,"provider": string | null
                   }
                   Relationships: [
-                    
+
                   ]
                 },"match_cards": {
                   Row: {
@@ -805,28 +879,28 @@ isOneToOne: false
                            "created_at"?: string | null,"email"?: string | null,"id"?: string | null,"plan"?: Database["public"]['Enums']["user_plan"] | null,"plan_expires_at"?: string | null,"telegram_only"?: never
                          }
                         Relationships: [
-                    
+
                   ]
                 },"v_activation": {
                   Row: {
                     "activation_pct": number | null,"cohort_week": string | null,"signed_up": number | null,"target_pct": number | null,"with_search": number | null
                   }
                   Relationships: [
-                    
+
                   ]
                 },"v_alert_funnel": {
                   Row: {
                     "channel": string | null,"click_rate_pct": number | null,"clicked": number | null,"discarded": number | null,"dismiss_rate_pct": number | null,"level": string | null,"open_rate_pct": number | null,"opened": number | null,"save_rate_pct": number | null,"saved": number | null,"sent": number | null
                   }
                   Relationships: [
-                    
+
                   ]
                 },"v_alerts_per_user_day": {
                   Row: {
                     "alerts": number | null,"alerts_per_user": number | null,"cap": number | null,"day": string | null,"max_per_user": number | null,"users": number | null
                   }
                   Relationships: [
-                    
+
                   ]
                 },"v_first_value": {
                   Row: {
@@ -858,14 +932,14 @@ isOneToOne: false
                     "alerts": number | null,"click_rate_pct": number | null,"dismiss_rate_pct": number | null,"engagement_pct": number | null,"open_rate_pct": number | null,"save_rate_pct": number | null,"segment": string | null
                   }
                   Relationships: [
-                    
+
                   ]
                 },"v_north_star_weekly": {
                   Row: {
                     "active_users": number | null,"relevant_opens": number | null,"relevant_opens_per_active_user": number | null,"week": string | null
                   }
                   Relationships: [
-                    
+
                   ]
                 },"v_outcomes": {
                   Row: {
@@ -921,12 +995,15 @@ isOneToOne: false
                     "criterion": string | null,"denominator": number | null,"label": string | null,"met": boolean | null,"metric": string | null,"numerator": number | null,"ordinal": number | null,"threshold": number | null,"unit": string | null,"value": number | null
                   }
                   Relationships: [
-                    
+
                   ]
                 }
           }
           Functions: {
-            "comparables":
+            "commercial_access_active":
+{ Args: { "p_user": string }; Returns: boolean
+                           },
+"comparables":
 { Args: { "p_km_tol_pct"?: number,"p_listing_id": number,"p_max_age_days"?: number,"p_min_n"?: number,"p_year_tol"?: number }; Returns: Json
                            },
 "dashboard_summary":
@@ -934,11 +1011,23 @@ isOneToOne: false
               "enabled": boolean,"filters": Json,"name": string,"new_this_week": number,"notification_frequency": Database["public"]['Enums']["notify_frequency"],"opportunities_this_week": number,"pending": boolean,"profile_id": number,"total": number,"unseen": number
             }[]
                            },
+"decline_commercial_renewal":
+{ Args: Record<PropertyKey, never>; Returns: undefined
+                           },
 "delete_my_account":
 { Args: Record<PropertyKey, never>; Returns: undefined
                            },
+"effective_search_frequency":
+{ Args: { "p_frequency": Database["public"]['Enums']["notify_frequency"],"p_user": string }; Returns: Database["public"]['Enums']["notify_frequency"]
+                           },
+"enable_commercial_pilot":
+{ Args: Record<PropertyKey, never>; Returns: Json
+                           },
 "ensure_telegram_profile":
 { Args: { "p_chat_id": number,"p_telegram_user_id": number }; Returns: string
+                           },
+"expire_commercial_access":
+{ Args: { "p_user"?: string }; Returns: number
                            },
 "haversine_km":
 { Args: { "lat1": number,"lat2": number,"lon1": number,"lon2": number }; Returns: number
@@ -952,8 +1041,17 @@ isOneToOne: false
 "my_plan_limits":
 { Args: Record<PropertyKey, never>; Returns: Json
                            },
+"my_plan_snapshot":
+{ Args: Record<PropertyKey, never>; Returns: Json
+                           },
+"notification_access_active":
+{ Args: { "p_listing": number,"p_search": number,"p_user": string }; Returns: boolean
+                           },
 "plan_limits_for":
 { Args: { "p_user": string }; Returns: Json
+                           },
+"prepare_notification_delivery":
+{ Args: { "p_id": number }; Returns: boolean
                            },
 "preview_search":
 { Args: { "p_filters": Json,"p_origin_lat"?: number,"p_origin_lon"?: number,"p_radius_km"?: number }; Returns: Json
@@ -1010,11 +1108,20 @@ isOneToOne: false
         isOneToOne: false
         isSetofReturn: true
       } },
+"record_commercial_payment":
+{ Args: { "p_note"?: string,"p_offer": string,"p_paid_at"?: string,"p_provider": string,"p_reference": string,"p_user": string }; Returns: number
+                           },
 "record_plan_limit_hit":
 { Args: { "p_limit": string,"p_props"?: Json }; Returns: boolean
                            },
 "record_purchase":
 { Args: { "p_currency"?: string,"p_date"?: string,"p_listing_id": number,"p_price"?: number,"p_search_profile_id"?: number }; Returns: number
+                           },
+"refund_commercial_payment":
+{ Args: { "p_id": number,"p_reference": string }; Returns: undefined
+                           },
+"search_access_active":
+{ Args: { "p_search": number }; Returns: boolean
                            },
 "search_result_counts":
 { Args: { "p_profile_id": number }; Returns: {
@@ -1200,4 +1307,3 @@ export const Constants = {
           }
         }
 } as const
-

@@ -48,8 +48,8 @@ test("F4: registro, búsqueda, backfill, alerta, Me interesa y compra", async ({
 
   await test.step("landing (§50)", async () => {
     await page.goto("/");
-    await expect(page.getByRole("heading", { name: "Encontrá las oportunidades antes que los demás." })).toBeVisible();
-    await expect(page.getByText("8% debajo de publicaciones comparables.")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Decinos cuál. Te avisamos cuando aparezca." })).toBeVisible();
+    await expect(page.getByText("pide USD 2.574 menos")).toBeVisible();
     await expectNoHorizontalScroll(page);
     await page.getByRole("link", { name: "Crear mi búsqueda" }).first().click();
     await expect(page).toHaveURL(/\/login\?next=\/app\/searches\/new$/);
@@ -209,10 +209,10 @@ test("F4: registro, búsqueda, backfill, alerta, Me interesa y compra", async ({
     await page.getByLabel("Precio de compra").fill("9.500");
     await page.getByRole("button", { name: "Confirmar compra" }).click();
     await expect(page.getByTestId("purchased")).toContainText("Compraste este vehículo");
-    await page.getByRole("group", { name: "¿Automotive influyó en que encontraras este vehículo?" })
+    await page.getByRole("group", { name: "¿Ese Auto influyó en que encontraras este vehículo?" })
       .getByRole("button", { name: "Mucho" })
       .click();
-    await expect(page.getByTestId("purchased")).toContainText("Nos dijiste que Automotive influyó: mucho");
+    await expect(page.getByTestId("purchased")).toContainText("Nos dijiste que Ese Auto influyó: mucho");
     await expect(page.getByLabel("Estado")).toHaveValue("purchased");
 
     const [owned] = await query<{ purchase_price: string; automotive_influence: string; make: string; search_profile_id: string }>(

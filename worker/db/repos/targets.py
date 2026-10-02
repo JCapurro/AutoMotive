@@ -47,6 +47,10 @@ async def due_targets() -> list[dict[str, Any]]:
             "       s.crawl_interval_seconds "
             "  FROM crawl_targets t JOIN sources s ON s.id = t.source "
             " WHERE t.active AND s.enabled AND (t.next_run_at IS NULL OR t.next_run_at <= now()) "
+            "   AND EXISTS (SELECT 1 FROM search_profiles sp WHERE public.search_access_active(sp.id) "
+            "     AND lower(sp.filters->>'make') IS NOT DISTINCT FROM lower(t.make) "
+            "     AND lower(sp.filters->>'model') IS NOT DISTINCT FROM lower(t.model) "
+            "     AND (NOT sp.filters ? 'sources' OR sp.filters->'sources' ? t.source)) "
             " ORDER BY s.priority, t.next_run_at NULLS FIRST, t.id")).fetchall()
 
 

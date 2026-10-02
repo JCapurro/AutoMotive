@@ -4,7 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { AutoRefresh } from "@/components/app/auto-refresh";
-import { ListingCard } from "@/components/app/listing-card";
+import { LISTING_ROWS, ListingCard } from "@/components/app/listing-card";
 import { ProBanner, VisibleResultsReport } from "@/components/app/pro-cta";
 import { FrequencySelect, PauseButton } from "@/components/app/search-actions";
 import { SortSelect } from "@/components/app/sort-select";
@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth";
 import { type PlanLimits, visibleResults } from "@/lib/pro";
-import { describeFilters, describeVehicle } from "@/lib/search";
+import { describeVehicle, filterParts } from "@/lib/search";
 import { isSort, type Sort } from "@/lib/sorts";
 import { createClient } from "@/lib/supabase/server";
 import type { Filters } from "@/lib/types";
@@ -38,7 +38,7 @@ const COUNT_KEY: Record<Filter, string> = {
 };
 const EMPTY: Record<Filter, string> = {
   new: "No hay publicaciones nuevas sin ver.",
-  opportunities: "Todavía no hay oportunidades 🔥 para esta búsqueda.",
+  opportunities: "Todavía no hay oportunidades para esta búsqueda.",
   all: "Todavía no hay publicaciones que coincidan. Te avisamos cuando aparezca una.",
   saved: "No guardaste publicaciones de esta búsqueda.",
   discarded: "No descartaste publicaciones.",
@@ -90,16 +90,20 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 space-y-1">
-          <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight">
+          <h1 className="type-heading flex items-center gap-2 text-[28px] leading-tight">
             <span className="truncate">{profile.name}</span>
             {!profile.enabled ? <Badge variant="secondary">Pausada</Badge> : null}
           </h1>
-          <p className="text-sm text-muted-foreground">
-            {describeVehicle(filters)} · {describeFilters(filters, profile.radius_km)}
-          </p>
+          <ul aria-label="Filtros" className="flex flex-wrap gap-1.5">
+            {[describeVehicle(filters), ...filterParts(filters, profile.radius_km)].filter(Boolean).map((part) => (
+              <li key={part} className="rounded bg-muted px-2 py-0.5 text-[13px] text-muted-foreground [font-stretch:92%]">
+                {part}
+              </li>
+            ))}
+          </ul>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <FrequencySelect id={profile.id} value={profile.notification_frequency} />
+          <FrequencySelect id={profile.id} value={profile.notification_frequency} dailyOnly={Boolean((planLimits as PlanLimits | null)?.enforced && (planLimits as PlanLimits | null)?.plan === "free")} />
           <PauseButton id={profile.id} enabled={profile.enabled} />
           <Button asChild variant="outline" size="sm">
             <Link href={`/app/searches/${profile.id}/edit`}>
@@ -112,9 +116,9 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
       {pending ? (
         <div
           role="status"
-          className="flex items-center gap-2 rounded-xl bg-sky-50 p-4 text-sm text-sky-950 ring-1 ring-sky-200"
+          className="flex items-center gap-2.5 rounded-lg bg-muted p-4 text-sm"
         >
-          <Loader2 className="size-4 shrink-0 animate-spin" aria-hidden />
+          <Loader2 className="size-4 shrink-0 animate-spin motion-reduce:animate-none" aria-hidden />
           Estamos buscando coincidencias entre las publicaciones de los últimos 30 días. Aparecen acá en unos minutos.
           <AutoRefresh />
         </div>
@@ -128,8 +132,8 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
               href={href({ f, p: 1 })}
               aria-current={f === filter ? "page" : undefined}
               className={cn(
-                "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-sm ring-1 ring-foreground/10",
-                f === filter ? "bg-primary text-primary-foreground ring-primary" : "bg-card hover:bg-muted",
+                "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-sm ring-1 ring-border",
+                f === filter ? "bg-primary font-semibold text-primary-foreground ring-primary" : "bg-background hover:bg-muted",
               )}
             >
               {FILTERS[f]}
@@ -141,13 +145,13 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
       </div>
 
       {shown.length ? (
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2" data-testid="results">
+        <div className={LISTING_ROWS} data-testid="results">
           {shown.map((card) => (
             <ListingCard key={card.listing_id} card={card} />
           ))}
         </div>
       ) : (
-        <p className="rounded-xl bg-card p-8 text-center text-sm text-muted-foreground ring-1 ring-foreground/10">
+        <p className="rounded-lg bg-muted p-8 text-center text-sm text-muted-foreground">
           {pending ? "Buscando…" : EMPTY[filter]}
         </p>
       )}

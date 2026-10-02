@@ -8,8 +8,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 export const metadata: Metadata = { title: "Métricas" };
 
-const WAITLIST: Record<string, string> = { pro_monthly: "Pro mensual", pass_30: "Search Pass 30 días", pass_90: "Search Pass 90 días" };
-const CTA_EVENTS = ["pro_cta_viewed", "pro_cta_clicked", "waitlist_joined", "plan_limit_hit"] as const;
+const WAITLIST: Record<string, string> = { pro_monthly: "Agencia", pass_30: "Particular", pass_90: "Pase anterior 90 días" };
+const CTA_EVENTS = ["pro_cta_viewed", "pro_cta_clicked", "waitlist_joined", "purchase_requested", "plan_limit_hit"] as const;
 
 function levelLabel(level: string | null): string {
   return level && level in LEVEL ? `${LEVEL[level as Level].emoji} ${LEVEL[level as Level].short}` : "Sin nivel";
@@ -207,7 +207,7 @@ export default async function MetricsPage() {
         </Section>
       </div>
 
-      <Section title="Outcomes (§38)" description="«Compré este vehículo», la respuesta a «¿Automotive influyó?» y el tiempo usando Automotive.">
+      <Section title="Outcomes (§38)" description="«Compré este vehículo», la respuesta a «¿Ese Auto influyó?» y el tiempo usando Ese Auto.">
         <Table>
           <thead>
             <tr>
@@ -240,7 +240,7 @@ export default async function MetricsPage() {
       </Section>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <Section title="Monetización (§52)" description="CTA «Probar Automotive Pro», lista de espera y límites de plan (no se cobra).">
+        <Section title="Interés en los planes" description="Vistas, solicitudes y límites. Los pagos confirmados y las mensualidades vigentes se muestran en Cobros.">
           <div className="grid grid-cols-2 gap-3">
             {CTA_EVENTS.map((name, i) => (
               <Stat key={name} label={name} value={count(cta[i]?.count ?? 0)} note="eventos" />

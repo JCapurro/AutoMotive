@@ -26,10 +26,10 @@ async def profile_audiences(profile_ids: Iterable[int]) -> dict[int, dict[str, A
     async with connection() as cx:
         rows = await (await cx.execute(
             "SELECT sp.id AS profile_id, sp.name AS profile_name, sp.user_id, "
-            "       sp.notification_frequency::text AS frequency, "
+            "       public.effective_search_frequency(sp.user_id, sp.notification_frequency)::text AS frequency, "
             "       sp.notify_min_level::text AS min_level, sp.channels, " + _CONTACT +
             "  FROM search_profiles sp JOIN profiles p ON p.id = sp.user_id "
-            " WHERE sp.id = ANY(%s)", (ids,))).fetchall()
+            " WHERE sp.id = ANY(%s) AND public.search_access_active(sp.id)", (ids,))).fetchall()
     return {r["profile_id"]: r for r in rows}
 
 
@@ -61,10 +61,10 @@ async def listing_audiences(listing_ids: Iterable[int]) -> list[dict[str, Any]]:
             "  SELECT DISTINCT ON (sp.user_id, m.listing_id) sp.user_id, m.listing_id, "
             "         m.id AS match_id, m.level::text AS level, m.score, m.price_ref, m.red_flags, "
             "         sp.id AS profile_id, sp.name AS profile_name, "
-            "         sp.notification_frequency::text AS frequency, "
+            "         public.effective_search_frequency(sp.user_id, sp.notification_frequency)::text AS frequency, "
             "         sp.notify_min_level::text AS min_level, sp.channels "
             "    FROM matches m JOIN search_profiles sp ON sp.id = m.search_profile_id "
-            "   WHERE m.listing_id = ANY(%(ids)s) AND sp.enabled "
+            "   WHERE m.listing_id = ANY(%(ids)s) AND public.search_access_active(sp.id) "
             "   ORDER BY sp.user_id, m.listing_id, m.level, m.score DESC "
             "), ix AS ( "
             "  SELECT user_id, listing_id, saved, status::text AS status "
@@ -74,15 +74,16 @@ async def listing_audiences(listing_ids: Iterable[int]) -> list[dict[str, Any]]:
             "       coalesce(best.listing_id, ix.listing_id) AS listing_id, "
             "       best.match_id, best.level, best.score, best.price_ref, best.red_flags, "
             "       best.profile_id, best.profile_name, "
-            "       coalesce(best.frequency, 'immediate') AS frequency, "
+            "       coalesce(best.frequency, public.effective_search_frequency(p.id, 'immediate')::text) AS frequency, "
             "       coalesce(best.min_level, 'good') AS min_level, "
             "       coalesce(best.channels, "
             "                (SELECT array_agg(DISTINCT c) FROM search_profiles o, unnest(o.channels) c "
-            "                  WHERE o.user_id = coalesce(best.user_id, ix.user_id) AND o.enabled), "
+            "                  WHERE o.user_id = coalesce(best.user_id, ix.user_id) AND public.search_access_active(o.id)), "
             "                '{telegram,web}') AS channels, "
             "       coalesce(ix.saved, false) AS saved, ix.status, " + _CONTACT +
             "  FROM best FULL JOIN ix ON ix.user_id = best.user_id AND ix.listing_id = best.listing_id "
-            "  JOIN profiles p ON p.id = coalesce(best.user_id, ix.user_id)",
+            "  JOIN profiles p ON p.id = coalesce(best.user_id, ix.user_id) "
+            " WHERE public.commercial_access_active(p.id)",
             {"ids": ids})).fetchall()
 
 
@@ -144,6 +145,14 @@ async def queued(limit: int = 200) -> list[dict[str, Any]]:
             " WHERE n.status = 'queued' ORDER BY n.id LIMIT %s", (limit,))).fetchall()
 
 
+async def prepare_delivery(notification_id: int) -> bool:
+    """Check the current access just before dispatch, including an already queued alert."""
+    async with connection() as cx:
+        row = await (await cx.execute(
+            "SELECT public.prepare_notification_delivery(%s) AS allowed", (notification_id,))).fetchone()
+    return bool(row and row["allowed"])
+
+
 async def mark_sent(notification_id: int, *, provider_id: str | None = None,
                     extra: dict[str, Any] | None = None) -> None:
     delivery = {"provider_id": provider_id} if provider_id else {}
@@ -190,13 +199,13 @@ async def digest_users(since: datetime) -> list[dict[str, Any]]:
         return await (await cx.execute(
             "SELECT p.id::text AS user_id, " + _CONTACT + ", "
             "       coalesce((SELECT array_agg(DISTINCT c) FROM search_profiles sp, unnest(sp.channels) c "
-            "                  WHERE sp.user_id = p.id AND sp.enabled), '{}') AS channels "
+            "                  WHERE sp.user_id = p.id AND public.search_access_active(sp.id)), '{}') AS channels "
             "  FROM profiles p "
-            " WHERE EXISTS (SELECT 1 FROM notifications n WHERE n.user_id = p.id "
+            " WHERE public.commercial_access_active(p.id) AND (EXISTS (SELECT 1 FROM notifications n WHERE n.user_id = p.id "
             "                  AND n.status = 'digest' AND n.digested_in IS NULL) "
             "    OR EXISTS (SELECT 1 FROM matches m JOIN search_profiles sp ON sp.id = m.search_profile_id "
-            "                WHERE sp.user_id = p.id AND sp.enabled AND NOT m.is_backfill "
-            "                  AND m.generated_at >= %s) "
+            "                WHERE sp.user_id = p.id AND public.search_access_active(sp.id) AND NOT m.is_backfill "
+            "                  AND m.generated_at >= %s)) "
             " ORDER BY p.id", (since,))).fetchall()
 
 
@@ -205,6 +214,8 @@ async def pending_digest(user_id: str, channel: str) -> list[dict[str, Any]]:
         return await (await cx.execute(
             "SELECT id, kind::text AS kind, listing_id, match_id, payload FROM notifications "
             " WHERE user_id = %s AND channel::text = %s AND status = 'digest' AND digested_in IS NULL "
+            "   AND public.notification_access_active(user_id, search_profile_id, listing_id) "
+            "   AND (kind NOT IN ('new_match','opportunity') OR public.search_access_active(search_profile_id)) "
             " ORDER BY id", (user_id, channel))).fetchall()
 
 
@@ -221,7 +232,7 @@ async def top_matches(user_id: str, channel: str, since: datetime, limit: int) -
             "    FROM matches m "
             "    JOIN search_profiles sp ON sp.id = m.search_profile_id "
             "    JOIN listings l ON l.id = m.listing_id "
-            "   WHERE sp.user_id = %(user)s AND sp.enabled AND %(channel)s = ANY(sp.channels) "
+            "   WHERE sp.user_id = %(user)s AND public.search_access_active(sp.id) AND %(channel)s = ANY(sp.channels) "
             "     AND NOT m.is_backfill AND m.generated_at >= %(since)s AND l.status = 'active' "
             "     AND NOT EXISTS (SELECT 1 FROM notifications n WHERE n.user_id = sp.user_id "
             "                        AND n.channel::text = %(channel)s AND n.listing_id = m.listing_id "

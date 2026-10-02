@@ -116,7 +116,7 @@ export function UnreadBadge({ className = "" }: { className?: string }) {
     <span
       data-testid="inbox-badge"
       aria-label={`${unread} alertas sin leer`}
-      className={`inline-flex min-w-5 items-center justify-center rounded-full bg-orange-600 px-1.5 text-[11px] leading-5 font-semibold text-white tabular-nums ${className}`}
+      className={`inline-flex min-w-5 items-center justify-center rounded-full bg-mark px-1.5 text-[11px] leading-5 font-bold text-[#14213d] tabular-nums ${className}`}
     >
       {unread > 99 ? "99+" : unread}
     </span>

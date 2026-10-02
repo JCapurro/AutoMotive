@@ -14,7 +14,7 @@
 === telegram buttons ===
 (none)
 === email subject ===
-🗓 Tu resumen del día en Automotive: 4 novedades
+🗓 Tu resumen del día en Ese Auto: 4 novedades
 === email text ===
 🗓 Tu resumen del día
 1 alerta superó el tope diario de avisos inmediatos y quedó en este resumen.
@@ -34,7 +34,7 @@ Ya no están disponibles
   https://automotive.app/r/43?to=listing&l=504
 
 —
-Recibís este correo porque tenés búsquedas activas en Automotive.
+Recibís este correo porque tenés búsquedas activas en Ese Auto.
 === email html ===
 <div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.5;color:#1a1a1a">
 <p style="font-size:18px;margin:0 0 8px"><strong>🗓 Tu resumen del día</strong></p>
@@ -49,4 +49,4 @@ Recibís este correo porque tenés búsquedas activas en Automotive.
 <p style="margin:16px 0 4px"><strong>Ya no están disponibles</strong></p><ul style="margin:0;padding-left:20px">
 <li>🚫 <a href="https://automotive.app/r/43?to=listing&amp;l=504">Fiesta Kinetic Design 2015</a></li>
 </ul>
-<p style="margin:24px 0 0;font-size:12px;color:#888888">Recibís este correo porque tenés búsquedas activas en Automotive.</p></div>
+<p style="margin:24px 0 0;font-size:12px;color:#888888">Recibís este correo porque tenés búsquedas activas en Ese Auto.</p></div>

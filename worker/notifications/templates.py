@@ -38,7 +38,7 @@ HEADER = {
 }
 REPOST = "🔁 Re-publicado"
 VIEW_LISTING = "Ver publicación"
-VIEW_IN_APP = "🔎 Ver en Automotive"
+VIEW_IN_APP = "🔎 Ver en Ese Auto"
 INTERESTED, DISCARD = "⭐ Me interesa", "✖ Descartar"
 INTERESTED_DONE, DISCARD_DONE = "✅ Te interesa", "✖ Descartada"
 DIGEST_SECTIONS = {
@@ -48,7 +48,7 @@ DIGEST_SECTIONS = {
 }
 DIGEST_DEGRADED = ("1 alerta superó el tope diario de avisos inmediatos y quedó en este resumen.",
                    "{n} alertas superaron el tope diario de avisos inmediatos y quedaron en este resumen.")
-EMAIL_FOOTER = "Recibís este correo porque tenés búsquedas activas en Automotive."
+EMAIL_FOOTER = "Recibís este correo porque tenés búsquedas activas en Ese Auto."
 UNSUBSCRIBE = "Dejar de recibir estos emails"
 # Red flags shown in an alert, warnings first.
 MAX_FLAGS = 2
@@ -223,7 +223,7 @@ def _digest(n: Notification, links: Links) -> Content:
                 for s in DIGEST_SECTIONS]
     sections = [(title, rows) for title, rows in sections if rows]
     count = sum(len(rows) for _, rows in sections)
-    c = Content(HEADER["digest"], f"{HEADER['digest']} en Automotive: {count} novedad"
+    c = Content(HEADER["digest"], f"{HEADER['digest']} en Ese Auto: {count} novedad"
                 + ("es" if count != 1 else ""), sections=sections)
     if p.get("degraded"):
         c.lines.append(DIGEST_DEGRADED[p["degraded"] != 1].format(n=p["degraded"]))
@@ -248,7 +248,7 @@ class TelegramMessage:
 
 
 def telegram_buttons(n: Notification, links: Links, *, chosen: str | None = None) -> tuple[tuple[Button, ...], ...]:
-    """⭐ Me interesa · ✖ Descartar · 🔎 Ver en Automotive (sección 7.2).
+    """⭐ Me interesa · ✖ Descartar · 🔎 Ver en Ese Auto (sección 7.2).
     Callback data: nt:<action>:<notification_id> (bot/notification_actions.py)."""
     if n.kind == "digest" or n.listing_id is None:
         return ()

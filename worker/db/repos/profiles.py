@@ -186,7 +186,7 @@ async def list_alerts(user_id: int | None = None, only_active: bool = False) -> 
         where.append("p.telegram_user_id = %s")
         params.append(user_id)
     if only_active:
-        where.append("sp.enabled")
+        where.append("public.search_access_active(sp.id)")
     sql = _SELECT + " WHERE " + " AND ".join(where) + " ORDER BY sp.id DESC"
     async with connection() as cx:
         rows = await (await cx.execute(sql, params)).fetchall()
@@ -231,16 +231,17 @@ async def mark_bootstrapped(alert_id: int) -> None:
 async def enabled_profiles() -> list[dict[str, Any]]:
     """Every enabled profile, web or Telegram: what crawl targets are derived from."""
     async with connection() as cx:
+        await cx.execute("SELECT public.expire_commercial_access()")
         return await (await cx.execute(
             "SELECT id, filters, origin_lat, origin_lon FROM search_profiles "
-            " WHERE enabled ORDER BY id")).fetchall()
+            " WHERE public.search_access_active(id) ORDER BY id")).fetchall()
 
 
 async def pending_rematch() -> list[dict]:
     """Enabled profiles never bootstrapped, or edited since (sección 5.7)."""
     async with connection() as cx:
         rows = await (await cx.execute(
-            _SELECT + " WHERE sp.enabled AND (sp.bootstrapped_at IS NULL "
+            _SELECT + " WHERE public.search_access_active(sp.id) AND (sp.bootstrapped_at IS NULL "
                       "   OR sp.rematch_requested_at IS NOT NULL) ORDER BY sp.id")).fetchall()
     return [_to_alert(r) for r in rows]
 
@@ -253,7 +254,7 @@ async def alerts_for_target(source: str, make: str | None, model: str | None, *,
     telegram = " AND p.telegram_chat_id IS NOT NULL" if telegram_only else ""
     async with connection() as cx:
         rows = await (await cx.execute(
-            _SELECT + " WHERE sp.enabled" + telegram +
+            _SELECT + " WHERE public.search_access_active(sp.id)" + telegram +
                       "   AND lower(sp.filters->>'make') IS NOT DISTINCT FROM lower(%s) "
                       "   AND lower(sp.filters->>'model') IS NOT DISTINCT FROM lower(%s) "
                       "   AND (NOT sp.filters ? 'sources' OR sp.filters->'sources' ? %s) "

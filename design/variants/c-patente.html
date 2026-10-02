@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Automotive · Patente</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Saira:wdth,wght@50..125,100..900&display=swap" rel="stylesheet">
+<script src="data.js"></script>
+<script src="icons.js"></script>
+<script src="proto.js"></script>
+<style>
+/* C · Patente — the car's papers. The Mercosur plate names things (the brand,
+   each search), the VTV sticker carries the Opportunity Score, and the green
+   cédula is the listing's record. Saira (Omnibus-Type, Buenos Aires): narrow
+   and heavy on the plates, normal width for reading. */
+:root {
+  --page: #f2f4f7;
+  --paper: #ffffff;
+  --black: #000000;
+  --ink: #1d232d;
+  --ink-2: #4f5866;
+  --ink-3: #8c94a1;
+  --line: #d9dee6;
+  --blue: #1f3f99;
+  --blue-2: #2c55c4;
+  --sky: #74acdf;
+  --cedula: #dcebd4;
+  --cedula-ink: #17301a;
+  --cedula-line: rgba(47, 110, 52, .13);
+  --o-high: #e4472b;
+  --o-good: #2e9a57;
+  --o-match: #efbf2a;
+  --o-low: #9aa3ad;
+  --warn: #b5370f;
+  --r: 10px;
+  --wrap: 1200px;
+  --gut: clamp(16px, 4vw, 40px);
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; scrollbar-color: var(--blue) var(--page); }
+body {
+  margin: 0; background: var(--page); color: var(--ink);
+  font: 400 16px/1.5 "Saira", system-ui, sans-serif; font-stretch: 100%;
+  font-variant-numeric: tabular-nums; caret-color: var(--blue); -webkit-font-smoothing: antialiased;
+}
+::selection { background: var(--blue); color: #fff; }
+a { color: inherit; text-underline-offset: 3px; }
+:focus-visible { outline: 3px solid var(--blue-2); outline-offset: 2px; border-radius: 4px; }
+h1, h2, h3, p, ul, ol, dl, dd, figure { margin: 0; padding: 0; }
+ul, ol { list-style: none; }
+.icon { width: 18px; height: 18px; stroke-width: 2; flex: none; }
+.wrap { max-width: var(--wrap); margin: 0 auto; padding-left: var(--gut); padding-right: var(--gut); }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 8px; height: 46px; padding: 0 20px; border-radius: 8px; border: 0;
+  background: var(--blue); color: #fff; text-decoration: none; cursor: pointer; white-space: nowrap;
+  font: 700 15px/1 "Saira", sans-serif; font-stretch: 88%; letter-spacing: .01em; transition: background-color .15s, transform .1s;
+}
+.btn:hover { background: var(--blue-2); }
+.btn:active { transform: translateY(1px); }
+.btn.line { background: var(--paper); color: var(--black); box-shadow: inset 0 0 0 2px var(--black); }
+.btn.line:hover { background: var(--page); }
+.btn.sm { height: 38px; padding: 0 14px; font-size: 14px; }
+
+/* The Mercosur plate. */
+.plate { display: inline-flex; flex-direction: column; background: var(--paper); border: 2px solid var(--black); border-radius: 8px; overflow: hidden; color: var(--black); text-decoration: none; min-width: 0; }
+.plate-band { display: flex; align-items: center; justify-content: center; gap: 8px; position: relative; background: var(--blue); color: #fff; padding: 3px 26px; font-weight: 600; font-stretch: 100%; font-size: 9px; line-height: 1.2; letter-spacing: .14em; text-transform: uppercase; white-space: nowrap; }
+.plate-band::after { content: ""; position: absolute; right: 7px; top: 50%; width: 15px; height: 10px; margin-top: -5px; background: linear-gradient(var(--sky) 0 33%, #fff 33% 67%, var(--sky) 67%); border-radius: 1px; }
+.plate-band::before { content: ""; position: absolute; left: 8px; top: 50%; width: 12px; height: 8px; margin-top: -4px; background: radial-gradient(circle, #fff 45%, transparent 55%) 0 0 / 4px 4px; opacity: .9; }
+.plate-main { padding: 2px 14px 3px; text-align: center; font-weight: 700; font-stretch: 58%; letter-spacing: .07em; text-transform: uppercase; line-height: 1.05; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wordmark .plate-main { font-size: 22px; padding: 1px 12px 2px; }
+.wordmark .plate-band { font-size: 7px; padding: 2px 22px; }
+.wordmark .plate-band::after { width: 11px; height: 7px; margin-top: -3.5px; right: 6px; }
+.wordmark .plate-band::before { left: 6px; }
+
+/* The VTV sticker. */
+.oblea { display: block; width: var(--size, 96px); height: var(--size, 96px); filter: drop-shadow(0 2px 3px rgba(0,0,0,.25)); }
+.oblea .disc { fill: var(--o); }
+.oblea .core { fill: #fff; }
+.oblea .ring-text { fill: #fff; font: 700 8.6px "Saira", sans-serif; font-stretch: 80%; letter-spacing: .12em; text-transform: uppercase; }
+.oblea .num { fill: var(--black); font: 800 34px "Saira", sans-serif; font-stretch: 70%; }
+.oblea .of { fill: var(--ink-2); font: 600 8px "Saira", sans-serif; letter-spacing: .1em; text-transform: uppercase; }
+.lvl-high { --o: var(--o-high); }
+.lvl-good { --o: var(--o-good); }
+.lvl-match { --o: var(--o-match); }
+.lvl-match .ring-text { fill: #3a2c00; }
+.lvl-low { --o: var(--o-low); }
+
+/* ---------- Landing ---------- */
+.site-head { display: flex; align-items: center; justify-content: space-between; height: 76px; }
+.wordmark { text-decoration: none; display: inline-flex; }
+.site-head .login { font-weight: 600; text-decoration: none; padding: 8px 4px; }
+.site-head .login:hover { text-decoration: underline; }
+
+.hero { display: grid; gap: 40px; padding-top: clamp(16px, 4vw, 48px); padding-bottom: clamp(56px, 7vw, 96px); align-items: center; }
+.hero h1 { font-weight: 800; font-stretch: 62%; font-size: clamp(3rem, 7.4vw, 6.4rem); line-height: .92; letter-spacing: -.005em; text-transform: uppercase; color: var(--black); text-wrap: balance; }
+.hero .copy p { margin-top: 22px; font-size: 19px; line-height: 1.45; color: var(--ink-2); max-width: 38ch; }
+.hero .cta { margin-top: 28px; display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: center; }
+.hero .cta small { font-size: 14px; color: var(--ink-2); }
+@media (min-width: 960px) { .hero { grid-template-columns: 5fr 6fr; gap: 56px; } }
+
+.evidence { position: relative; padding-bottom: 120px; }
+.evidence .photo { position: relative; border-radius: 14px; overflow: hidden; aspect-ratio: 16 / 11; background: #cfd5dc; }
+.evidence .photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.evidence .oblea { position: absolute; right: 16px; top: 16px; --size: clamp(96px, 12vw, 132px); }
+.evidence .cedula { position: absolute; left: -20px; bottom: 0; width: min(380px, 88%); box-shadow: 0 20px 40px -18px rgba(23,48,26,.45); }
+@media (max-width: 959px) { .evidence { padding-bottom: 0; } .evidence .cedula { position: relative; left: auto; margin-top: -40px; margin-left: 12px; } }
+@media (prefers-reduced-motion: no-preference) {
+  .evidence .oblea { animation: stick .55s cubic-bezier(.2, 1.5, .4, 1) .5s both; }
+  @keyframes stick { from { opacity: 0; transform: scale(1.35) rotate(-18deg); } to { opacity: 1; transform: none; } }
+}
+
+/* The green card. */
+.cedula {
+  position: relative; border-radius: 14px; padding: 16px 18px 18px; color: var(--cedula-ink); background-color: var(--cedula);
+  background-image:
+    repeating-radial-gradient(circle at 0% 120%, transparent 0 9px, var(--cedula-line) 9px 10px),
+    repeating-radial-gradient(circle at 110% -20%, transparent 0 12px, var(--cedula-line) 12px 13px);
+}
+.cedula-title { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #3d6a3a; }
+.cedula h2, .cedula h3 { margin-top: 8px; font-weight: 800; font-stretch: 72%; font-size: 26px; line-height: 1; color: var(--black); }
+.fields { margin-top: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.fields div { background: rgba(255,255,255,.55); border: 1px solid rgba(47,110,52,.22); border-radius: 6px; padding: 5px 9px 6px; }
+.fields .wide { grid-column: 1 / -1; }
+.fields dt { font-size: 9.5px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #3d6a3a; }
+.fields dd { font-weight: 600; font-size: 15px; line-height: 1.25; color: var(--black); }
+.fields .big dd { font-weight: 800; font-stretch: 80%; font-size: 22px; }
+.fields .big dd small { display: block; font-weight: 500; font-stretch: 100%; font-size: 13px; color: var(--cedula-ink); }
+
+.band-sec { background: var(--paper); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.section { padding-top: 72px; padding-bottom: 72px; }
+.section h2 { font-weight: 800; font-stretch: 66%; font-size: clamp(2rem, 4.2vw, 3.2rem); line-height: .98; text-transform: uppercase; color: var(--black); max-width: 22ch; }
+.section .lede { margin-top: 14px; font-size: 18px; color: var(--ink-2); max-width: 58ch; }
+.legend { margin-top: 36px; display: grid; gap: 28px 24px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+.legend li { display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: center; }
+.legend .oblea { --size: 76px; }
+.legend b { display: block; font-weight: 700; font-size: 17px; line-height: 1.2; }
+.legend span { font-size: 14px; color: var(--ink-2); line-height: 1.4; }
+
+.benefits { margin-top: 36px; display: grid; gap: 0; border-top: 4px solid var(--blue); }
+.benefits li { padding: 18px 0; border-bottom: 1px solid var(--line); display: grid; gap: 4px; }
+.benefits b { font-weight: 800; font-stretch: 75%; font-size: 22px; line-height: 1.1; color: var(--black); }
+.benefits span { color: var(--ink-2); }
+@media (min-width: 860px) {
+  .benefits { grid-template-columns: repeat(4, 1fr); }
+  .benefits li { padding: 20px 20px 22px 0; border-bottom: 0; border-right: 1px solid var(--line); }
+  .benefits li + li { padding-left: 20px; }
+  .benefits li:last-child { border-right: 0; }
+}
+.closing { padding-top: 24px; padding-bottom: 96px; display: grid; gap: 28px; justify-items: start; }
+.closing .plate-main { font-size: clamp(2rem, 6vw, 4.4rem); padding: 4px 28px 8px; }
+.closing .plate-band { font-size: 11px; padding: 5px 40px; }
+.closing .plate { border-width: 3px; border-radius: 14px; max-width: 100%; }
+.closing p { font-size: 19px; color: var(--ink-2); max-width: 44ch; }
+.site-foot { border-top: 1px solid var(--line); padding-top: 22px; padding-bottom: 40px; font-size: 14px; color: var(--ink-2); }
+.site-foot .wrap { display: flex; gap: 8px 24px; flex-wrap: wrap; }
+
+/* ---------- App ---------- */
+.app-head { position: sticky; top: 0; z-index: 30; background: var(--paper); border-bottom: 1px solid var(--line); }
+.app-head .wrap { display: flex; align-items: center; gap: 28px; height: 64px; }
+.app-nav { display: none; gap: 4px; height: 100%; }
+.app-nav a { display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; color: var(--ink-2); text-decoration: none; font-weight: 600; font-size: 15px; border-bottom: 3px solid transparent; border-top: 3px solid transparent; }
+.app-nav a:hover { color: var(--black); }
+.app-nav a[aria-current="page"] { color: var(--black); border-bottom-color: var(--blue); }
+.count { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--o-high); color: #fff; font-size: 12px; font-weight: 800; }
+.app-head .btn { margin-left: auto; display: none; }
+.bell { margin-left: auto; position: relative; display: inline-grid; place-items: center; width: 42px; height: 42px; }
+.bell .icon { width: 22px; height: 22px; }
+.bell .count { position: absolute; top: 2px; right: 0; min-width: 18px; height: 18px; font-size: 11px; }
+@media (min-width: 900px) { .app-nav, .app-head .btn { display: flex; } .bell { display: none; } }
+.tabbar { position: fixed; inset: auto 0 0; z-index: 30; background: var(--paper); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); }
+.tabbar ul { display: grid; grid-template-columns: repeat(4, 1fr); max-width: 480px; margin: 0 auto; }
+.tabbar a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; height: 60px; font-size: 11px; font-weight: 600; color: var(--ink-2); text-decoration: none; }
+.tabbar a[aria-current="page"] { color: var(--blue); }
+.tabbar .icon { width: 22px; height: 22px; }
+@media (min-width: 900px) { .tabbar { display: none; } }
+.app-main { padding-top: 32px; padding-bottom: 120px; }
+@media (min-width: 900px) { .app-main { padding-bottom: 96px; } }
+.title { font-weight: 800; font-stretch: 66%; font-size: 40px; line-height: 1; text-transform: uppercase; color: var(--black); }
+.h2 { font-weight: 800; font-stretch: 70%; font-size: 28px; line-height: 1; text-transform: uppercase; color: var(--black); }
+.sub { font-size: 14px; color: var(--ink-2); margin-top: 4px; }
+.block { margin-top: 48px; }
+
+.searches { margin-top: 22px; display: grid; gap: 18px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 270px), 1fr)); }
+.search { min-width: 0; background: var(--paper); border-radius: 14px; padding: 18px; display: grid; gap: 14px; align-content: start; border: 1px solid var(--line); }
+.search .plate { width: 100%; }
+.search .plate-main { font-size: 34px; }
+.search .plate-band { font-size: 8.5px; letter-spacing: .1em; }
+.search .plate:hover { box-shadow: 0 0 0 3px rgba(31,63,153,.2); }
+.search.is-paused .plate { opacity: .45; }
+.filters { display: flex; flex-wrap: wrap; gap: 4px 6px; }
+.filters span { font-size: 13px; color: var(--ink-2); padding: 1px 8px; border-radius: 4px; background: var(--page); }
+.figs { display: flex; flex-wrap: wrap; align-items: end; gap: 12px 22px; }
+.figs b { display: block; font-weight: 800; font-stretch: 70%; font-size: 32px; line-height: 1; color: var(--black); }
+.figs .hot b { color: var(--o-high); }
+.figs span { display: block; font-size: 13px; color: var(--ink-2); white-space: nowrap; margin-top: 4px; }
+.figs .btn { margin-left: auto; }
+.state-line { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--ink-2); }
+.state-line .icon { width: 16px; height: 16px; }
+.state-line.loading .icon { animation: spin 1.2s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .state-line.loading .icon { animation: none; } }
+
+.telegram { margin-top: 18px; display: flex; gap: 14px; align-items: center; padding: 16px 18px; border-radius: 14px; background: var(--paper); border: 1px solid var(--line); text-decoration: none; }
+.telegram .icon { color: var(--blue); }
+.telegram b { font-weight: 700; }
+.telegram span { color: var(--ink-2); }
+.telegram .go { margin-left: auto; font-weight: 700; white-space: nowrap; color: var(--blue); }
+
+.listings { margin-top: 18px; display: grid; gap: 14px; }
+@media (min-width: 1000px) { .listings { grid-template-columns: 1fr 1fr; } }
+.lst { position: relative; display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 16px; background: var(--paper); border: 1px solid var(--line); border-radius: 14px; padding: 12px; }
+.lst:hover { border-color: var(--ink-3); }
+.lst .pic { position: relative; }
+.lst .pic img { width: 150px; height: 112px; object-fit: cover; border-radius: 8px; display: block; }
+.lst .pic .oblea { position: absolute; left: -12px; top: -12px; --size: 58px; }
+.lst h3 { font-weight: 700; font-size: 17px; line-height: 1.2; padding-right: 8px; }
+.lst h3 a { text-decoration: none; }
+.lst h3 a::after { content: ""; position: absolute; inset: 0; }
+.lst:hover h3 a { text-decoration: underline; }
+.lst .price { margin-top: 6px; font-weight: 800; font-stretch: 75%; font-size: 24px; line-height: 1; color: var(--black); }
+.lst .price small { font-weight: 500; font-stretch: 100%; font-size: 13px; color: var(--ink-2); margin-left: 6px; }
+.lst .meta { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 2px 14px; font-size: 13px; color: var(--ink-2); }
+.lst .foot { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.status { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: 4px; font-size: 12px; font-weight: 700; border: 1.5px solid currentColor; }
+.st-new { color: var(--blue); }
+.st-interested { color: var(--o-good); }
+.st-contacted { color: var(--ink); }
+.st-discarded { color: var(--ink-3); text-decoration: line-through; border-color: transparent; padding: 0; }
+.saved { color: var(--black); border-color: transparent; padding: 0; }
+.saved .icon { width: 14px; height: 14px; fill: var(--o-match); stroke: #8a6a00; }
+.age { margin-left: auto; font-size: 12px; color: var(--ink-2); }
+@media (max-width: 520px) {
+  .lst { grid-template-columns: 112px minmax(0, 1fr); gap: 14px; }
+  .lst .pic img { width: 112px; height: 84px; }
+  .lst .pic .oblea { --size: 50px; left: -10px; top: -10px; }
+}
+
+/* ---------- Listing ---------- */
+.back { display: inline-flex; gap: 6px; align-items: center; font-weight: 600; font-size: 14px; color: var(--ink-2); text-decoration: none; }
+.back:hover { color: var(--black); text-decoration: underline; }
+.d-head { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: end; justify-content: space-between; }
+.d-head h1 { font-weight: 800; font-stretch: 64%; font-size: clamp(2.4rem, 5vw, 3.6rem); line-height: .95; text-transform: uppercase; color: var(--black); }
+.d-head p { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 4px 16px; color: var(--ink-2); font-size: 15px; }
+.d-top { margin-top: 22px; display: grid; gap: 22px; }
+@media (min-width: 1000px) { .d-top { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 28px; align-items: start; } }
+.d-photo { position: relative; border-radius: 14px; overflow: hidden; aspect-ratio: 16 / 10; background: #cfd5dc; }
+.d-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.d-photo .oblea { position: absolute; right: 18px; top: 18px; --size: clamp(104px, 13vw, 140px); }
+.thumbs { margin-top: 8px; display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.thumbs img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 6px; display: block; }
+.actions { margin-top: 16px; display: grid; gap: 10px; }
+.seg { display: grid; grid-template-columns: repeat(4, 1fr); border: 2px solid var(--black); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; border-right: 1px solid var(--line); background: var(--paper); font: 600 13px/1.1 "Saira", sans-serif; padding: 10px 6px; cursor: pointer; color: var(--black); }
+.seg button:last-child { border-right: 0; }
+.seg button:hover { background: var(--page); }
+.seg button[aria-pressed="true"] { background: var(--black); color: #fff; }
+.actions .row { display: grid; grid-template-columns: 1fr auto; gap: 10px; }
+.actions .row .btn { justify-content: center; }
+
+.report { margin-top: 28px; display: grid; gap: 20px; }
+@media (min-width: 1000px) { .report { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 28px; } }
+.sheet { background: var(--paper); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.sheet + .sheet { margin-top: 20px; }
+.sheet > header { padding: 14px 20px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.sheet h2 { font-weight: 800; font-stretch: 72%; font-size: 22px; line-height: 1.1; text-transform: uppercase; color: var(--black); }
+.sheet > header span { font-size: 13px; color: var(--ink-2); text-align: right; }
+.sheet .body { padding: 18px 20px 20px; }
+.sheet .note { font-size: 14px; color: var(--ink-2); }
+
+.scale { position: relative; margin: 30px 4px 6px; height: 68px; }
+.scale .rule { position: absolute; left: 0; right: 0; top: 24px; height: 16px; background:
+  repeating-linear-gradient(90deg, var(--ink-3) 0 1px, transparent 1px calc(100% / 65)), var(--page); border-radius: 3px; }
+.scale .iqr { position: absolute; top: 24px; height: 16px; background: rgba(31,63,153,.22); border-left: 2px solid var(--blue); border-right: 2px solid var(--blue); }
+.scale .med { position: absolute; top: 14px; height: 36px; width: 3px; margin-left: -1.5px; background: var(--blue); }
+.scale .med span { position: absolute; top: -20px; left: 50%; transform: translateX(-50%); font-size: 12px; font-weight: 700; color: var(--blue); white-space: nowrap; }
+.scale .cmp { position: absolute; top: 29px; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; background: var(--black); }
+.scale .me { position: absolute; top: 8px; margin-left: -1px; width: 2px; height: 38px; background: var(--o-high); }
+.scale .me span { position: absolute; bottom: calc(100% + 2px); left: 6px; white-space: nowrap; font-weight: 800; font-stretch: 80%; font-size: 15px; line-height: 1.1; color: var(--o-high); }
+.scale .me span br { display: none; }
+@media (max-width: 559px) { .scale { margin-top: 48px; } .scale .me span br { display: inline; } }
+.scale .t { position: absolute; top: 48px; transform: translateX(-50%); font-size: 12px; color: var(--ink-2); }
+.trio { margin-top: 18px; display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line); border-radius: 8px; }
+.trio div { padding: 8px 12px; border-right: 1px solid var(--line); }
+.trio div:last-child { border-right: 0; }
+.trio dt { font-size: 12px; color: var(--ink-2); }
+.trio dd { font-weight: 800; font-stretch: 78%; font-size: 19px; color: var(--black); white-space: nowrap; }
+
+.inspect { width: 100%; border-collapse: collapse; font-size: 15px; }
+.inspect th { text-align: left; font-size: 12px; font-weight: 700; color: var(--ink-2); padding: 0 0 8px; border-bottom: 2px solid var(--black); }
+.inspect th:last-child, .inspect td:last-child { text-align: right; }
+.inspect td { padding: 10px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+.inspect td b { display: block; font-weight: 700; }
+.inspect td span { font-size: 13px; color: var(--ink-2); }
+.inspect td.pts { font-weight: 800; font-stretch: 78%; font-size: 18px; white-space: nowrap; color: var(--black); padding-left: 12px; }
+.inspect td.pts small { font-weight: 500; font-stretch: 100%; font-size: 12px; color: var(--ink-2); }
+.inspect .meter { display: block; margin-top: 6px; height: 4px; background: var(--page); border-radius: 2px; overflow: hidden; }
+.inspect .meter i { display: block; height: 100%; background: var(--blue); }
+.inspect tfoot td { border-bottom: 0; padding-top: 12px; font-weight: 800; font-stretch: 78%; font-size: 20px; color: var(--black); }
+
+.okays li, .obs li { display: grid; grid-template-columns: 22px 1fr; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.okays li:last-child, .obs li:last-child { border-bottom: 0; }
+.okays .icon { color: var(--o-good); stroke-width: 2.6; margin-top: 2px; }
+.okays b { display: block; font-weight: 700; }
+.okays span { font-size: 14px; color: var(--ink-2); }
+.obs .icon { color: var(--ink-3); margin-top: 2px; }
+.obs .warn { color: var(--warn); font-weight: 600; }
+.obs .warn .icon { color: var(--warn); }
+.questions { font-size: 15px; line-height: 1.55; padding: 14px 16px; border-radius: 8px; background: var(--page); border-left: 0; }
+.sheet .btn.line { margin-top: 12px; }
+</style>
+</head>
+<body>
+
+<!-- ================= LANDING ================= -->
+<section data-screen="landing">
+  <header class="wrap site-head">
+    <a class="wordmark" href="#landing" aria-label="Automotive"><span class="plate"><span class="plate-band" aria-hidden="true">&nbsp;</span><span class="plate-main">Automotive</span></span></a>
+    <a class="login" href="#inicio">Ingresar</a>
+  </header>
+
+  <main>
+    <section class="wrap hero">
+      <div class="copy">
+        <h1>Encontrá las oportunidades antes que los demás.</h1>
+        <p>Decinos qué auto estás buscando. Automotive monitorea las publicaciones y te avisa cuando aparece uno que conviene mirar.</p>
+        <div class="cta"><a class="btn" href="#inicio">Crear mi búsqueda</a><small>Gratis durante el piloto.</small></div>
+      </div>
+      <figure class="evidence" aria-label="Ejemplo de una oportunidad detectada">
+        <div class="photo"><img src="img/2302.jpg" alt="Ford Focus 2.0 Trend 2014 en Kavak"></div>
+        <span data-oblea="high" data-score="88"></span>
+        <div class="cedula">
+          <p class="cedula-title"><span>Ficha de la publicación</span><span>Kavak</span></p>
+          <h3>Ford Focus 2.0 Trend 2014</h3>
+          <dl class="fields">
+            <div class="big wide"><dt>Precio publicado</dt><dd>U$S 6.949<small>34% debajo de la mediana de 10 comparables</small></dd></div>
+            <div><dt>Kilometraje</dt><dd>105.420 km</dd></div>
+            <div><dt>Detectado</dt><dd>hace 16 h</dd></div>
+          </dl>
+        </div>
+      </figure>
+    </section>
+
+    <section class="band-sec">
+      <div class="wrap section">
+        <h2>Cada publicación sale con su oblea.</h2>
+        <p class="lede">Comparamos cada publicación de MercadoLibre, Facebook Marketplace, Kavak, V6 y Autocosmos contra vehículos similares y le ponemos un Opportunity Score de 0 a 100.</p>
+        <ul class="legend">
+          <li><span data-oblea="high" data-score="88"></span><p><b>Alta oportunidad</b><span>Debajo de publicaciones comparables y cerca de lo que buscás.</span></p></li>
+          <li><span data-oblea="good" data-score="78"></span><p><b>Buena coincidencia</b><span>Cumple tu búsqueda con buen precio o pocos km.</span></p></li>
+          <li><span data-oblea="match" data-score="62"></span><p><b>Coincidencia</b><span>Cumple lo que pediste, sin nada que la destaque.</span></p></li>
+          <li><span data-oblea="low" data-score="41"></span><p><b>Baja prioridad</b><span>Coincide, pero hay opciones mejores.</span></p></li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="wrap section">
+      <h2>Lo que hacemos mientras hacés otra cosa.</h2>
+      <ul class="benefits">
+        <li><b>No busques todo el día.</b><span>Automotive monitorea por vos.</span></li>
+        <li><b>No revises cientos de publicaciones.</b><span>Filtramos según lo que realmente buscás.</span></li>
+        <li><b>Detectá oportunidades.</b><span>Comparamos cada publicación contra vehículos similares.</span></li>
+        <li><b>Llegá temprano.</b><span>Recibí la alerta cuando aparece.</span></li>
+      </ul>
+    </section>
+
+    <section class="wrap closing">
+      <span class="plate"><span class="plate-band">República Argentina</span><span class="plate-main">Busca por vos</span></span>
+      <p>Vos elegís qué auto querés. Automotive busca por vos.</p>
+      <a class="btn" href="#inicio">Crear mi búsqueda</a>
+    </section>
+  </main>
+  <footer class="site-foot"><div class="wrap"><span>Automotive</span><a href="#">Privacidad</a><a href="#">Términos</a></div></footer>
+</section>
+
+<!-- ================= INICIO ================= -->
+<section data-screen="inicio">
+  <header class="app-head"><div class="wrap">
+    <a class="wordmark" href="#landing" aria-label="Automotive"><span class="plate"><span class="plate-band" aria-hidden="true">&nbsp;</span><span class="plate-main">Automotive</span></span></a>
+    <nav class="app-nav" aria-label="Principal"><a href="#inicio" aria-current="page">Inicio</a><a href="#inicio">Guardados</a><a href="#inicio">Alertas <span class="count">3</span></a><a href="#inicio">Ajustes</a></nav>
+    <a class="btn sm" href="#inicio"><i data-icon="plus"></i>Nueva búsqueda</a>
+    <a class="bell" href="#inicio" aria-label="Alertas, 3 sin leer"><i data-icon="bell"></i><span class="count">3</span></a>
+  </div></header>
+  <main class="wrap app-main">
+    <h1 class="title">Mis búsquedas</h1>
+    <div class="searches" id="searches"></div>
+    <a class="telegram" href="#inicio"><i data-icon="send"></i><p><b>Recibí las alertas en Telegram.</b> <span>Vinculá tu cuenta en un paso.</span></p><span class="go">Vincular</span></a>
+    <section class="block">
+      <h2 class="h2">Oportunidades recientes</h2>
+      <p class="sub">Las de los últimos 14 días, por Opportunity Score.</p>
+      <div class="listings" id="listings"></div>
+    </section>
+  </main>
+  <nav class="tabbar" aria-label="Principal"><ul>
+    <li><a href="#inicio" aria-current="page"><i data-icon="home"></i>Inicio</a></li>
+    <li><a href="#inicio"><i data-icon="bookmark"></i>Guardados</a></li>
+    <li><a href="#inicio"><i data-icon="bell"></i>Alertas</a></li>
+    <li><a href="#inicio"><i data-icon="sliders"></i>Ajustes</a></li>
+  </ul></nav>
+</section>
+
+<!-- ================= AVISO ================= -->
+<section data-screen="aviso">
+  <header class="app-head"><div class="wrap">
+    <a class="wordmark" href="#landing" aria-label="Automotive"><span class="plate"><span class="plate-band" aria-hidden="true">&nbsp;</span><span class="plate-main">Automotive</span></span></a>
+    <nav class="app-nav" aria-label="Principal"><a href="#inicio" aria-current="page">Inicio</a><a href="#inicio">Guardados</a><a href="#inicio">Alertas <span class="count">3</span></a><a href="#inicio">Ajustes</a></nav>
+    <a class="btn sm" href="#inicio"><i data-icon="plus"></i>Nueva búsqueda</a>
+    <a class="bell" href="#inicio" aria-label="Alertas, 3 sin leer"><i data-icon="bell"></i><span class="count">3</span></a>
+  </div></header>
+  <main class="wrap app-main" id="detail"></main>
+  <nav class="tabbar" aria-label="Principal"><ul>
+    <li><a href="#inicio" aria-current="page"><i data-icon="home"></i>Inicio</a></li>
+    <li><a href="#inicio"><i data-icon="bookmark"></i>Guardados</a></li>
+    <li><a href="#inicio"><i data-icon="bell"></i>Alertas</a></li>
+    <li><a href="#inicio"><i data-icon="sliders"></i>Ajustes</a></li>
+  </ul></nav>
+</section>
+
+<script>
+const { searches, listings, detail: d, LEVEL, STATUS } = AM;
+const usd = (n) => n.toLocaleString("es-AR");
+let uid = 0;
+function oblea(level, score) {
+  const id = `ring${++uid}`;
+  const label = `${LEVEL[level].label} · Opportunity Score · `.toUpperCase();
+  return `<svg class="oblea lvl-${level}" viewBox="0 0 120 120" role="img" aria-label="${LEVEL[level].label}, Opportunity Score ${score} de 100">
+    <defs><path id="${id}" d="M60 60m-47 0a47 47 0 1 1 94 0a47 47 0 1 1-94 0"/></defs>
+    <circle class="disc" cx="60" cy="60" r="58"/>
+    <circle cx="60" cy="60" r="56" fill="none" stroke="rgba(255,255,255,.55)" stroke-width="1"/>
+    <circle class="core" cx="60" cy="60" r="37"/>
+    <text class="ring-text"><textPath href="#${id}" textLength="292" lengthAdjust="spacing">${label}</textPath></text>
+    <text class="num" x="60" y="68" text-anchor="middle">${score}</text>
+    <text class="of" x="60" y="81" text-anchor="middle">de 100</text>
+  </svg>`;
+}
+const plate = (band, main, href) =>
+  `<${href ? `a href="${href}"` : "span"} class="plate"><span class="plate-band">${band}</span><span class="plate-main">${main}</span></${href ? "a" : "span"}>`;
+
+document.getElementById("searches").innerHTML = searches.map((s) => `
+  <article class="search is-${s.state}">
+    ${plate(s.state === "paused" ? "Pausada" : "República Argentina", s.name, "#inicio").replace('class="plate-main"', `class="plate-main" style="font-size:${Math.min(34, Math.floor(290 / (s.name.length * 0.48)))}px"`)}
+    <div class="filters">${s.filters.map((f) => `<span>${f}</span>`).join("")}</div>
+    ${s.state === "pending"
+      ? `<p class="state-line loading">${AM_ICON("loader")}Buscando publicaciones…</p>`
+      : `<div class="figs"><p><b>${s.fresh}</b><span>nuevos esta semana</span></p><p class="${s.opps ? "hot" : ""}"><b>${s.opps}</b><span>${s.opps === 1 ? "oportunidad" : "oportunidades"}</span></p><a class="btn line sm" href="#inicio">Ver resultados</a></div>`}
+  </article>`).join("");
+
+document.getElementById("listings").innerHTML = listings.map((l) => `
+  <article class="lst">
+    <div class="pic"><img src="${l.img}" alt="" loading="lazy">${oblea(l.level, l.score)}</div>
+    <div>
+      <h3><a href="#aviso">${l.name}</a></h3>
+      <p class="price">U$S ${l.usd}<small>$ ${l.ars}</small></p>
+      <p class="meta"><span>${l.km}</span><span>${l.place}</span><span>${l.source}</span></p>
+      <div class="foot">
+        ${l.status !== "seen" ? `<span class="status st-${l.status}">${STATUS[l.status]}</span>` : ""}
+        ${l.saved ? `<span class="status saved">${AM_ICON("star")}Guardado</span>` : ""}
+        <span class="age">${l.age}</span>
+      </div>
+    </div>
+  </article>`).join("");
+
+const min = 6000, max = 12500, x = (v) => ((v - min) / (max - min)) * 100;
+const narrow = window.innerWidth < 560;
+let scale = `<div class="rule"></div><div class="iqr" style="left:${x(d.priceRef.p25)}%;width:${x(d.priceRef.p75) - x(d.priceRef.p25)}%"></div>`;
+scale += d.comparables.map((v) => `<span class="cmp" style="left:${x(v)}%"></span>`).join("");
+scale += `<span class="med" style="left:${x(d.priceRef.median)}%"><span>Mediana U$S ${usd(d.priceRef.median)}</span></span>`;
+scale += `<span class="me" style="left:${x(d.usdN)}%"><span>U$S ${usd(d.usdN)},<br> 34% debajo</span></span>`;
+for (let t = narrow ? 8000 : 7000; t <= 12000; t += narrow ? 2000 : 1000) scale += `<span class="t" style="left:${x(t)}%">${usd(t)}</span>`;
+const total = d.breakdown.reduce((a, c) => a + c.got, 0);
+
+document.getElementById("detail").innerHTML = `
+  <a class="back" href="#inicio">${AM_ICON("arrow-left")}${d.search}</a>
+  <div class="d-head">
+    <div><h1>${d.name}</h1><p><span>En ${d.source}</span><span>${d.place}</span><span>Detectado ${d.age}</span></p></div>
+  </div>
+  <div class="d-top">
+    <div>
+      <div class="d-photo"><img src="${d.photos[0]}" alt="${d.name}">${oblea(d.level, d.score)}</div>
+      <div class="thumbs">${d.photos.slice(1).map((p) => `<img src="${p}" alt="" loading="lazy">`).join("")}</div>
+    </div>
+    <div>
+      <div class="cedula">
+        <p class="cedula-title"><span>Ficha de la publicación</span><span>N.º ${d.id}</span></p>
+        <h2>${d.title}</h2>
+        <dl class="fields">
+          <div class="big wide"><dt>Precio publicado</dt><dd>$ ${d.ars}<small>≈ U$S ${d.usd} al dólar del día</small></dd></div>
+          <div><dt>Marca</dt><dd>Ford</dd></div>
+          <div><dt>Modelo</dt><dd>Focus 2.0 Trend</dd></div>
+          <div><dt>Año</dt><dd>${d.year}</dd></div>
+          <div><dt>Kilometraje</dt><dd>${d.km}</dd></div>
+          <div><dt>Caja</dt><dd>${d.box}</dd></div>
+          <div><dt>Combustible</dt><dd>${d.fuel}</dd></div>
+          <div><dt>Vendedor</dt><dd>${d.seller}, ${d.sellerName}</dd></div>
+          <div><dt>Ubicación</dt><dd>${d.place}</dd></div>
+        </dl>
+      </div>
+      <div class="actions">
+        <div class="seg" role="group" aria-label="Estado"><button aria-pressed="false">Me interesa</button><button aria-pressed="false">Contactado</button><button aria-pressed="false">Visita</button><button aria-pressed="false">Descartar</button></div>
+        <div class="row"><a class="btn" href="#aviso">Ver en ${d.source}${AM_ICON("external")}</a><button class="btn line">${AM_ICON("star")}Guardar</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="report">
+    <div>
+      <section class="sheet">
+        <header><h2>Precio frente a comparables</h2><span>${d.priceRef.n} publicaciones de ${d.priceRef.level}</span></header>
+        <div class="body">
+          <p class="note">Mercado observado en dólares. La franja azul es la mitad central de las comparables.</p>
+          <div class="scale">${scale}</div>
+          <dl class="trio">
+            <div><dt>Cuarto más barato hasta</dt><dd>U$S ${usd(d.priceRef.p25)}</dd></div>
+            <div><dt>Mediana</dt><dd>U$S ${usd(d.priceRef.median)}</dd></div>
+            <div><dt>Cuarto más caro desde</dt><dd>U$S ${usd(d.priceRef.p75)}</dd></div>
+          </dl>
+        </div>
+      </section>
+      <section class="sheet">
+        <header><h2>Cómo se compone el ${d.score}</h2><span>Opportunity Score</span></header>
+        <div class="body">
+          <table class="inspect">
+            <thead><tr><th>Componente</th><th>Puntos</th></tr></thead>
+            <tbody>${d.breakdown.map((c) => `
+              <tr><td><b>${c.name}</b><span>${c.why}</span><span class="meter"><i style="width:${(c.got / c.of) * 100}%"></i></span></td>
+              <td class="pts">${String(+c.got.toFixed(1)).replace(".", ",")} <small>de ${c.of}</small></td></tr>`).join("")}
+            </tbody>
+            <tfoot><tr><td>Total</td><td class="pts">${d.score} <small>de 100</small></td></tr></tfoot>
+          </table>
+        </div>
+      </section>
+    </div>
+    <div>
+      <section class="sheet">
+        <header><h2>¿Por qué apareció?</h2><span>Búsqueda «${d.search}»</span></header>
+        <div class="body"><ul class="okays">${d.reasons.map((r) => `<li>${AM_ICON("check")}<p><b>${r.ok}</b><span>${r.detail}</span></p></li>`).join("")}</ul></div>
+      </section>
+      <section class="sheet">
+        <header><h2>Conviene verificar</h2><span>No indica un problema</span></header>
+        <div class="body"><ul class="obs">${d.flags.map((f) => `<li class="${f.warn ? "warn" : ""}">${AM_ICON(f.warn ? "alert" : "info")}<span>${f.text}</span></li>`).join("")}</ul></div>
+      </section>
+      <section class="sheet">
+        <header><h2>Preguntas para el vendedor</h2></header>
+        <div class="body"><p class="questions">${d.questions}</p><button class="btn line sm">${AM_ICON("copy")}Copiar preguntas</button></div>
+      </section>
+    </div>
+  </div>`;
+
+document.querySelectorAll("[data-oblea]").forEach((el) => { el.outerHTML = oblea(el.dataset.oblea, el.dataset.score); });
+AM_ICONS();
+</script>
+</body>
+</html>

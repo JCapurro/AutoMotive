@@ -20,17 +20,19 @@ describe("visibleResults", () => {
 
 describe("proOffer", () => {
   it("reads app_config.pro_offer and falls back per plan", () => {
-    expect(proOffer({ pro_monthly: { price_usd: 19 }, pass_30: { price_usd: "x" } })).toEqual({
+    expect(proOffer({ pro_monthly: { amount: 80000, currency: "ARS", days: 30 }, pass_30: { price_usd: "x" } })).toEqual({
       ...DEFAULT_PRO_OFFER,
-      pro_monthly: { price_usd: 19 },
+      pro_monthly: { amount: 80000, currency: "ARS", days: 30 },
     });
     expect(proOffer(null)).toEqual(DEFAULT_PRO_OFFER);
+    expect(proOffer({ pass_30: { price_usd: 15 }, pro_monthly: { amount: 49, currency: "USD", days: 30 } })).toEqual(DEFAULT_PRO_OFFER);
   });
 });
 
 describe("guards", () => {
   it("only known plans and placements", () => {
-    expect(isWaitlistPlan("pass_90")).toBe(true);
+    expect(isWaitlistPlan("pass_90")).toBe(false);
+    expect(isWaitlistPlan("pass_30")).toBe(true);
     expect(isWaitlistPlan("gold")).toBe(false);
     expect(isPlacement("dashboard")).toBe(true);
     expect(isPlacement("<script>")).toBe(false);

@@ -2,7 +2,7 @@
  * /r/<notification_id> (sección 7.3): every link of an alert goes through it.
  *
  *   /r/<id>?to=listing         → the listing at its source
- *   /r/<id>?to=detail          → the listing's page in Automotive
+ *   /r/<id>?to=detail          → the listing's page in Ese Auto
  *   /r/<id>?to=…&l=<listing>   → one item of a digest
  *
  * A click is recorded with public.track_notification_click (clicked_at, and
