@@ -33,6 +33,27 @@ El transporte MCP de la conversación ya abierta siguió devolviendo 401 despué
 
 `web/.env.local` conserva `MERCADOPAGO_ENABLED=false` y la URL de desarrollo; se preparó allí el ID del propietario. No se iniciaron pagos, preferencias de cobro ni suscripciones reales. La publicación, las migraciones del destino y las pruebas de extremo a extremo siguen pendientes.
 
+## Ensayo aislado · 3/10/2026
+
+El MCP volvió a responder. Se recuperaron las cuentas de prueba existentes y se completó el ingreso del vendedor `3735024820`. Su panel no tenía aplicaciones; se dejó preparado el formulario **S Auto Pruebas**, Checkout Pro / API de Preferences. La creación está pendiente de la confirmación del usuario para aceptar los términos del proveedor. No se creó todavía una aplicación bajo ese vendedor.
+
+Se inició una pila Supabase local independiente (`automotive_mp_test`, API `http://127.0.0.1:55321`, base en puerto `55322`, correo local en `55324`). Se aplicaron todas las migraciones, sin cargar el catálogo de mercado. Las cuentas `particular@e2e.automotive.test` y `agencia@e2e.automotive.test` están en Free, sin contrataciones ni pagos. La web de ensayo usa el puerto `3050` y `NEXT_DIST_DIR=.next-mp-test`; la web habitual y producción conservan sus entornos.
+
+El archivo ignorado `web/.env.mercadopago-test.local` contiene únicamente la configuración del ensayo. Para levantar la web, cargar sus variables en el proceso y ejecutar `next dev --hostname 127.0.0.1 --port 3050`. No reemplazar `web/.env.local`, no reutilizar sus claves Supabase y no habilitar los cobros de producción.
+
+El ejecutor `web/scripts/mercadopago-sandbox.ts` usa las funciones de facturación existentes. Desde `web/`, ejecutar:
+
+```text
+node --env-file=.env.mercadopago-test.local --conditions=react-server --import tsx scripts/mercadopago-sandbox.ts prepare
+node --env-file=.env.mercadopago-test.local --conditions=react-server --import tsx scripts/mercadopago-sandbox.ts inspect
+```
+
+También admite `checkout pass_30`, `checkout pro_monthly`, `reconcile <checkout UUID>`, `verify <checkout UUID>`, `cancel <checkout UUID>` y `refund <checkout UUID> <payment ID>`. Antes de cualquier operación del proveedor comprueba el propietario de la credencial con `/users/me` y exige una cuenta vendedora de prueba. El cobro requiere el email real del comprador de prueba (`MERCADOPAGO_TEST_BUYER_EMAIL`), un `SITE_URL` HTTPS para este ensayo, la clave de firma de su aplicación y `MERCADOPAGO_ENABLED=true` **solamente en el entorno de ensayo**. `prepare` modifica exclusivamente la pila local dedicada y puede reejecutarse; `refund` efectúa una devolución completa únicamente de un pago aprobado de prueba perteneciente a esa contratación.
+
+Verificado: preparación de cuentas; registro vacío; rechazo preventivo del token TEST de la aplicación original porque su propietario es la cuenta real `200367138`; 49 pruebas unitarias web aprobadas. Ese rechazo no crea ninguna preferencia. Para checkout alojado, se necesitan las credenciales de una aplicación creada dentro del vendedor de prueba, según la [guía oficial de pruebas](https://www.mercadopago.com.ar/developers/es/news/2023/11/16/Questions-on-how-to-test-your-integration--).
+
+Pendiente: crear la aplicación del vendedor de prueba; obtener sus credenciales y clave de firma sin mostrarlas; configurar un destino HTTPS de prueba; ejecutar el checkout como comprador de prueba; demostrar pago aprobado, notificación firmada del proveedor, activación y límites, reintento sin duplicación, devolución, mensualidad y baja. Los resultados simulados previos no prueban estos pasos. La primera factura de una suscripción puede demorar aproximadamente una hora según [Mercado Pago](https://www.mercadopago.com.ar/developers/es/docs/subscriptions/integration-configuration/subscription-no-associated-plan/authorized-payments); una autorización no demuestra su cobro.
+
 ## Implementación
 
 - [x] Persistir checkout propietario, oferta e importe histórico; capacidad atómica para impedir dos contrataciones concurrentes y comparación del precio aceptado con la oferta vigente antes de iniciar el cobro.
