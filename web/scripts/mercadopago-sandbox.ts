@@ -29,13 +29,17 @@ async function provider(path: string, method = "GET", body?: unknown) {
   return res.json();
 }
 
-async function testMerchant() {
+async function testMerchant(requireFictitiousSeller = false) {
   const owner = await provider("/users/me");
   assert.equal(String(owner.id), process.env.MERCADOPAGO_COLLECTOR_ID, "Collector must match the credential owner");
   // Legacy TEST credentials belong to the app owner, not the fictitious seller.
   // APP_USR credentials are allowed here only when their owner is a test user.
-  assert(process.env.MERCADOPAGO_ACCESS_TOKEN?.startsWith("TEST-") || owner.user_type === "test" || owner.tags?.includes("test_user"), "Refusing to use a real seller's production credential");
-  return String(owner.id);
+  const fictitiousSeller = owner.user_type === "test" || owner.tags?.includes("test_user") === true;
+  assert(process.env.MERCADOPAGO_ACCESS_TOKEN?.startsWith("TEST-") || fictitiousSeller, "Refusing to use a real seller's production credential");
+  // A legacy TEST token can create a preference owned by the real merchant,
+  // but that is insufficient for hosted checkout with a fictitious buyer.
+  assert(!requireFictitiousSeller || fictitiousSeller, "Hosted checkout tests require the fictitious seller's credential; the current owner is real");
+  return { id: String(owner.id), fictitiousSeller };
 }
 
 async function main() {
@@ -72,9 +76,10 @@ async function main() {
     console.log(JSON.stringify({ profiles, checkouts, payments }, null, 2));
     return;
   }
-  const collector = await testMerchant(); // Mandatory before every provider mutation or reconciliation.
+  const merchant = await testMerchant(command === "checkout"); // Mandatory before every provider mutation or reconciliation.
+  const collector = merchant.id;
   if (command === "credential") {
-    console.log(JSON.stringify({ testCredentialAccepted: true, collectorId: collector }));
+    console.log(JSON.stringify({ credentialOwnerVerified: true, collectorId: collector, hostedCheckoutReady: merchant.fictitiousSeller }));
     return;
   }
   if (command === "checkout") {
