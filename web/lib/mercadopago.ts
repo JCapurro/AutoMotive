@@ -11,9 +11,10 @@ export function validWebhook(id: string, requestId: string, signature: string, s
   return sameSecret(digest, parts.v1.toLowerCase());
 }
 
-export function checkoutUrl(value: string) {
+export function checkoutUrl(value: string, allowSandbox = false) {
   const url = new URL(value);
-  if (url.protocol !== "https:" || url.username || url.password || !["www.mercadopago.com.ar", "www.mercadopago.com"].includes(url.hostname)) throw new Error("invalid_checkout_url");
+  const allowed = ["www.mercadopago.com.ar", "www.mercadopago.com", ...(allowSandbox ? ["sandbox.mercadopago.com.ar"] : [])];
+  if (url.protocol !== "https:" || url.username || url.password || !allowed.includes(url.hostname)) throw new Error("invalid_checkout_url");
   return url.href;
 }
 

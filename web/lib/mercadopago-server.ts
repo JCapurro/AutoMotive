@@ -50,7 +50,7 @@ export async function createCheckout(userId: string, offer: "pass_30" | "pro_mon
   const { data, error } = await createAdminClient().rpc("begin_billing_checkout", { p_user: userId, p_offer: offer, p_email: email, p_version: version, p_expected_amount: amount });
   if (error) throw new Error(error.message.includes("offer_changed") ? "offer_changed" : error.message.includes("paid_plan_already_active") ? "paid_plan_already_active" : error.message.includes("checkout_already_open") ? "checkout_already_open" : "billing_database_error");
   const checkout = data as BillingCheckout & { new: boolean };
-  if (checkout.init_point && ["pending", "creating"].includes(checkout.status)) return checkoutUrl(checkout.init_point);
+  if (checkout.init_point && ["pending", "creating"].includes(checkout.status)) return checkoutUrl(checkout.init_point, process.env.MERCADOPAGO_TEST_MODE === "true");
   if (!checkout.new) throw new Error("checkout_in_progress");
   const site = new URL(process.env.SITE_URL!);
   const back = new URL("/app/pro?payment=returned", site).href;
@@ -66,7 +66,7 @@ export async function createCheckout(userId: string, offer: "pass_30" | "pro_mon
     const result = await api(offer === "pass_30" ? "/checkout/preferences" : "/preapproval", "POST", body, checkout.id);
     const resource = z.object({ id: providerId, init_point: z.string(), sandbox_init_point: z.string().optional(), collector_id: providerId }).parse(result);
     merchant(resource.collector_id);
-    const url = checkoutUrl(process.env.MERCADOPAGO_TEST_MODE === "true" && resource.sandbox_init_point ? resource.sandbox_init_point : resource.init_point);
+    const url = checkoutUrl(process.env.MERCADOPAGO_TEST_MODE === "true" && resource.sandbox_init_point ? resource.sandbox_init_point : resource.init_point, process.env.MERCADOPAGO_TEST_MODE === "true");
     await saveCheckout(checkout.id, { provider_id: resource.id, init_point: url });
     // A notification can authorize/pay before the create response arrives. Don't downgrade it to pending.
     await saveCheckout(checkout.id, { status: "pending" }, true, "creating");
@@ -150,8 +150,27 @@ async function searchPayments(checkout: BillingCheckout, deadline = Date.now() +
   throw new Error("reconciliation_incomplete");
 }
 
+async function recoverPreference(checkout: BillingCheckout) {
+  const page = z.object({ elements: z.array(z.object({ id: providerId, external_reference: z.string().nullable() })), total: z.number().int().nonnegative() })
+    .parse(await api(`/checkout/preferences/search?external_reference=${encodeURIComponent(checkout.id)}`));
+  const matches = page.elements.filter((item) => item.external_reference === checkout.id);
+  if (matches.length !== 1 || page.total !== page.elements.length) throw new Error("creation_needs_verification");
+  const resource = z.object({ id: providerId, collector_id: providerId, external_reference: z.string(), init_point: z.string(), sandbox_init_point: z.string().optional(),
+    items: z.array(z.object({ id: z.string(), quantity: z.number().int(), unit_price: money, currency_id: z.string() })) })
+    .parse(await api(`/checkout/preferences/${matches[0].id}`));
+  merchant(resource.collector_id);
+  if (resource.id !== matches[0].id || resource.external_reference !== checkout.id || resource.items.length !== 1
+    || resource.items[0].id !== "pass_30" || resource.items[0].quantity !== 1) throw new Error("preference_mismatch");
+  checkPrice(checkout, resource.items[0].unit_price, resource.items[0].currency_id);
+  const testMode = process.env.MERCADOPAGO_TEST_MODE === "true";
+  const url = checkoutUrl(testMode && resource.sandbox_init_point ? resource.sandbox_init_point : resource.init_point, testMode);
+  await saveCheckout(checkout.id, { provider_id: resource.id, init_point: url });
+  await saveCheckout(checkout.id, { status: "pending" }, true, "creating");
+}
+
 export async function syncCheckout(checkout: BillingCheckout, deadline?: number) {
   try {
+    if (checkout.offer === "pass_30" && !checkout.provider_id) await recoverPreference(checkout);
     if (checkout.offer === "pro_monthly") {
       if (!checkout.provider_id) {
         // external_reference is not a documented preapproval search filter; verify exact references locally.

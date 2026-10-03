@@ -32,7 +32,9 @@ async function provider(path: string, method = "GET", body?: unknown) {
 async function testMerchant() {
   const owner = await provider("/users/me");
   assert.equal(String(owner.id), process.env.MERCADOPAGO_COLLECTOR_ID, "Collector must match the credential owner");
-  assert(owner.user_type === "test" || owner.tags?.includes("test_user"), "This credential does not belong to a test seller");
+  // Legacy TEST credentials belong to the app owner, not the fictitious seller.
+  // APP_USR credentials are allowed here only when their owner is a test user.
+  assert(process.env.MERCADOPAGO_ACCESS_TOKEN?.startsWith("TEST-") || owner.user_type === "test" || owner.tags?.includes("test_user"), "Refusing to use a real seller's production credential");
   return String(owner.id);
 }
 
@@ -71,10 +73,14 @@ async function main() {
     return;
   }
   const collector = await testMerchant(); // Mandatory before every provider mutation or reconciliation.
+  if (command === "credential") {
+    console.log(JSON.stringify({ testCredentialAccepted: true, collectorId: collector }));
+    return;
+  }
   if (command === "checkout") {
     assert(id === "pass_30" || id === "pro_monthly", "Choose pass_30 or pro_monthly");
-    const buyerEmail = process.env.MERCADOPAGO_TEST_BUYER_EMAIL;
-    assert(buyerEmail && buyerEmail.endsWith("@testuser.com"), "Use the buyer's actual test email from Mercado Pago");
+    const buyerEmail = process.env.MERCADOPAGO_TEST_BUYER_EMAIL ?? (id === "pass_30" ? accounts[0] : undefined);
+    assert(buyerEmail && (id === "pass_30" || buyerEmail.endsWith("@testuser.com")), "Subscriptions require the buyer's actual test email from Mercado Pago");
     const email = accounts[id === "pass_30" ? 0 : 1];
     const { data: user, error } = await db.from("profiles").select("id").eq("email", email).single();
     const { data: config, error: configError } = await db.from("app_config").select("value").eq("key", "pro_offer").single();
@@ -119,7 +125,7 @@ async function main() {
       assert(["approved", "refunded", "charged_back"].includes(remote.status), "Payment is not approved or reversed");
       assert(new Date(paid.period_end) > new Date(paid.period_start), "Recorded access period must be positive");
     }
-  } else throw new Error("Use prepare, inspect, checkout, reconcile, verify, cancel or refund");
+  } else throw new Error("Use prepare, inspect, credential, checkout, reconcile, verify, cancel or refund");
   console.log(JSON.stringify({ action: command, checkoutId: id, verified: true }));
 }
 
