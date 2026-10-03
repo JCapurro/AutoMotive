@@ -42,6 +42,13 @@ async function testMerchant(requireFictitiousSeller = false) {
   return { id: String(owner.id), fictitiousSeller };
 }
 
+function testPayment(payment: { live_mode: boolean; payer?: { id?: string | number | null } }, merchant: { fictitiousSeller: boolean }) {
+  if (!payment.live_mode) return; // Legacy TEST payments.
+  assert(merchant.fictitiousSeller, "Refusing a live payment owned by a real seller");
+  assert(process.env.MERCADOPAGO_TEST_BUYER_ID && /^\d+$/.test(process.env.MERCADOPAGO_TEST_BUYER_ID), "Configure the explicit test buyer ID");
+  assert.equal(String(payment.payer?.id), process.env.MERCADOPAGO_TEST_BUYER_ID, "Payment must belong to the explicit fictitious buyer");
+}
+
 async function main() {
   localOnly();
   const db = createAdminClient();
@@ -110,7 +117,7 @@ async function main() {
     assert(!error && paid, "Payment must already belong to this checkout");
     const payment = await provider(`/v1/payments/${paymentId}`);
     assert.equal(String(payment.collector_id), collector);
-    assert.equal(payment.live_mode, false, "Refusing to refund a live payment");
+    testPayment(payment, merchant);
     assert.equal(payment.transaction_amount, checkout.amount);
     assert.equal(payment.currency_id, checkout.currency);
     assert.equal(payment.status, "approved");
@@ -125,7 +132,7 @@ async function main() {
     for (const paid of payments) {
       const remote = await provider(`/v1/payments/${paid.reference}`);
       assert.equal(String(remote.collector_id), collector);
-      assert.equal(remote.live_mode, false);
+      testPayment(remote, merchant);
       assert.equal(Boolean(paid.refunded_at), ["refunded", "charged_back"].includes(remote.status));
       assert(["approved", "refunded", "charged_back"].includes(remote.status), "Payment is not approved or reversed");
       assert(new Date(paid.period_end) > new Date(paid.period_start), "Recorded access period must be positive");

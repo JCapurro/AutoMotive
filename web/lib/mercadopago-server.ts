@@ -7,7 +7,7 @@ import type { Database } from "@/types/database";
 export type BillingCheckout = Database["public"]["Tables"]["billing_checkouts"]["Row"];
 const providerId = z.union([z.string().regex(/^[a-z0-9-]+$/i), z.number().int().positive()]).transform(String);
 const money = z.coerce.number().positive();
-const paymentSchema = z.object({ id: providerId, collector_id: providerId, status: z.string(), transaction_amount: money, currency_id: z.string(), external_reference: z.string().nullable().optional(), date_approved: z.string().nullable(), date_created: z.string(), live_mode: z.boolean() });
+const paymentSchema = z.object({ id: providerId, collector_id: providerId, status: z.string(), transaction_amount: money, currency_id: z.string(), external_reference: z.string().nullable().optional(), date_approved: z.string().nullable(), date_created: z.string(), live_mode: z.boolean(), payer: z.object({ id: providerId.nullable().optional() }).nullable().optional() });
 const subscriptionSchema = z.object({ id: providerId, collector_id: providerId, external_reference: z.string().nullable(), status: z.enum(["pending", "authorized", "paused", "cancelled"]), init_point: z.string().nullable().optional(), next_payment_date: z.string().nullable().optional(), auto_recurring: z.object({ frequency: z.number(), frequency_type: z.string(), transaction_amount: money, currency_id: z.string(), free_trial: z.unknown().optional() }) });
 const invoiceSchema = z.object({ id: providerId, preapproval_id: providerId, transaction_amount: money, currency_id: z.string(), debit_date: z.string(), payment: z.object({ id: providerId.nullable().optional() }).nullable().optional() });
 
@@ -50,7 +50,16 @@ export async function createCheckout(userId: string, offer: "pass_30" | "pro_mon
   const { data, error } = await createAdminClient().rpc("begin_billing_checkout", { p_user: userId, p_offer: offer, p_email: email, p_version: version, p_expected_amount: amount });
   if (error) throw new Error(error.message.includes("offer_changed") ? "offer_changed" : error.message.includes("paid_plan_already_active") ? "paid_plan_already_active" : error.message.includes("checkout_already_open") ? "checkout_already_open" : "billing_database_error");
   const checkout = data as BillingCheckout & { new: boolean };
-  if (checkout.init_point && ["pending", "creating"].includes(checkout.status)) return checkoutUrl(checkout.init_point, process.env.MERCADOPAGO_TEST_MODE === "true");
+  if (checkout.init_point && ["pending", "creating"].includes(checkout.status)) {
+    const url = checkoutUrl(checkout.init_point, process.env.MERCADOPAGO_TEST_MODE === "true");
+    // Older rehearsals stored sandbox_init_point. Verify the existing preference
+    // before repairing its redirect; never recreate the purchase or grant access.
+    if (offer === "pass_30" && new URL(url).hostname === "sandbox.mercadopago.com.ar") {
+      if (!checkout.provider_id) throw new Error("creation_needs_verification");
+      return refreshPreferenceUrl(checkout, checkout.provider_id);
+    }
+    return url;
+  }
   if (!checkout.new) throw new Error("checkout_in_progress");
   const site = new URL(process.env.SITE_URL!);
   const back = new URL("/app/pro?payment=returned", site).href;
@@ -66,7 +75,9 @@ export async function createCheckout(userId: string, offer: "pass_30" | "pro_mon
     const result = await api(offer === "pass_30" ? "/checkout/preferences" : "/preapproval", "POST", body, checkout.id);
     const resource = z.object({ id: providerId, init_point: z.string(), sandbox_init_point: z.string().optional(), collector_id: providerId }).parse(result);
     merchant(resource.collector_id);
-    const url = checkoutUrl(process.env.MERCADOPAGO_TEST_MODE === "true" && resource.sandbox_init_point ? resource.sandbox_init_point : resource.init_point, process.env.MERCADOPAGO_TEST_MODE === "true");
+    // The hosted checkout uses init_point even with the automatic test seller.
+    // Test mode still validates payment.live_mode; it does not select another UI.
+    const url = checkoutUrl(resource.init_point);
     await saveCheckout(checkout.id, { provider_id: resource.id, init_point: url });
     // A notification can authorize/pay before the create response arrives. Don't downgrade it to pending.
     await saveCheckout(checkout.id, { status: "pending" }, true, "creating");
@@ -100,7 +111,17 @@ async function applyPayment(raw: unknown, checkout: BillingCheckout, debitDate?:
   const payment = paymentSchema.parse(raw);
   merchant(payment.collector_id);
   checkPrice(checkout, payment.transaction_amount, payment.currency_id);
-  if (payment.live_mode !== (process.env.MERCADOPAGO_TEST_MODE !== "true")) throw new Error("payment_environment_mismatch");
+  const testMode = process.env.MERCADOPAGO_TEST_MODE === "true";
+  if (testMode && payment.live_mode) {
+    // Automatic test users can produce live_mode=true on the normal hosted URL.
+    // Accept that only for a provider-verified fictitious seller and the explicit
+    // buyer fixture, never merely because the token has a particular prefix.
+    const buyer = process.env.MERCADOPAGO_TEST_BUYER_ID;
+    if (!buyer || !/^\d+$/.test(buyer) || payment.payer?.id !== buyer) throw new Error("payment_environment_mismatch");
+    const owner = z.object({ id: providerId, tags: z.array(z.string()).optional(), user_type: z.string().optional() }).parse(await api("/users/me"));
+    merchant(owner.id);
+    if (!owner.tags?.includes("test_user") && owner.user_type !== "test") throw new Error("payment_environment_mismatch");
+  } else if (payment.live_mode !== !testMode) throw new Error("payment_environment_mismatch");
   if (checkout.offer === "pass_30" && payment.external_reference !== checkout.id) throw new Error("payment_reference_mismatch");
   if (!["approved", "refunded", "charged_back"].includes(payment.status)) return;
   if (payment.status === "approved" && !payment.date_approved) throw new Error("invalid_payment_date");
@@ -131,7 +152,8 @@ async function searchPayments(checkout: BillingCheckout, deadline = Date.now() +
   const path = monthly ? `/authorized_payments/search?preapproval_id=${checkout.provider_id}` : `/v1/payments/search?external_reference=${checkout.id}&sort=date_created&criteria=desc`;
   for (let offset = 0; offset < 1000;) {
     if (Date.now() > deadline) throw new Error("reconciliation_incomplete");
-    const page = z.object({ results: z.array(z.unknown()), paging: z.object({ total: z.number() }) }).parse(await api(`${path}&limit=100&offset=${offset}`));
+    // Invoice search rejects an explicit limit; paginate its default-sized pages.
+    const page = z.object({ results: z.array(z.unknown()), paging: z.object({ total: z.number() }) }).parse(await api(`${path}&${monthly ? "" : "limit=100&"}offset=${offset}`));
     for (const item of page.results) {
       if (Date.now() > deadline) throw new Error("reconciliation_incomplete");
       if (monthly) {
@@ -150,21 +172,26 @@ async function searchPayments(checkout: BillingCheckout, deadline = Date.now() +
   throw new Error("reconciliation_incomplete");
 }
 
+async function refreshPreferenceUrl(checkout: BillingCheckout, id: string) {
+  providerId.parse(id);
+  const resource = z.object({ id: providerId, collector_id: providerId, external_reference: z.string(), init_point: z.string(), sandbox_init_point: z.string().optional(),
+    items: z.array(z.object({ id: z.string(), quantity: z.number().int(), unit_price: money, currency_id: z.string() })) })
+    .parse(await api(`/checkout/preferences/${id}`));
+  merchant(resource.collector_id);
+  if (resource.id !== id || resource.external_reference !== checkout.id || resource.items.length !== 1
+    || resource.items[0].id !== "pass_30" || resource.items[0].quantity !== 1) throw new Error("preference_mismatch");
+  checkPrice(checkout, resource.items[0].unit_price, resource.items[0].currency_id);
+  const url = checkoutUrl(resource.init_point);
+  await saveCheckout(checkout.id, { provider_id: resource.id, init_point: url });
+  return url;
+}
+
 async function recoverPreference(checkout: BillingCheckout) {
   const page = z.object({ elements: z.array(z.object({ id: providerId, external_reference: z.string().nullable() })), total: z.number().int().nonnegative() })
     .parse(await api(`/checkout/preferences/search?external_reference=${encodeURIComponent(checkout.id)}`));
   const matches = page.elements.filter((item) => item.external_reference === checkout.id);
   if (matches.length !== 1 || page.total !== page.elements.length) throw new Error("creation_needs_verification");
-  const resource = z.object({ id: providerId, collector_id: providerId, external_reference: z.string(), init_point: z.string(), sandbox_init_point: z.string().optional(),
-    items: z.array(z.object({ id: z.string(), quantity: z.number().int(), unit_price: money, currency_id: z.string() })) })
-    .parse(await api(`/checkout/preferences/${matches[0].id}`));
-  merchant(resource.collector_id);
-  if (resource.id !== matches[0].id || resource.external_reference !== checkout.id || resource.items.length !== 1
-    || resource.items[0].id !== "pass_30" || resource.items[0].quantity !== 1) throw new Error("preference_mismatch");
-  checkPrice(checkout, resource.items[0].unit_price, resource.items[0].currency_id);
-  const testMode = process.env.MERCADOPAGO_TEST_MODE === "true";
-  const url = checkoutUrl(testMode && resource.sandbox_init_point ? resource.sandbox_init_point : resource.init_point, testMode);
-  await saveCheckout(checkout.id, { provider_id: resource.id, init_point: url });
+  await refreshPreferenceUrl(checkout, matches[0].id);
   await saveCheckout(checkout.id, { status: "pending" }, true, "creating");
 }
 
@@ -203,7 +230,7 @@ export async function handleNotification(topic: string, id: string) {
     if (checkout?.offer === "pass_30") { await applyPayment(raw, checkout); return; }
     // Subscription payments may omit external_reference. The invoice supplies the verified ownership link.
     const found = z.object({ results: z.array(z.object({ id: providerId })), paging: z.object({ total: z.number() }) })
-      .parse(await api(`/authorized_payments/search?payment_id=${payment.id}&limit=100`));
+      .parse(await api(`/authorized_payments/search?payment_id=${payment.id}`));
     if (found.paging.total > found.results.length) throw new Error("reconciliation_incomplete");
     for (const item of found.results) await invoicePayment(await api(`/authorized_payments/${item.id}`), undefined, raw);
   }

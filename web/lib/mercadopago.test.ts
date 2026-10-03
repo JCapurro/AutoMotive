@@ -37,19 +37,45 @@ it("authenticates the signed ID/request and handles calendar month boundaries", 
   expect(paymentPeriod(payment.date_approved, false).end).toBe("2026-11-01T13:00:00.000Z");
 });
 
-it("uses the provider sandbox checkout and reuses it only in test mode", async () => {
+it("uses the provider init_point with automatic test credentials and reuses it", async () => {
   setup(); vi.stubEnv("MERCADOPAGO_TEST_MODE", "true");
   const sandbox = "https://sandbox.mercadopago.com.ar/checkout/v1/redirect?pref_id=test-pref";
+  const init = "https://www.mercadopago.com.ar/checkout/v1/redirect?pref_id=test-pref";
   state.rpc.mockResolvedValueOnce({ error: null, data: { ...state.checkout, new: true } });
-  const fetcher = vi.fn().mockResolvedValueOnce(Response.json({ id: "test-pref", collector_id: 200367138, init_point: "https://www.mercadopago.com.ar/checkout/v1/redirect?pref_id=test-pref", sandbox_init_point: sandbox }));
+  const fetcher = vi.fn().mockResolvedValueOnce(Response.json({ id: "test-pref", collector_id: 200367138, init_point: init, sandbox_init_point: sandbox }));
   vi.stubGlobal("fetch", fetcher);
   const { createCheckout } = await import("./mercadopago-server");
-  await expect(createCheckout("owner", "pass_30", "buyer@example.com", "ars-launch-2026-10", 15000)).resolves.toBe(sandbox);
-  state.rpc.mockResolvedValueOnce({ error: null, data: { ...state.checkout, new: false, init_point: sandbox } });
-  await expect(createCheckout("owner", "pass_30", "buyer@example.com", "ars-launch-2026-10", 15000)).resolves.toBe(sandbox);
+  await expect(createCheckout("owner", "pass_30", "buyer@example.com", "ars-launch-2026-10", 15000)).resolves.toBe(init);
+  state.rpc.mockResolvedValueOnce({ error: null, data: { ...state.checkout, new: false, init_point: init } });
+  await expect(createCheckout("owner", "pass_30", "buyer@example.com", "ars-launch-2026-10", 15000)).resolves.toBe(init);
   expect(fetcher).toHaveBeenCalledTimes(1);
   expect(() => checkoutUrl(sandbox)).toThrow();
   expect(() => checkoutUrl("https://sandbox.mercadopago.com.ar.evil.test/pay", true)).toThrow();
+});
+
+it.each(["valid", "foreign seller", "foreign reference", "changed amount"])("verifies a cached sandbox preference before repairing the redirect: %s", async (scenario) => {
+  setup(); vi.stubEnv("MERCADOPAGO_TEST_MODE", "true");
+  const sandbox = "https://sandbox.mercadopago.com.ar/checkout/v1/redirect?pref_id=test-pref";
+  const init = "https://www.mercadopago.com.ar/checkout/v1/redirect?pref_id=test-pref";
+  state.rpc.mockResolvedValueOnce({ error: null, data: { ...state.checkout, provider_id: "test-pref", new: false, init_point: sandbox } });
+  const fetcher = vi.fn().mockResolvedValueOnce(Response.json({
+    id: "test-pref", collector_id: scenario === "foreign seller" ? 99 : 200367138,
+    external_reference: scenario === "foreign reference" ? "another-checkout" : state.checkout.id,
+    init_point: init, sandbox_init_point: sandbox,
+    items: [{ id: "pass_30", quantity: 1, unit_price: scenario === "changed amount" ? 1 : 15000, currency_id: "ARS" }],
+  }));
+  vi.stubGlobal("fetch", fetcher);
+  const { createCheckout } = await import("./mercadopago-server");
+  const result = createCheckout("owner", "pass_30", "buyer@example.com", "ars-launch-2026-10", 15000);
+  if (scenario === "valid") {
+    await expect(result).resolves.toBe(init);
+    expect(state.updates).toEqual([{ provider_id: "test-pref", init_point: init }]);
+  } else {
+    await expect(result).rejects.toThrow();
+    expect(state.updates).toHaveLength(0);
+  }
+  expect(fetcher).toHaveBeenCalledExactlyOnceWith("https://api.mercadopago.com/checkout/preferences/test-pref", expect.objectContaining({ method: "GET" }));
+  expect(state.rpc).toHaveBeenCalledTimes(1); // Only reserves/reuses the local checkout; never applies payment.
 });
 
 it("fetches current payment; rejects foreign money, currency, environment and unsigned notifications", async () => {
@@ -115,10 +141,28 @@ it("recovers an existing preference after an uncertain create without charging o
   vi.stubGlobal("fetch", fetcher);
   const { syncCheckout } = await import("./mercadopago-server");
   await syncCheckout(state.checkout as Parameters<typeof syncCheckout>[0]);
-  expect(state.updates).toContainEqual({ provider_id: "test-pref", init_point: preference.sandbox_init_point });
+  expect(state.updates).toContainEqual({ provider_id: "test-pref", init_point: preference.init_point });
   expect(state.updates).toContainEqual({ status: "pending" });
   expect(state.rpc).not.toHaveBeenCalled();
   expect(fetcher.mock.calls.every((call) => !call[1].method || call[1].method === "GET")).toBe(true);
+});
+
+it.each(["valid", "real seller", "different seller", "different buyer", "missing buyer fixture"])("checks provider identity for modern fictitious payments reported as live: %s", async (scenario) => {
+  setup(); vi.stubEnv("MERCADOPAGO_TEST_MODE", "true");
+  vi.stubEnv("MERCADOPAGO_TEST_BUYER_ID", scenario === "missing buyer fixture" ? "" : "3735031842");
+  const fetcher = vi.fn().mockResolvedValueOnce(Response.json({ ...payment, payer: { id: scenario === "different buyer" ? "99" : "3735031842" } }))
+    .mockResolvedValueOnce(Response.json({ id: scenario === "different seller" ? 99 : 200367138, user_type: "normal", tags: scenario === "real seller" ? ["normal"] : ["test_user"] }));
+  vi.stubGlobal("fetch", fetcher);
+  const { handleNotification } = await import("./mercadopago-server");
+  const result = handleNotification("payment", "111");
+  if (scenario === "valid") {
+    await expect(result).resolves.toBeUndefined();
+    expect(state.rpc).toHaveBeenCalledWith("apply_mercadopago_payment", expect.objectContaining({ p_reference: "111", p_status: "approved" }));
+    expect(fetcher).toHaveBeenCalledWith("https://api.mercadopago.com/users/me", expect.objectContaining({ method: "GET" }));
+  } else {
+    await expect(result).rejects.toThrow();
+    expect(state.rpc).not.toHaveBeenCalled();
+  }
 });
 
 it.each([
@@ -153,5 +197,26 @@ it("recovers a missed invoice and revokes refunded payments with no external ref
     .mockResolvedValueOnce(Response.json({ results: [{ id: 333 }], paging: { total: 1 } })).mockResolvedValueOnce(Response.json(invoice)).mockResolvedValueOnce(Response.json(sub));
   await handleNotification("payment", "111");
   expect(state.rpc).toHaveBeenCalledWith("apply_mercadopago_payment", expect.objectContaining({ p_reference: "111", p_status: "refunded" }));
-  expect(fetcher).toHaveBeenCalledWith("https://api.mercadopago.com/authorized_payments/search?payment_id=111&limit=100", expect.anything());
+  expect(fetcher).toHaveBeenCalledWith("https://api.mercadopago.com/authorized_payments/search?payment_id=111", expect.anything());
+});
+
+it("paginates invoice search with the provider default and never grants access for unpaid invoices", async () => {
+  setup(); state.checkout.offer = "pro_monthly"; state.checkout.amount = 75000; state.checkout.provider_id = "abc123";
+  const offsets: number[] = [];
+  const fetcher = vi.fn(async (input: string) => {
+    const url = new URL(input);
+    if (url.pathname === "/preapproval/abc123") return Response.json({ id: "abc123", collector_id: 200367138, external_reference: state.checkout.id, status: "authorized", auto_recurring: { frequency: 1, frequency_type: "months", transaction_amount: 75000, currency_id: "ARS" } });
+    if (url.pathname === "/authorized_payments/search") {
+      if (url.searchParams.has("limit")) return Response.json({ message: "Invalid value for limit" }, { status: 400 });
+      const offset = Number(url.searchParams.get("offset")); offsets.push(offset);
+      return Response.json({ results: Array.from({ length: offset === 0 ? 12 : 1 }, (_, i) => ({ id: `invoice-${offset + i}` })), paging: { total: 13, limit: 12 } });
+    }
+    return Response.json({ id: url.pathname.split("/").at(-1), preapproval_id: "abc123", transaction_amount: 75000, currency_id: "ARS", debit_date: payment.date_approved, payment: null });
+  });
+  vi.stubGlobal("fetch", fetcher);
+  const { syncCheckout } = await import("./mercadopago-server");
+  await syncCheckout(state.checkout as Parameters<typeof syncCheckout>[0]);
+  expect(offsets).toEqual([0, 12]);
+  expect(fetcher).toHaveBeenCalledTimes(16); // Subscription, two pages, thirteen unpaid invoices.
+  expect(state.rpc).not.toHaveBeenCalled();
 });
