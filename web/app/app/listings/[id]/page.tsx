@@ -135,7 +135,7 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
       <Gallery images={images} name={name} more={outboundHref} />
 
       <dl className="mt-6 grid grid-cols-2 gap-x-6 border-t-2 border-foreground md:grid-cols-[1.6fr_repeat(3,1fr)]">
-        <Fact label={isCashPrice(listing.description_facts) ? "Precio de contado" : "Precio publicado"} className="md:row-span-2">
+        <Fact label={isCashPrice(listing.description_facts) ? "Precio de contado" : "Precio publicado"} className="col-span-2 md:col-span-1 md:row-span-2">
           <span className="type-figure block text-2xl leading-tight" data-testid="price">
             {money(listing.price, listing.currency)}
           </span>
