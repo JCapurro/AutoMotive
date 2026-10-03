@@ -1,0 +1,89 @@
+# Mercado Pago · cobro y acceso automático
+
+Autorizado el 2/10/2026: Particular $15.000, pago único por 30 días; Agencia $75.000 con renovación mensual y acceso automático tras cada pago aprobado.
+
+Enlaces originales: [Particular](https://mpago.la/2Vf746M) y [Agencia](https://mpago.la/1t6wWDT). Verificados en el checkout público: nombres, importes y recurrencia. Son referencias para la operación asistida; no contienen la identidad del usuario de S Auto. Las contrataciones automáticas deben comenzar desde la cuenta autenticada de S Auto, con una referencia aleatoria propia. Un regreso del checkout nunca concede acceso.
+
+## Estado actual · 3/10/2026
+
+- El MCP de S Auto ya entrega las credenciales de producción activadas. El Access Token se guardó en `web/.env.local` (ignorado por Git) y como variable sensible de producción en Vercel. No se almacenaron Client Secret ni Public Key, porque el checkout alojado no los necesita.
+- `GET https://api.mercadopago.com/users/me` con ese token confirmó HTTP 200, vendedor `200367138` y país `MLA`. El ID del vendedor quedó configurado en Vercel.
+- Se guardaron en Vercel producción `MERCADOPAGO_ACCESS_TOKEN`, `MERCADOPAGO_WEBHOOK_SECRET`, `MERCADOPAGO_COLLECTOR_ID`, `CRON_SECRET`, `SITE_URL=https://www.eseauto.com.ar`, `MERCADOPAGO_TEST_MODE=false` y **`MERCADOPAGO_ENABLED=false`**. La clave de firma que cargó el usuario se transfirió directamente desde `web/.env.local` como variable sensible de Vercel, sin mostrarla.
+- Se aplicaron en una transacción las migraciones `20261007120000` y `20261008120000` al proyecto Supabase `dnqyravczgcpuowijbja`, registrándolas en `supabase_migrations.schema_migrations`. Se verificaron los importes ARS 15.000 y ARS 75.000, RLS de `billing_checkouts`, permisos de las funciones, conservación de las cuentas y del enforcement anterior. `commercial_pilot.enabled` sigue en `false`. La API de Supabase ya expone `billing_checkouts` (HTTP 200).
+- La copia preparada de la integración se publicó y volvió a desplegar con la clave de firma en el proyecto Vercel `auto-motive`. Despliegue actual `dpl_4z3yS4NvCouCGKkCrPx6mcPGpu3e`, estado **READY**, [sitio de producción](https://www.eseauto.com.ar), [inspector](https://vercel.com/jcapurros-projects/auto-motive/4z3yS4NvCouCGKkCrPx6mcPGpu3e). La copia excluye los archivos de secretos y el ajuste de presentación ajeno a esta integración en el detalle del aviso. La publicación directa precedió al commit y push de esta integración en `main`; los cobros siguen deshabilitados.
+- Validación de esta continuación: **49 pruebas web aprobadas**, lint y compilación local correctos, las dos compilaciones de Vercel correctas. El sitio responde 200; `GET /api/mercadopago/webhook` responde 405. En el dominio publicado se verificaron notificaciones sintéticas: tópico desconocido con firma válida **200**, firma inválida o ausente **401**, ID firmado distinto del cuerpo **400**, JSON mal formado con firma válida **400** y consulta de un pago inexistente **503** para pedir reintento. La conciliación sin autorización devuelve **401**; con el `CRON_SECRET` correcto devuelve **200** y `{ "synced": 0, "failed": 0, "deferred": 0 }`. Se reconfirmó el vendedor con `/users/me` y se comprobó antes y después que `billing_checkouts` y `commercial_payments` siguen vacías. No se creó ningún pago ni suscripción.
+
+**Configuración del servidor completa; contratación automática deshabilitada.** Las firmas sintéticas y la conciliación autenticada ya se verificaron en producción. Todavía faltan pagos, renovación, devolución y baja con cuentas de prueba, y entrega de notificaciones realmente emitidas por Mercado Pago. El MCP devolvió **401 `Authentication failed`** al consultar documentación en esta continuación; se solicitó reconectarlo para retomar sandbox. Este error del conector no afecta al Access Token del servidor, verificado con HTTP 200. No se iniciaron cobros reales.
+
+### Renovación OAuth del MCP · 3/10/2026
+
+Se renovó la autorización con el CLI oficial temporal `0.162.0-alpha.9`, sin reemplazar la instalación estable. Codex `0.160.0` bloqueaba el login por la diferencia entre el dominio del emisor y el de autorización; la [corrección oficial de OpenAI](https://github.com/openai/codex/commit/a20fe6335f960a350483d0079db2ec281c68202c) admite la combinación específica de Mercado Pago. El proveedor completó la autorización y el CLI confirmó `Successfully logged in to MCP server 'mercadopago'`; una consulta nueva de configuración muestra el servidor habilitado con OAuth. No se copiaron tokens al chat ni al repositorio.
+
+El transporte MCP de la conversación ya abierta siguió devolviendo 401 después del login: todavía falta recargar Codex para reconstruir esa conexión y verificar `application_list` con la autorización nueva. No se considera validado el acceso a las herramientas hasta esa consulta. Reutilizar S Auto y retomar las pruebas sandbox; los cobros permanecen deshabilitados.
+
+## Alta inicial con el MCP · 2/10/2026
+
+- La cuenta autorizada no tenía aplicaciones. Se creó **S Auto**, aplicación `1320088821469305`, sitio declarado `https://www.eseauto.com.ar`, país `MLA`, plataforma propia y producto inicial `checkout_pro`. Una segunda consulta confirmó que existe una sola aplicación con ese nombre e ID. Reutilizarla en las próximas configuraciones.
+- El propietario informado por el MCP es `200367138`. Es el valor preparado para `MERCADOPAGO_COLLECTOR_ID`; todavía falta comprobarlo con `/users/me` cuando esté disponible el Access Token de esta aplicación.
+- El MCP guardó el webhook de producción `https://www.eseauto.com.ar/api/mercadopago/webhook` con `payment`, `subscription_preapproval` y `subscription_authorized_payment`. No se configuró callback sandbox: requiere un entorno aislado.
+- `get_credentials` informó que las credenciales de producción **no están activadas**. La automatización de la aplicación vendedora de prueba falló con `MP_API_DOWN` (`Failure while creating seller app`). Las credenciales de prueba devueltas pertenecen a la aplicación original y el MCP advierte que no sirven para esa prueba sandbox; no se usaron ni se almacenaron como credenciales operativas.
+- `save_webhook` devuelve la clave de firma enmascarada. Obtener la clave real en [la aplicación de S Auto](https://www.mercadopago.com.ar/developers/panel/app/1320088821469305/webhooks) y guardarla directamente como secreto de servidor, sin pasarla por el chat.
+- Una consulta HTTPS al sitio publicado devolvió **404** para `/api/mercadopago/webhook` y `/api/mercadopago/reconcile`. Registrar la URL en Mercado Pago todavía no demuestra entrega de notificaciones: falta publicar la integración y preparar el destino.
+- Se reejecutó `npm.cmd test -- lib/mercadopago.test.ts` desde `web/`: **5 pruebas aprobadas**, con API y base simuladas. Se comprobó en la migración comercial Particular **ARS 15.000 / 30 días** y Agencia **ARS 75.000 / mes**; el servidor usa `frequency: 1`, `frequency_type: "months"` para Agencia.
+
+`web/.env.local` conserva `MERCADOPAGO_ENABLED=false` y la URL de desarrollo; se preparó allí el ID del propietario. No se iniciaron pagos, preferencias de cobro ni suscripciones reales. La publicación, las migraciones del destino y las pruebas de extremo a extremo siguen pendientes.
+
+## Implementación
+
+- [x] Persistir checkout propietario, oferta e importe histórico; capacidad atómica para impedir dos contrataciones concurrentes y comparación del precio aceptado con la oferta vigente antes de iniciar el cobro.
+- [x] Crear Particular con Checkout Pro y Agencia con checkout alojado de suscripción pendiente, específico del pagador. Sin capturar tarjetas en S Auto.
+- [x] Verificar firma y consultar el recurso vigente en la API; validar vendedor, moneda, importe y referencia antes de registrar acceso. Deduplicar por ID real del pago, sin extender períodos por reintentos.
+- [x] Registrar períodos Agencia por mes calendario desde la fecha de débito de cada factura, Particular por 30 días. Una autorización, un pago pendiente o rechazado no habilitan acceso.
+- [x] Cancelar Agencia en Mercado Pago desde Ajustes, comprobar la respuesta y conservar el período pagado. Impedir borrar la cuenta mientras haya una suscripción sin baja confirmada.
+- [x] Conciliar periódicamente pagos y suscripciones para recuperar notificaciones perdidas, y documentar la configuración externa.
+- [x] Verificar firmas, pagos ajenos/repetidos/fuera de orden, devoluciones/contracargos, vencimientos y cancelación con API simulada y PostgreSQL aislado.
+- [x] Crear S Auto con el MCP autorizado y registrar el webhook de producción con los tres eventos.
+- [x] Publicar la integración y aplicar ambas migraciones al destino; configurar el Access Token, vendedor y conciliación en Vercel con cobros deshabilitados.
+- [x] Cargar la clave real de firma del webhook, desplegar y verificar firmas sintéticas, validación de IDs y conciliación autenticada en el dominio publicado.
+- [ ] Completar pruebas con cuentas de prueba de Mercado Pago y entrega real de notificaciones; comprobar un pago, una renovación, baja y devolución.
+- [ ] Definir comprobantes, costos efectivos de cobro y contacto público antes de habilitar la contratación.
+
+Se reutilizan el registro comercial, los límites, los vencimientos y las herramientas de administración existentes. No se requieren SDK nuevo, almacenamiento de tarjetas ni otro proceso permanente.
+
+Validación previa a la publicación: 49 pruebas web y 12 pruebas comerciales/PostgreSQL aprobadas, lint y compilación correctos, usando la base aislada `ese_auto_release_test`. En la continuación del 3/10 se reejecutaron las pruebas web, lint y compilación, y se aplicaron las migraciones y publicó la integración según el estado actual anterior. Las pruebas PostgreSQL previas no sustituyen las pruebas de Mercado Pago sandbox pendientes.
+
+## Configuración pendiente del entorno destino
+
+Reutilizar la aplicación S Auto `1320088821469305`. Sus credenciales de producción ya están activadas y el Access Token, clave de firma, vendedor y `CRON_SECRET` están cargados en Vercel y publicados. No compartir secretos en el chat. `MERCADOPAGO_ENABLED=true` se habilita después de las pruebas sandbox pendientes; las migraciones ya están aplicadas.
+
+En producción usar `SITE_URL=https://www.eseauto.com.ar`. El dominio sin `www` redirige al dominio con `www`, por lo que la URL de notificaciones es `https://www.eseauto.com.ar/api/mercadopago/webhook`, directamente y sin redirección; habilitar **Pagos** y **Planes y suscripciones** (`payment`, `subscription_preapproval`, `subscription_authorized_payment`). La conciliación está en `/api/mercadopago/reconcile`, protegida con `Authorization: Bearer <CRON_SECRET>`. Conservar la URL local para desarrollo y configurar las redirecciones de Supabase Auth para el dominio público.
+
+### Pasos en Mercado Pago y Vercel
+
+1. La aplicación S Auto (`1320088821469305`) ya tiene las credenciales activadas y su Access Token está cargado en Vercel como `MERCADOPAGO_ACCESS_TOKEN`. Nunca usar Public Key como Access Token ni poner secretos con prefijo `NEXT_PUBLIC_`.
+2. En esa aplicación → Webhooks, la URL HTTPS y los tres eventos ya están registrados. La clave real de firma ya está guardada como `MERCADOPAGO_WEBHOOK_SECRET` y se verificó su uso en el endpoint publicado; no copiar el valor enmascarado devuelto por el MCP. `data.id` debe llegar en la query y coincidir con el cuerpo; la implementación requiere `x-signature` y `x-request-id` válidos.
+3. El ID del vendedor `200367138` ya se verificó con `GET https://api.mercadopago.com/users/me` y se cargó como `MERCADOPAGO_COLLECTOR_ID`; no confundirlo con el ID del plan o el de la aplicación.
+4. Cargar el `CRON_SECRET` ya generado en `web/.env.local`, `SITE_URL=https://www.eseauto.com.ar`, `NEXT_PUBLIC_CONTACT_EMAIL` y los valores Supabase del proyecto destino. Mantener `MERCADOPAGO_ENABLED=false` hasta completar las pruebas. Los cambios de variables requieren un nuevo despliegue.
+5. Para pruebas, usar un entorno y una base aislados con comprador/vendedor de prueba y `MERCADOPAGO_TEST_MODE=true`. En producción dejarlo en `false`: pagos de prueba no otorgan acceso real. No reutilizar la base productiva para probar devoluciones o borrados.
+6. Comprobar que Mercado Pago entrega y recibe HTTP 200 de notificaciones firmadas reales. El simulador del dashboard no demuestra por sí solo un pago aprobado. Una firma inválida responde 401, un ID inconsistente 400 y un fallo de verificación 503 para solicitar reintento.
+7. Cuando todo pase, activar el piloto en Administración → Cobros y `MERCADOPAGO_ENABLED=true`, desplegar y repetir el recorrido completo con el entorno correcto antes de invitar clientes.
+
+`web/vercel.json` incluye una conciliación diaria a las 09:00 UTC. El proveedor notifica cada pago; esta tarea es el respaldo. Cada ejecución procesa hasta 50 contrataciones o 45 segundos, rotando por fecha de última consulta; pendientes y errores se ven en Administración → Cobros. Si no alcanza a revisar todas las cuentas en un día, aumentar la frecuencia con un scheduler compatible o la capacidad del hosting. No se contrató ningún servicio adicional.
+
+Las migraciones `20261007120000_ese_auto_commercial.sql` y `20261008120000_mercadopago.sql` ya se aplicaron, en ese orden. Mantener el worker y la web compatibles con esos cambios. Activar el piloto desde Administración → Cobros después de las pruebas pendientes y de revisar y comunicar las cuentas existentes.
+
+Antes de cobrar: probar con cuentas/credenciales de prueba, identidad del vendedor, pago pendiente/aprobado/rechazado, mensualidad, baja, devolución y firma real de notificación. Confirmar soporte público y facturación. Las pruebas locales y el código preparado no equivalen a una integración probada con la cuenta real.
+
+La suscripción automática se crea sin asociarla al plan genérico: la API de planes asociados exige token de tarjeta. Se toma la oferta aprobada en `app_config` y se crea la misma mensualidad como suscripción específica, con checkout alojado por Mercado Pago. El plan genérico recibido tiene ID `ad4fa6a93a73444ab71606a838fd2812`; no se usa como identificador del vendedor ni para activar cuentas. No se agrega una segunda prueba gratis del proveedor.
+
+## Operación y casos de revisión
+
+- Un retorno del checkout no concede acceso. En Planes → Consultar estado se vuelve a consultar al proveedor; la baja de Agencia está en Planes y Ajustes. Después de pagar, el usuario debe reactivar sus búsquedas pausadas. Un impago no extiende el período; los límites y alertas existentes se detienen al vencer.
+- Vincular Telegram conserva la propiedad de la contratación y sus pagos al fusionar una cuenta anónima con la cuenta web; no deja una suscripción a nombre de una cuenta eliminada.
+- Una devolución total o contracargo anula solamente el período de ese pago. Repetir su aprobación no lo restaura. La devolución parcial requiere revisión administrativa: no se revoca automáticamente un período por una devolución parcial.
+- La pantalla administrativa permite registrar pagos asistidos **ya verificados**, sin efectuar cobros ni devolver dinero. Usar el ID real del pago como referencia y proveedor `Mercado Pago` para que una notificación posterior no lo contabilice dos veces.
+- Un error de creación puede ocurrir después de que Mercado Pago haya creado la suscripción. Se conserva la contratación y se bloquea un segundo intento. Consultar estado recupera Agencia buscando por email y comprobando la referencia exacta. Si no se puede demostrar que existe o que fue rechazada, revisar en el proveedor antes de cerrar manualmente el checkout: marcarlo fallido a ciegas puede crear cobros duplicados.
+- Las búsquedas históricas se paginan y se limitan a 1000 pagos por contratación, con error visible si se alcanza el límite. Los fallos de conciliación no habilitan acceso y rotan para no impedir la revisión del resto.
+- Los enlaces genéricos no identifican al cliente dentro de S Auto. Si ya hay clientes pagando con ellos, mantener la verificación manual y cancelar esas suscripciones desde Mercado Pago antes de migrarlos; no crear otra suscripción encima.
+
+Referencias oficiales: [Suscripción con pago pendiente](https://www.mercadopago.com.ar/developers/es/docs/subscriptions/integration-configuration/subscription-no-associated-plan/pending-payments), [notificaciones](https://www.mercadopago.com.ar/developers/es/docs/subscriptions/additional-content/your-integrations/notifications/webhooks), [facturas de suscripción](https://www.mercadopago.com.ar/developers/es/reference/online-payments/subscriptions/get-authorized-payment/get).

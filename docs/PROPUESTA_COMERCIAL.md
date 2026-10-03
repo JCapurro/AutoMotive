@@ -23,6 +23,8 @@ La ocupación orienta el mensaje; el acceso se cobra por capacidad. Un particula
 
 ## 2. Qué ya existe y qué falta
 
+Ampliación autorizada el 2/10/2026: cobro y acceso automático por la API de Mercado Pago preparados. Agencia pasa a renovación mensual automática al habilitar la integración; Particular mantiene pago único. Aplicación al entorno destino y validación con el proveedor pendientes. Ver [configuración y pruebas](MERCADO_PAGO.md).
+
 **Actualización 2/10/2026:** marca y piloto asistido implementados en el checkout local. Particular ARS 15.000 y Agencia ARS 75.000, capacidades y prueba única de 72 horas, registro de pagos externos y renovación manual. No publicado ni habilitado en producción. El inventario siguiente describe la inspección inicial anterior a esta implementación; no son los precios nuevos. Ver [implementación y habilitación](IMPLEMENTACION_COMERCIAL.md).
 
 Inspección del código local en `7721e16`, sin consultar métricas ni configuración de producción:

@@ -29,7 +29,7 @@ export function DeleteAccount() {
   const confirm = () =>
     start(async () => {
       const result = await deleteAccount();
-      if (result?.error) toast.error("No pudimos borrar la cuenta. Probá de nuevo.");
+      if (result?.error) toast.error(result.error);
     });
 
   return (

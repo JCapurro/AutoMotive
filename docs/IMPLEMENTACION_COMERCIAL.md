@@ -2,7 +2,9 @@
 
 Fecha: 2/10/2026. Autorizado por el usuario: nuevo nombre y ruta B del backlog comercial.
 
-Identidad visual elegida: **S Auto** en el logo y el ícono; **eseauto.com.ar** como nombre del sitio y dominio previsto. Ese Auto se conserva en los textos y la comunicación. El cambio de logo no registra ni configura el dominio: al publicar, configurar `SITE_URL=https://eseauto.com.ar`, `WEB_BASE_URL` y las redirecciones de Auth junto con hosting/DNS.
+**Ampliación autorizada:** integración por API de Mercado Pago para automatizar Particular (pago único de ARS 15.000/30 días) y Agencia (ARS 75.000 por mes). Checkout por usuario, alta después del pago aprobado, renovaciones, baja y conciliación preparados. Los requisitos del entorno y las pruebas pendientes están en [MERCADO_PAGO.md](MERCADO_PAGO.md); la descripción del piloto asistido que sigue corresponde a la etapa anterior.
+
+Identidad visual elegida: **S Auto** en el logo y el ícono; **eseauto.com.ar** como nombre del sitio. Ese Auto se conserva en los textos y la comunicación. El dominio raíz redirige a `www.eseauto.com.ar`: al publicar, configurar `SITE_URL=https://www.eseauto.com.ar`, `WEB_BASE_URL` y las redirecciones de Auth para ese dominio canónico.
 
 **Objetivo:** publicar Ese Auto y hacer efectivos Free (una búsqueda por 72 horas), Particular (ARS 15.000 / 30 días / 3 búsquedas) y Agencia (ARS 75.000 / 30 días con renovación manual / 10 búsquedas) en el piloto asistido PIL-01.
 

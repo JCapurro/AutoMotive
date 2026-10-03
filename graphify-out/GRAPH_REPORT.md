@@ -1,61 +1,56 @@
 # Graph Report - AutoMotive  (2026-10-02)
 
 ## Corpus Check
-- 343 files · ~290,041 words
+- 353 files · ~300,136 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 3159 nodes · 8057 edges · 178 communities (159 shown, 19 thin omitted)
-- Extraction: 94% EXTRACTED · 6% INFERRED · 0% AMBIGUOUS · INFERRED: 478 edges (avg confidence: 0.53)
+- 3226 nodes · 8246 edges · 186 communities (165 shown, 21 thin omitted)
+- Extraction: 94% EXTRACTED · 6% INFERRED · 0% AMBIGUOUS · INFERRED: 479 edges (avg confidence: 0.53)
 - Token cost: 0 input · 0 output
 
-## Graph Freshness
-- Built from commit: `7721e163`
-- Run `git rev-parse HEAD` and compare to check if the graph is stale.
-- Run `graphify update .` after code changes (no API cost).
-
 ## Community Hubs (Navigation)
-- Notification
+- templates.py
 - description_facts.py
 - Event
-- settings/page.tsx
+- pro.ts
 - listing-actions.tsx
-- ui.tsx
-- server.ts
-- Notifier
-- test_notifications_postgres.py
+- createAdminClient
+- service.py
+- targets.py
+- WebChannel
 - Links
 - inspector.tsx
 - ListingFacts
 - test_llm_jobs_postgres.py
-- notifications.py
-- admin-inspect.ts
+- connection
+- database.ts
 - ingest.py
-- normalize_text
-- createClient
+- CatalogModel
+- settings/page.tsx
 - enrich.py
-- SourceHealth
+- test_ingest_postgres.py
 - search-form.tsx
 - db.ts
 - facebook.py
-- crawl.py
+- listing.py
 - fiesta_listing
 - LLMProvider
 - test_llm_drafts.py
 - watchdog.py
-- app/listings/[id]/page.tsx
-- templates.py
+- format.ts
+- web/app/page.tsx
 - PRD — Automotive
-- copy.ts
+- searches/[id]/page.tsx
 - scraper_cli.py
-- connection
+- db/__init__.py
 - test_llm_claude_cli.py
-- telegram.py
+- [notificationId]/route.ts
 - listings.py
 - matching.py
-- test_ingest_postgres.py
+- test_intelligence.py
 - Listing
-- scheduler.py
+- pipeline/scoring.py
 - geo.py
 - migrate_sqlite.py
 - 20260927120000_core_schema.sql
@@ -63,64 +58,63 @@
 - devDependencies
 - dependencies
 - compilerOptions
-- mercadolibre.py
+- crawl.py
 - IntelligenceConfig
-- listing.py
+- transmission.py
 - PriceRef
-- patch
-- service.py
+- test_handlers.py
+- mercadopago-server.ts
 - 20261007120000_ese_auto_commercial.sql
-- database.ts
+- server.ts
 - test_db_postgres.py
 - TelegramChannel
 - 20261003120000_f6_backoffice_metrics.sql
-- test_handlers.py
+- SourceAlerts
 - components.json
 - 20260927120100_rls.sql
 - resolve_price
-- v6.py
+- app/listings/[id]/page.tsx
 - matches.py
 - .listing
-- test_llm_contract.py
-- AutoCosmosScraper
-- startup_warnings
 - ClaudeCliProvider
-- app/app/layout.tsx
-- requireUser
-- to_profile
+- Site
+- startup_warnings
+- Notifier
+- auth.ts
+- createClient
+- normalize_text
 - CommercialTests
 - Ese Auto · propuesta comercial y proyección
-- rescore.py
-- test_intelligence.py
+- reprocess.py
+- red_flags.py
 - Comunes a cualquier ruta
 - Puesta en producción del piloto (F7)
 - Automotive — Plan técnico del MVP
-- createAdminClient
-- test_commercial_postgres.py
-- notifications/engine.py
-- [notificationId]/route.ts
+- .search
+- MercadoPagoTests
+- rescore.py
+- v6.py
 - test_llm_anthropic_api.py
-- derive_targets
+- pgcase.py
 - 20261001120000_f4_web.sql
 - admin/actions.ts
 - metrics/page.tsx
-- load_models
-- raw_pages.py
-- PROPUESTA_COMERCIAL.md
+- autocosmos.py
+- pool.py
 - Setup
 - prompts/__init__.py
-- test_notifications_templates.py
+- intelligence/engine.py
 - 13. Roadmap por fases
 - scripts
 - 40. Modelo conceptual de datos
 - toggle-group.tsx
 - AutoMotive
-- transmission.py
+- PRDCopyTests
 - 5. Pipeline de ingesta (§14, §15, §42)
-- lib/env.ts
-- assess
+- MigrateSqliteTests
+- web/app/layout.tsx
 - RedFlagTests
-- .from_app_config
+- ResendEmailChannelTests
 - 6. Intelligence (§16–20, §24, §25, §44)
 - 4. Modelo de datos (Postgres / Supabase)
 - test_db.py
@@ -142,7 +136,7 @@
 - 20261006120000_description_facts.sql
 - loading.tsx
 - package.json
-- .shots-app.mjs
+- Ese Auto · backlog comercial
 - Automotive — web
 - 16. Matching Engine
 - 23. Página de resultado
@@ -150,6 +144,7 @@
 - 36. Métricas de activación
 - 20260930120000_f3_notifications.sql
 - opengraph-image.tsx
+- 6. Proyección a seis meses
 - 34. Alternativa de pricing
 - 35. Métricas principales
 - 38. Métricas de outcome
@@ -163,7 +158,14 @@
 - eslint.config.mjs
 - next.config.ts
 - postcss.config.mjs
+- FakeSource
 - automotive-worker
+- 20261008120000_mercadopago.sql
+- .from_app_config
+- Mercado Pago · cobro y acceso automático
+- Ese Auto · implementación del lanzamiento comercial
+- 7. Motor de notificaciones (§21, §22, §32, §47)
+- vercel.json
 
 ## God Nodes (most connected - your core abstractions)
 1. `Links` - 88 edges
@@ -171,72 +173,72 @@
 3. `createClient()` - 71 edges
 4. `connection()` - 70 edges
 5. `PRD — Automotive` - 59 edges
-6. `requireUser()` - 52 edges
+6. `requireUser()` - 55 edges
 7. `Page` - 48 edges
-8. `Notifier` - 44 edges
-9. `PostgresTestCase` - 43 edges
-10. `ListingDetail` - 42 edges
+8. `createAdminClient()` - 47 edges
+9. `PostgresTestCase` - 45 edges
+10. `Notifier` - 44 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `DigestItem` --uses--> `Links`  [INFERRED]
   worker/notifications/templates.py → worker/notifications/links.py
+- `AdminLayout()` --calls--> `requireAdmin()`  [EXTRACTED]
+  web/app/admin/layout.tsx → web/lib/admin.ts
+- `PurchasedBanner()` --calls--> `answerInfluence()`  [EXTRACTED]
+  web/components/app/listing-actions.tsx → web/app/app/listings/actions.ts
 - `LoginPage()` --calls--> `safeNext()`  [EXTRACTED]
   web/app/login/page.tsx → web/lib/navigation.ts
 - `EXAMPLE` --calls--> `money()`  [EXTRACTED]
   web/app/page.tsx → web/lib/format.ts
-- `TermsPage()` --calls--> `planPrice()`  [EXTRACTED]
-  web/app/terminos/page.tsx → web/lib/pro.ts
-- `AssistedSearch()` --indirect_call--> `createClient()`  [INFERRED]
-  web/components/app/assisted-search.tsx → web/lib/supabase/client.ts
 
 ## Import Cycles
 - None detected.
 
-## Communities (178 total, 19 thin omitted)
+## Communities (186 total, 21 thin omitted)
 
-### Community 0 - "Notification"
-Cohesion: 0.11
-Nodes (19): Channel, Notification, Protocol, The channel interface (sección 7.2): the engine never knows how an alert…, A notifications row, with the user's contact data, ready to send., SendResult, AsyncClient, datetime (+11 more)
+### Community 0 - "templates.py"
+Cohesion: 0.07
+Nodes (42): parse(), Inline buttons of a Telegram alert (sección 7.2): ⭐ Me interesa · ✖ Descartar.…, Channel, Notification, Protocol, The channel interface (sección 7.2): the engine never knows how an alert…, A notifications row, with the user's contact data, ready to send., SendResult (+34 more)
 
 ### Community 1 - "description_facts.py"
-Cohesion: 0.06
-Nodes (44): llm_facts_last_day(), Descriptions the LLM read in the last 24 h…, _after_label(), Amount, _amounts(), _before_label(), _close(), _currency() (+36 more)
+Cohesion: 0.07
+Nodes (37): _after_label(), Amount, _amounts(), _before_label(), _close(), _currency(), DescriptionFacts, _distinct() (+29 more)
 
 ### Community 2 - "Event"
-Cohesion: 0.13
-Nodes (17): Audience, decide(), decide_all(), Event, Notifications for one event, one per deliverable channel. `sent_today` is how…, Decide a batch. One alert per (user, dedupe_key), from the event with the…, Who an event is for: the user, through the profile that carries it., Rules (+9 more)
+Cohesion: 0.10
+Nodes (28): at_least(), level_for(), rank(), Opportunity levels (§20, sección 6.4), thresholds from…, 🔥 high ≥ 85 · 🟢 good ≥ 70 · 🟡 match ≥ 50 · ⚪ low. `cap` is the highest level…, Audience, classify(), decide() (+20 more)
 
-### Community 3 - "settings/page.tsx"
-Cohesion: 0.08
-Nodes (45): BillingPage(), metadata, metadata, joinWaitlist(), reportVisibleResults(), trackProCta(), metadata, ProPage() (+37 more)
+### Community 3 - "pro.ts"
+Cohesion: 0.11
+Nodes (36): confirmPayment(), launchCommercialPilot(), recordRefund(), joinWaitlist(), checkPayment(), ownedCheckout(), startPayment(), stopSubscription() (+28 more)
 
 ### Community 4 - "listing-actions.tsx"
-Cohesion: 0.10
-Nodes (33): answerInfluence(), currentStatus(), setDiscardReason(), setSaved(), setStatus(), deleteSearch(), setSearchEnabled(), setSearchFrequency() (+25 more)
-
-### Community 5 - "ui.tsx"
 Cohesion: 0.15
-Nodes (28): ConfigPage(), HINTS, metadata, metadata, metadata, metadata, metadata, metadata (+20 more)
+Nodes (19): Props, PurchasedBanner(), PurchaseDialog(), TODAY(), Button(), buttonVariants, Dialog(), DialogClose() (+11 more)
 
-### Community 6 - "server.ts"
-Cohesion: 0.16
-Nodes (15): declineRenewal(), loadFormData(), EditSearchPage(), metadata, metadata, NewSearchPage(), RenewalButton(), Tabs() (+7 more)
-
-### Community 7 - "Notifier"
-Cohesion: 0.10
-Nodes (30): log_error(), Record a pipeline error. Never raises: observability must not break the…, amain(), build_notifier(), _every(), notifying(), stdout, plus LOG_FILE (UTF-8, rotated at midnight, LOG_KEEP_DAYS kept)., Run `job(stop)` now and then every `seconds` until stopped; errors are logged. (+22 more)
-
-### Community 8 - "test_notifications_postgres.py"
+### Community 5 - "createAdminClient"
 Cohesion: 0.11
-Nodes (17): Notification, ResendEmailChannel, MatchCandidate, A new, non-backfill match the crawl just stored., Request, F7, punto 7: a footer link and List-Unsubscribe one-click (RFC 8058)., ResendEmailChannelTests, AlertTypesTests (+9 more)
+Nodes (38): BillingPage(), metadata, ConfigPage(), HINTS, metadata, metadata, escapeLike(), metadata (+30 more)
+
+### Community 6 - "service.py"
+Cohesion: 0.14
+Nodes (24): build_items(), Any, datetime, Daily digest (§32, sección 7.2). Every day at app_config.digest_hour (ART,…, Digest items from waiting rows and the day's top matches: waiting rows always…, Build today's digests. Returns how many were created (then delivered)., run_digest(), deliverable() (+16 more)
+
+### Community 7 - "targets.py"
+Cohesion: 0.24
+Nodes (9): due_targets(), enabled_sources(), finish_target(), Any, crawl_targets and the source cadence they run on (sección 5.1)., Make crawl_targets mirror `specs` (pipeline.crawl.TargetSpec): upsert the…, Active targets of enabled sources whose next_run_at has come (or never ran)., next_run_at = now + the source's interval (sección 5.1). A failed run retries… (+1 more)
+
+### Community 8 - "WebChannel"
+Cohesion: 0.14
+Nodes (16): ResendEmailChannel, WebChannel, MatchCandidate, A new, non-backfill match the crawl just stored., ListingEvent, AlertTypesTests, DailyCapAndDigestTests, DedupeTests (+8 more)
 
 ### Community 9 - "Links"
-Cohesion: 0.16
-Nodes (15): CallbackQueryHandler, Update, _allowed(), help_(), invalid_code_text(), linked_text(), The Telegram bot after F4: it links the account and answers alert buttons.…, register() (+7 more)
+Cohesion: 0.07
+Nodes (36): CallbackQueryHandler, InlineKeyboardMarkup, Update, _allowed(), help_(), invalid_code_text(), linked_text(), The Telegram bot after F4: it links the account and answers alert buttons.… (+28 more)
 
 ### Community 10 - "inspector.tsx"
-Cohesion: 0.13
-Nodes (20): CASCADE, Inspector(), LEVEL_RANK, STATUS_TONE, LevelBadge(), STATUS_STYLE, StatusBadge(), COMPARABLE_LEVEL (+12 more)
+Cohesion: 0.10
+Nodes (25): CASCADE, Inspector(), LEVEL_RANK, STATUS_TONE, LevelBadge(), STATUS_STYLE, StatusBadge(), COMPARABLE_LEVEL (+17 more)
 
 ### Community 11 - "ListingFacts"
 Cohesion: 0.13
@@ -246,125 +248,125 @@ Nodes (24): AsyncAnthropic, AnthropicApiProvider, CatalogModel, M, The Claude AP
 Cohesion: 0.16
 Nodes (6): LlmJobsCase, QueueTests, The llm_jobs queue against the local Supabase Postgres (sección 8.4): what the…, What the web can do with the user's session (sección 4.4)., Run `sql` as the signed-in web user (role authenticated, RLS on)., WebAccessTests
 
-### Community 13 - "notifications.py"
+### Community 13 - "connection"
 Cohesion: 0.08
-Nodes (36): apply_telegram_action(), digest_users(), existing_keys(), insert_decisions(), insert_digest(), insert_event(), interactions(), listing_audiences() (+28 more)
+Nodes (44): connection(), AsyncConnection, get_geocode_cache(), has_fresh_geocode_failure(), Cache that this query failed to geocode, so we don't keep retrying., True if the query was tried and failed within the past `max_age_days`., set_geocode_cache(), set_geocode_cache_failure() (+36 more)
 
-### Community 14 - "admin-inspect.ts"
-Cohesion: 0.17
-Nodes (13): MatchInspector(), metadata, metadata, NotificationInspector(), context(), Inspection, inspectMatch(), inspectNotification() (+5 more)
+### Community 14 - "database.ts"
+Cohesion: 0.10
+Nodes (22): MatchInspector(), metadata, NotificationInspector(), context(), Inspection, inspectMatch(), inspectNotification(), ListingRow (+14 more)
 
 ### Community 15 - "ingest.py"
-Cohesion: 0.11
-Nodes (32): _empty(), _facts(), _geocode_rows(), ingest_rows(), IngestConfig, ListingEvent, normalize_items(), _on_insert() (+24 more)
+Cohesion: 0.14
+Nodes (27): _empty(), _facts(), _geocode_rows(), ingest_rows(), IngestConfig, normalize_items(), _on_insert(), _on_update() (+19 more)
 
-### Community 16 - "normalize_text"
-Cohesion: 0.09
-Nodes (35): Translate between the Telegram wizard's filter dict and search_profiles. The…, vehicle_catalog: canonical make/model/trim names. The catalog is small (a few…, _km(), _money(), normalize_draft(), _positive(), CatalogModel, The LLM's search drafts, checked against vehicle_catalog (sección 8.4, paso 4).… (+27 more)
-
-### Community 17 - "createClient"
+### Community 16 - "CatalogModel"
 Cohesion: 0.16
-Nodes (15): RFC-8058, POST(), unsubscribe(), metadata, UnsubscribePage(), LoginPage(), metadata, Logo() (+7 more)
+Nodes (18): normalize_brand(), _best_by_name(), _brands_in(), CatalogModel, _finish(), _fuzzy(), _has_phrase(), _pick() (+10 more)
+
+### Community 17 - "settings/page.tsx"
+Cohesion: 0.13
+Nodes (18): RFC-8058, POST(), declineRenewal(), metadata, unsubscribe(), metadata, UnsubscribePage(), LoginPage() (+10 more)
 
 ### Community 18 - "enrich.py"
-Cohesion: 0.11
-Nodes (32): Refresher, mark_detail_checked(), DescriptionLLM, drain(), enrich_pass(), ingest_detail(), Any, Listing (+24 more)
+Cohesion: 0.13
+Nodes (27): Refresher, mark_detail_checked(), DescriptionLLM, drain(), enrich_pass(), ingest_detail(), Any, Listing (+19 more)
 
-### Community 19 - "SourceHealth"
-Cohesion: 0.12
-Nodes (17): A source's failure streak after a run (the admin alert reads it)., SourceHealth, failing_text(), last_error_line(), Any, datetime, SourceHealth, The exception line of a traceback ("RuntimeError: login wall"). (+9 more)
+### Community 19 - "test_ingest_postgres.py"
+Cohesion: 0.10
+Nodes (24): RuntimeError, ListingDetail, What fetch_detail() found at a listing's URL (sección 5.5). `gone` means the…, ingest(), normalize → geocode → upsert. The whole batch is one transaction., PostgresTestCase, Opens the worker pool on TEST_DATABASE_URL over a clean slate., CanonicalUpsertTests (+16 more)
 
 ### Community 20 - "search-form.tsx"
 Cohesion: 0.05
-Nodes (65): AssistedStart, canonical(), enabledSources(), escapeLike(), jobText(), Preview, PreviewListing, previewSearch() (+57 more)
+Nodes (66): loadFormData(), EditSearchPage(), metadata, metadata, AssistedSearch(), FALLBACK_TITLE, JobRow, Origin (+58 more)
 
 ### Community 21 - "db.ts"
 Cohesion: 0.11
 Nodes (25): SEARCH_FILTERS, alertedUser(), signIn(), ask(), setHeartbeat(), signIn(), globalSetup(), main() (+17 more)
 
 ### Community 22 - "facebook.py"
-Cohesion: 0.09
-Nodes (30): parse_relative_date(), Parse Spanish relative date strings shown by AR car classifieds. Examples…, Return a unix timestamp inferred from a Spanish relative-date string., _strip_accents(), _after_colon(), _city_slug(), _city_slug_from_origin(), _extract_location() (+22 more)
-
-### Community 23 - "crawl.py"
 Cohesion: 0.10
-Nodes (28): _collector_loop(), AbstractEventLoop, Any, T, Run collector coroutines on an event loop that can start subprocesses.…, run_collector(), finish_run(), Observability (sección 10, §46): collector_runs, pipeline_errors and source… (+20 more)
+Nodes (29): parse_relative_date(), Parse Spanish relative date strings shown by AR car classifieds. Examples…, Return a unix timestamp inferred from a Spanish relative-date string., _strip_accents(), _after_colon(), _city_slug(), _city_slug_from_origin(), _extract_location() (+21 more)
+
+### Community 23 - "listing.py"
+Cohesion: 0.09
+Nodes (27): NamedTuple, FxQuote, attrs_hash(), fingerprint(), _hash(), listing_facts(), normalize_listing(), price_usd() (+19 more)
 
 ### Community 24 - "fiesta_listing"
 Cohesion: 0.14
 Nodes (14): evaluate(), match(), The reasons if every hard filter is ok or unknown; None if one fails., CurrencyTests, fiesta_listing(), fiesta_profile(), GoldenFixtureTests, GuardAndLevelTests (+6 more)
 
 ### Community 25 - "LLMProvider"
-Cohesion: 0.09
-Nodes (28): claim(), expire(), finish(), Any, AsyncConnection, llm_jobs: the queue between the web and the LLM layer (sección 8.4). The web…, The oldest queued job of `kinds`, now 'running'; None if there is none., done' with its output, or 'failed' with the error (never both). (+20 more)
+Cohesion: 0.08
+Nodes (34): claim(), expire(), finish(), Any, AsyncConnection, llm_jobs: the queue between the web and the LLM layer (sección 8.4). The web…, The oldest queued job of `kinds`, now 'running'; None if there is none., done' with its output, or 'failed' with the error (never both). (+26 more)
 
 ### Community 26 - "test_llm_drafts.py"
-Cohesion: 0.20
-Nodes (18): draft(), norm(), normalization/drafts.py: the deterministic step after the LLM (sección 8.4,…, test_catalog_names_win_over_the_llm_spelling(), test_duplicates_collapse_and_the_list_is_capped(), test_enums_become_the_form_empty_value(), test_km_and_radius(), test_known_make_unknown_model_keeps_the_make() (+10 more)
+Cohesion: 0.12
+Nodes (32): _km(), _money(), normalize_draft(), normalize_drafts(), _positive(), Any, CatalogModel, date (+24 more)
 
 ### Community 27 - "watchdog.py"
-Cohesion: 0.11
-Nodes (26): timedelta, last_beat(), EnvFileTests, F7, punto 8: the watchdog's decisions (tools/watchdog.py), without network or…, tools/supabase_keys.py rewrites .env files in place., TransitionTests, WebCheckTests, WorkerHeartbeatTests (+18 more)
+Cohesion: 0.09
+Nodes (30): timedelta, beat(), last_beat(), datetime, The worker's heartbeat (F7, punto 8): one row in worker_heartbeat, updated…, started_now(), EnvFileTests, F7, punto 8: the watchdog's decisions (tools/watchdog.py), without network or… (+22 more)
 
-### Community 28 - "app/listings/[id]/page.tsx"
-Cohesion: 0.08
-Nodes (45): AdminListingPage(), escapeLike(), ListingsPage(), ListingPage(), markFor(), metadata, plain(), priceHistory() (+37 more)
+### Community 28 - "format.ts"
+Cohesion: 0.10
+Nodes (39): AdminListingPage(), ListingsPage(), DIGEST_SECTION, DigestItem, InboxPage(), metadata, WebPayload, ListingPage() (+31 more)
 
-### Community 29 - "templates.py"
-Cohesion: 0.14
-Nodes (29): age_line(), ago_long(), before_after(), Button, Content, _digest(), DigestItem, email() (+21 more)
+### Community 29 - "web/app/page.tsx"
+Cohesion: 0.09
+Nodes (17): AdminLayout(), metadata, BENEFITS, EXAMPLE, Landing(), STEPS, metadata, metadata (+9 more)
 
 ### Community 30 - "PRD — Automotive"
 Cohesion: 0.05
 Nodes (37): 11. Principios de producto, 13. Concepto de Search Profile, 14. Ingesta de publicaciones, 17. Opportunity Score, 18. Componentes iniciales del Opportunity Score, 19. Price Intelligence, 1. Resumen ejecutivo, 20. Niveles de oportunidad (+29 more)
 
-### Community 31 - "copy.ts"
-Cohesion: 0.07
-Nodes (33): Dashboard(), FOLLOWED, metadata, SavedPage(), Snapshot, COUNT_KEY, EMPTY, Filter (+25 more)
+### Community 31 - "searches/[id]/page.tsx"
+Cohesion: 0.10
+Nodes (28): Dashboard(), metadata, reportVisibleResults(), trackProCta(), COUNT_KEY, EMPTY, Filter, FILTERS (+20 more)
 
 ### Community 32 - "scraper_cli.py"
-Cohesion: 0.09
-Nodes (30): shutdown(), AsyncConnection, date, quote_for_today(), fx_rates: the day's USD/ARS quote, frozen so price_usd can be reproduced…, The quote stored for today (blue, else oficial), fetching and storing it on…, today_ar(), _fetch_quote() (+22 more)
-
-### Community 33 - "connection"
 Cohesion: 0.10
-Nodes (36): Postgres (Supabase) data access for the worker. Replaces the old SQLite module.…, close_pool(), connection(), AsyncConnection, Async Postgres connection pool (psycopg 3), one per worker process. The worker…, get_config(), Any, Business rules from the app_config table (Apéndice A), cached briefly so edits… (+28 more)
+Nodes (26): shutdown(), _collector_loop(), AbstractEventLoop, Any, T, Run collector coroutines on an event loop that can start subprocesses.…, run_collector(), USD/ARS rate fetcher with TTL cache. For pricing used cars in AR, the "blue"… (+18 more)
+
+### Community 33 - "db/__init__.py"
+Cohesion: 0.10
+Nodes (33): Postgres (Supabase) data access for the worker. Replaces the old SQLite module.…, (marca, modelo) combinations of a wizard filter: one search profile each., split_vehicles(), alerts_for_target(), _canonical(), create_alert(), delete_alert(), enabled_profiles() (+25 more)
 
 ### Community 34 - "test_llm_claude_cli.py"
-Cohesion: 0.16
-Nodes (26): BaseModel, Run the CLI once and return its stdout. Raises LLMTimeout / LLMError., run_cli(), json_schema(), Any, The model's JSON Schema, self-contained: `$defs` inlined and titles dropped.…, envelope(), FakeRunner (+18 more)
-
-### Community 35 - "telegram.py"
 Cohesion: 0.12
-Nodes (13): InlineKeyboardMarkup, parse(), Inline buttons of a Telegram alert (sección 7.2): ⭐ Me interesa · ✖ Descartar.…, keyboard(), Any, datetime, Notification, Telegram (§21, canal existente): the §22 copy in HTML plus the inline buttons ⭐… (+5 more)
+Nodes (32): BaseModel, parse_envelope(), Any, Run the CLI once and return its stdout. Raises LLMTimeout / LLMError., The structured answer inside `--output-format json`'s envelope., run_cli(), json_schema(), Any (+24 more)
+
+### Community 35 - "[notificationId]/route.ts"
+Cohesion: 0.33
+Nodes (10): GET(), handle(), HEAD(), peek(), Row, track(), ClickTarget, destination() (+2 more)
 
 ### Community 36 - "listings.py"
-Cohesion: 0.10
-Nodes (31): enrichment_queue(), find_repost_of(), insert_listing(), insert_snapshot(), lock_existing(), mark_gone(), matched_recheck_queue(), _param() (+23 more)
+Cohesion: 0.09
+Nodes (34): enrichment_queue(), find_repost_of(), insert_listing(), insert_snapshot(), lock_existing(), mark_gone(), matched_recheck_queue(), _param() (+26 more)
 
 ### Community 37 - "matching.py"
-Cohesion: 0.10
-Nodes (31): Result, ago(), money(), number(), Every user-facing string of the intelligence layer (§19, §24, §25). Kept in one…, USD 10.300 · ARS 12.500.000 (Argentine thousands separator)., _choice(), distance_km() (+23 more)
+Cohesion: 0.15
+Nodes (24): Result, _choice(), distance_km(), evaluate(), filter_currency(), _km(), _location(), _model() (+16 more)
 
-### Community 38 - "test_ingest_postgres.py"
-Cohesion: 0.10
-Nodes (27): RuntimeError, ListingDetail, What fetch_detail() found at a listing's URL (sección 5.5). `gone` means the…, WebChannel, Tells the admin when a collector goes down and when it's back., SourceAlerts, ingest(), normalize → geocode → upsert. The whole batch is one transaction. (+19 more)
+### Community 38 - "test_intelligence.py"
+Cohesion: 0.24
+Nodes (9): RedFlag, Any, datetime, question_keys(), Questions for the seller (§25, sección 6.6). Deterministic templates. Always:…, One message ready to copy: "Hola, ¿cómo estás? ¿Lo seguís teniendo? …"., seller_questions(), F2 intelligence, pure (docs/TECHNICAL_PLAN.md, sección 6): no network, no… (+1 more)
 
 ### Community 39 - "Listing"
-Cohesion: 0.11
-Nodes (19): AutoCosmos AR scraper. AutoCosmos exposes a public listings page at…, BaseScraper, CollectorBlocked, Listing, Run keyword detection over the title and tag the listing. Statistical detection…, One ad as a collector read it, before normalization. `marca`/`modelo`/`version`…, Apply user filters that the source could not enforce server-side., The source answered with a login wall, a security challenge or no session. The… (+11 more)
+Cohesion: 0.09
+Nodes (23): BaseScraper, CollectorBlocked, Listing, Run keyword detection over the title and tag the listing. Statistical detection…, One ad as a collector read it, before normalization. `marca`/`modelo`/`version`…, Apply user filters that the source could not enforce server-side., The source answered with a login wall, a security challenge or no session. The…, Download the ad's own page, with the source's login-wall and session checks,… (+15 more)
 
-### Community 40 - "scheduler.py"
-Cohesion: 0.07
-Nodes (35): profiles_by_ids(), Profiles (alert dicts with their "profile" row) by id, enabled or not., Bootstrap of new or edited profiles (sección 5.7). A profile that was never…, Backfill one profile. Returns how many listings it matched., Bootstrap every profile that needs it. Returns how many were processed., rematch_profile(), run_pending(), _key() (+27 more)
+### Community 40 - "pipeline/scoring.py"
+Cohesion: 0.14
+Nodes (14): Weights, curves and thresholds of the intelligence layer (sección 6, Apéndice…, Any, datetime, The I/O around intelligence/: rows, comparables, fx and config in; matches out.…, Load the rows and comparables of these listings (once each)., Scorer, F2 intelligence against the local Supabase Postgres (docs/TECHNICAL_PLAN.md,…, explain() (+6 more)
 
 ### Community 41 - "geo.py"
-Cohesion: 0.13
-Nodes (18): Coords, _fallback_can_stand_alone(), filter_listings_by_radius(), geocode_location(), _geocode_nominatim(), _looks_like_non_location_query(), _lookup_known_location(), normalize_location_query() (+10 more)
+Cohesion: 0.12
+Nodes (20): Coords, _fallback_can_stand_alone(), filter_listings_by_radius(), geocode_location(), _geocode_nominatim(), haversine_km(), _looks_like_non_location_query(), _lookup_known_location() (+12 more)
 
 ### Community 42 - "migrate_sqlite.py"
-Cohesion: 0.10
-Nodes (19): AsyncConnectionPool, Row, connection_kwargs(), open_pool(), Any, Open the process-wide pool (idempotent)., ensure_telegram_profile(), LoadEmailsTests (+11 more)
+Cohesion: 0.15
+Nodes (13): Row, connection_kwargs(), Any, ensure_telegram_profile(), LoadEmailsTests, load_emails(), main(), Migration (+5 more)
 
 ### Community 43 - "20260927120000_core_schema.sql"
 Cohesion: 0.13
@@ -386,53 +388,53 @@ Nodes (29): class-variance-authority, cn, lucide-react, next, next-themes, radix
 Cohesion: 0.07
 Nodes (28): dom, dom.iterable, esnext, **/*.mts, .next/dev/types/**/*.ts, next-env.d.ts, .next/types/**/*.ts, node_modules (+20 more)
 
-### Community 48 - "mercadolibre.py"
+### Community 48 - "crawl.py"
 Cohesion: 0.14
-Nodes (19): _blocked(), _browser_storage_state(), _build_url(), _extract_id(), _looks_like_login_wall(), _page_looks_like_login_wall(), _parse_card(), parse_search() (+11 more)
+Nodes (22): crawl_due(), derive_targets(), Any, BatchHandler, HealthHandler, SourceHealth, Crawl targets and their cadence (sección 5.1). Each tick `crawl_targets` is re-…, A target's query in the collectors' filter vocabulary. (+14 more)
 
 ### Community 49 - "IntelligenceConfig"
-Cohesion: 0.19
-Nodes (23): diff_pct(), How far below the median the published price is, in % (negative = above)., IntelligenceConfig, level_for(), 🔥 high ≥ 85 · 🟢 good ≥ 70 · 🟡 match ≥ 50 · ⚪ low. `cap` is the highest level…, age_hours(), clamp(), completeness_component() (+15 more)
+Cohesion: 0.23
+Nodes (21): diff_pct(), How far below the median the published price is, in % (negative = above)., IntelligenceConfig, age_hours(), clamp(), completeness_component(), completeness_fields(), Component (+13 more)
 
-### Community 50 - "listing.py"
-Cohesion: 0.10
-Nodes (24): NamedTuple, FxQuote, attrs_hash(), fingerprint(), _hash(), normalize_listing(), price_usd(), Any (+16 more)
+### Community 50 - "transmission.py"
+Cohesion: 0.25
+Nodes (8): _classify(), fuel(), Transmission and fuel from free text (sección 5.2, paso 2). Sources rarely…, manual' | 'automatic' | None, from the first text that settles it. Pass the…, Canonical fuel ('nafta', 'diesel', 'gnc', 'hibrido', 'electrico') or None,…, private' | 'dealer' | None., seller_type(), transmission()
 
 ### Community 51 - "PriceRef"
-Cohesion: 0.17
-Nodes (13): AST, fetch(), PriceRef, Any, public.comparables() for one listing. `cfg` overrides app_config.comparables., CopyLintTests, _docstring_nodes(), _fold() (+5 more)
+Cohesion: 0.15
+Nodes (14): AST, fetch(), PriceRef, Any, Price Intelligence (§19, sección 6.2). The statistics come from the SQL…, public.comparables() for one listing. `cfg` overrides app_config.comparables., CopyLintTests, _docstring_nodes() (+6 more)
 
-### Community 52 - "patch"
-Cohesion: 0.33
-Nodes (5): patch, _is_recent(), Drop listings published more than `max_age_days` ago. If the source doesn't say…, _is_recent reads stored listing rows (published_at is a timestamptz)., SchedulerRecencyTests
+### Community 52 - "test_handlers.py"
+Cohesion: 0.13
+Nodes (14): patch, start(), _is_recent(), Drop listings published more than `max_age_days` ago. If the source doesn't say…, _ctx(), _FakeChat, _FakeMessage, _FakeUpdate (+6 more)
 
-### Community 53 - "service.py"
-Cohesion: 0.20
-Nodes (17): deliverable(), flag_texts(), _iso(), listing_payload(), load_rules(), match_payload(), _min_n(), _num() (+9 more)
+### Community 53 - "mercadopago-server.ts"
+Cohesion: 0.15
+Nodes (29): GET(), POST(), checkoutUrl(), paymentPeriod(), sameSecret(), api(), applyPayment(), BillingCheckout (+21 more)
 
 ### Community 54 - "20261007120000_ese_auto_commercial.sql"
 Cohesion: 0.09
 Nodes (8): llm_jobs_guard_commercial, matches_guard_commercial, public.commercial_payments, public.guard_assisted_commercial_access(), public.guard_match_access(), public.plan_limits_for(), public.profiles, public.refund_commercial_payment()
 
-### Community 55 - "database.ts"
-Cohesion: 0.09
-Nodes (33): markSeen(), Purchase, recordPurchase(), Supabase, trackSellerQuestions(), GET(), GET(), POST() (+25 more)
+### Community 55 - "server.ts"
+Cohesion: 0.20
+Nodes (15): GET(), GET(), POST(), Email, LoginState, sendMagicLink(), siteUrl(), verifyCode() (+7 more)
 
 ### Community 56 - "test_db_postgres.py"
-Cohesion: 0.12
-Nodes (9): Helpers for tests that need Postgres (see conftest.py for the event loop)., AlertRepoTests, GeocodeAndConfigTests, _listing(), The bot's data layer against a real Postgres with the supabase/ migrations. Run…, /start <code> (public.link_telegram, F4)., SeenMatchesTests, store() (+1 more)
+Cohesion: 0.13
+Nodes (8): AlertRepoTests, GeocodeAndConfigTests, _listing(), The bot's data layer against a real Postgres with the supabase/ migrations. Run…, /start <code> (public.link_telegram, F4)., SeenMatchesTests, store(), TelegramLinkTests
 
 ### Community 57 - "TelegramChannel"
 Cohesion: 0.15
-Nodes (8): TelegramChannel, FakeSource, Listing, Stands in for a collector: returns `results[name]`, serves `details[url]` (an…, FakeBot, Exception, TelegramChannelTests, FakeBot
+Nodes (9): Any, datetime, Notification, TelegramChannel, CallbackDataTests, FakeBot, Exception, TelegramChannelTests (+1 more)
 
 ### Community 58 - "20261003120000_f6_backoffice_metrics.sql"
 Cohesion: 0.10
 Nodes (16): pro_waitlist_set_updated_at, public.admin_notification_daily, public.admin_score_histogram, public.admin_searches, public.admin_source_health, public.admin_users, public.join_waitlist(), public.pro_waitlist (+8 more)
 
-### Community 59 - "test_handlers.py"
-Cohesion: 0.21
-Nodes (9): start(), _ctx(), _FakeChat, _FakeMessage, _FakeUpdate, _FakeUser, The bot after F4: /start <code> links the account, the old wizard commands…, RetiredWizardTests (+1 more)
+### Community 59 - "SourceAlerts"
+Cohesion: 0.10
+Nodes (24): finish_run(), Observability (sección 10, §46): collector_runs, pipeline_errors and source…, A source's failure streak after a run (the admin alert reads it)., Close a run and keep the source's health counters in step. Returns the source's…, SourceHealth, start_run(), failing_text(), last_error_line() (+16 more)
 
 ### Community 60 - "components.json"
 Cohesion: 0.09
@@ -446,9 +448,9 @@ Nodes (20): public.app_config, public.collector_runs, public.crawl_targets, publ
 Cohesion: 0.15
 Nodes (7): PriceResolution, What resolve_price() concluded, stored in description_facts.price_check. The…, The listing's effective price (sección 5.2, v3). `published`/`currency`: the…, resolve_price(), _usd(), _resolve(), ResolvePriceTests
 
-### Community 63 - "v6.py"
-Cohesion: 0.09
-Nodes (46): BeautifulSoup, Browser, BrowserContext, browser_context(), _ensure_browser(), Shared Playwright helpers — reuse a single browser instance across scrapers., Yield a fresh browser context. Closes context on exit; browser is reused., dedupe() (+38 more)
+### Community 63 - "app/listings/[id]/page.tsx"
+Cohesion: 0.08
+Nodes (25): markFor(), metadata, plain(), priceHistory(), SAME, SCORE_PART, ScoreInWords(), Similar (+17 more)
 
 ### Community 64 - "matches.py"
 Cohesion: 0.17
@@ -458,105 +460,97 @@ Nodes (19): _existing(), filter_unseen(), insert_legacy_matches(), _keys(), mark
 Cohesion: 0.22
 Nodes (6): ComparablesCascadeTests, IntelligenceCase, PriceRef, Insert a listing row directly: comparables are about stored columns., Sección 6.2: trim+transmission → transmission → model, first with n ≥ min_n., ScoredMatchesTests
 
-### Community 66 - "test_llm_contract.py"
-Cohesion: 0.07
-Nodes (43): fixture, skipif, AbstractEventLoop, Any, T, Entry-point helper: run the worker's coroutines on a loop psycopg supports.…, run(), selector_loop() (+35 more)
+### Community 66 - "ClaudeCliProvider"
+Cohesion: 0.11
+Nodes (19): fixture, Runner, ClaudeCliProvider, CatalogModel, M, load_recordings(), Any, Path (+11 more)
 
-### Community 67 - "AutoCosmosScraper"
-Cohesion: 0.12
-Nodes (19): range, AutoCosmosScraper, _price(), AsyncClient, Listing, Response, GET, retried on a network error or a 5xx; the last answer or error wins., (price, currency, partial reason) from the price blocks of a card or detail. A… (+11 more)
+### Community 67 - "Site"
+Cohesion: 0.20
+Nodes (10): range, AutoCosmosSearchTests, card(), page(), Request, Response, AutoCosmos search: every page of the model, `?pidx=N`, retried on 503 (no…, Serves `pages[pidx]`; `fail[pidx]` is a list of statuses (or exceptions) to… (+2 more)
 
 ### Community 68 - "startup_warnings"
 Cohesion: 0.14
 Nodes (10): What this configuration leaves off (F7, punto 5): one line per channel, metric…, startup_warnings(), _database(), db_test_skip_reason(), Why the DB tests can't run here, or None. They TRUNCATE tables, so they only…, ConfigTests, F7, punto 4: the DB tests TRUNCATE, so they never touch the pilot's database., F7, punto 5: every channel or metric the .env leaves off is logged at startup. (+2 more)
 
-### Community 69 - "ClaudeCliProvider"
-Cohesion: 0.17
-Nodes (10): Runner, ClaudeCliProvider, parse_envelope(), Any, CatalogModel, M, The structured answer inside `--output-format json`'s envelope., parametrize (+2 more)
+### Community 69 - "Notifier"
+Cohesion: 0.07
+Nodes (42): AbstractEventLoop, Any, T, Entry-point helper: run the worker's coroutines on a loop psycopg supports.…, run(), selector_loop(), log_error(), Record a pipeline error. Never raises: observability must not break the… (+34 more)
 
-### Community 70 - "app/app/layout.tsx"
-Cohesion: 0.16
-Nodes (16): markOpened(), AppLayout(), active(), BottomNav(), ITEMS, MobileInboxLink(), TopNav(), Inbox (+8 more)
+### Community 70 - "auth.ts"
+Cohesion: 0.13
+Nodes (18): markOpened(), active(), BottomNav(), ITEMS, MobileInboxLink(), TopNav(), Inbox, InboxContext (+10 more)
 
-### Community 71 - "requireUser"
-Cohesion: 0.16
-Nodes (23): DIGEST_SECTION, DigestItem, InboxPage(), metadata, WebPayload, CHANNELS, deleteAccount(), saveChannels() (+15 more)
+### Community 71 - "createClient"
+Cohesion: 0.10
+Nodes (48): AppLayout(), answerInfluence(), currentStatus(), markSeen(), Purchase, recordPurchase(), setDiscardReason(), setSaved() (+40 more)
 
-### Community 72 - "to_profile"
-Cohesion: 0.15
-Nodes (17): _put(), Any, (marca, modelo) combinations of a wizard filter: one search profile each., Wizard dict + one (make, model) → search_profiles column values., search_profiles column values → the wizard dict the scheduler and handlers…, split_vehicles(), to_legacy(), to_profile() (+9 more)
+### Community 72 - "normalize_text"
+Cohesion: 0.09
+Nodes (23): _put(), Any, Translate between the Telegram wizard's filter dict and search_profiles. The…, Wizard dict + one (make, model) → search_profiles column values., search_profiles column values → the wizard dict the scheduler and handlers…, to_legacy(), to_profile(), load_models() (+15 more)
 
 ### Community 74 - "Ese Auto · propuesta comercial y proyección"
-Cohesion: 0.12
-Nodes (16): 1. Qué vender, 2. Qué ya existe y qué falta, 3. Referencias de mercado, 4. Alternativas iniciales conservadas como referencia, 5. Oferta seleccionada en pesos: B, 6. Proyección a seis meses, 7. Validación y salida comercial, 8. Decisión a registrar (+8 more)
+Cohesion: 0.22
+Nodes (9): 1. Qué vender, 2. Qué ya existe y qué falta, 3. Referencias de mercado, 4. Alternativas iniciales conservadas como referencia, 5. Oferta seleccionada en pesos: B, 7. Validación y salida comercial, 8. Decisión a registrar, Ese Auto · propuesta comercial y proyección (+1 more)
 
-### Community 76 - "rescore.py"
-Cohesion: 0.19
-Nodes (15): nightly_loop(), Any, datetime, Re-scoring existing matches (sección 6.1). * After enrichment: transmission or…, Re-score (search_profile_id, listing_id) pairs. Returns rows updated., Seconds from `now` to the next `hour` ("HH:MM", ART)., Re-score matches once a night, then purge stale listings; also, once at…, rescore() (+7 more)
+### Community 76 - "reprocess.py"
+Cohesion: 0.11
+Nodes (23): AsyncConnection, date, quote_for_today(), fx_rates: the day's USD/ARS quote, frozen so price_usd can be reproduced…, The quote stored for today (blue, else oficial), fetching and storing it on…, today_ar(), llm_facts_last_day(), Descriptions the LLM read in the last 24 h… (+15 more)
 
-### Community 77 - "test_intelligence.py"
-Cohesion: 0.12
-Nodes (22): RedFlag, Price Intelligence (§19, sección 6.2). The statistics come from the SQL…, Weights, curves and thresholds of the intelligence layer (sección 6, Apéndice…, One listing × one profile → everything a match row stores. Pure.…, _age_years(), description_known(), description_mismatches(), Any (+14 more)
+### Community 77 - "red_flags.py"
+Cohesion: 0.20
+Nodes (15): ago(), money(), number(), Every user-facing string of the intelligence layer (§19, §24, §25). Kept in one…, USD 10.300 · ARS 12.500.000 (Argentine thousands separator)., _age_years(), description_known(), description_mismatches() (+7 more)
 
 ### Community 78 - "Comunes a cualquier ruta"
-Cohesion: 0.12
-Nodes (16): COM-02 · Una oferta coherente, COM-03 · Límites que siguen vigentes al vencer, COM-04 y COM-05 · Cobro y ciclo de vida, COM-06 · Autogestión, COM-07 · Producto que se puede prometer, COM-08 · Medir rentabilidad, no solo intención, COM-09 · Operación comercial, COM-10 · Salida controlada (+8 more)
+Cohesion: 0.22
+Nodes (9): COM-02 · Una oferta coherente, COM-03 · Límites que siguen vigentes al vencer, COM-04 y COM-05 · Cobro y ciclo de vida, COM-06 · Autogestión, COM-07 · Producto que se puede prometer, COM-08 · Medir rentabilidad, no solo intención, COM-09 · Operación comercial, COM-10 · Salida controlada (+1 more)
 
 ### Community 79 - "Puesta en producción del piloto (F7)"
 Cohesion: 0.13
 Nodes (15): 10. Prueba de aceptación, 1. Dominio en Cloudflare, 2. Túnel de Cloudflare, 3. Resend (emails de login y de alertas), 4. API key de Anthropic (modo asistido), 5. Chat de Telegram para las alertas operativas, 6. Sesiones de MercadoLibre y Facebook, 7. Configuración (+7 more)
 
 ### Community 80 - "Automotive — Plan técnico del MVP"
-Cohesion: 0.13
-Nodes (15): 10. Backoffice y observabilidad (§45, §46), 11. Métricas y eventos (§35–38, §53), 12. Freemium (§33, §34), 14. Riesgos y decisiones abiertas, 15. Trazabilidad PRD → plan, 1. Punto de partida y gaps, 2. Arquitectura objetivo, 3. Estructura del repo (+7 more)
+Cohesion: 0.18
+Nodes (11): 10. Backoffice y observabilidad (§45, §46), 11. Métricas y eventos (§35–38, §53), 12. Freemium (§33, §34), 14. Riesgos y decisiones abiertas, 15. Trazabilidad PRD → plan, 1. Punto de partida y gaps, 2. Arquitectura objetivo, 3. Estructura del repo (+3 more)
 
-### Community 81 - "createAdminClient"
-Cohesion: 0.12
-Nodes (25): ErrorsPage(), MatchesPage(), metadata, Rate(), Filters, metadata, NotificationsPage(), AdminHome() (+17 more)
+### Community 81 - ".search"
+Cohesion: 0.15
+Nodes (15): _browser_storage_state(), _build_url(), _extract_id(), _looks_like_login_wall(), _page_looks_like_login_wall(), _parse_card(), parse_search(), Listing (+7 more)
 
-### Community 82 - "test_commercial_postgres.py"
-Cohesion: 0.20
-Nodes (10): due_targets(), enabled_sources(), finish_target(), Any, crawl_targets and the source cadence they run on (sección 5.1)., Make crawl_targets mirror `specs` (pipeline.crawl.TargetSpec): upsert the…, Active targets of enabled sources whose next_run_at has come (or never ran)., next_run_at = now + the source's interval (sección 5.1). A failed run retries… (+2 more)
+### Community 83 - "rescore.py"
+Cohesion: 0.18
+Nodes (16): purge_older_than(), nightly_loop(), Any, datetime, Re-scoring existing matches (sección 6.1). * After enrichment: transmission or…, Re-score (search_profile_id, listing_id) pairs. Returns rows updated., Seconds from `now` to the next `hour` ("HH:MM", ART)., Re-score matches once a night, then purge stale listings; also, once at… (+8 more)
 
-### Community 83 - "notifications/engine.py"
-Cohesion: 0.26
-Nodes (9): at_least(), rank(), Opportunity levels (§20, sección 6.4), thresholds from…, classify(), Decision, _Plan, _priority(), The notification decision (sección 7.1). Pure: no database, no channels.… (+1 more)
-
-### Community 84 - "[notificationId]/route.ts"
-Cohesion: 0.33
-Nodes (10): GET(), handle(), HEAD(), peek(), Row, track(), ClickTarget, destination() (+2 more)
+### Community 84 - "v6.py"
+Cohesion: 0.09
+Nodes (45): BeautifulSoup, Browser, BrowserContext, browser_context(), _ensure_browser(), Shared Playwright helpers — reuse a single browser instance across scrapers., Yield a fresh browser context. Closes context on exit; browser is reused., dedupe() (+37 more)
 
 ### Community 85 - "test_llm_anthropic_api.py"
-Cohesion: 0.27
-Nodes (12): message(), provider(), parametrize, Request, Response, F7, punto 6: the Claude API provider (llm/anthropic_api.py) against a mocked…, replay(), test_golden_phrases() (+4 more)
+Cohesion: 0.13
+Nodes (24): skipif, _items(), CatalogModel, vehicle_catalog as supabase/seed.sql inserts it, without a database. The LLM…, seed_catalog(), _year(), message(), provider() (+16 more)
 
-### Community 86 - "derive_targets"
-Cohesion: 0.38
-Nodes (4): derive_targets(), Group enabled profiles by (source, make, model) with the widest query.…, TargetSpec, CrawlTargetTests
+### Community 86 - "pgcase.py"
+Cohesion: 0.20
+Nodes (6): get_config(), Any, Business rules from the app_config table (Apéndice A), cached briefly so edits…, Helpers for tests that need Postgres (see conftest.py for the event loop)., Commercial access and payment boundaries against an isolated local database., Real isolated PostgreSQL checks for automatic access and hostile/repeated money…
 
 ### Community 87 - "20261001120000_f4_web.sql"
 Cohesion: 0.24
 Nodes (7): public.dashboard_summary(), public.link_telegram(), public.match_cards, public.profiles, public.recent_opportunities(), public.search_result_counts(), public.search_results()
 
 ### Community 88 - "admin/actions.ts"
-Cohesion: 0.12
-Nodes (22): ActionResult, shape(), SourceInput, updateConfig(), updateSource(), confirmPayment(), launchCommercialPilot(), recordRefund() (+14 more)
+Cohesion: 0.23
+Nodes (10): ActionResult, shape(), SourceInput, updateConfig(), updateSource(), ConfigEditor(), SourceForm(), Textarea() (+2 more)
 
 ### Community 89 - "metrics/page.tsx"
-Cohesion: 0.31
-Nodes (8): CTA_EVENTS, day(), levelLabel(), median(), metadata, MetricsPage(), WAITLIST, CHANNEL
+Cohesion: 0.11
+Nodes (29): ErrorsPage(), metadata, CTA_EVENTS, day(), levelLabel(), median(), metadata, MetricsPage() (+21 more)
 
-### Community 90 - "load_models"
-Cohesion: 0.24
-Nodes (8): load_models(), match_model(), AsyncConnection, CatalogModel, Model-level rows with their trims, aliases and production years., Canonical (make, model), or None if it isn't in the catalog. The model matches…, resolve_make_model(), CatalogMatchTests
+### Community 90 - "autocosmos.py"
+Cohesion: 0.23
+Nodes (10): AutoCosmosScraper, _price(), AsyncClient, Listing, Response, AutoCosmos AR scraper. AutoCosmos exposes a public listings page at…, GET, retried on a network error or a 5xx; the last answer or error wins., (price, currency, partial reason) from the price blocks of a card or detail. A… (+2 more)
 
-### Community 91 - "raw_pages.py"
-Cohesion: 0.24
-Nodes (10): compress(), decompress(), iter_for_reparse(), mark_parsed(), purge_older_than(), raw_pages: the last detail page of each listing, compressed (normalization v3).…, Stored detail pages, oldest listing first. `below_version`: per source, only…, The stored page was read again with this parser version (tools/reprocess.py). (+2 more)
-
-### Community 92 - "PROPUESTA_COMERCIAL.md"
-Cohesion: 0.24
-Nodes (4): Comprobaciones reproducibles, Ese Auto · implementación del lanzamiento comercial, Habilitación del entorno destino, Límites de esta entrega
+### Community 91 - "pool.py"
+Cohesion: 0.15
+Nodes (14): AsyncConnectionPool, close_pool(), open_pool(), Async Postgres connection pool (psycopg 3), one per worker process. The worker…, Open the process-wide pool (idempotent)., compress(), decompress(), iter_for_reparse() (+6 more)
 
 ### Community 93 - "Setup"
 Cohesion: 0.18
@@ -566,9 +560,9 @@ Nodes (11): Backoffice y métricas (F6), Base de datos (Supabase), Correr el bot
 Cohesion: 0.24
 Nodes (8): catalog_text(), load(), parse_search_system(), parse_search_user(), CatalogModel, date, System prompts and user messages of the LLM layer, shared by every provider.…, One line per make: "Ford: Fiesta [S, SE, Titanium]; Focus [...]".
 
-### Community 96 - "test_notifications_templates.py"
-Cohesion: 0.13
-Nodes (9): notification(), CopyLintTests, PRDCopyTests, Notification, Snapshots of the three alert types of §22 (+ the digest) on every channel. The…, §19: no "vale", "precio real", "tasación" in any alert., The §22 lines, in order, at the top of the Telegram message and the email text., render_all() (+1 more)
+### Community 96 - "intelligence/engine.py"
+Cohesion: 0.17
+Nodes (9): assess(), Evaluation, Any, datetime, PriceRef, One listing × one profile → everything a match row stores. Pure.…, The columns of `matches` this evaluation fills., Match, score, flags and questions whether or not it matches (explain_match). (+1 more)
 
 ### Community 97 - "13. Roadmap por fases"
 Cohesion: 0.20
@@ -590,25 +584,25 @@ Nodes (6): react, ToggleGroupContext, ToggleGroupItem(), Toggle(), toggleVariant
 Cohesion: 0.22
 Nodes (9): Agregar una nueva fuente, AutoMotive, Comandos del bot, Cómo funciona, Estructura, Fuentes, Limitaciones, Matching y Opportunity Score (+1 more)
 
-### Community 102 - "transmission.py"
-Cohesion: 0.25
-Nodes (8): _classify(), fuel(), Transmission and fuel from free text (sección 5.2, paso 2). Sources rarely…, manual' | 'automatic' | None, from the first text that settles it. Pass the…, Canonical fuel ('nafta', 'diesel', 'gnc', 'hibrido', 'electrico') or None,…, private' | 'dealer' | None., seller_type(), transmission()
+### Community 102 - "PRDCopyTests"
+Cohesion: 0.24
+Nodes (3): notification(), PRDCopyTests, The §22 lines, in order, at the top of the Telegram message and the email text.
 
 ### Community 103 - "5. Pipeline de ingesta (§14, §15, §42)"
 Cohesion: 0.25
 Nodes (8): 5.1 Crawl targets, 5.2 Normalización, 5.3 Upsert, snapshots y detección de cambios, 5.4 Re-publicaciones (§15, heurística imperfecta aceptada), 5.5 Enrichment de la ficha, 5.6 Watchlist refresher (§30), 5.7 Bootstrap (evita el diluvio inicial; se conserva la idea actual), 5. Pipeline de ingesta (§14, §15, §42)
 
-### Community 104 - "lib/env.ts"
-Cohesion: 0.11
-Nodes (12): metadata, mono, sans, viewport, metadata, metadata, TermsPage(), Contact() (+4 more)
+### Community 104 - "MigrateSqliteTests"
+Cohesion: 0.36
+Nodes (3): _make_sqlite(), MigrateSqliteTests, Path
 
-### Community 105 - "assess"
-Cohesion: 0.25
-Nodes (7): assess(), Evaluation, Any, datetime, PriceRef, The columns of `matches` this evaluation fills., Match, score, flags and questions whether or not it matches (explain_match).
+### Community 105 - "web/app/layout.tsx"
+Cohesion: 0.29
+Nodes (5): metadata, mono, sans, viewport, Toaster()
 
-### Community 107 - ".from_app_config"
-Cohesion: 0.40
-Nodes (3): _merge(), Any, ConfigTests
+### Community 107 - "ResendEmailChannelTests"
+Cohesion: 0.39
+Nodes (3): Request, F7, punto 7: a footer link and List-Unsubscribe one-click (RFC 8058)., ResendEmailChannelTests
 
 ### Community 108 - "6. Intelligence (§16–20, §24, §25, §44)"
 Cohesion: 0.29
@@ -690,9 +684,9 @@ Nodes (3): public.listings, public.match_cards, public.raw_pages
 Cohesion: 0.50
 Nodes (3): name, private, version
 
-### Community 129 - ".shots-app.mjs"
-Cohesion: 0.50
-Nodes (3): admin, pages, widths
+### Community 129 - "Ese Auto · backlog comercial"
+Cohesion: 0.29
+Nodes (7): Ese Auto · backlog comercial, Estado de implementación al 2/10/2026, Módulos según la elección, Registro de decisión, Regla de alcance, Reserva: implementar solo con demanda demostrada, Secuencia de ejecución seleccionada: B
 
 ### Community 130 - "Automotive — web"
 Cohesion: 0.40
@@ -714,25 +708,53 @@ Nodes (3): 33. Freemium inicial, Free, Pro
 Cohesion: 0.67
 Nodes (3): 36. Métricas de activación, First Value, Search Profile Creation Rate
 
+### Community 139 - "6. Proyección a seis meses"
+Cohesion: 0.29
+Nodes (7): 6. Proyección a seis meses, Comparación inicial A/B/C en USD · archivada, no vigente, Cuántas cuentas Agencia hacen falta para un ingreso objetivo · ARS, Evolución del escenario base B · ARS, Resultado mensual en mes 6, ruta B · ARS, Sensibilidad al costo en dólares, base mes 6, Supuestos de B
+
+### Community 160 - "FakeSource"
+Cohesion: 0.33
+Nodes (3): FakeSource, Listing, Stands in for a collector: returns `results[name]`, serves `details[url]` (an…
+
+### Community 180 - "20261008120000_mercadopago.sql"
+Cohesion: 0.39
+Nodes (5): profiles_guard_billing_delete, public.apply_mercadopago_payment(), public.billing_checkouts, public.commercial_payments, public.guard_billing_account_delete()
+
+### Community 181 - ".from_app_config"
+Cohesion: 0.50
+Nodes (3): _merge(), Any, ConfigTests
+
+### Community 182 - "Mercado Pago · cobro y acceso automático"
+Cohesion: 0.33
+Nodes (6): Configuración pendiente del entorno destino, Estado verificado con el MCP · 2/10/2026, Implementación, Mercado Pago · cobro y acceso automático, Operación y casos de revisión, Pasos en Mercado Pago y Vercel
+
+### Community 183 - "Ese Auto · implementación del lanzamiento comercial"
+Cohesion: 0.50
+Nodes (4): Comprobaciones reproducibles, Ese Auto · implementación del lanzamiento comercial, Habilitación del entorno destino, Límites de esta entrega
+
+### Community 184 - "7. Motor de notificaciones (§21, §22, §32, §47)"
+Cohesion: 0.50
+Nodes (4): 7.1 Decisión, 7.2 Canales, 7.3 Tracking de aperturas y clics, 7. Motor de notificaciones (§21, §22, §32, §47)
+
 ## Knowledge Gaps
-- **460 isolated node(s):** `public.vehicle_catalog`, `public.pipeline_errors`, `public.app_config`, `public.geocode_cache`, `public.fx_rates` (+455 more)
+- **472 isolated node(s):** `public.vehicle_catalog`, `public.pipeline_errors`, `public.app_config`, `public.geocode_cache`, `public.fx_rates` (+467 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **19 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **21 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `Listing` connect `Listing` to `AutoCosmosScraper`, `test_ingest_postgres.py`, `geo.py`, `migrate_sqlite.py`, `ingest.py`, `mercadolibre.py`, `normalize_text`, `listing.py`, `enrich.py`, `facebook.py`, `crawl.py`, `test_db_postgres.py`, `TelegramChannel`, `derive_targets`, `v6.py`?**
-  _High betweenness centrality (0.047) - this node is a cross-community bridge._
-- **Why does `Page` connect `Listing` to `AutoCosmosScraper`, `test_ingest_postgres.py`, `test_parsers.py`, `mercadolibre.py`, `facebook.py`, `TelegramChannel`, `v6.py`?**
-  _High betweenness centrality (0.020) - this node is a cross-community bridge._
-- **Why does `Links` connect `Links` to `Notification`, `test_notifications_templates.py`, `telegram.py`, `test_ingest_postgres.py`, `Notifier`, `test_notifications_postgres.py`, `scheduler.py`, `TelegramChannel`, `test_handlers.py`, `templates.py`?**
-  _High betweenness centrality (0.019) - this node is a cross-community bridge._
+- **Why does `Listing` connect `Listing` to `FakeSource`, `WebChannel`, `geo.py`, `migrate_sqlite.py`, `ingest.py`, `crawl.py`, `.search`, `enrich.py`, `test_ingest_postgres.py`, `v6.py`, `CatalogModel`, `facebook.py`, `listing.py`, `test_db_postgres.py`, `autocosmos.py`?**
+  _High betweenness centrality (0.045) - this node is a cross-community bridge._
+- **Why does `Links` connect `Links` to `templates.py`, `FakeSource`, `Notifier`, `PRDCopyTests`, `WebChannel`, `ResendEmailChannelTests`, `test_ingest_postgres.py`, `test_handlers.py`, `TelegramChannel`?**
+  _High betweenness centrality (0.026) - this node is a cross-community bridge._
+- **Why does `PostgresTestCase` connect `test_ingest_postgres.py` to `FakeSource`, `.listing`, `pipeline/scoring.py`, `CommercialTests`, `migrate_sqlite.py`, `MigrateSqliteTests`, `test_llm_jobs_postgres.py`, `WebChannel`, `MercadoPagoTests`, `test_handlers.py`, `pgcase.py`, `listing.py`, `test_db_postgres.py`?**
+  _High betweenness centrality (0.026) - this node is a cross-community bridge._
 - **Are the 41 inferred relationships involving `Links` (e.g. with `ResendEmailChannel` and `TelegramChannel`) actually correct?**
   _`Links` has 41 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 35 inferred relationships involving `Listing` (e.g. with `AutoCosmosScraper` and `Page`) actually correct?**
   _`Listing` has 35 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `public.vehicle_catalog`, `public.pipeline_errors`, `public.app_config` to the rest of the system?**
-  _460 weakly-connected nodes found - possible documentation gaps or missing edges._
-- **Should `Notification` be split into smaller, more focused modules?**
-  _Cohesion score 0.11264367816091954 - nodes in this community are weakly interconnected._
+  _472 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Should `templates.py` be split into smaller, more focused modules?**
+  _Cohesion score 0.0711864406779661 - nodes in this community are weakly interconnected._

@@ -4,6 +4,7 @@ import { cache } from "react";
 
 import { type ProOffer, proOffer } from "@/lib/pro";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { paymentsEnabled } from "@/lib/mercadopago-server";
 
 /**
  * app_config is server-only (sección 4.4): read with the service role. Only
@@ -16,6 +17,7 @@ export type WebConfig = {
   watchlistStaleDays: number;
   proOffer: ProOffer;
   commercialPilot: boolean;
+  automaticPayments: boolean;
 };
 
 export const webConfig = cache(async (): Promise<WebConfig> => {
@@ -35,5 +37,6 @@ export const webConfig = cache(async (): Promise<WebConfig> => {
     watchlistStaleDays: Number(values.watchlist_stale_days ?? 30),
     proOffer: proOffer(values.pro_offer),
     commercialPilot: (values.commercial_pilot as { enabled?: boolean } | undefined)?.enabled === true,
+    automaticPayments: paymentsEnabled() && (values.commercial_pilot as { enabled?: boolean } | undefined)?.enabled === true,
   };
 });

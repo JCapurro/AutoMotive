@@ -140,13 +140,13 @@ export default async function Landing({ searchParams }: PageProps<"/">) {
                 <p className="mt-3 text-3xl font-bold">{planPrice(cfg.proOffer[plan].amount)} <span className="text-base font-normal">{PLAN_COPY[plan].period}</span></p>
                 <p className="mt-2 text-muted-foreground">{PLAN_COPY[plan].pitch}</p>
                 <p className="mt-3">{PLAN_COPY[plan].searches} búsquedas activas · una cuenta · pesos argentinos.</p>
-                <p className="mt-2 text-sm text-muted-foreground">{plan === "pass_30" ? "Pago único, sin renovación automática." : "Durante el piloto: períodos de 30 días y renovación manual, sin débito automático."}</p>
+                <p className="mt-2 text-sm text-muted-foreground">{plan === "pass_30" ? "Pago único, sin renovación automática." : cfg.automaticPayments ? "Suscripción mensual. Cancelás desde Ajustes y conservás el período pagado." : "Durante el piloto: períodos de 30 días y renovación manual, sin débito automático."}</p>
                 <Button asChild variant="outline" className="mt-5"><Link href={user ? `/app/pro?plan=${plan}` : `/login?next=${encodeURIComponent(`/app/pro?plan=${plan}`)}`}>
                   {plan === "pass_30" ? "Busco mi auto" : "Busco vehículos habitualmente"}
                 </Link></Button>
               </article>)}
             </div>
-            <p className="mt-5 text-sm text-muted-foreground">{cfg.commercialPilot ? "Las altas y la confirmación de pagos se coordinan con la administración." : "Las altas pagas están en lista de espera."}
+            <p className="mt-5 text-sm text-muted-foreground">{cfg.automaticPayments ? "Pagás en Mercado Pago. Activamos el acceso cuando se aprueba el pago." : cfg.commercialPilot ? "Las altas y la confirmación de pagos se coordinan con la administración." : "Las altas pagas están en lista de espera."}
               {" "}Al vencer el acceso se detienen nuevas coincidencias y alertas; conservamos historial y favoritos.
               Hasta 10 avisos inmediatos de nuevas coincidencias por día; los restantes van al resumen.
               Bajas de precio de favoritos: avisos inmediatos mientras el acceso siga vigente.</p>

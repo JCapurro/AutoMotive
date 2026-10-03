@@ -2,7 +2,7 @@
 
 Fecha: 1/10/2026. Objetivo: ingreso complementario rentable. Referencia: [propuesta comercial y proyecciones](PROPUESTA_COMERCIAL.md).
 
-Estado de selección: **B · Mixta, elegida por el usuario**, con foco en ingreso recurrente. PIL-01, COM-01 a COM-10 y B-01/B-02 integran el backlog seleccionado. A y C quedan en reserva. Marca **Ese Auto** y etapa **PIL-01 implementadas localmente** el 2/10/2026. No se activaron cobros ni límites en producción. El estado detallado de cada frente figura debajo; autoservicio sigue condicionado a pagos y recompra.
+Estado de selección: **B · Mixta, elegida por el usuario**, con foco en ingreso recurrente. PIL-01, COM-01 a COM-10 y B-01/B-02 integran el backlog seleccionado. A y C quedan en reserva. Marca **Ese Auto**, piloto asistido e integración automática con Mercado Pago implementados localmente el 2/10/2026. No se activaron cobros ni límites en producción; falta configurar y validar el entorno destino.
 
 Precios definidos por el usuario: **Particular ARS 15.000 por 30 días, pago único; Agencia ARS 75.000/mes**. **Free permite una búsqueda por 3 días.** Como regla operativa propuesta, la prueba es única por cuenta y dura 72 horas corridas desde la primera activación de una búsqueda gratuita. Particular corresponde a `pass` con 3 búsquedas activas y Agencia a `pro` con 10 y una cuenta; Agencia Equipos (ruta C) sigue fuera del alcance. En las referencias técnicas siguientes, Pro designa ese mismo acceso Agencia, no un tercer plan pago.
 
@@ -13,12 +13,12 @@ Precios definidos por el usuario: **Particular ARS 15.000 por 30 días, pago ún
 | Marca | Implementada: Ese Auto, logo/textos/metadata/email/bot | Dominio, remitente y nombre/usuario del bot externos, revisar disponibilidad de marca antes de lanzar |
 | COM-02 / B-01 / B-02 | Implementados: ARS, 1/3/10 búsquedas, tres días, planes y entradas por público | Publicar oferta en el entorno destino |
 | COM-03 | Implementado en SQL y worker; prueba única, acceso, capacidad atómica y cola de avisos | Aplicar migración antes de actualizar worker; habilitar límites desde Cobros tras revisar/comunicar cuentas existentes |
-| PIL-01 | Implementado: solicitud, pagos verificados, períodos, referencia única y responsable | Configurar enlaces del proveedor fuera de la plataforma, verificar cada operación y conciliar diariamente |
-| COM-05 / COM-06 | Etapa asistida: renovación manual, no renovación, devolución ya verificada, acceso e historial en Ajustes | Suscripciones automáticas, impagos y conciliación automática si el piloto valida demanda |
+| PIL-01 | Implementado: solicitud, pagos verificados, períodos, referencia única y responsable; enlaces originales incluidos en Administración | Verificar y asociar manualmente pagos de esos enlaces; cancelar suscripciones externas antes de migrar clientes al checkout identificado |
+| COM-05 / COM-06 | Implementados: renovación mensual por pago aprobado, vencimiento por impago, conciliación, baja confirmada en Mercado Pago y devolución/contracargo | Configurar proveedor y scheduler; verificar notificaciones y renovación con Mercado Pago |
 | COM-08 | Registro y tablero básicos: ingresos, Particular, mensualidades Agencia vigentes y devoluciones | Registrar costos/horas y adquisición en planilla; métricas completas de cohortes y bajas por motivo |
 | COM-10 | Pruebas locales de permisos, período, capacidad, pagos y alertas; web compilada y vista en móvil/escritorio | Prueba con proveedor real/sandbox y login, publicar y habilitar cohorte limitada |
 | COM-01 / COM-07 / COM-09 | Operación externa pendiente | Validar oferta con candidatos, observar cobertura 7 días, presupuesto/hosting, contacto, comprobantes y condiciones |
-| COM-04 autoservicio | Condicionado, fuera de PIL-01 | Checkout alojado, eventos verificados y renovación automática después de pagos/recompra |
+| COM-04 autoservicio | Implementado por autorización expresa: checkout alojado por usuario, precio aceptado, firma y activación idempotente | Credenciales, ambas migraciones, despliegue y pruebas con Mercado Pago; ver [guía](MERCADO_PAGO.md) |
 
 La mensualidad Agencia vigente es una medida de períodos pagados; no es MRR de suscripciones con débito automático. Las devoluciones del piloto se registran después de verificarlas en el proveedor, por el importe total, empezando por el período más nuevo si existen renovaciones adelantadas. La configuración no modifica el importe histórico de una compra.
 
@@ -171,6 +171,8 @@ Orden de magnitud para completar A/B con autoservicio: aproximadamente 25–35 d
 No incluir inicialmente comisión por compraventa: la operación cierra fuera de Ese Auto y falta atribución verificable. No incluir mensajes automáticos a vendedores, detección certificada de deuda ni promesas de rentabilidad.
 
 ## Registro de decisión
+
+Actualización 2/10/2026: el usuario autorizó automatizar acceso y renovaciones mediante la API de Mercado Pago. El código amplía COM-04/05/06/10 con checkout identificado, firma de notificaciones, períodos idempotentes, baja real y conciliación. La configuración externa y las pruebas con el proveedor siguen pendientes; ver [Mercado Pago](MERCADO_PAGO.md). El piloto manual descrito arriba se conserva como recorrido previo y alternativa asistida.
 
 - [x] Objetivo confirmado: ingreso complementario rentable.
 - [x] Ruta B elegida; PIL-01, COM-01 a COM-10 y B-01/B-02 seleccionados, A/C en reserva.

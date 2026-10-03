@@ -52,6 +52,7 @@ export default function PrivacyPage() {
 
       <h2>Con quién se comparten</h2>
       <ul>
+        <li>Mercado Pago procesa los cobros. Recibe el email indicado y una referencia de la contratación. Guardamos importes, fechas, estado e identificadores del pago para verificar tu acceso; no guardamos números de tarjeta ni códigos de seguridad.</li>
         <li>Resend, que envía los emails (tu dirección y el contenido de la alerta).</li>
         <li>Telegram, si elegís recibir alertas por ahí.</li>
         <li>

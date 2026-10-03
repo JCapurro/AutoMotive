@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { DeleteAccount } from "@/components/app/delete-account";
+import { BillingStatus } from "@/components/app/billing-status";
 import { RenewalButton } from "@/components/app/renewal-button";
 import { ProCtaButton } from "@/components/app/pro-cta";
 import { ChannelsForm, FrequencyForm, LocationForm, TelegramLink } from "@/components/app/settings-forms";
@@ -19,7 +20,7 @@ export default async function SettingsPage() {
   const user = await requireUser();
   const cfg = await webConfig();
   const supabase = await createClient();
-  const [{ data: profile }, { data: waitlist }, { data: rawAccess }, { data: payments }, { data: declines }] = await Promise.all([
+  const [{ data: profile }, { data: waitlist }, { data: rawAccess }, { data: payments }, { data: declines }, { data: subscriptions }] = await Promise.all([
     supabase
       .from("profiles")
       .select("email, plan, telegram_chat_id, telegram_link_code, default_channels, default_notification_frequency, default_origin_label")
@@ -28,6 +29,7 @@ export default async function SettingsPage() {
     supabase.rpc("my_plan_limits"),
     supabase.from("commercial_payments").select("id,offer,amount,currency,period_start,period_end,refunded_at").order("verified_at", { ascending: false }).limit(10),
     supabase.from("events").select("props").eq("name", "renewal_declined").order("created_at", { ascending: false }).limit(10),
+    supabase.from("billing_checkouts").select("id,offer,amount,status,init_point,next_payment_at,sync_error").eq("offer", "pro_monthly").order("created_at", { ascending: false }).limit(3),
   ]);
   const access = rawAccess as PlanLimits | null;
   const declined = (declines ?? []).some((d) => (d.props as { period_end?: string })?.period_end === access?.expires_at);
@@ -85,9 +87,11 @@ export default async function SettingsPage() {
           <CardContent className="space-y-3">
             {access ? <p className="text-sm">{PLAN_NAMES[access.plan]} · {access.active_searches ?? 0} búsquedas activas
               {access.enforced ? ` de ${access.limits.max_profiles ?? "sin límite"}` : ""}.</p> : null}
-            {access?.plan === "pro" && access.active ? <>
-              <p className="text-sm text-muted-foreground">Renovación manual por 30 días. No hay débitos automáticos.
+            {(subscriptions ?? []).map((checkout) => <BillingStatus key={checkout.id} checkout={checkout} />)}
+            {access?.plan === "pro" && access.active && !subscriptions?.length ? <>
+              <p className="text-sm text-muted-foreground">Tu acceso en S Auto se registró manualmente por 30 días.
                 Podés avisar que no vas a renovar; el período pagado sigue vigente.</p>
+              <p className="text-sm text-muted-foreground">Si contrataste con un enlace de suscripción de Mercado Pago, cancelalo también desde tu cuenta de Mercado Pago. Este aviso por sí solo no detiene sus cobros.</p>
               <RenewalButton declined={declined} />
             </> : null}
             {access?.state === "expired" ? <p className="text-sm text-muted-foreground">Después de activar un plan, reanudá las búsquedas que quieras seguir desde sus resultados.</p> : null}

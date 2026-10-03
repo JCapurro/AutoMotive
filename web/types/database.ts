@@ -1,10 +1,18 @@
 
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
 
+type BillingCheckoutRow = { id: string; user_id: string; offer: string; offer_version: string; amount: number; currency: string; billing_email: string; status: string; provider_id: string | null; init_point: string | null; created_at: string; last_synced_at: string | null; sync_error: string | null; next_payment_at: string | null }
+
 export type Database = {
 
   "public": {
           Tables: {
+            billing_checkouts: {
+              Row: BillingCheckoutRow
+              Insert: Pick<BillingCheckoutRow, 'user_id' | 'offer' | 'offer_version' | 'amount' | 'billing_email'> & Partial<BillingCheckoutRow>
+              Update: Partial<BillingCheckoutRow>
+              Relationships: []
+            },
             "app_config": {
                   Row: {
                     "key": string,"updated_at": string,"value": NonNullable<Json>
@@ -51,13 +59,13 @@ isOneToOne: false
                   ]
                 },"commercial_payments": {
                   Row: {
-                    "amount": number,"currency": string,"id": number,"note": string | null,"offer": string,"offer_version": string,"paid_at": string,"period_end": string,"period_start": string,"provider": string,"reference": string,"refund_reference": string | null,"refunded_at": string | null,"refunded_by": string | null,"user_id": string,"verified_at": string,"verified_by": string | null
+                    "checkout_id": string | null,"amount": number,"currency": string,"id": number,"note": string | null,"offer": string,"offer_version": string,"paid_at": string,"period_end": string,"period_start": string,"provider": string,"reference": string,"refund_reference": string | null,"refunded_at": string | null,"refunded_by": string | null,"user_id": string,"verified_at": string,"verified_by": string | null
                   }
                   Insert: {
-                    "amount": number,"currency": string,"id"?: never,"note"?: string | null,"offer": string,"offer_version": string,"paid_at": string,"period_end": string,"period_start": string,"provider": string,"reference": string,"refund_reference"?: string | null,"refunded_at"?: string | null,"refunded_by"?: string | null,"user_id": string,"verified_at"?: string,"verified_by"?: string | null
+                    "checkout_id"?: string | null,"amount": number,"currency": string,"id"?: never,"note"?: string | null,"offer": string,"offer_version": string,"paid_at": string,"period_end": string,"period_start": string,"provider": string,"reference": string,"refund_reference"?: string | null,"refunded_at"?: string | null,"refunded_by"?: string | null,"user_id": string,"verified_at"?: string,"verified_by"?: string | null
                   }
                   Update: {
-                    "amount"?: number,"currency"?: string,"id"?: never,"note"?: string | null,"offer"?: string,"offer_version"?: string,"paid_at"?: string,"period_end"?: string,"period_start"?: string,"provider"?: string,"reference"?: string,"refund_reference"?: string | null,"refunded_at"?: string | null,"refunded_by"?: string | null,"user_id"?: string,"verified_at"?: string,"verified_by"?: string | null
+                    "checkout_id"?: string | null,"amount"?: number,"currency"?: string,"id"?: never,"note"?: string | null,"offer"?: string,"offer_version"?: string,"paid_at"?: string,"period_end"?: string,"period_start"?: string,"provider"?: string,"reference"?: string,"refund_reference"?: string | null,"refunded_at"?: string | null,"refunded_by"?: string | null,"user_id"?: string,"verified_at"?: string,"verified_by"?: string | null
                   }
                   Relationships: [
                     {
@@ -1000,6 +1008,8 @@ isOneToOne: false
                 }
           }
           Functions: {
+            begin_billing_checkout: { Args: { p_user: string; p_offer: string; p_email: string; p_version: string; p_expected_amount: number }; Returns: Json },
+            apply_mercadopago_payment: { Args: { p_checkout: string; p_reference: string; p_status: string; p_amount: number; p_currency: string; p_paid_at: string; p_start: string; p_end: string }; Returns: number },
             "commercial_access_active":
 { Args: { "p_user": string }; Returns: boolean
                            },

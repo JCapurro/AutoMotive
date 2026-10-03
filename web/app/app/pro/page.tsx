@@ -2,6 +2,7 @@ import { Check } from "lucide-react";
 import type { Metadata } from "next";
 
 import { ProPlans } from "@/components/app/pro-plans";
+import { BillingStatus } from "@/components/app/billing-status";
 import { requireUser } from "@/lib/auth";
 import { webConfig } from "@/lib/config";
 import { isPlacement, isWaitlistPlan, PRO_BENEFITS } from "@/lib/pro";
@@ -9,14 +10,14 @@ import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = { title: "Planes" };
 
-// §52 / sección 9: the plans screen. No charge yet: it measures intent with the waitlist.
 export default async function ProPage({ searchParams }: PageProps<"/app/pro">) {
-  await requireUser();
+  const user = await requireUser();
   const { from, plan } = await searchParams;
   const supabase = await createClient();
-  const [{ data: waitlist }, cfg] = await Promise.all([
+  const [{ data: waitlist }, cfg, { data: checkouts }] = await Promise.all([
     supabase.from("pro_waitlist").select("plan").maybeSingle(),
     webConfig(),
+    supabase.from("billing_checkouts").select("id,offer,amount,status,init_point,next_payment_at,sync_error").order("created_at", { ascending: false }).limit(3),
   ]);
 
   return (
@@ -26,7 +27,7 @@ export default async function ProPage({ searchParams }: PageProps<"/app/pro">) {
         <h1 className="text-2xl font-semibold tracking-tight">Elegí cuánto querés buscar</h1>
         <p className="text-muted-foreground">
           Particular acompaña la compra de tu próximo auto. Agencia sirve para buscar vehículos habitualmente.
-          {cfg.commercialPilot ? " Coordinamos el pago y verificamos cada alta durante este piloto." : " Las altas pagas todavía están en lista de espera."}
+          {cfg.automaticPayments ? " Pagás en Mercado Pago y activamos tu acceso al confirmar el pago." : cfg.commercialPilot ? " Coordinamos el pago y verificamos cada alta durante este piloto." : " Las altas pagas todavía están en lista de espera."}
         </p>
       </header>
 
@@ -52,7 +53,10 @@ export default async function ProPage({ searchParams }: PageProps<"/app/pro">) {
         recommended={isWaitlistPlan(plan) ? plan : undefined}
         placement={isPlacement(from) ? from : "plans"}
         pilot={cfg.commercialPilot}
+        automatic={cfg.automaticPayments}
+        email={user.email ?? ""}
       />
+      {(checkouts ?? []).map((checkout) => <BillingStatus key={checkout.id} checkout={checkout} />)}
       <p className="text-sm text-muted-foreground">Cada modelo guardado cuenta como una búsqueda; pausar libera capacidad.
         Hasta 10 avisos inmediatos de nuevas coincidencias por día y cuenta; los restantes van al resumen.
         Las bajas de precio de favoritos pueden avisarse de inmediato mientras tu acceso siga vigente.

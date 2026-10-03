@@ -1,0 +1,3 @@
+{
+  "crons": [{ "path": "/api/mercadopago/reconcile", "schedule": "0 9 * * *" }]
+}
