@@ -33,3 +33,7 @@ backups/
 .vercel
 .env*
 !.env.example
+
+# Fotos de avisos de terceros (Kavak, Autocosmos…) para los prototipos de design/variants:
+# copias locales, no se versionan.
+design/variants/img/
