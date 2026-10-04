@@ -3,7 +3,15 @@ export const googleAnalyticsId = process.env.NEXT_PUBLIC_GA4_ID ?? "";
 
 export const GA_CONSENT_COOKIE = "analytics_consent";
 
-export type AnalyticsParams = Record<string, string | number | boolean | undefined>;
+export type AnalyticsValue =
+  | string
+  | number
+  | boolean
+  | undefined
+  | AnalyticsValue[]
+  | { [key: string]: AnalyticsValue };
+
+export type AnalyticsParams = Record<string, AnalyticsValue>;
 
 /** Send a GA4 event without allowing analytics failures to affect the product. */
 export function analyticsEvent(name: string, params?: AnalyticsParams): void {
