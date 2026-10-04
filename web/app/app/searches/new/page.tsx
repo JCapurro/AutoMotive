@@ -47,10 +47,10 @@ export default async function NewSearchPage() {
       </div>
       <Tabs defaultValue="assisted">
         <TabsList>
-          <TabsTrigger value="structured">Estructurado</TabsTrigger>
           <TabsTrigger value="assisted">
             <Sparkles aria-hidden /> Asistido
           </TabsTrigger>
+          <TabsTrigger value="structured">Estructurado</TabsTrigger>
         </TabsList>
         <TabsContent value="structured" className="pt-3">
           <SearchForm
