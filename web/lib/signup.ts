@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { track } from "@/lib/events";
+import { queuePixel } from "@/lib/meta-pixel-server";
 import type { Database } from "@/types/database";
 
 /**
@@ -18,5 +19,7 @@ export async function afterSignIn(supabase: SupabaseClient<Database>): Promise<v
     .from("events")
     .select("id", { count: "exact", head: true })
     .eq("name", "signup_completed");
-  if (!count) await track(supabase, userId, "signup_completed", { method: "email" });
+  if (count) return;
+  await track(supabase, userId, "signup_completed", { method: "email" });
+  await queuePixel("CompleteRegistration", { content_name: "email" }, `signup:${userId}`);
 }

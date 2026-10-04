@@ -17,7 +17,7 @@ export default async function ProPage({ searchParams }: PageProps<"/app/pro">) {
   const [{ data: waitlist }, cfg, { data: checkouts }] = await Promise.all([
     supabase.from("pro_waitlist").select("plan").maybeSingle(),
     webConfig(),
-    supabase.from("billing_checkouts").select("id,offer,amount,status,init_point,next_payment_at,sync_error").order("created_at", { ascending: false }).limit(3),
+    supabase.from("billing_checkouts").select("id,offer,amount,status,init_point,next_payment_at,sync_error,created_at").order("created_at", { ascending: false }).limit(3),
   ]);
 
   return (

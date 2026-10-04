@@ -29,7 +29,7 @@ export default async function SettingsPage() {
     supabase.rpc("my_plan_limits"),
     supabase.from("commercial_payments").select("id,offer,amount,currency,period_start,period_end,refunded_at").order("verified_at", { ascending: false }).limit(10),
     supabase.from("events").select("props").eq("name", "renewal_declined").order("created_at", { ascending: false }).limit(10),
-    supabase.from("billing_checkouts").select("id,offer,amount,status,init_point,next_payment_at,sync_error").eq("offer", "pro_monthly").order("created_at", { ascending: false }).limit(3),
+    supabase.from("billing_checkouts").select("id,offer,amount,status,init_point,next_payment_at,sync_error,created_at").eq("offer", "pro_monthly").order("created_at", { ascending: false }).limit(3),
   ]);
   const access = rawAccess as PlanLimits | null;
   const declined = (declines ?? []).some((d) => (d.props as { period_end?: string })?.period_end === access?.expires_at);

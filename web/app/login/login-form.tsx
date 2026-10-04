@@ -1,18 +1,23 @@
 "use client";
 
 import { MailCheck } from "lucide-react";
-import { useActionState } from "react";
+import { useActionState, useEffect } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { pixel } from "@/lib/meta-pixel";
 
 import { type LoginState, sendMagicLink, verifyCode } from "./actions";
 
 export function LoginForm({ next, linkError, mailbox = "" }: { next: string; linkError: boolean; mailbox?: string }) {
   const [sent, send, sending] = useActionState(sendMagicLink, { step: "email", next } satisfies LoginState);
   const [checked, verify, verifying] = useActionState(verifyCode, { step: "code", next } satisfies LoginState);
+  // Asked for the sign-in link: new and returning accounts alike (CompleteRegistration tells them apart).
+  useEffect(() => {
+    if (sent.step === "code") pixel("Lead");
+  }, [sent]);
 
   if (sent.step === "code") {
     const codeError = checked.email === sent.email ? checked.error : undefined;

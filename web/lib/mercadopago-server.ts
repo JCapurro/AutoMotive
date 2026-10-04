@@ -1,5 +1,6 @@
 import "server-only";
 import { z } from "zod";
+import { type AdAttribution, sendPurchase } from "@/lib/meta-capi";
 import { checkoutUrl, paymentPeriod } from "@/lib/mercadopago";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Database } from "@/types/database";
@@ -45,7 +46,7 @@ async function saveCheckout(id: string, update: Database["public"]["Tables"]["bi
   if (error) throw new Error("billing_database_error");
 }
 
-export async function createCheckout(userId: string, offer: "pass_30" | "pro_monthly", email: string, version: string, amount: number) {
+export async function createCheckout(userId: string, offer: "pass_30" | "pro_monthly", email: string, version: string, amount: number, attribution?: AdAttribution) {
   if (!paymentsEnabled()) throw new Error("payments_not_configured");
   const { data, error } = await createAdminClient().rpc("begin_billing_checkout", { p_user: userId, p_offer: offer, p_email: email, p_version: version, p_expected_amount: amount });
   if (error) throw new Error(error.message.includes("offer_changed") ? "offer_changed" : error.message.includes("paid_plan_already_active") ? "paid_plan_already_active" : error.message.includes("checkout_already_open") ? "checkout_already_open" : "billing_database_error");
@@ -61,6 +62,7 @@ export async function createCheckout(userId: string, offer: "pass_30" | "pro_mon
     return url;
   }
   if (!checkout.new) throw new Error("checkout_in_progress");
+  if (attribution) await saveCheckout(checkout.id, { ad_attribution: attribution });
   const site = new URL(process.env.SITE_URL!);
   const back = new URL("/app/pro?payment=returned", site).href;
   try {
@@ -127,11 +129,13 @@ async function applyPayment(raw: unknown, checkout: BillingCheckout, debitDate?:
   if (payment.status === "approved" && !payment.date_approved) throw new Error("invalid_payment_date");
   const paidAt = payment.date_approved ?? payment.date_created;
   const period = paymentPeriod(debitDate ?? paidAt, checkout.offer === "pro_monthly");
-  const { error } = await createAdminClient().rpc("apply_mercadopago_payment", {
+  const { data: paymentRow, error } = await createAdminClient().rpc("apply_mercadopago_payment", {
     p_checkout: checkout.id, p_reference: payment.id, p_status: payment.status, p_amount: payment.transaction_amount,
     p_currency: payment.currency_id, p_paid_at: paidAt, p_start: period.start, p_end: period.end,
   });
   if (error) throw new Error("payment_database_error");
+  // A refund before the first notification still returns a row: only approvals are purchases.
+  if (payment.status === "approved" && paymentRow != null) await sendPurchase({ paymentId: Number(paymentRow), checkout, paidAt });
 }
 async function invoicePayment(raw: unknown, knownCheckout?: BillingCheckout, knownPayment?: unknown) {
   const invoice = invoiceSchema.parse(raw);

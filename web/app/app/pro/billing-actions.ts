@@ -2,6 +2,7 @@
 import { refresh } from "next/cache";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth";
+import { readAttribution } from "@/lib/meta-capi";
 import { createCheckout, cancelSubscription, syncCheckout } from "@/lib/mercadopago-server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -9,7 +10,7 @@ export async function startPayment(offer: string, email: string, accepted: boole
   const user = await requireUser();
   const input = z.object({ offer: z.enum(["pass_30", "pro_monthly"]), email: z.email().max(254), accepted: z.literal(true), version: z.string().min(1).max(80), amount: z.number().int().positive() }).safeParse({ offer, email, accepted, version, amount });
   if (!input.success) return { error: "Revisá el email y aceptá las condiciones del plan." };
-  try { return { url: await createCheckout(user.id, input.data.offer, input.data.email, input.data.version, input.data.amount) }; }
+  try { return { url: await createCheckout(user.id, input.data.offer, input.data.email, input.data.version, input.data.amount, await readAttribution()) }; }
   catch (error) {
     const message = error instanceof Error ? error.message : "";
     return { error: message === "offer_changed" ? "La oferta cambió. Actualizá la página y revisá el precio antes de pagar." : message === "paid_plan_already_active" ? "Ya tenés un plan pago vigente." : message === "checkout_already_open" || message === "checkout_in_progress" ? "Ya tenés una contratación en curso. Revisala abajo antes de iniciar otra." : "No pudimos iniciar el cobro. Revisá el estado de la contratación; si sigue pendiente, contactanos antes de volver a pagar." };

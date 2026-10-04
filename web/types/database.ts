@@ -1,7 +1,7 @@
 
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
 
-type BillingCheckoutRow = { id: string; user_id: string; offer: string; offer_version: string; amount: number; currency: string; billing_email: string; status: string; provider_id: string | null; init_point: string | null; created_at: string; last_synced_at: string | null; sync_error: string | null; next_payment_at: string | null }
+type BillingCheckoutRow = { id: string; user_id: string; offer: string; offer_version: string; amount: number; currency: string; billing_email: string; status: string; provider_id: string | null; init_point: string | null; created_at: string; last_synced_at: string | null; sync_error: string | null; next_payment_at: string | null; ad_attribution: Json | null }
 
 export type Database = {
 
@@ -59,13 +59,13 @@ isOneToOne: false
                   ]
                 },"commercial_payments": {
                   Row: {
-                    "checkout_id": string | null,"amount": number,"currency": string,"id": number,"note": string | null,"offer": string,"offer_version": string,"paid_at": string,"period_end": string,"period_start": string,"provider": string,"reference": string,"refund_reference": string | null,"refunded_at": string | null,"refunded_by": string | null,"user_id": string,"verified_at": string,"verified_by": string | null
+                    "checkout_id": string | null,"amount": number,"currency": string,"id": number,"note": string | null,"offer": string,"offer_version": string,"paid_at": string,"period_end": string,"period_start": string,"provider": string,"reference": string,"refund_reference": string | null,"refunded_at": string | null,"refunded_by": string | null,"meta_sent_at": string | null,"user_id": string,"verified_at": string,"verified_by": string | null
                   }
                   Insert: {
-                    "checkout_id"?: string | null,"amount": number,"currency": string,"id"?: never,"note"?: string | null,"offer": string,"offer_version": string,"paid_at": string,"period_end": string,"period_start": string,"provider": string,"reference": string,"refund_reference"?: string | null,"refunded_at"?: string | null,"refunded_by"?: string | null,"user_id": string,"verified_at"?: string,"verified_by"?: string | null
+                    "checkout_id"?: string | null,"amount": number,"currency": string,"id"?: never,"note"?: string | null,"offer": string,"offer_version": string,"paid_at": string,"period_end": string,"period_start": string,"provider": string,"reference": string,"refund_reference"?: string | null,"refunded_at"?: string | null,"refunded_by"?: string | null,"meta_sent_at"?: string | null,"user_id": string,"verified_at"?: string,"verified_by"?: string | null
                   }
                   Update: {
-                    "checkout_id"?: string | null,"amount"?: number,"currency"?: string,"id"?: never,"note"?: string | null,"offer"?: string,"offer_version"?: string,"paid_at"?: string,"period_end"?: string,"period_start"?: string,"provider"?: string,"reference"?: string,"refund_reference"?: string | null,"refunded_at"?: string | null,"refunded_by"?: string | null,"user_id"?: string,"verified_at"?: string,"verified_by"?: string | null
+                    "checkout_id"?: string | null,"amount"?: number,"currency"?: string,"id"?: never,"note"?: string | null,"offer"?: string,"offer_version"?: string,"paid_at"?: string,"period_end"?: string,"period_start"?: string,"provider"?: string,"reference"?: string,"refund_reference"?: string | null,"refunded_at"?: string | null,"refunded_by"?: string | null,"meta_sent_at"?: string | null,"user_id"?: string,"verified_at"?: string,"verified_by"?: string | null
                   }
                   Relationships: [
                     {

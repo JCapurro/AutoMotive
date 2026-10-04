@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { Contact, LegalPage } from "@/components/legal-page";
+import { ConsentSettings } from "@/components/meta-pixel";
 import { contactEmail } from "@/lib/env";
 
 export const metadata: Metadata = { title: "Política de privacidad" };
@@ -10,7 +11,7 @@ export const metadata: Metadata = { title: "Política de privacidad" };
 // before a public launch.
 export default function PrivacyPage() {
   return (
-    <LegalPage title="Política de privacidad" updated="28 de septiembre de 2026">
+    <LegalPage title="Política de privacidad" updated="3 de octubre de 2026">
       <p>
         Ese Auto es un servicio en etapa de piloto que monitorea publicaciones de autos usados y te avisa cuando
         aparece una que coincide con tu búsqueda. Esta política explica qué datos tuyos usamos, para qué y cómo
@@ -47,8 +48,9 @@ export default function PrivacyPage() {
 
       <h2>Para qué</h2>
       <p>
-        Solo para prestarte el servicio: buscar, avisarte, mostrarte los resultados y mejorar cómo los priorizamos.
-        No vendemos ni cedemos tus datos, no mostramos publicidad y nunca contactamos a un vendedor en tu nombre.
+        Para prestarte el servicio: buscar, avisarte, mostrarte los resultados y mejorar cómo los priorizamos. Y
+        para medir los anuncios con los que te llegamos (ver Cookies). No vendemos tus datos, no mostramos publicidad
+        dentro del sitio y nunca contactamos a un vendedor en tu nombre.
       </p>
 
       <h2>Con quién se comparten</h2>
@@ -56,6 +58,10 @@ export default function PrivacyPage() {
         <li>Mercado Pago procesa los cobros. Recibe el email indicado y una referencia de la contratación. Guardamos importes, fechas, estado e identificadores del pago para verificar tu acceso; no guardamos números de tarjeta ni códigos de seguridad.</li>
         <li>Resend, que envía los emails (tu dirección y el contenido de la alerta).</li>
         <li>Telegram, si elegís recibir alertas por ahí.</li>
+        <li>
+          Meta (Facebook e Instagram), solo si aceptás sus cookies: las páginas que visitás acá y las acciones que
+          medimos (ver Cookies), sin tu email ni el contenido de tus búsquedas.
+        </li>
         <li>
           Anthropic (Claude), que interpreta el texto del modo asistido. Solo recibe ese texto, sin tu email ni otros
           datos de tu cuenta.
@@ -69,7 +75,16 @@ export default function PrivacyPage() {
       </p>
 
       <h2>Cookies</h2>
-      <p>Usamos únicamente las cookies necesarias para mantener tu sesión iniciada. No usamos cookies de terceros.</p>
+      <p>
+        Usamos cookies propias para mantener tu sesión iniciada. Si las aceptás en el aviso de cookies, también usamos
+        el Pixel de Meta (Facebook e Instagram), que guarda cookies de Meta para medir si nuestros anuncios
+        funcionan: registra las páginas que visitás acá y acciones como pedir el link para entrar, crear la cuenta,
+        crear una búsqueda, guardar una publicación o contratar un plan. Cuando un pago se aprueba, se lo informamos
+        a Meta desde nuestro servidor con el plan, el importe, un identificador cifrado de tu cuenta, tu dirección IP,
+        tu navegador y los identificadores de esas cookies. No le mandamos tu email, tus búsquedas ni otros datos de
+        tu cuenta. Si las rechazás, no cargamos el Pixel ni le informamos nada a Meta.
+      </p>
+      <ConsentSettings />
 
       <h2>Tus derechos</h2>
       <p>

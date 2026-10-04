@@ -7,6 +7,7 @@ import { ASSISTED_MAX_CHARS, ASSISTED_MIN_CHARS, ASSISTED_WORKER_STALE_MS } from
 import { requireUser } from "@/lib/auth";
 import type { Frequency } from "@/lib/copy";
 import { track } from "@/lib/events";
+import { queuePixel } from "@/lib/meta-pixel-server";
 import { SearchInput, type SearchValues, matchingChanged, toColumns, toFilters } from "@/lib/search-form";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -110,6 +111,10 @@ export async function saveSearch(id: number | null, raw: SearchInput, origin?: S
       profile_id: data.id,
       ...(origin ? { llm_job_id: origin.jobId, edited: origin.edited } : {}),
     });
+    // The free trial's 72 hours start with the first active search (/app/pro).
+    const { count } = await supabase.from("search_profiles").select("id", { count: "exact", head: true });
+    if (count === 1) await queuePixel("StartTrial", { content_name: "first_search" }, `trial:${user.id}`);
+    await queuePixel("SearchCreated", { mode: origin?.mode ?? "structured" }, `search:${data.id}`);
     if (origin?.stay) return { savedId: data.id };
     redirect(`/app/searches/${data.id}`);
   }

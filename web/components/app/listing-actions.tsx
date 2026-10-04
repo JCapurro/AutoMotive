@@ -12,6 +12,7 @@ import {
   setStatus,
 } from "@/app/app/listings/actions";
 import { Button } from "@/components/ui/button";
+import { pixel } from "@/lib/meta-pixel";
 import {
   Dialog,
   DialogContent,
@@ -90,7 +91,10 @@ export function ListingActions(props: Props) {
           variant="outline"
           aria-pressed={saved}
           disabled={pending}
-          onClick={() => run(() => setSaved(listingId, !saved), saved ? "Quitada de guardados" : "Guardada: te avisamos si cambia")}
+          onClick={() => {
+            if (!saved) pixel("AddToWishlist", { content_ids: [String(listingId)], content_type: "product" });
+            run(() => setSaved(listingId, !saved), saved ? "Quitada de guardados" : "Guardada: te avisamos si cambia");
+          }}
         >
           {saved ? <BookmarkCheck aria-hidden className="text-amber-600" /> : <Bookmark aria-hidden />}
           {saved ? "Guardada" : "Guardar"}

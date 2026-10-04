@@ -1,16 +1,18 @@
 "use client";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { checkPayment, stopSubscription } from "@/app/app/pro/billing-actions";
 import { Button } from "@/components/ui/button";
+import { pixel } from "@/lib/meta-pixel";
 import { accessDate, PLAN_COPY, planPrice } from "@/lib/pro";
 
 const STATUS: Record<string, string> = { creating: "Preparando contratación", pending: "Esperando confirmación", authorized: "Suscripción autorizada", paused: "Suscripción pausada", cancelled: "Suscripción cancelada", paid: "Pago aprobado", failed: "Contratación rechazada" };
-export function BillingStatus({ checkout }: { checkout: { id: string; offer: string; amount: number; status: string; init_point: string | null; next_payment_at: string | null; sync_error: string | null } }) {
+export function BillingStatus({ checkout }: { checkout: { id: string; offer: string; amount: number; status: string; init_point: string | null; next_payment_at: string | null; sync_error: string | null; created_at: string } }) {
   const [pending, start] = useTransition();
   const [confirm, setConfirm] = useState(false);
   const monthly = checkout.offer === "pro_monthly";
   const cancellable = monthly && ["creating", "pending", "authorized", "paused"].includes(checkout.status);
+  usePurchasePixel(checkout);
   return <section className="space-y-3 rounded-xl border bg-card p-5 text-sm" aria-label="Estado de contratación">
     <h2 className="font-semibold">{monthly ? PLAN_COPY.pro_monthly.name : PLAN_COPY.pass_30.name} · {STATUS[checkout.status] ?? "Verificación pendiente"}</h2>
     <p>{planPrice(checkout.amount)} ARS {monthly ? "por mes" : "por 30 días, pago único"}.</p>
@@ -29,4 +31,22 @@ export function BillingStatus({ checkout }: { checkout: { id: string; offer: str
       <Button variant="outline" disabled={pending} onClick={() => setConfirm(false)}>Volver</Button>
     </div> : null}
   </section>;
+}
+
+/**
+ * Purchase for the ads pixel, once per approved checkout on this browser: the
+ * webhook confirms the payment server-side, so the browser fires it when the
+ * user sees it approved. Old checkouts (e.g. a new device) don't count.
+ */
+function usePurchasePixel(checkout: { id: string; offer: string; amount: number; status: string; created_at: string }) {
+  const approved = checkout.status === "paid" || checkout.status === "authorized";
+  useEffect(() => {
+    if (!approved || Date.now() - new Date(checkout.created_at).getTime() > 7 * 86_400_000) return;
+    const key = `px_purchase:${checkout.id}`;
+    try {
+      if (localStorage.getItem(key)) return;
+      localStorage.setItem(key, "1");
+    } catch {}
+    pixel("Purchase", { content_ids: [checkout.offer], value: checkout.amount, currency: "ARS" }, `purchase:${checkout.id}`);
+  }, [approved, checkout.id, checkout.offer, checkout.amount, checkout.created_at]);
 }

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { joinWaitlist } from "@/app/app/pro/actions";
 import { startPayment } from "@/app/app/pro/billing-actions";
 import { Button } from "@/components/ui/button";
+import { pixel } from "@/lib/meta-pixel";
 import { PLAN_COPY, planPrice, type Placement, type ProOffer, WAITLIST_PLANS, type WaitlistPlan } from "@/lib/pro";
 import { cn } from "@/lib/utils";
 export function ProPlans({ offer, current, placement, pilot = false, recommended, automatic = false, email = "" }: {
@@ -22,7 +23,10 @@ export function ProPlans({ offer, current, placement, pilot = false, recommended
         if (automatic) {
           const result = await startPayment(plan, billingEmail.trim(), accepted, offer.version, offer[plan].amount);
           if (result.error) toast.error(result.error);
-          else if (result.url) window.location.assign(result.url);
+          else if (result.url) {
+            pixel("InitiateCheckout", { content_ids: [plan], value: offer[plan].amount, currency: offer[plan].currency });
+            window.location.assign(result.url);
+          }
           return;
         }
         const res = await joinWaitlist(plan, placement);

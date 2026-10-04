@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Archivo, Geist_Mono } from "next/font/google";
 
+import { MetaPixel } from "@/components/meta-pixel";
 import { Toaster } from "@/components/ui/sonner";
 import { siteUrl } from "@/lib/env";
 
@@ -40,6 +41,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="flex min-h-full flex-col">
         {children}
         <Toaster position="top-center" richColors closeButton />
+        <MetaPixel />
       </body>
     </html>
   );
