@@ -6,7 +6,6 @@ import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import type { Frequency } from "@/lib/copy";
 import { track } from "@/lib/events";
-import { placeById } from "@/lib/locations";
 import { createClient } from "@/lib/supabase/server";
 
 const CHANNELS = ["telegram", "email", "web"] as const;
@@ -32,23 +31,6 @@ export async function saveFrequency(frequency: Frequency): Promise<void> {
   if (error) throw new Error(error.message);
   await supabase.from("search_profiles").update({ notification_frequency: frequency }).eq("user_id", user.id);
   await track(supabase, user.id, "notification_frequency_updated", { frequency });
-  refresh();
-}
-
-/** Where new searches are centered by default ("" clears it). */
-export async function saveDefaultLocation(placeId: string): Promise<void> {
-  const user = await requireUser();
-  const place = placeById(placeId);
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("profiles")
-    .update({
-      default_origin_lat: place?.lat ?? null,
-      default_origin_lon: place?.lon ?? null,
-      default_origin_label: place?.label ?? null,
-    })
-    .eq("id", user.id);
-  if (error) throw new Error(error.message);
   refresh();
 }
 

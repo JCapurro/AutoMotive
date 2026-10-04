@@ -15,7 +15,7 @@ export const metadata: Metadata = { title: "Nueva búsqueda" };
 export default async function NewSearchPage() {
   await requireUser();
   const supabase = await createClient();
-  const { catalog, sources, defaultOrigin, defaultFrequency } = await loadFormData(supabase);
+  const { catalog, sources, defaultFrequency } = await loadFormData(supabase);
 
   const initial: SearchValues = {
     name: "",
@@ -31,7 +31,7 @@ export default async function NewSearchPage() {
     transmission: "",
     fuel: "",
     sources: sources.map((s) => s.id),
-    location: defaultOrigin ? { ...defaultOrigin, radius_km: 30 } : null,
+    location: null,
     km_target: null,
     price_target: null,
     seller_type: "",
@@ -58,11 +58,10 @@ export default async function NewSearchPage() {
             sources={sources}
             initial={initial}
             profileId={null}
-            defaultOrigin={defaultOrigin}
           />
         </TabsContent>
         <TabsContent value="assisted" className="pt-3">
-          <AssistedSearch catalog={catalog} sources={sources} base={initial} defaultOrigin={defaultOrigin} />
+          <AssistedSearch catalog={catalog} sources={sources} base={initial} />
         </TabsContent>
       </Tabs>
     </div>

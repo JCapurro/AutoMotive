@@ -24,8 +24,9 @@ export default function PrivacyPage() {
           alertas.
         </li>
         <li>
-          <strong>Tus búsquedas</strong>: vehículo, filtros, preferencias y, si la cargás, una zona o ciudad de
-          referencia para el radio de búsqueda. No usamos la ubicación de tu dispositivo.
+          <strong>Tus búsquedas</strong>: vehículo, filtros, preferencias y un punto de referencia para el radio de
+          búsqueda: una zona o ciudad que elijas o, si nos das permiso, la ubicación de tu dispositivo al crear la
+          búsqueda, redondeada a alrededor de 1 km. No seguimos tu ubicación después.
         </li>
         <li>
           <strong>Tu cuenta de Telegram</strong>, solo si la vinculás: el identificador del chat, para mandarte las

@@ -7,7 +7,6 @@ import { toast } from "sonner";
 
 import {
   saveChannels,
-  saveDefaultLocation,
   saveFrequency,
   telegramLinked,
   unlinkTelegram,
@@ -17,7 +16,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { FREQUENCY, type Frequency } from "@/lib/copy";
-import { AMBA, PLACES } from "@/lib/locations";
 
 function useSave() {
   const [pending, start] = useTransition();
@@ -158,31 +156,6 @@ export function FrequencyForm({ value }: { value: Frequency }) {
         ))}
       </NativeSelect>
       <p className="text-xs text-muted-foreground">Se aplica a todas tus búsquedas; después podés cambiarla en cada una.</p>
-    </div>
-  );
-}
-
-export function LocationForm({ label }: { label: string | null }) {
-  const [pending, save] = useSave();
-  const current = [AMBA, ...PLACES].find((p) => p.label === label)?.id ?? "";
-  return (
-    <div className="space-y-1.5">
-      <Label htmlFor="default_location">Ubicación por defecto</Label>
-      <NativeSelect
-        id="default_location"
-        value={current}
-        disabled={pending}
-        onChange={(e) => save(() => saveDefaultLocation(e.target.value))}
-      >
-        <NativeSelectOption value="">Sin ubicación (todo el país)</NativeSelectOption>
-        <NativeSelectOption value={AMBA.id}>AMBA</NativeSelectOption>
-        {PLACES.map((p) => (
-          <NativeSelectOption key={p.id} value={p.id}>
-            {p.label}
-          </NativeSelectOption>
-        ))}
-      </NativeSelect>
-      <p className="text-xs text-muted-foreground">La usamos como punto de partida en cada búsqueda nueva.</p>
     </div>
   );
 }

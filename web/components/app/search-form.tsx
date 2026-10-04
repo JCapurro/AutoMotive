@@ -1,7 +1,7 @@
 "use client";
 
 import { Info, Loader2, LocateFixed } from "lucide-react";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 import { type Preview, type SaveOrigin, previewSearch, saveSearch } from "@/app/app/searches/actions";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -19,7 +19,6 @@ import { type SearchInput, type SearchValues, defaultName } from "@/lib/search-f
 import { cn } from "@/lib/utils";
 
 type Source = { id: string; name: string };
-type Origin = { label: string; lat: number; lon: number } | null;
 
 type Draft = {
   name: string;
@@ -36,7 +35,7 @@ type Draft = {
   transmission: "" | "manual" | "automatic";
   fuel: string;
   sources: string[];
-  place: string; // "" (todo el país) | "amba" | a PLACES id | "default" | "current" | "saved"
+  place: string; // "" (todo el país) | "amba" | a PLACES id | "current" | "saved"
   radius: string;
   current: { lat: number; lon: number } | null;
   saved: { label: string; lat: number; lon: number } | null;
@@ -53,13 +52,13 @@ function amount(text: string): number | null {
   return digits ? Number(digits) : null;
 }
 
-function draftFrom(v: SearchValues, defaultOrigin: Origin): Draft {
-  let place = "";
+/** A new search without a zone starts at the device's location (asked on mount). */
+function draftFrom(v: SearchValues, isNew: boolean): Draft {
+  let place = isNew ? "current" : "";
   let saved: Draft["saved"] = null;
   if (v.location) {
     const preset = placeByLabel(v.location.label);
     if (preset && preset.lat === v.location.lat && preset.lon === v.location.lon) place = preset.id;
-    else if (defaultOrigin && defaultOrigin.lat === v.location.lat && defaultOrigin.lon === v.location.lon) place = "default";
     else {
       place = "saved";
       saved = { label: v.location.label, lat: v.location.lat, lon: v.location.lon };
@@ -81,7 +80,7 @@ function draftFrom(v: SearchValues, defaultOrigin: Origin): Draft {
     fuel: v.fuel,
     sources: v.sources,
     place,
-    radius: v.location ? String(v.location.radius_km) : "",
+    radius: v.location ? String(v.location.radius_km) : isNew ? "30" : "",
     current: null,
     saved,
     km_target: v.km_target != null ? number(v.km_target) : "",
@@ -92,17 +91,16 @@ function draftFrom(v: SearchValues, defaultOrigin: Origin): Draft {
   };
 }
 
-function location(d: Draft, defaultOrigin: Origin): SearchInput["location"] {
+function location(d: Draft): SearchInput["location"] {
   const radius = Number(d.radius.replace(",", "."));
   const radius_km = Number.isFinite(radius) && radius > 0 ? radius : 30;
-  if (d.place === "default" && defaultOrigin) return { ...defaultOrigin, radius_km };
   if (d.place === "current" && d.current) return { label: "Mi ubicación", ...d.current, radius_km };
   if (d.place === "saved" && d.saved) return { ...d.saved, radius_km };
   const preset = placeById(d.place);
   return preset ? { label: preset.label, lat: preset.lat, lon: preset.lon, radius_km } : null;
 }
 
-function toInput(d: Draft, defaultOrigin: Origin): SearchInput {
+function toInput(d: Draft): SearchInput {
   return {
     name: d.nameTouched ? d.name : "",
     make: d.make,
@@ -117,7 +115,7 @@ function toInput(d: Draft, defaultOrigin: Origin): SearchInput {
     transmission: d.transmission,
     fuel: d.fuel,
     sources: d.sources,
-    location: location(d, defaultOrigin),
+    location: location(d),
     km_target: amount(d.km_target),
     price_target: amount(d.price_target),
     seller_type: d.seller_type,
@@ -133,7 +131,6 @@ export function SearchForm({
   sources,
   initial,
   profileId,
-  defaultOrigin,
   idPrefix,
   notes,
   origin,
@@ -143,7 +140,6 @@ export function SearchForm({
   sources: Source[];
   initial: SearchValues;
   profileId: number | null;
-  defaultOrigin: Origin;
   /** Several forms on one page (modo asistido) need distinct element ids. */
   idPrefix?: string;
   /** What the assisted parse couldn't settle, shown above the fields. */
@@ -153,9 +149,12 @@ export function SearchForm({
   onSaved?: (id: number) => void;
 }) {
   const fid = (key: string) => (idPrefix ? `${idPrefix}-${key}` : key);
-  const [d, setDraft] = useState<Draft>(() => draftFrom(initial, defaultOrigin));
+  const isNew = profileId == null && !initial.location;
+  const [d, setDraft] = useState<Draft>(() => draftFrom(initial, isNew));
   // The proposal as it arrived, to record whether the user corrected it.
-  const [pristine] = useState(() => JSON.stringify(toInput(draftFrom(initial, defaultOrigin), defaultOrigin)));
+  const [pristine] = useState(() => JSON.stringify(toInput(draftFrom(initial, isNew))));
+  // Until the user picks a zone, the location filled in on mount isn't a correction.
+  const placeTouched = useRef(false);
   const [errors, setErrors] = useState<{ error?: string; fields?: Record<string, string> }>({});
   const [saving, startSaving] = useTransition();
   // Tagged with the input it answers, so a stale count never shows for other filters.
@@ -175,7 +174,7 @@ export function SearchForm({
   const fuels = entry?.fuels.length ? entry.fuels : Object.keys(FUEL);
   const autoName = defaultName({ make: d.make, model: d.model, trim: d.trim });
 
-  const input = useMemo(() => toInput(d, defaultOrigin), [d, defaultOrigin]);
+  const input = useMemo(() => toInput(d), [d]);
   const previewKey = JSON.stringify({ ...input, name: "", notification_frequency: "", notify_min_level: "" });
 
   useEffect(() => {
@@ -201,6 +200,7 @@ export function SearchForm({
   }
 
   function choosePlace(place: string) {
+    placeTouched.current = true;
     const preset = placeById(place);
     setDraft((prev) => ({
       ...prev,
@@ -211,26 +211,38 @@ export function SearchForm({
   }
 
   function locate() {
-    if (!("geolocation" in navigator)) return;
+    const failed = () => {
+      setLocating(false);
+      // Only fall back if the user is still waiting on "current": they may have picked a zone meanwhile.
+      setDraft((prev) => (prev.place === "current" ? { ...prev, place: prev.current ? "current" : "" } : prev));
+      setErrors({ fields: { location: "No pudimos leer tu ubicación. Elegí una zona de la lista." } });
+    };
+    if (!("geolocation" in navigator)) return failed();
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        setDraft((prev) => ({
-          ...prev,
-          place: "current",
-          current: { lat: pos.coords.latitude, lon: pos.coords.longitude },
-          radius: prev.radius || "30",
-        }));
+        // ~1 km is plenty for a radius filter and avoids storing an exact address.
+        const round = (n: number) => Math.round(n * 100) / 100;
+        setDraft((prev) =>
+          prev.place === "current"
+            ? {
+                ...prev,
+                current: { lat: round(pos.coords.latitude), lon: round(pos.coords.longitude) },
+                radius: prev.radius || "30",
+              }
+            : prev,
+        );
         setLocating(false);
       },
-      () => {
-        setLocating(false);
-        setDraft((prev) => ({ ...prev, place: prev.current ? "current" : "" }));
-        setErrors({ fields: { location: "No pudimos leer tu ubicación. Elegí una zona de la lista." } });
-      },
+      failed,
       { enableHighAccuracy: false, timeout: 10_000 },
     );
   }
+
+  useEffect(() => {
+    if (isNew) locate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, when a new search opens
+  }, []);
 
   function toggleSource(id: string, on: boolean) {
     setDraft((prev) => ({
@@ -246,7 +258,15 @@ export function SearchForm({
       const result = await saveSearch(
         profileId,
         input,
-        origin ? { ...origin, edited: JSON.stringify(input) !== pristine } : undefined,
+        origin
+          ? {
+              ...origin,
+              edited:
+                JSON.stringify(
+                  placeTouched.current || d.place !== "current" ? input : { ...input, location: initial.location },
+                ) !== pristine,
+            }
+          : undefined,
       );
       if (result?.error) setErrors(result);
       else if (result?.savedId != null) onSaved?.(result.savedId);
@@ -436,9 +456,6 @@ export function SearchForm({
               <NativeSelect id={fid("place")} value={d.place} onChange={(e) => choosePlace(e.target.value)} className="w-full">
                 <NativeSelectOption value="">Todo el país</NativeSelectOption>
                 <NativeSelectOption value={AMBA.id}>AMBA (CABA y 60 km)</NativeSelectOption>
-                {defaultOrigin ? (
-                  <NativeSelectOption value="default">Mi ubicación guardada: {defaultOrigin.label}</NativeSelectOption>
-                ) : null}
                 {d.saved ? <NativeSelectOption value="saved">{d.saved.label}</NativeSelectOption> : null}
                 <NativeSelectOption value="current">Mi ubicación actual</NativeSelectOption>
                 {PLACES.map((p) => (
@@ -573,7 +590,7 @@ export function SearchForm({
             {errors.error}
           </p>
         ) : null}
-        <Button type="submit" className="h-11 w-full text-base" disabled={saving}>
+        <Button type="submit" className="h-11 w-full text-base" disabled={saving || locating}>
           {saving ? <Loader2 className="animate-spin" aria-hidden /> : null}
           {profileId ? "Guardar cambios" : "Crear búsqueda"}
         </Button>

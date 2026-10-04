@@ -30,7 +30,6 @@ import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
 type Source = { id: string; name: string };
-type Origin = { label: string; lat: number; lon: number } | null;
 
 type Reviewed = {
   title: string;
@@ -68,12 +67,10 @@ export function AssistedSearch({
   catalog,
   sources,
   base,
-  defaultOrigin,
 }: {
   catalog: Catalog;
   sources: Source[];
   base: SearchValues;
-  defaultOrigin: Origin;
 }) {
   const [text, setText] = useState("");
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
@@ -282,7 +279,6 @@ export function AssistedSearch({
                   sources={sources}
                   initial={d.values}
                   profileId={null}
-                  defaultOrigin={defaultOrigin}
                   idPrefix={single ? undefined : `draft-${i}`}
                   notes={d.notes}
                   origin={{ mode: "assisted", jobId: phase.jobId, stay: !single }}
@@ -319,7 +315,6 @@ export function AssistedSearch({
           sources={sources}
           initial={base}
           profileId={null}
-          defaultOrigin={defaultOrigin}
           origin={{ mode: "assisted_fallback", jobId: phase.jobId, stay: false }}
         />
       </div>

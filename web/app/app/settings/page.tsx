@@ -5,7 +5,7 @@ import { DeleteAccount } from "@/components/app/delete-account";
 import { BillingStatus } from "@/components/app/billing-status";
 import { RenewalButton } from "@/components/app/renewal-button";
 import { ProCtaButton } from "@/components/app/pro-cta";
-import { ChannelsForm, FrequencyForm, LocationForm, TelegramLink } from "@/components/app/settings-forms";
+import { ChannelsForm, FrequencyForm, TelegramLink } from "@/components/app/settings-forms";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireUser } from "@/lib/auth";
@@ -23,7 +23,7 @@ export default async function SettingsPage() {
   const [{ data: profile }, { data: waitlist }, { data: rawAccess }, { data: payments }, { data: declines }, { data: subscriptions }] = await Promise.all([
     supabase
       .from("profiles")
-      .select("email, plan, telegram_chat_id, telegram_link_code, default_channels, default_notification_frequency, default_origin_label")
+      .select("email, plan, telegram_chat_id, telegram_link_code, default_channels, default_notification_frequency")
       .single(),
     supabase.from("pro_waitlist").select("plan").maybeSingle(),
     supabase.rpc("my_plan_limits"),
@@ -73,7 +73,6 @@ export default async function SettingsPage() {
         </CardHeader>
         <CardContent className="grid gap-5 sm:grid-cols-2">
           <FrequencyForm value={profile?.default_notification_frequency ?? "immediate"} />
-          <LocationForm label={profile?.default_origin_label ?? null} />
         </CardContent>
       </Card>
 
