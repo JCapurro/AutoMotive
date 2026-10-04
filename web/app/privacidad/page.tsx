@@ -74,7 +74,7 @@ export default function PrivacyPage() {
         queda un registro anónimo de que una cuenta se dio de baja.
       </p>
 
-      <h2>Cookies</h2>
+      <h2 id="cookies">Cookies</h2>
       <p>
         Usamos cookies propias para mantener tu sesión iniciada. Si las aceptás en el aviso de cookies, también usamos
         el Pixel de Meta (Facebook e Instagram), que guarda cookies de Meta para medir si nuestros anuncios

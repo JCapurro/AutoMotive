@@ -110,21 +110,27 @@ fbq('consent','grant');fbq('init','${metaPixelId}');fbq('track','PageView');`}
 function ConsentBanner() {
   return (
     <section
-      aria-label="Cookies"
+      aria-labelledby="cookie-banner-title"
       className="fixed inset-x-4 bottom-4 z-50 mx-auto max-w-xl rounded-xl border bg-background p-4 text-sm shadow-lg"
     >
-      <p>
-        Usamos cookies de Meta para saber si nuestros anuncios funcionan. No le pasamos tu email ni tus búsquedas.{" "}
-        <Link href="/privacidad" className="underline underline-offset-2">
-          Más info
+      <h2 id="cookie-banner-title" className="font-semibold">
+        Uso de cookies
+      </h2>
+      <p className="mt-1 text-muted-foreground">
+        Utilizamos cookies propias y de terceros para el funcionamiento del sitio, analizar su uso y medir la
+        efectividad de nuestras campañas publicitarias. Podés aceptar todas las cookies o rechazar las que no son
+        necesarias. Para más información, consultá nuestra{" "}
+        <Link href="/privacidad#cookies" className="text-foreground underline underline-offset-2">
+          Política de privacidad
         </Link>
+        .
       </p>
-      <div className="mt-3 flex justify-end gap-2">
+      <div className="mt-3 flex flex-wrap justify-end gap-2">
         <Button variant="outline" size="sm" onClick={() => setConsent("denied")}>
           Rechazar
         </Button>
         <Button size="sm" onClick={() => setConsent("granted")}>
-          Aceptar
+          Aceptar todas
         </Button>
       </div>
     </section>
