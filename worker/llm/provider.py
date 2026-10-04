@@ -6,6 +6,7 @@ sees it (§44). Providers:
 
     claude_cli  `claude -p` on the worker's host, for development (llm/claude_cli.py)
     anthropic   the Claude API with an API key, for the pilot's users (llm/anthropic_api.py)
+    openai      OpenAI Responses API, Luna by default (llm/openai_api.py)
     local       an OpenAI-compatible local server, for the launch (llm/local.py)
 
 `LLM_PROVIDER` picks one (config.py).
@@ -65,4 +66,8 @@ def build_provider(name: str | None = None) -> LLMProvider:
         from llm.anthropic_api import AnthropicApiProvider
         return AnthropicApiProvider(api_key=config.ANTHROPIC_API_KEY, model=config.ANTHROPIC_MODEL,
                                     timeout=config.LLM_TIMEOUT_SECONDS)
-    raise ValueError(f"LLM_PROVIDER desconocido: {name!r} (claude_cli | anthropic | local)")
+    if name == "openai":
+        from llm.openai_api import OpenAIApiProvider
+        return OpenAIApiProvider(api_key=config.OPENAI_API_KEY, model=config.OPENAI_MODEL,
+                                timeout=config.LLM_TIMEOUT_SECONDS)
+    raise ValueError(f"LLM_PROVIDER desconocido: {name!r} (openai | claude_cli | anthropic | local)")

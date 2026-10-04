@@ -45,7 +45,7 @@ export default async function NewSearchPage() {
         <h1 className="text-xl font-semibold tracking-tight">Nueva búsqueda</h1>
         <p className="text-sm text-muted-foreground">Decinos qué auto estás buscando. Ese Auto monitorea por vos.</p>
       </div>
-      <Tabs defaultValue="structured">
+      <Tabs defaultValue="assisted">
         <TabsList>
           <TabsTrigger value="structured">Estructurado</TabsTrigger>
           <TabsTrigger value="assisted">

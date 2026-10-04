@@ -19,6 +19,9 @@ class ConfigTests(unittest.TestCase):
             self.assertEqual(config.ENRICH_TICK_SECONDS, 300)
             self.assertEqual(config.WATCHLIST_TICK_SECONDS, 3600)
             self.assertFalse(hasattr(config, "ALERT_RESCRAPE_INTERVAL_SECONDS"))
+            self.assertEqual(config.LLM_PROVIDER, "openai")
+            self.assertEqual(config.OPENAI_MODEL, "gpt-6-luna")
+            self.assertEqual(config.OPENAI_API_KEY, "")
         finally:
             sys.modules.pop("config", None)
             if original_config is not None:
@@ -72,5 +75,7 @@ class StartupWarningsTests(unittest.TestCase):
         self.assertIn("suscripción", self.warnings(LLM_PROVIDER="claude_cli")[0])
         self.assertIn("CLAUDE_CLI_PATH", self.warnings(found=False, LLM_PROVIDER="claude_cli")[1])
         self.assertIn("ANTHROPIC_API_KEY", self.warnings(ANTHROPIC_API_KEY="")[0])
+        self.assertIn("OPENAI_API_KEY", self.warnings(LLM_PROVIDER="openai", OPENAI_API_KEY="")[0])
+        self.assertEqual(self.warnings(LLM_PROVIDER="openai", OPENAI_API_KEY="sk-x"), [])
         self.assertIn("stub", self.warnings(LLM_PROVIDER="local")[0])
         self.assertIn("radio", self.warnings(GEOCODING_ENABLED=False)[0])

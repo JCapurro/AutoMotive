@@ -29,7 +29,7 @@ worker/       bot de Telegram, collectors, pipeline (Python, raíz de imports)
   intelligence/   matching, comparables, scoring, levels, red_flags, seller_questions (puros)
   pipeline/       crawl (targets + cadencia), ingest (upsert/snapshots/eventos),
                   enrich, watchlist, rematch, scoring, rescore, llm_jobs, scheduler (loop + alertas de Telegram)
-  llm/            capa LLM (modo asistido): LLMProvider, claude_cli (claude -p), anthropic_api (API key), local (stub), schemas, prompts
+  llm/            capa LLM (modo asistido): LLMProvider, openai_api (Luna), claude_cli, anthropic_api, local (stub), schemas, prompts
   bot/            Telegram: /start <código> (vinculación) y botones de las alertas
   db/             psycopg 3 (pool async) + repos por tabla
   tools/          scraper_cli, migrate_sqlite, explain_match, rematch, simulate_alert, llm_jobs, record_llm,
@@ -255,11 +255,15 @@ update public.profiles set role = 'admin' where email = 'vos@ejemplo.com';
 
 ### Modo asistido (LLM)
 
-La pestaña **Asistido** de `/app/searches/new` escribe el texto en `llm_jobs`;
-el worker lo interpreta con `claude -p` (`LLM_PROVIDER=claude_cli`, ver
+La pestaña **Asistido**, predeterminada en `/app/searches/new`, escribe el texto en `llm_jobs`;
+el worker lo interpreta con GPT-6 Luna (`LLM_PROVIDER=openai`, ver
 `.env.example`), normaliza los borradores contra `vehicle_catalog` y la web
 muestra un formulario editable por vehículo. Si el LLM falla o tarda más de
-60 s, la web cae al formulario estructurado vacío. Con `claude_cli` el host del
+60 s, la web cae al formulario estructurado vacío. Para activarlo, completar
+`OPENAI_API_KEY` en el `.env` de la raíz y reiniciar el worker. El modelo es
+`OPENAI_MODEL=gpt-6-luna`; usa Responses con JSON Schema estricto y reasoning
+`none`. La clave sólo la lee el worker. Ver [configuración de Luna](docs/LUNA.md).
+Con `claude_cli` el host del
 worker necesita Claude Code instalado y logueado (en Windows, `CLAUDE_CLI_PATH`
 con la ruta a `claude.exe`) y usa esa suscripción; para los usuarios del piloto,
 `LLM_PROVIDER=anthropic` usa la API de Claude con `ANTHROPIC_API_KEY` (Haiku 4.5
@@ -267,8 +271,7 @@ por defecto, `ANTHROPIC_MODEL`), mismo prompt, mismo esquema y mismos tests de c
 
 ```powershell
 cd worker
-python -m tools.record_llm --text "Busco Fiesta Titanium 2017"  # probar una frase contra claude -p
-python -m tools.record_llm            # regrabar las 20 frases doradas (tras cambiar un prompt o schema)
+python -m tools.check_llm             # comprobar configuración, sin llamadas API ni base de datos
 ```
 
 ### Correr la web

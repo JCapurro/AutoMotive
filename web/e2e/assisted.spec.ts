@@ -43,6 +43,8 @@ async function signIn(page: Page, email: string) {
   await expect(page.getByText("Revisá tu email")).toBeVisible();
   await page.goto(await magicLink(email, since));
   await expect(page).toHaveURL(/\/app\/searches\/new$/);
+  await expect(page.getByRole("tab", { name: "Asistido" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByLabel("¿Qué auto buscás?")).toBeVisible();
 }
 
 /** Nothing sticks out sideways (the review screen at 375 px included). */
@@ -52,7 +54,6 @@ async function expectNoHorizontalScroll(page: Page) {
 }
 
 async function ask(page: Page, text: string) {
-  await page.getByRole("tab", { name: "Asistido" }).click();
   await page.getByLabel("¿Qué auto buscás?").fill(text);
   await page.getByRole("button", { name: "Interpretar" }).click();
   // The job is in the table once the page waits for it.

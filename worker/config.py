@@ -61,10 +61,11 @@ WEB_BASE_URL = os.getenv("WEB_BASE_URL", "").strip().rstrip("/")
 # also this often (retries, rows queued by other loops).
 NOTIFY_TICK_SECONDS = int(os.getenv("NOTIFY_TICK_SECONDS", "60"))
 
-# LLM layer (sección 8): the assisted mode's parser. `claude_cli` runs
-# `claude -p` on this host (Claude Code installed and logged in); `local` is an
-# OpenAI-compatible server (Ollama, llama.cpp) for the launch.
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "claude_cli").strip().lower()
+# LLM layer (sección 8): OpenAI Luna for the assisted parser; the Claude
+# providers remain available. `local` is an OpenAI-compatible server stub.
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai").strip().lower()
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-6-luna").strip()
 # Empty: `claude` from PATH. On Windows point it at claude.exe (a .cmd shim
 # can't run without a shell).
 CLAUDE_CLI_PATH = os.getenv("CLAUDE_CLI_PATH", "").strip()
@@ -77,7 +78,7 @@ ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-haiku-4-5").strip()
 LOCAL_LLM_BASE_URL = os.getenv("LOCAL_LLM_BASE_URL", "http://127.0.0.1:11434/v1").strip()
 LOCAL_LLM_MODEL = os.getenv("LOCAL_LLM_MODEL", "").strip()
 # How often an idle llm_jobs loop looks for queued jobs, and how many jobs run
-# at once (each one is a `claude -p` process).
+# at once (API calls, or `claude -p` processes for the CLI provider).
 LLM_POLL_SECONDS = float(os.getenv("LLM_POLL_SECONDS", "2"))
 LLM_CONCURRENCY = int(os.getenv("LLM_CONCURRENCY", "1"))
 
@@ -110,13 +111,16 @@ def startup_warnings(env: dict | None = None, which=None) -> list[str]:
         out.append("alertas operativas desactivadas: falta TELEGRAM_ADMIN_CHAT_ID")
     if g["LLM_PROVIDER"] == "claude_cli":
         out.append("LLM_PROVIDER=claude_cli usa tu suscripción de Claude Code: para usuarios del piloto, "
-                   "LLM_PROVIDER=anthropic con ANTHROPIC_API_KEY")
+                   "LLM_PROVIDER=openai con OPENAI_API_KEY o anthropic con ANTHROPIC_API_KEY")
         if not which(g["CLAUDE_CLI_PATH"] or "claude"):
             out.append("no se encontró el CLI de Claude Code (CLAUDE_CLI_PATH): "
                        "el modo asistido cae siempre al formulario")
     elif g["LLM_PROVIDER"] == "anthropic":
         if not g.get("ANTHROPIC_API_KEY"):
             out.append("LLM_PROVIDER=anthropic sin ANTHROPIC_API_KEY: el modo asistido cae siempre al formulario")
+    elif g["LLM_PROVIDER"] == "openai":
+        if not g.get("OPENAI_API_KEY"):
+            out.append("LLM_PROVIDER=openai sin OPENAI_API_KEY: el modo asistido cae siempre al formulario")
     elif g["LLM_PROVIDER"] == "local":
         out.append("LLM_PROVIDER=local todavía es un stub: el modo asistido cae siempre al formulario")
     if not g["GEOCODING_ENABLED"]:

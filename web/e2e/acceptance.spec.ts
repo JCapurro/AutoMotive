@@ -76,6 +76,7 @@ test("F4: registro, búsqueda, backfill, alerta, Me interesa y compra", async ({
 
   let profileId = 0;
   await test.step("2. creación de la búsqueda estructurada con preview", async () => {
+    await page.getByRole("tab", { name: "Estructurado" }).click();
     await expectNoHorizontalScroll(page);
     await page.getByLabel("Marca").selectOption("Ford");
     await page.getByLabel("Modelo").selectOption("Fiesta");
