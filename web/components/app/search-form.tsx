@@ -15,6 +15,7 @@ import type { Catalog } from "@/lib/catalog";
 import { FREQUENCY, FUEL, MIN_LEVEL_OPTIONS, SELLER, TRANSMISSION } from "@/lib/copy";
 import { km, money, number, vehicle } from "@/lib/format";
 import { AMBA, PLACES, placeById, placeByLabel } from "@/lib/locations";
+import { currentLocationLabel } from "@/lib/current-location";
 import { type SearchInput, type SearchValues, defaultName } from "@/lib/search-form";
 import { cn } from "@/lib/utils";
 import { analyticsEvent } from "@/lib/google-analytics";
@@ -38,7 +39,7 @@ type Draft = {
   sources: string[];
   place: string; // "" (todo el país) | "amba" | a PLACES id | "current" | "saved"
   radius: string;
-  current: { lat: number; lon: number } | null;
+  current: { label: string; lat: number; lon: number } | null;
   saved: { label: string; lat: number; lon: number } | null;
   km_target: string;
   price_target: string;
@@ -95,7 +96,7 @@ function draftFrom(v: SearchValues, isNew: boolean): Draft {
 function location(d: Draft): SearchInput["location"] {
   const radius = Number(d.radius.replace(",", "."));
   const radius_km = Number.isFinite(radius) && radius > 0 ? radius : 30;
-  if (d.place === "current" && d.current) return { label: "Mi ubicación", ...d.current, radius_km };
+  if (d.place === "current" && d.current) return { ...d.current, radius_km };
   if (d.place === "saved" && d.saved) return { ...d.saved, radius_km };
   const preset = placeById(d.place);
   return preset ? { label: preset.label, lat: preset.lat, lon: preset.lon, radius_km } : null;
@@ -221,14 +222,17 @@ export function SearchForm({
     if (!("geolocation" in navigator)) return failed();
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
+      async (pos) => {
         // ~1 km is plenty for a radius filter and avoids storing an exact address.
         const round = (n: number) => Math.round(n * 100) / 100;
+        const lat = round(pos.coords.latitude);
+        const lon = round(pos.coords.longitude);
+        const label = await currentLocationLabel(lat, lon);
         setDraft((prev) =>
           prev.place === "current"
             ? {
                 ...prev,
-                current: { lat: round(pos.coords.latitude), lon: round(pos.coords.longitude) },
+                current: { label: label ?? "Mi ubicación actual", lat, lon },
                 radius: prev.radius || "30",
               }
             : prev,
@@ -481,9 +485,16 @@ export function SearchForm({
                 {locating
                   ? "Leyendo tu ubicación…"
                   : d.current
-                    ? `Ubicación leída (${d.current.lat.toFixed(3)}, ${d.current.lon.toFixed(3)}).`
+                    ? d.current.label === "Mi ubicación actual"
+                      ? "Ubicación detectada. No pudimos obtener el nombre del lugar."
+                      : `Tu ubicación: ${d.current.label}.`
                     : "Permití el acceso a tu ubicación."}
               </p>
+            ) : null}
+            {d.place === "current" && d.current && d.current.label !== "Mi ubicación actual" ? (
+              <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer" className="text-xs text-muted-foreground underline sm:col-span-2">
+                © OpenStreetMap
+              </a>
             ) : null}
           </CardContent>
         </Card>
