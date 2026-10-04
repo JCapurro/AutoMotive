@@ -62,6 +62,7 @@ export default function PrivacyPage() {
           Meta (Facebook e Instagram), solo si aceptás sus cookies: las páginas que visitás acá y las acciones que
           medimos (ver Cookies), sin tu email ni el contenido de tus búsquedas.
         </li>
+        <li>Google Analytics 4, solo si aceptás las cookies de análisis: páginas visitadas y eventos de uso como búsquedas, favoritos y contratación, sin el texto ni los filtros de tus búsquedas.</li>
         <li>
           Anthropic (Claude), que interpreta el texto del modo asistido. Solo recibe ese texto, sin tu email ni otros
           datos de tu cuenta.
@@ -77,9 +78,9 @@ export default function PrivacyPage() {
       <h2 id="cookies">Cookies</h2>
       <p>
         Usamos cookies propias para mantener tu sesión iniciada. Si las aceptás en el aviso de cookies, también usamos
-        el Pixel de Meta (Facebook e Instagram), que guarda cookies de Meta para medir si nuestros anuncios
-        funcionan: registra las páginas que visitás acá y acciones como pedir el link para entrar, crear la cuenta,
-        crear una búsqueda, guardar una publicación o contratar un plan. Cuando un pago se aprueba, se lo informamos
+        Google Analytics 4 para medir visitas y acciones de uso, y el Pixel de Meta (Facebook e Instagram) para medir si nuestros anuncios
+        funcionan: registra las páginas que visitás acá y acciones como crear la cuenta,
+        crear una búsqueda, guardar una publicación o iniciar la contratación de un plan. Google Analytics no recibe el texto ni los filtros de tus búsquedas. Cuando un pago se aprueba, se lo informamos
         a Meta desde nuestro servidor con el plan, el importe, un identificador cifrado de tu cuenta, tu dirección IP,
         tu navegador y los identificadores de esas cookies. No le mandamos tu email, tus búsquedas ni otros datos de
         tu cuenta. Mientras no las aceptes, o si las rechazás, el Pixel no le envía datos a Meta y tampoco le informamos los pagos.

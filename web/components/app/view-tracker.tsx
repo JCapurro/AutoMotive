@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 
 import { markSeen } from "@/app/app/listings/actions";
 import { pixel } from "@/lib/meta-pixel";
+import { analyticsEvent } from "@/lib/google-analytics";
 
 /** Opening a listing marks it "Visto" and logs listing_detail_viewed (after render, not during it). */
 export function ViewTracker({ listingId, notificationId }: { listingId: number; notificationId: number | null }) {
@@ -15,6 +16,7 @@ export function ViewTracker({ listingId, notificationId }: { listingId: number; 
     done.current = key;
     void markSeen(listingId, notificationId);
     pixel("ViewContent", { content_ids: [String(listingId)], content_type: "product" });
+    analyticsEvent("view_item", { item_id: String(listingId), content_type: "vehicle_listing" });
   }, [listingId, notificationId]);
   return null;
 }

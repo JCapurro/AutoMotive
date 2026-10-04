@@ -6,6 +6,7 @@ import { joinWaitlist } from "@/app/app/pro/actions";
 import { startPayment } from "@/app/app/pro/billing-actions";
 import { Button } from "@/components/ui/button";
 import { pixel } from "@/lib/meta-pixel";
+import { analyticsEvent } from "@/lib/google-analytics";
 import { PLAN_COPY, planPrice, type Placement, type ProOffer, WAITLIST_PLANS, type WaitlistPlan } from "@/lib/pro";
 import { cn } from "@/lib/utils";
 export function ProPlans({ offer, current, placement, pilot = false, recommended, automatic = false, email = "" }: {
@@ -25,6 +26,7 @@ export function ProPlans({ offer, current, placement, pilot = false, recommended
           if (result.error) toast.error(result.error);
           else if (result.url) {
             pixel("InitiateCheckout", { content_ids: [plan], value: offer[plan].amount, currency: offer[plan].currency });
+            analyticsEvent("begin_checkout", { currency: offer[plan].currency, value: offer[plan].amount, items: [{ item_id: plan, item_name: PLAN_COPY[plan].name }] });
             window.location.assign(result.url);
           }
           return;

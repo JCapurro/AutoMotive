@@ -13,6 +13,7 @@ import {
 } from "@/app/app/listings/actions";
 import { Button } from "@/components/ui/button";
 import { pixel } from "@/lib/meta-pixel";
+import { analyticsEvent } from "@/lib/google-analytics";
 import {
   Dialog,
   DialogContent,
@@ -92,7 +93,10 @@ export function ListingActions(props: Props) {
           aria-pressed={saved}
           disabled={pending}
           onClick={() => {
-            if (!saved) pixel("AddToWishlist", { content_ids: [String(listingId)], content_type: "product" });
+            if (!saved) {
+              pixel("AddToWishlist", { content_ids: [String(listingId)], content_type: "product" });
+              analyticsEvent("add_to_wishlist", { item_id: String(listingId) });
+            }
             run(() => setSaved(listingId, !saved), saved ? "Quitada de guardados" : "Guardada: te avisamos si cambia");
           }}
         >

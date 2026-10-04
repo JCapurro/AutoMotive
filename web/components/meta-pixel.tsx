@@ -6,6 +6,8 @@ import Script from "next/script";
 import { useEffect, useRef, useSyncExternalStore } from "react";
 
 import { Button } from "@/components/ui/button";
+import { googleAnalyticsId } from "@/lib/google-analytics";
+import { GA_CONSENT_COOKIE } from "@/lib/google-analytics";
 import { CONSENT_COOKIE, metaPixelId, pixel, PIXEL_QUEUE_COOKIE, type QueuedPixel } from "@/lib/meta-pixel";
 
 /** "Ver publicación": the web button and the alert redirect both leave the site through these. */
@@ -29,6 +31,9 @@ function setConsent(value: Consent) {
     ? `${CONSENT_COOKIE}=${value}; path=/; max-age=${365 * 86_400}; samesite=lax`
     : `${CONSENT_COOKIE}=; path=/; max-age=0`;
   if (value !== "granted") document.cookie = `${PIXEL_QUEUE_COOKIE}=; path=/; max-age=0`;
+  document.cookie = value === "granted"
+    ? `${GA_CONSENT_COOKIE}=granted; path=/; max-age=${365 * 86_400}; samesite=lax`
+    : `${GA_CONSENT_COOKIE}=; path=/; max-age=0; samesite=lax`;
   // Already loaded on this page: the snippet doesn't run twice, so switch it directly.
   (window as unknown as { fbq?: (...a: unknown[]) => void }).fbq?.("consent", value === "granted" ? "grant" : "revoke");
   window.dispatchEvent(new Event(CONSENT_EVENT));
@@ -36,7 +41,7 @@ function setConsent(value: Consent) {
 
 /** "Cambiar preferencias de cookies" in /privacidad: shows the banner again. */
 export function ConsentSettings() {
-  if (!metaPixelId) return null;
+  if (!metaPixelId && !googleAnalyticsId) return null;
   return (
     <Button variant="outline" size="sm" onClick={() => setConsent(null)}>
       Cambiar preferencias de cookies
@@ -97,7 +102,7 @@ export function MetaPixel() {
     return () => window.clearInterval(timer);
   }, [granted, pathname]);
 
-  if (!metaPixelId) return null;
+  if (!metaPixelId && !googleAnalyticsId) return null;
   return (
     <>
       <Script id="meta-pixel" strategy="afterInteractive">

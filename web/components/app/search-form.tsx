@@ -17,6 +17,7 @@ import { km, money, number, vehicle } from "@/lib/format";
 import { AMBA, PLACES, placeById, placeByLabel } from "@/lib/locations";
 import { type SearchInput, type SearchValues, defaultName } from "@/lib/search-form";
 import { cn } from "@/lib/utils";
+import { analyticsEvent } from "@/lib/google-analytics";
 
 type Source = { id: string; name: string };
 
@@ -269,7 +270,11 @@ export function SearchForm({
           : undefined,
       );
       if (result?.error) setErrors(result);
-      else if (result?.savedId != null) onSaved?.(result.savedId);
+      else if (result?.savedId != null) {
+        analyticsEvent("search", { search_type: "structured" });
+        analyticsEvent("search_created", { search_type: "structured" });
+        onSaved?.(result.savedId);
+      }
     });
   }
 
