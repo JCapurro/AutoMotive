@@ -82,7 +82,7 @@ export default function PrivacyPage() {
         crear una búsqueda, guardar una publicación o contratar un plan. Cuando un pago se aprueba, se lo informamos
         a Meta desde nuestro servidor con el plan, el importe, un identificador cifrado de tu cuenta, tu dirección IP,
         tu navegador y los identificadores de esas cookies. No le mandamos tu email, tus búsquedas ni otros datos de
-        tu cuenta. Si las rechazás, no cargamos el Pixel ni le informamos nada a Meta.
+        tu cuenta. Mientras no las aceptes, o si las rechazás, el Pixel no le envía datos a Meta y tampoco le informamos los pagos.
       </p>
       <ConsentSettings />
 

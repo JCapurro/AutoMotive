@@ -57,27 +57,25 @@ function flushQueue() {
 }
 
 /**
- * Meta Pixel base code, loaded only after the visitor accepts the banner. The
- * snippet's PageView covers the load; client navigations fire their own, since
- * the App Router never reloads the page.
+ * Meta Pixel base code, on every page. Until the visitor accepts the banner it
+ * runs with consent revoked (fbq('consent', 'revoke')): installed, but sending
+ * nothing. The snippet's PageView covers the load; client navigations fire
+ * their own, since the App Router never reloads the page.
  */
 export function MetaPixel() {
   const consent = useSyncExternalStore(subscribe, readConsent, () => "denied" as Consent);
-  const granted = Boolean(metaPixelId) && consent === "granted";
+  const granted = consent === "granted";
   const pathname = usePathname();
   const first = useRef(true);
 
   useEffect(() => {
-    if (!granted) return;
+    if (!metaPixelId) return;
     if (first.current) first.current = false;
     else pixel("PageView");
-    flushQueue();
-  }, [pathname, granted]);
+  }, [pathname]);
 
   useEffect(() => {
-    if (!granted) return;
-    // Server Actions that don't navigate (e.g. saving several searches on one page) still set the cookie.
-    const timer = window.setInterval(flushQueue, 2000);
+    if (!metaPixelId) return;
     const onClick = (e: MouseEvent) => {
       const a = (e.target as Element | null)?.closest?.("a");
       if (!a) return;
@@ -87,23 +85,31 @@ export function MetaPixel() {
       }
     };
     document.addEventListener("click", onClick, { capture: true });
-    return () => {
-      window.clearInterval(timer);
-      document.removeEventListener("click", onClick, { capture: true });
-    };
-  }, [granted]);
+    return () => document.removeEventListener("click", onClick, { capture: true });
+  }, []);
+
+  useEffect(() => {
+    // The server's queue waits for consent (the cookie lives 10 minutes).
+    if (!metaPixelId || !granted) return;
+    flushQueue();
+    // Server Actions that don't navigate (e.g. saving several searches on one page) still set the cookie.
+    const timer = window.setInterval(flushQueue, 2000);
+    return () => window.clearInterval(timer);
+  }, [granted, pathname]);
 
   if (!metaPixelId) return null;
-  if (consent === null) return <ConsentBanner />;
-  if (!granted) return null;
   return (
-    <Script id="meta-pixel" strategy="afterInteractive">
-      {`!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+    <>
+      <Script id="meta-pixel" strategy="afterInteractive">
+        {`!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
 n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
 n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];
 s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
-fbq('consent','grant');fbq('init','${metaPixelId}');fbq('track','PageView');`}
-    </Script>
+fbq('consent',/(^|; )${CONSENT_COOKIE}=granted/.test(document.cookie)?'grant':'revoke');
+fbq('init','${metaPixelId}');fbq('track','PageView');`}
+      </Script>
+      {consent === null ? <ConsentBanner /> : null}
+    </>
   );
 }
 
