@@ -1,114 +1,42 @@
 "use client";
 
-import { MailCheck } from "lucide-react";
+import Link from "next/link";
 import { useActionState, useEffect } from "react";
-
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { pixel } from "@/lib/meta-pixel";
+import { type AuthMode, type LoginState, authenticate, resendConfirmation } from "./actions";
 
-import { type LoginState, sendMagicLink, verifyCode } from "./actions";
-
-export function LoginForm({ next, linkError, mailbox = "" }: { next: string; linkError: boolean; mailbox?: string }) {
-  const [sent, send, sending] = useActionState(sendMagicLink, { step: "email", next } satisfies LoginState);
-  const [checked, verify, verifying] = useActionState(verifyCode, { step: "code", next } satisfies LoginState);
-  // Asked for the sign-in link: new and returning accounts alike (CompleteRegistration tells them apart).
-  useEffect(() => {
-    if (sent.step === "code") pixel("Lead");
-  }, [sent]);
-
-  if (sent.step === "code") {
-    const codeError = checked.email === sent.email ? checked.error : undefined;
-    return (
-      <div className="space-y-5">
-        <div className="flex gap-3 rounded-lg bg-muted p-4">
-          <MailCheck className="mt-0.5 size-5 shrink-0" aria-hidden />
-          <div className="space-y-1 text-sm">
-            <p className="font-medium">Revisá tu email</p>
-            <p className="text-muted-foreground">
-              Te mandamos un link a <span className="font-medium text-foreground">{sent.email}</span>. Abrilo desde
-              este dispositivo para entrar.
-            </p>
-            {mailbox ? (
-              <p className="text-muted-foreground" data-testid="local-mailbox">
-                Modo local: el email no sale a Internet, está en{" "}
-                <a href={mailbox} target="_blank" rel="noreferrer" className="font-medium text-foreground underline">
-                  Mailpit
-                </a>
-                .
-              </p>
-            ) : null}
-          </div>
-        </div>
-        <form action={verify} className="space-y-2">
-          <input type="hidden" name="email" value={sent.email} />
-          <input type="hidden" name="next" value={next} />
-          <Label htmlFor="code">¿Lo abriste en otro dispositivo? Ingresá el código del email</Label>
-          <div className="flex gap-2">
-            <Input
-              id="code"
-              name="code"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              maxLength={7}
-              placeholder="123456"
-              className="h-10 tracking-widest"
-            />
-            <Button type="submit" className="h-10" disabled={verifying}>
-              {verifying ? "Verificando…" : "Entrar"}
-            </Button>
-          </div>
-          {codeError ? (
-            <p role="alert" className="text-sm text-destructive">
-              {codeError}
-            </p>
-          ) : null}
-        </form>
-        <form action={send}>
-          <input type="hidden" name="email" value={sent.email} />
-          <input type="hidden" name="next" value={next} />
-          <Button type="submit" variant="link" className="h-auto p-0" disabled={sending}>
-            {sending ? "Reenviando…" : "Reenviar el link"}
-          </Button>
-        </form>
-      </div>
-    );
-  }
-
-  return (
-    <form action={send} className="space-y-4">
-      {linkError ? (
-        <Alert variant="destructive">
-          <AlertDescription>El link venció o ya se usó. Pedí uno nuevo.</AlertDescription>
-        </Alert>
-      ) : null}
+export function LoginForm({ next, linkError, mailbox = "", mode = "login", passwordUpdated = false }: {
+  next: string; linkError: boolean; mailbox?: string; mode?: AuthMode; passwordUpdated?: boolean;
+}) {
+  const [state, submit, pending] = useActionState(authenticate.bind(null, mode), { next } satisfies LoginState);
+  const [resent, resend, resending] = useActionState(resendConfirmation, { next } satisfies LoginState);
+  const href = (target: AuthMode) => `/login?mode=${target}&next=${encodeURIComponent(next)}`;
+  useEffect(() => { if (mode === "signup" && state.sent) pixel("Lead"); }, [mode, state.sent]);
+  return <div className="space-y-4">
+    {linkError ? <Alert variant="destructive"><AlertDescription>El link venció o ya se usó. Pedí un nuevo email.</AlertDescription></Alert> : null}
+    {passwordUpdated ? <Alert><AlertDescription>Contraseña actualizada. Ya podés ingresar.</AlertDescription></Alert> : null}
+    {state.sent ? <div className="space-y-4" role="status">
+      <p className="font-medium">Revisá tu email</p>
+      <p className="text-sm text-muted-foreground">{mode === "signup" ? "Si el registro puede completarse, recibirás un email para confirmar tu cuenta. Abrí el enlace antes de ingresar." : "Si existe una cuenta con ese email, recibirás un enlace para elegir una nueva contraseña."}</p>
+      {mailbox ? <p className="text-sm" data-testid="local-mailbox">El email local está en <a className="underline" href={mailbox} target="_blank" rel="noreferrer">Mailpit</a>.</p> : null}
+      {mode === "signup" ? <form action={resend} className="space-y-2">
+        <input type="hidden" name="email" value={state.email} /><input type="hidden" name="next" value={next} />
+        <Button variant="outline" disabled={resending}>{resending ? "Enviando…" : "Reenviar confirmación"}</Button>
+        {resent.error ? <p role="alert" className="text-sm text-destructive">{resent.error}</p> : null}
+        {resent.sent ? <p className="text-sm">Si tu cuenta está pendiente, recibirás una nueva confirmación.</p> : null}
+      </form> : null}
+    </div> : <form action={submit} className="space-y-4">
       <input type="hidden" name="next" value={next} />
-      <div className="space-y-2">
-        <Label htmlFor="email">Email</Label>
-        <Input
-          id="email"
-          name="email"
-          type="email"
-          autoComplete="email"
-          required
-          placeholder="vos@email.com"
-          defaultValue={sent.email}
-          className="h-10"
-        />
-      </div>
-      {sent.error ? (
-        <p role="alert" className="text-sm text-destructive">
-          {sent.error}
-        </p>
-      ) : null}
-      <Button type="submit" className="h-10 w-full" disabled={sending}>
-        {sending ? "Enviando…" : "Enviarme el link"}
-      </Button>
-      <p className="text-center text-xs text-muted-foreground">
-        Sin contraseñas: te mandamos un link para entrar. Si es tu primera vez, creamos tu cuenta.
-      </p>
-    </form>
-  );
+      <div className="space-y-2"><Label htmlFor="email">Email</Label><Input id="email" name="email" type="email" autoComplete="email" required placeholder="vos@email.com" defaultValue={state.email} className="h-10" /></div>
+      {mode !== "recover" ? <div className="space-y-2"><Label htmlFor="password">Contraseña</Label><Input id="password" name="password" type="password" autoComplete={mode === "signup" ? "new-password" : "current-password"} required minLength={mode === "signup" ? 8 : undefined} className="h-10" />{mode === "signup" ? <p className="text-xs text-muted-foreground">Al menos 8 caracteres.</p> : null}</div> : null}
+      {mode === "signup" ? <div className="space-y-2"><Label htmlFor="confirmPassword">Repetí la contraseña</Label><Input id="confirmPassword" name="confirmPassword" type="password" autoComplete="new-password" required minLength={8} className="h-10" /></div> : null}
+      {state.error ? <p role="alert" className="text-sm text-destructive">{state.error}</p> : null}
+      <Button className="h-10 w-full" disabled={pending}>{pending ? "Procesando…" : mode === "signup" ? "Crear cuenta" : mode === "recover" ? "Enviar recuperación" : "Ingresar"}</Button>
+    </form>}
+    <div className="flex flex-col gap-3 text-center text-sm">{mode === "login" ? <><Link className="underline" href={href("recover")}>Olvidé mi contraseña</Link><Link className="underline" href={href("signup")}>Crear cuenta</Link></> : <Link className="underline" href={href("login")}>Volver a ingresar</Link>}</div>
+  </div>;
 }

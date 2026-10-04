@@ -16,14 +16,15 @@ export async function GET(request: NextRequest) {
   const origin = requestOrigin(request);
   const tokenHash = searchParams.get("token_hash");
   const type = searchParams.get("type") as EmailOtpType | null;
-  const next = safeNext(searchParams.get("next"));
-  if (tokenHash && type) {
+  const recovery = type === "recovery";
+  const next = recovery ? "/auth/reset-password" : safeNext(searchParams.get("next"));
+  if (tokenHash && type && ["signup", "email", "recovery", "email_change", "invite", "magiclink"].includes(type)) {
     const supabase = await createClient();
     const { error } = await supabase.auth.verifyOtp({ type, token_hash: tokenHash });
     if (!error) {
-      await afterSignIn(supabase);
+      if (!recovery) await afterSignIn(supabase);
       return NextResponse.redirect(new URL(next, origin));
     }
   }
-  return NextResponse.redirect(new URL(`/login?error=link&next=${encodeURIComponent(next)}`, origin));
+  return NextResponse.redirect(new URL(`/login?error=link&mode=${recovery ? "recover" : "signup"}&next=${encodeURIComponent(next)}`, origin));
 }

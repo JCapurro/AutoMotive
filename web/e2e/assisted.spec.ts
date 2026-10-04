@@ -35,7 +35,11 @@ async function signIn(page: Page, email: string) {
   const since = new Date();
   await page.goto("/login?next=/app/searches/new");
   await page.getByLabel("Email").fill(email);
-  await page.getByRole("button", { name: "Enviarme el link" }).click();
+  await page.getByRole("link", { name: "Crear cuenta", exact: true }).click();
+  await page.getByLabel("Email", { exact: true }).fill(email);
+  await page.getByLabel("Contraseña", { exact: true }).fill("e2e-password-123");
+  await page.getByLabel("Repetí la contraseña").fill("e2e-password-123");
+  await page.getByRole("button", { name: "Crear cuenta", exact: true }).click();
   await expect(page.getByText("Revisá tu email")).toBeVisible();
   await page.goto(await magicLink(email, since));
   await expect(page).toHaveURL(/\/app\/searches\/new$/);

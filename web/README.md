@@ -9,8 +9,8 @@ comunican por tablas (plan técnico, sección 2).
 | Ruta | Qué hay |
 |---|---|
 | `/` | Landing del §50 |
-| `/login` | Email → magic link (o el código de 6 dígitos del mismo email) |
-| `/auth/callback`, `/auth/confirm` | Cierre del magic link (PKCE / token hash); registra `signup_completed` |
+| `/login` | Email + contraseña; creación de cuenta y recuperación por email |
+| `/auth/callback`, `/auth/confirm` | Confirmación / recuperación (PKCE o token hash); recuperación en `/auth/reset-password` |
 | `/app` | Dashboard del §28: búsquedas con "N nuevos esta semana · M oportunidades" y oportunidades recientes |
 | `/app/searches/new`, `/app/searches/[id]/edit` | Alta y edición estructurada, con preview "N publicaciones actuales coinciden" (`preview_search`) |
 | `/app/searches/[id]` | Resultados del §29: filtros, orden, pausar, frecuencia. Mientras el worker hace el backfill, la página se refresca sola |
@@ -44,7 +44,7 @@ npm run dev -- --hostname 127.0.0.1
 ```
 
 Usá `127.0.0.1:3000` (no `localhost`): es el `site_url` de Auth local y la
-cookie de sesión es por host. Los magic links locales llegan a Mailpit.
+cookie de sesión es por host. Los emails locales de confirmación y recuperación llegan a Mailpit. Configuración alojada: [AUTENTICACION.md](../docs/AUTENTICACION.md).
 
 Para ver resultados sin scrapear: `npm run e2e:seed` carga un mercado de Ford
 Fiesta de prueba; después de crear una búsqueda, `python -m tools.rematch`

@@ -3,7 +3,7 @@ import { MAILPIT_URL } from "./env";
 type Summary = { ID: string; To: { Address: string }[]; Created: string };
 
 /**
- * The magic link sent to `email` (local Supabase delivers to Mailpit).
+ * The confirmation or recovery link sent to `email` (local Supabase delivers to Mailpit).
  * Waits for a message newer than `since`.
  */
 export async function magicLink(email: string, since: Date, timeoutMs = 20_000): Promise<string> {
@@ -17,11 +17,11 @@ export async function magicLink(email: string, since: Date, timeoutMs = 20_000):
         .sort((a, b) => b.Created.localeCompare(a.Created))[0];
       if (latest) {
         const message = (await (await fetch(`${MAILPIT_URL}/api/v1/message/${latest.ID}`)).json()) as { HTML: string };
-        const href = message.HTML.match(/href="([^"]*\/auth\/v1\/verify[^"]*)"/)?.[1];
+        const href = message.HTML.match(/href="([^"]*\/auth\/(?:v1\/verify|confirm|callback)[^"]*)"/)?.[1];
         if (href) return href.replaceAll("&amp;", "&");
       }
     }
     await new Promise((r) => setTimeout(r, 500));
   }
-  throw new Error(`no magic link for ${email} in ${timeoutMs} ms`);
+  throw new Error(`no auth link for ${email} in ${timeoutMs} ms`);
 }

@@ -4,10 +4,12 @@ import { safeNext } from "@/lib/navigation";
 import { afterSignIn } from "@/lib/signup";
 import { createClient } from "@/lib/supabase/server";
 import { requestOrigin } from "@/lib/origin";
+import { GET as confirmEmail } from "../confirm/route";
 
-/** The magic link lands here with a PKCE code (sección 9, Auth). */
+/** Exchange a signup or recovery PKCE code for a server session. */
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
+  if (searchParams.has("token_hash")) return confirmEmail(request);
   const origin = requestOrigin(request);
   const code = searchParams.get("code");
   const next = safeNext(searchParams.get("next"));
@@ -15,9 +17,9 @@ export async function GET(request: NextRequest) {
     const supabase = await createClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
-      await afterSignIn(supabase);
+      if (next !== "/auth/reset-password") await afterSignIn(supabase);
       return NextResponse.redirect(new URL(next, origin));
     }
   }
-  return NextResponse.redirect(new URL(`/login?error=link&next=${encodeURIComponent(next)}`, origin));
+  return NextResponse.redirect(new URL(`/login?error=link&mode=${next === "/auth/reset-password" ? "recover" : "signup"}&next=${encodeURIComponent(next)}`, origin));
 }

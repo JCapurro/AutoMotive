@@ -7,9 +7,8 @@ import { queuePixel } from "@/lib/meta-pixel-server";
 import type { Database } from "@/types/database";
 
 /**
- * After a successful magic link or code: the first sign-in of an account is
- * its registration (§36, signup_completed). Magic link sign-in creates the
- * user, so "first" means no signup_completed yet.
+ * After email confirmation or password login, record the first sign-in.
+ * Recovery does not count as a completed registration.
  */
 export async function afterSignIn(supabase: SupabaseClient<Database>): Promise<void> {
   const { data } = await supabase.auth.getClaims();
