@@ -16,7 +16,7 @@ from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 
 import config
 from .base import BaseScraper, CollectorBlocked, Listing, ListingDetail
-from ._mercadolibre_browser import mercadolibre_context
+from ._mercadolibre_browser import mercadolibre_context, shutdown as mercadolibre_shutdown
 from ._dates import publication_date
 from ._http import Page, dedupe, json_ld_of_type, multiline_text, soup, text_of, to_int
 
@@ -295,7 +295,11 @@ def parse_detail(html: str, url: str, status: int = 200) -> ListingDetail:
 def _blocked(page_number: int, reason: str, url: str, status: int) -> None:
     """A wall on the first page fails the run; on a later page, keep what we have."""
     message = f"mercadolibre: {reason}; HTTP {status}; destination={_safe_url(url)}"
-    log.warning("%s. Open the persistent profile: python -m collectors.mercadolibre", message)
+    log.warning(
+        "%s. Complete verification in the existing Chrome window, or stop the worker "
+        "before running python -m collectors.mercadolibre; restart it after verification.",
+        message,
+    )
     if page_number == 1:
         raise CollectorBlocked(message)
 
@@ -412,4 +416,10 @@ async def _login_and_save() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(_login_and_save())
+    async def _interactive_main() -> None:
+        try:
+            await _login_and_save()
+        finally:
+            await mercadolibre_shutdown()
+
+    asyncio.run(_interactive_main())

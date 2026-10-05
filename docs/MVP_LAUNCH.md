@@ -32,7 +32,8 @@ el plazo.
 ## MercadoLibre
 
 La fuente usa Chrome visible con un perfil persistente propio, como Tecc,
-para las búsquedas y los detalles. Para preparar o verificar el perfil,
+para las búsquedas y los detalles. Mantiene el navegador abierto durante la corrida.
+Para preparar o verificar el perfil, detené primero el worker si está ejecutándose,
 desde el checkout operativo:
 
 ```powershell

@@ -1,6 +1,7 @@
 """Shared Playwright helpers — reuse a single browser instance across scrapers."""
 from __future__ import annotations
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
@@ -53,6 +54,11 @@ async def browser_context(
 
 async def shutdown() -> None:
     global _pw, _browser
+    from ._mercadolibre_browser import shutdown as mercadolibre_shutdown
+    try:
+        await mercadolibre_shutdown()
+    except Exception:
+        logging.getLogger(__name__).warning("MercadoLibre browser cleanup failed", exc_info=True)
     if _browser:
         try:
             await _browser.close()

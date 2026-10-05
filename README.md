@@ -188,10 +188,11 @@ siguen vivos y para probar nuevos filtros antes de cargarlos como alerta.
 
 El scraper de MercadoLibre usa el transporte de Tecc: Chrome instalado, visible,
 con un perfil persistente dedicado (`.ml_chrome_profile/`, configurable mediante
-`ML_BROWSER_PROFILE_DIR`). Busquedas y detalles reutilizan el mismo perfil.
+`ML_BROWSER_PROFILE_DIR`). Busquedas y detalles reutilizan el mismo navegador
+durante la corrida y el perfil entre corridas.
 Las cookies de `ml_state.json` ya no se cargan en un navegador headless.
 
-Para preparar o verificar ese perfil:
+Para preparar o verificar ese perfil, primero detene el worker si esta ejecutandose:
 
 ```powershell
 cd worker
@@ -202,8 +203,10 @@ Se abre Chrome sobre una busqueda real de autos. Si aparece un pedido de ingreso
 o verificacion, completalo manualmente y presiona Enter en la consola. El comando
 solo termina con exito cuando la busqueda devuelve publicaciones; el perfil queda
 guardado para las siguientes corridas. No copies el perfil de Tecc ni uses el
-perfil cotidiano de Chrome. Cierra este asistente antes de ejecutar otro proceso
-que use el mismo perfil. El worker necesita Chrome instalado y una sesion de
+perfil cotidiano de Chrome. Cierra este asistente antes de reanudar el worker;
+solo un proceso puede usar el perfil. Si el worker recibe una verificacion,
+completala en su ventana de Chrome abierta, o detenelo antes de usar el asistente.
+El worker necesita Chrome instalado y una sesion de
 escritorio que pueda abrir ventanas. El proveedor puede volver a exigir verificacion.
 
 ### Correr el bot

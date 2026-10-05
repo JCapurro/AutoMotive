@@ -13,6 +13,7 @@ from bs4 import BeautifulSoup
 import config
 from collectors import mercadolibre as ml
 from collectors import _mercadolibre_browser as transport
+from collectors import _browser as shared_browser
 from collectors.base import CollectorBlocked
 
 
@@ -25,37 +26,93 @@ class PersistentChromeTests(unittest.IsolatedAsyncioTestCase):
         self.lock = patch.object(transport, "_lock", asyncio.Lock())
         self.lock.start()
         self.addCleanup(self.lock.stop)
+        self.ctx_patch = patch.object(transport, "_ctx", None)
+        self.pw_patch = patch.object(transport, "_pw", None)
+        self.ctx_patch.start()
+        self.pw_patch.start()
+        self.addCleanup(self.ctx_patch.stop)
+        self.addCleanup(self.pw_patch.stop)
+
+    async def asyncTearDown(self):
+        await transport.shutdown()
+
+    async def test_shared_cleanup_continues_when_mercadolibre_close_fails(self):
+        ctx = MagicMock(close=AsyncMock(side_effect=RuntimeError("Chrome close failed")))
+        pw = MagicMock(stop=AsyncMock())
+        shared_ctx = MagicMock(close=AsyncMock())
+        shared_pw = MagicMock(stop=AsyncMock())
+        with patch.object(transport, "_ctx", ctx), patch.object(transport, "_pw", pw), \
+                patch.object(shared_browser, "_browser", shared_ctx), \
+                patch.object(shared_browser, "_pw", shared_pw), \
+                self.assertLogs("collectors._browser", level="WARNING"):
+            await shared_browser.shutdown()
+            self.assertIsNone(transport._ctx)
+            self.assertIsNone(transport._pw)
+            self.assertIsNone(shared_browser._browser)
+            self.assertIsNone(shared_browser._pw)
+        ctx.close.assert_awaited_once()
+        pw.stop.assert_awaited_once()
+        shared_ctx.close.assert_awaited_once()
+        shared_pw.stop.assert_awaited_once()
+
+    async def test_manually_closed_chrome_reopens_with_the_same_profile(self):
+        first = MagicMock(close=AsyncMock())
+        second = MagicMock(close=AsyncMock())
+        pw = MagicMock(stop=AsyncMock())
+        pw.chromium.launch_persistent_context = AsyncMock(side_effect=[first, second])
+        manager = MagicMock(start=AsyncMock(return_value=pw))
+        with tempfile.TemporaryDirectory() as tmp, \
+                patch.object(config, "ML_BROWSER_PROFILE_DIR", tmp), \
+                patch.object(transport, "async_playwright", return_value=manager):
+            async with transport.mercadolibre_context():
+                pass
+            first.on.call_args.args[1]()
+            async with transport.mercadolibre_context() as actual:
+                self.assertIs(actual, second)
+            self.assertEqual(pw.chromium.launch_persistent_context.await_count, 2)
+            manager.start.assert_awaited_once()
+            await transport.shutdown()
+        second.close.assert_awaited_once()
 
     async def test_uses_installed_visible_chrome_and_a_persistent_profile(self):
         ctx = MagicMock(close=AsyncMock())
         pw = MagicMock()
+        pw.stop = AsyncMock()
         pw.chromium.launch_persistent_context = AsyncMock(return_value=ctx)
         manager = MagicMock()
-        manager.__aenter__ = AsyncMock(return_value=pw)
-        manager.__aexit__ = AsyncMock(return_value=False)
+        manager.start = AsyncMock(return_value=pw)
         with tempfile.TemporaryDirectory() as tmp, \
                 patch.object(config, "ML_BROWSER_PROFILE_DIR", tmp), \
                 patch.object(transport, "async_playwright", return_value=manager):
             async with transport.mercadolibre_context() as actual:
                 self.assertIs(actual, ctx)
+            async with transport.mercadolibre_context() as actual:
+                self.assertIs(actual, ctx)
             pw.chromium.launch_persistent_context.assert_awaited_once_with(
                 str(Path(tmp).resolve()), channel="chrome", headless=False,
             )
+            ctx.close.assert_not_awaited()
+            await transport.shutdown()
         ctx.close.assert_awaited_once()
+        pw.stop.assert_awaited_once()
 
-    async def test_closes_profile_when_the_collector_fails(self):
+    async def test_collector_failure_releases_lock_and_keeps_the_browser_for_recovery(self):
         ctx = MagicMock(close=AsyncMock())
         pw = MagicMock()
+        pw.stop = AsyncMock()
         pw.chromium.launch_persistent_context = AsyncMock(return_value=ctx)
         manager = MagicMock()
-        manager.__aenter__ = AsyncMock(return_value=pw)
-        manager.__aexit__ = AsyncMock(return_value=False)
+        manager.start = AsyncMock(return_value=pw)
         with tempfile.TemporaryDirectory() as tmp, \
                 patch.object(config, "ML_BROWSER_PROFILE_DIR", tmp), \
                 patch.object(transport, "async_playwright", return_value=manager):
             with self.assertRaisesRegex(RuntimeError, "collector failed"):
                 async with transport.mercadolibre_context():
                     raise RuntimeError("collector failed")
+            async with transport.mercadolibre_context() as actual:
+                self.assertIs(actual, ctx)
+            ctx.close.assert_not_awaited()
+            await transport.shutdown()
         ctx.close.assert_awaited_once()
 
     async def test_search_and_enrichment_cannot_open_the_same_profile_concurrently(self):
@@ -63,27 +120,23 @@ class PersistentChromeTests(unittest.IsolatedAsyncioTestCase):
         peak = 0
 
         async def launch(*args, **kwargs):
-            nonlocal active, peak
-            active += 1
-            peak = max(peak, active)
             ctx = MagicMock()
-
-            async def close():
-                nonlocal active
-                active -= 1
-
-            ctx.close = close
+            ctx.close = AsyncMock()
             return ctx
 
         pw = MagicMock()
+        pw.stop = AsyncMock()
         pw.chromium.launch_persistent_context = launch
         manager = MagicMock()
-        manager.__aenter__ = AsyncMock(return_value=pw)
-        manager.__aexit__ = AsyncMock(return_value=False)
+        manager.start = AsyncMock(return_value=pw)
 
         async def use_profile():
+            nonlocal active, peak
             async with transport.mercadolibre_context():
+                active += 1
+                peak = max(peak, active)
                 await asyncio.sleep(0)
+                active -= 1
 
         with tempfile.TemporaryDirectory() as tmp, \
                 patch.object(config, "ML_BROWSER_PROFILE_DIR", tmp), \
@@ -94,10 +147,10 @@ class PersistentChromeTests(unittest.IsolatedAsyncioTestCase):
     async def test_failed_launch_releases_the_profile_for_the_next_attempt(self):
         ctx = MagicMock(close=AsyncMock())
         pw = MagicMock()
+        pw.stop = AsyncMock()
         pw.chromium.launch_persistent_context = AsyncMock(side_effect=[RuntimeError("launch failed"), ctx])
         manager = MagicMock()
-        manager.__aenter__ = AsyncMock(return_value=pw)
-        manager.__aexit__ = AsyncMock(return_value=False)
+        manager.start = AsyncMock(return_value=pw)
         with tempfile.TemporaryDirectory() as tmp, \
                 patch.object(config, "ML_BROWSER_PROFILE_DIR", tmp), \
                 patch.object(transport, "async_playwright", return_value=manager):
@@ -106,7 +159,8 @@ class PersistentChromeTests(unittest.IsolatedAsyncioTestCase):
                     self.fail("A failed launch must not yield a context")
             async with transport.mercadolibre_context() as actual:
                 self.assertIs(actual, ctx)
-        self.assertEqual(manager.__aexit__.await_count, 2)
+            await transport.shutdown()
+        self.assertEqual(pw.stop.await_count, 2)
         ctx.close.assert_awaited_once()
 
 
