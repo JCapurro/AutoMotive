@@ -91,6 +91,24 @@ class PersistentChromeTests(unittest.IsolatedAsyncioTestCase):
             await asyncio.gather(use_profile(), use_profile())
         self.assertEqual((peak, active), (1, 0))
 
+    async def test_failed_launch_releases_the_profile_for_the_next_attempt(self):
+        ctx = MagicMock(close=AsyncMock())
+        pw = MagicMock()
+        pw.chromium.launch_persistent_context = AsyncMock(side_effect=[RuntimeError("launch failed"), ctx])
+        manager = MagicMock()
+        manager.__aenter__ = AsyncMock(return_value=pw)
+        manager.__aexit__ = AsyncMock(return_value=False)
+        with tempfile.TemporaryDirectory() as tmp, \
+                patch.object(config, "ML_BROWSER_PROFILE_DIR", tmp), \
+                patch.object(transport, "async_playwright", return_value=manager):
+            with self.assertRaisesRegex(RuntimeError, "launch failed"):
+                async with transport.mercadolibre_context():
+                    self.fail("A failed launch must not yield a context")
+            async with transport.mercadolibre_context() as actual:
+                self.assertIs(actual, ctx)
+        self.assertEqual(manager.__aexit__.await_count, 2)
+        ctx.close.assert_awaited_once()
+
 
 class Page:
     def __init__(self, outcomes):
@@ -102,7 +120,10 @@ class Page:
 
     async def goto(self, url, **kwargs):
         self.asked.append(url)
-        self.url, self.html, status = next(self.outcomes)
+        outcome = next(self.outcomes)
+        if isinstance(outcome, BaseException):
+            raise outcome
+        self.url, self.html, status = outcome
         return MagicMock(status=status)
 
     def locator(self, selector):
@@ -114,7 +135,7 @@ class Page:
 
     async def wait_for_selector(self, selector, **kwargs):
         if not BeautifulSoup(self.html, "lxml").select(selector):
-            raise TimeoutError("selector missing")
+            raise ml.PlaywrightTimeoutError("selector missing")
 
     async def content(self):
         return self.html
@@ -175,6 +196,72 @@ class CollectorTransportTests(unittest.IsolatedAsyncioTestCase):
         with self.context(page):
             with self.assertRaisesRegex(RuntimeError, "HTTP 503"):
                 await ml.MercadoLibreScraper().search({})
+
+    async def test_gone_detail_survives_404_or_missing_pdp_selector(self):
+        url = "https://auto.mercadolibre.com.ar/MLA-1-x"
+        for status, html in [(404, ""), (200, "<body>Publicación finalizada</body>")]:
+            with self.subTest(status=status):
+                page = Page([(url, html, status)])
+                with self.context(page):
+                    detail = await ml.MercadoLibreScraper().fetch_detail(url)
+                self.assertTrue(detail.gone)
+                page.close.assert_awaited_once()
+
+    async def test_detail_http_error_is_not_a_gone_listing(self):
+        page = Page([("https://auto.mercadolibre.com.ar/MLA-1-x", "error", 503)])
+        with self.context(page):
+            with self.assertRaisesRegex(RuntimeError, "HTTP 503"):
+                await ml.MercadoLibreScraper().fetch_detail("https://auto.mercadolibre.com.ar/MLA-1-x")
+        page.close.assert_awaited_once()
+
+    async def test_detail_challenge_after_selector_wait_still_fails(self):
+        url = "https://auto.mercadolibre.com.ar/MLA-1-x"
+        page = Page([(url, "<body>Loading</body>", 200)])
+
+        async def delayed_challenge(*args, **kwargs):
+            page.url = "https://www.mercadolibre.com.ar/captcha/wall/logged"
+            raise ml.PlaywrightTimeoutError("verification appeared")
+
+        page.wait_for_selector = delayed_challenge
+        with self.context(page):
+            with self.assertRaisesRegex(CollectorBlocked, "security challenge"):
+                await ml.MercadoLibreScraper().fetch_detail(url)
+        page.close.assert_awaited_once()
+
+    async def test_first_page_failures_propagate_but_later_failures_keep_cards(self):
+        html = (FIXTURES / "mercadolibre_search.html").read_text(encoding="utf-8")
+        first = ("https://listado.mercadolibre.com.ar/autos", html, 200)
+        failures = [ml.PlaywrightTimeoutError("navigation failed"),
+                    ("https://listado.mercadolibre.com.ar/autos", "missing selector", 200),
+                    ("https://listado.mercadolibre.com.ar/autos", "server error", 503)]
+        for failure in failures:
+            with self.subTest(failure=str(failure)):
+                page = Page([failure])
+                with self.context(page):
+                    with self.assertRaises((ml.PlaywrightTimeoutError, RuntimeError)):
+                        await ml.MercadoLibreScraper().search({})
+                page.close.assert_awaited_once()
+                page = Page([first, failure])
+                with self.context(page), patch.object(ml, "_page_pause", AsyncMock()):
+                    found = await ml.MercadoLibreScraper().search({})
+                self.assertEqual(len(found), 3)
+                page.close.assert_awaited_once()
+
+    async def test_legitimate_no_results_is_successful(self):
+        page = Page([("https://listado.mercadolibre.com.ar/autos", '<div class="ui-search-rescue"></div>', 200)])
+        with self.context(page):
+            found = await ml.MercadoLibreScraper().search({})
+        self.assertEqual(found, [])
+        page.close.assert_awaited_once()
+
+    async def test_manual_setup_keeps_waiting_on_non_200_despite_cards(self):
+        html = '<li class="ui-search-layout__item"></li>'
+        url = "https://listado.mercadolibre.com.ar/autos"
+        page = Page([(url, html, 503), (url, html, 200)])
+        with self.context(page), patch.object(ml, "_wait_for_enter", AsyncMock()) as enter:
+            await ml._login_and_save()
+        self.assertEqual(enter.await_count, 1)
+        page.close.assert_awaited_once()
 
     async def test_manual_setup_does_not_succeed_until_a_search_is_readable(self):
         wall = ("https://www.mercadolibre.com.ar/captcha/wall/logged", "", 200)
