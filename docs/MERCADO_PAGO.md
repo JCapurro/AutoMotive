@@ -4,7 +4,23 @@ Autorizado el 2/10/2026: Particular $15.000, pago único por 30 días; Agencia $
 
 Enlaces originales: [Particular](https://mpago.la/2Vf746M) y [Agencia](https://mpago.la/1t6wWDT). Verificados en el checkout público: nombres, importes y recurrencia. Son referencias para la operación asistida; no contienen la identidad del usuario de S Auto. Las contrataciones automáticas deben comenzar desde la cuenta autenticada de S Auto, con una referencia aleatoria propia. Un regreso del checkout nunca concede acceso.
 
-## Estado actual · 3/10/2026
+## Estado actual · 5/10/2026
+
+La contratación automática está habilitada por pedido del propietario: `MERCADOPAGO_ENABLED=true` en Vercel producción, `MERCADOPAGO_TEST_MODE=false` y `app_config.commercial_pilot.enabled=true`. Particular cuesta ARS 15.000 por 30 días, pago único, con tres búsquedas activas. Agencia cuesta ARS 75.000 por mes, con renovación automática y diez búsquedas activas. La navegación de escritorio y móvil incluye **Planes**, en `/app/pro`; la portada conduce al plan elegido después del ingreso.
+
+Se comprobó en la web publicada que ambos botones crean un checkout del vendedor productivo correcto, con el importe, moneda y referencia de la cuenta correctos. Las comprobaciones usaron cuentas temporales confirmadas, sin aprobar pagos ni asociar tarjetas: Particular se venció por API y Agencia se canceló desde la acción publicada de la cuenta, verificando la baja en el proveedor. Un checkout pendiente conserva el plan Free y no registra un período pagado. Se eliminaron las cuentas temporales después de cerrar sus recursos. Los relojes de prueba de las dos cuentas existentes permanecieron iguales; la apertura no inició pruebas adicionales ni pausó búsquedas.
+
+La comprobación descubrió que faltaba en producción `20261009120000_meta_conversions.sql`. El inicio del checkout fallaba al guardar el consentimiento antes de contactar al proveedor. Se aplicó esa migración y se recargó el esquema de la API; después pasaron ambos recorridos publicados. La conversión Purchase se envía desde el servidor después de verificar un pago aprobado; la autorización de una suscripción no dispara una compra en el navegador.
+
+La aplicación **S Auto** y su vendedor se verificaron nuevamente. El webhook productivo conserva los tópicos `payment`, `subscription_preapproval` y `subscription_authorized_payment`; el endpoint acepta una firma sintética válida, rechaza una ausente, y la conciliación autenticada responde correctamente. La conciliación diaria de Vercel permanece configurada. Validación de código: 105 pruebas web, 16 pruebas PostgreSQL aisladas de pagos y límites, lint y compilación aprobados. Estas comprobaciones no equivalen a haber efectuado un cobro productivo.
+
+### Cobertura del ensayo que continúa pendiente
+
+La compra Particular ficticia aprobada ya se había conciliado de forma idempotente. La suscripción ficticia Agencia ahora está `authorized` y la API informa una factura `processed` por ARS 75.000 con pago `approved` (`181286077447`). Sin embargo, el recurso de pago identifica a un pagador guest diferente del comprador explícito del ensayo, aunque la suscripción identifica al comprador esperado. El resguardo del ensayo rechaza esa diferencia y Agencia sigue sin un período concedido en la base aislada. Se conservó ese resguardo; no se dio por probada su activación.
+
+Siguen pendientes la validación completa de ese período Agencia, una renovación, devolución y entrega automática de una notificación asociada a una transacción. Los tests cubren esos estados con API simulada y PostgreSQL, y Particular tiene evidencia real del ensayo, pero no se atribuye a esas pruebas cobertura del proveedor que no se observó. La producción fue abierta por el pedido explícito de habilitar los planes; no se realizaron cargos reales para verificarla.
+
+## Historial de preparación · 3/10/2026
 
 - El MCP de S Auto ya entrega las credenciales de producción activadas. El Access Token se guardó en `web/.env.local` (ignorado por Git) y como variable sensible de producción en Vercel. No se almacenaron Client Secret ni Public Key, porque el checkout alojado no los necesita.
 - `GET https://api.mercadopago.com/users/me` con ese token confirmó HTTP 200, vendedor `200367138` y país `MLA`. El ID del vendedor quedó configurado en Vercel.
@@ -119,9 +135,9 @@ Se reutilizan el registro comercial, los límites, los vencimientos y las herram
 
 Validación previa a la publicación: 49 pruebas web y 12 pruebas comerciales/PostgreSQL aprobadas, lint y compilación correctos, usando la base aislada `ese_auto_release_test`. En la continuación del 3/10 se reejecutaron las pruebas web, lint y compilación, y se aplicaron las migraciones y publicó la integración según el estado actual anterior. Las pruebas PostgreSQL previas no sustituyen las pruebas de Mercado Pago sandbox pendientes.
 
-## Configuración pendiente del entorno destino
+## Referencia de configuración del entorno destino
 
-Reutilizar la aplicación S Auto `1320088821469305`. Sus credenciales de producción ya están activadas y el Access Token, clave de firma, vendedor y `CRON_SECRET` están cargados en Vercel y publicados. No compartir secretos en el chat. `MERCADOPAGO_ENABLED=true` se habilita después de las pruebas sandbox pendientes; las migraciones ya están aplicadas.
+Reutilizar la aplicación S Auto `1320088821469305`. Sus credenciales de producción ya están activadas y el Access Token, clave de firma, vendedor y `CRON_SECRET` están cargados en Vercel y publicados. No compartir secretos en el chat. `MERCADOPAGO_ENABLED=true` está habilitado en producción desde el 5/10 por pedido explícito del propietario; las migraciones necesarias están aplicadas. La cobertura pendiente del ensayo se detalla al comienzo de este documento.
 
 En producción usar `SITE_URL=https://www.eseauto.com.ar`. El dominio sin `www` redirige al dominio con `www`, por lo que la URL de notificaciones es `https://www.eseauto.com.ar/api/mercadopago/webhook`, directamente y sin redirección; habilitar **Pagos** y **Planes y suscripciones** (`payment`, `subscription_preapproval`, `subscription_authorized_payment`). La conciliación está en `/api/mercadopago/reconcile`, protegida con `Authorization: Bearer <CRON_SECRET>`. Conservar la URL local para desarrollo y configurar las redirecciones de Supabase Auth para el dominio público.
 
@@ -130,14 +146,14 @@ En producción usar `SITE_URL=https://www.eseauto.com.ar`. El dominio sin `www` 
 1. La aplicación S Auto (`1320088821469305`) ya tiene las credenciales activadas y su Access Token está cargado en Vercel como `MERCADOPAGO_ACCESS_TOKEN`. Nunca usar Public Key como Access Token ni poner secretos con prefijo `NEXT_PUBLIC_`.
 2. En esa aplicación → Webhooks, la URL HTTPS y los tres eventos ya están registrados. La clave real de firma ya está guardada como `MERCADOPAGO_WEBHOOK_SECRET` y se verificó su uso en el endpoint publicado; no copiar el valor enmascarado devuelto por el MCP. `data.id` debe llegar en la query y coincidir con el cuerpo; la implementación requiere `x-signature` y `x-request-id` válidos.
 3. El ID del vendedor `200367138` ya se verificó con `GET https://api.mercadopago.com/users/me` y se cargó como `MERCADOPAGO_COLLECTOR_ID`; no confundirlo con el ID del plan o el de la aplicación.
-4. Cargar el `CRON_SECRET` ya generado en `web/.env.local`, `SITE_URL=https://www.eseauto.com.ar`, `NEXT_PUBLIC_CONTACT_EMAIL` y los valores Supabase del proyecto destino. Mantener `MERCADOPAGO_ENABLED=false` hasta completar las pruebas. Los cambios de variables requieren un nuevo despliegue.
+4. Cargar el `CRON_SECRET` ya generado en `web/.env.local`, `SITE_URL=https://www.eseauto.com.ar`, `NEXT_PUBLIC_CONTACT_EMAIL` y los valores Supabase del proyecto destino. La variable de activación de producción es `MERCADOPAGO_ENABLED=true`; los ensayos requieren su propio entorno aislado. Los cambios de variables requieren un nuevo despliegue.
 5. Para pruebas, usar un entorno y una base aislados con comprador/vendedor de prueba y `MERCADOPAGO_TEST_MODE=true`. En producción dejarlo en `false`: pagos de prueba no otorgan acceso real. No reutilizar la base productiva para probar devoluciones o borrados.
 6. Comprobar que Mercado Pago entrega y recibe HTTP 200 de notificaciones firmadas reales. El simulador del dashboard no demuestra por sí solo un pago aprobado. Una firma inválida responde 401, un ID inconsistente 400 y un fallo de verificación 503 para solicitar reintento.
-7. Cuando todo pase, activar el piloto en Administración → Cobros y `MERCADOPAGO_ENABLED=true`, desplegar y repetir el recorrido completo con el entorno correcto antes de invitar clientes.
+7. El piloto y `MERCADOPAGO_ENABLED=true` ya están activados en producción. Ante cambios de configuración o código de cobros, repetir el recorrido de ambos planes, comprobar el proveedor y verificar la concesión de acceso únicamente por pago aprobado.
 
 `web/vercel.json` incluye una conciliación diaria a las 09:00 UTC. El proveedor notifica cada pago; esta tarea es el respaldo. Cada ejecución procesa hasta 50 contrataciones o 45 segundos, rotando por fecha de última consulta; pendientes y errores se ven en Administración → Cobros. Si no alcanza a revisar todas las cuentas en un día, aumentar la frecuencia con un scheduler compatible o la capacidad del hosting. No se contrató ningún servicio adicional.
 
-Las migraciones `20261007120000_ese_auto_commercial.sql` y `20261008120000_mercadopago.sql` ya se aplicaron, en ese orden. Mantener el worker y la web compatibles con esos cambios. Activar el piloto desde Administración → Cobros después de las pruebas pendientes y de revisar y comunicar las cuentas existentes.
+Las migraciones `20261007120000_ese_auto_commercial.sql`, `20261008120000_mercadopago.sql` y `20261009120000_meta_conversions.sql` ya están aplicadas. Mantener el worker y la web compatibles con esos cambios. La activación del 5/10 preservó las cuentas y sus plazos de prueba existentes.
 
 Antes de cobrar: probar con cuentas/credenciales de prueba, identidad del vendedor, pago pendiente/aprobado/rechazado, mensualidad, baja, devolución y firma real de notificación. Confirmar soporte público y facturación. Las pruebas locales y el código preparado no equivalen a una integración probada con la cuenta real.
 
