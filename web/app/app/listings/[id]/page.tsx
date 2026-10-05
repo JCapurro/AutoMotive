@@ -71,6 +71,7 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
   if (!listing) notFound();
 
   const best = matches?.[0] ?? null;
+  const gone = listing.status === "gone";
   const others = (matches ?? []).slice(1);
   const reasons = (best?.match_reasons ?? {}) as Record<string, Reason>;
   const breakdown = (best?.score_breakdown ?? {}) as Record<string, Component | string>;
@@ -83,7 +84,7 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
   const name = vehicle(listing);
   const sourceName = listing.sources?.name ?? listing.source;
   const history = priceHistory(snapshots ?? []);
-  const similar = await similarListings(supabase, listing, priceRef, cfg.comparables);
+  const similar = gone ? [] : await similarListings(supabase, listing, priceRef, cfg.comparables);
   const back = best ? `/app/searches/${best.search_profile_id}` : "/app";
 
   return (
@@ -93,10 +94,10 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
         <ArrowLeft className="size-4" aria-hidden /> {best?.search_profiles?.name ?? "Inicio"}
       </Link>
 
-      {listing.status === "gone" ? (
+      {gone ? (
         <p role="status" className="mt-4 flex items-start gap-2.5 rounded-lg bg-muted p-4 text-[15px]">
           <Ban className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden />
-          Esta publicación ya no está disponible: se pausó, se vendió o se dio de baja.
+          Esta publicación ya no está disponible. Conservamos sus datos y precios como referencia histórica.
         </p>
       ) : null}
 
@@ -112,7 +113,7 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
             {listing.probable_repost_of ? <span>Re-publicada</span> : null}
           </p>
         </div>
-        {best ? (
+        {best && !gone ? (
           <div className="flex items-center gap-3.5">
             <span data-testid="score" className="type-figure text-[64px] leading-none tracking-[-0.03em]">
               <span className={markFor(best.level)}>{best.score}</span>
@@ -176,19 +177,25 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
 
       <div className="mt-11 grid gap-11 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] lg:gap-14">
         <div className="space-y-11">
-          <Section title="¿Está bien de precio?">
-            <PriceVerdict
-              listing={listing}
-              sourceName={sourceName}
-              refs={priceRef}
-              minN={cfg.minComparables}
-              window={cfg.comparables}
-              similar={similar}
-              cautious={flags.some((f) => f.id === "much_cheaper") || breakdown.guard === "suspicious"}
-            />
+          <Section title={gone ? "Precio de referencia" : "¿Está bien de precio?"}>
+            {gone ? (
+              <p className="mt-3 text-[15px] text-muted-foreground">
+                El precio corresponde al último aviso que observamos. Es una referencia histórica, no una oferta disponible ni un precio de venta confirmado.
+              </p>
+            ) : (
+              <PriceVerdict
+                listing={listing}
+                sourceName={sourceName}
+                refs={priceRef}
+                minN={cfg.minComparables}
+                window={cfg.comparables}
+                similar={similar}
+                cautious={flags.some((f) => f.id === "much_cheaper") || breakdown.guard === "suspicious"}
+              />
+            )}
           </Section>
 
-          {best ? (
+          {best && !gone ? (
             <Section
               title={`¿Por qué tiene ${best.score}?`}
               hint="El Opportunity Score va de 0 a 100: mientras más alto, mejor oportunidad para lo que buscás."

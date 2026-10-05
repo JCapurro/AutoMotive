@@ -153,6 +153,15 @@ async def prepare_delivery(notification_id: int) -> bool:
     return bool(row and row["allowed"])
 
 
+async def delivery_payload(notification_id: int) -> dict[str, Any] | None:
+    """The digest's payload after dispatch preparation removed ended ads."""
+    async with connection() as cx:
+        row = await (await cx.execute(
+            "SELECT payload FROM notifications WHERE id = %s AND status = 'queued'",
+            (notification_id,))).fetchone()
+    return row["payload"] if row else None
+
+
 async def mark_sent(notification_id: int, *, provider_id: str | None = None,
                     extra: dict[str, Any] | None = None) -> None:
     delivery = {"provider_id": provider_id} if provider_id else {}
@@ -216,6 +225,8 @@ async def pending_digest(user_id: str, channel: str) -> list[dict[str, Any]]:
             " WHERE user_id = %s AND channel::text = %s AND status = 'digest' AND digested_in IS NULL "
             "   AND public.notification_access_active(user_id, search_profile_id, listing_id) "
             "   AND (kind NOT IN ('new_match','opportunity') OR public.search_access_active(search_profile_id)) "
+            "   AND (kind = 'listing_gone' OR EXISTS (SELECT 1 FROM listings l "
+            "       WHERE l.id = notifications.listing_id AND l.status = 'active')) "
             " ORDER BY id", (user_id, channel))).fetchall()
 
 

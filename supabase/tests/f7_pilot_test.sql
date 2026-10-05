@@ -40,10 +40,10 @@ insert into public.owned_vehicles (user_id, listing_id) values
 
 -- ------------------------------------------------------------ retention
 select throws_ok($$select public.purge_stale_listings(7)$$, 'P0001', null, 'retention: refuses less than 30 days');
-select is(public.purge_stale_listings(), 2, 'retention: the two untouched listings unseen for 180+ days');
+select is(public.purge_stale_listings(), 1, 'retention: only untouched active listings unseen for 180+ days');
 select results_eq($$select id from public.listings where id between 9701 and 9707 order by id$$,
-                  $$values (9703::bigint), (9704::bigint), (9705::bigint), (9706::bigint), (9707::bigint)$$,
-                  '... saved, alerted, bought and recent ones stay');
+                  $$values (9702::bigint), (9703::bigint), (9704::bigint), (9705::bigint), (9706::bigint), (9707::bigint)$$,
+                  '... ended history, saved, alerted, bought and recent ones stay');
 select is((select count(*)::int from public.listing_snapshots where listing_id = 9701), 0, '... snapshots go with it');
 select is((select count(*)::int from public.matches where listing_id = 9701), 0, '... and its matches');
 select is((select probable_repost_of from public.listings where id = 9707), null, '... a repost of it is unlinked');

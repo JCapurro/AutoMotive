@@ -1,6 +1,7 @@
-"""Retention (F7, punto 10; sección 14): once a night, listings not seen for
-app_config.retention.listing_days (180) that no user touched are deleted with
-their snapshots and matches (SQL: public.purge_stale_listings). Stored detail
+"""Retention (F7, punto 10; sección 14): once a night, active listings not seen
+for app_config.retention.listing_days (180) that no user touched are deleted
+with their snapshots and matches (SQL: public.purge_stale_listings). Ended
+listings and their price history stay as historical references. Stored detail
 pages (raw_pages) go after app_config.retention.raw_page_days (90).
 
 Keeps the database small — the free tier of a hosted Supabase is 500 MB — and

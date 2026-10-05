@@ -46,6 +46,11 @@ async def deliver_pending(channels: Mapping[str, Channel], *, limit: int = 200) 
         for row in await repo.queued(limit):
             if not await repo.prepare_delivery(row["id"]):
                 continue
+            if row["kind"] == "digest":
+                prepared = await repo.delivery_payload(row["id"])
+                if prepared is None:
+                    continue
+                row["payload"] = prepared
             n = to_notification(row)
             result = await send_one(channels.get(n.channel), n)
             if result.ok:

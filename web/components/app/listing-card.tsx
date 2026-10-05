@@ -99,14 +99,14 @@ export function ListingCard({
       </p>
 
       <div className="col-start-2 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 pt-1 sm:col-start-3 sm:row-span-3 sm:row-start-1 sm:flex-col sm:items-end sm:pt-0 sm:text-right">
-        <LevelBadge level={card.level} score={card.score} long className="max-sm:flex-row max-sm:items-baseline max-sm:gap-2" />
+        {!gone ? <LevelBadge level={card.level} score={card.score} long className="max-sm:flex-row max-sm:items-baseline max-sm:gap-2" /> : null}
         <div className="flex flex-wrap items-center gap-1.5 sm:justify-end">
           {card.saved ? (
             <span className="inline-flex items-center gap-1 text-xs font-semibold">
               <Star className="size-3.5 fill-current" aria-hidden /> Guardado
             </span>
           ) : null}
-          <StatusBadge status={card.status} />
+          {!gone ? <StatusBadge status={card.status} /> : null}
         </div>
         <p className="flex flex-wrap gap-x-2 text-xs text-muted-foreground sm:flex-col sm:items-end">
           {gone ? <span className="font-medium text-destructive">Ya no está disponible</span> : null}
