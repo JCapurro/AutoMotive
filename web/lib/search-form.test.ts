@@ -20,6 +20,15 @@ const input = SearchInput.parse({
 });
 
 describe("search form → search_profiles (sección 4.3)", () => {
+  it("preserves all versions when creating and editing a search", () => {
+    const values = SearchInput.parse({ ...input, trim: "Titanium", trims: ["Titanium", "SE"], trim_strict: true });
+    const columns = toColumns(values, ALL);
+    expect(columns.filters.trims).toEqual(["Titanium", "SE"]);
+    expect(columns.filters.trim_strict).toBe(true);
+    expect(columns.name).toBe("Ford Fiesta Titanium / SE");
+    const stored = { ...columns, notification_frequency: "immediate", notify_min_level: "good" } as SearchProfile;
+    expect(toColumns(fromProfile(stored, ALL), ALL).filters.trims).toEqual(["Titanium", "SE"]);
+  });
   it("maps hard filters, soft preferences and the place", () => {
     const c = toColumns(input, ALL);
     expect(c.name).toBe("Ford Fiesta Titanium");

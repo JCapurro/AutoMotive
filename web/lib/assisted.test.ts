@@ -4,6 +4,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { AssistedOutput, addedVehicle, draftTitle, draftToValues, placeFromText } from "./assisted";
+import { cityFromText } from "./argentina-locations";
 import { SearchInput, type SearchValues, toFilters } from "./search-form";
 
 // What the worker writes to llm_jobs.output, kept current by
@@ -65,7 +66,8 @@ describe("draft → structured form", () => {
   it("maps the zone onto a place, with the radius the text gives", () => {
     const { values } = draftToValues(vento, BASE);
     expect(values.trim_strict).toBe(true);
-    expect(values.location).toEqual({ label: "Córdoba", lat: -31.4201, lon: -64.1888, radius_km: 50 });
+    const city = cityFromText("Córdoba")!;
+    expect(values.location).toEqual({ label: city.label, lat: city.lat, lon: city.lon, radius_km: 50 });
   });
 
   it("an unresolved vehicle arrives blank, with the worker's note", () => {
@@ -76,10 +78,18 @@ describe("draft → structured form", () => {
   });
 
   it("an unknown zone keeps the default place and says so", () => {
-    const draft = { ...fiesta, values: { ...fiesta.values, location: "Ushuaia" } };
+    const draft = { ...fiesta, values: { ...fiesta.values, location: "Una zona que no existe" } };
     const { values, notes } = draftToValues(draft, BASE);
     expect(values.location).toEqual(BASE.location);
-    expect(notes).toEqual(["No reconocimos la zona «Ushuaia»: elegila de la lista."]);
+    expect(notes).toEqual(["No reconocimos la zona «Una zona que no existe»: elegila de la lista."]);
+  });
+
+  it("keeps multiple versions in a single editable proposal", () => {
+    const draft = { ...fiesta, values: { ...fiesta.values, trims: ["Titanium", "SE"] } };
+    const { values } = draftToValues(draft, BASE);
+    expect(toFilters(SearchInput.parse(values)).trims).toEqual(["Titanium", "SE"]);
+    expect(draftTitle(draft, 0)).toBe("Ford Fiesta Titanium / SE");
+    expect(addedVehicle(values).trims).toEqual([]);
   });
 });
 
@@ -116,7 +126,7 @@ describe("placeFromText", () => {
   });
 
   it("returns nothing for places it doesn't know", () => {
-    expect(placeFromText("Ushuaia")).toBeUndefined();
+    expect(placeFromText("Una zona que no existe")).toBeUndefined();
     expect(placeFromText("")).toBeUndefined();
     expect(placeFromText(null)).toBeUndefined();
   });

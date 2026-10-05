@@ -112,6 +112,14 @@ def normalize_draft(models: Sequence[CatalogModel], d: SearchDraft,
     notes: list[str] = []
     entry, make, model = _vehicle(models, d, notes)
     trim = _trim(entry, d, notes)
+    trims: list[str] = []
+    for wanted in list(dict.fromkeys([*(d.trims or []), *([d.trim] if d.trim else [])])):
+        resolved_trim = trim if wanted == d.trim else _trim(entry, d.model_copy(update={"trim": wanted}), notes)
+        if resolved_trim and resolved_trim not in trims:
+            trims.append(resolved_trim)
+    if not trims and trim:
+        trims = [trim]
+    trim = trims[0] if trims else ""
 
     year_min = _year(d.year_min, "desde", this_year, notes)
     year_max = _year(d.year_max, "hasta", this_year, notes)
@@ -143,6 +151,7 @@ def normalize_draft(models: Sequence[CatalogModel], d: SearchDraft,
         "make": make,
         "model": model,
         "trim": trim,
+        "trims": trims,
         "trim_strict": bool(trim) and d.trim_strict,
         "year_min": year_min,
         "year_max": year_max,
@@ -157,23 +166,44 @@ def normalize_draft(models: Sequence[CatalogModel], d: SearchDraft,
         "location": location,
         "radius_km": radius,
     }
-    return {"values": values, "resolved": entry is not None, "notes": notes}
+    return {"values": values, "resolved": entry is not None, "notes": list(dict.fromkeys(notes))}
 
 
 def normalize_drafts(models: Sequence[CatalogModel], drafts: Sequence[SearchDraft],
                      today: dt.date | None = None) -> dict[str, Any]:
-    """llm_jobs.output for a parse_search job. Duplicates (same make, model and
-    trim) collapse into the first; at most MAX_VEHICLES drafts."""
+    """One search per resolved model, with all its requested versions."""
     out: list[dict[str, Any]] = []
-    seen: set[tuple[str, str, str]] = set()
+    seen: dict[tuple[str, str], dict[str, Any]] = {}
     for d in drafts:
         draft = normalize_draft(models, d, today)
         v = draft["values"]
-        key = (normalize_text(v["make"]), normalize_text(v["model"]), normalize_text(v["trim"]))
+        key = (normalize_text(v["make"]), normalize_text(v["model"]))
         if draft["resolved"] and key in seen:
+            first = seen[key]
+            previous = first["values"]
+            # A proposal without versions means any version of this model.
+            previous["trims"] = (list(dict.fromkeys(previous["trims"] + v["trims"]))
+                                 if previous["trims"] and v["trims"] else [])
+            previous["trim"] = previous["trims"][0] if previous["trims"] else ""
+            previous["trim_strict"] = bool(previous["trims"]) and previous["trim_strict"] and v["trim_strict"]
+            for field in ("year_min", "year_max", "price_max", "km_max"):
+                a, b = previous[field], v[field]
+                if a != b:
+                    previous[field] = None if a is None or b is None else (min(a, b) if field == "year_min" else max(a, b))
+                    first["notes"].append("Agrupamos las versiones con un rango común: revisá los años, precio y kilómetros.")
+            for field in ("transmission", "fuel", "seller_type", "location", "radius_km", "price_target", "km_target", "currency"):
+                if previous[field] != v[field]:
+                    label = {"transmission": "transmisión", "fuel": "combustible", "seller_type": "vendedor",
+                             "location": "ubicación", "radius_km": "radio", "price_target": "precio ideal",
+                             "km_target": "kilometraje ideal", "currency": "moneda"}[field]
+                    first["notes"].append(f"Las versiones tienen distintos valores de {label}: revisá este filtro antes de guardar.")
+                    if field != "currency":
+                        previous[field] = "" if isinstance(previous[field], str) else None
+                    else:
+                        previous["price_max"] = previous["price_target"] = None
+            first["notes"] = list(dict.fromkeys(first["notes"] + draft["notes"]))
             continue
-        seen.add(key)
+        if draft["resolved"]:
+            seen[key] = draft
         out.append(draft)
-        if len(out) == MAX_VEHICLES:
-            break
-    return {"drafts": out}
+    return {"drafts": out[:MAX_VEHICLES]}

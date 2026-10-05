@@ -27,7 +27,9 @@ async function setHeartbeat(ago: string) {
   );
 }
 
-test.beforeEach(async () => {
+test.beforeEach(async ({ context }) => {
+  await context.grantPermissions(["geolocation"]);
+  await context.setGeolocation({ latitude: -34.6037, longitude: -58.3816 });
   await setHeartbeat("0 seconds");
 });
 
@@ -74,7 +76,7 @@ test("F5: dos vehículos en un pedido, revisados y guardados", async ({ page }, 
   const fiesta = page.getByRole("region", { name: "Vehículo 1 de 2: Ford Fiesta Titanium" });
   await expect(fiesta.getByLabel("Marca")).toHaveValue("Ford");
   await expect(fiesta.getByLabel("Modelo")).toHaveValue("Fiesta");
-  await expect(fiesta.getByLabel(/^Versión/)).toHaveValue("Titanium");
+  await expect(fiesta.getByRole("button", { name: "Quitar versión Titanium" })).toBeVisible();
   await expect(fiesta.getByLabel("Año desde")).toHaveValue("2017");
   await expect(fiesta.getByLabel("Precio máximo")).toHaveValue("12.000");
   await fiesta.getByLabel("Año hasta").selectOption("2018");

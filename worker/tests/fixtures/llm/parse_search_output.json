@@ -5,6 +5,9 @@
         "make": "Ford",
         "model": "Fiesta",
         "trim": "Titanium",
+        "trims": [
+          "Titanium"
+        ],
         "trim_strict": false,
         "year_min": 2017,
         "year_max": null,
@@ -27,6 +30,9 @@
         "make": "Volkswagen",
         "model": "Polo",
         "trim": "Highline",
+        "trims": [
+          "Highline"
+        ],
         "trim_strict": false,
         "year_min": 2017,
         "year_max": null,
@@ -49,6 +55,7 @@
         "make": "",
         "model": "",
         "trim": "",
+        "trims": [],
         "trim_strict": false,
         "year_min": 2021,
         "year_max": 2021,
@@ -73,6 +80,9 @@
         "make": "Volkswagen",
         "model": "Vento",
         "trim": "Highline",
+        "trims": [
+          "Highline"
+        ],
         "trim_strict": true,
         "year_min": 2015,
         "year_max": 2017,

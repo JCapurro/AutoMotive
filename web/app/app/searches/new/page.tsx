@@ -22,6 +22,7 @@ export default async function NewSearchPage() {
     make: "",
     model: "",
     trim: "",
+    trims: [],
     trim_strict: false,
     year_min: null,
     year_max: null,

@@ -36,6 +36,8 @@ class SearchDraft(_Strict):
     make: str | None = Field(description="Marca, p. ej. «Ford». null si no se dice y el modelo no la implica.")
     model: str | None = Field(description="Modelo sin la versión, p. ej. «Fiesta», «Gol Trend», «Corolla Cross».")
     trim: str | None = Field(description="Versión o nivel de equipamiento, p. ej. «Titanium», «Highline».")
+    trims: list[str] = Field(default_factory=list, max_length=30,
+                            description="Todas las versiones pedidas del mismo modelo; vacío si no especifica versión.")
     trim_strict: bool = Field(description="true solo si pide exclusivamente esa versión («solo Highline»).")
     year_min: int | None = Field(description="Año modelo mínimo.")
     year_max: int | None = Field(description="Año modelo máximo.")
@@ -54,7 +56,7 @@ class SearchDraft(_Strict):
 class SearchDrafts(_Strict):
     vehicles: list[SearchDraft] = Field(
         max_length=MAX_VEHICLES,
-        description="Un elemento por cada vehículo distinto que busca. Vacío si el texto no pide ningún auto.",
+        description="Un elemento por cada modelo distinto; agrupar sus versiones en trims. Vacío si no pide autos.",
     )
 
 
@@ -108,12 +110,16 @@ def json_schema(model: type[BaseModel]) -> dict[str, Any]:
                 return inline(copy.deepcopy(defs[node["$ref"].rsplit("/", 1)[-1]]))
             out = {}
             for key, value in node.items():
-                if key == "title":
+                if key in {"title", "default"}:
                     continue
                 if key == "properties":  # property names, not keywords: keep them all
                     out[key] = {name: inline(sub) for name, sub in value.items()}
                 else:
                     out[key] = inline(value)
+            if out.get("type") == "object" and "properties" in out:
+                # Local defaults accept old recordings; providers still receive
+                # a fully required schema for strict structured outputs.
+                out["required"] = list(out["properties"])
             return out
         if isinstance(node, list):
             return [inline(v) for v in node]

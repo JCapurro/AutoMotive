@@ -19,6 +19,7 @@ export const SearchInput = z
     make: z.string().trim().min(1, "Elegí una marca."),
     model: z.string().trim().min(1, "Elegí un modelo."),
     trim: z.string().trim().max(60).default(""),
+    trims: z.array(z.string().trim().min(1).max(60)).max(30).default([]),
     trim_strict: z.boolean().default(false),
     year_min: year,
     year_max: year,
@@ -51,13 +52,18 @@ export const SearchInput = z
 export type SearchInput = z.input<typeof SearchInput>;
 export type SearchValues = z.output<typeof SearchInput>;
 
-export function defaultName(v: Pick<SearchValues, "make" | "model" | "trim">): string {
-  return [v.make, v.model, v.trim].filter(Boolean).join(" ").trim();
+export function selectedTrims(v: { trim: string; trims?: string[] }): string[] {
+  return [...new Set([...(v.trims ?? []), v.trim].filter(Boolean))];
+}
+
+export function defaultName(v: Pick<SearchValues, "make" | "model" | "trim"> & { trims?: string[] }): string {
+  return [v.make, v.model, selectedTrims(v).join(" / ")].filter(Boolean).join(" ").trim().slice(0, 80);
 }
 
 /** The hard filters of the form, as `filters` stores them. `allSources`: every enabled source. */
 export function toFilters(v: SearchValues, allSources: string[] = []): Filters {
-  const f: Filters = { make: v.make, model: v.model, trims: v.trim ? [v.trim] : [], trim_strict: Boolean(v.trim) && v.trim_strict };
+  const trims = selectedTrims(v);
+  const f: Filters = { make: v.make, model: v.model, trims, trim_strict: trims.length > 0 && v.trim_strict };
   if (v.year_min != null) f.year_min = v.year_min;
   if (v.year_max != null) f.year_max = v.year_max;
   if (v.price_max != null) f.price_max = v.price_max;
@@ -102,6 +108,7 @@ export function fromProfile(p: SearchProfile, allSources: string[]): SearchValue
     make: f.make ?? "",
     model: f.model ?? "",
     trim: f.trims?.[0] ?? "",
+    trims: f.trims ?? [],
     trim_strict: Boolean(f.trim_strict),
     year_min: f.year_min ?? null,
     year_max: f.year_max ?? null,

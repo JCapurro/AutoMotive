@@ -4,6 +4,7 @@ from __future__ import annotations
 import datetime as dt
 
 from llm.schemas import SearchDraft
+from intelligence.matching import match
 from normalization.drafts import MAX_VEHICLES, normalize_draft, normalize_drafts
 from seed_catalog import seed_catalog
 
@@ -113,7 +114,8 @@ def test_duplicates_collapse_and_the_list_is_capped():
     fiesta = draft(make="Ford", model="Fiesta", trim="Titanium")
     out = normalize_drafts(seed_catalog(), [fiesta, draft(make="ford", model="fiesta", trim="titanium"),
                                             draft(make="Ford", model="Fiesta", trim="SE")], today=TODAY)
-    assert [d["values"]["trim"] for d in out["drafts"]] == ["Titanium", "SE"]
+    assert len(out["drafts"]) == 1
+    assert out["drafts"][0]["values"]["trims"] == ["Titanium", "SE"]
 
     many = [draft(make="Ford", model=m) for m in ("Fiesta", "Focus", "Ka", "Ranger", "EcoSport", "Territory")]
     assert len(normalize_drafts(seed_catalog(), many, today=TODAY)["drafts"]) == MAX_VEHICLES
@@ -121,3 +123,41 @@ def test_duplicates_collapse_and_the_list_is_capped():
 
 def test_no_vehicles():
     assert normalize_drafts(seed_catalog(), [], today=TODAY) == {"drafts": []}
+
+
+def test_multiple_versions_in_one_proposal_and_distinct_models():
+    out = normalize_drafts(seed_catalog(), [
+        draft(model="Fiesta", trims=["Titanium", "SE"], trim_strict=True, price_max=12000),
+        draft(model="Polo", trim="Highline", price_max=12000),
+    ], today=TODAY)
+    assert len(out["drafts"]) == 2
+    fiesta, polo = (d["values"] for d in out["drafts"])
+    assert fiesta["trims"] == ["Titanium", "SE"]
+    assert fiesta["trim_strict"] is True
+    assert polo["trims"] == ["Highline"]
+    assert fiesta["price_max"] == polo["price_max"] == 12000
+
+
+def test_both_versions_match_the_same_search():
+    values = norm(model="Fiesta", trims=["Titanium", "SE"], trim_strict=True)["values"]
+    profile = {"filters": {"make": values["make"], "model": values["model"],
+                            "trims": values["trims"], "trim_strict": True}}
+    for trim in ("Titanium", "SE"):
+        assert match({"make": "Ford", "model": "Fiesta", "trim": trim}, profile) is not None
+    assert match({"make": "Ford", "model": "Fiesta", "trim": "S"}, profile) is None
+
+
+def test_invalid_versions_do_not_remove_valid_ones():
+    out = norm(model="Fiesta", trims=["titanium", "SE", "Highline", "Titanium"])
+    assert out["values"]["trims"] == ["Titanium", "SE"]
+    assert any("Highline" in n for n in out["notes"])
+
+
+def test_grouping_does_not_narrow_the_requested_ranges():
+    out = normalize_drafts(seed_catalog(), [
+        draft(model="Fiesta", trim="Titanium", year_min=2016, year_max=2018, km_max=100000),
+        draft(model="Fiesta", trim="SE", year_min=2014, year_max=2016, km_max=150000),
+    ], today=TODAY)
+    values = out["drafts"][0]["values"]
+    assert (values["year_min"], values["year_max"], values["km_max"]) == (2014, 2018, 150000)
+    assert out["drafts"][0]["notes"]

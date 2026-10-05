@@ -7,6 +7,8 @@
  */
 import { z } from "zod";
 
+import { cityById, cityFromText } from "@/lib/argentina-locations";
+
 import { AMBA, PLACES, type Place } from "@/lib/locations";
 import type { SearchValues } from "@/lib/search-form";
 
@@ -32,6 +34,7 @@ const DraftValues = z.object({
   make: z.string(),
   model: z.string(),
   trim: z.string(),
+  trims: z.array(z.string()).default([]),
   trim_strict: z.boolean(),
   year_min: z.number().int().nullable(),
   year_max: z.number().int().nullable(),
@@ -99,7 +102,9 @@ export function placeFromText(text: string | null | undefined): Place | undefine
   const folded = ` ${fold(text ?? "")} `;
   if (folded.trim() === "capital") return PLACES.find((p) => p.id === "caba");
   const hit = ALIASES.find(([alias]) => folded.includes(` ${alias} `));
-  if (!hit) return undefined;
+  const city = cityFromText(text ?? "");
+  if (city && (!hit || ["buenos aires", "bs as"].includes(hit[0]))) return city;
+  if (!hit) return cityFromText(text ?? "");
   return hit[1] === AMBA.id ? AMBA : PLACES.find((p) => p.id === hit[1]);
 }
 
@@ -113,7 +118,8 @@ export function draftToValues(draft: AssistedDraft, base: SearchValues): { value
   const notes = [...draft.notes];
   let location = base.location;
   if (v.location) {
-    const place = placeFromText(v.location);
+    const legacy = placeFromText(v.location);
+    const place = cityFromText(v.location) ?? (legacy?.id === "caba" ? cityById("caba") : legacy);
     if (place) {
       location = { label: place.label, lat: place.lat, lon: place.lon, radius_km: v.radius_km ?? place.radius };
     } else {
@@ -129,6 +135,7 @@ export function draftToValues(draft: AssistedDraft, base: SearchValues): { value
       make: v.make,
       model: v.model,
       trim: v.trim,
+      trims: v.trims,
       trim_strict: v.trim_strict,
       year_min: v.year_min,
       year_max: v.year_max,
@@ -155,10 +162,11 @@ export const ASSISTED_MAX_VEHICLES = 5;
  * (years, km, price, zone, alerts) from `from`, and the make, model and trim to pick.
  */
 export function addedVehicle(from: SearchValues): SearchValues {
-  return { ...from, name: "", make: "", model: "", trim: "", trim_strict: false };
+  return { ...from, name: "", make: "", model: "", trim: "", trims: [], trim_strict: false };
 }
 
 export function draftTitle(draft: AssistedDraft, index: number): string {
-  const { make, model, trim } = draft.values;
-  return [make, model, trim].filter(Boolean).join(" ") || `Vehículo ${index + 1}`;
+  const { make, model, trim, trims } = draft.values;
+  const versions = [...new Set([...trims, trim].filter(Boolean))];
+  return [make, model, versions.join(" / ")].filter(Boolean).join(" ") || `Vehículo ${index + 1}`;
 }
