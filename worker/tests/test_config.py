@@ -22,6 +22,7 @@ class ConfigTests(unittest.TestCase):
             self.assertEqual(config.LLM_PROVIDER, "openai")
             self.assertEqual(config.OPENAI_MODEL, "gpt-6-luna")
             self.assertEqual(config.OPENAI_API_KEY, "")
+            self.assertFalse(config.TELEGRAM_ENABLED)
         finally:
             sys.modules.pop("config", None)
             if original_config is not None:
@@ -58,7 +59,7 @@ class StartupWarningsTests(unittest.TestCase):
     FULL = {"WEB_BASE_URL": "https://automotive.example", "RESEND_API_KEY": "re_x",
             "EMAIL_FROM": "alertas@automotive.example", "TELEGRAM_ADMIN_CHAT_ID": "1",
             "LLM_PROVIDER": "anthropic", "ANTHROPIC_API_KEY": "sk-x", "CLAUDE_CLI_PATH": "",
-            "GEOCODING_ENABLED": True}
+            "GEOCODING_ENABLED": True, "TELEGRAM_ENABLED": True}
 
     def warnings(self, found=True, **changes):
         from config import startup_warnings
@@ -66,6 +67,9 @@ class StartupWarningsTests(unittest.TestCase):
 
     def test_a_complete_configuration_is_quiet(self):
         self.assertEqual(self.warnings(), [])
+
+    def test_mvp_does_not_require_telegram_configuration(self):
+        self.assertEqual(self.warnings(TELEGRAM_ENABLED=False, TELEGRAM_ADMIN_CHAT_ID=""), [])
 
     def test_each_missing_piece_is_named(self):
         self.assertIn("§53", self.warnings(WEB_BASE_URL="")[0])

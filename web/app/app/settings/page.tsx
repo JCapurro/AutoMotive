@@ -5,11 +5,10 @@ import { DeleteAccount } from "@/components/app/delete-account";
 import { BillingStatus } from "@/components/app/billing-status";
 import { RenewalButton } from "@/components/app/renewal-button";
 import { ProCtaButton } from "@/components/app/pro-cta";
-import { ChannelsForm, FrequencyForm, TelegramLink } from "@/components/app/settings-forms";
+import { ChannelsForm, FrequencyForm } from "@/components/app/settings-forms";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireUser } from "@/lib/auth";
-import { telegramBot } from "@/lib/env";
 import { webConfig } from "@/lib/config";
 import { isWaitlistPlan, PLAN_COPY, PLAN_NAMES, accessDescription, accessDate, planPrice, type PlanLimits } from "@/lib/pro";
 import { createClient } from "@/lib/supabase/server";
@@ -23,7 +22,7 @@ export default async function SettingsPage() {
   const [{ data: profile }, { data: waitlist }, { data: rawAccess }, { data: payments }, { data: declines }, { data: subscriptions }] = await Promise.all([
     supabase
       .from("profiles")
-      .select("email, plan, telegram_chat_id, telegram_link_code, default_channels, default_notification_frequency")
+      .select("email, plan, default_channels, default_notification_frequency")
       .single(),
     supabase.from("pro_waitlist").select("plan").maybeSingle(),
     supabase.rpc("my_plan_limits"),
@@ -38,20 +37,6 @@ export default async function SettingsPage() {
     <div className="mx-auto max-w-2xl space-y-5">
       <h1 className="text-xl font-semibold tracking-tight">Ajustes</h1>
 
-      <Card id="telegram">
-        <CardHeader>
-          <CardTitle>Telegram</CardTitle>
-          <CardDescription>Recibí las alertas en Telegram y marcá «Me interesa» o «Descartar» desde el chat.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <TelegramLink
-            bot={telegramBot}
-            code={profile?.telegram_link_code ?? ""}
-            linked={Boolean(profile?.telegram_chat_id)}
-          />
-        </CardContent>
-      </Card>
-
       <Card>
         <CardHeader>
           <CardTitle>Canales</CardTitle>
@@ -59,9 +44,8 @@ export default async function SettingsPage() {
         </CardHeader>
         <CardContent>
           <ChannelsForm
-            channels={profile?.default_channels ?? ["telegram", "web"]}
+            channels={profile?.default_channels ?? ["email", "web"]}
             email={profile?.email ?? user.email}
-            telegram={Boolean(profile?.telegram_chat_id)}
           />
         </CardContent>
       </Card>

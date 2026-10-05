@@ -11,7 +11,7 @@ export const metadata: Metadata = { title: "Política de privacidad" };
 // before a public launch.
 export default function PrivacyPage() {
   return (
-    <LegalPage title="Política de privacidad" updated="3 de octubre de 2026">
+    <LegalPage title="Política de privacidad" updated="5 de octubre de 2026">
       <p>
         Ese Auto es un servicio en etapa de piloto que monitorea publicaciones de autos usados y te avisa cuando
         aparece una que coincide con tu búsqueda. Esta política explica qué datos tuyos usamos, para qué y cómo
@@ -21,17 +21,13 @@ export default function PrivacyPage() {
       <h2>Qué datos usamos</h2>
       <ul>
         <li>
-          <strong>Tu email</strong>, para ingresar (te mandamos un link o un código) y, si lo elegís, para enviarte
-          alertas.
+          <strong>Tu email</strong>, para crear tu cuenta e ingresar con contraseña. Te enviamos emails para
+          confirmar el registro, recuperar la contraseña y, si lo elegís, recibir alertas.
         </li>
         <li>
           <strong>Tus búsquedas</strong>: vehículo, filtros, preferencias y un punto de referencia para el radio de
           búsqueda: una zona o ciudad que elijas o, si nos das permiso, la ubicación de tu dispositivo al crear la
           búsqueda, redondeada a alrededor de 1 km. No seguimos tu ubicación después.
-        </li>
-        <li>
-          <strong>Tu cuenta de Telegram</strong>, solo si la vinculás: el identificador del chat, para mandarte las
-          alertas.
         </li>
         <li>
           <strong>Cómo usás el servicio</strong>: publicaciones que abrís, guardás o descartás (y el motivo), estados
@@ -57,15 +53,14 @@ export default function PrivacyPage() {
       <ul>
         <li>Mercado Pago procesa los cobros. Recibe el email indicado y una referencia de la contratación. Guardamos importes, fechas, estado e identificadores del pago para verificar tu acceso; no guardamos números de tarjeta ni códigos de seguridad.</li>
         <li>Resend, que envía los emails (tu dirección y el contenido de la alerta).</li>
-        <li>Telegram, si elegís recibir alertas por ahí.</li>
         <li>
           Meta (Facebook e Instagram), solo si aceptás sus cookies: las páginas que visitás acá y las acciones que
           medimos (ver Cookies), sin tu email ni el contenido de tus búsquedas.
         </li>
         <li>Google Analytics 4, solo si aceptás las cookies de análisis: páginas visitadas y eventos de uso como búsquedas, favoritos y contratación, sin el texto ni los filtros de tus búsquedas.</li>
         <li>
-          Anthropic (Claude), que interpreta el texto del modo asistido. Solo recibe ese texto, sin tu email ni otros
-          datos de tu cuenta.
+          OpenAI, que interpreta el texto del modo asistido. Recibe ese texto y las opciones del catálogo necesarias
+          para convertirlo en filtros, sin tu email ni los identificadores de tu cuenta.
         </li>
       </ul>
 

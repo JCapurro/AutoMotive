@@ -6,7 +6,7 @@ import signal
 from telegram.ext import Application
 
 from config import (EMAIL_FROM, ENRICH_TICK_SECONDS, HEARTBEAT_SECONDS, LOG_FILE, LOG_KEEP_DAYS,
-                    NOTIFY_TICK_SECONDS, RESEND_API_KEY, TELEGRAM_ADMIN_CHAT_ID, TELEGRAM_TOKEN,
+                    NOTIFY_TICK_SECONDS, RESEND_API_KEY, TELEGRAM_ADMIN_CHAT_ID, TELEGRAM_ENABLED, TELEGRAM_TOKEN,
                     WATCHLIST_TICK_SECONDS, WEB_BASE_URL, startup_warnings)
 import db
 from bot.handlers import register
@@ -64,7 +64,9 @@ async def _every(name: str, seconds: int, job, stop: asyncio.Event) -> None:
 
 def build_notifier(bot, links: Links) -> Notifier:
     """The channels this worker can deliver on (sección 7.2)."""
-    channels = {"telegram": TelegramChannel(bot, links), "web": WebChannel(links)}
+    channels = {"web": WebChannel(links)}
+    if bot is not None:
+        channels["telegram"] = TelegramChannel(bot, links)
     if RESEND_API_KEY and EMAIL_FROM:
         channels["email"] = ResendEmailChannel(RESEND_API_KEY, EMAIL_FROM, links)
     return Notifier(channels)
@@ -80,23 +82,27 @@ def notifying(job, notifier: Notifier):
 
 
 async def amain() -> None:
-    if not TELEGRAM_TOKEN:
+    if TELEGRAM_ENABLED and not TELEGRAM_TOKEN:
         raise SystemExit("TELEGRAM_TOKEN no está seteado en .env")
 
     await db.open_pool()
 
     links = Links(WEB_BASE_URL)
-    app = Application.builder().token(TELEGRAM_TOKEN).build()
-    register(app, links)
-    notifier = build_notifier(app.bot, links)
-    source_alerts = SourceAlerts(app.bot, TELEGRAM_ADMIN_CHAT_ID, WEB_BASE_URL)
+    app = Application.builder().token(TELEGRAM_TOKEN).build() if TELEGRAM_ENABLED else None
+    if app is not None:
+        register(app, links)
+    notifier = build_notifier(app.bot if app else None, links)
+    source_alerts = SourceAlerts(app.bot, TELEGRAM_ADMIN_CHAT_ID, WEB_BASE_URL) if app else None
     for warning in startup_warnings():
         log.warning(warning)
 
-    await app.initialize()
-    await app.start()
-    await app.updater.start_polling(drop_pending_updates=True)
-    log.info("bot iniciado")
+    if app is not None:
+        await app.initialize()
+        await app.start()
+        await app.updater.start_polling(drop_pending_updates=True)
+        log.info("bot iniciado")
+    else:
+        log.info("worker iniciado: alertas web y email")
 
     stop = asyncio.Event()
 
@@ -119,7 +125,7 @@ async def amain() -> None:
     tasks = [
         asyncio.create_task(_every("heartbeat", HEARTBEAT_SECONDS,
                                    lambda _stop: heartbeat.beat(started_at), stop)),
-        asyncio.create_task(run_loop(notifier, stop, source_alerts.on_health)),
+        asyncio.create_task(run_loop(notifier, stop, source_alerts.on_health if source_alerts else None)),
         asyncio.create_task(_every("enrichment", ENRICH_TICK_SECONDS,
                                    notifying(enrich_pass, notifier), stop)),
         asyncio.create_task(_every("watchlist", WATCHLIST_TICK_SECONDS,
@@ -141,9 +147,10 @@ async def amain() -> None:
                 await task
             except asyncio.CancelledError:
                 pass
-        await app.updater.stop()
-        await app.stop()
-        await app.shutdown()
+        if app is not None:
+            await app.updater.stop()
+            await app.stop()
+            await app.shutdown()
         await run_collector(browser_shutdown())
         await db.close_pool()
         log.info("bye")

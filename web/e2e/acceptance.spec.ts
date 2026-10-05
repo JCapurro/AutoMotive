@@ -255,12 +255,8 @@ test("F4: registro, búsqueda, backfill, alerta, Me interesa y compra", async ({
 
     await navigate(page, "Ajustes");
     await expect(page).toHaveURL(/\/app\/settings$/);
-    const link = page.getByRole("link", { name: /Vincular Telegram/ });
-    const [{ telegram_link_code: code }] = await query<{ telegram_link_code: string }>(
-      `select telegram_link_code from public.profiles where email = $1`,
-      [email],
-    );
-    await expect(link).toHaveAttribute("href", new RegExp(`^https://t\\.me/[^?]+\\?start=${code}$`));
+    await expect(page.getByRole("link", { name: /Vincular Telegram/ })).toHaveCount(0);
+    await expect(page.getByText("Email", { exact: true })).toBeVisible();
     await expectNoHorizontalScroll(page);
   });
 

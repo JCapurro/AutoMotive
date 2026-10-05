@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 export default async function TermsPage() {
   const { proOffer, automaticPayments } = await webConfig();
   return (
-    <LegalPage title="Términos de uso" updated="2 de octubre de 2026">
+    <LegalPage title="Términos de uso" updated="5 de octubre de 2026">
       <p>
         Al crear una cuenta en Ese Auto aceptás estos términos. Si no estás de acuerdo, no uses el servicio.
       </p>
@@ -66,7 +66,7 @@ export default async function TermsPage() {
 
       <h2>Tu cuenta</h2>
       <p>
-        Usá un email que sea tuyo y no compartas los links de ingreso. No uses el servicio para fines ilegales ni
+        Usá un email que sea tuyo y no compartas tu contraseña ni los links de confirmación o recuperación. No uses el servicio para fines ilegales ni
         intentes acceder a datos de otros usuarios o sobrecargar el sistema. Podemos suspender cuentas que lo hagan.
         Podés borrar tu cuenta desde <Link href="/app/settings">Ajustes</Link>, después de confirmar la baja de una suscripción activa.
       </p>

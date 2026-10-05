@@ -9,6 +9,7 @@ load_dotenv()
 ROOT = Path(__file__).resolve().parent.parent
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "").strip()
+TELEGRAM_ENABLED = os.getenv("TELEGRAM_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
 # Operational alerts (sección 10): a collector that keeps failing, and its
 # recovery. Empty: no alerts (the admin still sees it in /admin/sources).
 TELEGRAM_ADMIN_CHAT_ID = os.getenv("TELEGRAM_ADMIN_CHAT_ID", "").strip()
@@ -107,7 +108,7 @@ def startup_warnings(env: dict | None = None, which=None) -> list[str]:
         out.append("WEB_BASE_URL no es https: Telegram no muestra el botón «Ver en Automotive»")
     if not (g["RESEND_API_KEY"] and g["EMAIL_FROM"]):
         out.append("email desactivado: faltan RESEND_API_KEY / EMAIL_FROM (canal obligatorio del §21)")
-    if not g["TELEGRAM_ADMIN_CHAT_ID"]:
+    if g.get("TELEGRAM_ENABLED", False) and not g["TELEGRAM_ADMIN_CHAT_ID"]:
         out.append("alertas operativas desactivadas: falta TELEGRAM_ADMIN_CHAT_ID")
     if g["LLM_PROVIDER"] == "claude_cli":
         out.append("LLM_PROVIDER=claude_cli usa tu suscripción de Claude Code: para usuarios del piloto, "

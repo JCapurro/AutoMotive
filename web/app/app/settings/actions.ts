@@ -8,7 +8,7 @@ import type { Frequency } from "@/lib/copy";
 import { track } from "@/lib/events";
 import { createClient } from "@/lib/supabase/server";
 
-const CHANNELS = ["telegram", "email", "web"] as const;
+const CHANNELS = ["email", "web"] as const;
 
 /** Channels for every search (sección 7.2). The web inbox is always on. */
 export async function saveChannels(channels: string[]): Promise<void> {
@@ -31,23 +31,6 @@ export async function saveFrequency(frequency: Frequency): Promise<void> {
   if (error) throw new Error(error.message);
   await supabase.from("search_profiles").update({ notification_frequency: frequency }).eq("user_id", user.id);
   await track(supabase, user.id, "notification_frequency_updated", { frequency });
-  refresh();
-}
-
-/** Whether the bot already linked this account (the page polls it after opening the deep link). */
-export async function telegramLinked(): Promise<boolean> {
-  await requireUser();
-  const supabase = await createClient();
-  const { data } = await supabase.from("profiles").select("telegram_chat_id").maybeSingle();
-  return Boolean(data?.telegram_chat_id);
-}
-
-export async function unlinkTelegram(): Promise<void> {
-  const user = await requireUser();
-  const supabase = await createClient();
-  const { error } = await supabase.rpc("unlink_telegram");
-  if (error) throw new Error(error.message);
-  await track(supabase, user.id, "telegram_unlinked");
   refresh();
 }
 

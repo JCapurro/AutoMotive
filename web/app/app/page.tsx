@@ -1,4 +1,4 @@
-import { Loader2, Pause, Plus, Send } from "lucide-react";
+import { Loader2, Pause, Plus } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -18,10 +18,9 @@ export const metadata: Metadata = { title: "Inicio" };
 export default async function Dashboard() {
   await requireUser();
   const supabase = await createClient();
-  const [{ data: searches }, { data: opportunities }, { data: profile }, { data: cta }] = await Promise.all([
+  const [{ data: searches }, { data: opportunities }, { data: cta }] = await Promise.all([
     supabase.rpc("dashboard_summary"),
     supabase.rpc("recent_opportunities", { p_limit: 8 }),
-    supabase.from("profiles").select("telegram_chat_id").maybeSingle(),
     supabase.rpc("pro_cta_state"),
   ]);
   // §52: "Ver planes" after real activity or a plan limit.
@@ -125,20 +124,6 @@ export default async function Dashboard() {
             );
           })}
         </div>
-
-        {!profile?.telegram_chat_id ? (
-          <Link
-            href="/app/settings#telegram"
-            className="group mt-5 flex items-center gap-3.5 rounded-lg bg-muted px-4 py-3.5 text-[15px]"
-          >
-            <Send className="size-5 shrink-0" aria-hidden />
-            <span>
-              <b className="font-bold">Recibí las alertas en Telegram.</b>{" "}
-              <span className="text-muted-foreground">Vinculá tu cuenta en un paso.</span>
-            </span>
-            <span className="ml-auto shrink-0 font-semibold underline-offset-4 group-hover:underline">Vincular</span>
-          </Link>
-        ) : null}
       </section>
 
       {pro?.show && pro.reason ? <ProBanner placement="dashboard" reason={pro.reason} /> : null}

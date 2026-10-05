@@ -27,7 +27,7 @@ export default async function UnsubscribePage({ searchParams }: PageProps<"/baja
           <CardHeader>
             <CardTitle className="text-lg">Listo, no te mandamos más emails</CardTitle>
             <CardDescription>
-              Tus búsquedas siguen activas y las alertas te llegan por los otros canales. Podés volver a activar el
+              Tus búsquedas siguen activas y las alertas quedan en la web. Podés volver a activar el
               email desde <Link href="/app/settings" className="underline">Ajustes</Link>.
             </CardDescription>
           </CardHeader>
@@ -36,7 +36,7 @@ export default async function UnsubscribePage({ searchParams }: PageProps<"/baja
             <CardHeader>
               <CardTitle className="text-lg">¿Dejar de recibir emails?</CardTitle>
               <CardDescription>
-                Dejamos de mandarte alertas por email. Tus búsquedas siguen activas en la web y en Telegram.
+                Dejamos de mandarte alertas por email. Tus búsquedas siguen activas en la web.
               </CardDescription>
             </CardHeader>
             <CardContent>

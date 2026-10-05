@@ -169,6 +169,37 @@ class CommercialTests(PostgresTestCase):
         self.assertTrue((await self.rows("SELECT enable_commercial_pilot() AS v",actor=self.admin))[0]['v']['already_enabled'])
         self.assertEqual((await self.access())['trial_started_at'],before)
 
+    async def test_free_trial_rollout_keeps_paid_enrollment_closed(self):
+        await self.rows("UPDATE app_config SET value=jsonb_set(value,'{enforced}','false') WHERE key='plan_limits'")
+        await self.rows("UPDATE app_config SET value=jsonb_set(value,'{enabled}','false') WHERE key='commercial_pilot'")
+        for _ in range(3): await self.search()
+        with self.assertRaisesRegex(Exception, 'admin_required'):
+            await self.rows("SELECT enable_free_trial()", actor=self.user)
+        result = (await self.rows("SELECT enable_free_trial() AS v", actor=self.admin))[0]['v']
+        self.assertEqual(result, {'trials_started': 1, 'searches_paused': 2})
+        before = await self.access()
+        self.assertEqual(before['active_searches'], 1)
+        self.assertEqual(before['state'], 'trial')
+        [pilot] = await self.rows("SELECT value FROM app_config WHERE key='commercial_pilot'")
+        self.assertFalse(pilot['value']['enabled'])
+        again = (await self.rows("SELECT enable_free_trial() AS v", actor=self.admin))[0]['v']
+        self.assertTrue(again['already_enabled'])
+        self.assertEqual((await self.access())['trial_started_at'], before['trial_started_at'])
+        with self.assertRaisesRegex(Exception, 'plan_limit_exceeded'):
+            await self.search()
+
+    async def test_new_accounts_use_email_and_web_channels(self):
+        [profile] = await self.rows("SELECT default_channels FROM profiles WHERE id=%s", self.user)
+        self.assertEqual(profile['default_channels'], ['email', 'web'])
+
+    async def test_service_role_can_roll_out_free_trial(self):
+        await self.rows("UPDATE app_config SET value=jsonb_set(value,'{enforced}','false') WHERE key='plan_limits'")
+        await self.search()
+        async with db.connection() as cx:
+            await cx.execute("SELECT set_config('request.jwt.claim.role','service_role',true)")
+            row = await (await cx.execute("SELECT enable_free_trial() AS v")).fetchone()
+        self.assertEqual(row['v']['trials_started'], 1)
+
     async def test_telegram_merge_preserves_consumed_trial(self):
         [pid] = await db.create_alert(user_id=865004321,chat_id=865004321,name='Fiesta',filters={'marcas':['Ford'],'modelos':['Fiesta']})
         old = (await self.rows("SELECT user_id FROM search_profiles WHERE id=%s",pid))[0]['user_id']

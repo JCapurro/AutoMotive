@@ -94,7 +94,7 @@ export async function saveSearch(id: number | null, raw: SearchInput, origin?: S
       .insert({
         ...row,
         user_id: user.id,
-        channels: profile?.default_channels ?? ["telegram", "web"],
+        channels: profile?.default_channels ?? ["email", "web"],
         raw_query: rawQuery,
       })
       .select("id")
