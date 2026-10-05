@@ -9,20 +9,19 @@ import { pixel } from "@/lib/meta-pixel";
 import { analyticsEvent } from "@/lib/google-analytics";
 import { PLAN_COPY, planPrice, type Placement, type ProOffer, WAITLIST_PLANS, type WaitlistPlan } from "@/lib/pro";
 import { cn } from "@/lib/utils";
-export function ProPlans({ offer, current, placement, pilot = false, recommended, automatic = false, email = "" }: {
-  offer: ProOffer; current: WaitlistPlan | null; placement: Placement | null; pilot?: boolean; recommended?: WaitlistPlan; automatic?: boolean; email?: string;
+export function ProPlans({ offer, current, placement, pilot = false, recommended, automatic = false }: {
+  offer: ProOffer; current: WaitlistPlan | null; placement: Placement | null; pilot?: boolean; recommended?: WaitlistPlan; automatic?: boolean;
 }) {
   const [plan, setPlan] = useState<WaitlistPlan>(recommended ?? current ?? "pass_30");
   const [joined, setJoined] = useState<WaitlistPlan | null>(current);
   const [pending, start] = useTransition();
-  const [billingEmail, setBillingEmail] = useState(email);
   const [accepted, setAccepted] = useState(false);
   return (
     <form className="space-y-4" onSubmit={(e) => {
       e.preventDefault();
       start(async () => {
         if (automatic) {
-          const result = await startPayment(plan, billingEmail.trim(), accepted, offer.version, offer[plan].amount);
+          const result = await startPayment(plan, accepted, offer.version, offer[plan].amount);
           if (result.error) toast.error(result.error);
           else if (result.url) {
             pixel("InitiateCheckout", { content_ids: [plan], value: offer[plan].amount, currency: offer[plan].currency });
@@ -64,9 +63,6 @@ export function ProPlans({ offer, current, placement, pilot = false, recommended
           : <>Estás en la lista de espera de <strong>{PLAN_COPY[joined].name}</strong>. Te avisamos cuando abramos las altas; no se genera ningún cobro.</>}
       </p> : null}
       {automatic ? <div className="space-y-3 text-sm">
-        <label className="block space-y-1">Email de tu cuenta de Mercado Pago
-          <input type="email" required maxLength={254} value={billingEmail} onChange={(e) => setBillingEmail(e.target.value)} className="block h-10 w-full rounded-md border px-3" autoComplete="email" />
-        </label>
         <label className="flex items-start gap-2"><input type="checkbox" required checked={accepted} onChange={(e) => setAccepted(e.target.checked)} className="mt-1" />
           <span>Acepto los <a href="/terminos" target="_blank" rel="noreferrer" className="underline">términos</a> y {plan === "pro_monthly" ? `el cobro de ${planPrice(offer[plan].amount)} ARS cada mes hasta cancelar.` : `el pago único de ${planPrice(offer[plan].amount)} ARS por 30 días.`}</span>
         </label>
