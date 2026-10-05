@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
 
 import { supabaseAnonKey, supabaseUrl } from "@/lib/env";
+import { isHealthOwner } from "@/lib/health-access";
 import { requestOrigin } from "@/lib/origin";
 
 /**
@@ -35,6 +36,14 @@ export async function proxy(request: NextRequest) {
   if (!signedIn && (pathname.startsWith("/app") || admin)) {
     const url = new URL(`/login?next=${encodeURIComponent(pathname + search)}`, requestOrigin(request));
     return redirectWith(url, response);
+  }
+  if (pathname === "/app/health" || pathname.startsWith("/app/health/")) {
+    const { data: verified, error } = await supabase.auth.getUser();
+    if (error || !isHealthOwner(verified.user)) {
+      const denied = new NextResponse("Not found", { status: 404, headers: { "Cache-Control": "private, no-store" } });
+      response.cookies.getAll().forEach((cookie) => denied.cookies.set(cookie));
+      return denied;
+    }
   }
   if (admin) {
     const { data: profile } = await supabase.from("profiles").select("role").eq("id", data!.claims!.sub).maybeSingle();

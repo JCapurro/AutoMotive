@@ -7,6 +7,13 @@ export type Database = {
 
   "public": {
           Tables: {
+      platform_health_checks: {
+        Row: { id: number; checked_at: string; checks: Json; email_pending: boolean; last_email_at: string | null }
+        Insert: { id: number; checked_at: string; checks: Json; email_pending?: boolean; last_email_at?: string | null }
+        Update: { id?: number; checked_at?: string; checks?: Json; email_pending?: boolean; last_email_at?: string | null }
+        Relationships: []
+      }
+
             billing_checkouts: {
               Row: BillingCheckoutRow
               Insert: Pick<BillingCheckoutRow, 'user_id' | 'offer' | 'offer_version' | 'amount' | 'billing_email'> & Partial<BillingCheckoutRow>

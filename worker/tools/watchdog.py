@@ -7,17 +7,15 @@ Checks:
   * base   — Postgres answers;
   * web    — WEB_BASE_URL answers (through the tunnel, when it is public).
 
-Sends a Telegram to TELEGRAM_ADMIN_CHAT_ID when a check starts failing and
-when it recovers — not on every run: the last state lives in
-logs/watchdog_state.json.
+Includes collector failures, stalled/overdue/empty runs and sends email to
+PLATFORM_HEALTH_EMAIL on failure/recovery. State: logs/platform_health_state.json.
 
 Usage (from worker/):
     python -m tools.watchdog          # check and alert
-    python -m tools.watchdog --dry    # check and print, no Telegram, no state
+    python -m tools.watchdog --dry    # check and print, no email, no state
 """
 from __future__ import annotations
 
-import argparse
 import json
 import sys
 from datetime import timedelta
@@ -28,7 +26,7 @@ import httpx
 
 import db
 from aio import run
-from config import ROOT, TELEGRAM_ADMIN_CHAT_ID, TELEGRAM_TOKEN, WATCHDOG_STALE_MINUTES, WEB_BASE_URL
+from config import ROOT
 from pipeline.heartbeat import last_beat
 
 STATE_FILE = ROOT / "logs" / "watchdog_state.json"
@@ -76,12 +74,6 @@ def transitions(previous: dict[str, str | None], current: dict[str, str | None])
     return out
 
 
-def send_telegram(text: str) -> None:
-    # The URL carries the bot token: never log it.
-    httpx.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
-               json={"chat_id": TELEGRAM_ADMIN_CHAT_ID, "text": text}, timeout=15).raise_for_status()
-
-
 def load_state(path: Path) -> dict[str, str | None]:
     try:
         return json.loads(path.read_text(encoding="utf-8"))
@@ -90,33 +82,9 @@ def load_state(path: Path) -> dict[str, str | None]:
 
 
 def main() -> int:
-    try:
-        sys.stdout.reconfigure(encoding="utf-8")  # Windows consoles default to cp1252
-    except AttributeError:
-        pass
-    parser = argparse.ArgumentParser(description=__doc__.split("\n")[1])
-    parser.add_argument("--dry", action="store_true", help="solo mostrar, sin Telegram ni estado")
-    args = parser.parse_args()
-
-    current = run(check_db_and_worker(timedelta(minutes=WATCHDOG_STALE_MINUTES)))
-    current["web"] = check_web(WEB_BASE_URL)
-    for name, problem in current.items():
-        print(f"{name:7} {'OK' if not problem else problem}")
-    if args.dry:
-        return 0 if not any(current.values()) else 1
-
-    messages = transitions(load_state(STATE_FILE), current)
-    if messages and TELEGRAM_TOKEN and TELEGRAM_ADMIN_CHAT_ID:
-        try:
-            send_telegram("\n".join(messages))
-        except httpx.HTTPError as e:
-            print(f"no pude avisar por Telegram: {type(e).__name__}", file=sys.stderr)
-            return 2  # keep the old state: try again next run
-    elif messages:
-        print("hay cambios pero falta TELEGRAM_ADMIN_CHAT_ID: no aviso", file=sys.stderr)
-    STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    STATE_FILE.write_text(json.dumps(current, ensure_ascii=False), encoding="utf-8")
-    return 0 if not any(current.values()) else 1
+    # Keep the registered Windows task compatible with the platform health CLI.
+    from tools.platform_health import main as health_main
+    return health_main()
 
 
 if __name__ == "__main__":
