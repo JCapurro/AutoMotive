@@ -1,7 +1,7 @@
 # MVP del 6 de octubre de 2026
 
 El lanzamiento ofrece una búsqueda gratuita durante 72 horas desde su primera
-activación, hasta 50 resultados, alertas en la web y un resumen diario por email.
+activación, hasta 50 resultados, alertas y un resumen diario por email.
 Particular y Agencia continúan en lista de espera; los cobros automáticos siguen
 deshabilitados hasta completar las pruebas de Mercado Pago.
 
@@ -12,13 +12,12 @@ deshabilitados hasta completar las pruebas de Mercado Pago.
   La clave se guarda en el `.env` ignorado y nunca en el repositorio.
 - Web/Vercel: `NEXT_PUBLIC_CONTACT_EMAIL=contact@eseauto.com.ar`.
 - `TELEGRAM_ENABLED=false` es el valor predeterminado del MVP. El worker puede
-  arrancar sin token de Telegram. Ajustes, dashboard y landing ofrecen web/email.
+  arrancar sin token de Telegram. Ajustes, dashboard y landing ofrecen email.
 
 ## Prueba gratuita
 
-La migración `20261010120000_mvp_email_free_trial.sql` cambia los canales
-predeterminados a email/web, sustituye la antigua preferencia de Telegram y
-conserva las preferencias explícitas de recibir solamente en la web.
+Las migraciones del MVP dejan email como único canal y conservan las bajas
+explícitas de correo. Las notificaciones históricas permanecen guardadas.
 
 `enable_free_trial()` habilita exclusivamente los límites gratuitos. Requiere
 un administrador autenticado o el servicio de confianza con `service_role`.
@@ -57,3 +56,5 @@ Antes de anunciar, completar con una cuenta externa el registro, la confirmació
 la recuperación de contraseña, una búsqueda y la recepción de su resumen.
 Un correo de prueba del remitente verifica entrega, pero no sustituye ese
 recorrido completo.
+
+La migración `20261011120000_mvp_email_only_published.sql` retira las alertas web, conserva las bajas de email y las notificaciones históricas. Los resultados se ordenan por Mejor oportunidad. La novedad usa exclusivamente la fecha de publicación; si falta, no suma puntos. Me interesa guarda el aviso; Descartar lo retira de Guardados.

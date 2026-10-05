@@ -2,7 +2,7 @@
  * Formatting shared by every screen. Mirrors the worker's copy
  * (worker/intelligence/copy.py, worker/notifications/templates.py): Argentine
  * thousands separators, "Publicado hace X" only when the source says when,
- * "Detectado hace X" otherwise (§11, principio 5).
+ * unknown publication date otherwise.
  */
 
 export const TIME_ZONE = "America/Argentina/Buenos_Aires";
@@ -36,14 +36,13 @@ export function ago(since: string | Date, now: Date = new Date()): string {
   return `${Math.floor(hours / 24)} días`;
 }
 
-/** "Publicado hace 4 minutos" or, without a publication date, "Detectado hace …". */
+/** "Publicado hace 4 minutos" or, without a publication date, "Fecha de publicación no informada". */
 export function ageLine(
   listing: { published_at?: string | null; first_seen_at?: string | null },
   now: Date = new Date(),
 ): string | null {
   if (listing.published_at) return `Publicado hace ${ago(listing.published_at, now)}`;
-  if (listing.first_seen_at) return `Detectado hace ${ago(listing.first_seen_at, now)}`;
-  return null;
+  return "Fecha de publicación no informada";
 }
 
 export function daysSince(since: string | Date, now: Date = new Date()): number {

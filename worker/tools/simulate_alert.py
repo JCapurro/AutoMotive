@@ -4,8 +4,7 @@ a target's batch, from matching on (sección 6 → sección 7).
 
 The listing must already be in `listings`. Every enabled search of its make
 and model scores it; the new matches go through the notification engine
-(decision, dedupe, daily cap) and are delivered. Only the web inbox by
-default, so nothing leaves the machine; the web shows it through Realtime.
+(decision, dedupe, daily cap) and are delivered. Only a simulated email adapter is used, so nothing leaves the machine.
 Used by the web's e2e tests ("llega una alerta simulada") and for QA.
 
 Usage (from worker/):
@@ -21,11 +20,17 @@ import sys
 
 import db
 from aio import run
-from config import WEB_BASE_URL
-from notifications.channels.web import WebChannel
-from notifications.links import Links
+from notifications.channels.base import SendResult
+
 from notifications.service import Notifier
 from pipeline.scheduler import process_batch
+
+
+class SimulatedEmail:
+    name = "email"
+
+    async def send(self, notification):
+        return SendResult(True, provider_id=f"simulated:{notification.id}")
 
 
 async def simulate(listing_id: int) -> list[dict]:
@@ -36,7 +41,7 @@ async def simulate(listing_id: int) -> list[dict]:
     if listing is None:
         raise SystemExit(f"listing {listing_id} no existe")
     target = {"id": None, "source": listing["source"], "make": listing["make"], "model": listing["model"]}
-    notifier = Notifier({"web": WebChannel(Links(WEB_BASE_URL))})
+    notifier = Notifier({"email": SimulatedEmail()})
     await process_batch(notifier, target, [listing_id], first_run=False)
     async with db.connection() as cx:
         return await (await cx.execute(

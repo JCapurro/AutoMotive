@@ -140,10 +140,10 @@ function watchEvents(
   if (edits.length) {
     out.push({ text: `La publicación cambió el ${dayMonth(edits[edits.length - 1].observed_at)}`, tone: "text-muted-foreground" });
   }
-  const days = daysSince(listing.published_at ?? listing.first_seen_at);
+  const days = listing.published_at ? daysSince(listing.published_at) : 0;
   if (days >= 1) {
     out.push({
-      text: `Lleva ${days} días ${listing.published_at ? "publicada" : "desde que la detectamos"}`,
+      text: `Lleva ${days} días publicada`,
       tone: days >= staleDays ? "text-warn" : "text-muted-foreground",
     });
   }

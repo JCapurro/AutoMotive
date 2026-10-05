@@ -9,7 +9,7 @@ Each alert starts with the lines of §22, in order:
     price_drop    📉 Bajó de precio · vehículo · Antes · Ahora · -X,X%
 
 and then what explains it (the search, place, source, red flags). Without a
-published_at the alert says "Detectado hace X", never "Publicado hace X"
+published_at the alert says "Fecha de publicación no informada"
 (§11, principio 5). Prices are always "publicados" (§19); the copy lint
 (tests/test_notifications_templates.py) checks FORBIDDEN_TERMS here too.
 
@@ -77,12 +77,10 @@ def ago_long(since: datetime, now: datetime) -> str:
 
 
 def age_line(listing: Mapping[str, Any], now: datetime) -> str | None:
-    published, seen = _ts(listing.get("published_at")), _ts(listing.get("first_seen_at"))
+    published = _ts(listing.get("published_at"))
     if published:
         return f"Publicado hace {ago_long(published, now)}."
-    if seen:
-        return f"Detectado hace {ago_long(seen, now)}."
-    return None
+    return "Fecha de publicación no informada."
 
 
 def pct(value: float, decimals: int = 1) -> str:

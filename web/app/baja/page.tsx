@@ -27,7 +27,7 @@ export default async function UnsubscribePage({ searchParams }: PageProps<"/baja
           <CardHeader>
             <CardTitle className="text-lg">Listo, no te mandamos más emails</CardTitle>
             <CardDescription>
-              Tus búsquedas siguen activas y las alertas quedan en la web. Podés volver a activar el
+              Tus búsquedas siguen activas y podés consultar los resultados en Inicio. Podés volver a activar el
               email desde <Link href="/app/settings" className="underline">Ajustes</Link>.
             </CardDescription>
           </CardHeader>

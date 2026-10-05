@@ -39,12 +39,12 @@ export default async function SettingsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Canales</CardTitle>
+          <CardTitle>Alertas por email</CardTitle>
           <CardDescription>Por dónde te avisamos. Aplica a todas tus búsquedas.</CardDescription>
         </CardHeader>
         <CardContent>
           <ChannelsForm
-            channels={profile?.default_channels ?? ["email", "web"]}
+            channels={profile?.default_channels ?? ["email"]}
             email={profile?.email ?? user.email}
           />
         </CardContent>

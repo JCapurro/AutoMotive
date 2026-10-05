@@ -35,13 +35,6 @@ export function ChannelsForm({ channels, email }: { channels: string[]; email: s
   return (
     <div className="space-y-3">
       <label className="flex items-start gap-3 text-sm">
-        <Checkbox checked disabled className="mt-0.5" />
-        <span>
-          <span className="font-medium">Web</span>
-          <span className="block text-muted-foreground">Siempre: las alertas quedan en Alertas.</span>
-        </span>
-      </label>
-      <label className="flex items-start gap-3 text-sm">
         <Checkbox
           className="mt-0.5"
           checked={channels.includes("email")}

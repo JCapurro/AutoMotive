@@ -88,7 +88,7 @@ EXPLAIN = {
     "trim_unknown": "versión no informada",
     "trim_any": "sin versión preferida",
     "recency_published": "publicado hace {ago}",
-    "recency_detected": "detectado hace {ago}",
+    "recency_unknown": "fecha de publicación no informada; no suma por novedad",
     "completeness": "{have}/{total} datos informados",
 }
 # Hard-filter names in "transmisión no informada".

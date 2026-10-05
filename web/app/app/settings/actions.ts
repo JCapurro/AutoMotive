@@ -8,12 +8,12 @@ import type { Frequency } from "@/lib/copy";
 import { track } from "@/lib/events";
 import { createClient } from "@/lib/supabase/server";
 
-const CHANNELS = ["email", "web"] as const;
+const CHANNELS = ["email"] as const;
 
-/** Channels for every search (sección 7.2). The web inbox is always on. */
+/** Channels for every search (sección 7.2). Email is the MVP delivery channel. */
 export async function saveChannels(channels: string[]): Promise<void> {
   const user = await requireUser();
-  const chosen = [...new Set(["web", ...channels.filter((c) => (CHANNELS as readonly string[]).includes(c))])];
+  const chosen = [...new Set(channels.filter((c) => (CHANNELS as readonly string[]).includes(c)))];
   const supabase = await createClient();
   const { error } = await supabase.from("profiles").update({ default_channels: chosen }).eq("id", user.id);
   if (error) throw new Error(error.message);

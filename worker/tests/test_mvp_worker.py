@@ -29,5 +29,5 @@ class MvpWorkerTests(unittest.IsolatedAsyncioTestCase):
     async def test_mvp_notifier_has_no_telegram_adapter(self):
         from notifications.links import Links
         notifier = main.build_notifier(None, Links('https://www.eseauto.com.ar'))
-        self.assertIn('web', notifier.channels)
+        self.assertNotIn('web', notifier.channels)
         self.assertNotIn('telegram', notifier.channels)

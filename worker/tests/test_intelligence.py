@@ -33,7 +33,7 @@ def fiesta_listing(**kw) -> dict:
         transmission="manual", fuel="nafta",
         location_text="Vicente López", lat=-34.526, lon=-58.479,
         seller_type=None, images=["1.jpg"], attributes={}, description=None,
-        published_at=None, first_seen_at=NOW - timedelta(minutes=4),
+        published_at=NOW - timedelta(minutes=4), first_seen_at=NOW - timedelta(minutes=4),
         price_partial=False, probable_repost_of=None, enriched_at=None,
     )
     row.update(kw)
@@ -76,14 +76,14 @@ class GoldenFixtureTests(unittest.TestCase):
         self.assertAlmostEqual(b["km"]["c"], 0.63, places=2)
         self.assertEqual(b["trim"]["c"], 1.0)
         self.assertAlmostEqual(b["recency"]["c"], 1.0, places=2)
-        self.assertEqual(b["completeness"]["c"], 0.6)
+        self.assertEqual(b["completeness"]["c"], 0.7)
         self.assertAlmostEqual(b["price"]["contribution"], 31.6, places=1)
         self.assertEqual(b["scoring_version"], SCORING_VERSION)
         self.assertEqual(b["price"]["explanation"],
                          "8% debajo del mercado observado · publicaciones comparables (n=23)")
         self.assertEqual(b["km"]["explanation"], "10% menos km que publicaciones comparables")
-        self.assertEqual(b["recency"]["explanation"], "detectado hace 4 min")
-        self.assertEqual(b["completeness"]["explanation"], "6/10 datos informados")
+        self.assertEqual(b["recency"]["explanation"], "publicado hace 4 min")
+        self.assertEqual(b["completeness"]["explanation"], "7/10 datos informados")
 
     def test_match_reasons_have_one_entry_per_filter(self):
         ev = evaluate(fiesta_listing(), fiesta_profile(), price_ref=MARKET, cfg=CFG, now=NOW, fx_rate=FX)
@@ -220,6 +220,19 @@ class GuardAndLevelTests(unittest.TestCase):
                          ["high", "high", "good", "good", "match", "match", "low", "low"])
         self.assertEqual(level_for(90, {"high": 95, "good": 80, "match": 60}), "good")
         self.assertEqual(level_for(90, t, cap="good"), "good")
+
+    def test_unknown_publication_does_not_reward_recent_detection(self):
+        from intelligence.scoring import recency_component
+        for detected in (NOW, NOW - timedelta(days=30)):
+            component = recency_component(fiesta_listing(published_at=None, first_seen_at=detected), CFG, NOW)
+            self.assertEqual(component.c, 0)
+            self.assertIn("no informada", component.explanation)
+
+    def test_old_publication_detected_today_is_still_old(self):
+        from intelligence.scoring import recency_component
+        component = recency_component(fiesta_listing(published_at=NOW - timedelta(days=30), first_seen_at=NOW), CFG, NOW)
+        self.assertLess(component.c, 0.001)
+        self.assertIn("publicado", component.explanation)
 
     def test_recency_halves_every_24_hours(self):
         day_old = fiesta_listing(published_at=NOW - timedelta(hours=24))

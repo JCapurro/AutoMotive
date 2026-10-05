@@ -13,7 +13,6 @@ from bot.handlers import register
 from llm import build_provider
 from notifications.channels.email import ResendEmailChannel
 from notifications.channels.telegram import TelegramChannel
-from notifications.channels.web import WebChannel
 from notifications.digest import digest_loop
 from notifications.links import Links
 from notifications.ops import SourceAlerts
@@ -64,7 +63,7 @@ async def _every(name: str, seconds: int, job, stop: asyncio.Event) -> None:
 
 def build_notifier(bot, links: Links) -> Notifier:
     """The channels this worker can deliver on (sección 7.2)."""
-    channels = {"web": WebChannel(links)}
+    channels = {}
     if bot is not None:
         channels["telegram"] = TelegramChannel(bot, links)
     if RESEND_API_KEY and EMAIL_FROM:
@@ -102,7 +101,7 @@ async def amain() -> None:
         await app.updater.start_polling(drop_pending_updates=True)
         log.info("bot iniciado")
     else:
-        log.info("worker iniciado: alertas web y email")
+        log.info("worker iniciado: alertas por email")
 
     stop = asyncio.Event()
 

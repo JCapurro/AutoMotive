@@ -14,13 +14,11 @@ import {
   COMPONENT,
   COMPONENTS,
   FUEL,
-  type Influence,
   type InteractionStatus,
   LEVEL,
   type Level,
   REASON_NAME,
   REASON_OK,
-  type RejectionReason,
   SELLER,
   TRANSMISSION,
 } from "@/lib/copy";
@@ -50,7 +48,6 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
     { data: matches },
     { data: interaction },
     { data: snapshots },
-    { data: owned },
     { data: notification },
     cfg,
   ] = await Promise.all([
@@ -68,7 +65,6 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
       .select("observed_at, price, currency, price_usd, change_kind")
       .eq("listing_id", listingId)
       .order("observed_at"),
-    supabase.from("owned_vehicles").select("id, automotive_influence").eq("listing_id", listingId).order("id").limit(1).maybeSingle(),
     n ? supabase.from("notifications").select("id").eq("id", n).maybeSingle() : Promise.resolve({ data: null }),
     webConfig(),
   ]);
@@ -88,9 +84,6 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
   const sourceName = listing.sources?.name ?? listing.source;
   const history = priceHistory(snapshots ?? []);
   const similar = await similarListings(supabase, listing, priceRef, cfg.comparables);
-  const profiles = (matches ?? [])
-    .map((m) => m.search_profiles)
-    .filter((p): p is { id: number; name: string } => Boolean(p));
   const back = best ? `/app/searches/${best.search_profile_id}` : "/app";
 
   return (
@@ -177,12 +170,7 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
           listingId={listingId}
           status={status}
           saved={interaction?.saved ?? false}
-          rejectionReason={(interaction?.rejection_reason ?? null) as RejectionReason | null}
           outboundHref={outboundHref}
-          price={listing.price}
-          currency={listing.currency}
-          profiles={profiles}
-          owned={owned ? { id: owned.id, influence: owned.automotive_influence as Influence | null } : null}
         />
       </div>
 
@@ -527,15 +515,14 @@ function PriceVerdict({
 /** "Suma mucho / algo / poco" from each part's share of its maximum (§6.3 in words). */
 function ScoreInWords({ breakdown }: { breakdown: Record<string, Component | string> }) {
   const parts = COMPONENTS.filter((c) => typeof breakdown[c] === "object").map((c) => ({ key: c, ...(breakdown[c] as Component) }));
-  const total = parts.reduce((sum, p) => sum + p.w, 0) || 1;
   return (
     <>
       <ul className="mt-3">
         {parts.map((p) => {
-          const adds = p.c >= 0.9 ? "mucho" : p.c >= 0.5 ? "algo" : "poco";
+          const adds = p.c === 0 ? "nada" : p.c >= 0.9 ? "mucho" : p.c >= 0.5 ? "algo" : "poco";
           return (
             <li key={p.key} className="grid grid-cols-[104px_minmax(0,1fr)] items-baseline gap-3.5 border-b py-3 last:border-b-0">
-              <span className={cn("justify-self-start text-[13px] font-bold whitespace-nowrap", adds === "poco" && "text-faint")}>
+              <span className={cn("justify-self-start text-[13px] font-bold whitespace-nowrap", (adds === "poco" || adds === "nada") && "text-faint")}>
                 <span className={adds === "mucho" ? "mark" : adds === "algo" ? "mark-under" : undefined}>Suma {adds}</span>
               </span>
               <p>
@@ -552,30 +539,7 @@ function ScoreInWords({ breakdown }: { breakdown: Record<string, Component | str
           verificarla.
         </p>
       ) : null}
-      <details className="group mt-3.5">
-        <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 py-1 text-sm font-semibold [&::-webkit-details-marker]:hidden">
-          Ver el puntaje en números
-          <span aria-hidden className="grid size-4.5 place-items-center rounded bg-muted text-sm leading-none group-open:hidden">
-            +
-          </span>
-          <span aria-hidden className="hidden size-4.5 place-items-center rounded bg-muted text-sm leading-none group-open:grid">
-            –
-          </span>
-        </summary>
-        <table className="mt-1.5 w-full text-sm">
-          <tbody>
-            {parts.map((p) => (
-              <tr key={p.key} className="border-b">
-                <td className="py-1.5">{COMPONENT[p.key]}</td>
-                <td className="type-figure py-1.5 text-right">
-                  {p.contribution.toFixed(1).replace(".", ",")}{" "}
-                  <span className="font-normal text-muted-foreground">de {Math.round((p.w / total) * 100)}</span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </details>
+
     </>
   );
 }

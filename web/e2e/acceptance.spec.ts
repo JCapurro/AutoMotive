@@ -37,12 +37,12 @@ async function expectNoHorizontalScroll(page: Page) {
 }
 
 /** Main navigation: the bottom tab bar on a phone, the header on desktop. */
-async function navigate(page: Page, name: "Inicio" | "Guardados" | "Alertas" | "Ajustes") {
+async function navigate(page: Page, name: "Inicio" | "Guardados" | "Ajustes") {
   const nav = page.getByRole("navigation", { name: "Principal" }).filter({ visible: true });
   await nav.getByRole("link", { name, exact: false }).first().click();
 }
 
-test("F4: registro, búsqueda, backfill, alerta, Me interesa y compra", async ({ page }, testInfo) => {
+test("F4: registro, búsqueda, backfill, alerta, Me interesa y guardados", async ({ page }, testInfo) => {
   const run = `${testInfo.project.name}-${Date.now()}`;
   const email = `${run}@${E2E_EMAIL_DOMAIN}`;
 
@@ -106,7 +106,7 @@ test("F4: registro, búsqueda, backfill, alerta, Me interesa y compra", async ({
     );
     expect(profile.filters).toEqual({ ...SEARCH_FILTERS, location_label: "AMBA" });
     expect(profile.radius_km).toBe(60);
-    expect(profile.channels).toContain("web");
+    expect(profile.channels).toEqual(["email"]);
   });
 
   await test.step("3. el worker hace el backfill y se ve en los resultados", async () => {
@@ -124,6 +124,7 @@ test("F4: registro, búsqueda, backfill, alerta, Me interesa y compra", async ({
     await expect(page.getByRole("status")).toHaveCount(0);
     await expectNoHorizontalScroll(page);
 
+    await expect(page.getByLabel("Ordenar")).toHaveValue("score");
     // Filters and sort (§29).
     await page.getByRole("link", { name: /^Oportunidades/ }).click();
     await expect(page).toHaveURL(/f=opportunities/);
@@ -156,95 +157,34 @@ test("F4: registro, búsqueda, backfill, alerta, Me interesa y compra", async ({
     await page.getByRole("button", { name: "Descartar" }).click();
     await page.getByRole("radio", { name: "Demasiado caro" }).check();
     await page.getByRole("button", { name: "Descartar", exact: true }).last().click();
-    await expect(page.getByLabel("Motivo", { exact: true })).toHaveValue("too_expensive");
+    await expect(page.getByRole("button", { name: "Descartar", exact: true })).toBeDisabled();
     await page.goto(`/app/searches/${profileId}?f=discarded`);
     await expect(page.getByTestId("listing-card")).toHaveCount(1);
   });
 
   let dealId = 0;
-  await test.step("4. llega una alerta simulada (Realtime)", async () => {
-    await navigate(page, "Inicio");
-    await expect(page.getByRole("heading", { name: "Mis búsquedas" })).toBeVisible();
-    await expect(page.getByTestId("search-card")).toContainText("nuevos esta semana");
-    await expect(page.getByTestId("inbox-badge")).toHaveCount(0);
-
+  await test.step("4. alerta de email simulada sin notificaciones web", async () => {
     dealId = await insertFreshDeal(run);
-    const sent = JSON.parse(worker("simulate_alert", String(dealId), "--json")) as { kind: string; channel: string }[];
-    expect(sent.some((n) => n.kind === "opportunity" && n.channel === "web")).toBe(true);
-
-    // No reload: the badge and the toast come through Supabase Realtime.
-    // Phone: on the header bell and the tab bar; desktop: in the header nav.
-    const badges = page.getByTestId("inbox-badge").filter({ visible: true });
-    await expect(badges.first()).toHaveText("1", { timeout: 20_000 });
-    await expect(badges).toHaveCount(mobile(page) ? 2 : 1);
-    await expect(page.getByText("🔥 Nueva oportunidad").first()).toBeVisible();
-  });
-
-  await test.step("5. clic en la alerta", async () => {
-    await navigate(page, "Alertas");
-    await expect(page).toHaveURL(/\/app\/inbox$/);
-    const alert = page.getByTestId("inbox-item").filter({ hasText: "Nueva oportunidad" }).first();
-    await expect(alert).toContainText("Ford Fiesta Titanium 2017");
-    await expectNoHorizontalScroll(page);
-    await alert.getByRole("link").click();
-    await expect(page).toHaveURL(new RegExp(`/app/listings/${dealId}\\?n=\\d+`));
-    await expect(page.getByTestId("score")).toBeVisible();
-
-    const [n] = await query<{ opened_at: string | null; clicked_at: string | null }>(
-      `select opened_at, clicked_at from public.notifications where listing_id = $1 and channel = 'web'
-          and user_id = (select id from public.profiles where email = $2)`,
-      [dealId, email],
-    );
-    expect(n.opened_at).not.toBeNull();
-    expect(n.clicked_at).not.toBeNull();
+    const sent = JSON.parse(worker("simulate_alert", String(dealId), "--json")) as { id: number; kind: string; channel: string; status: string }[];
+    const alert = sent.find((n) => n.kind === "opportunity" && n.channel === "email");
+    expect(alert?.status).toBe("sent");
+    expect(sent.some((n) => n.channel === "web" || n.channel === "telegram")).toBe(false);
     await expect(page.getByTestId("inbox-badge")).toHaveCount(0);
+    await page.goto(`/r/${alert!.id}?to=detail`);
+    await expect(page).toHaveURL(new RegExp(`/app/listings/${dealId}\\?n=\\d+`));
   });
 
-  await test.step("6. «Me interesa»", async () => {
-    await page.getByRole("button", { name: "Me interesa" }).click();
-    await expect(page.getByRole("button", { name: "Te interesa" })).toBeVisible();
-    await expect(page.getByLabel("Estado")).toHaveValue("interested");
-    await page.getByRole("button", { name: "Guardar" }).click();
-    await expect(page.getByRole("button", { name: "Guardada" })).toBeVisible();
+  await test.step("5. Me interesa guarda el aviso", async () => {
+    await expect(page.getByLabel("Estado", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Ver el puntaje en números")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Guardar", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Compré este vehículo" })).toHaveCount(0);
+    await page.getByRole("button", { name: "Me interesa", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Me interesa", exact: true })).toHaveAttribute("aria-pressed", "true");
+    const [interaction] = await query<{ status: string; saved: boolean }>(
+      `select i.status, i.saved from public.user_listing_interactions i join public.profiles p on p.id=i.user_id where p.email=$1 and i.listing_id=$2`, [email, dealId]);
+    expect(interaction).toEqual({ status: "interested", saved: true });
     await expectNoHorizontalScroll(page);
-  });
-
-  await test.step("7. «Compré este vehículo» y la pregunta de influencia (§38)", async () => {
-    await page.getByRole("button", { name: "Compré este vehículo" }).click();
-    await page.getByLabel("Precio de compra").fill("9.500");
-    await page.getByRole("button", { name: "Confirmar compra" }).click();
-    await expect(page.getByTestId("purchased")).toContainText("Compraste este vehículo");
-    await page.getByRole("group", { name: "¿Ese Auto influyó en que encontraras este vehículo?" })
-      .getByRole("button", { name: "Mucho" })
-      .click();
-    await expect(page.getByTestId("purchased")).toContainText("Nos dijiste que Ese Auto influyó: mucho");
-    await expect(page.getByLabel("Estado")).toHaveValue("purchased");
-
-    const [owned] = await query<{ purchase_price: string; automotive_influence: string; make: string; search_profile_id: string }>(
-      `select o.purchase_price, o.automotive_influence, o.vehicle->>'make' as make, o.search_profile_id
-         from public.owned_vehicles o join public.profiles p on p.id = o.user_id
-        where p.email = $1 and o.listing_id = $2`,
-      [email, dealId],
-    );
-    expect(owned).toMatchObject({ purchase_price: "9500", automotive_influence: "a_lot", make: "Ford" });
-    expect(Number(owned.search_profile_id)).toBe(profileId);
-    const events = await query<{ name: string }>(
-      `select e.name from public.events e join public.profiles p on p.id = e.user_id where p.email = $1`,
-      [email],
-    );
-    const names = events.map((e) => e.name);
-    for (const name of [
-      "search_profile_created",
-      "listing_detail_viewed",
-      "listing_status_changed",
-      "listing_discarded",
-      "alert_clicked",
-      "listing_saved",
-      "vehicle_purchased",
-      "purchase_influence_answered",
-    ]) {
-      expect(names, name).toContain(name);
-    }
   });
 
   await test.step("watchlist y ajustes", async () => {
@@ -264,8 +204,8 @@ test("F4: registro, búsqueda, backfill, alerta, Me interesa y compra", async ({
     await test.step("mobile: navegación inferior a 375 px", async () => {
       expect(page.viewportSize()?.width).toBe(375);
       const tabs = page.getByRole("navigation", { name: "Principal" }).filter({ visible: true });
-      await expect(tabs.getByRole("link")).toHaveCount(4);
-      for (const name of ["Inicio", "Guardados", "Alertas", "Ajustes"] as const) {
+      await expect(tabs.getByRole("link")).toHaveCount(3);
+      for (const name of ["Inicio", "Guardados", "Ajustes"] as const) {
         await navigate(page, name);
         await expect(tabs.getByRole("link", { name }).first()).toHaveAttribute("aria-current", "page");
         await expectNoHorizontalScroll(page);

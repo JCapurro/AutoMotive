@@ -48,7 +48,8 @@ export async function setStatus(listingId: number, status: InteractionStatus, re
   const before = await currentStatus(supabase, listingId);
   const { error } = await supabase
     .from("user_listing_interactions")
-    .upsert({ user_id: user.id, listing_id: listingId, status, rejection_reason: rejection }, { onConflict: "user_id,listing_id" });
+    .upsert({ user_id: user.id, listing_id: listingId, status, rejection_reason: rejection,
+      ...(status === "interested" ? { saved: true } : status === "discarded" ? { saved: false } : {}) }, { onConflict: "user_id,listing_id" });
   if (error) throw new Error(error.message);
   await track(supabase, user.id, "listing_status_changed", {
     listing_id: listingId,
@@ -56,6 +57,9 @@ export async function setStatus(listingId: number, status: InteractionStatus, re
     from: before?.status ?? "new",
     via: "web",
   });
+  if ((status === "interested" && !before?.saved) || (status === "discarded" && before?.saved)) {
+    await track(supabase, user.id, "listing_saved", { listing_id: listingId, saved: status === "interested" });
+  }
   if (status === "discarded") {
     await track(supabase, user.id, "listing_discarded", { listing_id: listingId, reason: rejection });
   }

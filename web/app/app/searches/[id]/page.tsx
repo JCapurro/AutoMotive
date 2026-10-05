@@ -51,7 +51,7 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
   if (!/^\d+$/.test(id)) notFound();
   const query = await searchParams;
   const filter: Filter = typeof query.f === "string" && Object.hasOwn(FILTERS, query.f) ? (query.f as Filter) : "all";
-  const sort: Sort = isSort(query.s) ? query.s : "recent";
+  const sort: Sort = isSort(query.s) ? query.s : "score";
   const page = Math.max(Number(query.p) || 1, 1);
 
   const supabase = await createClient();

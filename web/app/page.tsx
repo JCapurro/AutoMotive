@@ -32,7 +32,7 @@ const STEPS = [
   },
   {
     title: "Te avisamos cuando aparece uno que vale la pena mirar.",
-    text: "Por email y en la web, con el precio comparado y las preguntas para hacerle al vendedor.",
+    text: "Por email, con el precio comparado y las preguntas para hacerle al vendedor.",
     example: (
       <p className="inline-block rounded-md bg-muted px-3.5 py-3 text-[15px] leading-snug">
         <span className="block text-[13px] text-muted-foreground">Nueva oportunidad</span>

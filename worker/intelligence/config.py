@@ -15,7 +15,7 @@ from normalization.price_check import ALMOST_CERTAIN_BELOW_MEDIAN_PCT, SUSPICIOU
 
 # Bump when matching or scoring logic changes: every match is re-scored (sección 6.1).
 # f2-v2: matches also store seller_questions (F4), so the old rows get them.
-SCORING_VERSION = "f2-v2"
+SCORING_VERSION = "f2-v3-published"
 
 COMPONENTS = ("price", "match", "km", "trim", "recency", "completeness")
 

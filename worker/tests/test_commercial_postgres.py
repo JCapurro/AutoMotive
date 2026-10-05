@@ -54,6 +54,18 @@ class CommercialTests(PostgresTestCase):
     async def pay(self, offer='pass_30', ref='tx-001', user=None, actor=None):
         return (await self.rows("SELECT record_commercial_payment(%s,%s,'Mercado Pago',%s,now(),null) AS id", user or self.user, offer, ref, actor=actor or self.admin))[0]['id']
 
+    async def test_default_score_sort_and_recent_sort_use_publication(self):
+        pid = await self.search()
+        ids = []
+        for name, score, published_days, detected_days in [('old-detected-today', 95, 30, 0), ('new-detected-earlier', 70, 1, 5), ('unknown', 80, None, 0)]:
+            lid = (await self.rows("INSERT INTO listings(source,external_id,url,title,make,model,published_at,first_seen_at) VALUES ('mercadolibre',%s,'https://example.test/sort','Fiesta','Ford','Fiesta',now()-make_interval(days=>%s),now()-make_interval(days=>%s)) RETURNING id", name, published_days, detected_days))[0]['id']
+            ids.append(lid)
+            await self.rows("INSERT INTO matches(search_profile_id,listing_id,score,level,score_breakdown,match_reasons,scoring_version) VALUES (%s,%s,%s,'good','{}','{}','test')", pid, lid, score)
+        default = await self.rows("SELECT listing_id FROM search_results(%s)", pid, actor=self.user)
+        self.assertEqual([r['listing_id'] for r in default], [ids[0], ids[2], ids[1]])
+        recent = await self.rows("SELECT listing_id FROM search_results(%s,'all','recent')", pid, actor=self.user)
+        self.assertEqual([r['listing_id'] for r in recent], [ids[1], ids[0], ids[2]])
+
     async def test_trial_never_resets_and_active_capacity_is_atomic(self):
         self.assertEqual((await self.access())['state'], 'available')
         attempts = await asyncio.gather(self.search(), self.search(), return_exceptions=True)
@@ -190,7 +202,7 @@ class CommercialTests(PostgresTestCase):
 
     async def test_new_accounts_use_email_and_web_channels(self):
         [profile] = await self.rows("SELECT default_channels FROM profiles WHERE id=%s", self.user)
-        self.assertEqual(profile['default_channels'], ['email', 'web'])
+        self.assertEqual(profile['default_channels'], ['email'])
 
     async def test_service_role_can_roll_out_free_trial(self):
         await self.rows("UPDATE app_config SET value=jsonb_set(value,'{enforced}','false') WHERE key='plan_limits'")

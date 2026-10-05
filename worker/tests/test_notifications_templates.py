@@ -80,7 +80,7 @@ class PRDCopyTests(unittest.TestCase):
         n = notification("opportunity", {**OPPORTUNITY.payload,
                                           "listing": {**FIESTA, "published_at": None}})
         text = templates.email(n, LINKS, NOW).text
-        self.assertIn("Detectado hace 2 minutos.", text)
+        self.assertIn("Fecha de publicación no informada.", text)
         self.assertNotIn("Publicado", text)
 
     def test_few_comparables_no_percentage(self):
