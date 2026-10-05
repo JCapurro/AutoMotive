@@ -33,6 +33,15 @@ class SchedulerRecencyTests(unittest.TestCase):
         with patch("pipeline.scheduler.time.time", return_value=1_700_000_000):
             self.assertTrue(_is_recent(self._row(None), max_age_days=15))
 
+    def test_missing_publication_uses_first_detection_and_ignores_last_seen(self):
+        now = 1_700_000_000
+        with patch("pipeline.scheduler.time.time", return_value=now):
+            for days, recent in ((1, True), (16, False)):
+                row = dict(self._row(None),
+                           first_seen_at=datetime.fromtimestamp(now - days * 86400, timezone.utc),
+                           last_seen_at=datetime.fromtimestamp(now, timezone.utc))
+                self.assertEqual(_is_recent(row, max_age_days=15), recent)
+
 
 if __name__ == "__main__":
     unittest.main()

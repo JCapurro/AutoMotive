@@ -25,6 +25,7 @@ import httpx
 from bs4 import BeautifulSoup
 
 from .base import BaseScraper, Listing, ListingDetail
+from ._dates import publication_date
 from ._http import HEADERS, Page, dedupe, fetch_page, multiline_text, soup, text_of, to_int
 
 
@@ -68,6 +69,7 @@ def _price(container, block: str) -> tuple[float | None, str | None, str | None]
 
 
 class AutoCosmosScraper(BaseScraper):
+    DETAIL_PARSER_VERSION = 2
     name = "autocosmos"
     BASE = "https://www.autocosmos.com.ar"
     MAX_PAGES = 20             # 960 cards: a safety cap, no model comes close today
@@ -161,6 +163,7 @@ class AutoCosmosScraper(BaseScraper):
             km=km,
             ubicacion=ubic,
             vendedor="concesionaria" if dealer_logo else None,
+            published_at=publication_date(art),
             price_partial=partial is not None,
             price_partial_reason=partial,
             imagenes=[img.get("src")] if img and img.get("src") else [],
@@ -224,6 +227,7 @@ class AutoCosmosScraper(BaseScraper):
             ubicacion=", ".join(p for p in (city, region) if p) or None,
             vendedor="concesionaria" if dealer else ("particular" if seller and "particular" in seller.lower() else None),
             vendedor_nombre=logo.get("alt") if logo else None,
+            published_at=publication_date(car),
             descripcion=multiline_text(car.select_one("section.description .grid-container__content")),
             imagenes=dedupe(images),
             atributos=specs,

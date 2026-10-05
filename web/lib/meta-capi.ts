@@ -70,7 +70,7 @@ export async function sendPurchase({ paymentId, checkout, paidAt }: Purchase): P
       .select("id")
       .maybeSingle();
     if (!claimed) return;
-    // The first payment is the one the browser may also have reported.
+    // Keep historical event IDs stable; each renewal has its own verified payment.
     const { count } = await db
       .from("commercial_payments")
       .select("id", { count: "exact", head: true })

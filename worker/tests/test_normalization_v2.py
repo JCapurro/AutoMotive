@@ -151,6 +151,19 @@ def _stored(**kw) -> dict:
 
 
 class MergeTests(unittest.TestCase):
+    def test_publication_can_arrive_later_and_never_be_erased_or_drift(self):
+        first_seen = datetime(2026, 9, 28, tzinfo=timezone.utc)
+        published = datetime(2026, 9, 20, tzinfo=timezone.utc)
+        old = _stored(first_seen_at=first_seen)
+        values, _ = merge(old, _stored(published_at=published), detail=True)
+        self.assertEqual(values["published_at"], published)
+        self.assertNotIn("first_seen_at", values)
+        for incoming in (None, first_seen):
+            values, _ = merge(dict(old, published_at=published),
+                              _stored(published_at=incoming), detail=False)
+            self.assertEqual(values["published_at"], published)
+            self.assertNotIn("first_seen_at", values)
+
     def test_same_card_again_changes_nothing(self):
         old = _stored()
         new = {k: v for k, v in old.items() if k not in ("id", "enriched_at", "probable_repost_of")}

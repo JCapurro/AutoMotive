@@ -26,7 +26,7 @@ export default async function SourcesPage({ searchParams }: PageProps<"/admin/so
     <>
       <PageHeader
         title="Fuentes"
-        description={`Con ${alertAfter} fallas seguidas el worker avisa por Telegram (TELEGRAM_ADMIN_CHAT_ID). La cadencia se aplica en el próximo tick.`}
+        description={`Con ${alertAfter} fallas seguidas el watchdog avisa por email. Revisa los collectors cada 5 minutos; también avisa al recuperarse.`}
       />
       <WorkerStatus beat={beat} />
       <SourceHealthTable rows={health ?? []} editable alertAfter={alertAfter} />

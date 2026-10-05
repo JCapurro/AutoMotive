@@ -8,7 +8,7 @@
   of Supabase runs on this PC. Tasks (all under \AutoMotive\):
     Web        at logon: next start on 127.0.0.1:3000 (supervised, restarts)
     Worker     at logon: python main.py (supervised, restarts)
-    Watchdog   every 5 min: python -m tools.watchdog (Telegram to the admin)
+    Watchdog   every 5 min: python -m tools.watchdog (email operativo y health de collectors)
     Backup     daily 03:30: ops\backup.ps1 (pg_dump of the hosted database, via Docker)
   Remove them with ops\uninstall-tasks.ps1.
 #>

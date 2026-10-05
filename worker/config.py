@@ -92,6 +92,9 @@ LOG_FILE = os.getenv("LOG_FILE", str(ROOT / "logs" / "worker.log")).strip()
 LOG_KEEP_DAYS = int(os.getenv("LOG_KEEP_DAYS", "14"))
 HEARTBEAT_SECONDS = int(os.getenv("HEARTBEAT_SECONDS", "60"))
 WATCHDOG_STALE_MINUTES = int(os.getenv("WATCHDOG_STALE_MINUTES", "10"))
+PLATFORM_HEALTH_EMAIL = os.getenv("PLATFORM_HEALTH_EMAIL", "").strip()
+PLATFORM_HEALTH_RUN_TIMEOUT_MINUTES = max(1, int(os.getenv("PLATFORM_HEALTH_RUN_TIMEOUT_MINUTES", "30")))
+PLATFORM_HEALTH_EMPTY_RUNS = max(0, int(os.getenv("PLATFORM_HEALTH_EMPTY_RUNS", "3")))
 
 
 def startup_warnings(env: dict | None = None, which=None) -> list[str]:

@@ -64,7 +64,7 @@ class CommercialTests(PostgresTestCase):
         default = await self.rows("SELECT listing_id FROM search_results(%s)", pid, actor=self.user)
         self.assertEqual([r['listing_id'] for r in default], [ids[0], ids[2], ids[1]])
         recent = await self.rows("SELECT listing_id FROM search_results(%s,'all','recent')", pid, actor=self.user)
-        self.assertEqual([r['listing_id'] for r in recent], [ids[1], ids[0], ids[2]])
+        self.assertEqual([r['listing_id'] for r in recent], [ids[2], ids[1], ids[0]])
 
     async def test_trial_never_resets_and_active_capacity_is_atomic(self):
         self.assertEqual((await self.access())['state'], 'available')

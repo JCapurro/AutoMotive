@@ -20,6 +20,7 @@ from urllib.parse import parse_qs, urlparse
 from bs4 import BeautifulSoup
 
 from .base import BaseScraper, Listing, ListingDetail
+from ._dates import publication_date
 from ._browser import browser_context
 from ._http import Page, dedupe, fetch_page, slim_html, json_ld_of_type, soup, text_of, to_int
 from normalization.fx import usd_ars_rate
@@ -102,6 +103,7 @@ def _parse_card(a) -> Listing | None:
         ubicacion=location,
         vendedor="concesionaria",  # Kavak is dealer-only
         vendedor_nombre="Kavak",
+        published_at=publication_date(a),
         imagenes=[img["src"]] if img and img.get("src") else [],
     )
 
@@ -161,6 +163,7 @@ def parse_detail(html: str, url: str, status: int = 200) -> ListingDetail:
         ubicacion=location,
         vendedor="concesionaria",
         vendedor_nombre="Kavak",
+        published_at=publication_date(doc, structured=car),
         # The last JSON-LD image is a promotional banner, not the car.
         imagenes=dedupe([i for i in (images if isinstance(images, list) else [images])
                          if "BANNER" not in str(i).upper()]),
@@ -170,6 +173,7 @@ def parse_detail(html: str, url: str, status: int = 200) -> ListingDetail:
 
 
 class KavakScraper(BaseScraper):
+    DETAIL_PARSER_VERSION = 2
     name = "kavak"
     BASE = "https://www.kavak.com/ar/usados"
     MAX_SCROLLS = 30

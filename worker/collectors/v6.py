@@ -21,7 +21,7 @@ from bs4 import BeautifulSoup
 
 from .base import BaseScraper, Listing, ListingDetail
 from ._browser import browser_context
-from ._dates import parse_relative_date
+from ._dates import publication_date
 from ._http import Page, dedupe, fetch_rendered, json_ld_of_type, multiline_text, soup, text_of, to_int
 
 
@@ -108,7 +108,7 @@ def _parse_card(a) -> Listing | None:
         combustible=combustible,
         transmision=transmision,
         version=version,
-        published_at=parse_relative_date(days) if days else None,
+        published_at=publication_date(a, text=days),
         imagenes=[img["src"]] if img and img.get("src") else [],
     )
 
@@ -176,11 +176,12 @@ def parse_detail(html: str, url: str, status: int = 200) -> ListingDetail:
         descripcion=multiline_text(doc.select_one(".v2-desc-text")),
         imagenes=dedupe(images if isinstance(images, list) else [images]),
         atributos=specs,
-        published_at=parse_relative_date(published) if published else None,
+        published_at=publication_date(doc, structured=ld, text=published),
     ))
 
 
 class V6Scraper(BaseScraper):
+    DETAIL_PARSER_VERSION = 2
     name = "v6"
     BASE = "https://www.v6.com.ar/publicaciones"
 

@@ -54,6 +54,11 @@ docs/         PRD y plan técnico
 La cadencia de cada fuente es `sources.crawl_interval_seconds` (ML 10 min,
 Kavak/V6/Autocosmos 30 min, Facebook 60 min) y el ritmo de las fichas,
 `sources.detail_interval_seconds`. Se editan en la base, sin deploy.
+
+La antigüedad usa la fecha de publicación que informa la fuente (`published_at`).
+Si falta, usa la primera detección (`first_seen_at`), que no cambia al volver a
+ver el aviso. La web y las alertas distinguen «Publicado hace…» de «Detectado
+hace…»; el orden por recientes y el componente de antigüedad usan el mismo respaldo.
 ## Cómo funciona
 
 1. Creás una búsqueda en la web (`/app/searches/new`): marca, modelo y versión
