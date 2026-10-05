@@ -11,7 +11,7 @@ import { createClient } from "@/lib/supabase/server";
 export const metadata: Metadata = { title: "Planes" };
 
 export default async function ProPage({ searchParams }: PageProps<"/app/pro">) {
-  const user = await requireUser();
+  await requireUser();
   const { from, plan } = await searchParams;
   const supabase = await createClient();
   const [{ data: waitlist }, cfg, { data: checkouts }] = await Promise.all([
@@ -54,7 +54,6 @@ export default async function ProPage({ searchParams }: PageProps<"/app/pro">) {
         placement={isPlacement(from) ? from : "plans"}
         pilot={cfg.commercialPilot}
         automatic={cfg.automaticPayments}
-        email={user.email ?? ""}
       />
       {(checkouts ?? []).map((checkout) => <BillingStatus key={checkout.id} checkout={checkout} />)}
       <p className="text-sm text-muted-foreground">Cada modelo guardado cuenta como una búsqueda; pausar libera capacidad.
