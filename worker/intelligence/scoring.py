@@ -128,19 +128,21 @@ def trim_component(listing: Mapping[str, Any], profile: Mapping[str, Any],
 
 
 def age_hours(listing: Mapping[str, Any], now: datetime) -> tuple[float | None, bool]:
-    """Publication age only; detection time is not evidence of freshness."""
+    """Effective age, with first detection as fallback; bool identifies publication."""
     published = listing.get("published_at")
-    if published is None:
+    since = published or listing.get("first_seen_at")
+    if since is None:
         return None, False
-    return max(0.0, (now - published).total_seconds() / 3600), True
+    return max(0.0, (now - since).total_seconds() / 3600), published is not None
 
 
 def recency_component(listing: Mapping[str, Any], cfg: IntelligenceConfig, now: datetime) -> Component:
-    hours, _ = age_hours(listing, now)
+    hours, published = age_hours(listing, now)
     if hours is None:
         return Component(0.0, copy.EXPLAIN["recency_unknown"])
     c = clamp(0.5 ** (hours / cfg.curve("recency")["half_life_hours"]))
-    return Component(c, copy.EXPLAIN["recency_published"].format(ago=copy.ago(hours)))
+    key = "recency_published" if published else "recency_detected"
+    return Component(c, copy.EXPLAIN[key].format(ago=copy.ago(hours)))
 
 
 def completeness_fields(listing: Mapping[str, Any], cfg: IntelligenceConfig) -> dict[str, bool]:

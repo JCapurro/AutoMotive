@@ -25,7 +25,7 @@ from playwright.async_api import async_playwright
 
 from .base import BaseScraper, CollectorBlocked, Listing, ListingDetail
 from ._browser import browser_context
-from ._dates import parse_relative_date
+from ._dates import parse_publication_date
 from ._http import Page, fetch_rendered, slim_html, soup
 from config import FB_STORAGE_STATE
 from normalization.geo import nearest_known_location_name
@@ -202,9 +202,9 @@ def parse_card(href: str, text: str, label: str = "", img: str | None = None) ->
         price, moneda = _parse_price(label)
     title = _title_from_card(label, lines) or (text or "")[:120]
 
-    # Pull publication-date string from any "Hace ..." line
+    # Publication cues only; a model year or a price is not a date.
     date_line = next(
-        (ln for ln in lines if ln.lower().startswith("hace ")
+        (ln for ln in lines if ln.lower().startswith(("hace ", "publicado ", "publicada "))
          or ln.lower() in ("ayer", "hoy", "anteayer")),
         None,
     )
@@ -219,7 +219,7 @@ def parse_card(href: str, text: str, label: str = "", img: str | None = None) ->
         anio=_parse_year(text),
         km=_parse_km(text),
         ubicacion=_extract_location(lines, title),
-        published_at=parse_relative_date(date_line),
+        published_at=parse_publication_date(date_line),
         imagenes=[img] if img else [],
     )
 
@@ -303,10 +303,10 @@ def parse_detail(html: str, url: str, status: int = 200) -> ListingDetail:
     # "Publicado hace 2 días en Vicente López, BA"
     published_at = location = None
     for ln, pl in zip(lines, plain):
-        if pl.startswith(("publicado hace", "listed ")):
-            hm = re.match(r"(?:publicado|listed)\s+(.*?)(?:\s+(?:en|in)\s+(.+))?$", ln, re.IGNORECASE)
+        if pl.startswith(("publicado ", "publicada ", "listed ")):
+            hm = re.match(r"(?:publicad[oa]|listed)\s+(.*?)(?:\s+(?:en|in)\s+(.+))?$", ln, re.IGNORECASE)
             if hm:
-                published_at = parse_relative_date(hm.group(1))
+                published_at = parse_publication_date(hm.group(1))
                 location = hm.group(2)
             break
 
@@ -447,7 +447,7 @@ class FacebookMarketplaceScraper(BaseScraper):
         return out
 
     # 2: "Ver más" is expanded and the description stops before the page around it.
-    DETAIL_PARSER_VERSION = 2
+    DETAIL_PARSER_VERSION = 3
     parse_detail = staticmethod(parse_detail)
 
     async def fetch_detail_page(self, url: str) -> Page:

@@ -17,7 +17,8 @@ describe("format", () => {
     expect(ageLine({ published_at: "2026-09-28T11:56:00Z", first_seen_at: "2026-09-28T11:58:00Z" }, NOW)).toBe(
       "Publicado hace 4 minutos",
     );
-    expect(ageLine({ published_at: null, first_seen_at: "2026-09-28T09:00:00Z" }, NOW)).toBe("Fecha de publicación no informada");
+    expect(ageLine({ published_at: null, first_seen_at: "2026-09-28T09:00:00Z" }, NOW)).toBe("Detectado hace 3 horas");
+    expect(ageLine({}, NOW)).toBe("Fecha de publicación no informada");
     expect(ageLine({ published_at: "2026-09-20T12:00:00Z" }, NOW)).toBe("Publicado hace 8 días");
   });
 

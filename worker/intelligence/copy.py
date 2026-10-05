@@ -88,6 +88,7 @@ EXPLAIN = {
     "trim_unknown": "versión no informada",
     "trim_any": "sin versión preferida",
     "recency_published": "publicado hace {ago}",
+    "recency_detected": "detectado por primera vez hace {ago}",
     "recency_unknown": "fecha de publicación no informada; no suma por novedad",
     "completeness": "{have}/{total} datos informados",
 }

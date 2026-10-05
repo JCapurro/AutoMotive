@@ -221,12 +221,19 @@ class GuardAndLevelTests(unittest.TestCase):
         self.assertEqual(level_for(90, {"high": 95, "good": 80, "match": 60}), "good")
         self.assertEqual(level_for(90, t, cap="good"), "good")
 
-    def test_unknown_publication_does_not_reward_recent_detection(self):
+    def test_unknown_publication_uses_first_detection(self):
         from intelligence.scoring import recency_component
         for detected in (NOW, NOW - timedelta(days=30)):
             component = recency_component(fiesta_listing(published_at=None, first_seen_at=detected), CFG, NOW)
-            self.assertEqual(component.c, 0)
-            self.assertIn("no informada", component.explanation)
+            expected = 0.5 ** ((NOW - detected).total_seconds() / 3600 / 24)
+            self.assertAlmostEqual(component.c, expected)
+            self.assertIn("detectado por primera vez", component.explanation)
+
+    def test_without_either_date_recency_is_unknown(self):
+        from intelligence.scoring import recency_component
+        component = recency_component(fiesta_listing(published_at=None, first_seen_at=None), CFG, NOW)
+        self.assertEqual(component.c, 0)
+        self.assertIn("no informada", component.explanation)
 
     def test_old_publication_detected_today_is_still_old(self):
         from intelligence.scoring import recency_component

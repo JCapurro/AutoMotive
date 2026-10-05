@@ -34,13 +34,11 @@ log = logging.getLogger("scheduler")
 
 
 def _is_recent(row: dict, max_age_days: int) -> bool:
-    """Drop listings published more than `max_age_days` ago.
-    If the source doesn't say when, accept it — the matches table and the
-    bootstrap flag handle freshness for those."""
-    published: datetime | None = row.get("published_at")
-    if published is None:
+    """Drop old listings, using first detection when publication is unknown."""
+    since: datetime | None = row.get("published_at") or row.get("first_seen_at")
+    if since is None:
         return True
-    return (time.time() - published.timestamp()) <= max_age_days * 86_400
+    return (time.time() - since.timestamp()) <= max_age_days * 86_400
 
 
 def _key(row: dict) -> tuple[str, str]:

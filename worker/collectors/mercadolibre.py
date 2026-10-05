@@ -19,7 +19,7 @@ from playwright.async_api import async_playwright
 import config
 from .base import BaseScraper, CollectorBlocked, Listing, ListingDetail
 from ._browser import browser_context
-from ._dates import parse_relative_date
+from ._dates import publication_date
 from ._http import Page, dedupe, fetch_page, json_ld_of_type, multiline_text, soup, text_of, to_int
 
 
@@ -181,6 +181,7 @@ def _parse_card(card_html: str) -> Listing | None:
         anio=anio,
         km=km,
         ubicacion=location,
+        published_at=publication_date(soup),
         imagenes=[img_url] if img_url else [],
     )
 
@@ -245,7 +246,7 @@ def parse_detail(html: str, url: str, status: int = 200) -> ListingDetail:
 
     # "2026 | 0 km · Publicado hace 7 meses"
     subtitle = text_of(doc.select_one(".ui-pdp-subtitle, .ui-pdp-header__subtitle")) or ""
-    published = re.search(r"publicado\s+(hace\s+.+)$", subtitle, re.IGNORECASE)
+    published = re.search(r"publicad[oa]\s+(.+)$", subtitle, re.IGNORECASE)
 
     seller_header = _plain(text_of(doc.select_one(".ui-vip-seller-profile__header")) or "")
     vendedor = ("concesionaria" if "concesionaria" in seller_header or "tienda oficial" in seller_header
@@ -278,7 +279,8 @@ def parse_detail(html: str, url: str, status: int = 200) -> ListingDetail:
         descripcion=multiline_text(doc.select_one(".ui-pdp-description__content")),
         imagenes=images,
         atributos=specs,
-        published_at=parse_relative_date(published.group(1)) if published else None,
+        published_at=publication_date(doc, structured=ld,
+                                      text=published.group(1) if published else None),
     ))
 
 
@@ -293,6 +295,7 @@ def _blocked(page_number: int) -> None:
 
 
 class MercadoLibreScraper(BaseScraper):
+    DETAIL_PARSER_VERSION = 2
     name = "mercadolibre"
 
     MAX_PAGES = 2  # first 96 results per run is plenty for "newest" sort

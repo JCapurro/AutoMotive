@@ -143,6 +143,18 @@ class IngestCase(PostgresTestCase):
 
 
 class CanonicalUpsertTests(IngestCase):
+    async def test_missing_publication_keeps_first_detection_when_date_arrives_later(self):
+        await ingest([card("1")], geocode=None)
+        first = await self.listing("1")
+        self.assertIsNone(first["published_at"])
+        published = int(first["first_seen_at"].timestamp()) - 7 * 86400
+        await ingest([card("1", published_at=published)], geocode=None)
+        await ingest([card("1")], geocode=None)
+        later = await self.listing("1")
+        self.assertEqual(later["first_seen_at"], first["first_seen_at"])
+        self.assertEqual(int(later["published_at"].timestamp()), published)
+        self.assertEqual(await self.snapshots("1"), ["new"])
+
     async def test_two_runs_in_a_row_do_not_duplicate_and_first_seen_never_moves(self):
         await self.fiesta_alert()
         FakeSource.results["mercadolibre"] = [card("1"), card("2"), card("2"), card("3")]
