@@ -31,19 +31,22 @@ el plazo.
 
 ## MercadoLibre
 
-La fuente está bloqueada por login/verificación del proveedor. Para preparar
-una sesión, desde el checkout operativo:
+La fuente usa Chrome visible con un perfil persistente propio, como Tecc,
+para las búsquedas y los detalles. Para preparar o verificar el perfil,
+desde el checkout operativo:
 
 ```powershell
 cd C:\Users\Juan\Desktop\AutoMotive\worker
 python -m collectors.mercadolibre
 ```
 
-El propietario completa el ingreso/verificación en el navegador. Cuando puede
-ver el sitio normalmente, vuelve a la consola y presiona Enter para guardar
-`ml_state.json`. Después hay que comprobar una corrida del scraper con esa
-sesión. Un login exitoso no demuestra que el acceso automatizado esté habilitado.
-Si el proveedor mantiene el bloqueo, la fuente continúa degradada.
+El propietario completa el ingreso/verificación en esa ventana de Chrome y
+presiona Enter para comprobar una búsqueda real de autos. El comando solo
+termina con éxito cuando aparecen publicaciones. El estado queda en
+`.ml_chrome_profile/` (configurable con `ML_BROWSER_PROFILE_DIR`); `ml_state.json`
+ya no se usa. Chrome debe estar instalado y el escritorio disponible para abrir
+ventanas. Después hay que comprobar una corrida real del scraper. Si el proveedor
+mantiene el bloqueo, la fuente continúa degradada y distingue login de captcha.
 
 ## Verificación
 

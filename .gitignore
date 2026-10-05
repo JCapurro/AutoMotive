@@ -2,6 +2,7 @@
 .env
 fb_state.json
 ml_state.json
+.ml_chrome_profile/
 
 # Runtime data
 *.db

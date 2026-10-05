@@ -1,54 +1,60 @@
 """MercadoLibre Argentina scraper.
 
-Uses Playwright against the public search page. The official Mercado Libre
-API exposes /sites/MLA/search but it is gated by their PolicyAgent for
-non-Partner apps (returns 403 for any query, regardless of OAuth scopes),
-so we don't bother with the API path.
-
-Item pages (fetch_detail) are server-rendered and read with a plain GET.
+Search and detail pages use installed, visible Chrome with a dedicated
+persistent profile, matching Tecc's transport. Manual verification opens that
+same profile; a cookie snapshot in a fresh headless context is not used.
 """
 from __future__ import annotations
 import asyncio
 import logging
+import random
 import re
-from pathlib import Path
+from urllib.parse import urlsplit
 
 from bs4 import BeautifulSoup
-from playwright.async_api import async_playwright
+from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 
 import config
 from .base import BaseScraper, CollectorBlocked, Listing, ListingDetail
-from ._browser import browser_context
+from ._mercadolibre_browser import mercadolibre_context
 from ._dates import parse_relative_date
-from ._http import Page, dedupe, fetch_page, json_ld_of_type, multiline_text, soup, text_of, to_int
+from ._http import Page, dedupe, json_ld_of_type, multiline_text, soup, text_of, to_int
 
 
 log = logging.getLogger("collectors.mercadolibre")
 
 
-def _browser_storage_state() -> str | None:
-    """Return the saved MercadoLibre browser session, if it exists."""
-    return config.ML_STORAGE_STATE if Path(config.ML_STORAGE_STATE).exists() else None
+def _wall_reason(url: str, body_text: str = "") -> str | None:
+    url_l = (url or "").lower()
+    text_l = (body_text or "").lower()
+    if "/captcha/" in url_l or ("por seguridad" in text_l and "complet" in text_l and "desaf" in text_l):
+        return "security challenge"
+    if ("account-verification" in url_l or "/login" in url_l
+            or ("para continuar" in text_l and ("ingresa" in text_l or "ingresá" in text_l))):
+        return "login required"
+    return None
 
 
 def _looks_like_login_wall(url: str, body_text: str = "") -> bool:
-    url_l = (url or "").lower()
-    text_l = (body_text or "").lower()
-    return (
-        "account-verification" in url_l
-        or "/login" in url_l
-        or ("para continuar" in text_l and "ingresa" in text_l)
-        # Security challenge (captcha): never solved automatically, the run fails.
-        or ("por seguridad" in text_l and "complet" in text_l and "desaf" in text_l)
-    )
+    return _wall_reason(url, body_text) is not None
 
 
-async def _page_looks_like_login_wall(page) -> bool:
+async def _page_wall_reason(page) -> str | None:
     try:
         body_text = await page.locator("body").inner_text(timeout=2_000)
     except Exception:
         body_text = ""
-    return _looks_like_login_wall(page.url, body_text)
+    return _wall_reason(page.url, body_text)
+
+
+def _safe_url(url: str) -> str:
+    """Log the destination without login query parameters or fragments."""
+    parts = urlsplit(url)
+    return f"{parts.scheme}://{parts.hostname}{parts.path}"
+
+
+async def _page_pause() -> None:
+    await asyncio.sleep(random.uniform(3.0, 5.5))
 
 
 # ---------- URL building ----------
@@ -284,12 +290,12 @@ def parse_detail(html: str, url: str, status: int = 200) -> ListingDetail:
 
 # ---------- scraper ----------
 
-def _blocked(page_number: int) -> None:
+def _blocked(page_number: int, reason: str, url: str, status: int) -> None:
     """A wall on the first page fails the run; on a later page, keep what we have."""
-    log.warning("MercadoLibre requires account verification/login. "
-                "Run: python -m collectors.mercadolibre")
+    message = f"mercadolibre: {reason}; HTTP {status}; destination={_safe_url(url)}"
+    log.warning("%s. Open the persistent profile: python -m collectors.mercadolibre", message)
     if page_number == 1:
-        raise CollectorBlocked("mercadolibre: login wall or security challenge")
+        raise CollectorBlocked(message)
 
 
 class MercadoLibreScraper(BaseScraper):
@@ -300,22 +306,22 @@ class MercadoLibreScraper(BaseScraper):
     async def search(self, filters: dict) -> list[Listing]:
         out: list[Listing] = []
         seen_ids: set[str] = set()
-        storage_state = _browser_storage_state()
-        if not storage_state:
-            log.warning(
-                "MercadoLibre browser session missing at %s. Run: python -m collectors.mercadolibre",
-                config.ML_STORAGE_STATE,
-            )
-        async with browser_context(storage_state=storage_state) as ctx:
+        async with mercadolibre_context() as ctx:
             page = await ctx.new_page()
             try:
                 for p in range(1, self.MAX_PAGES + 1):
+                    if p > 1:
+                        await _page_pause()
                     url = _build_url(filters, page=p)
+                    status = 0
                     try:
-                        await page.goto(url, timeout=45_000, wait_until="domcontentloaded")
-                        if await _page_looks_like_login_wall(page):
-                            _blocked(p)
+                        response = await page.goto(url, timeout=45_000, wait_until="domcontentloaded")
+                        status = response.status if response else 0
+                        if reason := await _page_wall_reason(page):
+                            _blocked(p, reason, page.url, status)
                             break
+                        if status >= 400:
+                            raise RuntimeError(f"mercadolibre search HTTP {status}: {_safe_url(page.url)}")
                         await page.wait_for_selector(
                             "li.ui-search-layout__item, .ui-search-rescue",
                             timeout=15_000,
@@ -323,9 +329,11 @@ class MercadoLibreScraper(BaseScraper):
                     except CollectorBlocked:
                         raise
                     except Exception as exc:
-                        if await _page_looks_like_login_wall(page):
-                            _blocked(p)
+                        if reason := await _page_wall_reason(page):
+                            _blocked(p, reason, page.url, status)
                         else:
+                            if p == 1:
+                                raise
                             log.warning("MercadoLibre scrape failed: %s", exc)
                         break  # no results / blocked
                     if await page.locator(".ui-search-rescue").count() > 0:
@@ -348,28 +356,56 @@ class MercadoLibreScraper(BaseScraper):
     parse_detail = staticmethod(parse_detail)
 
     async def fetch_detail_page(self, url: str) -> Page:
-        page = await fetch_page(url)
-        if _looks_like_login_wall(page.url, text_of(soup(page.html).body) or ""):
-            raise CollectorBlocked("mercadolibre: login wall or security challenge")
-        return page
+        async with mercadolibre_context() as ctx:
+            page = await ctx.new_page()
+            try:
+                response = await page.goto(url, timeout=45_000, wait_until="domcontentloaded")
+                status = response.status if response else 0
+                if reason := await _page_wall_reason(page):
+                    _blocked(1, reason, page.url, status)
+                if status >= 400 and status != 404:
+                    raise RuntimeError(f"mercadolibre detail HTTP {status}: {_safe_url(page.url)}")
+                if status != 404:
+                    try:
+                        await page.wait_for_selector(".ui-pdp-container, h1.ui-pdp-title", timeout=8_000)
+                    except PlaywrightTimeoutError:
+                        # Paused/finalized ads may lack the normal PDP container.
+                        # The parser handles them, after checking for a wall.
+                        pass
+                    if reason := await _page_wall_reason(page):
+                        _blocked(1, reason, page.url, status)
+                return Page(status, page.url, await page.content())
+            finally:
+                await page.close()
 
 
 # ------ Interactive login: `python -m collectors.mercadolibre` ------
+async def _wait_for_enter() -> None:
+    await asyncio.to_thread(input, "")
+
+
 async def _login_and_save() -> None:
-    async with async_playwright() as pw:
-        browser = await pw.chromium.launch(headless=False)
-        ctx = await browser.new_context(locale="es-AR")
+    async with mercadolibre_context() as ctx:
         page = await ctx.new_page()
-        await page.goto("https://www.mercadolibre.com.ar/")
-        print(
-            "Inicia sesion o completa la verificacion de MercadoLibre en la ventana abierta. "
-            "Cuando puedas ver el sitio normalmente, volve a esta consola y presiona Enter."
-        )
-        await asyncio.get_event_loop().run_in_executor(None, input, "")
-        await ctx.storage_state(path=config.ML_STORAGE_STATE)
-        print(f"[mercadolibre] sesion guardada en {config.ML_STORAGE_STATE}")
-        await ctx.close()
-        await browser.close()
+        try:
+            while True:
+                response = await page.goto(_build_url({}), timeout=45_000, wait_until="domcontentloaded")
+                status = response.status if response else 0
+                if not await _page_wall_reason(page):
+                    try:
+                        await page.wait_for_selector("li.ui-search-layout__item", timeout=15_000)
+                    except PlaywrightTimeoutError:
+                        pass
+                    if status == 200 and await page.locator("li.ui-search-layout__item").count() > 0:
+                        print(f"[mercadolibre] busqueda verificada; perfil guardado en {config.ML_BROWSER_PROFILE_DIR}")
+                        return
+                print(
+                    "La busqueda sigue bloqueada o sin publicaciones. Completa el ingreso/verificacion "
+                    "en esta ventana de Chrome y presiona Enter para volver a comprobar."
+                )
+                await _wait_for_enter()
+        finally:
+            await page.close()
 
 
 if __name__ == "__main__":

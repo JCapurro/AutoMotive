@@ -181,22 +181,25 @@ siguen vivos y para probar nuevos filtros antes de cargarlos como alerta.
 
 ### MercadoLibre: sesion web
 
-El scraper de MercadoLibre usa Playwright sobre la pagina publica de busqueda.
-La API oficial (`/sites/MLA/search`) esta bloqueada por el PolicyAgent de
-MercadoLibre para apps no-Partner (devuelve 403 con cualquier scope OAuth), asi
-que no se usa.
+El scraper de MercadoLibre usa el transporte de Tecc: Chrome instalado, visible,
+con un perfil persistente dedicado (`.ml_chrome_profile/`, configurable mediante
+`ML_BROWSER_PROFILE_DIR`). Busquedas y detalles reutilizan el mismo perfil.
+Las cookies de `ml_state.json` ya no se cargan en un navegador headless.
 
-Para que el navegador headless no quede atrapado por la verificacion de cuenta
-de MercadoLibre, guarda una sesion web una vez:
+Para preparar o verificar ese perfil:
 
 ```powershell
 cd worker
 python -m collectors.mercadolibre
 ```
 
-Se abre Chromium -> inicia sesion o completa la verificacion -> volve a la
-consola -> Enter. Genera `ml_state.json` y las siguientes corridas lo reutilizan
-en modo headless.
+Se abre Chrome sobre una busqueda real de autos. Si aparece un pedido de ingreso
+o verificacion, completalo manualmente y presiona Enter en la consola. El comando
+solo termina con exito cuando la busqueda devuelve publicaciones; el perfil queda
+guardado para las siguientes corridas. No copies el perfil de Tecc ni uses el
+perfil cotidiano de Chrome. Cierra este asistente antes de ejecutar otro proceso
+que use el mismo perfil. El worker necesita Chrome instalado y una sesion de
+escritorio que pueda abrir ventanas. El proveedor puede volver a exigir verificacion.
 
 ### Correr el bot
 

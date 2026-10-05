@@ -46,7 +46,9 @@ DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 DB_POOL_MAX_SIZE = int(os.getenv("DB_POOL_MAX_SIZE", "5"))
 
 FB_STORAGE_STATE = str(ROOT / os.getenv("FB_STORAGE_STATE", "fb_state.json"))
-ML_STORAGE_STATE = str(ROOT / os.getenv("ML_STORAGE_STATE", "ml_state.json"))
+# Mercado Libre uses the same persistent, visible Chrome profile for manual
+# verification, search and detail pages (the transport used by Tecc).
+ML_BROWSER_PROFILE_DIR = str(ROOT / os.getenv("ML_BROWSER_PROFILE_DIR", ".ml_chrome_profile"))
 
 # Sources offered by the Telegram wizard (the enabled ones live in the sources table).
 SOURCES = ["mercadolibre", "facebook", "v6", "kavak", "autocosmos"]

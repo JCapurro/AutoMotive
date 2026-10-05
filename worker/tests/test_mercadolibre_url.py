@@ -1,11 +1,8 @@
 from __future__ import annotations
 
-from pathlib import Path
-import tempfile
 import unittest
 
-import config
-from collectors.mercadolibre import _browser_storage_state, _build_url, _looks_like_login_wall
+from collectors.mercadolibre import _build_url, _looks_like_login_wall
 
 
 class MercadoLibreUrlTests(unittest.TestCase):
@@ -24,17 +21,6 @@ class MercadoLibreUrlTests(unittest.TestCase):
         self.assertIn("_VEHICLE*YEAR_2015-2024", url)
         self.assertIn("_KILOMETERS_0-120000km", url)
         self.assertNotIn("_PriceRange_", url)
-
-    def test_browser_storage_state_uses_existing_ml_session_file(self):
-        original = config.ML_STORAGE_STATE
-        with tempfile.TemporaryDirectory() as tmp:
-            state = Path(tmp) / "ml_state.json"
-            config.ML_STORAGE_STATE = str(state)
-            self.assertIsNone(_browser_storage_state())
-
-            state.write_text("{}", encoding="utf-8")
-            self.assertEqual(_browser_storage_state(), str(state))
-        config.ML_STORAGE_STATE = original
 
     def test_detects_mercadolibre_account_verification_wall(self):
         self.assertTrue(
