@@ -15,13 +15,12 @@ export function ProPlans({ offer, current, placement, pilot = false, recommended
   const [plan, setPlan] = useState<WaitlistPlan>(recommended ?? current ?? "pass_30");
   const [joined, setJoined] = useState<WaitlistPlan | null>(current);
   const [pending, start] = useTransition();
-  const [accepted, setAccepted] = useState(false);
   return (
     <form className="space-y-4" onSubmit={(e) => {
       e.preventDefault();
       start(async () => {
         if (automatic) {
-          const result = await startPayment(plan, accepted, offer.version, offer[plan].amount);
+          const result = await startPayment(plan, true, offer.version, offer[plan].amount);
           if (result.error) toast.error(result.error);
           else if (result.url) {
             pixel("InitiateCheckout", { content_ids: [plan], value: offer[plan].amount, currency: offer[plan].currency });
@@ -43,7 +42,7 @@ export function ProPlans({ offer, current, placement, pilot = false, recommended
             <label key={p} className={cn("flex cursor-pointer flex-col gap-2 rounded-xl bg-card p-5 ring-1 ring-foreground/10 has-[:focus-visible]:ring-3 has-[:focus-visible]:ring-ring/50", plan === p && "ring-2 ring-primary")}>
               <span className="flex items-center justify-between gap-2">
                 <span className="font-medium">{copy.name}</span>
-                <input type="radio" name="plan" value={p} checked={plan === p} onChange={() => { setPlan(p); setAccepted(false); }} className="size-4 accent-primary" />
+                <input type="radio" name="plan" value={p} checked={plan === p} onChange={() => setPlan(p)} className="size-4 accent-primary" />
               </span>
               <span className="text-2xl font-semibold tracking-tight">{planPrice(offer[p].amount)}
                 <span className="ml-1 text-sm font-normal text-muted-foreground">{copy.period}</span>
@@ -62,14 +61,12 @@ export function ProPlans({ offer, current, placement, pilot = false, recommended
         {pilot ? <>Registramos tu solicitud de <strong>{PLAN_COPY[joined].name}</strong>. La administración coordina el pago y activa el período después de verificarlo. Esta solicitud no genera un cobro.</>
           : <>Estás en la lista de espera de <strong>{PLAN_COPY[joined].name}</strong>. Te avisamos cuando abramos las altas; no se genera ningún cobro.</>}
       </p> : null}
-      {automatic ? <div className="space-y-3 text-sm">
-        <label className="flex items-start gap-2"><input type="checkbox" required checked={accepted} onChange={(e) => setAccepted(e.target.checked)} className="mt-1" />
-          <span>Acepto los <a href="/terminos" target="_blank" rel="noreferrer" className="underline">términos</a> y {plan === "pro_monthly" ? `el cobro de ${planPrice(offer[plan].amount)} ARS cada mes hasta cancelar.` : `el pago único de ${planPrice(offer[plan].amount)} ARS por 30 días.`}</span>
-        </label>
-      </div> : null}
       <Button type="submit" size="lg" className="h-11 w-full px-5 text-base sm:w-auto" disabled={pending || (!automatic && joined === plan)}>
         {automatic ? "Continuar en Mercado Pago" : joined && joined !== plan ? "Cambiar mi solicitud" : pilot ? `Solicitar ${PLAN_COPY[plan].name}` : "Sumarme a la lista de espera"}
       </Button>
+      {automatic ? <p className="text-sm text-muted-foreground">
+        Al adquirir este plan, usted está de acuerdo con <a href="/terminos" target="_blank" rel="noreferrer" className="underline underline-offset-4">términos y condiciones</a>.
+      </p> : null}
     </form>
   );
 }
