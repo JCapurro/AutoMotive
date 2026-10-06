@@ -1,0 +1,128 @@
+{
+  "ok": true,
+  "strict": true,
+  "browserSkipped": false,
+  "lint": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "filesScanned": 7
+  },
+  "runtime": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": []
+  },
+  "layout": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 1,
+    "findings": [
+      {
+        "code": "panel_out_of_canvas",
+        "severity": "info",
+        "time": 0.8,
+        "selector": "div.loop-card",
+        "message": "Painted panel extends outside the composition canvas.",
+        "rect": {
+          "left": 659.66,
+          "top": 1148.42,
+          "right": 1314.97,
+          "bottom": 1305.59,
+          "width": 655.31,
+          "height": 157.17
+        },
+        "containerSelector": "#ea-root",
+        "text": "ZONA",
+        "fixHint": "Move the panel inward, or mark intentional off-canvas animation with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1080,
+          "bottom": 1920,
+          "width": 1080,
+          "height": 1920
+        },
+        "overflow": {
+          "right": 234.97
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/ea-problema.html",
+        "bbox": {
+          "x": 659.66,
+          "y": 1148.42,
+          "width": 655.31,
+          "height": 157.17
+        },
+        "firstSeen": 0.8,
+        "lastSeen": 0.8,
+        "occurrences": 1,
+        "heldMs": 0
+      }
+    ],
+    "duration": 24,
+    "samples": [
+      0.8,
+      3.9,
+      4.7,
+      5.2,
+      6.2,
+      9.3,
+      11,
+      14.2,
+      18,
+      22.5
+    ],
+    "transitionSamples": [],
+    "transitionSamplesDropped": 0,
+    "tolerance": 2,
+    "totalIssueCount": 1,
+    "truncated": false
+  },
+  "motion": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "enabled": true,
+    "specPath": "C:\\Users\\Juan\\Desktop\\AutoMotive\\docs\\marketing\\reel-hyperframes-2026-10-05\\index.motion.json",
+    "samples": 300
+  },
+  "contrast": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "enabled": true,
+    "samples": [
+      0.8,
+      4.7,
+      6.2,
+      11,
+      22.5
+    ],
+    "checked": 37,
+    "passed": 37
+  },
+  "hdr": {
+    "autoPromotion": null,
+    "inspection": "available"
+  },
+  "snapshots": {
+    "enabled": false,
+    "files": [],
+    "times": [],
+    "findingFiles": []
+  },
+  "_meta": {
+    "version": "0.8.134",
+    "updateAvailable": false
+  }
+}

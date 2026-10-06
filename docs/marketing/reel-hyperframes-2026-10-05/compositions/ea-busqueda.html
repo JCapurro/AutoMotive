@@ -1,0 +1,46 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"></head><body><template>
+<style>#ea-busqueda{position:absolute;inset:0;width:100%;height:100%;overflow:hidden}
+*{box-sizing:border-box}h1,h2,p{margin:0}
+.scene{position:absolute;inset:0;width:100%;height:100%;overflow:hidden;perspective:1800px;color:#fbfbf8}
+.world{position:absolute;inset:0;transform-style:preserve-3d}
+.eyebrow{position:absolute;left:78px;top:315px;font-size:32px;letter-spacing:2px;font-weight:650;color:#f4d447}
+.headline{position:absolute;left:78px;top:370px;width:850px;font-size:94px;line-height:1.04;font-weight:750;letter-spacing:-2px}
+.line{display:block;position:relative;width:100%;min-height:102px}
+.note{position:absolute;left:78px;top:1350px;width:850px;font-size:28px;line-height:1.25;color:#cad4dd}
+.view{position:relative;overflow:hidden;background:#fbfbf8;border-radius:18px}
+.view img{display:block;width:100%;height:100%;object-fit:contain;image-rendering:auto}
+.panel{position:absolute;transform-style:flat;border:3px solid #a5b5c5;border-radius:21px;box-shadow:0 28px 70px #07132188}
+.underline{position:absolute;height:8px;background:#f4d447;transform-origin:0 50%}
+
+    .phone-stage{position:absolute;left:266px;top:570px;width:480px;height:780px;transform-style:preserve-3d;transform-origin:50% 40%}
+    .hardware{position:absolute;inset:0;border:4px solid #91a2b4;border-radius:68px;background:#263d55;box-shadow:45px 50px 90px #071321bb,inset 0 0 0 9px #0e1d30}
+    .phone-surface{position:absolute;left:20px;top:55px;width:440px;height:655px;border-radius:46px;background:#fbfbf8;overflow:hidden}
+    #search-empty{position:absolute;left:0;top:55px}
+    .cutout{position:absolute;left:177px;top:21px;width:125px;height:20px;border-radius:20px;background:#0b1728}
+    .written-panel{left:78px;top:635px;width:846px;transform-origin:50% 50%}
+    .search-focus{position:absolute;left:43px;top:516px;width:244px;height:78px;border:7px solid #f4d447;border-radius:16px;pointer-events:none}
+    </style>
+<div id="ea-busqueda" data-composition-id="ea-busqueda" data-duration="5" data-width="1080" data-height="1920">
+<section id="ea-busqueda-clip" class="scene clip" data-start="0" data-duration="5" data-track-index="1"><div class="world">
+    <div class="eyebrow">01 · TU BÚSQUEDA</div><h2 class="headline"><span class="line">Contá qué auto</span><span class="line">buscás.</span></h2>
+    <div class="phone-stage"><div class="hardware"></div><div class="phone-surface"><div id="search-empty" class="view" style="width:440px;height:563.77px;"><img id="capture-01-formulario-vacio" src="assets/capturas-hd/01-formulario-vacio.png" alt="Componente completo de Ese Auto, capturado en alta definicion"></div></div><div class="cutout"></div></div>
+    <div class="panel written-panel"><div id="search-written" class="view" style="width:840px;height:635.40px;"><img id="capture-02-busqueda-escrita" src="assets/capturas-hd/02-busqueda-escrita.png" alt="Componente completo de Ese Auto, capturado en alta definicion"></div><div class="search-focus"></div></div>
+    <p class="note">Modelo, presupuesto y zona · revisá antes de guardar.</p>
+    </div></section>
+</div><script>(function(){const root=document.getElementById('ea-busqueda');const tl=gsap.timeline({paused:true});
+const q=s=>root.querySelectorAll(s);
+    // Adaptación del recurso oficial parallax-device-dive con pantalla auténtica.
+    tl.fromTo(q('.phone-stage'),{y:480,z:-600,scale:.76,rotationX:22,rotationY:-38,opacity:0},{y:0,z:0,scale:1,rotationX:5,rotationY:-13,opacity:1,duration:.75,ease:'power3.out'},0);
+    tl.fromTo(q('.headline .line'),{x:-400,opacity:0},{x:0,opacity:1,duration:.48,stagger:.12,ease:'power4.out'},.12);
+    tl.fromTo(q('.eyebrow'),{y:-50,opacity:0},{y:0,opacity:1,duration:.3},.1);
+    tl.to(q('.phone-stage'),{scale:1.32,y:125,rotationX:0,rotationY:0,duration:.65,ease:'power2.inOut'},1.05);
+    tl.to(q('.phone-stage'),{x:-560,scale:.75,rotationY:45,opacity:0,duration:.42,ease:'power3.inOut'},1.8);
+    tl.fromTo(q('.written-panel'),{x:190,y:130,z:-300,scale:.64,rotationY:-35,opacity:0},{x:0,y:0,z:0,scale:1,rotationY:0,opacity:1,duration:.55,ease:'power4.out'},2.1);
+    tl.to(q('.written-panel'),{scale:1.045,y:-14,duration:1.4,ease:'sine.inOut'},2.65);
+    tl.fromTo(q('.search-focus'),{opacity:0,scale:1.14},{opacity:1,scale:1,duration:.35,ease:'power2.out'},3.0);
+    tl.to(q('.search-focus'),{opacity:0,duration:.25},4.15);
+    tl.fromTo(q('.note'),{x:150,opacity:0},{x:0,opacity:1,duration:.4},2.65);
+    tl.to(q('.written-panel'),{x:1000,rotationY:35,opacity:0,duration:.45,ease:'power3.in'},4.55);
+    tl.to(q('.headline,.note,.eyebrow'),{opacity:0,y:-45,duration:.3},4.7);
+    window.__timelines['ea-busqueda']=tl;})();</script>
+</template></body></html>

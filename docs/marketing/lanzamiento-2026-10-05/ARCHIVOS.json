@@ -1,0 +1,52 @@
+{
+  "prepared": "2026-10-04",
+  "days": [
+    "2026-10-05",
+    "2026-10-06"
+  ],
+  "canva": "https://www.canva.com/d/LZI0mkml8f-sTzi",
+  "images": [
+    {
+      "name": "01-lunes-presentacion-feed-v2.png",
+      "width": 1122,
+      "height": 1402,
+      "bytes": 1484625
+    },
+    {
+      "name": "02-martes-carrusel-1.png",
+      "width": 1122,
+      "height": 1402,
+      "bytes": 1208370
+    },
+    {
+      "name": "03-martes-carrusel-2.png",
+      "width": 1122,
+      "height": 1402,
+      "bytes": 1413225
+    },
+    {
+      "name": "04-martes-carrusel-3-v2.png",
+      "width": 1122,
+      "height": 1402,
+      "bytes": 1340236
+    },
+    {
+      "name": "05-historia-presentacion-v2.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 1352036
+    },
+    {
+      "name": "06-historia-prueba-v2.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 1297210
+    },
+    {
+      "name": "07-encabezado-x.png",
+      "width": 2172,
+      "height": 724,
+      "bytes": 962969
+    }
+  ]
+}

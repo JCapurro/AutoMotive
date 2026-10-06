@@ -38,3 +38,16 @@ backups/
 # Fotos de avisos de terceros (Kavak, Autocosmos…) para los prototipos de design/variants:
 # copias locales, no se versionan.
 design/variants/img/
+
+# Local launchers, run logs and generated graph caches/backups
+.claude/
+.last_run_log
+web/graphify-out/
+graphify-out/cache/
+graphify-out/[0-9]*/
+graphify-out/.*.tmp.json
+graphify-out/.graphify_labels.json.sig
+
+# Local media tooling and waveform caches
+**/.waveform-cache/
+**/vendor/ffmpeg.exe

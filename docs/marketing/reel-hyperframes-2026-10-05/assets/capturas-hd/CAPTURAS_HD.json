@@ -1,0 +1,115 @@
+[
+  {
+    "name": "01-formulario-vacio",
+    "x": 24,
+    "y": 24,
+    "width": 1198,
+    "height": 1535,
+    "scale": 3,
+    "source_components": [
+      "01-formulario-vacio"
+    ]
+  },
+  {
+    "name": "02-busqueda-escrita",
+    "x": 1304,
+    "y": 24,
+    "width": 1244,
+    "height": 941,
+    "scale": 3,
+    "source_components": [
+      "02-busqueda-escrita"
+    ]
+  },
+  {
+    "name": "03-modelo",
+    "x": 24,
+    "y": 1583,
+    "width": 1102,
+    "height": 408,
+    "scale": 3,
+    "source_components": [
+      "03-marca",
+      "03-modelo"
+    ]
+  },
+  {
+    "name": "03-anio",
+    "x": 1304,
+    "y": 1583,
+    "width": 1102,
+    "height": 204,
+    "scale": 3,
+    "source_components": [
+      "03-anio"
+    ]
+  },
+  {
+    "name": "03-kilometraje",
+    "x": 24,
+    "y": 2015,
+    "width": 1102,
+    "height": 204,
+    "scale": 3,
+    "source_components": [
+      "03-kilometraje"
+    ]
+  },
+  {
+    "name": "04-precio",
+    "x": 1304,
+    "y": 2015,
+    "width": 1102,
+    "height": 204,
+    "scale": 3,
+    "source_components": [
+      "04-precio"
+    ]
+  },
+  {
+    "name": "04-zona",
+    "x": 24,
+    "y": 2243,
+    "width": 1102,
+    "height": 408,
+    "scale": 3,
+    "source_components": [
+      "04-zona",
+      "04-radio"
+    ]
+  },
+  {
+    "name": "05-opcion-1",
+    "x": 1304,
+    "y": 2243,
+    "width": 1198,
+    "height": 508,
+    "scale": 3,
+    "source_components": [
+      "05-opcion-1"
+    ]
+  },
+  {
+    "name": "05-opcion-2",
+    "x": 24,
+    "y": 2775,
+    "width": 1198,
+    "height": 574,
+    "scale": 3,
+    "source_components": [
+      "05-opcion-2"
+    ]
+  },
+  {
+    "name": "06-precio-contexto",
+    "x": 1304,
+    "y": 2775,
+    "width": 1198,
+    "height": 863,
+    "scale": 3,
+    "source_components": [
+      "06-precios",
+      "06-comparables"
+    ]
+  }
+]

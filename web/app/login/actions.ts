@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { safeNext } from "@/lib/navigation";
+import { supabaseAnonKey, supabaseUrl } from "@/lib/env";
 import { afterSignIn } from "@/lib/signup";
 import { createClient } from "@/lib/supabase/server";
 
@@ -58,4 +59,31 @@ export async function resendConfirmation(prev: LoginState, form: FormData): Prom
   const supabase = await createClient();
   const { error } = await supabase.auth.resend({ type: "signup", email: parsed.data, options: { emailRedirectTo: await callbackUrl(next) } });
   return { next, email: parsed.data, sent: !error, error: error ? emailError(error) : undefined };
+}
+
+export async function signInWithGoogle(prev: LoginState, form: FormData): Promise<LoginState> {
+  const next = safeNext(String(form.get("next") ?? prev.next));
+  let url: string;
+  try {
+    // The SDK builds an authorization URL even when the provider is disabled.
+    // Check first so users get feedback here instead of a raw Auth error page.
+    const settings = await fetch(`${supabaseUrl}/auth/v1/settings`, {
+      headers: { apikey: supabaseAnonKey }, cache: "no-store", signal: AbortSignal.timeout(10_000),
+    });
+    if (!settings.ok) return { next, error: "No pudimos conectar con Google. Probá de nuevo o ingresá con email y contraseña." };
+    const config = await settings.json();
+    if (!config.external?.google) return { next, error: "El ingreso con Google todavía no está disponible. Ingresá con email y contraseña." };
+    const supabase = await createClient();
+    const callback = new URL(await callbackUrl(next));
+    callback.searchParams.set("provider", "google");
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: callback.toString(), skipBrowserRedirect: true },
+    });
+    if (error || !data.url) return { next, error: "No pudimos iniciar el ingreso con Google. Probá de nuevo." };
+    url = data.url;
+  } catch {
+    return { next, error: "No pudimos conectar con Google. Probá de nuevo o ingresá con email y contraseña." };
+  }
+  redirect(url);
 }

@@ -1,0 +1,15 @@
+{"id":"image_001","type":"image","path":".media/images/image_001.png","source":"ingested","description":"01-formulario-vacio.png","provenance":{"provider":"local","from":"assets/capturas-hd/01-formulario-vacio.png"}}
+{"id":"image_002","type":"image","path":".media/images/image_002.png","source":"ingested","description":"02-busqueda-escrita.png","provenance":{"provider":"local","from":"assets/capturas-hd/02-busqueda-escrita.png"}}
+{"id":"image_003","type":"image","path":".media/images/image_003.png","source":"ingested","description":"03-modelo.png","provenance":{"provider":"local","from":"assets/capturas-hd/03-modelo.png"}}
+{"id":"image_004","type":"image","path":".media/images/image_004.png","source":"ingested","description":"03-anio.png","provenance":{"provider":"local","from":"assets/capturas-hd/03-anio.png"}}
+{"id":"image_005","type":"image","path":".media/images/image_005.png","source":"ingested","description":"03-kilometraje.png","provenance":{"provider":"local","from":"assets/capturas-hd/03-kilometraje.png"}}
+{"id":"image_006","type":"image","path":".media/images/image_006.png","source":"ingested","description":"04-precio.png","provenance":{"provider":"local","from":"assets/capturas-hd/04-precio.png"}}
+{"id":"image_007","type":"image","path":".media/images/image_007.png","source":"ingested","description":"04-zona.png","provenance":{"provider":"local","from":"assets/capturas-hd/04-zona.png"}}
+{"id":"image_008","type":"image","path":".media/images/image_008.png","source":"ingested","description":"05-opcion-1.png","provenance":{"provider":"local","from":"assets/capturas-hd/05-opcion-1.png"}}
+{"id":"image_009","type":"image","path":".media/images/image_009.png","source":"ingested","description":"05-opcion-2.png","provenance":{"provider":"local","from":"assets/capturas-hd/05-opcion-2.png"}}
+{"id":"image_010","type":"image","path":".media/images/image_010.png","source":"ingested","description":"06-precio-contexto.png","provenance":{"provider":"local","from":"assets/capturas-hd/06-precio-contexto.png"}}
+{"id":"image_011","type":"image","path":".media/images/image_011.png","source":"ingested","description":"05-opcion-1.png","provenance":{"provider":"local","from":"assets/capturas-hd/05-opcion-1.png"}}
+{"id":"image_012","type":"image","path":".media/images/image_012.png","source":"ingested","description":"05-opcion-2.png","provenance":{"provider":"local","from":"assets/capturas-hd/05-opcion-2.png"}}
+{"id":"video_001","type":"video","path":".media/video/video_001.mp4","source":"ingested","description":"ESE_AUTO_REEL_HYPERFRAMES_HD_1080x1920.mp4","provenance":{"provider":"local","from":"ESE_AUTO_REEL_HYPERFRAMES_HD_1080x1920.mp4"}}
+{"id":"video_002","type":"video","path":".media/video/video_002.mp4","source":"ingested","description":"ESE_AUTO_REEL_HYPERFRAMES_HD_SIN_AUDIO.mp4","provenance":{"provider":"local","from":"ESE_AUTO_REEL_HYPERFRAMES_HD_SIN_AUDIO.mp4"}}
+{"id":"image_013","type":"image","path":".media/images/image_013.png","source":"ingested","description":"PORTADA_REEL_HD.png","provenance":{"provider":"local","from":"PORTADA_REEL_HD.png"}}

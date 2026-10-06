@@ -1,0 +1,130 @@
+{
+  "project": "Ese Auto - Reel HyperFrames",
+  "date": "2026-10-05",
+  "status": "exportado y verificado; no publicado",
+  "authoring": {
+    "tool": "HyperFrames",
+    "version": "0.8.134",
+    "gsap_version": "3.14.2",
+    "scenes": 6,
+    "editable_project": "docs/marketing/reel-hyperframes-2026-10-05",
+    "studio_url": "http://localhost:3019/#project/reel-hyperframes-2026-10-05"
+  },
+  "render": {
+    "job_id": "0d500e0b-35e6-4b8d-b214-ea113cf8a42f",
+    "composition_hash": "7ed1fe8077468f79",
+    "quality": "delivery (high)",
+    "width": 1080,
+    "height": 1920,
+    "fps": 30,
+    "frames": 720,
+    "duration_seconds": 24,
+    "capture": "HyperFrames screenshot capture with hardware GPU",
+    "workers": 4,
+    "elapsed_seconds": 161.8,
+    "video_codec": "H.264 High",
+    "pixel_format": "yuv420p",
+    "audio_codec": "AAC",
+    "sample_rate": 48000,
+    "channels": 2,
+    "music_bpm": 120
+  },
+  "verification": {
+    "hyperframes_check": "PASS - strict",
+    "errors": 0,
+    "warnings": 0,
+    "layout_info": 1,
+    "layout_info_reason": "Tarjeta ZONA entra desde fuera del encuadre a los 0.8 segundos.",
+    "motion_samples": 300,
+    "contrast_checked": 37,
+    "contrast_passed": 37,
+    "full_decode": "PASS",
+    "silent_stream_copy": "PASS",
+    "visual_review": "Capturas del MP4 exportado, incluidas la entrada, el acercamiento y el traspaso del telefono, y las seis escenas.",
+    "audio": {
+      "integrated_lufs": -16.08,
+      "true_peak_dbtp": -1.87
+    },
+    "animation_map_tweens": 186,
+    "animation_map_note": "Diagnostico incluye tiempos locales de subcomposiciones ademas de montaje; se verificaron los encuadres en sus tiempos globales."
+  },
+  "material": {
+    "screenshots": [
+      {
+        "file": "01-formulario-vacio.jpg",
+        "sha256": "5cf9a0ffea18ac5418f53641cd3a3ae7b896f0326593067ab78a385d62e20b10",
+        "identical_to_original": true
+      },
+      {
+        "file": "02-busqueda-escrita.jpg",
+        "sha256": "56af39202fbeabc0baf1b41bf986f5cc8fbd99c95dc83d71995107e3eb9574d7",
+        "identical_to_original": true
+      },
+      {
+        "file": "03-filtros-vehiculo.jpg",
+        "sha256": "9ff7e3ef2d871b2cfe5240502dd979187e940625b595ecc62d82efe2ad979bae",
+        "identical_to_original": true
+      },
+      {
+        "file": "04-presupuesto-zona.jpg",
+        "sha256": "aa1d15b95d3ec544210291a53898240069ec4c53af94b9d30d5300ce7c9400fe",
+        "identical_to_original": true
+      },
+      {
+        "file": "05-resultados-reales.jpg",
+        "sha256": "d983315551b9026bd52e189bfec72ffaa2abca34b50bc0548b7f441d3388e31e",
+        "identical_to_original": true
+      },
+      {
+        "file": "06-precio-contexto.jpg",
+        "sha256": "54fcab88c7f9114206540e6c3c32063eb3f187ea9e39fdef2388a4dbfe7ca858",
+        "identical_to_original": true
+      }
+    ],
+    "ui_treatment": "Capturas sin redibujar; recortes CSS y encuadres animados.",
+    "music_source": "Copia identica de audio-v2-120bpm.wav",
+    "demo_scope": "Borrador no guardado; resultados de una busqueda ya existente. Precios publicados, no disponibilidad confirmada."
+  },
+  "files": [
+    {
+      "name": "ESE_AUTO_REEL_HYPERFRAMES_1080x1920.mp4",
+      "bytes": 12602261,
+      "sha256": "6110a82993e326942ea6f7801bd0a19f331c174a724a0f4372683b2cb52fb666"
+    },
+    {
+      "name": "ESE_AUTO_REEL_HYPERFRAMES_SIN_AUDIO.mp4",
+      "bytes": 11994196,
+      "sha256": "a9c9234b1eb3f349e954ef493ade12055a3872d7b34436c6e560eeb0b2575306"
+    },
+    {
+      "name": "PORTADA_REEL.png",
+      "bytes": 481646,
+      "sha256": "afbd54ad0436ad5c1355117e7e9a0a9688e2de11b14fd4a2dd8e3fb8d1c3dc46"
+    },
+    {
+      "name": "COPY_INSTAGRAM.txt",
+      "bytes": 532,
+      "sha256": "e9ab601abda92bd0d0442ed8afcd11ffa28491ada25c647cca77c415e2c905a1"
+    },
+    {
+      "name": "TEXTOS_PANTALLA.srt",
+      "bytes": 720,
+      "sha256": "b57e1be42b9a33d268d223986e3fc17f4b1339b41a5370b35a387c754398e67d"
+    },
+    {
+      "name": "PUBLICAR_REEL.md",
+      "bytes": 2009,
+      "sha256": "cef26bac30d778b608586301f4e96a7b9aded7b477b7cde1a84f4aa29b2c0309"
+    },
+    {
+      "name": "BRIEF.md",
+      "bytes": 1734,
+      "sha256": "275881a59ac8596075e1f5d7623d7569398df42b2f494ac1fa3f7b19b7538521"
+    },
+    {
+      "name": "STORYBOARD.md",
+      "bytes": 2051,
+      "sha256": "fc3b590dc6fb82f4954e90839146c3555e55781279ab22b0c1e2469c733a099f"
+    }
+  ]
+}

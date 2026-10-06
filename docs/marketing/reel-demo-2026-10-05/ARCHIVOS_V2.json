@@ -1,0 +1,42 @@
+{
+  "file": "ESE_AUTO_REEL_DEMO_V2_1080x1920.mp4",
+  "silent_file": "ESE_AUTO_REEL_DEMO_V2_SIN_AUDIO.mp4",
+  "dimensions": [
+    1080,
+    1920
+  ],
+  "aspect_ratio": "9:16",
+  "fps": 30,
+  "duration_seconds": 24,
+  "video_codec": "H.264",
+  "pixel_format": "yuv420p",
+  "audio_codec": "AAC",
+  "audio_sample_rate": 48000,
+  "audio_channels": 2,
+  "audio_bpm": 120,
+  "audio_integrated_lufs": -15.95,
+  "audio_true_peak_dbtp": -2.84,
+  "transitions": 7,
+  "transition_seconds": 0.3,
+  "transition_start_seconds": [
+    3,
+    5,
+    8,
+    10,
+    12,
+    16,
+    20
+  ],
+  "bytes": 2903029,
+  "silent_bytes": 2297322,
+  "source": "montaje con las mismas seis capturas reales de V1",
+  "checked": [
+    "decodificacion completa sin errores",
+    "codec, dimensiones y duracion comprobados",
+    "faststart comprobado",
+    "fotogramas extraidos del MP4 para revision visual",
+    "mezcla de audio sin muestras saturadas"
+  ],
+  "published": false,
+  "previous_version_preserved": true
+}

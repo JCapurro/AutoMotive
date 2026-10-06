@@ -1,0 +1,38 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"></head><body><template>
+<style>#ea-problema{position:absolute;inset:0;width:100%;height:100%;overflow:hidden}
+*{box-sizing:border-box}h1,h2,p{margin:0}
+.scene{position:absolute;inset:0;width:100%;height:100%;overflow:hidden;perspective:1800px;color:#fbfbf8}
+.world{position:absolute;inset:0;transform-style:preserve-3d}
+.eyebrow{position:absolute;left:78px;top:315px;font-size:32px;letter-spacing:2px;font-weight:650;color:#f4d447}
+.headline{position:absolute;left:78px;top:370px;width:850px;font-size:94px;line-height:1.04;font-weight:750;letter-spacing:-2px}
+.line{display:block;position:relative;width:100%;min-height:102px}
+.note{position:absolute;left:78px;top:1350px;width:850px;font-size:28px;line-height:1.25;color:#cad4dd}
+.view{position:relative;overflow:hidden;background:#fbfbf8;border-radius:18px}
+.view img{display:block;width:100%;height:100%;object-fit:contain;image-rendering:auto}
+.panel{position:absolute;transform-style:flat;border:3px solid #a5b5c5;border-radius:21px;box-shadow:0 28px 70px #07132188}
+.underline{position:absolute;height:8px;background:#f4d447;transform-origin:0 50%}
+
+    .hook{position:absolute;left:78px;top:365px;width:850px;font-size:110px;line-height:1.02;font-weight:750;letter-spacing:-3px}
+    .hook-line{display:block;width:850px;height:120px}.hook-line:last-child{color:#f4d447}
+    .loop-card{position:absolute;left:95px;top:885px;width:790px;height:126px;border:2px solid #879bb0;border-radius:18px;background:#263d55;display:flex;align-items:center;padding:28px 42px;font-size:46px;font-weight:650}
+    .loop-card:nth-child(2){top:1045px;left:130px}.loop-card:nth-child(3){top:1205px;left:78px}
+    .loop-card svg{margin-left:auto;width:48px;height:48px;flex:none}.card-stack{position:absolute;inset:0;transform-style:preserve-3d}
+    </style>
+<div id="ea-problema" data-composition-id="ea-problema" data-duration="3" data-width="1080" data-height="1920">
+<section id="ea-problema-clip" class="scene clip" data-start="0" data-duration="3" data-track-index="1"><div class="world">
+    <div class="eyebrow" id="problem-label">¿BUSCANDO UN USADO?</div>
+    <h1 class="hook"><span class="hook-line">Otra vez</span><span class="hook-line">los mismos</span><span class="hook-line">filtros.</span></h1>
+    <div class="card-stack">
+    <div class="loop-card"><span>MODELO</span><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M38 19A15 15 0 1 0 38 30M38 8v12H26" fill="none" stroke="#f4d447" stroke-width="4" stroke-linecap="round"/></svg></div><div class="loop-card"><span>PRESUPUESTO</span><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M38 19A15 15 0 1 0 38 30M38 8v12H26" fill="none" stroke="#f4d447" stroke-width="4" stroke-linecap="round"/></svg></div><div class="loop-card"><span>ZONA</span><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M38 19A15 15 0 1 0 38 30M38 8v12H26" fill="none" stroke="#f4d447" stroke-width="4" stroke-linecap="round"/></svg></div></div></div></section>
+</div><script>(function(){const root=document.getElementById('ea-problema');const tl=gsap.timeline({paused:true});
+const q=s=>root.querySelectorAll(s);
+    tl.fromTo(q('.hook-line'),{y:180,rotationX:-45,opacity:0},{y:0,rotationX:0,opacity:1,duration:.56,stagger:.13,ease:'power4.out'},.02);
+    tl.fromTo(q('.eyebrow'),{x:-180,opacity:0},{x:0,opacity:1,duration:.35,ease:'power2.out'},0);
+    tl.fromTo(q('.loop-card'),{x:1000,z:-600,rotationY:-50,opacity:0},{x:0,z:0,rotationY:-7,opacity:1,duration:.65,stagger:.16,ease:'back.out(1.2)'},.40);
+    tl.to(q('.loop-card'),{x:-35,y:-20,rotationY:5,duration:1.4,stagger:.08,ease:'sine.inOut'},1.05);
+    tl.to(q('.loop-card svg'),{rotation:270,duration:1.75,ease:'none'},.7);
+    tl.to(q('.eyebrow'),{opacity:0,duration:.16},2.05);
+    tl.to(q('.hook'),{scale:1.08,y:-50,duration:.7,ease:'power2.in'},2.25);
+    tl.to(q('.world'),{z:-800,rotationY:30,x:-900,opacity:0,duration:.45,ease:'power3.in'},2.55);
+    window.__timelines['ea-problema']=tl;})();</script>
+</template></body></html>

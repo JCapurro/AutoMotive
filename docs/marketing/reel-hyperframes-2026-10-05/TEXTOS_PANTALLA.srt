@@ -1,0 +1,35 @@
+1
+00:00:00,000 --> 00:00:03,000
+¿Buscando un usado?
+Otra vez los mismos filtros.
+
+2
+00:00:03,000 --> 00:00:08,000
+Contá qué auto buscás.
+Modelo, presupuesto y zona · revisá antes de guardar.
+
+3
+00:00:08,000 --> 00:00:10,000
+Revisá lo que entendimos.
+Podés corregir los filtros antes de guardar.
+
+4
+00:00:10,000 --> 00:00:12,000
+Ajustá presupuesto y zona.
+
+5
+00:00:12,000 --> 00:00:16,000
+Revisá las coincidencias.
+Búsqueda existente · datos del 5/10.
+
+6
+00:00:16,000 --> 00:00:20,000
+Mirá el precio en contexto.
+Comparamos precios publicados de autos parecidos.
+
+7
+00:00:20,000 --> 00:00:24,000
+Probá una búsqueda gratis por 3 días.
+Con resumen diario.
+Enlace en el perfil.
+@eseauto.ar · eseauto.com.ar

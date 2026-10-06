@@ -4,6 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { ListingActions } from "@/components/app/listing-actions";
+import { DealerFeesNotice } from "@/components/app/dealer-fees-notice";
 import { DescriptionPriceContext, SellerDescription } from "@/components/app/description-insights";
 import { type PricePoint, PriceHistory } from "@/components/app/price-history";
 import { SellerQuestions } from "@/components/app/seller-questions";
@@ -153,6 +154,7 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
               ) : null}
             </span>
           ) : null}
+          <DealerFeesNotice sellerType={listing.seller_type} />
         </Fact>
         <Fact label="Kilometraje">{km(listing.mileage_km) ?? "No informado"}</Fact>
         <Fact label="Año">{listing.year ?? "No informado"}</Fact>

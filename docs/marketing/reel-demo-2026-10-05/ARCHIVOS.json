@@ -1,0 +1,19 @@
+{
+  "file": "ESE_AUTO_REEL_DEMO_1080x1920.mp4",
+  "dimensions": [
+    1080,
+    1920
+  ],
+  "aspect_ratio": "9:16",
+  "fps": 30,
+  "duration_seconds": 24,
+  "video_codec": "H.264",
+  "pixel_format": "yuv420p",
+  "audio_codec": "AAC",
+  "audio_sample_rate": 48000,
+  "audio_channels": 2,
+  "bytes": 1893911,
+  "source": "montaje con seis capturas reales del navegador",
+  "checked": "decodificacion completa sin errores; fotogramas exportados para revision",
+  "published": false
+}

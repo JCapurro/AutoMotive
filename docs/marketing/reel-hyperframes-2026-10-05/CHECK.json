@@ -1,0 +1,247 @@
+{
+  "ok": true,
+  "strict": false,
+  "browserSkipped": false,
+  "lint": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 3,
+    "infoCount": 0,
+    "findings": [
+      {
+        "code": "duplicate_media_discovery_risk",
+        "severity": "warning",
+        "message": "Detected 3 matching img entries with the same source/start/duration.",
+        "selector": "[data-composition-id]",
+        "dataAttributes": {},
+        "sourceFile": "C:\\Users\\Juan\\Desktop\\AutoMotive\\docs\\marketing\\reel-hyperframes-2026-10-05\\compositions\\ea-filtros.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0,
+        "fixHint": "Avoid duplicated media nodes that can be discovered twice during compilation."
+      },
+      {
+        "code": "duplicate_media_discovery_risk",
+        "severity": "warning",
+        "message": "Detected 2 matching img entries with the same source/start/duration.",
+        "selector": "[data-composition-id]",
+        "dataAttributes": {},
+        "sourceFile": "C:\\Users\\Juan\\Desktop\\AutoMotive\\docs\\marketing\\reel-hyperframes-2026-10-05\\compositions\\ea-filtros.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0,
+        "fixHint": "Avoid duplicated media nodes that can be discovered twice during compilation."
+      },
+      {
+        "code": "duplicate_media_discovery_risk",
+        "severity": "warning",
+        "message": "Detected 2 matching img entries with the same source/start/duration.",
+        "selector": "[data-composition-id]",
+        "dataAttributes": {},
+        "sourceFile": "C:\\Users\\Juan\\Desktop\\AutoMotive\\docs\\marketing\\reel-hyperframes-2026-10-05\\compositions\\ea-opciones.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0,
+        "fixHint": "Avoid duplicated media nodes that can be discovered twice during compilation."
+      }
+    ],
+    "filesScanned": 7
+  },
+  "runtime": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": []
+  },
+  "layout": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 1,
+    "infoCount": 2,
+    "findings": [
+      {
+        "code": "content_overlap",
+        "severity": "warning",
+        "time": 2.75,
+        "selector": "#problem-label",
+        "message": "Two text blocks overlap and may render unreadable.",
+        "rect": {
+          "left": 57.38,
+          "top": 323.44,
+          "right": 444,
+          "bottom": 357.03,
+          "width": 386.62,
+          "height": 33.59
+        },
+        "containerSelector": "h1.hook > span:nth-of-type(1)",
+        "text": "¿BUSCANDO UN USADO?",
+        "fixHint": "Give each block its own zone, or mark intentional layering with data-layout-allow-overlap.",
+        "dataAttributes": {},
+        "sourceFile": "compositions/ea-problema.html",
+        "bbox": {
+          "x": 57.38,
+          "y": 323.44,
+          "width": 386.62,
+          "height": 33.59
+        },
+        "firstSeen": 2.75,
+        "lastSeen": 2.875,
+        "occurrences": 2,
+        "heldMs": 125
+      },
+      {
+        "code": "panel_out_of_canvas",
+        "severity": "info",
+        "time": 0.8,
+        "selector": "div.loop-card",
+        "message": "Painted panel extends outside the composition canvas.",
+        "rect": {
+          "left": 659.66,
+          "top": 1148.42,
+          "right": 1314.97,
+          "bottom": 1305.59,
+          "width": 655.31,
+          "height": 157.17
+        },
+        "containerSelector": "#ea-root",
+        "text": "ZONA",
+        "fixHint": "Move the panel inward, or mark intentional off-canvas animation with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 0,
+          "top": 0,
+          "right": 1080,
+          "bottom": 1920,
+          "width": 1080,
+          "height": 1920
+        },
+        "overflow": {
+          "right": 234.97
+        },
+        "dataAttributes": {},
+        "sourceFile": "compositions/ea-problema.html",
+        "bbox": {
+          "x": 659.66,
+          "y": 1148.42,
+          "width": 655.31,
+          "height": 157.17
+        },
+        "firstSeen": 0.8,
+        "lastSeen": 0.8,
+        "occurrences": 1,
+        "heldMs": 0
+      },
+      {
+        "code": "content_overlap",
+        "severity": "info",
+        "time": 9.875,
+        "selector": "#ea-filtros-clip > div:nth-of-type(1) > div:nth-of-type(1)",
+        "message": "Two text blocks overlap and may render unreadable.",
+        "rect": {
+          "left": 78,
+          "top": 318,
+          "right": 354.63,
+          "bottom": 350,
+          "width": 276.63,
+          "height": 32
+        },
+        "containerSelector": "#filters-title > span:nth-of-type(1)",
+        "text": "02 · LOS FILTROS",
+        "fixHint": "Give each block its own zone, or mark intentional layering with data-layout-allow-overlap.",
+        "dataAttributes": {},
+        "sourceFile": "compositions/ea-filtros.html",
+        "bbox": {
+          "x": 78,
+          "y": 318,
+          "width": 276.63,
+          "height": 32
+        },
+        "firstSeen": 9.875,
+        "lastSeen": 9.875,
+        "occurrences": 1,
+        "heldMs": 0
+      }
+    ],
+    "duration": 24,
+    "samples": [
+      0.8,
+      3.9,
+      6.2,
+      9.3,
+      11,
+      14.2,
+      18,
+      22.5
+    ],
+    "transitionSamples": [],
+    "transitionSamplesDropped": 0,
+    "tolerance": 2,
+    "totalIssueCount": 3,
+    "truncated": false
+  },
+  "motion": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "enabled": true,
+    "specPath": "C:\\Users\\Juan\\Desktop\\AutoMotive\\docs\\marketing\\reel-hyperframes-2026-10-05\\index.motion.json",
+    "samples": 300
+  },
+  "contrast": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "enabled": true,
+    "samples": [
+      0.8,
+      3.9,
+      9.3,
+      14.2,
+      22.5
+    ],
+    "checked": 37,
+    "passed": 37
+  },
+  "hdr": {
+    "autoPromotion": null,
+    "inspection": "available"
+  },
+  "snapshots": {
+    "enabled": true,
+    "files": [
+      "snapshots\\frame-00-at-0.8s.png",
+      "snapshots\\frame-01-at-3.9s.png",
+      "snapshots\\frame-02-at-9.3s.png",
+      "snapshots\\frame-03-at-14.2s.png",
+      "snapshots\\frame-04-at-22.5s.png"
+    ],
+    "times": [
+      0.8,
+      3.9,
+      9.3,
+      14.2,
+      22.5
+    ],
+    "findingFiles": []
+  },
+  "_meta": {
+    "version": "0.8.134",
+    "updateAvailable": false
+  }
+}

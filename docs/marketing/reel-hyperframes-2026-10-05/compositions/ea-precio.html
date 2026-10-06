@@ -1,0 +1,39 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"></head><body><template>
+<style>#ea-precio{position:absolute;inset:0;width:100%;height:100%;overflow:hidden}
+*{box-sizing:border-box}h1,h2,p{margin:0}
+.scene{position:absolute;inset:0;width:100%;height:100%;overflow:hidden;perspective:1800px;color:#fbfbf8}
+.world{position:absolute;inset:0;transform-style:preserve-3d}
+.eyebrow{position:absolute;left:78px;top:315px;font-size:32px;letter-spacing:2px;font-weight:650;color:#f4d447}
+.headline{position:absolute;left:78px;top:370px;width:850px;font-size:94px;line-height:1.04;font-weight:750;letter-spacing:-2px}
+.line{display:block;position:relative;width:100%;min-height:102px}
+.note{position:absolute;left:78px;top:1350px;width:850px;font-size:28px;line-height:1.25;color:#cad4dd}
+.view{position:relative;overflow:hidden;background:#fbfbf8;border-radius:18px}
+.view img{display:block;width:100%;height:100%;object-fit:contain;image-rendering:auto}
+.panel{position:absolute;transform-style:flat;border:3px solid #a5b5c5;border-radius:21px;box-shadow:0 28px 70px #07132188}
+.underline{position:absolute;height:8px;background:#f4d447;transform-origin:0 50%}
+
+    .price-stage{position:absolute;left:78px;top:650px;width:846px;transform-style:preserve-3d;transform-origin:50% 30%}
+    .price-corner{position:absolute;inset:-13px;border:6px solid #f4d447;border-radius:28px;pointer-events:none}
+    </style>
+<div id="ea-precio" data-composition-id="ea-precio" data-duration="4" data-width="1080" data-height="1920">
+<section id="ea-precio-clip" class="scene clip" data-start="0" data-duration="4" data-track-index="1"><div class="world">
+    <div class="eyebrow">04 · EL PRECIO</div><h2 class="headline"><span class="line">Mirá el precio</span><span class="line">en contexto.</span></h2>
+    <div class="panel price-stage"><div class="view" style="width:840px;height:605.11px;"><img id="capture-06-precio-contexto" src="assets/capturas-hd/06-precio-contexto.png" alt="Componente completo de Ese Auto, capturado en alta definicion"></div><div class="price-corner"></div></div>
+    <p class="note">Comparamos precios publicados de autos parecidos.</p>
+    </div></section>
+</div><script>(function(){const root=document.getElementById('ea-precio');const tl=gsap.timeline({paused:true});
+const q=s=>root.querySelectorAll(s);
+    tl.fromTo(q('.headline .line'),{y:120,opacity:0},{y:0,opacity:1,duration:.5,stagger:.12,ease:'power3.out'},.05);
+    tl.fromTo(q('.eyebrow'),{opacity:0},{opacity:1,duration:.3},.05);
+    // Cámara hacia el precio pedido; después abre para mostrar los comparables.
+    // Geometría de enfoque adaptada de ui-focus-zoom, ancla medida en la captura.
+    tl.fromTo(q('.price-stage'),{y:220,scale:.8,rotationX:28,opacity:0},{y:0,scale:1,rotationX:0,opacity:1,duration:.6,ease:'power4.out'},0);
+    tl.to(q('.price-stage'),{scale:1.12,y:-36,duration:.9,ease:'power2.inOut'},.7);
+    tl.to(q('.price-stage'),{scale:1,y:0,rotationY:-3,duration:.8,ease:'power2.inOut'},1.7);
+    tl.fromTo(q('.price-corner'),{opacity:0,scale:1.04},{opacity:1,scale:1,duration:.4,ease:'power2.out'},.7);
+    tl.to(q('.price-corner'),{opacity:0,duration:.35},1.65);
+    tl.fromTo(q('.note'),{x:220,opacity:0},{x:0,opacity:1,duration:.4},1.1);
+    tl.to(q('.price-stage'),{scale:.45,rotationY:55,x:-500,z:-500,opacity:0,duration:.5,ease:'power3.in'},3.5);
+    tl.to(q('.headline,.eyebrow,.note'),{opacity:0,duration:.25},3.75);
+    window.__timelines['ea-precio']=tl;})();</script>
+</template></body></html>

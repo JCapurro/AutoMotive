@@ -1,0 +1,49 @@
+Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'C:\Users\Juan\Desktop\AutoMotive\docs\marketing\reel-hyperframes-2026-10-05\ESE_AUTO_REEL_HYPERFRAMES_1080x1920.mp4':
+  Metadata:
+    minor_version   : 512
+    major_brand     : isom
+    compatible_brands: isomiso2avc1mp41
+    hyperframes_version: 0.8.134
+    hyperframes_renderer: hyperframes
+    encoder         : Lavf61.7.100
+  Duration: 00:00:24.00, start: 0.000000, bitrate: 4200 kb/s
+  Stream #0:0[0x1](und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(tv, bt709, progressive), 1080x1920 [SAR 1:1 DAR 9:16], 3996 kb/s, 30 fps, 30 tbr, 15360 tbn (default)
+      Metadata:
+        handler_name    : VideoHandler
+        vendor_id       : [0][0][0][0]
+        encoder         : Lavc61.19.100 libx264
+  Stream #0:1[0x2](und): Audio: aac (LC) (mp4a / 0x6134706D), 48000 Hz, stereo, fltp, 196 kb/s (default)
+      Metadata:
+        handler_name    : SoundHandler
+        vendor_id       : [0][0][0][0]
+Stream mapping:
+  Stream #0:1 -> #0:0 (aac (native) -> pcm_s16le (native))
+Press [q] to stop, [?] for help
+Output #0, null, to 'pipe:':
+  Metadata:
+    minor_version   : 512
+    major_brand     : isom
+    compatible_brands: isomiso2avc1mp41
+    hyperframes_version: 0.8.134
+    hyperframes_renderer: hyperframes
+    encoder         : Lavf61.7.100
+  Stream #0:0(und): Audio: pcm_s16le, 192000 Hz, stereo, s16, 6144 kb/s (default)
+      Metadata:
+        handler_name    : SoundHandler
+        vendor_id       : [0][0][0][0]
+        encoder         : Lavc61.19.100 pcm_s16le
+[Parsed_loudnorm_0 @ 000002bb7f13a900] 
+{
+	"input_i" : "-16.08",
+	"input_tp" : "-1.87",
+	"input_lra" : "1.20",
+	"input_thresh" : "-26.18",
+	"output_i" : "-15.35",
+	"output_tp" : "-1.50",
+	"output_lra" : "1.00",
+	"output_thresh" : "-25.45",
+	"normalization_type" : "dynamic",
+	"target_offset" : "-0.65"
+}
+[out#0/null @ 000002bb7f0c5780] video:0KiB audio:18000KiB subtitle:0KiB other streams:0KiB global headers:0KiB muxing overhead: unknown
+size=N/A time=00:00:24.00 bitrate=N/A speed= 9.3x    

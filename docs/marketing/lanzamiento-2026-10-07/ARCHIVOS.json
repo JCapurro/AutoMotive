@@ -1,0 +1,69 @@
+{
+  "prepared": "2026-10-05",
+  "publication_dates": [
+    "2026-10-07",
+    "2026-10-08"
+  ],
+  "timezone": "America/Buenos_Aires",
+  "status": "prepared_not_published_or_scheduled",
+  "image_mode": "built_in_imagegen",
+  "images": [
+    {
+      "file": "imagenes/01-miercoles-historia-busqueda.png",
+      "width": 940,
+      "height": 1672,
+      "bytes": 1168254,
+      "sha256": "1700763138932cbbba5955f83a4fd8c79a40cd4c06fea704d0ca988778a97437",
+      "aspect_ratio": "9:16"
+    },
+    {
+      "file": "imagenes/02-jueves-carrusel-1.png",
+      "width": 1122,
+      "height": 1402,
+      "bytes": 1189476,
+      "sha256": "bc609bcdde53542eb93cb61635a51e2d957f4e12c7398701bcaac5de7c6cfdcc",
+      "aspect_ratio": "4:5"
+    },
+    {
+      "file": "imagenes/03-jueves-carrusel-2.png",
+      "width": 1122,
+      "height": 1402,
+      "bytes": 1219779,
+      "sha256": "f3239508b97f5cb4b517d7cb23da34d62a534717f6857f872d813f2d663b5c51",
+      "aspect_ratio": "4:5"
+    },
+    {
+      "file": "imagenes/04-jueves-carrusel-3.png",
+      "width": 1122,
+      "height": 1402,
+      "bytes": 1235644,
+      "sha256": "9b1acf2644b183e3a0c95778f72f9b49004c742329246f9d3734ee61cb7e4769",
+      "aspect_ratio": "4:5"
+    },
+    {
+      "file": "imagenes/05-historia-prueba-actualizada.png",
+      "width": 941,
+      "height": 1672,
+      "bytes": 1228067,
+      "sha256": "1ac25fd1a568ec19bdab6e22a9276e2df089af02e024f798a175467a48d887f7",
+      "aspect_ratio": "9:16"
+    }
+  ],
+  "x_posts": [
+    {
+      "account": "@eseautoar",
+      "characters_with_url_23": 236
+    },
+    {
+      "account": "@eseautoar",
+      "characters_with_url_23": 261
+    }
+  ],
+  "checks": [
+    "PNG legibles y proporciones verificadas",
+    "copys de X dentro de 280 caracteres",
+    "anclas y enlaces locales verificados",
+    "filas CSV con igual cantidad de columnas"
+  ],
+  "csv_columns": 16
+}

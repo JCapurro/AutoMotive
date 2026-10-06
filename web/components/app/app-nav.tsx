@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, Bookmark, CreditCard, Home, Plus, Settings } from "lucide-react";
+import { Activity, Bookmark, Home, Plus, Settings } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -11,7 +11,6 @@ import { cn } from "@/lib/utils";
 const ITEMS = [
   { href: "/app", label: "Inicio", icon: Home, exact: true },
   { href: "/app/saved", label: "Guardados", icon: Bookmark },
-  { href: "/app/pro", label: "Planes", icon: CreditCard },
   { href: "/app/settings", label: "Ajustes", icon: Settings },
 ];
 
@@ -43,11 +42,16 @@ export function TopNav({ admin = false, healthOwner = false }: { admin?: boolean
           Admin
         </Link>
       ) : null}
-      <Button asChild className="my-auto ml-auto h-9 px-3.5">
-        <Link href="/app/searches/new">
-          <Plus aria-hidden /> Nueva búsqueda
-        </Link>
-      </Button>
+      <div className="my-auto ml-auto flex items-center gap-2">
+        <Button asChild variant="outline" className="h-9 px-3.5">
+          <Link href="/app/pro">Adquirir plan</Link>
+        </Button>
+        <Button asChild className="h-9 px-3.5">
+          <Link href="/app/searches/new">
+            <Plus aria-hidden /> Nueva búsqueda
+          </Link>
+        </Button>
+      </div>
     </nav>
   );
 }
@@ -61,7 +65,7 @@ export function BottomNav({ healthOwner = false }: { healthOwner?: boolean }) {
       aria-label="Principal"
       className="fixed inset-x-0 bottom-0 z-40 border-t bg-background pb-[env(safe-area-inset-bottom)] md:hidden"
     >
-      <ul className={cn("mx-auto grid max-w-md", healthOwner ? "grid-cols-5" : "grid-cols-4")}>
+      <ul className={cn("mx-auto grid max-w-md", healthOwner ? "grid-cols-4" : "grid-cols-3")}>
         {items.map(({ href, label, icon: Icon, exact }) => {
           const current = active(pathname, href, exact);
           return (

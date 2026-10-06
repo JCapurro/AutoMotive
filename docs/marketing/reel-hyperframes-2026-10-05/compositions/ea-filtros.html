@@ -1,0 +1,43 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"></head><body><template>
+<style>#ea-filtros{position:absolute;inset:0;width:100%;height:100%;overflow:hidden}
+*{box-sizing:border-box}h1,h2,p{margin:0}
+.scene{position:absolute;inset:0;width:100%;height:100%;overflow:hidden;perspective:1800px;color:#fbfbf8}
+.world{position:absolute;inset:0;transform-style:preserve-3d}
+.eyebrow{position:absolute;left:78px;top:315px;font-size:32px;letter-spacing:2px;font-weight:650;color:#f4d447}
+.headline{position:absolute;left:78px;top:370px;width:850px;font-size:94px;line-height:1.04;font-weight:750;letter-spacing:-2px}
+.line{display:block;position:relative;width:100%;min-height:102px}
+.note{position:absolute;left:78px;top:1350px;width:850px;font-size:28px;line-height:1.25;color:#cad4dd}
+.view{position:relative;overflow:hidden;background:#fbfbf8;border-radius:18px}
+.view img{display:block;width:100%;height:100%;object-fit:contain;image-rendering:auto}
+.panel{position:absolute;transform-style:flat;border:3px solid #a5b5c5;border-radius:21px;box-shadow:0 28px 70px #07132188}
+.underline{position:absolute;height:8px;background:#f4d447;transform-origin:0 50%}
+
+    .filter-model{left:78px;top:630px}.filter-year{left:78px;top:945px}.filter-km{left:78px;top:1130px}
+    .filter-group,.zone-group{position:absolute;inset:0;transform-style:flat;perspective:1800px}
+    .money{left:78px;top:680px}.zone{left:78px;top:910px}
+    #zone-title{position:absolute;left:78px;top:370px;width:850px;font-size:94px;line-height:1.04;font-weight:750;letter-spacing:-2px}
+    </style>
+<div id="ea-filtros" data-composition-id="ea-filtros" data-duration="4" data-width="1080" data-height="1920">
+<section id="ea-filtros-clip" class="scene clip" data-start="0" data-duration="4" data-track-index="1"><div class="world">
+    <div class="eyebrow">02 · LOS FILTROS</div><h2 class="headline" id="filters-title"><span class="line">Revisá lo que</span><span class="line">entendimos.</span></h2>
+    <h2 id="zone-title"><span class="line">Ajustá presupuesto</span><span class="line">y zona.</span></h2>
+    <div class="filter-group"><div class="panel filter-model"><div class="view" style="width:820px;height:303.59px;"><img id="capture-03-modelo" src="assets/capturas-hd/03-modelo.png" alt="Componente completo de Ese Auto, capturado en alta definicion"></div></div><div class="panel filter-year"><div class="view" style="width:820px;height:151.80px;"><img id="capture-03-anio" src="assets/capturas-hd/03-anio.png" alt="Componente completo de Ese Auto, capturado en alta definicion"></div></div><div class="panel filter-km"><div class="view" style="width:820px;height:151.80px;"><img id="capture-03-kilometraje" src="assets/capturas-hd/03-kilometraje.png" alt="Componente completo de Ese Auto, capturado en alta definicion"></div></div></div>
+    <div class="zone-group"><div class="panel money"><div class="view" style="width:840px;height:155.50px;"><img id="capture-04-precio" src="assets/capturas-hd/04-precio.png" alt="Componente completo de Ese Auto, capturado en alta definicion"></div></div><div class="panel zone"><div class="view" style="width:840px;height:311.00px;"><img id="capture-04-zona" src="assets/capturas-hd/04-zona.png" alt="Componente completo de Ese Auto, capturado en alta definicion"></div></div></div>
+    <p class="note">Podés corregir los filtros antes de guardar.</p>
+    </div></section>
+</div><script>(function(){const root=document.getElementById('ea-filtros');const tl=gsap.timeline({paused:true});
+const q=s=>root.querySelectorAll(s);
+    tl.fromTo(q('#filters-title,.eyebrow'),{x:-180,opacity:0},{x:0,opacity:1,duration:.4,ease:'power3.out'},.05);
+    tl.fromTo(q('.filter-group .panel'),{x:-850,z:-450,rotationY:48,opacity:0},{x:0,z:0,rotationY:0,opacity:1,duration:.6,stagger:.19,ease:'power4.out'},.05);
+    tl.to(q('.filter-model'),{y:-18,rotationY:-4,duration:.9,ease:'sine.inOut'},.8);
+    tl.to(q('.filter-year,.filter-km'),{y:12,rotationY:4,duration:.8,ease:'sine.inOut'},1.05);
+    tl.to(q('.filter-group'),{x:-1150,rotationY:-25,opacity:0,duration:.4,ease:'power3.in'},1.75);
+    tl.to(q('#filters-title'),{x:-350,opacity:0,duration:.24},1.8);
+    tl.fromTo(q('#zone-title'),{y:100,opacity:0},{y:0,opacity:1,duration:.45,ease:'power3.out'},2.0);
+    tl.fromTo(q('.zone-group .panel'),{x:850,rotationY:-42,z:-300,opacity:0},{x:0,rotationY:0,z:0,opacity:1,duration:.6,stagger:.15,ease:'power4.out'},1.98);
+    tl.to(q('.zone-group'),{y:-12,scale:1.02,duration:.8,ease:'sine.inOut'},2.7);
+    tl.fromTo(q('.note'),{opacity:0},{opacity:1,duration:.3},.9);
+    tl.to(q('.zone-group'),{y:-500,scale:.9,opacity:0,duration:.38,ease:'power3.in'},3.62);
+    tl.to(q('#zone-title,.eyebrow,.note'),{opacity:0,duration:.25},3.75);
+    window.__timelines['ea-filtros']=tl;})();</script>
+</template></body></html>

@@ -1,0 +1,226 @@
+{
+  "project": "Ese Auto - Reel HyperFrames HD",
+  "date": "2026-10-05",
+  "status": "exportado y verificado; no publicado",
+  "authoring": {
+    "tool": "HyperFrames",
+    "version": "0.8.134",
+    "gsap_version": "3.14.2",
+    "scenes": 6,
+    "editable_project": "docs/marketing/reel-hyperframes-2026-10-05",
+    "studio_url": "http://localhost:3019/#project/reel-hyperframes-2026-10-05"
+  },
+  "render": {
+    "job_id": "9f059b05-b6b3-4402-98c0-d536094d2a80",
+    "composition_hash": "8b585315585ebbbb",
+    "quality": "delivery (high)",
+    "width": 1080,
+    "height": 1920,
+    "fps": 30,
+    "frames": 720,
+    "duration_seconds": 24.0,
+    "elapsed_seconds": 157.7,
+    "capture": "HyperFrames screenshot capture with hardware GPU",
+    "workers": 4,
+    "video_codec": "h264",
+    "video_profile": "High",
+    "pixel_format": "yuv420p",
+    "audio_codec": "aac",
+    "sample_rate": 48000,
+    "channels": 2,
+    "music_bpm": 120
+  },
+  "verification": {
+    "hyperframes_check": "PASS - strict",
+    "errors": 0,
+    "warnings": 0,
+    "layout_info": 1,
+    "layout_info_reason": "Entrada intencional de la tarjeta ZONA a los 0.8 s.",
+    "motion_samples": 300,
+    "full_decode": "PASS",
+    "silent_stream_copy": "PASS",
+    "visual_review": "Nueve fotogramas del MP4 final; controles completos, textos legibles, fotos proporcionadas, sin sombras cortadas.",
+    "review_frames": [
+      0.8,
+      3.9,
+      4.7,
+      6.6,
+      9.3,
+      11,
+      14.2,
+      18,
+      22.5
+    ],
+    "timing_unchanged": true,
+    "original_video_preserved": true,
+    "graphify_update": "PASS - AST-only"
+  },
+  "material": {
+    "images": [
+      {
+        "name": "01-formulario-vacio.png",
+        "bytes": 190376,
+        "sha256": "b1ee0c0fb8e3cb8256b3e2bf499ec62c0ca73ba7c3180fc17cef0ec057426eb2",
+        "width": 1198,
+        "height": 1535,
+        "native_scale": 3,
+        "source_components": [
+          "01-formulario-vacio"
+        ]
+      },
+      {
+        "name": "02-busqueda-escrita.png",
+        "bytes": 113712,
+        "sha256": "9d56866fd50a9f8289337c4c4269f3f2c9d95d9ae62be85ce9b0593dca59bad7",
+        "width": 1244,
+        "height": 941,
+        "native_scale": 3,
+        "source_components": [
+          "02-busqueda-escrita"
+        ]
+      },
+      {
+        "name": "03-modelo.png",
+        "bytes": 21974,
+        "sha256": "a210667e64e23f7437f5227e66f2d4120da22984ab633797a8453c4f399591ce",
+        "width": 1102,
+        "height": 408,
+        "native_scale": 3,
+        "source_components": [
+          "03-marca",
+          "03-modelo"
+        ]
+      },
+      {
+        "name": "03-anio.png",
+        "bytes": 10722,
+        "sha256": "c3934ccf89d7157bb82cf0862a591e5407b3ca42846658525a5cb9f6b2f695c3",
+        "width": 1102,
+        "height": 204,
+        "native_scale": 3,
+        "source_components": [
+          "03-anio"
+        ]
+      },
+      {
+        "name": "03-kilometraje.png",
+        "bytes": 12239,
+        "sha256": "6b821a1c577c32b41579e37827b14dc0e52c769aed3bc4d12281ba72a22f3906",
+        "width": 1102,
+        "height": 204,
+        "native_scale": 3,
+        "source_components": [
+          "03-kilometraje"
+        ]
+      },
+      {
+        "name": "04-precio.png",
+        "bytes": 14034,
+        "sha256": "ee5d2a49345106a606b0dd21c5bf53b59af5aa19f9d1301c68962ff73b13a179",
+        "width": 1102,
+        "height": 204,
+        "native_scale": 3,
+        "source_components": [
+          "04-precio"
+        ]
+      },
+      {
+        "name": "04-zona.png",
+        "bytes": 27636,
+        "sha256": "4446febf9f5f1fbb9915d9bc50cc4f9a61d1b62d108b2183d5e815c9abc326b3",
+        "width": 1102,
+        "height": 408,
+        "native_scale": 3,
+        "source_components": [
+          "04-zona",
+          "04-radio"
+        ]
+      },
+      {
+        "name": "05-opcion-1.png",
+        "bytes": 154960,
+        "sha256": "360948d317f117279c8599d8ca387b9ba348482a5c6f8371bfad52acae2b8967",
+        "width": 1198,
+        "height": 508,
+        "native_scale": 3,
+        "source_components": [
+          "05-opcion-1"
+        ]
+      },
+      {
+        "name": "05-opcion-2.png",
+        "bytes": 161411,
+        "sha256": "8c6bd13b9d8b3409f48678d5486add9ca85b4eb093d5cba5101670e74e45fe3b",
+        "width": 1198,
+        "height": 574,
+        "native_scale": 3,
+        "source_components": [
+          "05-opcion-2"
+        ]
+      },
+      {
+        "name": "06-precio-contexto.png",
+        "bytes": 102565,
+        "sha256": "cd581580d337262216ce656f8795a6da5c60cdcfe0eaf6a435d717fe206d8154",
+        "width": 1198,
+        "height": 863,
+        "native_scale": 3,
+        "source_components": [
+          "06-precios",
+          "06-comparables"
+        ]
+      }
+    ],
+    "ui_treatment": "DOM visible, estilos calculados, valores y fuente Archivo congelados de la plataforma. Render nativo a 3x con HyperFrames y extraccion sin remuestreo. Componentes completos con margen de 8 CSS px. Sin ampliar los JPEG viejos.",
+    "photo_treatment": "Fotos originales de los avisos con object-fit:contain; sin recorte adicional.",
+    "music": {
+      "name": "musica-120bpm.wav",
+      "bytes": 4608078,
+      "sha256": "27844a03e3ce7410f1785c5991c88c848c5aeace93fd91c915d7d4cd75ef9eb8"
+    },
+    "music_changed": false,
+    "demo_scope": "Borrador no guardado; resultados de una busqueda ya existente. Precios publicados, no disponibilidad confirmada."
+  },
+  "files": [
+    {
+      "name": "ESE_AUTO_REEL_HYPERFRAMES_HD_1080x1920.mp4",
+      "bytes": 14322572,
+      "sha256": "de76cdd020d265fe89f02559a2a8b572e00af4ce98808bb20813cbb0b08d40d5"
+    },
+    {
+      "name": "ESE_AUTO_REEL_HYPERFRAMES_HD_SIN_AUDIO.mp4",
+      "bytes": 13714539,
+      "sha256": "21c5c082c56414a868f0ea9c27a49d0ac340b4a10a22b75a2b501945abecb196"
+    },
+    {
+      "name": "PORTADA_REEL_HD.png",
+      "bytes": 479755,
+      "sha256": "df86df4c07f8f564d06250bd598723ee84b0d0b1045fefe18a4cf15ac4fce95c"
+    },
+    {
+      "name": "COPY_INSTAGRAM.txt",
+      "bytes": 532,
+      "sha256": "e9ab601abda92bd0d0442ed8afcd11ffa28491ada25c647cca77c415e2c905a1"
+    },
+    {
+      "name": "TEXTOS_PANTALLA.srt",
+      "bytes": 720,
+      "sha256": "b57e1be42b9a33d268d223986e3fc17f4b1339b41a5370b35a387c754398e67d"
+    },
+    {
+      "name": "PUBLICAR_REEL_HD.md",
+      "bytes": 2243,
+      "sha256": "c43cb51f7b6e326ec13970ec3d21be8433168e1014f155ab1e6c7cb577b0b5ce"
+    },
+    {
+      "name": "BRIEF_HD.md",
+      "bytes": 2332,
+      "sha256": "1d77296983b731c3a3c72571d033305088f2510238336a7ef0cfa350d42b8907"
+    },
+    {
+      "name": "STORYBOARD_HD.md",
+      "bytes": 2305,
+      "sha256": "cf9e93eae08d9d3da1e698bfe33674fa01b50148c5b93715451301bb75f922a4"
+    }
+  ]
+}

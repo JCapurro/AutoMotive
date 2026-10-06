@@ -1,0 +1,24 @@
+ESE AUTO — MIÉRCOLES 7 Y JUEVES 8 DE OCTUBRE DE 2026
+Todos los horarios corresponden a Argentina.
+
+Abrí INDEX.html para ver el calendario, copiar los textos y descargar los PNG.
+La misma planificación editable está en GUIA_MIERCOLES_Y_JUEVES.md.
+
+MIÉRCOLES:
+Instagram: 01 → encuesta nativa → 05 con sticker de enlace del miércoles.
+X @eseautoar: post de búsqueda repetida, 19:45.
+
+JUEVES:
+Instagram: carrusel 02 → 03 → 04, 19:30. Luego compartir a historias y usar 05.
+X @eseautoar: post para comparar precios, 19:45.
+
+El carrusel contiene tres imágenes y cada historia utiliza un único archivo.
+Agregar los stickers de enlace desde Instagram: la imagen por sí sola no es clickeable.
+No reutilizar la antigua historia que dice que las altas pagas están en lista de espera.
+La nueva historia 05 se limita a la prueba y reemplaza esa versión.
+
+No hay una nueva publicación comercial personal ni anuncios en estos dos días.
+Los materiales fueron preparados; no están publicados ni programados.
+SEGUIMIENTO_7_Y_8_OCT.csv permite registrar resultados sin inventar métricas.
+PROMPTS.json contiene las instrucciones de generación con la herramienta integrada.
+ARCHIVOS.json contiene dimensiones y comprobaciones de las piezas seleccionadas.

@@ -1,0 +1,43 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"></head><body><template>
+<style>#ea-cierre{position:absolute;inset:0;width:100%;height:100%;overflow:hidden}
+*{box-sizing:border-box}h1,h2,p{margin:0}
+.scene{position:absolute;inset:0;width:100%;height:100%;overflow:hidden;perspective:1800px;color:#fbfbf8}
+.world{position:absolute;inset:0;transform-style:preserve-3d}
+.eyebrow{position:absolute;left:78px;top:315px;font-size:32px;letter-spacing:2px;font-weight:650;color:#f4d447}
+.headline{position:absolute;left:78px;top:370px;width:850px;font-size:94px;line-height:1.04;font-weight:750;letter-spacing:-2px}
+.line{display:block;position:relative;width:100%;min-height:102px}
+.note{position:absolute;left:78px;top:1350px;width:850px;font-size:28px;line-height:1.25;color:#cad4dd}
+.view{position:relative;overflow:hidden;background:#fbfbf8;border-radius:18px}
+.view img{display:block;width:100%;height:100%;object-fit:contain;image-rendering:auto}
+.panel{position:absolute;transform-style:flat;border:3px solid #a5b5c5;border-radius:21px;box-shadow:0 28px 70px #07132188}
+.underline{position:absolute;height:8px;background:#f4d447;transform-origin:0 50%}
+
+    .close-copy{position:absolute;left:78px;top:370px;width:850px;font-size:100px;line-height:1.04;font-weight:750;letter-spacing:-2px}
+    .free{position:absolute;left:72px;top:640px;width:880px;height:190px;font-size:158px;font-weight:800;color:#f4d447;letter-spacing:-5px;line-height:1}
+    .days{position:absolute;left:78px;top:825px;width:850px;font-size:90px;font-weight:750;line-height:1}
+    .daily{position:absolute;left:78px;top:945px;width:850px;font-size:42px}
+    .cta{position:absolute;left:78px;top:1055px;width:850px;height:112px;display:flex;align-items:center;justify-content:space-between;background:#f4d447;border-radius:20px;padding:24px 36px;color:#14283e;font-size:52px;font-weight:700}
+    .cta svg{width:55px;height:55px;flex:none}.handle{position:absolute;left:78px;top:1210px;width:850px;font-size:48px;font-weight:700}
+    .domain{position:absolute;left:78px;top:1290px;width:850px;font-size:42px;color:#cad4dd}
+    .finish-rule{left:78px;top:1380px;width:840px;height:5px}
+    </style>
+<div id="ea-cierre" data-composition-id="ea-cierre" data-duration="4" data-width="1080" data-height="1920">
+<section id="ea-cierre-clip" class="scene clip" data-start="0" data-duration="4" data-track-index="1"><div class="world">
+    <div class="eyebrow">ESE AUTO · ARGENTINA</div><h2 class="close-copy"><span class="line">Probá una</span><span class="line">búsqueda</span></h2>
+    <div class="free">GRATIS</div><div class="days">por 3 días.</div><p class="daily">Con resumen diario.</p>
+    <div class="cta"><span>Enlace en el perfil</span><svg viewBox="0 0 60 60" aria-hidden="true"><path d="M10 50L50 10M15 10H50V45" stroke="#14283e" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <p class="handle">@eseauto.ar</p><p class="domain">eseauto.com.ar</p><div class="underline finish-rule"></div>
+    </div></section>
+</div><script>(function(){const root=document.getElementById('ea-cierre');const tl=gsap.timeline({paused:true});
+const q=s=>root.querySelectorAll(s);
+    tl.fromTo(q('.close-copy .line'),{y:200,rotationX:-60,opacity:0},{y:0,rotationX:0,opacity:1,duration:.6,stagger:.13,ease:'power4.out'},0);
+    tl.fromTo(q('.eyebrow'),{x:-150,opacity:0},{x:0,opacity:1,duration:.35},.05);
+    tl.fromTo(q('.free'),{x:1000,rotationY:-65,scale:1.3,opacity:0},{x:0,rotationY:0,scale:1,opacity:1,duration:.7,ease:'back.out(1.05)'},.40);
+    tl.fromTo(q('.days'),{y:140,opacity:0},{y:0,opacity:1,duration:.45,ease:'power3.out'},.85);
+    tl.fromTo(q('.daily'),{x:-200,opacity:0},{x:0,opacity:1,duration:.4},1.1);
+    tl.fromTo(q('.cta'),{y:200,scale:.8,rotationX:35,opacity:0},{y:0,scale:1,rotationX:0,opacity:1,duration:.6,ease:'back.out(1.15)'},1.25);
+    tl.fromTo(q('.handle,.domain'),{y:60,opacity:0},{y:0,opacity:1,duration:.4,stagger:.13,ease:'power2.out'},1.65);
+    tl.fromTo(q('.finish-rule'),{scaleX:0},{scaleX:1,duration:.55,ease:'power3.out'},1.9);
+    tl.to(q('.cta svg'),{x:8,y:-8,duration:.5,repeat:3,yoyo:true,ease:'sine.inOut'},2);
+    window.__timelines['ea-cierre']=tl;})();</script>
+</template></body></html>

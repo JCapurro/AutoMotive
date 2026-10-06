@@ -1,0 +1,38 @@
+{
+  "fonts": [
+    {
+      "contentType": "font/woff2",
+      "id": "81d9e362850c7297",
+      "kind": "font",
+      "name": "21ca8f3f56c22ca2-s.p.14a9xpaqsbppk.woff2",
+      "path": "C:\\Users\\Juan\\AppData\\Local\\Temp/browser-use/assets/87d87601-b6d1-4de8-840b-6193f281f31f/81d9e362850c7297.woff2",
+      "url": "https://www.eseauto.com.ar/_next/static/immutable/media/21ca8f3f56c22ca2-s.p.14a9xpaqsbppk.woff2"
+    },
+    {
+      "contentType": "font/woff2",
+      "id": "592f79cfba0d56c4",
+      "kind": "font",
+      "name": "797e433ab948586e-s.p.1v5bejj26fx9h.woff2",
+      "path": "C:\\Users\\Juan\\AppData\\Local\\Temp/browser-use/assets/87d87601-b6d1-4de8-840b-6193f281f31f/592f79cfba0d56c4.woff2",
+      "url": "https://www.eseauto.com.ar/_next/static/immutable/media/797e433ab948586e-s.p.1v5bejj26fx9h.woff2"
+    }
+  ],
+  "photos": [
+    {
+      "contentType": "image/webp",
+      "id": "264959fcda3bf4c3",
+      "kind": "image",
+      "name": "D_NQ_NP_2X_913105-MLA116548889076_092026-F.webp",
+      "path": "C:\\Users\\Juan\\AppData\\Local\\Temp/browser-use/assets/9a33ca0b-2807-4064-85b2-7910d64286ed/264959fcda3bf4c3.webp",
+      "url": "https://http2.mlstatic.com/D_NQ_NP_2X_913105-MLA116548889076_092026-F.webp"
+    },
+    {
+      "contentType": "image/webp",
+      "id": "4a3daae562ab27b3",
+      "kind": "image",
+      "name": "D_NQ_NP_2X_747315-MLA116970664578_092026-F.webp",
+      "path": "C:\\Users\\Juan\\AppData\\Local\\Temp/browser-use/assets/9a33ca0b-2807-4064-85b2-7910d64286ed/4a3daae562ab27b3.webp",
+      "url": "https://http2.mlstatic.com/D_NQ_NP_2X_747315-MLA116970664578_092026-F.webp"
+    }
+  ]
+}

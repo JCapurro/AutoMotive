@@ -1,0 +1,8 @@
+[
+  {"start":3,"end":5,"step":"01 · TU BÚSQUEDA","heading":"Contá qué auto buscás.","file":"capturas/01-formulario-vacio.jpg","crop":[15,334,385,575],"note":"Ejemplo de configuración"},
+  {"start":5,"end":8,"step":"01 · TU BÚSQUEDA","heading":"Modelo, presupuesto y zona.","file":"capturas/02-busqueda-escrita.jpg","crop":[16,326,414,625],"focus":[32,576,99,34],"note":"Pedido real interpretado, sin guardar"},
+  {"start":8,"end":10,"step":"02 · LOS FILTROS","heading":"Revisá lo que entendimos.","file":"capturas/03-filtros-vehiculo.jpg","panels":[{"crop":[25,56,377,178],"bounds":[78,600,850,295]},{"crop":[25,289,377,351],"bounds":[78,913,850,153]},{"crop":[25,637,377,692],"bounds":[78,1084,850,133]}],"note":"Podés corregir los filtros"},
+  {"start":10,"end":12,"step":"02 · LOS FILTROS","heading":"Ajustá presupuesto y zona.","file":"capturas/04-presupuesto-zona.jpg","panels":[{"crop":[27,228,375,287],"bounds":[78,640,850,160]},{"crop":[27,450,375,575],"bounds":[78,838,850,320]}],"note":"Ejemplo: USD 10.000 · AMBA"},
+  {"start":12,"end":16,"step":"03 · LAS OPCIONES","heading":"Revisá las coincidencias.","file":"capturas/05-resultados-reales.jpg","crop":[14,174,395,477],"note":"Búsqueda existente · datos del 5/10"},
+  {"start":16,"end":20,"step":"04 · EL PRECIO","heading":"Mirá el precio en contexto.","file":"capturas/06-precio-contexto.jpg","crop":[15,470,385,737],"note":"Comparación de precios publicados"}
+]

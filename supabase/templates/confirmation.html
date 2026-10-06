@@ -1,6 +1,64 @@
-<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.5;color:#1a1a1a;max-width:480px">
-  <h2>Confirmá tu cuenta en Ese Auto</h2>
-  <p>Confirmá tu email para empezar a guardar búsquedas y recibir alertas.</p>
-  <p><a href="{{ .RedirectTo }}&amp;token_hash={{ .TokenHash }}&amp;type=signup">Confirmar mi cuenta</a></p>
-  <p>El enlace sirve una sola vez y vence en una hora. Si no creaste esta cuenta, ignorá este email.</p>
-</div>
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Confirmá tu cuenta en Ese Auto</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f1f3f7;color:#14213d;font-family:Arial,Helvetica,sans-serif;-webkit-text-size-adjust:100%;">
+  <div style="display:none;font-size:1px;line-height:1px;color:#f1f3f7;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;">Tu cuenta está casi lista. Confirmá tu email para terminar el registro.</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f1f3f7;">
+    <tr><td align="center" style="padding:32px 16px;">
+      <!--[if mso]><table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:560px;">
+        <tr><td style="padding:0 0 24px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+            <td><span style="display:inline-block;background-color:#ffe14d;padding:5px 10px;color:#14213d;font-size:26px;font-weight:800;letter-spacing:-1px;line-height:30px;">S Auto</span></td>
+            <td align="right" style="color:#4e5a73;font-size:11px;font-weight:700;letter-spacing:1.5px;">TU CUENTA</td>
+          </tr></table>
+        </td></tr>
+        <tr><td style="background-color:#ffffff;border:1px solid #d8dde6;border-radius:12px;overflow:hidden;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="table-layout:fixed;">
+            <tr><td height="5" style="height:5px;font-size:0;line-height:0;background-color:#ffe14d;border-radius:12px 12px 0 0;">&nbsp;</td></tr>
+            <tr><td style="padding:32px 28px 0;">
+              <p style="margin:0 0 16px;color:#4e5a73;font-size:11px;font-weight:700;letter-spacing:1.8px;line-height:18px;">CONFIRMACIÓN DE REGISTRO</p>
+              <h1 style="margin:0 0 18px;color:#14213d;font-size:30px;font-weight:700;letter-spacing:-0.8px;line-height:37px;">Un paso más.<br>Tu cuenta está casi lista.</h1>
+              <p style="margin:0;color:#4e5a73;font-size:16px;line-height:25px;">Confirmá tu dirección de email para terminar el registro en <strong style="color:#14213d;">Ese Auto</strong> y acceder a tu cuenta.</p>
+            </td></tr>
+            <tr><td style="padding:24px 28px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f1f3f7;border-radius:8px;table-layout:fixed;"><tr><td style="padding:14px 16px;">
+                <p style="margin:0 0 4px;color:#4e5a73;font-size:11px;font-weight:700;letter-spacing:1px;line-height:17px;">EMAIL DE TU CUENTA</p>
+                <p style="margin:0;color:#14213d;font-size:15px;font-weight:700;line-height:22px;overflow-wrap:anywhere;word-break:break-all;">{{ .Email }}</p>
+              </td></tr></table>
+            </td></tr>
+            <tr><td align="center" style="padding:0 28px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" bgcolor="#14213d" style="background-color:#14213d;border-radius:8px;mso-padding-alt:16px 20px;">
+                <a href="{{ .RedirectTo }}&amp;token_hash={{ .TokenHash }}&amp;type=signup" style="display:block;border:1px solid #14213d;border-radius:8px;padding:16px 20px;color:#ffffff;font-size:16px;font-weight:700;line-height:22px;text-align:center;text-decoration:none;">Confirmar mi email</a>
+              </td></tr></table>
+              <p style="margin:12px 0 0;color:#4e5a73;font-size:12px;line-height:19px;">Después, podés ingresar con tu email y contraseña.</p>
+            </td></tr>
+            <tr><td style="padding:28px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f8f9fb;border-radius:6px;"><tr><td style="border-left:3px solid #ffe14d;padding:16px;">
+                <p style="margin:0 0 5px;color:#14213d;font-size:13px;font-weight:700;line-height:20px;">Este enlace es personal y de un solo uso.</p>
+                <p style="margin:0;color:#4e5a73;font-size:13px;line-height:21px;">Tiene una validez limitada. Si venció, volvé al registro y pedí una nueva confirmación.</p>
+              </td></tr></table>
+            </td></tr>
+            <tr><td style="padding:0 28px 28px;">
+              <p style="margin:0 0 9px;color:#4e5a73;font-size:12px;line-height:19px;">Si el botón no funciona, copiá y pegá este enlace en tu navegador:</p>
+              <p style="margin:0;font-size:11px;line-height:18px;overflow-wrap:anywhere;word-break:break-all;">
+                <a href="{{ .RedirectTo }}&amp;token_hash={{ .TokenHash }}&amp;type=signup" style="color:#4e5a73;text-decoration:underline;overflow-wrap:anywhere;word-break:break-all;">{{ .RedirectTo }}&amp;token_hash={{ .TokenHash }}&amp;type=signup</a>
+              </p>
+            </td></tr>
+          </table>
+        </td></tr>
+        <tr><td align="center" style="padding:22px 12px 0;">
+          <p style="margin:0 0 5px;color:#14213d;font-size:12px;font-weight:700;line-height:19px;">Ese Auto &middot; eseauto.com.ar</p>
+          <p style="margin:0;color:#4e5a73;font-size:11px;line-height:18px;">Este es un email automático relacionado con tu cuenta.<br>Si no creaste esta cuenta, podés ignorar este mensaje.</p>
+        </td></tr>
+      </table>
+      <!--[if mso]></td></tr></table><![endif]-->
+    </td></tr>
+  </table>
+</body>
+</html>
