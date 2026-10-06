@@ -617,7 +617,7 @@ class DescriptionFactsTests(IngestCase):
     async def test_ambiguous_descriptions_ask_the_llm_once(self):
         await ingest([card("1")], geocode=None)
         await db.mark_seen(await self.fiesta_alert(), [card("1").to_dict()], backfill=False)
-        self._detail("1", "Precio U$S 12.000. Otro precio U$S 13.000")        # two plain prices
+        self._detail("1", "Contado USD 9.800. Contado USD 10.000. El precio publicado es el de lista.")
 
         class FakeLLM:
             calls = 0
@@ -628,7 +628,10 @@ class DescriptionFactsTests(IngestCase):
                                     timing_belt_changed=None, accepts_trade_in=None, financing=None,
                                     damage_mentioned=None, cash_price=9_800, list_price=None, down_payment=None,
                                     installment_amount=None, installment_count=None, price_currency="USD",
-                                    published_price_kind="list", mileage_km=None, year=None)
+                                    published_price_kind="list", mileage_km=None, year=None,
+                                    evidence=[{"field": "cash_price", "quote": "Contado USD 9.800"},
+                                              {"field": "price_currency", "quote": "Contado USD 9.800"},
+                                              {"field": "published_price_kind", "quote": "El precio publicado es el de lista"}])
 
         llm = enrich.DescriptionLLM(FakeLLM(), daily_cap=5)
         with patch.object(enrich.DescriptionLLM, "create", AsyncMock(return_value=llm)):

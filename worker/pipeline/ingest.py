@@ -147,6 +147,10 @@ def _facts(existing: dict[str, Any], incoming: dict[str, Any], *,
     card's title-only reading never replaces one of the description, and
     the LLM's reading of the same text is kept."""
     new, old = incoming.get("description_facts"), existing.get("description_facts")
+    if authoritative and incoming.get("description") and (
+            incoming["description"] != existing.get("description")
+            or (incoming.get("title") and incoming["title"] != existing.get("title"))):
+        return new  # Old evidence is invalidated even when the new text has no facts.
     if new is None or old is None:
         return old if new is None else new
     if not authoritative:
@@ -167,11 +171,18 @@ def merge(existing: dict[str, Any], incoming: dict[str, Any], *,
     """
     authoritative = detail or existing.get("enriched_at") is None
     out: dict[str, Any] = {"url": incoming.get("url") or existing.get("url")}
+    old_filled = set((existing.get("attributes") or {}).get("_description_filled") or [])
+    new_filled = set((incoming.get("attributes") or {}).get("_description_filled") or [])
+
+    def preserve_structured(column: str) -> bool:
+        return column in new_filled and column not in old_filled and not _empty(existing.get(column))
 
     for col in _DESCRIPTIVE:
         new, old = incoming.get(col), existing.get(col)
         out[col] = (new if not _empty(new) else old) if authoritative else \
                    (old if not _empty(old) else new)
+        if preserve_structured(col):
+            out[col] = old
     # Coordinates follow the location text they were geocoded from.
     loc_from_incoming = out["location_text"] == incoming.get("location_text") \
         and incoming.get("lat") is not None
@@ -187,6 +198,9 @@ def merge(existing: dict[str, Any], incoming: dict[str, Any], *,
         and incoming.get("make")
     for col in _VEHICLE:
         out[col] = incoming.get(col) if take_new else existing.get(col)
+        if col == "trim" and preserve_structured(col) and all(
+                existing.get(k) == incoming.get(k) for k in ("make", "model")):
+            out[col] = existing.get(col)
 
     out["published_at"] = existing.get("published_at") or incoming.get("published_at")
     attrs_old, attrs_new = existing.get("attributes") or {}, incoming.get("attributes") or {}
@@ -222,15 +236,27 @@ def merge(existing: dict[str, Any], incoming: dict[str, Any], *,
     else:
         out["price_usd"] = _to_usd(price.price, price.currency, rate)
     new_km = incoming.get("mileage_km")
-    out["mileage_km"] = new_km if new_km is not None else existing.get("mileage_km")
+    out["mileage_km"] = new_km if new_km is not None and not preserve_structured("mileage_km") else existing.get("mileage_km")
+    derived = []
+    for col in ("year", "mileage_km", "transmission", "fuel", "trim"):
+        if not _empty(incoming.get(col)) and col not in new_filled and out[col] == incoming[col] and authoritative:
+            continue
+        if (col in new_filled and out[col] == incoming.get(col) and
+                (_empty(existing.get(col)) or col in old_filled or out[col] != existing.get(col))) \
+                or (col in old_filled and out[col] == existing.get(col)):
+            derived.append(col)
+    out["attributes"]["_description_filled"] = derived
     out["fingerprint"] = fingerprint(out)
 
     changes: list[str] = []
     if published_changed:
         changes.append("price")
-    if new_km is not None and new_km != existing.get("mileage_km"):
+    if out["mileage_km"] is not None and out["mileage_km"] != existing.get("mileage_km"):
         changes.append("mileage")
-    if (not _empty(out["description"]) and out["description"] != existing.get("description"))             or (effective_changed and not published_changed):
+    old_facts, new_facts = existing.get("description_facts") or {}, out.get("description_facts") or {}
+    analysis_changed = any(old_facts.get(key) != new_facts.get(key) for key in ("claims", "evidence"))
+    if (not _empty(out["description"]) and out["description"] != existing.get("description")) \
+            or (effective_changed and not published_changed) or analysis_changed:
         # The effective price moved because of how the text reads.
         changes.append("description")
     if not _empty(out["images"]) and out["images"] != (existing.get("images") or []):

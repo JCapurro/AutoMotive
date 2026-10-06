@@ -17,6 +17,7 @@ from typing import Any, Mapping
 from intelligence import copy
 from intelligence.config import IntelligenceConfig
 from normalization.normalize import normalize_text
+from normalization.description_claims import claim
 
 
 @dataclass(frozen=True)
@@ -56,16 +57,26 @@ def red_flags(listing: Mapping[str, Any], *, diff_pct: float | None, guard: str 
     rules = cfg.red_flags
     flags: list[RedFlag] = []
     text = normalize_text(listing.get("description"))
+    facts = listing.get("description_facts") or {}
 
     if description_known(listing):
-        if not _OWNERS.search(text):
+        if claim(facts, "single_owner") is not True and not _OWNERS.search(text):
             flags.append(RedFlag("no_owners", copy.RED_FLAG["no_owners"], "info"))
-        if not _SERVICE.search(text):
+        if claim(facts, "service_history") is False:
+            flags.append(RedFlag("service_unavailable", copy.RED_FLAG["service_unavailable"], "info"))
+        elif claim(facts, "service_history") is None and not _SERVICE.search(text):
             flags.append(RedFlag("no_service", copy.RED_FLAG["no_service"], "info"))
-        if timing_belt and not _TIMING_BELT.search(text):
+        if claim(facts, "timing_belt_changed") is False:
+            flags.append(RedFlag("timing_pending", copy.RED_FLAG["timing_pending"], "info"))
+        elif timing_belt and claim(facts, "timing_belt_changed") is None and not _TIMING_BELT.search(text):
             flags.append(RedFlag("no_timing_belt", copy.RED_FLAG["no_timing_belt"], "info"))
         if len(text) < rules["min_description_chars"]:
             flags.append(RedFlag("short_description", copy.RED_FLAG["short_description"], "info"))
+        for field, key in (("damage_mentioned", "damage_mentioned"), ("commercial_use", "commercial_use")):
+            if claim(facts, field) is True:
+                flags.append(RedFlag(key, copy.RED_FLAG[key], "info"))
+        if claim(facts, "vtv_current") is False:
+            flags.append(RedFlag("vtv_pending", copy.RED_FLAG["vtv_pending"], "info"))
 
     if diff_pct is not None and diff_pct >= rules["much_cheaper_pct"]:
         key = "much_cheaper_anticipo" if diff_pct >= rules["anticipo_pct"] else "much_cheaper"

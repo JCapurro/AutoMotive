@@ -4,6 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { ListingActions } from "@/components/app/listing-actions";
+import { DescriptionPriceContext, SellerDescription } from "@/components/app/description-insights";
 import { type PricePoint, PriceHistory } from "@/components/app/price-history";
 import { SellerQuestions } from "@/components/app/seller-questions";
 import { ViewTracker } from "@/components/app/view-tracker";
@@ -193,6 +194,7 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
                 cautious={flags.some((f) => f.id === "much_cheaper") || breakdown.guard === "suspicious"}
               />
             )}
+            {!gone ? <DescriptionPriceContext listing={listing} refs={priceRef} minN={cfg.minComparables} /> : null}
           </Section>
 
           {best && !gone ? (
@@ -206,6 +208,7 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
         </div>
 
         <div className="space-y-11">
+          <SellerDescription listing={listing} />
           {best ? (
             <Section
               title="¿Por qué apareció?"

@@ -14,7 +14,7 @@ _LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
 # Tables the DB tests write to; reference data (sources, app_config, catalog) stays.
 _TRUNCATE = ("search_profiles, listings, listing_snapshots, matches, geocode_cache, "
              "events, notifications, user_listing_interactions, owned_vehicles, "
-             "crawl_targets, collector_runs, pipeline_errors, fx_rates")
+             "crawl_targets, collector_runs, pipeline_errors, fx_rates, description_llm_runs")
 
 # Every DB test gets this quote instead of calling dolarapi.com.
 TEST_FX_RATE = 1_000.0

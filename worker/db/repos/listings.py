@@ -143,6 +143,45 @@ async def llm_facts_last_day() -> int:
     return int(row["n"])
 
 
+async def reserve_description_run(listing_id: int, input_hash: str, daily_cap: int) -> int | None:
+    """Atomic rolling-24h budget, shared across sources/passes; failed attempts also count.
+
+    At most one attempt for the same listing/text/version in 24h. The transaction
+    ends before network I/O; the reservation remains counted if a process dies.
+    """
+    if daily_cap <= 0:
+        return None
+    async with connection() as cx:
+        async with cx.transaction():
+            await cx.execute("SELECT pg_advisory_xact_lock(7060141200)")
+            count = await (await cx.execute(
+                "SELECT count(*) AS n FROM description_llm_runs "
+                "WHERE started_at > now() - interval '1 day'")).fetchone()
+            # Honor legacy successful analyses until their first rolling window expires.
+            legacy = await (await cx.execute(
+                "SELECT count(*) AS n FROM listings WHERE description_facts ->> 'source' = 'llm' "
+                "AND (description_facts ->> 'llm_at')::timestamptz > now() - interval '1 day' "
+                "AND NOT EXISTS (SELECT 1 FROM description_llm_runs r WHERE r.listing_id = listings.id "
+                "AND r.started_at > now() - interval '1 day')")).fetchone()
+            if int(count["n"]) + int(legacy["n"]) >= daily_cap:
+                return None
+            duplicate = await (await cx.execute(
+                "SELECT id FROM description_llm_runs WHERE listing_id = %s AND input_hash = %s "
+                "AND started_at > now() - interval '1 day' LIMIT 1", (listing_id, input_hash))).fetchone()
+            if duplicate:
+                return None
+            run = await (await cx.execute(
+                "INSERT INTO description_llm_runs (listing_id, input_hash) VALUES (%s, %s) RETURNING id",
+                (listing_id, input_hash))).fetchone()
+            return int(run["id"])
+
+
+async def finish_description_run(run_id: int, *, error: str | None) -> None:
+    async with connection() as cx:
+        await cx.execute("UPDATE description_llm_runs SET completed_at = now(), error = %s WHERE id = %s",
+                         (error, run_id))
+
+
 async def mark_detail_checked(listing_ids: Iterable[int]) -> None:
     ids = list(listing_ids)
     if ids:

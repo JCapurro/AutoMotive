@@ -193,7 +193,7 @@ def test_factory_uses_the_configured_model(monkeypatch):
 
 def test_optional_tasks_use_their_own_schema():
     facts = dict.fromkeys(json_schema(ListingFacts)["properties"])
-    facts.update(fuel="gnc", single_owner=True, mileage_km=90000)
+    facts.update(fuel="gnc", single_owner=True, mileage_km=90000, equipment=[], evidence=[])
     responses = iter([facts, {"text": "¡Hola! ¿Lo seguís teniendo?"}])
     p, seen = provider(lambda r: httpx.Response(200, json=answer(json.dumps(next(responses)))))
     result = asyncio.run(p.extract_listing_facts("Gol GNC", "Único dueño, 90 mil km"))

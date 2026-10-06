@@ -27,13 +27,15 @@ from typing import Any
 
 import db
 from aio import run
-from collectors import REGISTRY
+from collectors import REGISTRY, Listing
 from db.repos import listings as repo
 from db.repos import raw_pages
+from db.repos.catalog import load_models
 from db.repos.fx import quote_for_today
 from intelligence.copy import money
-from normalization.description_facts import DescriptionFacts, from_llm, parse, resolve_price
+from normalization.description_facts import DescriptionFacts, parse, resolve_price
 from normalization.price_check import keyword_partial
+from normalization.vehicle import CatalogModel, resolve_trim
 from pipeline.enrich import DescriptionLLM, ingest_detail, rescore_changed
 from pipeline.ingest import IngestResult, _published, _same_number, _to_usd, _usd_rate
 from pipeline.rescore import rescore_listings
@@ -54,7 +56,7 @@ def _published_reason(row: dict[str, Any]) -> str | None:
 
 
 def recompute(row: dict[str, Any], facts: DescriptionFacts | None, *,
-              today_rate: float | None) -> dict[str, Any]:
+              today_rate: float | None, catalog: list[CatalogModel] | None = None) -> dict[str, Any]:
     """The columns that change for a stored row given a reading of its text."""
     pub, pub_cur = _published(row)
     rate = _usd_rate(row) or today_rate
@@ -74,6 +76,15 @@ def recompute(row: dict[str, Any], facts: DescriptionFacts | None, *,
                               ("transmission", facts.transmission), ("fuel", facts.fuel)):
             if row.get(column) is None and value is not None:
                 new[column] = value
+        if not row.get("trim") and facts.claims.get("trim"):
+            model = next((m for m in catalog or [] if m.make == row.get("make") and m.model == row.get("model")), None)
+            if model and (trim := resolve_trim(model, facts.claims["trim"])):
+                new["trim"] = trim
+        filled = [k for k in ("year", "mileage_km", "transmission", "fuel", "trim") if k in new and row.get(k) is None]
+        if filled:
+            attrs = dict(row.get("attributes") or {})
+            attrs["_description_filled"] = list(dict.fromkeys([*attrs.get("_description_filled", []), *filled]))
+            new["attributes"] = attrs
     return {k: v for k, v in new.items() if v != row.get(k)}
 
 
@@ -99,13 +110,17 @@ def _line(row: dict[str, Any], changed: dict[str, Any]) -> str:
 
 
 async def reprocess_facts(*, dry_run: bool, llm: bool, source: str | None = None) -> list[int]:
-    """--facts. Returns the ids whose effective price or partial flag changed."""
+    """--facts. Return every changed id so claims/questions are re-scored too.
+
+    Dry-run never contacts an LLM or reserves a paid attempt.
+    """
     async with db.connection() as cx:
         fx = await quote_for_today(cx)
+        catalog = await load_models(cx)
         sql = "SELECT * FROM listings WHERE description IS NOT NULL"
         rows = await (await cx.execute(sql + (" AND source = %s" if source else "") + " ORDER BY id",
                                        (source,) if source else ())).fetchall()
-    helper = await DescriptionLLM.create() if llm else None
+    helper = await DescriptionLLM.create() if llm and not dry_run else None
     now_year = datetime.now(timezone.utc).year
     repriced: list[int] = []
     for row in rows:
@@ -115,18 +130,18 @@ async def reprocess_facts(*, dry_run: bool, llm: bool, source: str | None = None
             facts = stored                          # the LLM already read this text
         else:
             facts = parse(row["description"], row["title"], now_year=now_year)
-            if helper is not None and facts is not None and facts.ambiguous \
-                    and await repo.llm_facts_last_day() < helper.daily_cap:
-                try:
-                    answer = await helper.provider.extract_listing_facts(row["title"], row["description"])
-                    facts = from_llm(answer, facts, llm_at=datetime.now(timezone.utc).isoformat())
-                except Exception as e:
-                    log.info("LLM failed for listing %s: %s", row["id"], type(e).__name__)
-        changed = recompute(row, facts, today_rate=fx.rate if fx else None)
+        if helper is not None:
+            item = Listing(source=row["source"], listing_id=row["external_id"], url=row["url"],
+                           titulo=row["title"], descripcion=row["description"])
+            await helper.refine(row["id"], item)
+            if item.extra.get("description_facts"):
+                facts = DescriptionFacts.from_json(item.extra["description_facts"])
+        elif llm and dry_run:
+            print(f"#{row['id']} análisis IA pendiente de aplicar; dry-run no hace llamadas")
+        changed = recompute(row, facts, today_rate=fx.rate if fx else None, catalog=catalog)
         if not changed:
             continue
-        if set(changed) & {"price", "currency", "price_partial"}:
-            repriced.append(row["id"])
+        repriced.append(row["id"])
         print(_line(row, changed))
         if not dry_run:
             async with db.connection() as cx:
@@ -173,7 +188,7 @@ async def main(argv: list[str]) -> int:
     what.add_argument("--facts", action="store_true", help="desde las descripciones guardadas")
     what.add_argument("--raw", action="store_true", help="desde las páginas guardadas (raw_pages)")
     ap.add_argument("--dry-run", action="store_true", help="solo mostrar qué cambiaría")
-    ap.add_argument("--llm", action="store_true", help="--facts: el LLM para los textos ambiguos")
+    ap.add_argument("--llm", action="store_true", help="--facts: analizar descripciones con IA y caché (sin llamadas en dry-run)")
     ap.add_argument("--outdated", action="store_true", help="--raw: solo las parseadas con una versión vieja")
     ap.add_argument("--source", help="una sola fuente")
     args = ap.parse_args(argv)
@@ -184,7 +199,7 @@ async def main(argv: list[str]) -> int:
             repriced = await reprocess_facts(dry_run=args.dry_run, llm=args.llm, source=args.source)
             if repriced and not args.dry_run:
                 await rescore_listings(repriced)
-            print(f"{len(repriced)} precio(s) {'cambiarían' if args.dry_run else 'cambiaron'}")
+            print(f"{len(repriced)} publicación(es) {'cambiarían' if args.dry_run else 'cambiaron'}")
         else:
             result = await reprocess_raw(dry_run=args.dry_run, source=args.source, outdated=args.outdated)
             if not args.dry_run:

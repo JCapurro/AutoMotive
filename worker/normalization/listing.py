@@ -18,7 +18,7 @@ from normalization.fx import FxQuote
 from normalization.geo import normalize_location_query
 from normalization.normalize import normalize_text
 from normalization.price_check import keyword_partial
-from normalization.vehicle import CatalogModel, resolve_vehicle
+from normalization.vehicle import CatalogModel, resolve_trim, resolve_vehicle
 
 
 _CURRENCIES = {"USD": "USD", "U$S": "USD", "US$": "USD", "U$D": "USD", "ARS": "ARS", "$": "ARS"}
@@ -106,6 +106,13 @@ def normalize_listing(item: Listing, *, catalog: list[CatalogModel], target: Tar
     raw_currency = (item.moneda or "").strip().upper() or None
     currency = _CURRENCIES.get(raw_currency) if raw_currency else None
     facts = listing_facts(item, now_year=datetime.now(timezone.utc).year)
+    # A version mentioned only in the description may fill a missing trim,
+    # but must match the resolved model's catalog. Never replace a page/title trim.
+    described_trim = None
+    if facts and not vehicle.trim and facts.claims.get("trim"):
+        model = next((m for m in catalog if m.make == vehicle.make and m.model == vehicle.model), None)
+        if model:
+            described_trim = resolve_trim(model, facts.claims["trim"])
 
     attributes: dict[str, Any] = dict(item.atributos)
     for key, value in (("transmision", item.transmision), ("vendedor", item.vendedor),
@@ -114,6 +121,13 @@ def normalize_listing(item: Listing, *, catalog: list[CatalogModel], target: Tar
         if value:
             attributes.setdefault(key, value)
     attributes["_normalization"] = {"method": vehicle.method, "notes": list(vehicle.notes)}
+    described = {
+        "year": not item.anio,
+        "mileage_km": item.km is None,
+        "transmission": not tx.transmission(item.transmision, item.version, item.titulo),
+        "fuel": not tx.fuel(item.combustible, item.version, item.titulo),
+        "trim": bool(described_trim),
+    }
 
     published = item.precio if item.precio and item.precio > 0 else None
     # Why the title or the page's structure (Autocosmos' "Anticipo" block)
@@ -133,7 +147,7 @@ def normalize_listing(item: Listing, *, catalog: list[CatalogModel], target: Tar
         "description": item.descripcion or None,
         "make": vehicle.make,
         "model": vehicle.model,
-        "trim": vehicle.trim,
+        "trim": vehicle.trim or described_trim,
         "year": item.anio or (facts.year if facts else None),
         "price": price.price,
         "currency": price.currency,
@@ -158,6 +172,7 @@ def normalize_listing(item: Listing, *, catalog: list[CatalogModel], target: Tar
     }
     row["price_usd"] = price_usd(row["price"], row["currency"], fx)
     row["fx_rate"] = fx.rate if fx and row["currency"] == "ARS" and row["price_usd"] else None
+    attributes["_description_filled"] = [key for key, missing in described.items() if missing and row.get(key) is not None]
     # Not columns: what merge() needs to re-resolve the price against stored facts.
     row["usd_rate"] = usd_rate
     row["published_partial_reason"] = partial_reason

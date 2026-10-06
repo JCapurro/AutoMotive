@@ -63,11 +63,22 @@ class SearchDrafts(_Strict):
 PriceKind = Literal["cash", "list", "down_payment", "installment"]
 
 
+class ListingEvidence(_Strict):
+    field: Literal["transmission", "fuel", "single_owner", "service_history", "timing_belt_changed",
+                   "accepts_trade_in", "financing", "damage_mentioned", "cash_price", "list_price",
+                   "down_payment", "installment_amount", "installment_count", "price_currency",
+                   "published_price_kind", "mileage_km", "year", "trim", "engine", "equipment",
+                   "tires_condition", "commercial_use", "repairs", "damage_details", "vtv_current",
+                   "documentation", "negotiable", "urgent_sale", "sale_reason"]
+    quote: str = Field(min_length=1, max_length=600,
+                       description="Cita literal y suficiente del aviso que respalda el dato, con su contexto y negaciones.")
+
+
 class ListingFacts(_Strict):
     """Facts a listing's text states that the structured fields miss (sección 8.1).
 
-    The worker asks for them when the rules of normalization/description_facts.py
-    can't settle a description (several prices, several km): pipeline/enrich.py.
+    The worker reads complete descriptions once per title/text/version.
+    Every non-null value needs literal evidence; missing information is unknown.
     """
 
     transmission: Transmission | None
@@ -89,6 +100,21 @@ class ListingFacts(_Strict):
         description="Qué es el precio publicado según el texto, si lo aclara: contado, lista, anticipo o cuota.")
     mileage_km: int | None = Field(description="Kilometraje actual del auto (no el de un service o una pieza).")
     year: int | None = Field(description="Año modelo del auto.")
+    trim: str | None = Field(default=None, description="Versión escrita en el aviso, sin inferirla por equipamiento.")
+    engine: str | None = Field(default=None, description="Motor/cilindrada escritos literalmente.")
+    equipment: list[str] = Field(default_factory=list, max_length=25,
+                                 description="Equipamiento presente según el vendedor, nombres literales; sin inferir por versión.")
+    tires_condition: str | None = Field(default=None, description="Fragmento literal sobre estado/cambio de cubiertas.")
+    commercial_use: bool | None = Field(default=None, description="Uso taxi/remís/comercial declarado; null si no lo dice.")
+    repairs: str | None = Field(default=None, description="Fragmento literal sobre reparaciones realizadas o pendientes.")
+    damage_details: str | None = Field(default=None, description="Fragmento literal sobre daños actuales, choques o granizo mencionados.")
+    vtv_current: bool | None = Field(default=None, description="true si declara VTV vigente; false si vencida/no tiene; no deducir de una fecha.")
+    documentation: str | None = Field(default=None, description="Fragmento literal sobre documentación/titularidad/deudas.")
+    negotiable: bool | None = Field(default=None, description="Si declara precio negociable/conversable o fijo/no negociable.")
+    urgent_sale: bool | None = Field(default=None, description="Si declara urgencia de venta, no deducir del precio.")
+    sale_reason: str | None = Field(default=None, description="Motivo de venta expresado literalmente, sin inferir.")
+    evidence: list[ListingEvidence] = Field(default_factory=list, max_length=60,
+                                           description="Una o más citas por cada campo no null o lista no vacía.")
 
 
 class PolishedQuestions(_Strict):

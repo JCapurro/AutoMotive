@@ -1,4 +1,4 @@
-"""What a listing's description says: the real price, financing, km and year.
+"""What a listing's description says: prices, vehicle facts and seller claims.
 
 In AR classifieds the published number is often not the deal; the seller
 explains it in the text:
@@ -28,10 +28,11 @@ from dataclasses import asdict, dataclass, field
 from typing import Any, Mapping
 
 from normalization import transmission as tx
+from normalization.description_claims import CLAIM_FIELDS, grounded_values, input_hash, quote_contexts
 from normalization.money import (MIN_ARS_VEHICLE_PRICE, MIN_USD_VEHICLE_PRICE, parse_number,
                                  plain_dollar_currency, plausible_vehicle_price)
 
-VERSION = 1
+VERSION = 2
 
 TOTAL_KINDS = ("cash", "list", "generic")
 PARTIAL_KINDS = ("down_payment", "installment")
@@ -90,13 +91,17 @@ class DescriptionFacts:
     llm_at: str | None = None
     # Filled by resolve_price() when the facts are stored with a listing.
     price_check: dict[str, Any] | None = None
+    claims: dict[str, Any] = field(default_factory=dict)
+    evidence: list[dict[str, str]] = field(default_factory=list)
+    input_hash: str | None = None
 
     def of_kind(self, *kinds: str) -> list[Amount]:
         return [a for a in self.amounts if a.kind in kinds]
 
     def is_empty(self) -> bool:
         return not (self.amounts or self.published_is or self.financing.offered or self.mileage_km
-                    or self.year or self.transmission or self.fuel or self.gnc or self.ambiguous)
+                    or self.year or self.transmission or self.fuel or self.gnc or self.ambiguous
+                    or self.source == "llm" or self.claims)
 
     def to_json(self) -> dict[str, Any]:
         out = asdict(self)
@@ -122,6 +127,9 @@ class DescriptionFacts:
             source=data.get("source") or "rules",
             llm_at=data.get("llm_at"),
             price_check=data.get("price_check"),
+            claims=dict(data.get("claims") or {}),
+            evidence=list(data.get("evidence") or []),
+            input_hash=data.get("input_hash"),
         )
 
 
@@ -523,46 +531,89 @@ def resolve_price(published: float | None, currency: str | None, *,
                            partial_reason if partial else None, kind, mismatch, effective_kind=kind)
 
 
-def from_llm(llm: Any, rules: DescriptionFacts | None, *, llm_at: str) -> DescriptionFacts:
+def from_llm(llm: Any, rules: DescriptionFacts | None, *, llm_at: str,
+             title: str = "", description: str | None = None) -> DescriptionFacts:
     """Facts from the LLM's ListingFacts (llm/schemas.py), on top of the rules'.
 
     The LLM only fills what the text states explicitly; amounts it gives are
     checked with the same bounds as the rules' and replace them.
     """
     base = rules or DescriptionFacts()
-    currency = getattr(llm, "price_currency", None)
+    text = "\n".join((title, trim_page_noise(description) or ""))
+    values, evidence = grounded_values(llm, text) if description is not None else ({}, [])
+
+    def value(name: str) -> Any:
+        # Compatibility for recorded legacy responses; live callers always supply text.
+        return values.get(name) if description is not None else getattr(llm, name, None)
+
+    currency = value("price_currency")
     amounts: list[Amount] = []
     for kind, attr in (("cash", "cash_price"), ("list", "list_price"),
                        ("down_payment", "down_payment"), ("installment", "installment_amount")):
-        value = getattr(llm, attr, None)
-        if not value or value <= 0:
+        amount = value(attr)
+        if not amount or amount <= 0:
             continue
-        cur = currency or plain_dollar_currency(float(value), ars_from=_PLAIN_DOLLAR_ARS_FROM)
-        if _plausible(kind, float(value), cur):
-            amounts.append(Amount(kind, float(value), cur, "llm"))
+        cur = currency or plain_dollar_currency(float(amount), ars_from=_PLAIN_DOLLAR_ARS_FROM)
+        quotes = [e["quote"] for e in evidence if e["field"] == attr]
+        supported = description is None or any(
+            abs(float(amount) - a.amount) < 0.000001 and a.currency == cur and a.kind in (kind, "generic")
+            and all(any(abs(float(amount) - found.amount) < 0.000001 and found.currency == cur
+                        and found.kind in (kind, "generic") for found in _amounts(_plain(context)))
+                    for context in quote_contexts(q, text))
+            for q in quotes for a in _amounts(_plain(q)))
+        if supported and _plausible(kind, float(amount), cur):
+            amounts.append(Amount(kind, float(amount), cur, quotes[0] if quotes else "llm"))
+        else:
+            values.pop(attr, None)
     fin = Financing(**asdict(base.financing))
     down = next((a.money() for a in amounts if a.kind == "down_payment"), None)
     inst = next((a.money() for a in amounts if a.kind == "installment"), None)
     fin.down_payment = down or fin.down_payment
     fin.installment = inst or fin.installment
-    if getattr(llm, "installment_count", None) and 2 <= llm.installment_count <= 120:
-        fin.max_installments = llm.installment_count
-    fin.offered = fin.offered or bool(getattr(llm, "financing", None) or down or inst)
-    km = getattr(llm, "mileage_km", None)
-    year = getattr(llm, "year", None)
-    kind = getattr(llm, "published_price_kind", None)
+    count = value("installment_count")
+    count_supported = description is None or any(
+        _financing(_plain(e["quote"]), _amounts(_plain(e["quote"]))).max_installments == count
+        for e in evidence if e["field"] == "installment_count")
+    if count and 2 <= count <= 120 and count_supported:
+        fin.max_installments = count
+    elif count:
+        values.pop("installment_count", None)
+    fin.offered = fin.offered or bool(value("financing") or down or inst)
+    km = value("mileage_km")
+    year = value("year")
+    if description is not None:
+        if km and not any(_km(_plain(e["quote"]))[0] == km and all(
+                _km(_plain(context))[0] == km for context in quote_contexts(e["quote"], text))
+                for e in evidence if e["field"] == "mileage_km"):
+            km = None
+            values.pop("mileage_km", None)
+        if year and not any(_year(_plain(e["quote"]), None) == year for e in evidence if e["field"] == "year"):
+            year = None
+            values.pop("year", None)
+    kind = value("published_price_kind")
+    if description is not None:
+        if kind and not any(_published_is(_plain(e["quote"])) == kind for e in evidence if e["field"] == "published_price_kind"):
+            kind = None
+            values.pop("published_price_kind", None)
+        for field_name, parser in (("transmission", tx.transmission), ("fuel", tx.fuel)):
+            result = values.get(field_name)
+            if result and not any(parser(e["quote"]) == result for e in evidence if e["field"] == field_name):
+                values.pop(field_name, None)
     return DescriptionFacts(
         amounts=amounts or base.amounts,
         published_is=kind if kind in ("cash", "list") else base.published_is,
         financing=fin,
         mileage_km=km if km and 100 <= km < 1_000_000 else base.mileage_km,
         year=year if year and 1980 <= year <= 2040 else base.year,
-        transmission=getattr(llm, "transmission", None) or base.transmission,
-        fuel=getattr(llm, "fuel", None) or base.fuel,
-        gnc=base.gnc or getattr(llm, "fuel", None) == "gnc",
-        ambiguous=False,
+        transmission=value("transmission") or base.transmission,
+        fuel=value("fuel") or base.fuel,
+        gnc=base.gnc or value("fuel") == "gnc",
+        ambiguous=base.ambiguous and not (amounts or km),
         source="llm",
         llm_at=llm_at,
+        claims={k: v for k, v in values.items() if k in CLAIM_FIELDS},
+        evidence=[e for e in evidence if e["field"] in values],
+        input_hash=input_hash(title, trim_page_noise(description)) if description is not None else None,
     )
 
 

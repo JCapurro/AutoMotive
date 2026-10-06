@@ -105,6 +105,11 @@ LEVEL_LABEL = {"high": "🔥 Alta oportunidad", "good": "🟢 Buena coincidencia
 # ---------------------------------------------------------------------------
 
 RED_FLAG = {
+    "damage_mentioned": "El vendedor menciona daños o antecedentes de choques: conviene verificar su alcance.",
+    "commercial_use": "El vendedor declara uso comercial: conviene conocer el uso y mantenimiento que tuvo.",
+    "service_unavailable": "El vendedor indica que no tiene historial de mantenimiento: conviene pedir más detalles.",
+    "timing_pending": "El vendedor indica que la distribución no está hecha: conviene verificar qué trabajo queda pendiente.",
+    "vtv_pending": "El vendedor indica que no tiene VTV vigente: conviene verificar qué falta resolver.",
     "no_owners": "No especifica cantidad de dueños: conviene verificar.",
     "no_service": "No informa services: conviene verificar el historial.",
     "no_timing_belt": "No informa la distribución: conviene verificar cuándo se cambió.",
@@ -126,6 +131,16 @@ RED_FLAG = {
 # ---------------------------------------------------------------------------
 
 QUESTION = {
+    "timing_pending": "Sobre la distribución pendiente, ¿qué trabajo necesita? ¿Tenés un presupuesto?",
+    "condition_photos": "¿Podés compartir fotos recientes para revisar el estado de chapa y pintura?",
+    "maintenance_details": "Si no tenés historial, ¿qué mantenimiento se le hizo y qué trabajos tiene pendientes?",
+    "damage_scope": "Sobre los daños que mencionás, ¿me compartís fotos y el detalle de lo reparado o pendiente? ¿Tenés un presupuesto?",
+    "commercial_history": "¿Durante cuánto tiempo tuvo uso comercial y qué mantenimiento se le hizo?",
+    "service_proof": "¿Tenés los comprobantes del mantenimiento que mencionás?",
+    "timing_proof": "¿En qué fecha y kilometraje se hizo la distribución? ¿Tenés el comprobante?",
+    "vtv_pending": "¿Qué falta resolver para la VTV?",
+    "documentation": "Sobre la documentación que mencionás, ¿me confirmás titularidad, deudas y si está listo para transferir?",
+    "cash_offer": "Como mencionás que el precio es conversable, ¿cuál sería tu mejor precio de contado?",
     "greeting": "Hola, ¿cómo estás?",
     "available": "¿Lo seguís teniendo?",
     "holder": "¿Sos titular?",

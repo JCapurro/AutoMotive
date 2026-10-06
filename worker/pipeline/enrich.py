@@ -10,9 +10,10 @@ rate-limited by sources.detail_interval_seconds; sources drain in parallel.
 
 Each detail page is kept in raw_pages before it's parsed (tools/reprocess.py
 re-reads them). The description's facts (normalization/description_facts.py)
-come from rules; when the rules can't settle them (several prices, several
-km) and app_config.description_facts.llm is on, the LLM reads the text, at
-most llm_daily_cap times a day.
+come from rules; when app_config.description_facts.llm is on, the LLM also
+reads each complete description, retaining evidence and seller statements.
+The text/version cache and a persistent ledger enforce llm_daily_cap across
+concurrent sources and failed attempts.
 
 After a pass the matches of the listings that changed are re-scored
 (pipeline/rescore.py): transmission or version may go from unknown to a
@@ -35,7 +36,8 @@ from db.repos import raw_pages
 from db.repos.runs import log_error
 from db.repos.targets import enabled_sources
 from llm.provider import LLMProvider, build_provider
-from normalization.description_facts import from_llm, parse as parse_facts
+from normalization.description_claims import input_hash
+from normalization.description_facts import VERSION, from_llm, parse as parse_facts, trim_page_noise
 from normalization.listing import Target
 from pipeline.ingest import IngestResult, ListingEvent, ingest
 from pipeline.rescore import rescore_listings
@@ -45,7 +47,7 @@ log = logging.getLogger("enrich")
 
 
 class DescriptionLLM:
-    """The LLM for the descriptions the rules can't settle."""
+    """Read each complete description once, within a persistent daily budget."""
 
     def __init__(self, provider: LLMProvider, *, daily_cap: int) -> None:
         self.provider = provider
@@ -65,29 +67,40 @@ class DescriptionLLM:
         return cls(provider, daily_cap=int(cfg.get("llm_daily_cap", 50)))
 
     async def refine(self, listing_id: int, item: Listing) -> None:
-        """Put the LLM's reading in item.extra["description_facts"] when the
-        rules find the text ambiguous. Any failure leaves the rules' reading."""
-        if not item.descripcion:
+        """Ground the analysis in the text. Any failure leaves the rules' reading."""
+        description = trim_page_noise(item.descripcion)
+        if not description or not description.strip():
             return
-        rules = parse_facts(item.descripcion, item.titulo, now_year=datetime.now(timezone.utc).year)
-        if rules is None or not rules.ambiguous:
-            return
+        rules = parse_facts(description, item.titulo, now_year=datetime.now(timezone.utc).year)
         stored = await repo.stored_description(listing_id)
-        if stored and stored.get("description") == item.descripcion \
-                and (stored.get("description_facts") or {}).get("source") == "llm":
+        cached = (stored or {}).get("description_facts") or {}
+        digest = input_hash(item.titulo, description)
+        if cached.get("source") == "llm" and cached.get("v") == VERSION and cached.get("input_hash") == digest:
             item.extra["description_facts"] = stored["description_facts"]      # already read
             return
-        if await repo.llm_facts_last_day() >= self.daily_cap:
+        try:
+            run_id = await repo.reserve_description_run(listing_id, f"v{VERSION}:{digest}", self.daily_cap)
+        except Exception as e:
+            log.warning("description facts: budget unavailable (%s)", type(e).__name__)
             return
+        if run_id is None:
+            return
+        error = None
         try:
             answer = await asyncio.wait_for(
-                self.provider.extract_listing_facts(item.titulo, item.descripcion),
+                self.provider.extract_listing_facts(item.titulo, description),
                 timeout=config.LLM_TIMEOUT_SECONDS + 5)
+            facts = from_llm(answer, rules, llm_at=datetime.now(timezone.utc).isoformat(),
+                             title=item.titulo, description=description)
+            item.extra["description_facts"] = facts.to_json()
         except Exception as e:
+            error = type(e).__name__
             log.info("description facts: LLM failed for listing %s: %s", listing_id, type(e).__name__)
-            return
-        facts = from_llm(answer, rules, llm_at=datetime.now(timezone.utc).isoformat())
-        item.extra["description_facts"] = facts.to_json()
+        finally:
+            try:
+                await repo.finish_description_run(run_id, error=error)
+            except Exception as e:
+                log.warning("description facts: run completion unavailable (%s)", type(e).__name__)
 
 
 async def refresh_listing(row: dict[str, Any], *, stage: str,
