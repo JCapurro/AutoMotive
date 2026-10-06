@@ -1,0 +1,69 @@
+{
+  "productId": "18089",
+  "productReference": "AH251JH_8339",
+  "productName": "TOYOTA HILUX L/21 2.4 DC 4X2 TDI DX 2025",
+  "description": "TOYOTA HILUX L/21 2.4 DC 4X2 TDI DX 2025",
+  "linkText": "ah251jh_8339-toyota-hilux-l-21-2-4-dc-4x2-tdi-dx-2025",
+  "brand": "TOYOTA",
+  "categories": [
+    "/Usados/"
+  ],
+  "allSpecifications": [
+    "Año",
+    "Km",
+    "Estado",
+    "Precio",
+    "IVA",
+    "Modelo",
+    "Tipo de vehículo",
+    "Tipo plan",
+    "Combustible",
+    "Caja"
+  ],
+  "Año": [
+    "2025"
+  ],
+  "Km": [
+    "39674"
+  ],
+  "Estado": [
+    "Disponible"
+  ],
+  "Precio": [
+    "43800000"
+  ],
+  "IVA": [
+    "10.5"
+  ],
+  "Modelo": [
+    "HILUX"
+  ],
+  "Tipo de vehículo": [
+    "Pick-up B"
+  ],
+  "Tipo plan": [
+    "-s/d-"
+  ],
+  "Combustible": [
+    "Diesel"
+  ],
+  "Caja": [
+    "Caja Manual"
+  ],
+  "items": [
+    {
+      "images": [
+        {
+          "imageUrl": "https://randazzoar.vteximg.com.br/arquivos/ids/806140/A-20Ingresar_0.jpg?v=639268819996930000"
+        }
+      ],
+      "sellers": [
+        {
+          "commertialOffer": {
+            "Price": 400000.0
+          }
+        }
+      ]
+    }
+  ]
+}

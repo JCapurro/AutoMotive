@@ -10,7 +10,15 @@ insert into public.sources (id, name, enabled, crawl_interval_seconds, priority,
   ('kavak',        'Kavak',                true,  1800, 20,  5),
   ('v6',           'V6',                   true,  1800, 30,  5),
   ('facebook',     'Facebook Marketplace', true,  3600, 40, 30),
-  ('autocosmos',   'Autocosmos',           true,  1800, 50,  5)
+  ('autocosmos',   'Autocosmos',           true,  1800, 50,  5),
+  ('mardelusados', 'Mardel Usados',        true,  3600, 60,  5),
+  ('rosariogarage','Rosario Garage',       true,  3600, 70,  5),
+  ('usadossantafe','Usados Santa Fe',       true,  3600, 80,  5),
+  ('onlycarsusados','Only Cars Usados',    true, 7200, 90, 15),
+  ('sc_clasificados','SC Clasificados',    true, 7200,100, 15),
+  ('autocity',      'Autocity',           true, 3600,110,  5),
+  ('carone',        'Car One',            true, 3600,120,  5),
+  ('gruporandazzo', 'Grupo Randazzo',     true, 3600,130,  5)
 on conflict (id) do nothing;
 
 -- ---------------------------------------------------------------------------

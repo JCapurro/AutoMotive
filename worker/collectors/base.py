@@ -72,6 +72,11 @@ class ListingDetail:
 
 class BaseScraper:
     name: str = "base"
+    # Small catalogs/feeds are read once per source, without a model hint.
+    INVENTORY_TARGET: bool = False
+    # Collectors with verified stable search/detail IDs opt in. Validate before
+    # applying detail data, including replay after the original URL redirected.
+    STRICT_DETAIL_ID: bool = False
     # Bump when parse_detail() changes what it reads: tools/reprocess.py --raw
     # --outdated re-parses the raw_pages stored with an older version.
     DETAIL_PARSER_VERSION: int = 1

@@ -247,17 +247,18 @@ async def pending_rematch() -> list[dict]:
 
 
 async def alerts_for_target(source: str, make: str | None, model: str | None, *,
-                            telegram_only: bool = True) -> list[dict]:
+                            telegram_only: bool = True, inventory: bool = False) -> list[dict]:
     """Enabled profiles a crawl target's batch is for: same make/model, and the
-    source among the profile's sources (all of them when it has none). By
+    source among the profile's sources (all of them when it has none). An
+    inventory target reaches every model, still checking access and source. By
     default only the Telegram-linked ones; matching (F2) takes every profile."""
     telegram = " AND p.telegram_chat_id IS NOT NULL" if telegram_only else ""
     async with connection() as cx:
         rows = await (await cx.execute(
             _SELECT + " WHERE public.search_access_active(sp.id)" + telegram +
-                      "   AND lower(sp.filters->>'make') IS NOT DISTINCT FROM lower(%s) "
-                      "   AND lower(sp.filters->>'model') IS NOT DISTINCT FROM lower(%s) "
+                      "   AND (%s OR (lower(sp.filters->>'make') IS NOT DISTINCT FROM lower(%s) "
+                      "   AND lower(sp.filters->>'model') IS NOT DISTINCT FROM lower(%s))) "
                       "   AND (NOT sp.filters ? 'sources' OR sp.filters->'sources' ? %s) "
                       " ORDER BY sp.id",
-            (make, model, source))).fetchall()
+            (inventory and make is None and model is None, make, model, source))).fetchall()
     return [_to_alert(r) for r in rows]

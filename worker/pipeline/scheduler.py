@@ -118,7 +118,8 @@ async def process_batch(notifier: Notifier, target: dict, listing_ids: list[int]
     max_age_days = int(await db.get_config("recommended_max_age_days", RECOMMENDED_MAX_AGE_DAYS))
     staged: list[_Staged] = []
     for alert in await db.alerts_for_target(target["source"], target.get("make"), target.get("model"),
-                                            telegram_only=False):
+                                            telegram_only=False,
+                                            inventory=(target.get("query") or {}).get("inventory") is True):
         try:
             staged.append(await _stage(alert, listing_ids, scorer))
         except Exception:

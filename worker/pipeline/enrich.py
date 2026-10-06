@@ -148,7 +148,14 @@ async def ingest_detail(row: dict[str, Any], detail: ListingDetail, *, stage: st
         return result
 
     item = detail.listing
-    # The stored identity wins over whatever the page says its id is.
+    if getattr(REGISTRY.get(row["source"]), "STRICT_DETAIL_ID", False) and (
+            item.source != row["source"] or str(item.listing_id) != str(row["external_id"])):
+        await log_error(stage, f"listing:{row['id']}",
+                        f"Detail identity mismatch: expected {row['source']}:{row['external_id']}, "
+                        f"received {item.source}:{item.listing_id}")
+        await repo.mark_detail_checked([row["id"]])
+        return result
+    # Keep the stored URL and legacy identity normalization after validation.
     item.source, item.listing_id = row["source"], row["external_id"]
     item.url = row["url"]
     if llm is not None:

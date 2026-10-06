@@ -1,6 +1,7 @@
 # Secrets and local sessions
 .env
 fb_state.json
+ig_state.json
 ml_state.json
 .ml_chrome_profile/
 

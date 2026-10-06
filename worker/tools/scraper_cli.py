@@ -3,7 +3,7 @@ Test a scraper without running the bot.
 
 Usage:
     python -m tools.scraper_cli <source> [k=v ...]
-    python -m tools.scraper_cli detail <url> [--html out.html]
+    python -m tools.scraper_cli detail <url> [--html out.html] [--source source_id]
 
 Examples:
     python -m tools.scraper_cli mercadolibre marca=Toyota modelo=Corolla anio_min=2018
@@ -72,15 +72,26 @@ def _money(amount: float | None, currency: str | None) -> str:
 
 _HOSTS = {"mercadolibre": "mercadolibre", "facebook": "facebook", "v6.com": "v6", "kavak": "kavak",
           "autocosmos": "autocosmos"}
+_REGIONAL_HOSTS = {"mardelusados.com": "mardelusados", "www.rosariogarage.com": "rosariogarage",
+                   "rosariogarage.com": "rosariogarage", "usadossantafe.com.ar": "usadossantafe",
+                   "autocity.com.ar": "autocity", "www.autocity.com.ar": "autocity",
+                   "carone.com.ar": "carone", "www.carone.com.ar": "carone",
+                   "www.gruporandazzo.com": "gruporandazzo", "gruporandazzo.com": "gruporandazzo"}
 
 
 def _source_of(url: str) -> str | None:
-    host = urlparse(url).netloc.lower()
+    parsed = urlparse(url)
+    host = (parsed.hostname or "").lower()
+    if host in _REGIONAL_HOSTS:
+        return _REGIONAL_HOSTS[host]
+    if host in ("instagram.com", "www.instagram.com"):
+        account = parsed.path.strip("/").split("/", 1)[0].lower()
+        return account if account in ("onlycarsusados", "sc_clasificados") else None
     return next((src for part, src in _HOSTS.items() if part in host), None)
 
 
-async def detail(url: str, html_out: str | None) -> None:
-    src = _source_of(url)
+async def detail(url: str, html_out: str | None, source: str | None = None) -> None:
+    src = source or _source_of(url)
     if src not in REGISTRY:
         print(f"❌ no sé qué fuente es {url}. Fuentes: {', '.join(REGISTRY)}")
         sys.exit(1)
@@ -128,7 +139,8 @@ async def detail(url: str, html_out: str | None) -> None:
 async def main() -> None:
     if len(sys.argv) >= 3 and sys.argv[1] == "detail":
         html_out = sys.argv[sys.argv.index("--html") + 1] if "--html" in sys.argv[3:-1] else None
-        await detail(sys.argv[2], html_out)
+        source = sys.argv[sys.argv.index("--source") + 1] if "--source" in sys.argv[3:-1] else None
+        await detail(sys.argv[2], html_out, source)
         return
     if len(sys.argv) < 2 or sys.argv[1] not in REGISTRY:
         print(__doc__)

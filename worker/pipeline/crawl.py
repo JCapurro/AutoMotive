@@ -5,6 +5,8 @@ grouped by (source, make, model) with the widest query: lowest year_min,
 highest year_max, highest km_max (or none) and **no price filter** (prices
 are compared after currency conversion). Scraping cost depends on how many
 models are searched, not on how many users search them.
+Small catalogs/feeds opt into INVENTORY_TARGET: one unfiltered source target,
+without make/model hints, shared by every eligible profile that selects it.
 
 Sources run in parallel; the targets of one source run one after the other,
 with jitter. A target is due when now ≥ next_run_at = last_run_at +
@@ -64,7 +66,7 @@ def _widest(values: list[Any], pick) -> Any:
 
 
 def derive_targets(profiles: list[dict[str, Any]], sources: list[str]) -> list[TargetSpec]:
-    """Group enabled profiles by (source, make, model) with the widest query.
+    """Group profiles by vehicle, or once per inventory source without filters.
 
     `sources` are the enabled sources with a collector; a profile that names
     its sources only contributes to those.
@@ -74,16 +76,25 @@ def derive_targets(profiles: list[dict[str, Any]], sources: list[str]) -> list[T
     for p in profiles:
         f = p.get("filters") or {}
         make, model = f.get("make"), f.get("model")
-        if not make and not model:
-            continue    # a search without a vehicle would crawl the whole site
         wanted = f.get("sources") or sources
         for source in (s for s in wanted if s in sources):
+            if getattr(REGISTRY.get(source), "INVENTORY_TARGET", False):
+                key = (source, "", "")
+                groups.setdefault(key, []).append(p)
+                names.setdefault(key, (None, None))
+                continue
+            if not make and not model:
+                continue    # large search sites still need a vehicle
             key = (source, normalize_brand(make), normalize_text(model))
             groups.setdefault(key, []).append(p)
             names.setdefault(key, (make, model))
 
     specs: list[TargetSpec] = []
     for key, members in sorted(groups.items()):
+        if getattr(REGISTRY.get(key[0]), "INVENTORY_TARGET", False):
+            specs.append(TargetSpec(key[0], None, None,
+                                    {"inventory": True, "profile_ids": sorted(m["id"] for m in members)}))
+            continue
         filters = [m.get("filters") or {} for m in members]
         query: dict[str, Any] = {
             "year_min": _widest([f.get("year_min") for f in filters], min),
