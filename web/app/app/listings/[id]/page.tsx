@@ -1,9 +1,10 @@
-import { AlertTriangle, ArrowLeft, Ban, Car, CircleCheck, CircleHelp, CircleMinus, Info } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Ban, CircleCheck, CircleHelp, CircleMinus, Info } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { ListingActions } from "@/components/app/listing-actions";
+import { ListingGallery } from "@/components/app/listing-gallery";
 import { DescriptionPriceContext, SellerDescription } from "@/components/app/description-insights";
 import { type PricePoint, PriceHistory } from "@/components/app/price-history";
 import { SellerQuestions } from "@/components/app/seller-questions";
@@ -81,7 +82,7 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
   const status = (interaction?.status ?? "new") as InteractionStatus;
   const fromAlert = notification?.id ?? null;
   const outboundHref = fromAlert ? `/r/${fromAlert}?to=listing` : `/app/listings/${listingId}/out`;
-  const images = imageUrls(listing.images).slice(0, 10);
+  const images = imageUrls(listing.images);
   const name = vehicle(listing);
   const sourceName = listing.sources?.name ?? listing.source;
   const history = priceHistory(snapshots ?? []);
@@ -127,7 +128,7 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
         ) : null}
       </header>
 
-      <Gallery images={images} name={name} more={outboundHref} />
+      <ListingGallery images={images} name={name} />
 
       <dl className="mt-6 grid grid-cols-2 gap-x-6 border-t-2 border-foreground md:grid-cols-[1.6fr_repeat(3,1fr)]">
         <Fact label={isCashPrice(listing.description_facts) ? "Precio de contado" : "Precio publicado"} className="col-span-2 md:col-span-1 md:row-span-2">
@@ -292,50 +293,6 @@ function Fact({ label, className, children }: { label: string; className?: strin
     <div className={cn("min-w-0 border-b py-3", className)}>
       <dt className="text-[13px] text-muted-foreground">{label}</dt>
       <dd className="mt-0.5 font-semibold break-words">{children}</dd>
-    </div>
-  );
-}
-
-/** First photo big, four more beside it; the rest are on the source. */
-function Gallery({ images, name, more }: { images: string[]; name: string; more: string }) {
-  if (!images.length) {
-    return (
-      <div className="mt-6 grid h-40 place-items-center rounded-md bg-muted">
-        <Car className="size-10 text-faint" aria-hidden />
-      </div>
-    );
-  }
-  const shown = images.slice(0, 5);
-  return (
-    <div className="mt-6 grid grid-cols-4 gap-1.5 md:grid-cols-[2fr_1fr_1fr] md:grid-rows-2">
-      {shown.map((src, i) => (
-        <div
-          key={src}
-          className={cn(
-            "relative overflow-hidden rounded bg-muted",
-            i === 0 ? "col-span-full aspect-video md:col-span-1 md:row-span-2 md:aspect-auto" : "aspect-[4/3] md:aspect-auto md:min-h-36",
-          )}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element -- listing photos live on each source's CDN */}
-          <img
-            src={src}
-            alt={i === 0 ? name : ""}
-            loading={i < 2 ? "eager" : "lazy"}
-            referrerPolicy="no-referrer"
-            className="size-full object-cover"
-          />
-          {i === shown.length - 1 && images.length > shown.length ? (
-            <a
-              href={more}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="absolute inset-0 grid place-items-center bg-[#14213d]/60 text-sm font-semibold text-white hover:bg-[#14213d]/70"
-            >
-              +{images.length - shown.length} fotos
-            </a>
-          ) : null}
-        </div>
-      ))}
     </div>
   );
 }
