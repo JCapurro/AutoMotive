@@ -74,13 +74,13 @@ export function MetaPixel() {
   const first = useRef(true);
 
   useEffect(() => {
-    if (!metaPixelId) return;
+    if (!metaPixelId || pathname.startsWith("/auth/")) return;
     if (first.current) first.current = false;
     else pixel("PageView");
   }, [pathname]);
 
   useEffect(() => {
-    if (!metaPixelId) return;
+    if (!metaPixelId || pathname.startsWith("/auth/")) return;
     const onClick = (e: MouseEvent) => {
       const a = (e.target as Element | null)?.closest?.("a");
       if (!a) return;
@@ -91,18 +91,18 @@ export function MetaPixel() {
     };
     document.addEventListener("click", onClick, { capture: true });
     return () => document.removeEventListener("click", onClick, { capture: true });
-  }, []);
+  }, [pathname]);
 
   useEffect(() => {
     // The server's queue waits for consent (the cookie lives 10 minutes).
-    if (!metaPixelId || !granted) return;
+    if (!metaPixelId || !granted || pathname.startsWith("/auth/")) return;
     flushQueue();
     // Server Actions that don't navigate (e.g. saving several searches on one page) still set the cookie.
     const timer = window.setInterval(flushQueue, 2000);
     return () => window.clearInterval(timer);
   }, [granted, pathname]);
 
-  if (!metaPixelId && !googleAnalyticsId) return null;
+  if (pathname.startsWith("/auth/") || (!metaPixelId && !googleAnalyticsId)) return null;
   return (
     <>
       <Script id="meta-pixel" strategy="afterInteractive">

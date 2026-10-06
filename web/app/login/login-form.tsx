@@ -17,18 +17,12 @@ export function LoginForm({ next, linkError, mailbox = "", mode = "login", passw
   const href = (target: AuthMode) => `/login?mode=${target}&next=${encodeURIComponent(next)}`;
   useEffect(() => { if (mode === "signup" && state.sent) pixel("Lead"); }, [mode, state.sent]);
   return <div className="space-y-4">
-    {linkError ? <Alert variant="destructive"><AlertDescription>El link venció o ya se usó. Pedí un nuevo email.</AlertDescription></Alert> : null}
+    {linkError ? <Alert variant="destructive"><AlertDescription>{mode === "recover" ? "Este enlace ya se usó o venció. Pedí una nueva recuperación con tu email." : "Este enlace ya se usó o venció. Si ya confirmaste tu cuenta, ingresá con tu email y contraseña. Si todavía está pendiente, pedí una nueva confirmación abajo."}</AlertDescription></Alert> : null}
     {passwordUpdated ? <Alert><AlertDescription>Contraseña actualizada. Ya podés ingresar.</AlertDescription></Alert> : null}
     {state.sent ? <div className="space-y-4" role="status">
       <p className="font-medium">Revisá tu email</p>
       <p className="text-sm text-muted-foreground">{mode === "signup" ? "Si el registro puede completarse, recibirás un email para confirmar tu cuenta. Abrí el enlace antes de ingresar." : "Si existe una cuenta con ese email, recibirás un enlace para elegir una nueva contraseña."}</p>
       {mailbox ? <p className="text-sm" data-testid="local-mailbox">El email local está en <a className="underline" href={mailbox} target="_blank" rel="noreferrer">Mailpit</a>.</p> : null}
-      {mode === "signup" ? <form action={resend} className="space-y-2">
-        <input type="hidden" name="email" value={state.email} /><input type="hidden" name="next" value={next} />
-        <Button variant="outline" disabled={resending}>{resending ? "Enviando…" : "Reenviar confirmación"}</Button>
-        {resent.error ? <p role="alert" className="text-sm text-destructive">{resent.error}</p> : null}
-        {resent.sent ? <p className="text-sm">Si tu cuenta está pendiente, recibirás una nueva confirmación.</p> : null}
-      </form> : null}
     </div> : <form action={submit} className="space-y-4">
       <input type="hidden" name="next" value={next} />
       <div className="space-y-2"><Label htmlFor="email">Email</Label><Input id="email" name="email" type="email" autoComplete="email" required placeholder="vos@email.com" defaultValue={state.email} className="h-10" /></div>
@@ -37,6 +31,14 @@ export function LoginForm({ next, linkError, mailbox = "", mode = "login", passw
       {state.error ? <p role="alert" className="text-sm text-destructive">{state.error}</p> : null}
       <Button className="h-10 w-full" disabled={pending}>{pending ? "Procesando…" : mode === "signup" ? "Crear cuenta" : mode === "recover" ? "Enviar recuperación" : "Ingresar"}</Button>
     </form>}
+    {(mode === "signup" && state.sent) || (mode === "login" && (linkError || state.confirmationRequired)) ? <form action={resend} className="space-y-2 border-t pt-4">
+      <input type="hidden" name="next" value={next} />
+      <Label htmlFor="confirmation-email">Email para reenviar la confirmación</Label>
+      <Input id="confirmation-email" name="email" type="email" autoComplete="email" required defaultValue={resent.email ?? state.email} placeholder="vos@email.com" />
+      <Button type="submit" variant="outline" disabled={resending}>{resending ? "Enviando…" : "Reenviar confirmación"}</Button>
+      {resent.error ? <p role="alert" className="text-sm text-destructive">{resent.error}</p> : null}
+      {resent.sent ? <p role="status" className="text-sm">Solicitud recibida. Si tu cuenta está pendiente, recibirás otro email; revisá también spam. Si ya la confirmaste, ingresá con tu contraseña.</p> : null}
+    </form> : null}
     <div className="flex flex-col gap-3 text-center text-sm">{mode === "login" ? <><Link className="underline" href={href("recover")}>Olvidé mi contraseña</Link><Link className="underline" href={href("signup")}>Crear cuenta</Link></> : <Link className="underline" href={href("login")}>Volver a ingresar</Link>}</div>
   </div>;
 }

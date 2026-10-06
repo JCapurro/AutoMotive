@@ -44,6 +44,7 @@ async function signIn(page: Page, email: string) {
   await page.getByRole("button", { name: "Crear cuenta", exact: true }).click();
   await expect(page.getByText("Revisá tu email")).toBeVisible();
   await page.goto(await magicLink(email, since));
+    await page.getByRole("button", { name: "Confirmar mi email" }).click();
   await expect(page).toHaveURL(/\/app\/searches\/new$/);
   await expect(page.getByRole("tab", { name: "Asistido" })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByLabel("¿Qué auto buscás?")).toBeVisible();

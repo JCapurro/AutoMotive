@@ -31,7 +31,7 @@ function RouteTracking() {
       return;
     }
     const gtag = (window as unknown as { gtag?: (...args: unknown[]) => void }).gtag;
-    if (!gtag || !hasAnalyticsConsent()) return;
+    if (pathname.startsWith("/auth/") || !gtag || !hasAnalyticsConsent()) return;
     const pageLocation = `${window.location.origin}${pathname}${searchParams.size ? `?${searchParams}` : ""}`;
     gtag("event", "page_view", { page_location: pageLocation, page_path: `${pathname}${searchParams.size ? `?${searchParams}` : ""}` });
   }, [pathname, searchParams]);
@@ -42,9 +42,10 @@ function RouteTracking() {
 /** GA4 uses the same explicit cookie choice as the existing analytics consent banner. */
 export function GoogleAnalytics() {
   const consent = useSyncExternalStore(subscribe, readConsent, () => "denied" as Consent);
+  const pathname = usePathname();
 
   useEffect(() => {
-    if (!googleAnalyticsId) return;
+    if (!googleAnalyticsId || pathname.startsWith("/auth/")) return;
     const gtag = (window as unknown as { gtag?: (...args: unknown[]) => void }).gtag;
     const granted = consent === "granted";
     if (gtag) gtag("consent", "update", {
@@ -56,9 +57,9 @@ export function GoogleAnalytics() {
     document.cookie = granted
       ? `${GA_CONSENT_COOKIE}=granted; path=/; max-age=${365 * 86_400}; samesite=lax`
       : `${GA_CONSENT_COOKIE}=; path=/; max-age=0; samesite=lax`;
-  }, [consent]);
+  }, [consent, pathname]);
 
-  if (!googleAnalyticsId) return null;
+  if (!googleAnalyticsId || pathname.startsWith("/auth/")) return null;
   return (
     <>
       <Script src={`https://www.googletagmanager.com/gtag/js?id=${googleAnalyticsId}`} strategy="afterInteractive" />

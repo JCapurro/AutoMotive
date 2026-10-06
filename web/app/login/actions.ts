@@ -8,7 +8,7 @@ import { afterSignIn } from "@/lib/signup";
 import { createClient } from "@/lib/supabase/server";
 
 export type AuthMode = "login" | "signup" | "recover";
-export type LoginState = { email?: string; error?: string; sent?: boolean; next: string };
+export type LoginState = { email?: string; error?: string; sent?: boolean; confirmationRequired?: boolean; next: string };
 const Email = z.email({ error: "Ingresá un email válido." });
 async function callbackUrl(next: string): Promise<string> {
   const h = await headers();
@@ -47,7 +47,7 @@ export async function authenticate(mode: AuthMode, prev: LoginState, form: FormD
     return { ...state, sent: true };
   }
   const { error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) return { ...state, error: error.code === "email_not_confirmed" ? "Confirmá tu email antes de ingresar. Revisá tu bandeja de entrada y spam." : "No pudimos ingresar. Revisá tu email y contraseña o recuperá tu contraseña." };
+  if (error) return { ...state, confirmationRequired: error.code === "email_not_confirmed", error: error.code === "email_not_confirmed" ? "Confirmá tu email antes de ingresar. Revisá tu bandeja de entrada y spam." : "No pudimos ingresar. Revisá tu email y contraseña o recuperá tu contraseña." };
   await afterSignIn(supabase);
   redirect(next);
 }

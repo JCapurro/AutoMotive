@@ -65,6 +65,7 @@ test("F4: registro, búsqueda, backfill, alerta, Me interesa y guardados", async
     await page.getByRole("button", { name: "Crear cuenta", exact: true }).click();
     await expect(page.getByText("Revisá tu email")).toBeVisible();
     await page.goto(await magicLink(email, since));
+    await page.getByRole("button", { name: "Confirmar mi email" }).click();
     await expect(page).toHaveURL(/\/app\/searches\/new$/);
     const [signup] = await query(
       `select e.name from public.events e join public.profiles p on p.id = e.user_id
