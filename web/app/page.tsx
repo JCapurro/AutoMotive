@@ -1,12 +1,12 @@
 import Link from "next/link";
 
-import { Logo } from "@/components/logo";
+import { PublicPlans } from "@/components/public-plans";
 import { SiteFooter } from "@/components/site-footer";
+import { SiteHeader } from "@/components/site-header";
 import { Button } from "@/components/ui/button";
 import { currentUser } from "@/lib/auth";
 import { money } from "@/lib/format";
 import { webConfig } from "@/lib/config";
-import { PLAN_COPY, planPrice, WAITLIST_PLANS } from "@/lib/pro";
 
 // §50: hero, an example of what we flag, how it works, the four benefits and
 // the "Crear mi búsqueda" CTA. No chart to decode: a price list read with a
@@ -57,12 +57,7 @@ export default async function Landing({ searchParams }: PageProps<"/">) {
 
   return (
     <div className="flex min-h-dvh flex-col">
-      <header className={`${WRAP} flex h-17 items-center justify-between`}>
-        <Logo />
-        <Link href={user ? "/app" : "/login"} className="px-1 py-2 text-[15px] font-medium underline-offset-4 hover:underline">
-          {user ? "Mis búsquedas" : "Ingresar"}
-        </Link>
-      </header>
+      <SiteHeader signedIn={Boolean(user)} page="home" />
 
       <main className="flex-1">
         {params.cuenta === "borrada" ? (
@@ -85,6 +80,7 @@ export default async function Landing({ searchParams }: PageProps<"/">) {
                 <Button asChild className="h-11 px-4.5 text-[15px]">
                   <Link href={start}>Crear mi búsqueda</Link>
                 </Button>
+                <Link href="/pricing" className="py-2 text-[15px] font-medium underline underline-offset-4">Ver planes</Link>
                 <span className="text-sm text-muted-foreground">Prueba gratis por 3 días. Sin tarjeta.</span>
               </div>
             </div>
@@ -132,24 +128,10 @@ export default async function Landing({ searchParams }: PageProps<"/">) {
         <section id="planes" className="border-t py-16">
           <div className={WRAP}>
             <h2 className="type-heading text-[1.75rem] leading-tight md:text-4xl">Un plan para tu forma de buscar</h2>
-            <p className="mt-3 max-w-3xl text-muted-foreground">Empezá con una búsqueda gratis por 72 horas desde su primera activación.
-              Incluye hasta 50 resultados y resumen diario. Pausar o reemplazarla no reinicia la prueba.</p>
-            <div className="mt-8 grid gap-6 md:grid-cols-2">
-              {WAITLIST_PLANS.map((plan) => <article key={plan} className="rounded-xl border p-6">
-                <h3 className="text-xl font-bold">{PLAN_COPY[plan].name}</h3>
-                <p className="mt-3 text-3xl font-bold">{planPrice(cfg.proOffer[plan].amount)} <span className="text-base font-normal">{PLAN_COPY[plan].period}</span></p>
-                <p className="mt-2 text-muted-foreground">{PLAN_COPY[plan].pitch}</p>
-                <p className="mt-3">{PLAN_COPY[plan].searches} búsquedas activas · una cuenta · pesos argentinos.</p>
-                <p className="mt-2 text-sm text-muted-foreground">{plan === "pass_30" ? "Pago único, sin renovación automática." : cfg.automaticPayments ? "Suscripción mensual. Cancelás desde Ajustes y conservás el período pagado." : "Durante el piloto: períodos de 30 días y renovación manual, sin débito automático."}</p>
-                <Button asChild variant="outline" className="mt-5"><Link href={user ? `/app/pro?plan=${plan}` : `/login?next=${encodeURIComponent(`/app/pro?plan=${plan}`)}`}>
-                  {cfg.automaticPayments ? `Contratar ${PLAN_COPY[plan].name}` : plan === "pass_30" ? "Busco mi auto" : "Busco vehículos habitualmente"}
-                </Link></Button>
-              </article>)}
+            <p className="mt-3 max-w-3xl text-muted-foreground">Probá gratis por 3 días y elegí cuántas búsquedas querés seguir.</p>
+            <div className="mt-8">
+              <PublicPlans cfg={cfg} signedIn={Boolean(user)} />
             </div>
-            <p className="mt-5 text-sm text-muted-foreground">{cfg.automaticPayments ? "Pagás en Mercado Pago. Activamos el acceso cuando se aprueba el pago." : cfg.commercialPilot ? "Las altas y la confirmación de pagos se coordinan con la administración." : "Las altas pagas están en lista de espera."}
-              {" "}Al vencer el acceso se detienen nuevas coincidencias y alertas; conservamos historial y favoritos.
-              Hasta 10 avisos inmediatos de nuevas coincidencias por día; los restantes van al resumen.
-              Bajas de precio de favoritos: avisos inmediatos mientras el acceso siga vigente.</p>
           </div>
         </section>
 
