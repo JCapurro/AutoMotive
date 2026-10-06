@@ -19,7 +19,7 @@ function active(pathname: string, href: string, exact?: boolean) {
 }
 
 /** Desktop: links in the header. */
-export function TopNav({ admin = false, healthOwner = false }: { admin?: boolean; healthOwner?: boolean }) {
+export function TopNav({ admin = false, healthOwner = false, canAcquirePlan }: { admin?: boolean; healthOwner?: boolean; canAcquirePlan: boolean }) {
   const pathname = usePathname();
   return (
     <nav aria-label="Principal" className="hidden h-full flex-1 items-stretch gap-1 md:flex">
@@ -43,9 +43,7 @@ export function TopNav({ admin = false, healthOwner = false }: { admin?: boolean
         </Link>
       ) : null}
       <div className="my-auto ml-auto flex items-center gap-2">
-        <Button asChild variant="outline" className="h-9 px-3.5">
-          <Link href="/app/pro">Adquirir plan</Link>
-        </Button>
+        <AcquirePlanButton canAcquirePlan={canAcquirePlan} />
         <Button asChild className="h-9 px-3.5">
           <Link href="/app/searches/new">
             <Plus aria-hidden /> Nueva búsqueda
@@ -53,6 +51,16 @@ export function TopNav({ admin = false, healthOwner = false }: { admin?: boolean
         </Button>
       </div>
     </nav>
+  );
+}
+
+/** Desktop and mobile share the same plan acquisition rule. */
+export function AcquirePlanButton({ canAcquirePlan, className }: { canAcquirePlan: boolean; className?: string }) {
+  if (!canAcquirePlan) return null;
+  return (
+    <Button asChild variant="outline" className={cn("h-9 px-3.5", className)}>
+      <Link href="/app/pro">Adquirir plan</Link>
+    </Button>
   );
 }
 

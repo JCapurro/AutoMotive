@@ -44,6 +44,11 @@ export type PlanLimits = {
   active_searches?: number;
   limits: { max_profiles?: number; max_visible_results?: number; immediate_alerts?: boolean };
 };
+/** The snapshot resolves expiry; a stored plan name alone doesn't prove paid access. */
+export function canAcquirePlan(access: PlanLimits | null): boolean {
+  if (!access) return false;
+  return access.plan === "free" || access.active === false;
+}
 export type ProCtaState = {
   show: boolean; reason: "activity" | "plan_limit" | null; plan?: string;
   alert_clicks?: number; waitlist_plan?: WaitlistPlan | null;

@@ -1,8 +1,25 @@
 import { describe, expect, it } from "vitest";
 
-import { DEFAULT_PRO_OFFER, isPlacement, isWaitlistPlan, proOffer, visibleResults } from "./pro";
+import { canAcquirePlan, DEFAULT_PRO_OFFER, isPlacement, isWaitlistPlan, proOffer, visibleResults } from "./pro";
 
 const free = (enforced: boolean) => ({ plan: "free" as const, enforced, limits: { max_visible_results: 50 } });
+
+describe("canAcquirePlan", () => {
+  it.each(["pass", "pro"] as const)("hides acquisition for active %s access, including manual grants", (plan) => {
+    expect(canAcquirePlan({ plan, enforced: true, active: true, state: "paid", limits: {} })).toBe(false);
+    expect(canAcquirePlan({ plan, enforced: false, active: true, state: "pilot", limits: {} })).toBe(false);
+  });
+  it.each(["pass", "pro"] as const)("allows acquisition after %s access expires", (plan) => {
+    expect(canAcquirePlan({ plan, enforced: true, active: false, state: "expired", limits: {} })).toBe(true);
+  });
+  it.each(["available", "trial", "expired"] as const)("allows acquisition during free %s access", (state) => {
+    expect(canAcquirePlan({ plan: "free", enforced: true, active: state === "trial", state, limits: {} })).toBe(true);
+  });
+  it("doesn't offer acquisition until the account's access is known", () => {
+    expect(canAcquirePlan(null)).toBe(false);
+    expect(canAcquirePlan({ plan: "pro", enforced: true, limits: {} })).toBe(false);
+  });
+});
 
 describe("visibleResults", () => {
   it("measures but doesn't cap while the pilot doesn't enforce", () => {
