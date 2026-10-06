@@ -970,8 +970,8 @@
     "semantic_hash": ""
   },
   "worker/collectors/_http.py": {
-    "mtime": 1791294763.9324281,
-    "ast_hash": "21332db81a4a1d12a456f4985bebae78",
+    "mtime": 1791303547.9631317,
+    "ast_hash": "e93224d2006a5f116b7dce6b6f04cdfc",
     "semantic_hash": ""
   },
   "worker/collectors/_loop.py": {
@@ -980,8 +980,8 @@
     "semantic_hash": ""
   },
   "worker/collectors/autocosmos.py": {
-    "mtime": 1791294763.9423962,
-    "ast_hash": "85147a966e70e4929f1ea9851c529f63",
+    "mtime": 1791303547.98101,
+    "ast_hash": "5ce8bea074640eddea543f78cbb15f5b",
     "semantic_hash": ""
   },
   "worker/collectors/base.py": {
@@ -1210,8 +1210,8 @@
     "semantic_hash": ""
   },
   "worker/normalization/geo.py": {
-    "mtime": 1791294764.1220748,
-    "ast_hash": "70054202bbab0918d08e2ba4eab7f068",
+    "mtime": 1791303547.984652,
+    "ast_hash": "471a37366e67a7b4cb3091850657ffff",
     "semantic_hash": ""
   },
   "worker/normalization/listing.py": {
@@ -3860,8 +3860,8 @@
     "semantic_hash": ""
   },
   "worker/collectors/_regional.py": {
-    "mtime": 1791298520.4515383,
-    "ast_hash": "867e81b48cb72019a2a799bcd023c82e",
+    "mtime": 1791303547.9661884,
+    "ast_hash": "9d75c887f7ca0dfd2aa4607fa517fe07",
     "semantic_hash": ""
   },
   "worker/collectors/instagram.py": {
@@ -3875,8 +3875,8 @@
     "semantic_hash": ""
   },
   "worker/collectors/rosariogarage.py": {
-    "mtime": 1791295880.1365163,
-    "ast_hash": "aa3ec56cb14e29da78f5da94401d0c5d",
+    "mtime": 1791303547.9769673,
+    "ast_hash": "c4b6c2531a85a9f076cdd22a0b7f1322",
     "semantic_hash": ""
   },
   "worker/collectors/usadossantafe.py": {
@@ -3980,13 +3980,13 @@
     "semantic_hash": ""
   },
   "worker/collectors/carone.py": {
-    "mtime": 1791299232.2798688,
-    "ast_hash": "dbc6372efefb8d5b711fb33276d9d6d7",
+    "mtime": 1791303547.9697027,
+    "ast_hash": "6310427c369f163e3765a7636fb1fbfb",
     "semantic_hash": ""
   },
   "worker/collectors/gruporandazzo.py": {
-    "mtime": 1791300363.3450212,
-    "ast_hash": "45f0cc54d75613fae894bcdb17b5f66c",
+    "mtime": 1791303547.9742634,
+    "ast_hash": "1cdb93b5b20591f6bdd4c18ec8c457e6",
     "semantic_hash": ""
   },
   "worker/tests/fixtures/html/randazzo_api_product.json": {
@@ -4005,28 +4005,28 @@
     "semantic_hash": ""
   },
   "docs/FUENTES_AGENCIAS.md": {
-    "mtime": 1791300520.7193837,
-    "ast_hash": "ebabec738753dca27aecd2e412c4b031",
+    "mtime": 1791302799.0811238,
+    "ast_hash": "8f94efe290cc3ae6e3401cbe16a470ee",
     "semantic_hash": ""
   },
   "docs/FUENTES_REGIONALES.md": {
-    "mtime": 1791298975.693986,
-    "ast_hash": "cc256461856d031ab09c54557b7a3925",
+    "mtime": 1791302799.0711021,
+    "ast_hash": "c8c58fb586a3877e1f07ec27679e948b",
     "semantic_hash": ""
   },
   "docs/superpowers/plans/2026-10-06-agencias-usados.md": {
-    "mtime": 1791300520.728039,
-    "ast_hash": "7ff1f820652fbf61320be3985d5804ed",
+    "mtime": 1791300659.1922495,
+    "ast_hash": "032de1c267925eedf2b9b50f67824de6",
     "semantic_hash": ""
   },
   "worker/tests/fixtures/html/autocity_detail.html": {
-    "mtime": 1791300055.2705336,
-    "ast_hash": "ac14e43f772f14c3fbf74c25666c0021",
+    "mtime": 1791301500.405708,
+    "ast_hash": "199d764b384450314646df78e3bcea17",
     "semantic_hash": ""
   },
   "worker/tests/fixtures/html/autocity_search.html": {
-    "mtime": 1791298369.1078331,
-    "ast_hash": "1968c7bf2518690f828447de5bf04ced",
+    "mtime": 1791301500.4067087,
+    "ast_hash": "5a7e71ca338ff2cfbddd1908d78d8e35",
     "semantic_hash": ""
   },
   "worker/tests/fixtures/html/carone_detail.html": {
@@ -4047,6 +4047,21 @@
   "worker/tests/fixtures/html/randazzo_search.html": {
     "mtime": 1791300055.2029953,
     "ast_hash": "ac7e06d20e21c8d3dff6cb843c3298b0",
+    "semantic_hash": ""
+  },
+  "worker/http_clients.py": {
+    "mtime": 1791303547.9601326,
+    "ast_hash": "a1f97cc5170e2395abcc599e70141c96",
+    "semantic_hash": ""
+  },
+  "worker/tests/test_http_clients.py": {
+    "mtime": 1791303632.0450757,
+    "ast_hash": "8e5bfb28327c7d8671818b11f4341d4a",
+    "semantic_hash": ""
+  },
+  "docs/research/FUENTES_PUBLICACIONES_2026-10-06.md": {
+    "mtime": 1791294315.8532004,
+    "ast_hash": "038355f30960eed319a50541402aa297",
     "semantic_hash": ""
   }
 }

@@ -13,6 +13,7 @@ import unicodedata
 from urllib.parse import parse_qs, urlencode, urljoin, urlparse
 
 import httpx
+from http_clients import async_client
 
 from ._http import HEADERS, Page, dedupe, multiline_text, soup, text_of, to_int
 from .base import BaseScraper, CollectorBlocked, Listing, ListingDetail
@@ -172,7 +173,7 @@ class RosarioGarageScraper(BaseScraper):
     async def search(self, filters: dict) -> list[Listing]:
         out: dict[str, Listing] = {}
         seen: set[str] = set()
-        async with httpx.AsyncClient(timeout=self.TIMEOUT, headers=HEADERS, follow_redirects=True,
+        async with async_client(timeout=self.TIMEOUT, headers=HEADERS, follow_redirects=True,
                                      transport=self.transport) as client:
             for category in self.CATEGORIES:
                 rubro, brands = await self._finder_form(client, category)
@@ -219,7 +220,7 @@ class RosarioGarageScraper(BaseScraper):
         return list(out.values())
 
     async def fetch_detail_page(self, url: str) -> Page:
-        async with httpx.AsyncClient(timeout=self.TIMEOUT, headers=HEADERS, follow_redirects=True,
+        async with async_client(timeout=self.TIMEOUT, headers=HEADERS, follow_redirects=True,
                                      transport=self.transport) as client:
             response = await self._get(client, url)
         if response.status_code not in (404, 410):

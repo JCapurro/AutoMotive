@@ -9,6 +9,7 @@ from collections.abc import Awaitable, Callable, Iterable
 from typing import Any
 
 import httpx
+from http_clients import async_client
 
 import db
 from config import GEOCODING_ENABLED, GEOCODING_USER_AGENT
@@ -320,7 +321,7 @@ async def _geocode_nominatim(query: str) -> Coords | None:
         if elapsed < _NOMINATIM_MIN_INTERVAL:
             await asyncio.sleep(_NOMINATIM_MIN_INTERVAL - elapsed)
         try:
-            async with httpx.AsyncClient(timeout=8.0, headers=headers) as client:
+            async with async_client(timeout=8.0, headers=headers) as client:
                 response = await client.get(
                     "https://nominatim.openstreetmap.org/search", params=params
                 )

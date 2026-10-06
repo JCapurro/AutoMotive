@@ -8,6 +8,7 @@ from typing import Any, Iterator, Sequence
 
 import httpx
 from bs4 import BeautifulSoup
+from http_clients import async_client
 
 from ._browser import browser_context
 
@@ -30,7 +31,7 @@ class Page:
 
 async def fetch_page(url: str, *, timeout: float = 25.0) -> Page:
     """Plain HTTP GET. Raises on network errors; any HTTP status is returned."""
-    async with httpx.AsyncClient(timeout=timeout, headers=HEADERS, follow_redirects=True) as cx:
+    async with async_client(timeout=timeout, headers=HEADERS, follow_redirects=True) as cx:
         r = await cx.get(url)
     return Page(r.status_code, str(r.url), r.text)
 

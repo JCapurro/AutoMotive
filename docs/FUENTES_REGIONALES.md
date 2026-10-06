@@ -1,6 +1,6 @@
 # Fuentes regionales de publicaciones
 
-Implementación local en `codex/nuevas-fuentes-usados`, desde `dba6da5`. No aplicada ni desplegada en producción.
+Código publicado en `main` mediante `dc222f9`. Migraciones aplicadas y worker supervisado reiniciado en producción el 6 de octubre de 2026.
 
 ## Fuentes agregadas
 
@@ -40,6 +40,10 @@ La revalidación de Only Cars usó el mismo `aio.run` y `run_collector` que sepa
 - Las búsquedas con fuentes específicas conservan su selección. Las que abarcan todas las fuentes incorporan las nuevas después de habilitarlas.
 
 ## Probar y activar
+
+Activación realizada en el proyecto configurado `dnqyravczgcpuowijbja`: ambas migraciones de fuentes constan en `supabase_migrations.schema_migrations` y las ocho fuentes nuevas están habilitadas. Se conservó la migración histórica remota `20261005042219_admin_search_access`, ausente del repositorio: su SQL se recuperó en un directorio temporal de despliegue para que la CLI verificara el historial. El dry-run incluyó exclusivamente `20261006141335_regional_sources.sql` y `20261006144025_agency_sources.sql`; se aplicaron con la CLI 2.119.0, `--include-all` y `--skip-vault`, sin seed ni roles.
+
+La tarea `\\AutoMotive\\Worker` se reinició y mantiene el supervisor habitual de `ops/run-forever.ps1`. El nuevo heartbeat identifica PID `33152`, inicio `2026-10-06T16:04:18Z`, checkout principal y entorno de producción. La lectura bajo el rol `authenticated` confirmó las 13 fuentes habilitadas que utiliza el formulario de búsquedas. El primer ciclo creó los siete targets compartidos de inventario y siete targets por vehículo para Rosario Garage, e inició ejecuciones reales de las ocho fuentes. La evidencia del resultado se registra en [FUENTES_AGENCIAS.md](FUENTES_AGENCIAS.md).
 
 1. Publicar el código del worker y aplicar la migración generada `supabase/migrations/20261006141335_regional_sources.sql` en el entorno elegido; verificar el orden de migraciones existentes, que en este repositorio incluye versiones con fechas futuras. No activar en una máquina que todavía carezca de los collectors.
 2. Reiniciar el worker con su entorno habitual. Revisar `sources`, los nuevos `crawl_targets`, `collector_runs` y `/admin/sources`; confirmar ingesta y matches antes de afirmar que producción quedó conectada.

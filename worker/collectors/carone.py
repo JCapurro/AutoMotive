@@ -8,6 +8,7 @@ import re
 from urllib.parse import urlparse
 
 import httpx
+from http_clients import async_client
 
 from ._http import HEADERS, Page, dedupe, multiline_text, slim_html, soup
 from ._regional import PublicCatalogScraper, matches_vehicle
@@ -136,7 +137,7 @@ class CarOneScraper(PublicCatalogScraper):
     async def _catalog_page(self, page_number: int) -> dict:
         variables = {"q": "", "pageSize": self.PAGE_SIZE, "currentPage": page_number,
                      "sort": {"created_at": "DESC"}, "filter": {"stock_status": {"eq": "IN_STOCK"}}}
-        async with httpx.AsyncClient(headers=HEADERS, timeout=45, follow_redirects=False,
+        async with async_client(headers=HEADERS, timeout=45, follow_redirects=False,
                                      transport=self.transport) as client:
             response = await client.post(self.BASE + "/api/graphql",
                                          json={"query": self.QUERY, "variables": variables})

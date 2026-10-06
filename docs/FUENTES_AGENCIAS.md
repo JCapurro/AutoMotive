@@ -1,6 +1,6 @@
 # Autocity, Car One y Grupo Randazzo
 
-Implementación junto con las cinco [fuentes regionales](FUENTES_REGIONALES.md). Código y migraciones validados; activación en producción pendiente.
+Implementación junto con las cinco [fuentes regionales](FUENTES_REGIONALES.md). Código publicado en `main` (`dc222f9`), migraciones aplicadas y worker reiniciado en producción el 6 de octubre de 2026.
 
 ## Operación
 
@@ -52,4 +52,10 @@ python -m tools.scraper_cli detail https://www.gruporandazzo.com/ae074xf_8091-re
 
 ## Activación
 
-Publicar el código del worker, revisar el orden de migraciones existente (hay versiones posteriores con fechas futuras) y aplicar las migraciones en el entorno elegido. Reiniciar el worker y comprobar `sources`, `crawl_targets`, `collector_runs`, ingesta y matches en producción antes de afirmar que las agencias están conectadas allí.
+Las dos migraciones se aplicaron el 6 de octubre en el entorno de producción configurado. La tarea supervisada `\\AutoMotive\\Worker` se reinició y las 13 fuentes habilitadas se verificaron bajo el rol `authenticated`. Se preservó el historial remoto de migraciones; ver [FUENTES_REGIONALES.md](FUENTES_REGIONALES.md).
+
+Primer ciclo real observado a las 16:22:40 UTC: Autocity **220**, Car One **199**, Grupo Randazzo **188**, Mardel **311** y Rosario Garage **504** avisos guardados. Las cinco fuentes tuvieron ejecuciones `ok`, completaron el bootstrap de sus once targets y generaron **193 matches** en total. Los reservados que permanecían en el índice de Randazzo se excluyeron por su estado propio. Son registros por fuente; pueden representar autos publicados también en otras webs.
+
+Only Cars, SC Clasificados y Santa Fe tuvieron timeouts de navegación en la primera carga simultánea. El diagnóstico reprodujo ocho cargas síncronas de certificados para ocho solicitudes HTTP, con inicializaciones individuales de 0,7 a 2,4 segundos. Se agregó `worker/http_clients.py`: los clientes conservan sesiones independientes y reutilizan un contexto TLS verificado según `SSL_CERT_FILE`/`SSL_CERT_DIR` o el bundle habitual de certifi. La carga se sincroniza entre los threads del worker y los collectors; `trust_env=False` conserva su comportamiento. La prueba regresiva falla antes del cambio (8 cargas frente a 1) y pasa después. Otras pruebas comprueban verificación de hostname, `CERT_REQUIRED`, cookies separadas, certificados configurados y carga única entre ocho threads.
+
+Validación del ajuste: **597 passed, 21 skipped, 124 deselected** sin DB. Medición de ocho inicializaciones: 1,7474 segundos la primera, y **0,0043 segundos** entre las siete siguientes. Los transports de catálogos/fichas y geocoding usan la misma fábrica. `graphify update .` terminó mediante AST: 4.600 nodos, 11.201 relaciones, 283 comunidades. La verificación final en producción debe incluir el resultado de los reintentos de las tres fuentes de navegador.

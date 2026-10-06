@@ -8,6 +8,7 @@ import re
 from urllib.parse import urlencode, urlparse
 
 import httpx
+from http_clients import async_client
 
 from normalization.money import parse_number
 from ._http import HEADERS, Page, dedupe, multiline_text, slim_html, soup, to_int
@@ -161,7 +162,7 @@ class GrupoRandazzoScraper(PublicCatalogScraper):
     async def _public_json(self, url: str) -> tuple[httpx.Response, object]:
         if urlparse(url).hostname != urlparse(self.BASE).hostname:
             raise ValueError("gruporandazzo: URL outside the source")
-        async with httpx.AsyncClient(headers=HEADERS, timeout=45, follow_redirects=False,
+        async with async_client(headers=HEADERS, timeout=45, follow_redirects=False,
                                      transport=self.transport) as client:
             response = await client.get(url)
         if response.is_redirect:

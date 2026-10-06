@@ -5,6 +5,7 @@ import re
 from urllib.parse import urljoin, urlparse
 
 import httpx
+from http_clients import async_client
 
 from normalization.money import parse_number
 from normalization.normalize import normalize_brand, normalize_text
@@ -57,7 +58,7 @@ class PublicCatalogScraper(BaseScraper):
         host = urlparse(self.BASE).hostname
         if urlparse(url).hostname != host:
             raise ValueError(f"{self.name}: URL outside the source")
-        async with httpx.AsyncClient(headers=HEADERS, timeout=35, follow_redirects=False,
+        async with async_client(headers=HEADERS, timeout=35, follow_redirects=False,
                                      transport=self.transport) as client:
             for _ in range(6):
                 response = await client.get(url)

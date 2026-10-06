@@ -22,6 +22,7 @@ import re
 import urllib.parse
 
 import httpx
+from http_clients import async_client
 from bs4 import BeautifulSoup
 
 from .base import BaseScraper, Listing, ListingDetail
@@ -253,7 +254,7 @@ class AutoCosmosScraper(BaseScraper):
     async def search(self, filters: dict) -> list[Listing]:
         out: list[Listing] = []
         seen: set[str] = set()
-        async with httpx.AsyncClient(
+        async with async_client(
             timeout=self.TIMEOUT, headers=HEADERS, follow_redirects=True, verify=True,
             transport=self.transport,
         ) as cx:
