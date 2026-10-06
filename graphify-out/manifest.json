@@ -3819,14 +3819,24 @@
     "ast_hash": "7453c49bf34e2caa58a6c87c560e3755",
     "semantic_hash": ""
   },
-  "web/components/app/dealer-fees-notice.tsx": {
-    "mtime": 1791257740.631971,
-    "ast_hash": "5cd4b5ad485de088caefbdc7efda34d3",
+  ".claude/launch.json": {
+    "mtime": 1791122418.2081141,
+    "ast_hash": "0fc6bc2d9538a68b5cb4b5d926a25739",
     "semantic_hash": ""
   },
-  "web/components/app/listing-gallery.tsx": {
-    "mtime": 1791257909.7477574,
-    "ast_hash": "aee29dae2b26468d4deab395edef31f8",
+  ".claude/settings.local.json": {
+    "mtime": 1781364322.01761,
+    "ast_hash": "144250335b7d320f3a847e6c8956f6fe",
+    "semantic_hash": ""
+  },
+  "docs/marketing/reel-hyperframes-2026-10-05/.waveform-cache/peaks-v2_assets_musica-120bpm.wav_4608078-1791227468738.json": {
+    "mtime": 1791229364.3850172,
+    "ast_hash": "e9dd952370f98c049fa8b78ca7737245",
+    "semantic_hash": ""
+  },
+  "docs/marketing/reel-hyperframes-2026-10-05/.waveform-cache/v2_assets_musica-120bpm.wav_4608078-1791227468738.json": {
+    "mtime": 1791229363.3091946,
+    "ast_hash": "904d1f8956271aacfafcfa25b5f37e82",
     "semantic_hash": ""
   }
 }
