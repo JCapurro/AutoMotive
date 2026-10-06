@@ -10,9 +10,10 @@ vi.mock("next/headers", () => ({ headers: async () => new Headers({ origin: "htt
 vi.mock("next/navigation", () => ({ redirect: (path: string) => { throw new Error(`redirect:${path}`); } }));
 import { authenticate, resendConfirmation } from "@/app/login/actions";
 import { updatePassword } from "@/app/auth/reset-password/actions";
-import { GET as confirm } from "@/app/auth/confirm/route";
+import { POST as confirm } from "@/app/auth/confirm/route";
 import { GET as callback } from "@/app/auth/callback/route";
 const form = (values: Record<string, string>) => { const data = new FormData(); for (const [k, v] of Object.entries(values)) data.set(k, v); return data; };
+const confirmationRequest = (url: string) => new NextRequest("https://eseauto.com.ar/auth/confirm", { method: "POST", headers: { origin: "https://eseauto.com.ar" }, body: new URLSearchParams(new URL(url).searchParams) });
 const credentials = { email: "Person@Example.com", password: "good-password", confirmPassword: "good-password" };
 beforeEach(() => {
   vi.resetAllMocks();
@@ -98,15 +99,16 @@ describe("password updates", () => {
 });
 describe("email links", () => {
   it("forces recovery to the password form and skips registration metrics", async () => {
-    const response = await confirm(new NextRequest("https://eseauto.com.ar/auth/confirm?token_hash=test&type=recovery&next=/admin"));
+    const response = await confirm(confirmationRequest("https://eseauto.com.ar/auth/confirm?token_hash=test&type=recovery&next=/admin"));
     expect(response.headers.get("location")).toBe("https://eseauto.com.ar/auth/reset-password");
     expect(mocks.auth.verifyOtp).toHaveBeenCalledWith({ type: "recovery", token_hash: "test" });
     expect(mocks.afterSignIn).not.toHaveBeenCalled();
   });
   it("accepts signup token hashes through the template callback", async () => {
     const response = await callback(new NextRequest("https://eseauto.com.ar/auth/callback?token_hash=test&type=signup&next=/app/searches/new"));
-    expect(response.headers.get("location")).toBe("https://eseauto.com.ar/app/searches/new");
-    expect(mocks.afterSignIn).toHaveBeenCalledOnce();
+    expect(response.headers.get("location")).toContain("/auth/confirm-email?");
+    expect(mocks.auth.verifyOtp).not.toHaveBeenCalled();
+    expect(mocks.afterSignIn).not.toHaveBeenCalled();
   });
   it("exchanges a PKCE recovery code without marking registration", async () => {
     const response = await callback(new NextRequest("https://eseauto.com.ar/auth/callback?code=test&next=/auth/reset-password"));
@@ -116,15 +118,15 @@ describe("email links", () => {
   });
   it("expired recovery links return to the recovery request", async () => {
     mocks.auth.verifyOtp.mockResolvedValue({ error: { code: "otp_expired" } });
-    const response = await confirm(new NextRequest("https://eseauto.com.ar/auth/confirm?token_hash=test&type=recovery"));
+    const response = await confirm(confirmationRequest("https://eseauto.com.ar/auth/confirm?token_hash=test&type=recovery"));
     expect(response.headers.get("location")).toContain("mode=recover");
     expect(mocks.afterSignIn).not.toHaveBeenCalled();
   });
   it("rejects invalid token types and external redirect destinations", async () => {
-    const invalid = await confirm(new NextRequest("https://eseauto.com.ar/auth/confirm?token_hash=test&type=invalid"));
+    const invalid = await confirm(confirmationRequest("https://eseauto.com.ar/auth/confirm?token_hash=test&type=invalid"));
     expect(invalid.headers.get("location")).toContain("error=link");
     expect(mocks.auth.verifyOtp).not.toHaveBeenCalled();
-    const valid = await confirm(new NextRequest("https://eseauto.com.ar/auth/confirm?token_hash=test&type=signup&next=https://evil.example"));
+    const valid = await confirm(confirmationRequest("https://eseauto.com.ar/auth/confirm?token_hash=test&type=signup&next=https://evil.example"));
     expect(valid.headers.get("location")).toBe("https://eseauto.com.ar/app");
   });
 });

@@ -32,6 +32,7 @@ test("F7: privacidad, baja del email y borrar la cuenta", async ({ page, request
     await page.getByRole("button", { name: "Crear cuenta", exact: true }).click();
     await expect(page.getByText("Revisá tu email")).toBeVisible();
     await page.goto(await magicLink(email, since));
+    await page.getByRole("button", { name: "Confirmar mi email" }).click();
     await expect(page).toHaveURL(/\/app/);
     await query(`update public.profiles set default_channels = '{telegram,email,web}' where email = $1`, [email]);
   });

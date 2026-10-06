@@ -26,6 +26,7 @@ async function signIn(page: Page, email: string, next = "/app") {
   await page.getByRole("button", { name: "Crear cuenta", exact: true }).click();
   await expect(page.getByText("Revisá tu email")).toBeVisible();
   await page.goto(await magicLink(email, since));
+    await page.getByRole("button", { name: "Confirmar mi email" }).click();
 }
 
 async function expectNoHorizontalScroll(page: Page) {

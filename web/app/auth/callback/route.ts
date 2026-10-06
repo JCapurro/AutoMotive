@@ -7,6 +7,10 @@ import { requestOrigin } from "@/lib/origin";
 import { GET as confirmEmail } from "../confirm/route";
 
 /** Exchange a signup or recovery PKCE code for a server session. */
+export function HEAD() {
+  return new NextResponse(null, { headers: { "Cache-Control": "private, no-store" } });
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
   if (searchParams.has("token_hash")) return confirmEmail(request);
@@ -21,5 +25,5 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(new URL(next, origin));
     }
   }
-  return NextResponse.redirect(new URL(`/login?error=link&mode=${next === "/auth/reset-password" ? "recover" : "signup"}&next=${encodeURIComponent(next)}`, origin));
+  return NextResponse.redirect(new URL(`/login?error=link&mode=${next === "/auth/reset-password" ? "recover" : "login"}&next=${encodeURIComponent(next)}`, origin));
 }
