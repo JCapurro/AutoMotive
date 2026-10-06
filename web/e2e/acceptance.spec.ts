@@ -51,7 +51,7 @@ test("F4: registro, búsqueda, backfill, alerta, guardar y guardados", async ({ 
     await expect(page.getByRole("heading", { name: "Decinos cuál. Te avisamos cuando aparezca." })).toBeVisible();
     await expect(page.getByText("pide USD 2.574 menos")).toBeVisible();
     await expectNoHorizontalScroll(page);
-    await page.getByRole("link", { name: "Crear mi búsqueda" }).first().click();
+    await page.getByRole("button", { name: "Crear mi búsqueda" }).first().click();
     await expect(page).toHaveURL(/\/login\?next=\/app\/searches\/new$/);
   });
 

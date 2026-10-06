@@ -1,5 +1,4 @@
-import Link from "next/link";
-
+import { LandingSearch } from "@/components/landing-search";
 import { PublicPlans } from "@/components/public-plans";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
@@ -53,7 +52,6 @@ const WRAP = "mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-10";
 
 export default async function Landing({ searchParams }: PageProps<"/">) {
   const [user, params, cfg] = await Promise.all([currentUser(), searchParams, webConfig()]);
-  const start = user ? "/app/searches/new" : "/login?next=/app/searches/new";
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -66,23 +64,16 @@ export default async function Landing({ searchParams }: PageProps<"/">) {
           </p>
         ) : null}
 
-        <section className={`${WRAP} pt-8 pb-14 md:pt-16`}>
-          <h1 className="type-display max-w-[27ch] text-[2.4rem] leading-[1.02] text-balance md:text-[4.2rem] lg:text-[4.6rem]">
+        <section className={`${WRAP} pt-6 pb-14 sm:pt-8 md:pt-16`}>
+          <h1 className="type-display max-w-[27ch] text-[2.15rem] leading-[1.02] text-balance sm:text-[2.4rem] md:text-[4.2rem] lg:text-[4.6rem]">
             Decinos cuál. Te avisamos cuando aparezca.
           </h1>
-          <div className="mt-8 grid items-start gap-10 md:mt-12 md:grid-cols-[4fr_8fr] md:gap-14">
+          <div className="mt-8 grid items-start gap-10 md:mt-12 md:grid-cols-2 md:gap-12">
             <div>
-              <div className="max-w-[34ch] space-y-2 text-[19px] leading-snug text-muted-foreground">
-                <p>Decinos qué auto estás buscando.</p>
+              <div className="max-w-[42ch] space-y-2 text-[19px] leading-snug text-muted-foreground">
                 <p>Ese Auto monitorea las publicaciones y te avisa cuando aparece uno que vale la pena mirar.</p>
               </div>
-              <div className="mt-7 flex flex-wrap items-center gap-x-4 gap-y-3">
-                <Button asChild className="h-11 px-4.5 text-[15px]">
-                  <Link href={start}>Crear mi búsqueda</Link>
-                </Button>
-                <Link href="/pricing" className="py-2 text-[15px] font-medium underline underline-offset-4">Ver planes</Link>
-                <span className="text-sm text-muted-foreground">Prueba gratis por 3 días. Sin tarjeta.</span>
-              </div>
+              <LandingSearch signedIn={Boolean(user)} />
             </div>
             <Example />
           </div>
@@ -140,8 +131,8 @@ export default async function Landing({ searchParams }: PageProps<"/">) {
             <h2 className="type-display max-w-[20ch] text-[1.9rem] leading-[1.05] md:text-[2.8rem]">
               Vos elegís qué auto querés. Ese Auto busca por vos.
             </h2>
-            <Button asChild className="mt-7 h-11 px-4.5 text-[15px]">
-              <Link href={start}>Crear mi búsqueda</Link>
+            <Button type="submit" form="landing-search" className="mt-7 h-11 px-4.5 text-[15px]">
+              Crear mi búsqueda
             </Button>
           </div>
         </section>

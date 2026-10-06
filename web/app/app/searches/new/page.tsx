@@ -6,14 +6,16 @@ import { SearchForm } from "@/components/app/search-form";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { requireUser } from "@/lib/auth";
 import type { SearchValues } from "@/lib/search-form";
+import { searchIntentPrompt } from "@/lib/search-intent";
 import { createClient } from "@/lib/supabase/server";
 
 import { loadFormData } from "../form-data";
 
 export const metadata: Metadata = { title: "Nueva búsqueda" };
 
-export default async function NewSearchPage() {
+export default async function NewSearchPage({ searchParams }: PageProps<"/app/searches/new">) {
   await requireUser();
+  const prompt = searchIntentPrompt((await searchParams).prompt);
   const supabase = await createClient();
   const { catalog, sources, defaultFrequency } = await loadFormData(supabase);
 
@@ -61,8 +63,8 @@ export default async function NewSearchPage() {
             profileId={null}
           />
         </TabsContent>
-        <TabsContent value="assisted" className="pt-3">
-          <AssistedSearch catalog={catalog} sources={sources} base={initial} />
+        <TabsContent value="assisted" forceMount className="pt-3 data-[state=inactive]:hidden">
+          <AssistedSearch catalog={catalog} sources={sources} base={initial} initialText={prompt} />
         </TabsContent>
       </Tabs>
     </div>

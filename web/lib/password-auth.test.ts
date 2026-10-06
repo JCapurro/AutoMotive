@@ -29,6 +29,13 @@ describe("password authentication", () => {
     expect(mocks.auth.signUp).toHaveBeenCalledWith({ email: "person@example.com", password: credentials.password, options: { emailRedirectTo: "https://eseauto.com.ar/auth/callback?next=%2Fapp%2Fsearches%2Fnew" } });
     expect(mocks.afterSignIn).not.toHaveBeenCalled();
   });
+  it("preserves the landing prompt in signup emails and password login", async () => {
+    const next = `/app/searches/new?${new URLSearchParams({ prompt: "Fiesta & Polo en Córdoba" })}`;
+    await authenticate("signup", { next }, form(credentials));
+    const callbackUrl = new URL(mocks.auth.signUp.mock.calls[0][0].options.emailRedirectTo);
+    expect(callbackUrl.searchParams.get("next")).toBe(next);
+    await expect(authenticate("login", { next }, form(credentials))).rejects.toThrow(`redirect:${next}`);
+  });
   it("rejects short and mismatched passwords before contacting Auth", async () => {
     expect((await authenticate("signup", { next: "/app" }, form({ ...credentials, password: "short" }))).error).toBeTruthy();
     expect((await authenticate("signup", { next: "/app" }, form({ ...credentials, confirmPassword: "different" }))).error).toBeTruthy();

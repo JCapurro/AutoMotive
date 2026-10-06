@@ -31,3 +31,19 @@ it("opening or previewing the email must not consume its one-use signup token", 
     expect(auth.verifyOtp).not.toHaveBeenCalled();
   }
 });
+
+it("keeps the landing prompt through the email preview and explicit confirmation", async () => {
+  const next = `/app/searches/new?${new URLSearchParams({ prompt: "Fiesta manual & Polo en Córdoba" })}`;
+  const preview = await GET(new NextRequest(`https://www.eseauto.com.ar/auth/confirm?${new URLSearchParams({
+    token_hash: "intent-token", type: "signup", next,
+  })}`));
+  expect(new URL(preview.headers.get("location")!).searchParams.get("next")).toBe(next);
+  expect(auth.verifyOtp).not.toHaveBeenCalled();
+
+  const confirmed = await POST(new NextRequest("https://www.eseauto.com.ar/auth/confirm", {
+    method: "POST", headers: { origin: "https://www.eseauto.com.ar" },
+    body: new URLSearchParams({ token_hash: "intent-token", type: "signup", next }),
+  }));
+  expect(confirmed.status).toBe(303);
+  expect(confirmed.headers.get("location")).toBe(`https://www.eseauto.com.ar${next}`);
+});

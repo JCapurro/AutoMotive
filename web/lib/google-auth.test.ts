@@ -24,6 +24,15 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("Google login", () => {
+  it("preserves the landing prompt through OAuth initiation and its callback", async () => {
+    const next = `/app/searches/new?${new URLSearchParams({ prompt: "Fiesta & Polo en Córdoba" })}`;
+    await expect(signInWithGoogle({ next }, new FormData())).rejects.toThrow("redirect:");
+    const redirectUrl = new URL(mocks.signInWithOAuth.mock.calls[0][0].options.redirectTo);
+    expect(redirectUrl.searchParams.get("next")).toBe(next);
+    redirectUrl.searchParams.set("code", "valid");
+    const response = await callback(new NextRequest(redirectUrl));
+    expect(response.headers.get("location")).toBe(`https://eseauto.com.ar${next}`);
+  });
   it("starts PKCE independently of email/password and preserves the destination", async () => {
     await expect(signInWithGoogle({ next: "/app/searches/new" }, new FormData())).rejects.toThrow("redirect:https://auth.example.com/auth/v1/authorize?provider=google");
     expect(mocks.fetch).toHaveBeenCalledWith("https://auth.example.com/auth/v1/settings", { headers: { apikey: "public-key" }, cache: "no-store", signal: expect.any(AbortSignal) });

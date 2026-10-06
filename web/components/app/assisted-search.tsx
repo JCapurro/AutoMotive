@@ -3,20 +3,18 @@
 import { Check, Loader2, PenLine, Plus, RotateCcw, Sparkles, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useId, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { startAssisted } from "@/app/app/searches/actions";
 import { SearchForm } from "@/components/app/search-form";
+import { SearchPromptInput } from "@/components/search-prompt-input";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   ASSISTED_DEADLINE_MS,
-  ASSISTED_EXAMPLES,
-  ASSISTED_MAX_CHARS,
+  ASSISTED_MIN_CHARS,
   ASSISTED_MAX_VEHICLES,
   ASSISTED_POLL_MS,
   AssistedOutput,
@@ -67,18 +65,54 @@ export function AssistedSearch({
   catalog,
   sources,
   base,
+  initialText = "",
 }: {
   catalog: Catalog;
   sources: Source[];
   base: SearchValues;
+  initialText?: string;
 }) {
-  const [text, setText] = useState("");
+  const [text, setText] = useState(initialText);
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const [error, setError] = useState<string | null>(null);
   const [sending, startSending] = useTransition();
   const [supabase] = useState(createClient);
   const router = useRouter();
-  const textId = useId();
+  const autoStarted = useRef(false);
+  const requestInFlight = useRef(false);
+
+  const sendPrompt = useCallback((prompt: string) => {
+    if (requestInFlight.current) return;
+    requestInFlight.current = true;
+    setError(null);
+    startSending(async () => {
+      try {
+        const result = await startAssisted(prompt);
+        if (result.jobId != null) setPhase({ kind: "waiting", jobId: result.jobId });
+        else if (result.unavailable) setPhase({ kind: "failed", jobId: null, reason: "unavailable" });
+        else setError(result.error ?? "No pudimos enviar tu búsqueda.");
+        // Consume the intent after sending it, so a refresh or tab change won't send it again.
+        const url = new URL(window.location.href);
+        if (url.searchParams.has("prompt")) {
+          url.searchParams.delete("prompt");
+          window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+        }
+      } catch {
+        setError("No pudimos enviar tu búsqueda. Probá de nuevo.");
+      } finally {
+        requestInFlight.current = false;
+      }
+    });
+  }, [startSending]);
+
+  useEffect(() => {
+    if (!initialText || autoStarted.current) return;
+    // Native history updates don't rerender the server page. Check the URL too
+    // in case the assisted tab is remounted with its original server props.
+    if (new URL(window.location.href).searchParams.get("prompt")?.trim() !== initialText) return;
+    autoStarted.current = true;
+    sendPrompt(initialText);
+  }, [initialText, sendPrompt]);
 
   const waitingJob = phase.kind === "waiting" ? phase.jobId : null;
 
@@ -151,13 +185,8 @@ export function AssistedSearch({
 
   function submit(event: React.FormEvent) {
     event.preventDefault();
-    setError(null);
-    startSending(async () => {
-      const result = await startAssisted(text);
-      if (result.jobId != null) setPhase({ kind: "waiting", jobId: result.jobId });
-      else if (result.unavailable) setPhase({ kind: "failed", jobId: null, reason: "unavailable" });
-      else setError(result.error ?? "No pudimos enviar tu búsqueda.");
-    });
+    if (sending || phase.kind === "waiting") return;
+    sendPrompt(text);
   }
 
   function update(index: number, patch: Partial<Reviewed>) {
@@ -322,68 +351,26 @@ export function AssistedSearch({
   }
 
   const waiting = phase.kind === "waiting";
+  const busy = sending || waiting;
   return (
     <form onSubmit={submit} className="max-w-2xl">
       <Card>
-        <CardHeader>
-          <CardTitle>
-            <Label htmlFor={textId} className="text-base">
-              ¿Qué auto buscás?
-            </Label>
-          </CardTitle>
-          <CardDescription>
-            Escribilo como se lo contarías a alguien: modelo, versión, años, presupuesto, kilómetros, zona. Si buscás
-            varios, nombralos todos. Revisás los filtros antes de guardar.
-          </CardDescription>
-        </CardHeader>
         <CardContent className="space-y-3">
-          <Textarea
-            id={textId}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder={ASSISTED_EXAMPLES[0]}
-            maxLength={ASSISTED_MAX_CHARS}
-            rows={3}
-            disabled={waiting}
-            aria-describedby={`${textId}-count`}
-          />
-          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-            <span id={`${textId}-count`}>
-              {text.length}/{ASSISTED_MAX_CHARS}
-            </span>
-          </div>
-          {!text && !waiting ? (
-            <div className="space-y-1.5">
-              <p className="text-xs text-muted-foreground">Ejemplos:</p>
-              <ul className="flex flex-col gap-1.5">
-                {ASSISTED_EXAMPLES.map((example) => (
-                  <li key={example}>
-                    <button
-                      type="button"
-                      onClick={() => setText(example)}
-                      className="w-full rounded-md bg-muted px-2.5 py-1.5 text-left text-sm hover:bg-muted/70"
-                    >
-                      «{example}»
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
+          <SearchPromptInput value={text} onChange={setText} disabled={busy} />
           {error ? (
             <p role="alert" className="text-sm text-destructive">
               {error}
             </p>
           ) : null}
-          {waiting ? (
+          {busy ? (
             <div role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="size-4 animate-spin" aria-hidden />
+              <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
               Interpretando tu búsqueda… suele tardar entre 5 y 20 segundos.
             </div>
           ) : null}
           <div className="flex flex-wrap items-center gap-2">
-            <Button type="submit" disabled={sending || waiting || text.trim().length < 3}>
-              {sending || waiting ? <Loader2 className="animate-spin" aria-hidden /> : <Sparkles aria-hidden />}
+            <Button type="submit" disabled={busy || text.trim().length < ASSISTED_MIN_CHARS}>
+              {!busy ? <Sparkles aria-hidden /> : null}
               Interpretar
             </Button>
             {waiting ? (
