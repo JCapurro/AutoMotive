@@ -58,4 +58,22 @@ Primer ciclo real observado a las 16:22:40 UTC: Autocity **220**, Car One **199*
 
 Only Cars, SC Clasificados y Santa Fe tuvieron timeouts de navegación en la primera carga simultánea. El diagnóstico reprodujo ocho cargas síncronas de certificados para ocho solicitudes HTTP, con inicializaciones individuales de 0,7 a 2,4 segundos. Se agregó `worker/http_clients.py`: los clientes conservan sesiones independientes y reutilizan un contexto TLS verificado según `SSL_CERT_FILE`/`SSL_CERT_DIR` o el bundle habitual de certifi. La carga se sincroniza entre los threads del worker y los collectors; `trust_env=False` conserva su comportamiento. La prueba regresiva falla antes del cambio (8 cargas frente a 1) y pasa después. Otras pruebas comprueban verificación de hostname, `CERT_REQUIRED`, cookies separadas, certificados configurados y carga única entre ocho threads.
 
-Validación del ajuste: **597 passed, 21 skipped, 124 deselected** sin DB. Medición de ocho inicializaciones: 1,7474 segundos la primera, y **0,0043 segundos** entre las siete siguientes. Los transports de catálogos/fichas y geocoding usan la misma fábrica. `graphify update .` terminó mediante AST: 4.600 nodos, 11.201 relaciones, 283 comunidades. La verificación final en producción debe incluir el resultado de los reintentos de las tres fuentes de navegador.
+Validación del ajuste: **597 passed, 21 skipped, 124 deselected** sin DB. Medición de ocho inicializaciones: 1,7474 segundos la primera, y **0,0043 segundos** entre las siete siguientes. Los transports de catálogos/fichas y geocoding usan la misma fábrica. `graphify update .` terminó mediante AST: 4.600 nodos, 11.201 relaciones, 283 comunidades. Corrección publicada y desplegada mediante `4a2da6a`.
+
+### Resultado observado en producción
+
+Consulta a las **16:27:24 UTC del 6 de octubre de 2026**:
+
+| Fuente | Avisos persistidos | Matches | Última ejecución |
+|---|---:|---:|---|
+| Only Cars Usados | 4 | 1 | `4956`, `ok` |
+| SC Clasificados | 10 | 1 | `4955`, `ok` |
+| Mardel Usados | 311 | 1 | `4925`, `ok` |
+| Rosario Garage | 504 | 180 | `4937`, `ok`; siete targets completados |
+| Usados Santa Fe | 33 | 1 | `4960`, `ok` |
+| Autocity | 220 | 7 | `4929`, `ok` |
+| Car One | 199 | 1 | `4930`, `ok` |
+| Grupo Randazzo | 188 | 4 | `4931`, `ok` |
+| Total | **1.469** | **196** | Ocho fuentes con `consecutive_failures=0` |
+
+Los perfiles de Instagram completaron su reintento antes del segundo reinicio. Santa Fe completó la ejecución con el worker actualizado en 18 segundos. El heartbeat final identifica PID `41192`, inicio `16:26:52 UTC`, checkout principal, tarea supervisada activa y base remota configurada. Los catorce targets nuevos completaron el bootstrap. Próximas ejecuciones registradas: fuentes web aproximadamente una hora después de su ciclo; Instagram, dos horas después. La ingesta, el matching y el enriquecimiento posterior se observaron en las tablas reales; los totales cambian con el stock y pueden incluir el mismo auto en distintas fuentes.
