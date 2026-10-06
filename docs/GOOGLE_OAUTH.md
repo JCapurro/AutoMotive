@@ -12,7 +12,7 @@ El 5/10/2026, después de configurar el proveedor, se verificó
 `/auth/v1/settings` del proyecto `dnqyravczgcpuowijbja`: `external.google=true`.
 La prueba real desde la versión local completó la autorización de Google,
 intercambió el código y abrió `/app/settings`; la sesión persistió al recargar.
-La web de producción todavía no incluye el botón y necesita un nuevo despliegue.
+El botón de producción requiere que el código esté desplegado en Vercel.
 Agregar el botón no habilita automáticamente el proveedor: si se deshabilita,
 el formulario informa que Google no está disponible y permite usar contraseña.
 
