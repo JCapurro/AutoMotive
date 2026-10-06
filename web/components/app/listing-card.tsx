@@ -56,7 +56,7 @@ export function ListingCard({
       data-testid="listing-card"
       className="group relative grid grid-cols-[88px_minmax(0,1fr)] gap-x-4 gap-y-1 border-b py-3.5 hover:bg-[linear-gradient(90deg,transparent,var(--muted)_6%,var(--muted)_94%,transparent)] sm:grid-cols-[96px_minmax(0,1fr)_auto]"
     >
-      <div className="relative row-span-3 h-16 w-22 overflow-hidden rounded bg-muted sm:h-[66px] sm:w-24">
+      <div className="relative row-span-3 h-16 w-full overflow-hidden rounded bg-muted sm:h-[66px]">
         {image ? (
           // eslint-disable-next-line @next/next/no-img-element -- listing photos live on each source's CDN
           <img src={image} alt="" loading="lazy" referrerPolicy="no-referrer" className="size-full object-cover" />
