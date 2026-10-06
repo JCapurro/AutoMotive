@@ -93,7 +93,7 @@ class ResendEmailChannelTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(body["subject"], "📉 Bajó de precio: Ford Fiesta Titanium 2017 (-6,1%)")
         self.assertTrue(body["text"].startswith("📉 Bajó de precio\nFord Fiesta Titanium 2017\n"
                                                 "Antes: USD 11.500\nAhora: USD 10.800\n-6,1%"))
-        self.assertIn("<strong>📉 Bajó de precio</strong>", body["html"])
+        self.assertIn(">Bajó de precio</h1>", body["html"])
 
     async def test_every_email_can_unsubscribe(self):
         """F7, punto 7: a footer link and List-Unsubscribe one-click (RFC 8058)."""

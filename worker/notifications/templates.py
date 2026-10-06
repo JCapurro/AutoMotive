@@ -26,6 +26,7 @@ from typing import Any, Mapping
 
 from intelligence import copy
 from notifications.channels.base import Notification
+from notifications.email_html import render as render_email_html
 from notifications.links import Links
 
 
@@ -139,6 +140,12 @@ class DigestItem:
     url: str
     prefix: str = ""
     suffix: str = ""
+    details: list[str] = field(default_factory=list)
+    price: str | None = None
+    previous_price: str | None = None
+    badge: str | None = None
+    highlighted: bool = False
+    score: int | float | None = None
 
 
 @dataclass
@@ -209,16 +216,24 @@ def _digest(n: Notification, links: Links) -> Content:
         listing = it.get("listing") or {}
         url = links.listing(n.id, listing.get("url") or "", it.get("listing_id"))
         match = it.get("match") or {}
+        details = [str(x) for x in (km(listing), listing.get("location_text")) if x]
         if it["section"] == "price_drops":
             drop = it.get("price_drop") or {}
             before, after = before_after(drop, listing)
             return DigestItem(vehicle(listing), url, "📉 ",
-                              f" · {before} → {after} (-{pct(drop.get('drop_pct') or 0)}%)")
+                              f" · {before} → {after} (-{pct(drop.get('drop_pct') or 0)}%)",
+                              details=details, price=after, previous_price=before,
+                              badge=f"Bajó {pct(drop.get('drop_pct') or 0)}%")
         if it["section"] == "gone":
-            return DigestItem(vehicle(listing), url, "🚫 ")
+            return DigestItem(vehicle(listing), url, "🚫 ", details=details,
+                              badge="Ya no está disponible")
         extra = [x for x in (km(listing), price(listing)) if x]
         prefix = f"{_level_emoji(match.get('level'))} {match.get('score')} · " if match else ""
-        return DigestItem(vehicle(listing), url, prefix, "".join(f" · {x}" for x in extra))
+        label = copy.LEVEL_LABEL.get(match.get("level"))
+        return DigestItem(vehicle(listing), url, prefix, "".join(f" · {x}" for x in extra),
+                          details=details, price=price(listing),
+                          badge=label.split(" ", 1)[1] if label else None,
+                          highlighted=match.get("level") == "high", score=match.get("score"))
 
     sections = [(DIGEST_SECTIONS[s], [item(it) for it in items if it["section"] == s])
                 for s in DIGEST_SECTIONS]
@@ -308,31 +323,11 @@ def email(n: Notification, links: Links, now: datetime) -> EmailMessage:
     if unsubscribe:
         text.append(f"{UNSUBSCRIBE}: {unsubscribe}")
 
-    e = escape
-    html = ['<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.5;color:#1a1a1a">',
-            f'<p style="font-size:18px;margin:0 0 8px"><strong>{e(c.header)}</strong></p>']
-    if c.vehicle:
-        html.append(f'<p style="font-size:17px;margin:0 0 4px"><strong>{e(c.vehicle)}</strong></p>')
-    html += [f'<p style="margin:0">{e(x)}</p>' for x in c.lines]
-    buttons = [(c.link.label, c.link.url)] if c.link else []
-    if detail:
-        buttons.append((VIEW_IN_APP, detail))
-    if buttons:
-        html.append('<p style="margin:16px 0">' + " ".join(
-            f'<a href="{e(url)}" style="display:inline-block;padding:10px 16px;margin-right:8px;'
-            f'background:#1a1a1a;color:#ffffff;text-decoration:none;border-radius:6px">{e(label)}</a>'
-            for label, url in buttons) + "</p>")
-    for title, rows in c.sections:
-        html.append(f'<p style="margin:16px 0 4px"><strong>{e(title)}</strong></p><ul style="margin:0;padding-left:20px">')
-        html += [f'<li>{e(r.prefix)}<a href="{e(r.url)}">{e(r.text)}</a>{e(r.suffix)}</li>' for r in rows]
-        html.append("</ul>")
-    if c.notes:
-        html += [f'<p style="margin:0;color:#555555">{e(x)}</p>' for x in c.notes]
-    footer = e(EMAIL_FOOTER)
-    if unsubscribe:
-        footer += f' <a href="{e(unsubscribe)}" style="color:#888888">{e(UNSUBSCRIBE)}</a>'
-    html.append(f'<p style="margin:24px 0 0;font-size:12px;color:#888888">{footer}</p></div>')
-    return EmailMessage(c.subject, "\n".join(text), "\n".join(html))
+    html = render_email_html(c, kind=n.kind, now=now, day=n.payload.get("date"),
+                             detail_url=detail, app_url=f"{links.base_url}/app" if links.tracked else None,
+                             unsubscribe_url=unsubscribe, footer=EMAIL_FOOTER,
+                             unsubscribe_label=UNSUBSCRIBE)
+    return EmailMessage(c.subject, "\n".join(text), html)
 
 
 def web(n: Notification, links: Links, now: datetime) -> dict[str, Any]:
