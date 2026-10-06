@@ -3,7 +3,7 @@ import { Check } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import type { WebConfig } from "@/lib/config";
-import { PLAN_COPY, planPrice, WAITLIST_PLANS } from "@/lib/pro";
+import { CUSTOM_PLAN, PLAN_COPY, planPrice, WAITLIST_PLANS } from "@/lib/pro";
 
 type PricingConfig = Pick<WebConfig, "proOffer" | "automaticPayments" | "commercialPilot">;
 type PublicPlan = {
@@ -61,23 +61,7 @@ export function PublicPlans({ cfg, signedIn }: { cfg: PricingConfig; signedIn: b
         href: signedIn ? destination : `/login?next=${encodeURIComponent(destination)}`,
       };
     }),
-    {
-      id: "custom",
-      label: "Para necesidades específicas",
-      name: "Custom",
-      price: "A convenir",
-      period: "según alcance y duración",
-      pitch: "Si necesitás más capacidad o una búsqueda particular, armamos una propuesta con vos.",
-      features: [
-        "Cantidad de búsquedas a acordar",
-        "Modelos, zonas y filtros definidos juntos",
-        "Modalidad de alertas a acordar",
-        "Acompañamiento en la configuración",
-      ],
-      terms: "Acordamos el alcance, el precio y las condiciones antes de activar el servicio.",
-      cta: "Consultar Custom",
-      href: `mailto:contacto@eseauto.com.ar?subject=${encodeURIComponent("Consulta por plan Custom")}&body=${encodeURIComponent("Hola, me interesa un plan Custom de Ese Auto.\n\nNecesito buscar:\nCantidad de búsquedas:\nModelos y zonas:\nDuración estimada:\n")}`,
-    },
+    CUSTOM_PLAN,
   ];
 
   return (

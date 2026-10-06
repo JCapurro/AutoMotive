@@ -44,6 +44,24 @@ export type PlanLimits = {
   active_searches?: number;
   limits: { max_profiles?: number; max_visible_results?: number; immediate_alerts?: boolean };
 };
+export const CUSTOM_PLAN = {
+  id: "custom" as const,
+  label: "Para necesidades específicas",
+  name: "Custom",
+  price: "A convenir",
+  period: "según alcance y duración",
+  pitch: "Si necesitás más capacidad o una búsqueda particular, armamos una propuesta con vos.",
+  features: [
+    "Cantidad de búsquedas a acordar",
+    "Modelos, zonas y filtros definidos juntos",
+    "Modalidad de alertas a acordar",
+    "Acompañamiento en la configuración",
+  ],
+  terms: "Acordamos el alcance, el precio y las condiciones antes de activar el servicio.",
+  cta: "Consultar Custom",
+  href: `mailto:contacto@eseauto.com.ar?subject=${encodeURIComponent("Consulta por plan Custom")}&body=${encodeURIComponent("Hola, me interesa un plan Custom de Ese Auto.\n\nNecesito buscar:\nCantidad de búsquedas:\nModelos y zonas:\nDuración estimada:\n")}`,
+};
+export type PlanChoice = WaitlistPlan | typeof CUSTOM_PLAN.id;
 /** The snapshot resolves expiry; a stored plan name alone doesn't prove paid access. */
 export function canAcquirePlan(access: PlanLimits | null): boolean {
   if (!access) return false;
