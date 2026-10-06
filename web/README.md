@@ -64,7 +64,7 @@ El e2e necesita el stack local de Supabase y el entorno Python del worker
 (`pip install -r ../worker/requirements.txt`): el backfill y la alerta simulada
 corren el código real del worker. Cubre la aceptación de F4: registro,
 creación de búsqueda, backfill, alerta simulada que llega por Realtime, clic
-(trackeado por `/r/`), "Me interesa" y compra con la pregunta del §38.
+(trackeado por `/r/`), "Guardar" y compra con la pregunta del §38.
 `e2e/admin.spec.ts` cubre la de F6: el inspector en un clic desde
 Notificaciones, los 6 criterios del §53 en el Resumen, `/admin` cerrado a
 quien no es admin y el CTA Pro → planes → lista de espera con sus eventos.

@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ExternalLink, ThumbsUp, X } from "lucide-react";
+import { Bookmark, Check, ExternalLink, X } from "lucide-react";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { setStatus } from "@/app/app/listings/actions";
@@ -43,7 +43,7 @@ export function ListingActions({ listingId, status, saved, outboundHref }: Props
           run(() => setStatus(listingId, "interested"), "Guardada: te avisamos si cambia");
         }}
       >
-        {interested ? <Check aria-hidden /> : <ThumbsUp aria-hidden />} Me interesa
+        {interested ? <Check aria-hidden /> : <Bookmark aria-hidden />} {interested ? "Guardada" : "Guardar"}
       </Button>
       <Button variant="outline" disabled={pending || status === "discarded" || status === "purchased"} onClick={() => setDiscarding(true)}>
         <X aria-hidden /> Descartar

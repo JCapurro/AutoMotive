@@ -8,7 +8,7 @@ import { worker } from "./support/worker";
 /**
  * F4 acceptance (docs/TECHNICAL_PLAN.md, sección 13):
  *   registro → creación de búsqueda → ver el backfill → llega una alerta
- *   simulada → clic en la alerta → "Me interesa" → comprado,
+ *   simulada → clic en la alerta → "Guardar" → comprado,
  * on desktop and on a 375 px phone (the `mobile` project).
  */
 
@@ -42,7 +42,7 @@ async function navigate(page: Page, name: "Inicio" | "Guardados" | "Ajustes") {
   await nav.getByRole("link", { name, exact: false }).first().click();
 }
 
-test("F4: registro, búsqueda, backfill, alerta, Me interesa y guardados", async ({ page }, testInfo) => {
+test("F4: registro, búsqueda, backfill, alerta, guardar y guardados", async ({ page }, testInfo) => {
   const run = `${testInfo.project.name}-${Date.now()}`;
   const email = `${run}@${E2E_EMAIL_DOMAIN}`;
 
@@ -175,13 +175,12 @@ test("F4: registro, búsqueda, backfill, alerta, Me interesa y guardados", async
     await expect(page).toHaveURL(new RegExp(`/app/listings/${dealId}\\?n=\\d+`));
   });
 
-  await test.step("5. Me interesa guarda el aviso", async () => {
+  await test.step("5. Guardar guarda el aviso", async () => {
     await expect(page.getByLabel("Estado", { exact: true })).toHaveCount(0);
     await expect(page.getByText("Ver el puntaje en números")).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Guardar", exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Compré este vehículo" })).toHaveCount(0);
-    await page.getByRole("button", { name: "Me interesa", exact: true }).click();
-    await expect(page.getByRole("button", { name: "Me interesa", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await page.getByRole("button", { name: "Guardar", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Guardada", exact: true })).toHaveAttribute("aria-pressed", "true");
     const [interaction] = await query<{ status: string; saved: boolean }>(
       `select i.status, i.saved from public.user_listing_interactions i join public.profiles p on p.id=i.user_id where p.email=$1 and i.listing_id=$2`, [email, dealId]);
     expect(interaction).toEqual({ status: "interested", saved: true });

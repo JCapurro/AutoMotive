@@ -28,7 +28,7 @@ export const LEVELS: Level[] = ["high", "good", "match", "low"];
 export const STATUS: Record<InteractionStatus, string> = {
   new: "Nuevo",
   seen: "Visto",
-  interested: "Me interesa",
+  interested: "Guardada",
   discarded: "Descartado",
   contacted: "Contactado",
   visit_scheduled: "Visita agendada",
