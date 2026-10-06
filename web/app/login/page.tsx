@@ -23,7 +23,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
           <CardDescription>Guardá tus búsquedas y recibí las alertas.</CardDescription>
         </CardHeader>
         <CardContent>
-          <LoginForm key={mode} next={next} mode={mode} linkError={params.error === "link"} mailbox={localMailbox} passwordUpdated={params.password === "updated"} />
+          <LoginForm key={mode} next={next} mode={mode} linkError={params.error === "link"} googleError={params.error === "google"} mailbox={localMailbox} passwordUpdated={params.password === "updated"} />
         </CardContent>
       </Card>
       <p className="max-w-sm text-center text-xs text-muted-foreground">

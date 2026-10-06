@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requestOrigin } from "@/lib/origin";
 import { GET as confirmEmail } from "../confirm/route";
 
-/** Exchange a signup or recovery PKCE code for a server session. */
+/** Exchange an email or OAuth PKCE code for a server session. */
 export function HEAD() {
   return new NextResponse(null, { headers: { "Cache-Control": "private, no-store" } });
 }
@@ -17,13 +17,19 @@ export async function GET(request: NextRequest) {
   const origin = requestOrigin(request);
   const code = searchParams.get("code");
   const next = safeNext(searchParams.get("next"));
-  if (code) {
+  if (code && !searchParams.has("error")) {
     const supabase = await createClient();
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
-      if (next !== "/auth/reset-password") await afterSignIn(supabase);
+      if (next !== "/auth/reset-password") {
+        if (searchParams.get("provider") === "google" && data?.user?.identities?.some((identity) => identity.provider === "google")) await afterSignIn(supabase, "google");
+        else await afterSignIn(supabase);
+      }
       return NextResponse.redirect(new URL(next, origin));
     }
+  }
+  if (searchParams.get("provider") === "google") {
+    return NextResponse.redirect(new URL(`/login?error=google&next=${encodeURIComponent(next)}`, origin));
   }
   return NextResponse.redirect(new URL(`/login?error=link&mode=${next === "/auth/reset-password" ? "recover" : "login"}&next=${encodeURIComponent(next)}`, origin));
 }
