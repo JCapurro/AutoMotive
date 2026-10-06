@@ -1,9 +1,11 @@
-import { Loader2, Pause, Plus } from "lucide-react";
+import { Pause, Plus } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { AutoRefresh } from "@/components/app/auto-refresh";
 import { LISTING_ROWS, ListingCard } from "@/components/app/listing-card";
 import { ProBanner } from "@/components/app/pro-cta";
+import { SearchLoadingButton } from "@/components/app/search-preparation";
 import { Button } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth";
 import type { ProCtaState } from "@/lib/pro";
@@ -27,6 +29,7 @@ export default async function Dashboard() {
   const pro = (cta ?? null) as ProCtaState | null;
   const { data: radii } = await supabase.from("search_profiles").select("id, radius_km");
   const radius = new Map((radii ?? []).map((r) => [r.id, r.radius_km]));
+  const hasPending = searches?.some((s) => s.enabled && s.pending) ?? false;
 
   if (!searches?.length) {
     return (
@@ -56,6 +59,7 @@ export default async function Dashboard() {
             </Link>
           </Button>
         </div>
+        {hasPending ? <AutoRefresh /> : null}
         <div className="mt-5 border-t-2 border-foreground">
           <div aria-hidden className="hidden grid-cols-[minmax(0,1fr)_130px_130px_150px] border-b py-2.5 text-[13px] text-muted-foreground md:grid">
             <span>Búsqueda</span>
@@ -91,11 +95,7 @@ export default async function Dashboard() {
                     ))}
                   </ul>
                 </div>
-                {s.pending ? (
-                  <p className="col-span-full flex items-center gap-2 text-sm text-muted-foreground md:col-span-2 md:col-start-2 md:row-start-1 md:justify-end">
-                    <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden /> Buscando publicaciones…
-                  </p>
-                ) : (
+                {!s.pending ? (
                   <p
                     className={cn(
                       "col-span-full flex gap-5 md:col-span-2 md:col-start-2 md:row-start-1 md:grid md:grid-cols-2 md:gap-0",
@@ -116,10 +116,21 @@ export default async function Dashboard() {
                       </span>
                     </span>
                   </p>
-                )}
-                <Button asChild variant="outline" className="col-start-2 row-start-1 h-9 self-start md:col-start-4 md:self-center md:justify-self-end">
-                  <Link href={`/app/searches/${s.profile_id}`}>Ver resultados</Link>
-                </Button>
+                ) : null}
+                <div className={cn(
+                  "md:col-start-4 md:self-center md:justify-self-end",
+                  s.pending && s.enabled
+                    ? "col-span-full row-start-2 justify-self-start sm:col-span-1 sm:col-start-2 sm:row-start-1 sm:self-start"
+                    : "col-start-2 row-start-1 self-start",
+                )}>
+                  {s.pending && s.enabled ? (
+                    <div role="status"><SearchLoadingButton /></div>
+                  ) : (
+                    <Button asChild variant="outline" className="h-9">
+                      <Link href={`/app/searches/${s.profile_id}`}>Ver resultados</Link>
+                    </Button>
+                  )}
+                </div>
               </div>
             );
           })}
@@ -128,7 +139,7 @@ export default async function Dashboard() {
 
       {pro?.show && pro.reason ? <ProBanner placement="dashboard" reason={pro.reason} /> : null}
 
-      <section>
+      {!hasPending || opportunities?.length ? <section>
         <h2 className="type-heading text-[22px] leading-tight">Oportunidades recientes</h2>
         <p className="mt-1 text-sm text-muted-foreground">Las de los últimos 14 días, ordenadas por Opportunity Score.</p>
         {opportunities?.length ? (
@@ -142,7 +153,7 @@ export default async function Dashboard() {
             Todavía no hay oportunidades ni buenas coincidencias de los últimos 14 días. Te avisamos cuando aparezcan.
           </p>
         )}
-      </section>
+      </section> : null}
     </div>
   );
 }

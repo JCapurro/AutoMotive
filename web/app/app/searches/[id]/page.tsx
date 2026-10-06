@@ -1,21 +1,24 @@
-import { Loader2, Pencil } from "lucide-react";
+import { Pencil } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { AutoRefresh } from "@/components/app/auto-refresh";
 import { LISTING_ROWS, ListingCard } from "@/components/app/listing-card";
+import { AutoRefresh } from "@/components/app/auto-refresh";
 import { ProBanner, VisibleResultsReport } from "@/components/app/pro-cta";
 import { FrequencySelect, PauseButton } from "@/components/app/search-actions";
+import { SearchCriteriaSummary } from "@/components/app/search-criteria-summary";
+import { SearchPreparation } from "@/components/app/search-preparation";
 import { SortSelect } from "@/components/app/sort-select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth";
 import { type PlanLimits, visibleResults } from "@/lib/pro";
-import { describeVehicle, filterParts } from "@/lib/search";
+import { collectionPending } from "@/lib/search-collection";
+import { loadSearchCollection } from "@/lib/search-collection-server";
 import { isSort, type Sort } from "@/lib/sorts";
 import { createClient } from "@/lib/supabase/server";
-import type { Filters } from "@/lib/types";
+import type { Filters, Preferences } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Resultados" };
@@ -46,7 +49,7 @@ const EMPTY: Record<Filter, string> = {
 const PAGE_SIZE = 50;
 
 export default async function SearchResultsPage({ params, searchParams }: PageProps<"/app/searches/[id]">) {
-  await requireUser();
+  const user = await requireUser();
   const { id } = await params;
   if (!/^\d+$/.test(id)) notFound();
   const query = await searchParams;
@@ -56,7 +59,7 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
 
   const supabase = await createClient();
   const profileId = Number(id);
-  const [{ data: profile }, { data: results }, { data: counts }, { data: planLimits }] = await Promise.all([
+  const [{ data: profile }, { data: results }, { data: counts }, { data: planLimits }, { data: sources }] = await Promise.all([
     supabase.from("search_profiles").select("*").eq("id", profileId).maybeSingle(),
     supabase.rpc("search_results", {
       p_profile_id: profileId,
@@ -67,11 +70,16 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
     }),
     supabase.rpc("search_result_counts", { p_profile_id: profileId }),
     supabase.rpc("my_plan_limits"),
+    supabase.from("sources").select("id,name,enabled").order("priority"),
   ]);
   if (!profile) notFound();
 
   const filters = profile.filters as Filters;
-  const pending = !profile.bootstrapped_at || Boolean(profile.rematch_requested_at);
+  const collectionSources = await loadSearchCollection(profile, user.id, sources);
+  const collecting = collectionPending(collectionSources);
+  const needsPreparation = !profile.bootstrapped_at || Boolean(profile.rematch_requested_at) || collecting;
+  const pending = profile.enabled && needsPreparation;
+  const retryCollection = profile.enabled && collectionSources?.some((source) => source.collectionState === "failed" || source.collectionState === "unknown");
   const count = (counts?.[0] ?? {}) as Record<string, number>;
   // §33: the free plan's visible results. Not enforced (the pilot): all of
   // them, and the database records plan_limit_hit. Enforced: capped.
@@ -88,61 +96,62 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 space-y-1">
-          <h1 className="type-heading flex items-center gap-2 text-[28px] leading-tight">
+      {!pending && retryCollection ? <AutoRefresh every={10_000} /> : null}
+      <header className="space-y-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <h1 className="type-heading flex min-w-0 max-w-full items-center gap-2 text-[28px] leading-tight">
             <span className="truncate">{profile.name}</span>
             {!profile.enabled ? <Badge variant="secondary">Pausada</Badge> : null}
           </h1>
-          <ul aria-label="Filtros" className="flex flex-wrap gap-1.5">
-            {[describeVehicle(filters), ...filterParts(filters, profile.radius_km)].filter(Boolean).map((part) => (
-              <li key={part} className="rounded bg-muted px-2 py-0.5 text-[13px] text-muted-foreground [font-stretch:92%]">
-                {part}
-              </li>
-            ))}
-          </ul>
+          <div className="flex flex-wrap items-center gap-2">
+            <FrequencySelect id={profile.id} value={profile.notification_frequency} dailyOnly={Boolean((planLimits as PlanLimits | null)?.enforced && (planLimits as PlanLimits | null)?.plan === "free")} />
+            <PauseButton id={profile.id} enabled={profile.enabled} />
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/app/searches/${profile.id}/edit`}>
+                <Pencil aria-hidden /> Editar
+              </Link>
+            </Button>
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <FrequencySelect id={profile.id} value={profile.notification_frequency} dailyOnly={Boolean((planLimits as PlanLimits | null)?.enforced && (planLimits as PlanLimits | null)?.plan === "free")} />
-          <PauseButton id={profile.id} enabled={profile.enabled} />
-          <Button asChild variant="outline" size="sm">
-            <Link href={`/app/searches/${profile.id}/edit`}>
-              <Pencil aria-hidden /> Editar
-            </Link>
-          </Button>
-        </div>
-      </div>
+        <SearchCriteriaSummary
+          name={profile.name}
+          filters={filters}
+          preferences={(profile.preferences ?? {}) as Preferences}
+          radiusKm={profile.radius_km}
+          hasLocation={profile.origin_lat != null && profile.origin_lon != null}
+          sources={collectionSources}
+        />
+      </header>
 
       {pending ? (
-        <div
-          role="status"
-          className="flex items-center gap-2.5 rounded-lg bg-muted p-4 text-sm"
-        >
-          <Loader2 className="size-4 shrink-0 animate-spin motion-reduce:animate-none" aria-hidden />
-          Estamos buscando coincidencias entre las publicaciones de los últimos 30 días. Aparecen acá en unos minutos.
-          <AutoRefresh />
-        </div>
+        <SearchPreparation />
+      ) : needsPreparation ? (
+        <p role="status" className="rounded-lg border bg-muted p-5 text-sm">
+          Reanudá la búsqueda para preparar {profile.bootstrapped_at ? "los resultados con tus nuevos filtros" : "tus primeros resultados"}.
+        </p>
       ) : null}
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <nav aria-label="Filtros" className="-mx-4 flex gap-1 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-          {(Object.keys(FILTERS) as Filter[]).map((f) => (
-            <Link
-              key={f}
-              href={href({ f, p: 1 })}
-              aria-current={f === filter ? "page" : undefined}
-              className={cn(
-                "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-sm ring-1 ring-border",
-                f === filter ? "bg-primary font-semibold text-primary-foreground ring-primary" : "bg-background hover:bg-muted",
-              )}
-            >
-              {FILTERS[f]}
-              <span className="tabular-nums opacity-70">{count[COUNT_KEY[f]] ?? 0}</span>
-            </Link>
-          ))}
-        </nav>
-        <SortSelect value={sort} />
-      </div>
+      {!needsPreparation || shown.length > 0 ? (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <nav aria-label="Filtros" data-testid="result-filters" className="-mx-4 flex gap-1 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+            {(Object.keys(FILTERS) as Filter[]).map((f) => (
+              <Link
+                key={f}
+                href={href({ f, p: 1 })}
+                aria-current={f === filter ? "page" : undefined}
+                className={cn(
+                  "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-sm ring-1 ring-border",
+                  f === filter ? "bg-primary font-semibold text-primary-foreground ring-primary" : "bg-background hover:bg-muted",
+                )}
+              >
+                {FILTERS[f]}
+                <span className="tabular-nums opacity-70">{count[COUNT_KEY[f]] ?? 0}</span>
+              </Link>
+            ))}
+          </nav>
+          <SortSelect value={sort} />
+        </div>
+      ) : null}
 
       {shown.length ? (
         <div className={LISTING_ROWS} data-testid="results">
@@ -150,9 +159,9 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
             <ListingCard key={card.listing_id} card={card} />
           ))}
         </div>
-      ) : (
+      ) : needsPreparation ? null : (
         <p className="rounded-lg bg-muted p-8 text-center text-sm text-muted-foreground">
-          {pending ? "Buscando…" : EMPTY[filter]}
+          {EMPTY[filter]}
         </p>
       )}
 

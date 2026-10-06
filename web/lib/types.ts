@@ -47,6 +47,7 @@ export type Filters = {
 export type Preferences = {
   km_target?: number;
   price_target?: number;
+  price_target_currency?: "USD" | "ARS";
   seller_type?: "private" | "dealer";
   preferred_trims?: string[];
   colors?: string[];
