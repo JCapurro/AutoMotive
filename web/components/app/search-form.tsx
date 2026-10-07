@@ -274,7 +274,6 @@ export function SearchForm({
       return;
     }
     // Keep an available zone after a failed refresh; never widen the search silently.
-    setDraft((prev) => prev.place === "current" && !prev.current ? { ...prev, place: "city" } : prev);
     if (!requestPermission && d.current && (result.reason === "permission" || result.reason === "denied")) return;
     const notices = {
       permission: "Podés usar la zona aproximada o permitir la ubicación del dispositivo para ajustarla.",
@@ -282,7 +281,7 @@ export function SearchForm({
       timeout: "La ubicación del dispositivo está tardando. Conservamos la zona disponible; también podés elegir otra ciudad.",
       unavailable: "No pudimos leer la ubicación del dispositivo. Conservamos la zona disponible; también podés elegir otra ciudad.",
     };
-    setLocationNotice(d.current ? notices[result.reason] : "No pudimos detectar tu zona. Elegí provincia y ciudad o usá la ubicación del dispositivo.");
+    setLocationNotice(d.current ? notices[result.reason] : "No pudimos detectar tu zona. Elegí Ubicación manual o usá la ubicación del dispositivo.");
   }
 
   useEffect(() => {
@@ -559,14 +558,22 @@ export function SearchForm({
             <CardDescription>Las publicaciones sin ubicación no se descartan: se muestran como «no informado».</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
-            <Field id={fid("place")} label="Buscar cerca de" error={fieldError("location")} className="sm:col-span-2">
-              <NativeSelect id={fid("place")} value={d.place} onChange={(e) => choosePlace(e.target.value)} className="w-full">
-                <NativeSelectOption value="current">{d.current?.label ?? "Detectar mi ubicación"}</NativeSelectOption>
-                <NativeSelectOption value="city">Otra ubicación</NativeSelectOption>
-                <NativeSelectOption value="">Todo el país</NativeSelectOption>
-                {d.saved ? <NativeSelectOption value="saved">{d.saved.label} (guardada)</NativeSelectOption> : null}
-              </NativeSelect>
-            </Field>
+            <fieldset className="space-y-2 sm:col-span-2">
+              <legend className="text-sm font-medium">Buscar cerca de</legend>
+              <Segmented
+                name={fid("place")}
+                value={d.place}
+                onChange={choosePlace}
+                variant="chips"
+                options={[
+                  { value: "current", label: "Mi ubicación actual" },
+                  { value: "city", label: "Ubicación manual" },
+                  { value: "", label: "Todo el país" },
+                  ...(d.saved ? [{ value: "saved", label: "Ubicación guardada" }] : []),
+                ]}
+              />
+              {fieldError("location")}
+            </fieldset>
             {d.place === "city" ? (
               <>
                 <Field id={fid("province")} label="Provincia">
@@ -579,13 +586,13 @@ export function SearchForm({
                     {PROVINCES.map((p) => <NativeSelectOption key={p.id} value={p.id}>{p.label}</NativeSelectOption>)}
                   </NativeSelect>
                 </Field>
-                <Field id={fid("city")} label="Ciudad">
+                <Field id={fid("city")} label="Localidad">
                   <NativeSelect id={fid("city")} value={d.city} onChange={(e) => {
                     placeTouched.current = true;
                     setErrors({});
                     set("city", e.target.value);
                   }} className="w-full" disabled={!d.province} required>
-                    <NativeSelectOption value="">{d.province ? "Elegí una ciudad" : "Primero elegí la provincia"}</NativeSelectOption>
+                    <NativeSelectOption value="">{d.province ? "Elegí una localidad" : "Primero elegí la provincia"}</NativeSelectOption>
                     {cities.map((city) => <NativeSelectOption key={city.id} value={city.id}>
                       {city.city}{(cityNames.get(city.city) ?? 0) > 1 ? ` (${city.department})` : ""}
                     </NativeSelectOption>)}
@@ -608,8 +615,11 @@ export function SearchForm({
                     : "Usá la ubicación del dispositivo o elegí una ciudad."}
               </p>
             ) : null}
+            {d.place === "saved" && d.saved ? (
+              <p className="text-xs text-muted-foreground sm:col-span-2">{d.saved.label}. Usamos la ubicación guardada en esta búsqueda.</p>
+            ) : null}
             {locationNotice ? <p role="status" className="text-xs text-muted-foreground sm:col-span-2">{locationNotice}</p> : null}
-            {d.place === "current" || d.place === "city" ? (
+            {d.place === "current" ? (
               <Button type="button" variant="outline" size="sm" disabled={locating} onClick={() => {
                 placeTouched.current = true;
                 set("place", "current");
@@ -742,20 +752,27 @@ function Segmented({
   value,
   onChange,
   options,
+  variant = "segmented",
 }: {
   name: string;
   value: string;
   onChange: (value: string) => void;
   options: { value: string; label: string }[];
+  variant?: "segmented" | "chips";
 }) {
   return (
-    <div className="inline-flex rounded-lg bg-muted p-0.5">
+    <div className={variant === "chips" ? "flex flex-wrap gap-2" : "inline-flex rounded-lg bg-muted p-0.5"}>
       {options.map((o) => (
         <label
           key={o.value || "any"}
           className={cn(
-            "cursor-pointer rounded-md px-3 py-1.5 text-sm text-muted-foreground has-focus-visible:ring-2 has-focus-visible:ring-ring",
-            value === o.value && "bg-background font-medium text-foreground shadow-sm",
+            "cursor-pointer px-3 py-1.5 text-sm has-focus-visible:ring-2 has-focus-visible:ring-ring",
+            variant === "chips"
+              ? "rounded-full border border-border text-muted-foreground hover:bg-muted"
+              : "rounded-md text-muted-foreground",
+            value === o.value && (variant === "chips"
+              ? "border-primary bg-primary font-medium text-primary-foreground hover:bg-primary"
+              : "bg-background font-medium text-foreground shadow-sm"),
           )}
         >
           <input
