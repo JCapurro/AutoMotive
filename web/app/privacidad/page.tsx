@@ -11,7 +11,7 @@ export const metadata: Metadata = { title: "Política de privacidad" };
 // before a public launch.
 export default function PrivacyPage() {
   return (
-    <LegalPage title="Política de privacidad" updated="5 de octubre de 2026">
+    <LegalPage title="Política de privacidad" updated="7 de octubre de 2026">
       <p>
         Ese Auto es un servicio en etapa de piloto que monitorea publicaciones de autos usados y te avisa cuando
         aparece una que coincide con tu búsqueda. Esta política explica qué datos tuyos usamos, para qué y cómo
@@ -26,8 +26,10 @@ export default function PrivacyPage() {
         </li>
         <li>
           <strong>Tus búsquedas</strong>: vehículo, filtros, preferencias y un punto de referencia para el radio de
-          búsqueda: una zona o ciudad que elijas o, si nos das permiso, la ubicación de tu dispositivo al crear la
-          búsqueda, redondeada a alrededor de 1 km. No seguimos tu ubicación después.
+          búsqueda: una zona o ciudad que elijas, una zona aproximada estimada a partir de tu conexión por nuestro
+          proveedor de alojamiento (Vercel), o, si nos das permiso, la ubicación de tu dispositivo al crear la
+          búsqueda. Podés cambiar la zona antes de guardar. Las coordenadas del dispositivo y de la zona aproximada
+          se redondean a alrededor de 1 km. No guardamos tu dirección IP para obtener esta zona ni seguimos tu ubicación después.
         </li>
         <li>
           <strong>Cómo usás el servicio</strong>: publicaciones que abrís, guardás o descartás (y el motivo), estados

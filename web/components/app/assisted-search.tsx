@@ -24,6 +24,7 @@ import {
 } from "@/lib/assisted";
 import type { Catalog } from "@/lib/catalog";
 import type { SearchValues } from "@/lib/search-form";
+import type { DetectedLocation } from "@/lib/search-location";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
@@ -66,11 +67,13 @@ export function AssistedSearch({
   sources,
   base,
   initialText = "",
+  approximateLocation = null,
 }: {
   catalog: Catalog;
   sources: Source[];
   base: SearchValues;
   initialText?: string;
+  approximateLocation?: DetectedLocation | null;
 }) {
   const [text, setText] = useState(initialText);
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
@@ -308,6 +311,7 @@ export function AssistedSearch({
                   sources={sources}
                   initial={d.values}
                   profileId={null}
+                  approximateLocation={approximateLocation}
                   idPrefix={single ? undefined : `draft-${i}`}
                   notes={d.notes}
                   origin={{ mode: "assisted", jobId: phase.jobId, stay: !single }}
@@ -344,6 +348,7 @@ export function AssistedSearch({
           sources={sources}
           initial={base}
           profileId={null}
+          approximateLocation={approximateLocation}
           origin={{ mode: "assisted_fallback", jobId: phase.jobId, stay: false }}
         />
       </div>

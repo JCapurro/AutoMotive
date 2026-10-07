@@ -1,5 +1,6 @@
 import { Sparkles } from "lucide-react";
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 
 import { AssistedSearch } from "@/components/app/assisted-search";
 import { SearchForm } from "@/components/app/search-form";
@@ -7,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { requireUser } from "@/lib/auth";
 import type { SearchValues } from "@/lib/search-form";
 import { searchIntentPrompt } from "@/lib/search-intent";
+import { approximateLocationFromHeaders } from "@/lib/search-location";
 import { createClient } from "@/lib/supabase/server";
 
 import { loadFormData } from "../form-data";
@@ -15,6 +17,7 @@ export const metadata: Metadata = { title: "Nueva búsqueda" };
 
 export default async function NewSearchPage({ searchParams }: PageProps<"/app/searches/new">) {
   await requireUser();
+  const approximateLocation = approximateLocationFromHeaders(await headers());
   const prompt = searchIntentPrompt((await searchParams).prompt);
   const supabase = await createClient();
   const { catalog, sources, defaultFrequency } = await loadFormData(supabase);
@@ -61,10 +64,11 @@ export default async function NewSearchPage({ searchParams }: PageProps<"/app/se
             sources={sources}
             initial={initial}
             profileId={null}
+            approximateLocation={approximateLocation}
           />
         </TabsContent>
         <TabsContent value="assisted" forceMount className="pt-3 data-[state=inactive]:hidden">
-          <AssistedSearch catalog={catalog} sources={sources} base={initial} initialText={prompt} />
+          <AssistedSearch catalog={catalog} sources={sources} base={initial} initialText={prompt} approximateLocation={approximateLocation} />
         </TabsContent>
       </Tabs>
     </div>

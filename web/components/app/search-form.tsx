@@ -18,6 +18,7 @@ import { PROVINCES, citiesInProvince, cityById, cityByLocation } from "@/lib/arg
 import { type SearchInput, type SearchValues, defaultName, selectedTrims } from "@/lib/search-form";
 import { cn } from "@/lib/utils";
 import { analyticsEvent } from "@/lib/google-analytics";
+import { detectDeviceLocation, type DetectedLocation } from "@/lib/search-location";
 
 type Source = { id: string; name: string };
 
@@ -41,7 +42,7 @@ type Draft = {
   province: string;
   city: string;
   radius: string;
-  current: { label: string; lat: number; lon: number } | null;
+  current: DetectedLocation | null;
   saved: { label: string; lat: number; lon: number } | null;
   km_target: string;
   price_target: string;
@@ -56,8 +57,8 @@ function amount(text: string): number | null {
   return digits ? Number(digits) : null;
 }
 
-/** A new search without a zone starts at the device's location (asked on mount). */
-function draftFrom(v: SearchValues, isNew: boolean): Draft {
+/** A new search starts with an approximate zone, refined silently if permission exists. */
+function draftFrom(v: SearchValues, isNew: boolean, approximateLocation: DetectedLocation | null = null): Draft {
   let place = isNew ? "current" : "";
   let saved: Draft["saved"] = null;
   let province = "";
@@ -93,7 +94,7 @@ function draftFrom(v: SearchValues, isNew: boolean): Draft {
     province,
     city,
     radius: v.location ? String(v.location.radius_km) : isNew ? "30" : "",
-    current: null,
+    current: isNew ? approximateLocation : null,
     saved,
     km_target: v.km_target != null ? number(v.km_target) : "",
     price_target: v.price_target != null ? number(v.price_target) : "",
@@ -106,7 +107,10 @@ function draftFrom(v: SearchValues, isNew: boolean): Draft {
 function location(d: Draft): SearchInput["location"] {
   const radius = Number(d.radius.replace(",", "."));
   const radius_km = radius;
-  if (d.place === "current" && d.current) return { ...d.current, radius_km };
+  if (d.place === "current" && d.current) {
+    const { label, lat, lon } = d.current;
+    return { label, lat, lon, radius_km };
+  }
   if (d.place === "saved" && d.saved) return { ...d.saved, radius_km };
   if (d.place === "city") {
     const city = cityById(d.city);
@@ -151,6 +155,7 @@ export function SearchForm({
   notes,
   origin,
   onSaved,
+  approximateLocation = null,
 }: {
   catalog: Catalog;
   sources: Source[];
@@ -163,10 +168,11 @@ export function SearchForm({
   origin?: Omit<SaveOrigin, "edited">;
   /** With origin.stay: the new search's id, instead of navigating to it. */
   onSaved?: (id: number) => void;
+  approximateLocation?: DetectedLocation | null;
 }) {
   const fid = (key: string) => (idPrefix ? `${idPrefix}-${key}` : key);
   const isNew = profileId == null && !initial.location;
-  const [d, setDraft] = useState<Draft>(() => draftFrom(initial, isNew));
+  const [d, setDraft] = useState<Draft>(() => draftFrom(initial, isNew, approximateLocation));
   const [versionText, setVersionText] = useState("");
   // The proposal as it arrived, to record whether the user corrected it.
   const [pristine] = useState(() => JSON.stringify(toInput(draftFrom(initial, isNew))));
@@ -179,6 +185,7 @@ export function SearchForm({
   const [preview, setPreview] = useState<{ key: string; data: Preview | null } | null>(null);
   const [previewing, startPreview] = useTransition();
   const [locating, setLocating] = useState(false);
+  const [locationNotice, setLocationNotice] = useState("");
 
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft((prev) => ({ ...prev, [key]: value }));
 
@@ -244,51 +251,42 @@ export function SearchForm({
     placeTouched.current = true;
     locationRequest.current += 1;
     setLocating(false);
+    setLocationNotice("");
     setErrors({});
     setDraft((prev) => ({
       ...prev,
       place,
       radius: prev.radius || "30",
     }));
-    if (place === "current" && !d.current) locate();
+    if (place === "current" && !d.current) void locate(true);
   }
 
-  function locate() {
+  async function locate(requestPermission = false) {
     const request = ++locationRequest.current;
-    const failed = () => {
-      if (request !== locationRequest.current) return;
-      setLocating(false);
-      // Only fall back if the user is still waiting on "current": they may have picked a zone meanwhile.
-      setDraft((prev) => (prev.place === "current" ? { ...prev, place: prev.current ? "current" : "city" } : prev));
-      setErrors({ fields: { location: "No pudimos leer tu ubicación. Elegí provincia y ciudad, o volvé a intentarlo." } });
-    };
-    if (!("geolocation" in navigator)) return failed();
+    setLocationNotice("");
+    setErrors((prev) => ({ ...prev, fields: { ...prev.fields, location: "" } }));
     setLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        if (request !== locationRequest.current) return;
-        // ~1 km is plenty for a radius filter and avoids storing an exact address.
-        const round = (n: number) => Math.round(n * 100) / 100;
-        const lat = round(pos.coords.latitude);
-        const lon = round(pos.coords.longitude);
-        setDraft((prev) =>
-          prev.place === "current"
-            ? {
-                ...prev,
-                current: { label: "Mi ubicación actual", lat, lon },
-                radius: prev.radius || "30",
-              }
-            : prev,
-        );
-        setLocating(false);
-      },
-      failed,
-      { enableHighAccuracy: false, timeout: 10_000 },
-    );
+    const result = await detectDeviceLocation(requestPermission);
+    if (request !== locationRequest.current) return;
+    setLocating(false);
+    if (result.location) {
+      setDraft((prev) => prev.place === "current" ? { ...prev, current: result.location, radius: prev.radius || "30" } : prev);
+      return;
+    }
+    // Keep an available zone after a failed refresh; never widen the search silently.
+    setDraft((prev) => prev.place === "current" && !prev.current ? { ...prev, place: "city" } : prev);
+    if (!requestPermission && d.current && (result.reason === "permission" || result.reason === "denied")) return;
+    const notices = {
+      permission: "Podés usar la zona aproximada o permitir la ubicación del dispositivo para ajustarla.",
+      denied: "El navegador bloqueó la ubicación del dispositivo. Podés continuar con la zona aproximada o elegir otra ciudad.",
+      timeout: "La ubicación del dispositivo está tardando. Conservamos la zona disponible; también podés elegir otra ciudad.",
+      unavailable: "No pudimos leer la ubicación del dispositivo. Conservamos la zona disponible; también podés elegir otra ciudad.",
+    };
+    setLocationNotice(d.current ? notices[result.reason] : "No pudimos detectar tu zona. Elegí provincia y ciudad o usá la ubicación del dispositivo.");
   }
 
   useEffect(() => {
-    if (isNew && d.place === "current") locate();
+    if (isNew && d.place === "current") void locate();
     return () => { locationRequest.current += 1; };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once, when a new search opens
   }, []);
@@ -307,6 +305,8 @@ export function SearchForm({
       setErrors({ fields: { location: "Elegí provincia y ciudad o permití el acceso a tu ubicación." } });
       return;
     }
+    locationRequest.current += 1;
+    setLocating(false);
     startSaving(async () => {
       const result = await saveSearch(
         profileId,
@@ -561,7 +561,7 @@ export function SearchForm({
           <CardContent className="grid gap-4 sm:grid-cols-2">
             <Field id={fid("place")} label="Buscar cerca de" error={fieldError("location")} className="sm:col-span-2">
               <NativeSelect id={fid("place")} value={d.place} onChange={(e) => choosePlace(e.target.value)} className="w-full">
-                <NativeSelectOption value="current">Mi ubicación actual</NativeSelectOption>
+                <NativeSelectOption value="current">{d.current?.label ?? "Detectar mi ubicación"}</NativeSelectOption>
                 <NativeSelectOption value="city">Otra ubicación</NativeSelectOption>
                 <NativeSelectOption value="">Todo el país</NativeSelectOption>
                 {d.saved ? <NativeSelectOption value="saved">{d.saved.label} (guardada)</NativeSelectOption> : null}
@@ -599,16 +599,25 @@ export function SearchForm({
               </Field>
             ) : null}
             {d.place === "current" ? (
-              <p className="flex items-center gap-1.5 text-xs text-muted-foreground sm:col-span-2">
+              <p role="status" className="flex items-center gap-1.5 text-xs text-muted-foreground sm:col-span-2">
                 <LocateFixed className="size-3.5" aria-hidden />
                 {locating
-                  ? "Leyendo tu ubicación…"
+                  ? d.current ? "Podés continuar con esta zona mientras ajustamos la ubicación…" : "Buscando tu ubicación… Si hay un fallo temporal, reintentamos automáticamente."
                   : d.current
-                    ? "Ubicación detectada. Usamos este punto como centro del radio."
-                    : "Permití el acceso a tu ubicación."}
+                    ? d.current.approximate ? `Zona aproximada por tu conexión: ${d.current.label}. Podés cambiarla si no coincide.` : "Ubicación detectada. Usamos este punto como centro del radio."
+                    : "Usá la ubicación del dispositivo o elegí una ciudad."}
               </p>
             ) : null}
-            {d.place === "current" && !locating ? <Button type="button" variant="outline" size="sm" onClick={locate}>Actualizar mi ubicación</Button> : null}
+            {locationNotice ? <p role="status" className="text-xs text-muted-foreground sm:col-span-2">{locationNotice}</p> : null}
+            {d.place === "current" || d.place === "city" ? (
+              <Button type="button" variant="outline" size="sm" disabled={locating} onClick={() => {
+                placeTouched.current = true;
+                set("place", "current");
+                void locate(true);
+              }}>
+                <LocateFixed aria-hidden /> {d.current && !d.current.approximate ? "Actualizar mi ubicación" : "Usar ubicación del dispositivo"}
+              </Button>
+            ) : null}
           </CardContent>
         </Card>
 
@@ -687,7 +696,7 @@ export function SearchForm({
             {errors.error}
           </p>
         ) : null}
-        <Button type="submit" className="h-11 w-full text-base" disabled={saving || locating}>
+        <Button type="submit" className="h-11 w-full text-base" disabled={saving || (locating && !locationReady)}>
           {saving ? <Loader2 className="animate-spin" aria-hidden /> : null}
           {profileId ? "Guardar cambios" : "Crear búsqueda"}
         </Button>
