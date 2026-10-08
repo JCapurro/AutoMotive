@@ -9,13 +9,14 @@ import asyncio
 import logging
 import random
 import re
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urljoin
 
 from bs4 import BeautifulSoup
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 
 import config
-from .base import BaseScraper, CollectorBlocked, Listing, ListingDetail
+from .base import BaseScraper, CollectorBlocked, Listing, ListingDetail, SearchResults
+from ._recency import PublicationWindow
 from ._mercadolibre_browser import mercadolibre_context, shutdown as mercadolibre_shutdown
 from ._dates import publication_date
 from ._http import Page, dedupe, json_ld_of_type, multiline_text, soup, text_of, to_int
@@ -203,6 +204,26 @@ def parse_search(html: str) -> list[Listing]:
     return list(out.values())
 
 
+def _search_link(html: str, current_url: str, *, today: bool = False) -> str | None:
+    """Follow the site's date/pagination links without inventing filter suffixes."""
+    doc = soup(html)
+    if today:
+        anchors = [a for a in doc.select("a[href]")
+                   if _plain(a.get_text(" ", strip=True)).startswith("publicados hoy")]
+    else:
+        anchors = doc.select(".andes-pagination__button--next a[href], a[rel='next']")
+    for a in anchors:
+        if a.get("aria-disabled") == "true" or a.find_parent(attrs={"aria-disabled": "true"}):
+            continue
+        url = urljoin(current_url, a.get("href", ""))
+        parts = urlsplit(url)
+        if (parts.scheme == "https" and parts.hostname in {
+                "listado.mercadolibre.com.ar", "autos.mercadolibre.com.ar", "vehiculos.mercadolibre.com.ar"}
+                and url != current_url):
+            return url
+    return None
+
+
 # ---------- detail page ----------
 
 _GONE_TEXTS = ("publicacion pausada", "publicacion finalizada", "esta publicacion esta pausada",
@@ -311,6 +332,8 @@ class MercadoLibreScraper(BaseScraper):
     MAX_PAGES = 2  # first 96 results per run is plenty for "newest" sort
 
     async def search(self, filters: dict) -> list[Listing]:
+        if window := PublicationWindow.from_filters(filters):
+            return await self._search_recent(filters, window)
         out: list[Listing] = []
         seen_ids: set[str] = set()
         async with mercadolibre_context() as ctx:
@@ -359,6 +382,105 @@ class MercadoLibreScraper(BaseScraper):
             finally:
                 await page.close()
         return out
+
+    async def _publication_date(self, ctx, listing: Listing) -> int | None:
+        """Cards often omit dates: read the ad instead of using detection time."""
+        page = await ctx.new_page()
+        try:
+            response = await page.goto(listing.url, timeout=45_000, wait_until="domcontentloaded")
+            status = response.status if response else 0
+            if reason := await _page_wall_reason(page):
+                raise CollectorBlocked(f"mercadolibre date: {reason}")
+            if status >= 400 and status != 404:
+                raise RuntimeError(f"mercadolibre date HTTP {status}")
+            if status != 404:
+                try:
+                    await page.wait_for_selector(".ui-pdp-container, h1.ui-pdp-title", timeout=8_000)
+                except PlaywrightTimeoutError:
+                    pass
+            if reason := await _page_wall_reason(page):
+                raise CollectorBlocked(f"mercadolibre date: {reason}")
+            detail = parse_detail(await page.content(), listing.url, status)
+            return detail.listing.published_at if detail.listing else None
+        finally:
+            await page.close()
+
+    async def _search_recent(self, filters: dict, window: PublicationWindow) -> SearchResults:
+        results = SearchResults()
+        seen: set[str] = set()
+        visited: set[str] = set()
+        known = filters.get("known_publication_dates") or {}
+        async with mercadolibre_context() as ctx:
+            page = await ctx.new_page()
+            url = _build_url(filters)
+            today_checked = not window.today_only
+            pages = 0
+            try:
+                while True:
+                    if url in visited:
+                        results.complete, results.reason = False, "mercadolibre: pagination repeated a page"
+                        break
+                    visited.add(url)
+                    if pages:
+                        await _page_pause()
+                    response = await page.goto(url, timeout=45_000, wait_until="domcontentloaded")
+                    status = response.status if response else 0
+                    if reason := await _page_wall_reason(page):
+                        raise CollectorBlocked(f"mercadolibre search: {reason}")
+                    if status >= 400:
+                        raise RuntimeError(f"mercadolibre search HTTP {status}")
+                    await page.wait_for_selector("li.ui-search-layout__item, .ui-search-rescue", timeout=15_000)
+                    html = await page.content()
+                    if not today_checked:
+                        today_checked = True
+                        if today_url := _search_link(html, page.url, today=True):
+                            url = today_url
+                            continue
+                        log.warning("MercadoLibre has no Publicados hoy link; verifying dates on unfiltered results")
+                    if soup(html).select_one(".ui-search-rescue") is not None:
+                        break
+                    cards = parse_search(html)
+                    if not cards:
+                        raise ValueError("mercadolibre: result cards exist but none could be parsed")
+                    pages += 1
+                    for listing in cards:
+                        if listing.listing_id in seen:
+                            continue
+                        seen.add(listing.listing_id)
+                        self.annotate_partial_price(listing)
+                        if not self.matches_filters(listing, filters):
+                            continue
+                        if listing.published_at is None:
+                            listing.published_at = known.get(listing.listing_id)
+                        if listing.published_at is None:
+                            await asyncio.sleep(config.RECENT_ML_DETAIL_SECONDS)
+                            try:
+                                listing.published_at = await self._publication_date(ctx, listing)
+                            except CollectorBlocked:
+                                raise
+                            except Exception as exc:
+                                results.complete, results.reason = False, f"mercadolibre date fetch failed: {type(exc).__name__}"
+                                log.warning("Could not read publication date for %s: %s", listing.listing_id, exc)
+                        if listing.published_at is None:
+                            results.unknown_dates += 1
+                        elif window.contains(listing):
+                            results.append(listing)
+                    next_url = _search_link(html, page.url)
+                    if not next_url:
+                        break
+                    if pages >= config.RECENT_ML_MAX_PAGES:
+                        results.complete, results.reason = False, "mercadolibre: publication scan page limit reached"
+                        break
+                    url = next_url
+            except Exception as exc:
+                if not seen:
+                    raise
+                results.complete, results.reason = False, f"mercadolibre: {type(exc).__name__}: {exc}"
+            finally:
+                await page.close()
+        log.info("mercadolibre publication window: pages=%d kept=%d unknown_dates=%d complete=%s reason=%s",
+                 pages, len(results), results.unknown_dates, results.complete, results.reason)
+        return results
 
     parse_detail = staticmethod(parse_detail)
 

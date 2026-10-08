@@ -154,8 +154,12 @@ async def main() -> None:
 
     await db.open_pool()   # geocode cache for the radius filter
     scraper = REGISTRY[src]()
+    complete, reason, unknown_dates = True, None, 0
     try:
         results = await run_collector(scraper.search(filters))
+        complete = getattr(results, "complete", True)
+        reason = getattr(results, "reason", None)
+        unknown_dates = getattr(results, "unknown_dates", 0)
         results = await filter_listings_by_radius(results, filters)
     except Exception as e:
         print(f"❌ scraper falló: {type(e).__name__}: {e}")
@@ -164,20 +168,31 @@ async def main() -> None:
         await run_collector(browser_shutdown())
         await db.close_pool()
 
-    print(f"✅ {len(results)} resultados\n")
+    if complete:
+        print(f"✅ {len(results)} resultados\n")
+    else:
+        print(f"⚠ {len(results)} resultados; recorrido incompleto: {reason}\n")
+    if unknown_dates:
+        print(f"{unknown_dates} avisos excluidos por fecha de publicación desconocida\n")
     if not results:
+        if not complete:
+            sys.exit(2)
         return
 
-    print(_fmt("ID", 14), _fmt("PRECIO", 14), _fmt("AÑO", 5),
+    print(_fmt("ID", 14), _fmt("PUBLICADO", 20), _fmt("PRECIO", 14), _fmt("AÑO", 5),
           _fmt("KM", 10), _fmt("UBIC", 18), _fmt("TÍTULO", 60))
     print("-" * 125)
     for r in results[:30]:
         precio = f"{r.moneda or ''} {int(r.precio):,}".replace(",", ".") if r.precio else "-"
         km = f"{r.km:,}".replace(",", ".") if r.km else "-"
-        print(_fmt(r.listing_id, 14), _fmt(precio, 14), _fmt(r.anio, 5),
+        published = (datetime.fromtimestamp(r.published_at, timezone.utc).isoformat()
+                     if r.published_at is not None else "desconocida")
+        print(_fmt(r.listing_id, 14), _fmt(published, 20), _fmt(precio, 14), _fmt(r.anio, 5),
               _fmt(km, 10), _fmt(r.ubicacion, 18), _fmt(r.titulo, 60))
 
     print("\nPrimera URL:", results[0].url)
+    if not complete:
+        sys.exit(2)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
 """crawl_targets and the source cadence they run on (sección 5.1)."""
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Iterable
 
 from psycopg.types.json import Jsonb
@@ -18,7 +19,8 @@ async def enabled_sources() -> dict[str, dict[str, Any]]:
 
 async def sync_targets(specs: Iterable[Any]) -> None:
     """Make crawl_targets mirror `specs` (pipeline.crawl.TargetSpec): upsert the
-    wanted ones (a reactivated target keeps first_run_done) and deactivate the rest."""
+    wanted ones and deactivate the rest. Adopting a new publication policy resets
+    bootstrap once; ordinary query edits/reactivations keep first_run_done."""
     specs = list(specs)
     async with connection() as cx:
         await cx.execute("CREATE TEMP TABLE wanted (source text, make text, model text, query jsonb) "
@@ -32,11 +34,28 @@ async def sync_targets(specs: Iterable[Any]) -> None:
             "INSERT INTO crawl_targets (source, make, model, query, active) "
             "SELECT source, make, model, query, true FROM wanted "
             "ON CONFLICT (source, make, model) DO UPDATE SET query = excluded.query, active = true "
+            " , first_run_done = CASE WHEN excluded.query ? 'publication_policy' AND "
+            "     crawl_targets.query->'publication_policy' IS DISTINCT FROM excluded.query->'publication_policy' "
+            "     THEN false ELSE crawl_targets.first_run_done END "
+            " , next_run_at = CASE WHEN excluded.query ? 'publication_policy' AND "
+            "     crawl_targets.query->'publication_policy' IS DISTINCT FROM excluded.query->'publication_policy' "
+            "     THEN NULL ELSE crawl_targets.next_run_at END "
             " WHERE crawl_targets.query IS DISTINCT FROM excluded.query OR NOT crawl_targets.active")
         await cx.execute(
             "UPDATE crawl_targets t SET active = false WHERE active AND NOT EXISTS ("
             "  SELECT 1 FROM wanted w WHERE w.source = t.source "
             "     AND w.make IS NOT DISTINCT FROM t.make AND w.model IS NOT DISTINCT FROM t.model)")
+
+
+async def publication_dates(target: dict[str, Any]) -> dict[str, int]:
+    """Reuse stored publication dates, avoiding a detail request on every daily read."""
+    async with connection() as cx:
+        rows = await (await cx.execute(
+            "SELECT external_id, published_at FROM listings WHERE source = %s "
+            " AND lower(make) IS NOT DISTINCT FROM lower(%s) "
+            " AND (%s::text IS NULL OR lower(model) = lower(%s)) AND published_at IS NOT NULL",
+            (target["source"], target.get("make"), target.get("model"), target.get("model")))).fetchall()
+    return {r["external_id"]: int(r["published_at"].timestamp()) for r in rows}
 
 
 async def due_targets() -> list[dict[str, Any]]:
@@ -55,15 +74,16 @@ async def due_targets() -> list[dict[str, Any]]:
             " ORDER BY s.priority, t.next_run_at NULLS FIRST, t.id")).fetchall()
 
 
-async def finish_target(target_id: int, *, ok: bool, retry_seconds: int) -> None:
-    """next_run_at = now + the source's interval (sección 5.1). A failed run
-    retries after `retry_seconds` and doesn't count as the first run."""
+async def finish_target(target_id: int, *, ok: bool, retry_seconds: int,
+                        covered_until: datetime | None = None) -> None:
+    """Schedule from completion; keep coverage at the successful scan's start.
+    Failure retries without advancing bootstrap or the coverage checkpoint."""
     async with connection() as cx:
         if ok:
             await cx.execute(
-                "UPDATE crawl_targets t SET last_run_at = now(), first_run_done = true, "
+                "UPDATE crawl_targets t SET last_run_at = coalesce(%s::timestamptz, now()), first_run_done = true, "
                 "  next_run_at = now() + make_interval(secs => s.crawl_interval_seconds) "
-                "  FROM sources s WHERE s.id = t.source AND t.id = %s", (target_id,))
+                "  FROM sources s WHERE s.id = t.source AND t.id = %s", (covered_until, target_id))
         else:
             await cx.execute(
                 "UPDATE crawl_targets SET next_run_at = now() + make_interval(secs => %s) "

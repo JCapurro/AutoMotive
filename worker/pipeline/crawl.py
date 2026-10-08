@@ -9,8 +9,8 @@ Small catalogs/feeds opt into INVENTORY_TARGET: one unfiltered source target,
 without make/model hints, shared by every eligible profile that selects it.
 
 Sources run in parallel; the targets of one source run one after the other,
-with jitter. A target is due when now ≥ next_run_at = last_run_at +
-sources.crawl_interval_seconds.
+with jitter. The next run is scheduled after the source's interval. For recent
+publications, last_run_at records the successful scan's start to preserve coverage.
 """
 from __future__ import annotations
 
@@ -19,10 +19,12 @@ import logging
 import random
 import traceback
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable
 
 from collectors import REGISTRY, Listing
 from collectors._loop import run_collector
+from collectors._recency import POLICY_VERSION, SOURCES as RECENT_SOURCES, target_window
 from db.repos import runs, targets as targets_repo
 from db.repos.runs import SourceHealth
 from normalization.listing import Target
@@ -51,6 +53,8 @@ class TargetRun:
     items: list[Listing]
     result: IngestResult
     first_run: bool
+    complete: bool = True
+    covered_until: datetime | None = None
 
 
 BatchHandler = Callable[[TargetRun], Awaitable[None]]
@@ -101,6 +105,8 @@ def derive_targets(profiles: list[dict[str, Any]], sources: list[str]) -> list[T
             "year_max": _widest([f.get("year_max") for f in filters], max),
             "km_max": _widest([f.get("km_max") for f in filters], max),
         }
+        if key[0] in RECENT_SOURCES:
+            query["publication_policy"] = POLICY_VERSION
         # Facebook searches around a city: the oldest profile with a location picks it.
         located = next((m for m in sorted(members, key=lambda m: m["id"])
                         if m.get("origin_lat") is not None), None)
@@ -119,6 +125,7 @@ def scraper_filters(target: dict[str, Any]) -> dict[str, Any]:
                          "anio_min": q.get("year_min"), "anio_max": q.get("year_max"),
                          "km_max": q.get("km_max"),
                          "origin_lat": q.get("origin_lat"), "origin_lon": q.get("origin_lon")}
+    f.update(target_window(target))
     return {k: v for k, v in f.items() if v is not None}
 
 
@@ -130,7 +137,10 @@ async def run_target(target: dict[str, Any], on_health: HealthHandler | None = N
                 FAILURE_RETRY_SECONDS)
     try:
         scraper = REGISTRY[source]()
-        items = await run_collector(scraper.search(scraper_filters(target)))
+        filters = scraper_filters(target)
+        if source in RECENT_SOURCES:
+            filters["known_publication_dates"] = await targets_repo.publication_dates(target)
+        items = await run_collector(scraper.search(filters))
     except Exception as exc:
         log.warning("target=%s %s %s/%s failed: %s", target["id"], source, target.get("make"),
                     target.get("model"), exc)
@@ -147,13 +157,18 @@ async def run_target(target: dict[str, Any], on_health: HealthHandler | None = N
         await targets_repo.finish_target(target["id"], ok=False, retry_seconds=retry)
         await _report(on_health, health)
         return None
-    health = await runs.finish_run(run_id, ok=True, found=result.found, new=result.new,
-                                   updated=result.updated)
+    complete = getattr(items, "complete", True)
+    error = getattr(items, "reason", None) if not complete else None
+    health = await runs.finish_run(run_id, ok=complete, found=result.found, new=result.new,
+                                   updated=result.updated, error=error)
     await _report(on_health, health)
     log.info("target=%s %s %s/%s found=%d new=%d updated=%d events=%d", target["id"], source,
              target.get("make") or "*", target.get("model") or "*", result.found, result.new,
              result.updated, len(result.events))
-    return TargetRun(target, items, result, first_run=not target["first_run_done"])
+    covered_until = (datetime.fromtimestamp(filters["publication_until"], timezone.utc)
+                     if "publication_until" in filters else None)
+    return TargetRun(target, items, result, first_run=not target["first_run_done"],
+                     complete=complete, covered_until=covered_until)
 
 
 async def _report(on_health: HealthHandler | None, health: SourceHealth | None) -> None:
@@ -181,8 +196,15 @@ async def _run_source(targets: list[dict[str, Any]], on_batch: BatchHandler | No
                 await on_batch(run)
             except Exception:
                 await runs.log_error("notify", f"target:{target['id']}", traceback.format_exc())
+                await targets_repo.finish_target(target["id"], ok=False, retry_seconds=min(
+                    int(target.get("crawl_interval_seconds") or FAILURE_RETRY_SECONDS),
+                    FAILURE_RETRY_SECONDS))
+                continue
         # Only now is the first run over: its batch was handled as backfill.
-        await targets_repo.finish_target(target["id"], ok=True, retry_seconds=0)
+        await targets_repo.finish_target(target["id"], ok=run.complete,
+                                        retry_seconds=0 if run.complete else min(
+                                            int(target.get("crawl_interval_seconds") or FAILURE_RETRY_SECONDS),
+                                            FAILURE_RETRY_SECONDS), covered_until=run.covered_until)
 
 
 async def crawl_due(on_batch: BatchHandler | None = None, *, jitter_seconds: float = 5.0,

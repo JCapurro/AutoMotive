@@ -22,6 +22,11 @@ ALLOWED_USER_IDS = {
 TICK_INTERVAL_SECONDS = int(os.getenv("TICK_INTERVAL_SECONDS", "300"))
 # Pause between two targets of the same source (randomized in [x/2, x]).
 CRAWL_JITTER_SECONDS = float(os.getenv("CRAWL_JITTER_SECONDS", "8"))
+# Caps mark the scan incomplete rather than silently finishing a bootstrap.
+RECENT_ML_MAX_PAGES = max(1, int(os.getenv("RECENT_ML_MAX_PAGES", "100")))
+RECENT_FB_MAX_SCROLLS = max(1, int(os.getenv("RECENT_FB_MAX_SCROLLS", "200")))
+RECENT_ML_DETAIL_SECONDS = max(0, float(os.getenv("RECENT_ML_DETAIL_SECONDS", "8")))
+RECENT_FB_DETAIL_SECONDS = max(0, float(os.getenv("RECENT_FB_DETAIL_SECONDS", "30")))
 # Enrichment of matched listings (sección 5.5) and the watchlist refresher
 # (sección 5.6) wake up this often; each listing is checked at most daily.
 ENRICH_TICK_SECONDS = int(os.getenv("ENRICH_TICK_SECONDS", "300"))

@@ -45,7 +45,7 @@ docs/         PRD y plan técnico
 
 | Fuente | Tipo | Notas |
 |--------|------|-------|
-| **MercadoLibre** | Playwright web + sesión | Mayor volumen. Requiere `ml_state.json` si aparece verificación |
+| **MercadoLibre** | Chrome visible + perfil persistente | Mayor volumen. Conserva la sesión y la verificación en `.ml_chrome_profile` |
 | **Facebook Marketplace** | Headless browser + sesión | Particulares — donde aparecen las gangas. Requiere login una vez |
 | **V6** | Headless browser | Particulares + concesionarias, fotos directas |
 | **Kavak** | Headless browser | Inventario certificado, precios estables — buen anclaje para la mediana |
@@ -72,6 +72,12 @@ hace…»; el orden por recientes y el componente de antigüedad usan el mismo r
    Dos usuarios que buscan el mismo modelo comparten un solo scrapeo. Un target
    corre cuando vence su `next_run_at`; las fuentes van en paralelo y los
    targets de una fuente en serie, con jitter (`CRAWL_JITTER_SECONDS`).
+   Mercado Libre y Facebook cargan publicaciones de los **últimos 30 días**
+   inicialmente; luego buscan **publicadas hoy** (Mercado Libre, hora argentina)
+   o en las **últimas 24 horas** (Facebook). Una interrupción amplía la ventana
+   hasta el último recorrido completo, con tope de 30 días. Se verifica la fecha
+   informada por la fuente; los avisos sin fecha verificable se excluyen de estas
+   búsquedas. [Plan, configuración y validación](docs/RECENT_PUBLICATIONS.md).
 3. **Normalización v2**: marca/modelo/versión salen del título y los atributos
    contra `vehicle_catalog` (alias + `rapidfuzz`), no del filtro de búsqueda; si
    no se resuelven se usa el del target con `normalization_confidence` baja.
