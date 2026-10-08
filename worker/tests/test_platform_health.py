@@ -62,6 +62,31 @@ class CollectorChecksTests(unittest.TestCase):
         self.assertIsNone(health.collector_checks([target()], NOW,
                          previous={'collector:kavak':'falló'})['collector:kavak'])
 
+    def test_publication_windows_allow_successful_empty_scans(self):
+        for source in ('facebook', 'mercadolibre'):
+            with self.subTest(source=source):
+                row = target(source=source, query={'publication_policy': health.POLICY_VERSION}, found=[0]*3)
+                checks = health.collector_checks([row], NOW,
+                    previous={f'collector:{source}': 'empty scans'})
+                self.assertIsNone(checks[f'collector:{source}'])
+
+    def test_legacy_recent_sources_still_detect_empty_inventory(self):
+        for source in ('facebook', 'mercadolibre'):
+            with self.subTest(source=source):
+                row = target(source=source, query={}, found=[0]*3)
+                self.assertIn('posible rotura', health.collector_checks([row], NOW)[f'collector:{source}'])
+
+    def test_publication_windows_keep_real_health_failures(self):
+        for source in ('facebook', 'mercadolibre'):
+            for changes, reason in (
+                ({'latest_status': 'failed', 'statuses': ['failed']*3}, 'corridas fallidas'),
+                ({'latest_status': 'running', 'started_at': NOW-timedelta(hours=1)}, 'trabada'),
+                ({'next_run_at': NOW-timedelta(hours=2)}, 'vencida'),
+            ):
+                with self.subTest(source=source, reason=reason):
+                    row = target(source=source, query={'publication_policy': health.POLICY_VERSION}, **changes)
+                    self.assertIn(reason, health.collector_checks([row], NOW)[f'collector:{source}'])
+
     def test_custom_threshold(self):
         self.assertIn('2 corridas', health.collector_checks([target(statuses=['failed']*2)], NOW, failures=2)['collector:kavak'])
 

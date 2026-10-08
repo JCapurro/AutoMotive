@@ -18,6 +18,7 @@ from uuid import uuid4
 import httpx
 
 from aio import run
+from collectors._recency import POLICY_VERSION, SOURCES as RECENT_SOURCES
 import config
 import db
 from notifications.ops import last_error_line
@@ -37,7 +38,7 @@ with eligible as (
       and (not sp.filters ? 'sources' or sp.filters->'sources' ? t.source)
   )
 )
-select t.id, t.source, t.name, t.make, t.model, t.created_at, t.updated_at, t.next_run_at,
+select t.id, t.source, t.name, t.make, t.model, t.query, t.created_at, t.updated_at, t.next_run_at,
   t.crawl_interval_seconds, latest.started_at, latest.status as latest_status,
   latest.error as latest_error, coalesce(history.statuses, '{}') as statuses,
   coalesce(history.found, '{}') as found,
@@ -90,7 +91,13 @@ def collector_checks(rows: list[dict], now: datetime, *, failures: int = 3,
         elif row['latest_status'] == 'running':
             if now - row['started_at'] > timedelta(minutes=timeout_minutes):
                 reason = f"corrida trabada por más de {timeout_minutes} minutos"
-        elif (empty_runs > 0 and row['had_results'] and len(statuses) >= empty_runs
+        # With a publication window, an empty successful scan means no recent
+        # listings qualified. It is not evidence that the inventory parser broke.
+        # Failed/incomplete scans, stalled runs and missed cadence still alert.
+        elif (empty_runs > 0
+              and not (row['source'] in RECENT_SOURCES
+                       and (row.get('query') or {}).get('publication_policy') == POLICY_VERSION)
+              and row['had_results'] and len(statuses) >= empty_runs
               and all(s == 'ok' for s in statuses[:empty_runs])
               and all(n == 0 for n in row['found'][:empty_runs])):
             reason = f"{empty_runs} corridas sin avisos después de obtener resultados; posible rotura del parser"
