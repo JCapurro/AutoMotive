@@ -60,6 +60,7 @@ export default function PrivacyPage() {
           medimos (ver Cookies), sin tu email ni el contenido de tus búsquedas.
         </li>
         <li>Google Analytics 4, solo si aceptás las cookies de análisis: páginas visitadas y eventos de uso como búsquedas, favoritos y contratación, sin el texto ni los filtros de tus búsquedas.</li>
+        <li>Microsoft Clarity, solo si aceptás las cookies de análisis: mapas de calor y grabaciones de las interacciones con el sitio para detectar dificultades de uso. El contenido de los campos de los formularios se oculta en las grabaciones.</li>
         <li>
           OpenAI, que interpreta el texto del modo asistido. Recibe ese texto y las opciones del catálogo necesarias
           para convertirlo en filtros, sin tu email ni los identificadores de tu cuenta.
@@ -83,6 +84,12 @@ export default function PrivacyPage() {
         tu cuenta. Mientras no las aceptes, o si las rechazás, el Pixel no le envía datos a Meta y tampoco le informamos los pagos.
       </p>
       <ConsentSettings />
+      <p>
+        Microsoft Clarity también se activa al aceptar las cookies de análisis. Nos permite ver clics,
+        desplazamientos y recorridos por las páginas. No lo cargamos antes de aceptar ni en las páginas de
+        confirmación y recuperación de acceso. Si cambiás tus preferencias y retirás el consentimiento, detenemos
+        la grabación.
+      </p>
 
       <h2>Tus derechos</h2>
       <p>

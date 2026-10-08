@@ -8,6 +8,7 @@ import { useEffect, useRef, useSyncExternalStore } from "react";
 import { Button } from "@/components/ui/button";
 import { googleAnalyticsId } from "@/lib/google-analytics";
 import { GA_CONSENT_COOKIE } from "@/lib/google-analytics";
+import { clarityProjectId } from "@/lib/microsoft-clarity";
 import { CONSENT_COOKIE, metaPixelId, pixel, PIXEL_QUEUE_COOKIE, type QueuedPixel } from "@/lib/meta-pixel";
 
 /** "Ver publicación": the web button and the alert redirect both leave the site through these. */
@@ -41,7 +42,7 @@ function setConsent(value: Consent) {
 
 /** "Cambiar preferencias de cookies" in /privacidad: shows the banner again. */
 export function ConsentSettings() {
-  if (!metaPixelId && !googleAnalyticsId) return null;
+  if (!metaPixelId && !googleAnalyticsId && !clarityProjectId) return null;
   return (
     <Button variant="outline" size="sm" onClick={() => setConsent(null)}>
       Cambiar preferencias de cookies
@@ -102,17 +103,17 @@ export function MetaPixel() {
     return () => window.clearInterval(timer);
   }, [granted, pathname]);
 
-  if (pathname.startsWith("/auth/") || (!metaPixelId && !googleAnalyticsId)) return null;
+  if (pathname.startsWith("/auth/") || (!metaPixelId && !googleAnalyticsId && !clarityProjectId)) return null;
   return (
     <>
-      <Script id="meta-pixel" strategy="afterInteractive">
+      {metaPixelId ? <Script id="meta-pixel" strategy="afterInteractive">
         {`!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
 n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
 n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];
 s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
 fbq('consent',/(^|; )${CONSENT_COOKIE}=granted/.test(document.cookie)?'grant':'revoke');
 fbq('init','${metaPixelId}');fbq('track','PageView');`}
-      </Script>
+      </Script> : null}
       {consent === null ? <ConsentBanner /> : null}
     </>
   );

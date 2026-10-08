@@ -3,6 +3,7 @@ import { Archivo, Geist_Mono } from "next/font/google";
 
 import { MetaPixel } from "@/components/meta-pixel";
 import { GoogleAnalytics } from "@/components/google-analytics";
+import { MicrosoftClarity } from "@/components/microsoft-clarity";
 import { Toaster } from "@/components/ui/sonner";
 import { siteUrl } from "@/lib/env";
 
@@ -43,6 +44,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         {children}
         <Toaster position="top-center" richColors closeButton />
         <GoogleAnalytics />
+        <MicrosoftClarity />
         <MetaPixel />
       </body>
     </html>
