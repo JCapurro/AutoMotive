@@ -16,6 +16,7 @@ Notes:
 """
 from __future__ import annotations
 import asyncio
+import logging
 import re
 import unicodedata
 import urllib.parse
@@ -23,11 +24,13 @@ from pathlib import Path
 
 from playwright.async_api import async_playwright
 
-from .base import BaseScraper, CollectorBlocked, Listing, ListingDetail
+from .base import BaseScraper, CollectorBlocked, Listing, ListingDetail, SearchResults
+from ._recency import PublicationWindow
 from ._browser import browser_context
 from ._dates import parse_publication_date
 from ._http import Page, fetch_rendered, slim_html, soup
 from config import FB_STORAGE_STATE
+import config
 from normalization.geo import nearest_known_location_name
 from normalization.money import MIN_ARS_VEHICLE_PRICE, MIN_USD_VEHICLE_PRICE, plain_dollar_currency
 
@@ -36,6 +39,7 @@ _PRICE_RE = re.compile(r"(US\$|u\$s|USD|ARS|\$)\s*([\d\.\,]+)", re.IGNORECASE)
 # FB renders kms as "115 km", "115.000 km" or "115 mil km" (= 115.000 km).
 _KM_RE = re.compile(r"(\d[\d\.\,]*)\s*(mil\s+)?km", re.IGNORECASE)
 _YEAR_RE = re.compile(r"\b(19[8-9]\d|20[0-3]\d)\b")
+log = logging.getLogger("collectors.facebook")
 
 
 # Common AR cities → FB Marketplace location slugs (best-effort)
@@ -368,6 +372,9 @@ class FacebookMarketplaceScraper(BaseScraper):
     def _build_url(self, f: dict) -> str:
         slug = _city_slug(f.get("ubicacion")) if f.get("ubicacion") else _city_slug_from_origin(f)
         params: dict[str, str] = {}
+        params["sortBy"] = "creation_time_descend"
+        if window := PublicationWindow.from_filters(f):
+            params["daysSinceListed"] = str(window.facebook_days)
         q = " ".join(f[k] for k in ("marca", "modelo", "version") if f.get(k)).strip()
         if q:
             params["query"] = q
@@ -398,6 +405,9 @@ class FacebookMarketplaceScraper(BaseScraper):
         if not Path(FB_STORAGE_STATE).exists():
             raise CollectorBlocked(f"facebook: no session at {FB_STORAGE_STATE}. "
                                    "Run: python -m collectors.facebook   to log in once.")
+
+        if window := PublicationWindow.from_filters(filters):
+            return await self._search_recent(filters, window)
 
         url = self._build_url(filters)
         out: list[Listing] = []
@@ -445,6 +455,97 @@ class FacebookMarketplaceScraper(BaseScraper):
             finally:
                 await page.close()
         return out
+
+    async def _publication_date(self, ctx, listing: Listing) -> int | None:
+        page = await ctx.new_page()
+        try:
+            response = await page.goto(listing.url, timeout=45_000, wait_until="domcontentloaded")
+            status = response.status if response else 0
+            if "/login" in page.url or "checkpoint" in page.url:
+                raise CollectorBlocked("facebook: session expired while reading publication date")
+            if status >= 400 and status != 404:
+                raise RuntimeError(f"facebook date HTTP {status}")
+            if status != 404:
+                await page.wait_for_timeout(3_500)
+            if "/login" in page.url or "checkpoint" in page.url:
+                raise CollectorBlocked("facebook: session expired while reading publication date")
+            detail = parse_detail(await page.content(), listing.url, status)
+            return detail.listing.published_at if detail.listing else None
+        finally:
+            await page.close()
+
+    async def _search_recent(self, filters: dict, window: PublicationWindow) -> SearchResults:
+        results = SearchResults()
+        seen: set[str] = set()
+        known = filters.get("known_publication_dates") or {}
+        stalls = scrolls = 0
+        async with browser_context(storage_state=FB_STORAGE_STATE) as ctx:
+            page = await ctx.new_page()
+            try:
+                response = await page.goto(self._build_url(filters), timeout=45_000, wait_until="domcontentloaded")
+                if response and response.status >= 400:
+                    raise RuntimeError(f"facebook search HTTP {response.status}")
+                await page.wait_for_timeout(3_500)
+                while True:
+                    if "/login" in page.url or "checkpoint" in page.url:
+                        raise CollectorBlocked("facebook: session expired")
+                    before = len(seen)
+                    # Read each batch before scrolling; older cards may leave the DOM.
+                    for a in await page.locator("a[href*='/marketplace/item/']").all():
+                        href = await a.get_attribute("href") or ""
+                        match = re.search(r"/marketplace/item/(\d+)", href)
+                        if not match or match[1] in seen:
+                            continue
+                        seen.add(match[1])
+                        text = (await a.inner_text()).strip()
+                        label = await a.get_attribute("aria-label") or ""
+                        if not _matches_query_text(f"{label}\n{text}", filters):
+                            continue
+                        image = a.locator("img").first
+                        img = await image.get_attribute("src") if await image.count() else None
+                        listing = parse_card(href, text, label, img)
+                        if listing is None:
+                            continue
+                        self.annotate_partial_price(listing)
+                        if not self.matches_filters(listing, filters):
+                            continue
+                        if listing.published_at is None:
+                            listing.published_at = known.get(listing.listing_id)
+                        if listing.published_at is None:
+                            await asyncio.sleep(config.RECENT_FB_DETAIL_SECONDS)
+                            try:
+                                listing.published_at = await self._publication_date(ctx, listing)
+                            except CollectorBlocked:
+                                raise
+                            except Exception as exc:
+                                results.complete, results.reason = False, f"facebook date fetch failed: {type(exc).__name__}"
+                                log.warning("Could not read publication date for %s: %s", listing.listing_id, exc)
+                        if listing.published_at is None:
+                            results.unknown_dates += 1
+                        elif window.contains(listing):
+                            results.append(listing)
+                    stalls = stalls + 1 if len(seen) == before else 0
+                    if stalls >= 3:
+                        body = _plain(await page.locator("body").inner_text())
+                        if not seen and not any(s in body for s in (
+                                "no se encontraron resultados", "no hay resultados", "no results found")):
+                            raise CollectorBlocked("facebook: empty feed without a confirmed no-results message")
+                        break
+                    if scrolls >= config.RECENT_FB_MAX_SCROLLS:
+                        results.complete, results.reason = False, "facebook: publication scan scroll limit reached"
+                        break
+                    await page.mouse.wheel(0, 4_000)
+                    scrolls += 1
+                    await page.wait_for_timeout(1_500)
+            except Exception as exc:
+                if not seen:
+                    raise
+                results.complete, results.reason = False, f"facebook: {type(exc).__name__}: {exc}"
+            finally:
+                await page.close()
+        log.info("facebook publication window: scrolls=%d kept=%d unknown_dates=%d complete=%s reason=%s",
+                 scrolls, len(results), results.unknown_dates, results.complete, results.reason)
+        return results
 
     # 2: "Ver más" is expanded and the description stops before the page around it.
     DETAIL_PARSER_VERSION = 3

@@ -27,6 +27,7 @@ from notifications.links import Links
 from notifications.ops import SourceAlerts
 from notifications.service import Notifier
 from db.repos import listings as repo_listings, raw_pages
+from db.repos import targets as repo_targets
 from llm.schemas import ListingFacts
 from pipeline import crawl, enrich, rematch, retention, scheduler, watchlist
 from pipeline.ingest import ingest
@@ -258,6 +259,33 @@ class RepostTests(IngestCase):
 
 
 class CrawlTargetsTests(IngestCase):
+    async def test_publication_policy_resets_existing_bootstrap_once(self):
+        await self.fiesta_alert()
+        await self.tick()
+        async with db.connection() as cx:
+            await cx.execute("UPDATE crawl_targets SET query = query - 'publication_policy'")
+        specs = await crawl.sync_targets(await db.enabled_profiles())
+        [t] = await self.rows("SELECT id, first_run_done, next_run_at FROM crawl_targets")
+        self.assertFalse(t["first_run_done"])
+        self.assertIsNone(t["next_run_at"])
+        await repo_targets.finish_target(t["id"], ok=True, retry_seconds=0)
+        await repo_targets.sync_targets(specs)
+        [t] = await self.rows("SELECT first_run_done, next_run_at FROM crawl_targets")
+        self.assertTrue(t["first_run_done"])
+        self.assertIsNotNone(t["next_run_at"])
+
+    async def test_failed_retry_preserves_successful_coverage_start(self):
+        await self.fiesta_alert()
+        await self.tick()
+        [t] = await self.rows("SELECT id FROM crawl_targets")
+        covered = datetime.now(timezone.utc) - timedelta(hours=2)
+        await repo_targets.finish_target(t["id"], ok=True, retry_seconds=0, covered_until=covered)
+        await repo_targets.finish_target(t["id"], ok=False, retry_seconds=900)
+        [t] = await self.rows("SELECT first_run_done, last_run_at, next_run_at > now() AS later "
+                             "FROM crawl_targets")
+        self.assertTrue(t["first_run_done"] and t["later"])
+        self.assertEqual(t["last_run_at"], covered)
+
     async def test_cost_does_not_grow_with_a_repeated_profile(self):
         await self.fiesta_alert(sources=["mercadolibre", "kavak"])
         await self.tick()
@@ -278,10 +306,15 @@ class CrawlTargetsTests(IngestCase):
     async def test_cadence_follows_the_source_interval(self):
         await self.fiesta_alert()
         await self.tick()
-        [t] = await self.rows("SELECT last_run_at, next_run_at, first_run_done FROM crawl_targets")
+        [t] = await self.rows("SELECT last_run_at, next_run_at, first_run_done, "
+                             "next_run_at > now() AS later, "
+                             "next_run_at <= now() + interval '600 seconds' AS within_interval "
+                             "FROM crawl_targets")
 
         self.assertTrue(t["first_run_done"])
-        self.assertEqual(t["next_run_at"] - t["last_run_at"], timedelta(seconds=600))   # seed: ML 10 min
+        # Cadence follows completion; coverage follows the beginning of the scan.
+        self.assertGreaterEqual(t["next_run_at"] - t["last_run_at"], timedelta(seconds=600))
+        self.assertTrue(t["later"] and t["within_interval"])       # seed: ML 10 min
         self.assertEqual(await crawl.crawl_due(), 0)              # not due again yet
 
     async def test_targets_without_profiles_are_deactivated(self):

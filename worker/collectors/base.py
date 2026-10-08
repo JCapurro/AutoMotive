@@ -56,6 +56,17 @@ class CollectorBlocked(RuntimeError):
     session. The run fails (collector_runs) instead of looking like "0 results"."""
 
 
+class SearchResults(list[Listing]):
+    """Keep usable results from a partial crawl without advancing its checkpoint."""
+
+    def __init__(self, items=(), *, complete: bool = True, reason: str | None = None,
+                 unknown_dates: int = 0):
+        super().__init__(items)
+        self.complete = complete
+        self.reason = reason
+        self.unknown_dates = unknown_dates
+
+
 @dataclass
 class ListingDetail:
     """What fetch_detail() found at a listing's URL (sección 5.5).
