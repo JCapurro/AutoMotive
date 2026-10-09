@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Logo } from "@/components/logo";
 import { cn } from "@/lib/utils";
 
-export function SiteHeader({ signedIn, page }: { signedIn: boolean; page: "home" | "pricing" }) {
+export function SiteHeader({ signedIn, page }: { signedIn: boolean; page: "home" | "planes" }) {
   return (
     <header className="border-b">
       <div className="mx-auto grid w-full max-w-6xl grid-cols-2 items-center gap-x-4 gap-y-3 px-4 py-4 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:px-6 lg:px-10">
@@ -11,7 +11,7 @@ export function SiteHeader({ signedIn, page }: { signedIn: boolean; page: "home"
         <nav aria-label="Navegación principal" className="col-span-2 row-start-2 flex justify-center gap-6 sm:col-span-1 sm:col-start-2 sm:row-start-1">
           {[
             { href: "/", label: "Inicio", key: "home" },
-            { href: "/pricing", label: "Pricing", key: "pricing" },
+            { href: "/planes", label: "Planes", key: "planes" },
           ].map((item) => (
             <Link
               key={item.key}

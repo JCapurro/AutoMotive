@@ -24,7 +24,7 @@ export function LandingSearch({ signedIn }: { signedIn: boolean }) {
         <Button type="submit" disabled={pending} className="h-11 px-4.5 text-[15px]">
           {pending ? "Continuando…" : "Crear mi búsqueda"}
         </Button>
-        <Link href="/pricing" className="py-2 text-[15px] font-medium underline underline-offset-4">Ver planes</Link>
+        <Link href="/planes" className="py-2 text-[15px] font-medium underline underline-offset-4">Ver planes</Link>
       </div>
       <p className="text-sm text-muted-foreground">Prueba gratis por 3 días. Sin tarjeta.</p>
     </form>

@@ -6,6 +6,7 @@ import { siteUrl } from "@/lib/env";
 export default function sitemap(): MetadataRoute.Sitemap {
   return [
     { url: `${siteUrl}/`, changeFrequency: "weekly", priority: 1 },
+    { url: `${siteUrl}/planes`, changeFrequency: "monthly", priority: 0.8 },
     { url: `${siteUrl}/login`, changeFrequency: "yearly", priority: 0.5 },
     { url: `${siteUrl}/privacidad`, changeFrequency: "yearly", priority: 0.2 },
     { url: `${siteUrl}/terminos`, changeFrequency: "yearly", priority: 0.2 },
