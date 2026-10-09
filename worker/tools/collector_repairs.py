@@ -35,7 +35,13 @@ def safe_text(value: str | None) -> str:
     for key, secret in vars(config).items():
         if re.search(r'TOKEN|SECRET|PASSWORD|API_KEY|DATABASE_URL', key) and isinstance(secret, str) and secret:
             text = text.replace(secret, '[redactado]')
-    return '\n'.join(safe_error(line) for line in text.splitlines() if line.strip())[:2000]
+    # Headers/storage state may be quoted objects or contain several semicolon
+    # separated cookies. Conservatively omit the remaining payload in that case.
+    text = re.sub(
+        r'''(?is)(["']?(?:authorization|proxy-authorization|cookies?|set-cookie|password|'''
+        r'''api[_-]?key|(?:access|refresh|session)[_-]?token|token|secret|session|sessionid|csrftoken)'''
+        r'''["']?\s*[:=])\s*.*''', r'\1[redactado]', text)
+    return '\n'.join(safe_error(line) for line in text.splitlines() if line.strip())[-2000:]
 
 
 def json_text(value) -> str:
@@ -129,6 +135,7 @@ async def execute(args) -> dict:
                     return {'dispatch': None}
                 result = await dispatch_context(cx, incident)
                 result['claim_token'] = incident['claim_token']
+                result['lease_recovered'] = incident['lease_recovered']
                 return {'dispatch': result}
             if args.command == 'attach':
                 return {'attached': await repository.attach(cx, args.id, args.token, args.thread)}

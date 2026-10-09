@@ -11,6 +11,23 @@ pytestmark = [pytest.mark.db, requires_db]
 
 
 class HealthDatabaseTests(PostgresTestCase):
+    async def test_shared_inventory_targets_are_monitored_for_selected_profiles(self):
+        async with db.connection() as cx:
+            user = await (await cx.execute(
+                "INSERT INTO auth.users(id,email,created_at,updated_at) VALUES (gen_random_uuid(),%s,now(),now()) RETURNING id",
+                (f'{uuid4()}@automotive.test',))).fetchone()
+            await cx.execute(
+                "INSERT INTO search_profiles(user_id,name,filters) VALUES (%s,'Inventory health',"
+                "'{\"make\":\"Ford\",\"model\":\"Fiesta\",\"sources\":[\"onlycarsusados\"]}')", (user['id'],))
+            for source in ('onlycarsusados', 'sc_clasificados'):
+                await cx.execute(
+                    'INSERT INTO sources(id,name,crawl_interval_seconds) VALUES (%s,%s,7200) '
+                    'ON CONFLICT(id) DO NOTHING', (source, source))
+                await cx.execute(
+                    "INSERT INTO crawl_targets(source,query) VALUES (%s,'{\"inventory\":true}')", (source,))
+            rows = await (await cx.execute(COLLECTORS_SQL, {'history':3})).fetchall()
+            self.assertEqual([row['source'] for row in rows], ['onlycarsusados'])
+
     async def test_only_enabled_accessible_search_targets_are_monitored(self):
         async with db.connection() as cx:
             user = await (await cx.execute("INSERT INTO auth.users(id,email,created_at,updated_at) VALUES (gen_random_uuid(),%s,now(),now()) RETURNING id",

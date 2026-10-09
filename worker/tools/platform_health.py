@@ -32,8 +32,9 @@ with eligible as (
   from crawl_targets t join sources s on s.id=t.source
   where t.active and s.enabled and exists (
     select 1 from search_profiles sp where public.search_access_active(sp.id)
-      and lower(sp.filters->>'make') is not distinct from lower(t.make)
-      and lower(sp.filters->>'model') is not distinct from lower(t.model)
+      and ((t.query->>'inventory' = 'true' and t.make is null and t.model is null) or (
+        lower(sp.filters->>'make') is not distinct from lower(t.make)
+        and lower(sp.filters->>'model') is not distinct from lower(t.model)))
       and (not sp.filters ? 'sources' or sp.filters->'sources' ? t.source)
   )
 )

@@ -49,8 +49,28 @@ class RepairContextTests(unittest.TestCase):
         self.assertIn('Only Cars', result['prompt'])
         self.assertIn('captcha', result['prompt'])
 
+    def test_entire_cookie_header_is_removed(self):
+        text = repairs.safe_text('Cookie: sessionid=example_session; other_session=example_other')
+        self.assertNotIn('example_session', text)
+        self.assertNotIn('example_other', text)
+
+    def test_quoted_headers_and_storage_state_are_removed(self):
+        examples = [
+            'headers={"Authorization": "Bearer example_bearer", "Cookie": "sessionid=example_cookie"}',
+            "{'cookies': [{'name': 'sessionid', 'value': 'example_cookie'}]}",
+            '{"session": {"value": "example_session"}}',
+        ]
+        for value in examples:
+            text = repairs.safe_text(value)
+            for secret in ('example_bearer', 'example_cookie', 'example_session'):
+                self.assertNotIn(secret, text)
+
     def test_context_is_bounded(self):
         self.assertLessEqual(len(repairs.safe_text('x' * 10000)), 2000)
+
+    def test_long_trace_keeps_the_final_exception(self):
+        text = repairs.safe_text('stack frame\n' * 500 + 'RuntimeError: HTTP 503')
+        self.assertIn('RuntimeError: HTTP 503', text)
 
     def test_json_handles_timestamps_and_uuid(self):
         encoded = repairs.json_text(self.context())

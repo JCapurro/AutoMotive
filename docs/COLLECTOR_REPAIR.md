@@ -6,6 +6,8 @@ El dueño autorizó diagnóstico y corrección automática el 9/10/2026: un chat
 
 La fuente es `platform_health_checks`, el mismo snapshot privado de `/app/health`. El chequeo considera fallos repetidos del target, corridas trabadas, búsquedas vencidas y corridas sin resultados después de obtener avisos. Los fallos de base, web y heartbeat del worker conservan sus avisos existentes y no abren chats de collectors.
 
+El chequeo incluye los targets de inventario compartido (`query.inventory=true`, sin marca/modelo), siempre que un perfil con acceso activo seleccione esa fuente. Esto cubre Only Cars Usados, SC Clasificados y los otros catálogos completos, con la misma elegibilidad que el scheduler.
+
 `collector_repair_incidents` tiene RLS y no permite lectura ni escritura desde los roles del navegador. Una fuente tiene un solo incidente sin resolver. Cambiar el error no abre otro chat. Un snapshot fresco que vuelve a OK lo resuelve; retirar la fuente del monitoreo lo cancela. Snapshots vencidos, problemas de base y corridas iniciadas no confirman recuperación.
 
 ## Despacho
