@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { confirmPayment, launchCommercialPilot, recordRefund } from "@/app/admin/billing/actions";
 import { Button } from "@/components/ui/button";
-import { PLAN_COPY, planPrice, type ProOffer, type WaitlistPlan, WAITLIST_PLANS } from "@/lib/pro";
+import { PLAN_COPY, type PlanLimitsConfig, planPrice, type ProOffer, type WaitlistPlan, WAITLIST_PLANS } from "@/lib/pro";
 
 const field = "mt-1 block h-10 w-full rounded-lg border bg-background px-3 text-sm";
 export function PaymentForm({ users, offer }: { users: { id: string; email: string | null }[]; offer: ProOffer }) {
@@ -43,12 +43,12 @@ export function PaymentForm({ users, offer }: { users: { id: string; email: stri
     <Button type="submit" disabled={pending} className="sm:col-span-2">Registrar pago y activar período</Button>
   </form>;
 }
-export function PilotLaunch({ enabled, freeUsers, excessSearches }: { enabled: boolean; freeUsers: number; excessSearches: number }) {
+export function PilotLaunch({ enabled, limits, freeUsers, excessSearches }: { enabled: boolean; limits: PlanLimitsConfig; freeUsers: number; excessSearches: number }) {
   const [confirm, setConfirm] = useState(false);
   const [pending, start] = useTransition();
   return <section className="space-y-3 rounded-xl border p-5 text-sm">
     <h2 className="font-semibold">{enabled ? "Piloto comercial habilitado" : "Habilitar el piloto comercial"}</h2>
-    {enabled ? <p>Free dura 72 horas; Particular permite 3 búsquedas activas y Agencia, 10. Los pagos y las renovaciones se verifican manualmente.</p> : <>
+    {enabled ? <p>Free dura 72 horas; Particular permite {limits.pass.maxProfiles} búsquedas activas y Agencia, {limits.pro.maxProfiles}. Los pagos y las renovaciones se verifican manualmente.</p> : <>
       <p>Hay {freeUsers} cuentas gratuitas con búsquedas activas. Las que todavía no iniciaron una prueba recibirán 72 horas desde la habilitación.
         Hay {excessSearches} búsquedas por encima de la capacidad nominal. Se pausarán los excedentes y las búsquedas con acceso vencido;
         se mantienen las más antiguas dentro del límite y todo el historial.</p>

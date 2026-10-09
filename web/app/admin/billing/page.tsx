@@ -20,7 +20,7 @@ export default async function BillingPage() {
   ]);
   const email = new Map((users ?? []).map((u) => [u.id, u.email ?? "Solo Telegram"]));
   const pending = (users ?? []).filter((u) => u.waitlist_plan);
-  const excess = (users ?? []).reduce((n, u) => n + Math.max(0, (u.enabled_searches ?? 0) - (u.plan === "pro" ? 10 : u.plan === "pass" ? 3 : 1)), 0);
+  const excess = (users ?? []).reduce((n, u) => n + Math.max(0, (u.enabled_searches ?? 0) - (cfg.planLimits[u.plan === "pro" || u.plan === "pass" ? u.plan : "free"].maxProfiles)), 0);
   return <div className="space-y-6">
     <PageHeader title="Cobros y acceso" description="Mercado Pago procesa los cobros. Acá revisás el acceso y registrás pagos asistidos ya verificados." />
     <p className="rounded border p-4 text-sm">{checkoutError ? "Falta la migración de Mercado Pago." : !paymentsConfigured() ? "Falta configurar los secretos de Mercado Pago y la conciliación." : cfg.automaticPayments ? "Cobro y acceso automáticos habilitados." : "Integración configurada; contratación automática deshabilitada."}</p>
@@ -30,7 +30,7 @@ export default async function BillingPage() {
       <p className="text-sm text-muted-foreground">Enlaces para cobro asistido: <a href="https://mpago.la/2Vf746M" className="underline" target="_blank" rel="noreferrer">Particular</a> · <a href="https://mpago.la/1t6wWDT" className="underline" target="_blank" rel="noreferrer">Agencia</a>. Requieren asociar manualmente el pago y gestionar la suscripción en Mercado Pago.</p>
     </section>
     {error ? <p role="alert" className="rounded border p-4 text-sm">Falta aplicar la migración comercial en esta base. Las altas están pendientes.</p> : <>
-      <PilotLaunch enabled={cfg.commercialPilot} freeUsers={(users ?? []).filter((u) => u.plan === "free" && (u.enabled_searches ?? 0) > 0).length} excessSearches={excess} />
+      <PilotLaunch enabled={cfg.commercialPilot} limits={cfg.planLimits} freeUsers={(users ?? []).filter((u) => u.plan === "free" && (u.enabled_searches ?? 0) > 0).length} excessSearches={excess} />
       <dl className="grid gap-4 rounded-xl border p-5 sm:grid-cols-3">
         <div><dt className="text-sm text-muted-foreground">Ingresos confirmados del mes</dt><dd className="text-xl font-bold">{planPrice(revenue?.confirmed_revenue ?? 0)}</dd></div>
         <div><dt className="text-sm text-muted-foreground">Particular vendidos este mes</dt><dd className="text-xl font-bold">{revenue?.particular_sales ?? 0}</dd></div>

@@ -18,11 +18,17 @@ on conflict (key) do update set value = app_config.value
 
 -- Immediate alerts a plan includes per day. The legacy boolean immediate_alerts
 -- still works: true is the global alerts_max_per_user_day, false is none.
+-- Like the web's alertCap(), anything but a whole number >= 0 counts as 0
+-- instead of raising (a 7.5 typed in /admin/config must not stop every batch).
 create function public.plan_alert_cap(p_access jsonb) returns integer
 language sql stable set search_path = '' as $$
   select case
     when p_access->'limits' ? 'immediate_alerts_per_day'
-      then greatest(coalesce((p_access->'limits'->>'immediate_alerts_per_day')::integer, 0), 0)
+      then case when jsonb_typeof(p_access->'limits'->'immediate_alerts_per_day') = 'number'
+                 and (p_access->'limits'->>'immediate_alerts_per_day')::numeric between 0 and 2147483647
+                 and (p_access->'limits'->>'immediate_alerts_per_day')::numeric % 1 = 0
+            then (p_access->'limits'->>'immediate_alerts_per_day')::numeric::integer
+            else 0 end
     when coalesce((p_access->'limits'->>'immediate_alerts')::boolean, false)
       then coalesce((select (value #>> '{}')::integer from public.app_config where key = 'alerts_max_per_user_day'), 10)
     else 0 end
