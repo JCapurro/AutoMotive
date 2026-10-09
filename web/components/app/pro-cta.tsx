@@ -6,7 +6,7 @@ import { useEffect, useRef, useTransition } from "react";
 
 import { reportVisibleResults, trackProCta } from "@/app/app/pro/actions";
 import { Button } from "@/components/ui/button";
-import type { Placement } from "@/lib/pro";
+import { type BannerReason, bannerCopy, type Placement } from "@/lib/pro";
 import { cn } from "@/lib/utils";
 
 /** pro_cta_viewed once per tab session and placement (the banner re-renders on every navigation). */
@@ -55,33 +55,21 @@ export function ProCtaButton({
   );
 }
 
-const COPY = {
-  activity: {
-    title: "Seguí buscando con Ese Auto",
-    body: "Particular y Agencia suman búsquedas activas y avisos cuando detectamos coincidencias.",
-  },
-  plan_limit: {
-    title: "Elegí capacidad para tus búsquedas",
-    body: "La prueba incluye una búsqueda por 3 días. Particular permite 3 activas y Agencia, 10.",
-  },
-  results: {
-    title: "¿Querés ver todos los resultados?",
-    body: "La prueba gratuita muestra hasta 50 publicaciones. Particular y Agencia muestran todos los resultados disponibles.",
-  },
-} as const;
-
 /** §52: the banner, shown after real activity (pro_cta_state) or a limit. */
 export function ProBanner({
   placement,
   reason,
+  maxResults = null,
   className,
 }: {
   placement: Placement;
-  reason: keyof typeof COPY;
+  reason: BannerReason;
+  /** The results the account's plan shows (my_plan_limits), for reason "results". */
+  maxResults?: number | null;
   className?: string;
 }) {
   useViewed(placement);
-  const copy = COPY[reason];
+  const copy = bannerCopy(reason, maxResults);
   return (
     <aside
       aria-label="Planes de Ese Auto"

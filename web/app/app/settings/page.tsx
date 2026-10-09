@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireUser } from "@/lib/auth";
 import { webConfig } from "@/lib/config";
-import { isWaitlistPlan, PLAN_COPY, PLAN_NAMES, accessDescription, accessDate, planPrice, type PlanLimits } from "@/lib/pro";
+import { accountAlertCap, isWaitlistPlan, PLAN_COPY, PLAN_NAMES, accessDescription, accessDate, planPrice, type PlanLimits } from "@/lib/pro";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = { title: "Ajustes" };
@@ -32,6 +32,7 @@ export default async function SettingsPage() {
   ]);
   const access = rawAccess as PlanLimits | null;
   const declined = (declines ?? []).some((d) => (d.props as { period_end?: string })?.period_end === access?.expires_at);
+  const alertCap = accountAlertCap(access, cfg.planLimits);
 
   return (
     <div className="mx-auto max-w-2xl space-y-5">
@@ -53,7 +54,8 @@ export default async function SettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle>Preferencias</CardTitle>
-          {access?.enforced && access.plan === "free" ? <CardDescription>Durante la prueba, las nuevas coincidencias llegan en el resumen diario. Tu preferencia se aplica al activar un plan pago.</CardDescription> : null}
+          {alertCap === 0 ? <CardDescription>Tu plan incluye solo el resumen diario. Tu preferencia se aplica al activar un plan con avisos inmediatos.</CardDescription>
+            : alertCap != null ? <CardDescription>Tu plan incluye hasta {alertCap} {alertCap === 1 ? "aviso inmediato" : "avisos inmediatos"} por día; los que pasan el tope van al resumen diario.</CardDescription> : null}
         </CardHeader>
         <CardContent className="grid gap-5 sm:grid-cols-2">
           <FrequencyForm value={profile?.default_notification_frequency ?? "immediate"} />

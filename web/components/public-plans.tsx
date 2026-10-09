@@ -3,12 +3,11 @@ import { Check } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import type { WebConfig } from "@/lib/config";
-import { CUSTOM_PLAN, PLAN_COPY, planPrice, WAITLIST_PLANS } from "@/lib/pro";
+import { alertsText, CUSTOM_PLAN, inWords, OFFER_TIER, PLAN_COPY, planPrice, resultsText, searchesText, WAITLIST_PLANS } from "@/lib/pro";
 
-type PricingConfig = Pick<WebConfig, "proOffer" | "automaticPayments" | "commercialPilot">;
+type PricingConfig = Pick<WebConfig, "proOffer" | "planLimits" | "automaticPayments" | "commercialPilot">;
 type PublicPlan = {
   id: string;
-  label: string;
   name: string;
   price: string;
   period: string;
@@ -19,41 +18,39 @@ type PublicPlan = {
   href: string;
 };
 
-/** Shared by the landing and public Pricing page; prices follow the current offer. */
+/**
+ * Shared by the landing and the public Planes page. Prices follow the current
+ * offer and every limit comes from app_config.plan_limits, as the backend applies it.
+ */
 export function PublicPlans({ cfg, signedIn }: { cfg: PricingConfig; signedIn: boolean }) {
   const start = signedIn ? "/app/searches/new" : "/login?next=/app/searches/new";
+  const trial = cfg.planLimits.free;
   const plans: PublicPlan[] = [
     {
       id: "trial",
-      label: "Para conocer Ese Auto",
       name: "Prueba gratis",
       price: "Gratis",
       period: "por 3 días · sin tarjeta",
       pitch: "Probá cómo buscamos y comparamos autos antes de elegir un plan.",
-      features: ["1 búsqueda activa", "Hasta 50 resultados por búsqueda", "Resumen diario de coincidencias", "Historial y favoritos"],
-      terms: "Las 72 horas empiezan al activar tu primera búsqueda. Una prueba por cuenta, sin cobro automático.",
+      features: [searchesText(trial, false), resultsText(trial), alertsText(trial), "Historial y favoritos"],
+      terms: "Las 72 horas empiezan al activar tu búsqueda. Una prueba por cuenta, sin cobro automático.",
       cta: "Probar gratis",
       href: start,
     },
     ...WAITLIST_PLANS.map((plan) => {
       const copy = PLAN_COPY[plan];
+      const caps = cfg.planLimits[OFFER_TIER[plan]];
       const destination = `/app/pro?plan=${plan}`;
       return {
         id: plan,
-        label: plan === "pass_30" ? "Para comprar tu próximo auto" : "Para buscar vehículos habitualmente",
         name: copy.name,
         price: planPrice(cfg.proOffer[plan].amount),
-        period: `${copy.period} · pesos argentinos`,
+        period: plan === "pass_30" ? `${copy.period} · pago único` : copy.period,
         pitch: plan === "pass_30"
-          ? "Seguí hasta tres opciones a la vez y recibí avisos para encontrar tu próximo auto."
-          : "Monitoreá más modelos y oportunidades de compra desde una misma cuenta.",
-        features: [
-          `Hasta ${copy.searches} búsquedas activas`,
-          "Todos los resultados disponibles",
-          "Avisos al detectar coincidencias",
-          "Historial y favoritos",
-        ],
-        terms: plan === "pass_30" ? "Pago único. Sin renovación automática."
+          ? `Seguí hasta ${inWords(caps.maxProfiles)} opciones a la vez y recibí avisos para encontrar tu próximo auto.`
+          : "Para agencias y revendedores. Monitoreá más modelos y oportunidades de compra desde una misma cuenta.",
+        features: [searchesText(caps), resultsText(caps), alertsText(caps), "Historial y favoritos"],
+        terms: plan === "pass_30" ? "Sin renovación automática."
           : cfg.automaticPayments ? "Renovación mensual automática. Cancelás desde Ajustes y conservás el período pagado."
             : "Durante el piloto: períodos de 30 días y renovación manual, sin débito automático.",
         cta: cfg.automaticPayments ? `Contratar ${copy.name}`
@@ -68,9 +65,8 @@ export function PublicPlans({ cfg, signedIn }: { cfg: PricingConfig; signedIn: b
     <>
       <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
         {plans.map((plan) => (
-          <article key={plan.id} className={`row-span-8 grid grid-rows-subgrid gap-y-0 rounded-lg border p-5 ${plan.id === "trial" ? "bg-muted/40" : ""}`}>
-            <p className="text-sm text-muted-foreground">{plan.label}</p>
-            <h3 className="mt-2 text-xl font-bold">{plan.name}</h3>
+          <article key={plan.id} className={`row-span-7 grid grid-rows-subgrid gap-y-0 rounded-lg border p-5 ${plan.id === "trial" ? "bg-muted/40" : ""}`}>
+            <h3 className="text-xl font-bold">{plan.name}</h3>
             <p data-plan-price className="mt-5 text-3xl font-bold">{plan.price}</p>
             <p className="mt-1 text-sm text-muted-foreground">{plan.period}</p>
             <p className="mt-4 text-muted-foreground">{plan.pitch}</p>
@@ -85,16 +81,15 @@ export function PublicPlans({ cfg, signedIn }: { cfg: PricingConfig; signedIn: b
         ))}
       </div>
 
-      <div className="mt-8 border-t pt-6">
-        <h3 className="text-lg font-bold">En todos los planes</h3>
-        <p className="mt-2 max-w-3xl text-muted-foreground">Comparación con autos similares, explicación del precio y señales para revisar antes de contactar al vendedor. Prueba gratis, Particular y Agencia son para una cuenta individual; en Custom definimos el alcance de la propuesta.</p>
-        <p className="mt-4 text-sm text-muted-foreground">{cfg.automaticPayments
+      <div className="mt-8 max-w-3xl space-y-2 border-t pt-6 text-sm text-muted-foreground">
+        <p className="text-base text-foreground">Una búsqueda es un modelo, con sus versiones, años, kilómetros, presupuesto y zona. Si querés seguir varios modelos, cada uno cuenta como una búsqueda.</p>
+        <p>Todos los planes incluyen comparación con autos similares, explicación del precio y señales para revisar antes de contactar al vendedor. Los avisos que pasan el tope del día van al resumen. Las bajas de precio de tus favoritos se avisan de inmediato mientras el acceso siga vigente. La frecuencia de revisión depende de cada portal.</p>
+        <p>Los precios pueden actualizarse. Si tu plan se renueva solo, te avisamos por mail 30 días antes.</p>
+        <p>{cfg.automaticPayments
           ? "Pagás en Mercado Pago. Activamos el acceso cuando se aprueba el pago."
           : cfg.commercialPilot
             ? "Las altas y la confirmación de pagos se coordinan con la administración."
             : "Las altas pagas están en lista de espera."}</p>
-        <p className="mt-2 text-sm text-muted-foreground">Particular y Agencia incluyen hasta 10 avisos inmediatos de nuevas coincidencias por día; los restantes van al resumen. En Custom, las condiciones de alertas se definen en la propuesta. Las bajas de precio de favoritos se avisan de inmediato mientras el acceso siga vigente. La frecuencia de revisión depende de cada portal.</p>
-        <p className="mt-2 text-sm text-muted-foreground">Al vencer el acceso se detienen nuevas coincidencias y alertas; conservamos historial y favoritos. Pausar o reemplazar una búsqueda no reinicia la prueba gratis.</p>
       </div>
     </>
   );

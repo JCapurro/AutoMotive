@@ -284,7 +284,7 @@ function Decision({
   if (n.status === "digest") {
     reasons.push(
       payload.degraded === "daily_cap"
-        ? "Pasó el tope diario (alerts_max_per_user_day): se degradó al digest."
+        ? "Pasó el tope diario de avisos inmediatos de su plan: se degradó al digest."
         : "La búsqueda tiene frecuencia diaria: va al digest.",
     );
   }

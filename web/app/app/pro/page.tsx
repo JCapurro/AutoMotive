@@ -5,7 +5,7 @@ import { ProPlans } from "@/components/app/pro-plans";
 import { BillingStatus } from "@/components/app/billing-status";
 import { requireUser } from "@/lib/auth";
 import { webConfig } from "@/lib/config";
-import { isPlacement, isWaitlistPlan, PRO_BENEFITS } from "@/lib/pro";
+import { alertCapsText, isPlacement, isWaitlistPlan, PRO_BENEFITS } from "@/lib/pro";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = { title: "Planes" };
@@ -43,6 +43,7 @@ export default async function ProPage({ searchParams }: PageProps<"/app/pro">) {
 
       <ProPlans
         offer={cfg.proOffer}
+        limits={cfg.planLimits}
         current={isWaitlistPlan(waitlist?.plan) ? waitlist.plan : null}
         recommended={isWaitlistPlan(plan) || plan === "custom" ? plan : undefined}
         placement={isPlacement(from) ? from : "plans"}
@@ -51,7 +52,7 @@ export default async function ProPage({ searchParams }: PageProps<"/app/pro">) {
       />
       {(checkouts ?? []).map((checkout) => <BillingStatus key={checkout.id} checkout={checkout} />)}
       <p className="text-sm text-muted-foreground">Cada modelo guardado cuenta como una búsqueda; pausar libera capacidad.
-        Particular y Agencia incluyen hasta 10 avisos inmediatos de nuevas coincidencias por día y cuenta; los restantes van al resumen.
+        {" "}{alertCapsText(cfg.planLimits)}{" "}
         En Custom, las condiciones se definen en la propuesta.
         Las bajas de precio de favoritos pueden avisarse de inmediato mientras tu acceso siga vigente.
         La detección depende de la disponibilidad de cada fuente.</p>

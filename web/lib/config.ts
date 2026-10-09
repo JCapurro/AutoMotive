@@ -2,7 +2,7 @@ import "server-only";
 
 import { cache } from "react";
 
-import { type ProOffer, proOffer } from "@/lib/pro";
+import { type PlanLimitsConfig, planLimits, type ProOffer, proOffer } from "@/lib/pro";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { paymentsEnabled } from "@/lib/mercadopago-server";
 
@@ -16,6 +16,8 @@ export type WebConfig = {
   comparables: { yearTol: number; kmTolPct: number; maxAgeDays: number };
   watchlistStaleDays: number;
   proOffer: ProOffer;
+  /** app_config.plan_limits: what each plan includes, as the database applies it. */
+  planLimits: PlanLimitsConfig;
   commercialPilot: boolean;
   automaticPayments: boolean;
 };
@@ -24,7 +26,7 @@ export const webConfig = cache(async (): Promise<WebConfig> => {
   const { data } = await createAdminClient()
     .from("app_config")
     .select("key, value")
-    .in("key", ["comparables", "watchlist_stale_days", "pro_offer", "commercial_pilot"]);
+    .in("key", ["comparables", "watchlist_stale_days", "pro_offer", "commercial_pilot", "plan_limits", "alerts_max_per_user_day"]);
   const values = Object.fromEntries((data ?? []).map((row) => [row.key, row.value]));
   const comparables = (values.comparables ?? {}) as { min_n?: number; year_tol?: number; km_tol_pct?: number; max_age_days?: number };
   return {
@@ -36,6 +38,7 @@ export const webConfig = cache(async (): Promise<WebConfig> => {
     },
     watchlistStaleDays: Number(values.watchlist_stale_days ?? 30),
     proOffer: proOffer(values.pro_offer),
+    planLimits: planLimits(values.plan_limits, Number(values.alerts_max_per_user_day ?? 10)),
     commercialPilot: (values.commercial_pilot as { enabled?: boolean } | undefined)?.enabled === true,
     automaticPayments: paymentsEnabled() && (values.commercial_pilot as { enabled?: boolean } | undefined)?.enabled === true,
   };

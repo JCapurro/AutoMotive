@@ -40,7 +40,7 @@ export function FrequencySelect({ id, value, dailyOnly = false }: { id: number; 
       aria-label="Frecuencia de alertas"
       value={dailyOnly ? "daily" : value}
       disabled={pending || dailyOnly}
-      title={dailyOnly ? "La prueba gratis incluye resumen diario. Tu preferencia se conserva para el plan pago." : undefined}
+      title={dailyOnly ? "Tu plan incluye solo el resumen diario. Tu preferencia se conserva para un plan con avisos inmediatos." : undefined}
       onChange={(e) => {
         const next = e.target.value as Frequency;
         start(() => setSearchFrequency(id, next));

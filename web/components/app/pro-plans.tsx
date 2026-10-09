@@ -7,10 +7,10 @@ import { startPayment } from "@/app/app/pro/billing-actions";
 import { Button } from "@/components/ui/button";
 import { pixel } from "@/lib/meta-pixel";
 import { analyticsEvent } from "@/lib/google-analytics";
-import { CUSTOM_PLAN, PLAN_COPY, planPrice, type Placement, type PlanChoice, type ProOffer, WAITLIST_PLANS, type WaitlistPlan } from "@/lib/pro";
+import { CUSTOM_PLAN, OFFER_TIER, PLAN_COPY, type PlanLimitsConfig, planPrice, type Placement, type PlanChoice, type ProOffer, searchesText, WAITLIST_PLANS, type WaitlistPlan } from "@/lib/pro";
 import { cn } from "@/lib/utils";
-export function ProPlans({ offer, current, placement, pilot = false, recommended, automatic = false }: {
-  offer: ProOffer; current: WaitlistPlan | null; placement: Placement | null; pilot?: boolean; recommended?: PlanChoice; automatic?: boolean;
+export function ProPlans({ offer, limits, current, placement, pilot = false, recommended, automatic = false }: {
+  offer: ProOffer; limits: PlanLimitsConfig; current: WaitlistPlan | null; placement: Placement | null; pilot?: boolean; recommended?: PlanChoice; automatic?: boolean;
 }) {
   const [plan, setPlan] = useState<PlanChoice>(recommended ?? current ?? "pass_30");
   const [joined, setJoined] = useState<WaitlistPlan | null>(current);
@@ -48,7 +48,7 @@ export function ProPlans({ offer, current, placement, pilot = false, recommended
               <span data-plan-price className="text-2xl font-semibold tracking-tight">{planPrice(offer[p].amount)}</span>
               <span className="text-sm text-muted-foreground">{copy.period} · pesos argentinos</span>
               <span className="text-sm text-muted-foreground">{copy.pitch}</span>
-              <span className="text-sm font-medium">Hasta {copy.searches} búsquedas activas · una cuenta</span>
+              <span className="text-sm font-medium">{searchesText(limits[OFFER_TIER[p]])} · una cuenta</span>
               <span className="text-sm text-muted-foreground">
                 {p === "pro_monthly" ? automatic ? "Renovación mensual automática. Podés cancelar desde Ajustes." : "En este piloto: períodos de 30 días y renovación manual, sin débito automático." : "Sin renovación automática."}
               </span>

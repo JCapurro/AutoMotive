@@ -13,7 +13,7 @@ import { SortSelect } from "@/components/app/sort-select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth";
-import { type PlanLimits, visibleResults } from "@/lib/pro";
+import { includesImmediateAlerts, type PlanLimits, visibleResults } from "@/lib/pro";
 import { collectionPending } from "@/lib/search-collection";
 import { loadSearchCollection } from "@/lib/search-collection-server";
 import { isSort, type Sort } from "@/lib/sorts";
@@ -104,7 +104,7 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
             {!profile.enabled ? <Badge variant="secondary">Pausada</Badge> : null}
           </h1>
           <div className="flex flex-wrap items-center gap-2">
-            <FrequencySelect id={profile.id} value={profile.notification_frequency} dailyOnly={Boolean((planLimits as PlanLimits | null)?.enforced && (planLimits as PlanLimits | null)?.plan === "free")} />
+            <FrequencySelect id={profile.id} value={profile.notification_frequency} dailyOnly={!includesImmediateAlerts(planLimits as PlanLimits | null)} />
             <PauseButton id={profile.id} enabled={profile.enabled} />
             <Button asChild variant="outline" size="sm">
               <Link href={`/app/searches/${profile.id}/edit`}>
@@ -168,7 +168,7 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
       {limit.over ? (
         <>
           <VisibleResultsReport profileId={profileId} total={count.all_count ?? 0} />
-          {limit.cap != null && rows.length > limit.cap ? <ProBanner placement="results" reason="results" /> : null}
+          {limit.cap != null && reach >= limit.cap ? <ProBanner placement="results" reason="results" maxResults={limit.cap} /> : null}
         </>
       ) : null}
 

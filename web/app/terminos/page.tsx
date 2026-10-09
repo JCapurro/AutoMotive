@@ -4,17 +4,26 @@ import Link from "next/link";
 import { Contact, LegalPage } from "@/components/legal-page";
 import { contactEmail } from "@/lib/env";
 import { webConfig } from "@/lib/config";
-import { planPrice } from "@/lib/pro";
+import { type PlanCaps, planPrice } from "@/lib/pro";
 
 export const metadata: Metadata = { title: "Términos de uso" };
 export const dynamic = "force-dynamic";
 
 // F7, punto 7. A first version for the pilot: have it reviewed before a
 // public launch.
+// The limits each plan includes, worded from app_config.plan_limits.
+function searches(caps: PlanCaps): string {
+  return caps.maxProfiles === 1 ? "una búsqueda activa" : `${caps.maxProfiles} búsquedas activas`;
+}
+function alerts(caps: PlanCaps): string {
+  return `hasta ${caps.immediateAlertsPerDay} ${caps.immediateAlertsPerDay === 1 ? "aviso inmediato" : "avisos inmediatos"} por día`;
+}
+
 export default async function TermsPage() {
-  const { proOffer, automaticPayments } = await webConfig();
+  const { proOffer, planLimits, automaticPayments } = await webConfig();
+  const { free, pass, pro } = planLimits;
   return (
-    <LegalPage title="Términos de uso" updated="5 de octubre de 2026">
+    <LegalPage title="Términos de uso" updated="9 de octubre de 2026">
       <p>
         Al crear una cuenta en Ese Auto aceptás estos términos. Si no estás de acuerdo, no uses el servicio.
       </p>
@@ -27,20 +36,22 @@ export default async function TermsPage() {
       </p>
 
       <h2>Prueba y planes</h2>
-      <p>La prueba gratis permite una búsqueda activa durante 72 horas corridas desde su primera activación,
-        una sola vez por cuenta, hasta 50 resultados y resumen diario. Editar, pausar o reemplazar la búsqueda no reinicia el plazo.</p>
-      <p>Particular cuesta {planPrice(proOffer.pass_30.amount)} ARS por 30 días, permite 3 búsquedas activas y no se renueva automáticamente.
-        Agencia cuesta {planPrice(proOffer.pro_monthly.amount)} ARS y permite 10 búsquedas activas en una cuenta.
+      <p>La prueba gratis permite {searches(free)} durante 72 horas corridas desde su primera activación,
+        una sola vez por cuenta, {free.maxVisibleResults == null ? "todos los resultados disponibles" : `hasta ${free.maxVisibleResults} resultados por búsqueda`}
+        {free.immediateAlertsPerDay > 0 ? `, ${alerts(free)} y resumen diario` : " y resumen diario"}. Editar, pausar o reemplazar la búsqueda no reinicia el plazo.</p>
+      <p>Particular cuesta {planPrice(proOffer.pass_30.amount)} ARS por 30 días, permite {searches(pass)} y {alerts(pass)}, y no se renueva automáticamente.
+        Agencia cuesta {planPrice(proOffer.pro_monthly.amount)} ARS y permite {searches(pro)} y {alerts(pro)} en una cuenta.
         {automaticPayments ? " Agencia se cobra cada mes mediante una suscripción de Mercado Pago hasta que la canceles. El acceso corresponde al mes calendario de cada débito aprobado. No hay otra prueba gratis ni almacenamiento de tarjetas en S Auto." : " En el piloto asistido, Agencia se activa por 30 días con renovación manual. La administración confirma el pago externo antes de activar el período."}</p>
       <p>Al vencer el acceso se detienen nuevas coincidencias y alertas, incluidos los favoritos; se conserva el historial.
         Pausar una búsqueda libera capacidad. Cada modelo guardado consume una búsqueda.
-        Los planes pagos incluyen hasta 10 avisos inmediatos de nuevas coincidencias por día y cuenta;
-        los restantes van al resumen. Las bajas de precio de favoritos mantienen su aviso inmediato con acceso vigente.</p>
+        Los avisos inmediatos de nuevas coincidencias se cuentan por día calendario, en hora de Argentina;
+        los que pasan el tope del plan van al resumen. Las bajas de precio de favoritos mantienen su aviso inmediato con acceso vigente.</p>
       <p>{automaticPayments ? "Podés cancelar la suscripción Agencia desde Ajustes. Mostramos la baja cuando Mercado Pago la confirma; se detienen las siguientes renovaciones y tu período ya pagado sigue vigente hasta su vencimiento." : "Podés avisar que no querés renovar desde Ajustes. Tu período ya pagado sigue vigente hasta su vencimiento."}
         {" "}Las suscripciones contratadas mediante enlaces genéricos se cancelan desde Mercado Pago; el aviso de no renovación en S Auto no detiene esos cobros.
         Para consultar un cobro o solicitar una devolución, contactá a <Contact email={contactEmail} />.
         Un pago pendiente o rechazado no activa acceso; una devolución total o contracargo revoca su período.
-        Los cambios de precio se comunican antes de contratar otro período y no modifican un período ya comprado.</p>
+        Los precios pueden actualizarse. En los planes con renovación automática, avisamos por mail 30 días antes del cambio.
+        Los pases ya pagos no cambian.</p>
 
       <h2>La información que mostramos</h2>
       <ul>
