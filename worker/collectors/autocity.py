@@ -5,7 +5,7 @@ import asyncio
 import re
 from urllib.parse import parse_qs, urljoin, urlparse
 
-from ._http import Page, dedupe, multiline_text, slim_html, soup, text_of, to_int
+from ._http import HEADERS, Page, dedupe, multiline_text, slim_html, soup, text_of, to_int
 from ._regional import PublicCatalogScraper, matches_vehicle, price
 from .base import Listing, ListingDetail
 
@@ -15,6 +15,8 @@ class AutocityScraper(PublicCatalogScraper):
     STRICT_DETAIL_ID = True
     BASE = "https://autocity.com.ar"
     CATALOG = BASE + "/catalogo/usados/"
+    # Identify our client: Autocity rejects the shared Chrome/124 header.
+    HTTP_HEADERS = {**HEADERS, "User-Agent": "EseAuto/1.0"}
     MAX_PAGES = 100
     PAGE_DELAY = .2
 

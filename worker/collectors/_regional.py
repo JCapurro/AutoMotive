@@ -50,6 +50,7 @@ def matches_vehicle(item: Listing, filters: dict) -> bool:
 class PublicCatalogScraper(BaseScraper):
     BASE = ""
     INVENTORY_TARGET = True
+    HTTP_HEADERS = HEADERS
 
     def __init__(self, *, transport: httpx.AsyncBaseTransport | None = None):
         self.transport = transport
@@ -58,7 +59,7 @@ class PublicCatalogScraper(BaseScraper):
         host = urlparse(self.BASE).hostname
         if urlparse(url).hostname != host:
             raise ValueError(f"{self.name}: URL outside the source")
-        async with async_client(headers=HEADERS, timeout=35, follow_redirects=False,
+        async with async_client(headers=self.HTTP_HEADERS, timeout=35, follow_redirects=False,
                                      transport=self.transport) as client:
             for _ in range(6):
                 response = await client.get(url)
