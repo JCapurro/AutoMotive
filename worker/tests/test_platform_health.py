@@ -8,6 +8,7 @@ from unittest.mock import patch
 import httpx
 
 from tools import platform_health as health
+from collectors._recency import POLICY_VERSION
 
 NOW = datetime(2026, 10, 5, tzinfo=timezone.utc)
 
@@ -53,6 +54,22 @@ class CollectorChecksTests(unittest.TestCase):
         self.assertIsNone(self.check(found=[0]*3, had_results=False))
         self.assertIsNone(self.check(found=[None]*3))
         self.assertIsNone(health.collector_checks([target(found=[0]*3)], NOW, empty_runs=0)['collector:kavak'])
+
+    def test_recent_publication_windows_can_legitimately_be_empty(self):
+        for source in ('mercadolibre', 'facebook'):
+            row = target(source=source, query={'publication_policy': POLICY_VERSION}, found=[0]*3)
+            self.assertIsNone(health.collector_checks([row], NOW)[f'collector:{source}'])
+            row['query'] = {}
+            self.assertIn('posible rotura', health.collector_checks([row], NOW)[f'collector:{source}'])
+
+    def test_publication_window_still_alerts_failures_stalls_and_missed_cadence(self):
+        for changes in (
+            dict(statuses=['failed']*3, latest_status='failed'),
+            dict(latest_status='running', started_at=NOW-timedelta(hours=1)),
+            dict(found=[0]*3, next_run_at=NOW-timedelta(hours=2)),
+        ):
+            row = target(source='mercadolibre', query={'publication_policy': POLICY_VERSION}, **changes)
+            self.assertIsNotNone(health.collector_checks([row], NOW)['collector:mercadolibre'])
 
     def test_recovery_requires_a_successful_completed_run(self):
         for status in ('running', 'failed'):
