@@ -16,6 +16,7 @@ import httpx
 from notifications import templates
 from notifications.channels.base import Notification, SendResult
 from notifications.links import Links
+from notifications.email_assets import logo_attachment
 
 
 RESEND_URL = "https://api.resend.com/emails"
@@ -38,7 +39,7 @@ class ResendEmailChannel:
             return SendResult(False, "el usuario no tiene email")
         msg = templates.email(notification, self.links, self.clock())
         body = {"from": self.sender, "to": [notification.email], "subject": msg.subject,
-                "html": msg.html, "text": msg.text}
+                "html": msg.html, "text": msg.text, "attachments": [logo_attachment()]}
         if one_click := self.links.unsubscribe_one_click(notification.unsubscribe_token):
             body["headers"] = {"List-Unsubscribe": f"<{one_click}>",
                                "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"}

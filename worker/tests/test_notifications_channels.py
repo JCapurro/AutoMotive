@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from base64 import b64decode
 import unittest
 
 import httpx
@@ -90,10 +91,15 @@ class ResendEmailChannelTests(unittest.IsolatedAsyncioTestCase):
         body = json.loads(req.content)
         self.assertEqual(body["to"], ["ana@automotive.test"])
         self.assertEqual(body["from"], "Automotive <alertas@automotive.test>")
-        self.assertEqual(body["subject"], "📉 Bajó de precio: Ford Fiesta Titanium 2017 (-6,1%)")
+        self.assertEqual(body["subject"], "📉 Bajó de precio: Ford Fiesta Titanium 2017 (-6,1%) · Ese Auto")
         self.assertTrue(body["text"].startswith("📉 Bajó de precio\nFord Fiesta Titanium 2017\n"
                                                 "Antes: USD 11.500\nAhora: USD 10.800\n-6,1%"))
         self.assertIn(">Bajó de precio</h1>", body["html"])
+        [logo] = body["attachments"]
+        self.assertEqual(logo["content_id"], "ese-auto-logo")
+        self.assertEqual(logo["content_type"], "image/png")
+        self.assertTrue(b64decode(logo["content"]).startswith(b"\x89PNG\r\n\x1a\n"))
+        self.assertIn('src="cid:ese-auto-logo"', body["html"])
 
     async def test_every_email_can_unsubscribe(self):
         """F7, punto 7: a footer link and List-Unsubscribe one-click (RFC 8058)."""

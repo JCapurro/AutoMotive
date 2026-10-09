@@ -22,6 +22,7 @@ from intelligence.config import DEFAULT_COMPARABLES
 from notifications import dispatch
 from notifications.channels.base import Channel
 from notifications.engine import LISTING_GONE, MATCH, PRICE_DROP, Audience, Event, Rules, decide_all
+from notifications.media import image_urls
 from notifications.templates import MAX_FLAGS
 
 
@@ -80,6 +81,7 @@ def listing_payload(row: Mapping[str, Any]) -> dict[str, Any]:
     if out["price"] is not None:
         out["price"] = float(out["price"])
     out["id"] = row.get("id")
+    out["images"] = image_urls(row.get("images"))
     # What the description says (normalization/description_facts.py): the
     # price is the cash one, the car can be financed.
     facts = row.get("description_facts") or {}
