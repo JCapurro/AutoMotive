@@ -28,6 +28,7 @@ from intelligence import copy
 from notifications.channels.base import Notification
 from notifications.email_html import render as render_email_html
 from notifications.links import Links
+from notifications.media import image_urls
 
 
 HEADER = {
@@ -146,6 +147,8 @@ class DigestItem:
     badge: str | None = None
     highlighted: bool = False
     score: int | float | None = None
+    images: list[str] = field(default_factory=list)
+    detail_url: str | None = None
 
 
 @dataclass
@@ -157,6 +160,9 @@ class Content:
     link: Link | None = None
     notes: list[str] = field(default_factory=list)       # what explains it
     sections: list[tuple[str, list[DigestItem]]] = field(default_factory=list)   # digest
+    images: list[str] = field(default_factory=list)
+    price: str | None = None
+    previous_price: str | None = None
 
 
 def _notes(p: Mapping[str, Any], listing: Mapping[str, Any]) -> list[str]:
@@ -177,9 +183,10 @@ def content(n: Notification, links: Links, now: datetime) -> Content:
     car = vehicle(listing)
     link = Link(VIEW_LISTING, links.listing(n.id, listing.get("url") or ""))
     c = Content(HEADER[n.kind], f"{HEADER[n.kind]}: {car}", vehicle=car, link=link,
-                notes=_notes(p, listing))
+                notes=_notes(p, listing), images=image_urls(listing.get("images")))
 
     if n.kind in ("new_match", "opportunity"):
+        c.price = price(listing)
         c.lines += [x for x in (km(listing), price(listing)) if x]
         if listing.get("financing"):
             c.notes.append(FINANCEABLE)
@@ -199,6 +206,7 @@ def content(n: Notification, links: Links, now: datetime) -> Content:
     elif n.kind == "price_drop":
         drop = p.get("price_drop") or {}
         before, after = before_after(drop, listing)
+        c.price, c.previous_price = after, before
         c.lines += [f"Antes: {before}", f"Ahora: {after}", f"-{pct(drop.get('drop_pct') or 0)}%"]
         c.subject += f" (-{pct(drop.get('drop_pct') or 0)}%)"
         if match.get("score") is not None:
@@ -215,6 +223,8 @@ def _digest(n: Notification, links: Links) -> Content:
     def item(it: Mapping[str, Any]) -> DigestItem:
         listing = it.get("listing") or {}
         url = links.listing(n.id, listing.get("url") or "", it.get("listing_id"))
+        visual = {"images": image_urls(listing.get("images")),
+                  "detail_url": links.detail(n.id, it["listing_id"]) if it.get("listing_id") is not None else None}
         match = it.get("match") or {}
         details = [str(x) for x in (km(listing), listing.get("location_text")) if x]
         if it["section"] == "price_drops":
@@ -223,17 +233,17 @@ def _digest(n: Notification, links: Links) -> Content:
             return DigestItem(vehicle(listing), url, "📉 ",
                               f" · {before} → {after} (-{pct(drop.get('drop_pct') or 0)}%)",
                               details=details, price=after, previous_price=before,
-                              badge=f"Bajó {pct(drop.get('drop_pct') or 0)}%")
+                              badge=f"Bajó {pct(drop.get('drop_pct') or 0)}%", **visual)
         if it["section"] == "gone":
             return DigestItem(vehicle(listing), url, "🚫 ", details=details,
-                              badge="Ya no está disponible")
+                              badge="Ya no está disponible", **visual)
         extra = [x for x in (km(listing), price(listing)) if x]
         prefix = f"{_level_emoji(match.get('level'))} {match.get('score')} · " if match else ""
         label = copy.LEVEL_LABEL.get(match.get("level"))
         return DigestItem(vehicle(listing), url, prefix, "".join(f" · {x}" for x in extra),
                           details=details, price=price(listing),
                           badge=label.split(" ", 1)[1] if label else None,
-                          highlighted=match.get("level") == "high", score=match.get("score"))
+                          highlighted=match.get("level") == "high", score=match.get("score"), **visual)
 
     sections = [(DIGEST_SECTIONS[s], [item(it) for it in items if it["section"] == s])
                 for s in DIGEST_SECTIONS]
@@ -304,6 +314,13 @@ class EmailMessage:
 def email(n: Notification, links: Links, now: datetime) -> EmailMessage:
     c = content(n, links, now)
     detail = links.detail(n.id) if n.kind != "digest" and n.listing_id is not None else None
+    # Keep Telegram/source links as they are. Email's main action brings people
+    # to the analysis in Ese Auto, using the existing click-tracking route.
+    if detail:
+        c.link = Link("Ver auto en Ese Auto", detail)
+    if n.kind != "digest":
+        c.subject += " · Ese Auto"
+    app_url = f"{links.base_url.rstrip('/')}/app" if links.tracked else None
 
     text = [c.header]
     if c.vehicle:
@@ -311,11 +328,11 @@ def email(n: Notification, links: Links, now: datetime) -> EmailMessage:
     text += c.lines
     if c.link:
         text.append(f"{c.link.label}: {c.link.url}")
-    if detail:
-        text.append(f"{VIEW_IN_APP}: {detail}")
     for title, rows in c.sections:
         text += ["", title]
-        text += [f"{r.prefix}{r.text}{r.suffix}\n  {r.url}" for r in rows]
+        text += [f"{r.prefix}{r.text}{r.suffix}\n  {r.detail_url or r.url}" for r in rows]
+    if app_url:
+        text += ["", f"Ver mis búsquedas: {app_url}"]
     if c.notes:
         text += [""] + c.notes
     unsubscribe = links.unsubscribe(n.unsubscribe_token)
@@ -324,7 +341,7 @@ def email(n: Notification, links: Links, now: datetime) -> EmailMessage:
         text.append(f"{UNSUBSCRIBE}: {unsubscribe}")
 
     html = render_email_html(c, kind=n.kind, now=now, day=n.payload.get("date"),
-                             detail_url=detail, app_url=f"{links.base_url}/app" if links.tracked else None,
+                             detail_url=detail, app_url=app_url,
                              unsubscribe_url=unsubscribe, footer=EMAIL_FOOTER,
                              unsubscribe_label=UNSUBSCRIBE)
     return EmailMessage(c.subject, "\n".join(text), html)

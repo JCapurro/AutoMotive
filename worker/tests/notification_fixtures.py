@@ -14,6 +14,8 @@ FIESTA = {"id": 501, "title": "Ford Fiesta Titanium 1.6 2017 impecable", "make":
           "trim": "Titanium", "year": 2017, "mileage_km": 112000, "price": 10300.0, "currency": "USD",
           "url": "https://auto.mercadolibre.com.ar/MLA-123456789-ford-fiesta-titanium-_JM",
           "source": "mercadolibre", "location_text": "Palermo, Capital Federal",
+          "images": ["https://images.example.test/fiesta-front.jpg", {"url": "https://images.example.test/fiesta-side.jpg"},
+                     "https://images.example.test/fiesta-interior.jpg"],
           "published_at": (NOW - timedelta(minutes=4)).isoformat(),
           "first_seen_at": (NOW - timedelta(minutes=2)).isoformat()}
 
