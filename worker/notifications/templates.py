@@ -373,7 +373,7 @@ TRIAL_REMINDER_PLANS = ("Para volver a monitorear, elegí Particular ({particula
 TRIAL_REMINDER_PLANS_FALLBACK = "Para volver a monitorear, elegí Particular o Agencia."
 TRIAL_REMINDER_AFTER = "Después de pagar, reactivás tu búsqueda desde Ese Auto."
 TRIAL_REMINDER_CTA = "Ver planes"
-TRIAL_REMINDER_NOTE = "No hay cobros automáticos: solo pagás si elegís un plan."
+TRIAL_REMINDER_NOTE = "La prueba gratis no genera cobros: solo pagás si elegís un plan."
 TRIAL_REMINDER_FOOTER = ("Recibís este email porque activaste una búsqueda gratis en Ese Auto. "
                          "Es el único aviso que te mandamos sobre el fin de la prueba.")
 # Plain UTM link: /r/ only tracks listings.

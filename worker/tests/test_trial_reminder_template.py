@@ -63,7 +63,7 @@ class TrialReminderEmailTests(unittest.TestCase):
             "Después de pagar, reactivás tu búsqueda desde Ese Auto.",
             f"Ver planes: {PLANS_URL}",
         ])
-        self.assertIn("No hay cobros automáticos: solo pagás si elegís un plan.", msg.text)
+        self.assertIn("La prueba gratis no genera cobros: solo pagás si elegís un plan.", msg.text)
         self.assertIn(">TU PRUEBA GRATIS</p>", msg.html)
         self.assertIn(">Terminó tu prueba de 3 días</h1>", msg.html)
         self.assertIn("Tus resultados y favoritos siguen guardados. Elegí un plan para volver a recibir alertas.",

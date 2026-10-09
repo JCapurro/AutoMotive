@@ -58,7 +58,7 @@ Se edita desde `/admin/config`; el worker toma el cambio en menos de un minuto. 
 - Cuenta cuándo venció la prueba (fecha y hora argentina), que la búsqueda quedó pausada y que se conservan resultados y favoritos.
 - Muestra Particular y Agencia con los importes de `app_config.pro_offer`. Si la oferta falta o es inválida, nombra los planes sin precio, nunca con un precio equivocado.
 - Botón «Ver planes» a `/app/pro?utm_source=email&utm_medium=email&utm_campaign=trial_reminder`. No usa `/r/`, que solo registra clics de publicaciones.
-- Nota: «No hay cobros automáticos: solo pagás si elegís un plan.»
+- Nota: «La prueba gratis no genera cobros: solo pagás si elegís un plan.»
 - Pie propio: aclara que es el único aviso sobre el fin de la prueba, con el link de baja. Lleva también `List-Unsubscribe` de un clic, igual que las alertas.
 
 Snapshot revisado en `worker/tests/snapshots/notifications/trial_reminder.txt`.
