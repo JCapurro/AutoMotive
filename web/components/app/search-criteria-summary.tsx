@@ -1,8 +1,8 @@
-import { Banknote, CalendarDays, CarFront, Check, ChevronDown, CircleHelp, Gauge, Loader2, MapPin, Pause, Settings2, TriangleAlert, type LucideIcon } from "lucide-react";
+import { Banknote, CalendarDays, CarFront, Check, ChevronDown, Gauge, Loader2, MapPin, Settings2, type LucideIcon } from "lucide-react";
 
 import { FUEL, SELLER, TRANSMISSION } from "@/lib/copy";
 import { number } from "@/lib/format";
-import type { CollectionState, SearchSource } from "@/lib/search-collection";
+import type { SearchSource } from "@/lib/search-collection";
 import type { Filters, Preferences } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -14,15 +14,6 @@ type Props = {
   radiusKm: number | null;
   hasLocation: boolean;
   sources: SearchSource[] | null;
-};
-
-const STATUS: Record<CollectionState, { label: string; icon: LucideIcon }> = {
-  waiting: { label: "Recolección pendiente", icon: Loader2 },
-  loading: { label: "Recolectando datos", icon: Loader2 },
-  done: { label: "Recolección completada", icon: Check },
-  failed: { label: "No se pudo completar la recolección", icon: TriangleAlert },
-  paused: { label: "Recolección pausada", icon: Pause },
-  unknown: { label: "Estado de recolección sin confirmar", icon: CircleHelp },
 };
 
 function range(min: number | undefined, max: number | undefined, format: (value: number) => string) {
@@ -112,14 +103,16 @@ export function SearchCriteriaSummary({ name, filters: f, preferences: p, radius
             <span className="text-muted-foreground">Plataformas</span>
             <ul aria-label="Plataformas de la búsqueda" className="flex flex-wrap gap-1.5">
               {platforms.map((source) => {
-                const state = source.enabled ? source.collectionState ?? "unknown" : "paused";
-                const { label, icon: Icon } = STATUS[state];
-                const loading = state === "waiting" || state === "loading";
+                // This indicator describes activity; collector health stays in admin.
+                const loading = source.enabled && source.collectionState === "loading";
+                const label = loading ? "Buscando publicaciones" : "Sin búsqueda en curso";
+                const Icon = loading ? Loader2 : Check;
+                const paused = !source.enabled || source.collectionState === "paused";
                 return (
-                  <li key={source.id} title={label} aria-label={`${source.name}: ${label}`} data-collection-state={state}
+                  <li key={source.id} title={label} aria-label={`${source.name}: ${label}`} data-collection-state={loading ? "loading" : "idle"}
                     className="flex max-w-full items-center gap-1.5 rounded border px-2 py-1 font-medium">
-                    <span className="min-w-0 break-words">{source.name}{state === "paused" ? <span className="font-normal text-muted-foreground"> · pausada</span> : null}</span>
-                    <Icon aria-hidden className={`size-3.5 shrink-0 ${loading ? "animate-spin text-muted-foreground motion-reduce:animate-none" : state === "done" ? "text-ok" : state === "failed" ? "text-warn" : "text-muted-foreground"}`} />
+                    <span className="min-w-0 break-words">{source.name}{paused ? <span className="font-normal text-muted-foreground"> · pausada</span> : null}</span>
+                    <Icon aria-hidden className={`size-3.5 shrink-0 ${loading ? "animate-spin text-muted-foreground motion-reduce:animate-none" : "text-ok"}`} />
                   </li>
                 );
               })}

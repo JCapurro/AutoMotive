@@ -67,17 +67,18 @@ describe("first search preparation", () => {
     expect(html).not.toContain("Todavía no hay publicaciones");
     state.collectionState = "done";
     const completed = await resultsHtml();
-    expect(completed).toContain('data-collection-state="done"');
+    expect(completed).toContain('data-collection-state="idle"');
     expect(completed).not.toContain("data-refresh-every");
     expect(completed).not.toContain('data-testid="search-preparation"');
   });
-  it("refreshes failed collection at a slower cadence without a false tick", async () => {
+  it("keeps retrying failed collection while showing only an inactive tick", async () => {
     state.profile.bootstrapped_at = new Date(now).toISOString();
     state.collectionState = "failed";
     const html = await resultsHtml();
     expect(html).toContain('data-refresh-every="10000"');
-    expect(html).toContain('data-collection-state="failed"');
-    expect(html).not.toContain('data-collection-state="done"');
+    expect(html).toContain('data-collection-state="idle"');
+    expect(html).not.toContain('data-collection-state="failed"');
+    expect(html).not.toContain("No se pudo completar la recolección");
     expect(html).not.toContain('data-testid="search-preparation"');
   });
   it("shows the saved criteria and source catalog below the search title", async () => {

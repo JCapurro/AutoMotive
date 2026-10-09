@@ -16,20 +16,30 @@ function html(props: Partial<ComponentProps<typeof SearchCriteriaSummary>> = {})
 }
 
 describe("saved search criteria", () => {
-  it("shows independent accessible loading, completed, failed and paused platform states", () => {
+  it("shows activity only while searching and a tick for every inactive platform", () => {
     const result = html({ sources: [
       { id: "mercadolibre", name: "MercadoLibre", enabled: true, collectionState: "loading" },
       { id: "kavak", name: "Kavak", enabled: true, collectionState: "done" },
       { id: "autocosmos", name: "Autocosmos", enabled: true, collectionState: "failed" },
       { id: "v6", name: "V6", enabled: false, collectionState: "done" },
-    ], filters: { sources: ["mercadolibre", "kavak", "autocosmos", "v6"] } });
-    expect(result).toContain('aria-label="MercadoLibre: Recolectando datos"');
-    expect(result).toContain('aria-label="Kavak: Recolección completada"');
-    expect(result).toContain('aria-label="Autocosmos: No se pudo completar la recolección"');
-    expect(result).toContain('aria-label="V6: Recolección pausada"');
+      { id: "carone", name: "Car One", enabled: true, collectionState: "waiting" },
+      { id: "gruporandazzo", name: "Grupo Randazzo", enabled: true, collectionState: "unknown" },
+    ] });
+    expect(result).toContain('aria-label="MercadoLibre: Buscando publicaciones"');
+    expect(result).toContain('aria-label="Kavak: Sin búsqueda en curso"');
+    expect(result).toContain('aria-label="Autocosmos: Sin búsqueda en curso"');
+    expect(result).toContain('aria-label="Car One: Sin búsqueda en curso"');
+    expect(result).toContain('aria-label="Grupo Randazzo: Sin búsqueda en curso"');
     expect(result).toContain("motion-reduce:animate-none");
-    expect(result.match(/data-collection-state="done"/g)).toHaveLength(1);
-    expect(html()).not.toContain('data-collection-state="done"');
+    expect(result.match(/data-collection-state="loading"/g)).toHaveLength(1);
+    expect(result.match(/data-collection-state="idle"/g)).toHaveLength(4);
+    expect(result).toContain("lucide-check");
+    expect(result).not.toContain("No se pudo completar");
+    expect(result).not.toContain("triangle-alert");
+    expect(result).not.toContain("text-warn");
+    expect(result).not.toContain('data-collection-state="failed"');
+    expect(html({ filters: { sources: ["autocosmos"] } })).toContain('aria-label="Autocosmos: Sin búsqueda en curso"');
+    expect(html({ sources: [{ id: "v6", name: "V6", enabled: false, collectionState: "loading" }], filters: { sources: ["v6"] } })).not.toContain("animate-spin");
   });
   it("shows both bounds, currency and the real location without repeating the title", () => {
     const result = html({ filters: { make: "Ford", model: "Fiesta", year_min: 2016, year_max: 2018,
