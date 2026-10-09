@@ -4,6 +4,15 @@ Autorizado el 2/10/2026: Particular $15.000, pago único por 30 días; Agencia $
 
 Enlaces originales: [Particular](https://mpago.la/2Vf746M) y [Agencia](https://mpago.la/1t6wWDT). Verificados en el checkout público: nombres, importes y recurrencia. Son referencias para la operación asistida; no contienen la identidad del usuario de S Auto. Las contrataciones automáticas deben comenzar desde la cuenta autenticada de S Auto, con una referencia aleatoria propia. Un regreso del checkout nunca concede acceso.
 
+## Cambiar el monto de una suscripción activa · 9/10/2026
+
+Verificado para la fase 3 de [PLANES_2026-10.md](PLANES_2026-10.md). No se cambió ninguna suscripción.
+
+- **Qué permite Mercado Pago.** Cambiar el monto de una suscripción existente con `PUT /preapproval/{id}` y el cuerpo `{"auto_recurring": {"transaction_amount": 100000, "currency_id": "ARS"}}`. Está en [Gestión de suscripciones › Modificar monto](https://www.mercadopago.com.ar/developers/es/docs/subscriptions/subscription-management).
+- **Qué no documenta.** Si el pagador tiene que volver a autorizar y desde qué débito rige el monto nuevo. Hay que probarlo en el ensayo aislado (`automotive_mp_test`) antes de hacerlo en producción.
+- **Cómo están armadas las nuestras.** Las suscripciones de Agencia son preapprovals sin plan asociado: `createCheckout` crea cada una con el monto de su `billing_checkouts.amount`, tomado de `app_config.pro_offer` al iniciar el checkout. Cambiar `pro_offer` (y su `version`) solo afecta altas nuevas.
+- **Qué se rompe si se cambia mal.** Al cambiar el monto de una suscripción existente hay que actualizar `billing_checkouts.amount` en la misma operación. `subscription()` y `apply_mercadopago_payment` rechazan con `payment_mismatch` cualquier monto distinto del guardado; los débitos nuevos no se aplicarían y el acceso no se renovaría. Según los términos, además hay que avisar por mail 30 días antes.
+
 ## Estado actual · 5/10/2026
 
 La contratación automática está habilitada por pedido del propietario: `MERCADOPAGO_ENABLED=true` en Vercel producción, `MERCADOPAGO_TEST_MODE=false` y `app_config.commercial_pilot.enabled=true`. Particular cuesta ARS 15.000 por 30 días, pago único, con tres búsquedas activas. Agencia cuesta ARS 75.000 por mes, con renovación automática y diez búsquedas activas. La navegación de escritorio y móvil incluye **Planes**, en `/app/pro`; la portada conduce al plan elegido después del ingreso.
