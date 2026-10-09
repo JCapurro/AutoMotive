@@ -19,14 +19,15 @@ Markdown.
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from html import escape
 from typing import Any, Mapping
 
 from intelligence import copy
 from notifications.channels.base import Notification
-from notifications.email_html import render as render_email_html
+from notifications.email_html import AR, MONTHS, render as render_email_html
 from notifications.links import Links
 
 
@@ -334,3 +335,85 @@ def web(n: Notification, links: Links, now: datetime) -> dict[str, Any]:
     """Title and body lines for the web inbox (F4 renders the row itself)."""
     c = content(n, links, now)
     return {"title": c.header, "vehicle": c.vehicle, "lines": c.lines, "notes": c.notes}
+
+
+# ---------------------------------------------------------------------------
+# Free-trial reminder (docs/RECORDATORIO_PRUEBA.md): one email per account
+# when the 72 h trial ends without a plan. Not an alert: no listing, no /r/
+# link, its own footer (the account no longer has active searches).
+# ---------------------------------------------------------------------------
+
+TRIAL_REMINDER_SUBJECT = "Terminó tu prueba gratis en Ese Auto"
+TRIAL_REMINDER_EYEBROW = "TU PRUEBA GRATIS"
+TRIAL_REMINDER_TITLE = "Terminó tu prueba de 3 días"
+TRIAL_REMINDER_PREHEADER = ("Tus resultados y favoritos siguen guardados. "
+                            "Elegí un plan para volver a recibir alertas.")
+TRIAL_REMINDER_ENDED = "Tu prueba gratis venció el {date} a las {time} (hora de Argentina)."
+TRIAL_REMINDER_PAUSED = ("Pausamos tu búsqueda y dejamos de mandarte alertas. "
+                         "Conservamos tus resultados y favoritos.")
+TRIAL_REMINDER_PLANS = ("Para volver a monitorear, elegí Particular ({particular} por {days} días, "
+                        "pago único) o Agencia ({agencia} por mes).")
+TRIAL_REMINDER_PLANS_FALLBACK = "Para volver a monitorear, elegí Particular o Agencia."
+TRIAL_REMINDER_AFTER = "Después de pagar, reactivás tu búsqueda desde Ese Auto."
+TRIAL_REMINDER_CTA = "Ver planes"
+TRIAL_REMINDER_NOTE = "No hay cobros automáticos: solo pagás si elegís un plan."
+TRIAL_REMINDER_FOOTER = ("Recibís este email porque activaste una búsqueda gratis en Ese Auto. "
+                         "Es el único aviso que te mandamos sobre el fin de la prueba.")
+# Plain UTM link: /r/ only tracks listings.
+TRIAL_REMINDER_PATH = "/app/pro?utm_source=email&utm_medium=email&utm_campaign=trial_reminder"
+
+
+def _offer_price(offer: Mapping[str, Any], plan: str) -> tuple[str, int | None] | None:
+    """("ARS 15.000", 30) from app_config.pro_offer[plan]; None if it isn't usable."""
+    price = offer.get(plan)
+    if not isinstance(price, Mapping):
+        return None
+    amount, currency, days = price.get("amount"), price.get("currency"), price.get("days")
+    if isinstance(amount, bool) or not isinstance(currency, str) or not currency.strip():
+        return None
+    try:
+        amount = float(amount)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(amount) or amount <= 0:
+        return None
+    if isinstance(days, bool) or not isinstance(days, int) or days <= 0:
+        days = None
+    return copy.money(amount, currency.strip()), days
+
+
+def trial_reminder_plans(offer: Mapping[str, Any] | None) -> str:
+    """The plan line with the current prices, or without them if pro_offer is
+    missing or invalid (never a wrong price)."""
+    if isinstance(offer, Mapping):
+        particular, agencia = _offer_price(offer, "pass_30"), _offer_price(offer, "pro_monthly")
+        if particular and agencia and particular[1]:
+            return TRIAL_REMINDER_PLANS.format(particular=particular[0], days=particular[1],
+                                               agencia=agencia[0])
+    return TRIAL_REMINDER_PLANS_FALLBACK
+
+
+def trial_reminder_email(trial_expires_at: datetime, links: Links, unsubscribe_token: str | None,
+                         now: datetime, offer: Mapping[str, Any] | None) -> EmailMessage:
+    """The free-trial reminder: subject, text and HTML. Dates in Argentina's time."""
+    if trial_expires_at.tzinfo is None:
+        trial_expires_at = trial_expires_at.replace(tzinfo=timezone.utc)
+    ended = trial_expires_at.astimezone(AR)
+    plans_url = f"{links.base_url}{TRIAL_REMINDER_PATH}"
+    c = Content(TRIAL_REMINDER_TITLE, TRIAL_REMINDER_SUBJECT,
+                lines=[TRIAL_REMINDER_ENDED.format(date=f"{ended.day} de {MONTHS[ended.month - 1]}",
+                                                   time=f"{ended:%H:%M}"),
+                       TRIAL_REMINDER_PAUSED, trial_reminder_plans(offer), TRIAL_REMINDER_AFTER],
+                link=Link(TRIAL_REMINDER_CTA, plans_url), notes=[TRIAL_REMINDER_NOTE])
+    unsubscribe = links.unsubscribe(unsubscribe_token)
+
+    text = [c.header, *c.lines, f"{c.link.label}: {c.link.url}", "", *c.notes,
+            "", "—", TRIAL_REMINDER_FOOTER]
+    if unsubscribe:
+        text.append(f"{UNSUBSCRIBE}: {unsubscribe}")
+
+    html = render_email_html(c, kind="trial_reminder", now=now, day=None, detail_url=None, app_url=None,
+                             unsubscribe_url=unsubscribe, footer=TRIAL_REMINDER_FOOTER,
+                             unsubscribe_label=UNSUBSCRIBE, eyebrow=TRIAL_REMINDER_EYEBROW,
+                             title=TRIAL_REMINDER_TITLE, preheader=TRIAL_REMINDER_PREHEADER)
+    return EmailMessage(c.subject, "\n".join(text), html)

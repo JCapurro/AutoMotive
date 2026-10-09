@@ -75,7 +75,10 @@ def _digest_card(item: DigestItem) -> str:
 
 def render(c: Content, *, kind: str, now: datetime, day: str | None,
            detail_url: str | None, app_url: str | None, unsubscribe_url: str | None,
-           footer: str, unsubscribe_label: str) -> str:
+           footer: str, unsubscribe_label: str, eyebrow: str | None = None,
+           title: str | None = None, preheader: str | None = None) -> str:
+    """An alert, the digest or (with eyebrow/title/preheader) any other
+    account email, such as the free-trial reminder."""
     try:
         when = date.fromisoformat(day) if day else now.astimezone(AR).date()
     except (TypeError, ValueError):
@@ -83,18 +86,21 @@ def render(c: Content, *, kind: str, now: datetime, day: str | None,
     date_label = f"{when.day} de {MONTHS[when.month - 1]} de {when.year}"
     digest = kind == "digest"
     count = sum(len(rows) for _, rows in c.sections)
-    title = "Tu resumen del día" if digest else c.header.split(" ", 1)[-1]
-    preheader = (f"{count} novedad{'es' if count != 1 else ''} en tus búsquedas. "
-                 "Publicaciones nuevas, cambios de precio y avisos que ya no están disponibles."
-                 if digest else c.subject)
+    if title is None:
+        title = "Tu resumen del día" if digest else c.header.split(" ", 1)[-1]
+    if preheader is None:
+        preheader = (f"{count} novedad{'es' if count != 1 else ''} en tus búsquedas. "
+                     "Publicaciones nuevas, cambios de precio y avisos que ya no están disponibles."
+                     if digest else c.subject)
+    if eyebrow is None:
+        eyebrow = "RESUMEN DIARIO" if digest else "TUS ALERTAS"
     header = _table(
         f'<tr><td style="padding:24px 28px;border-bottom:1px solid {BORDER}">'
         f'<p style="margin:0;font-size:24px;line-height:30px;font-weight:bold;letter-spacing:-1px;color:{INK}">'
         'ese auto<span style="color:#75809a">.</span></p>'
         f'<p style="margin:4px 0 0;font-size:12px;color:{MUTED}">Tu búsqueda, al día.</p></td></tr>')
 
-    body = [_p("RESUMEN DIARIO" if digest else "TUS ALERTAS",
-               style=f"font-size:10px;letter-spacing:2px;font-weight:bold;color:{MUTED}"),
+    body = [_p(eyebrow, style=f"font-size:10px;letter-spacing:2px;font-weight:bold;color:{MUTED}"),
             _p(date_label, style=f"margin-top:8px;font-size:12px;color:{MUTED}"),
             f'<h1 style="margin:16px 0 0;font-size:30px;line-height:36px;letter-spacing:-1px;'
             f'font-weight:bold;color:{INK}">{escape(title)}</h1>']

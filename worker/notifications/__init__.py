@@ -4,6 +4,7 @@
     service.py    listing/match events → notifications rows
     dispatch.py   queued rows → channels, with retries
     digest.py     the daily summary
+    trial_reminder.py  the one free-trial reminder email (not an alert, own ledger)
     templates.py  §22 copy for Telegram, email and web
     links.py      /r/<id> tracked links
     channels/     Channel adapters: telegram, email (Resend), web

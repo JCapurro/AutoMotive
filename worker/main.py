@@ -7,7 +7,7 @@ from telegram.ext import Application
 
 from config import (EMAIL_FROM, ENRICH_TICK_SECONDS, HEARTBEAT_SECONDS, LOG_FILE, LOG_KEEP_DAYS,
                     NOTIFY_TICK_SECONDS, RESEND_API_KEY, TELEGRAM_ADMIN_CHAT_ID, TELEGRAM_ENABLED, TELEGRAM_TOKEN,
-                    WATCHLIST_TICK_SECONDS, WEB_BASE_URL, startup_warnings)
+                    TRIAL_REMINDER_TICK_SECONDS, WATCHLIST_TICK_SECONDS, WEB_BASE_URL, startup_warnings)
 import db
 from bot.handlers import register
 from llm import build_provider
@@ -17,6 +17,7 @@ from notifications.digest import digest_loop
 from notifications.links import Links
 from notifications.ops import SourceAlerts
 from notifications.service import Notifier
+from notifications.trial_reminder import run_trial_reminders
 from pipeline import heartbeat
 from pipeline.enrich import enrich_pass
 from pipeline.llm_jobs import llm_jobs_loop
@@ -132,6 +133,9 @@ async def amain() -> None:
         asyncio.create_task(_every("notifications", NOTIFY_TICK_SECONDS,
                                    lambda _stop: notifier.deliver(), stop)),
         asyncio.create_task(digest_loop(notifier, stop)),
+        asyncio.create_task(_every("trial_reminders", TRIAL_REMINDER_TICK_SECONDS,
+                                   lambda _stop: run_trial_reminders(notifier.channels.get("email"), links),
+                                   stop)),
         asyncio.create_task(nightly_loop(stop)),
         asyncio.create_task(llm_jobs_loop(build_provider(), stop)),
     ]

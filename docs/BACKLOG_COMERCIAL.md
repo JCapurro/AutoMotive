@@ -19,6 +19,7 @@ Precios definidos por el usuario: **Particular ARS 15.000 por 30 días, pago ún
 | COM-10 | Pruebas locales de permisos, período, capacidad, pagos y alertas; web compilada y vista en móvil/escritorio | Prueba con proveedor real/sandbox y login, publicar y habilitar cohorte limitada |
 | COM-01 / COM-07 / COM-09 | Operación externa pendiente | Validar oferta con candidatos, observar cobertura 7 días, presupuesto/hosting, contacto, comprobantes y condiciones |
 | COM-04 autoservicio | Implementado por autorización expresa: checkout alojado por usuario, precio aceptado, firma y activación idempotente | Credenciales, ambas migraciones, despliegue y pruebas con Mercado Pago; ver [guía](MERCADO_PAGO.md) |
+| COM-11 · aviso de fin de prueba | Implementado el 9/10/2026: un único email a cuentas cuya prueba terminó sin compra, entre 09:00 y 21:00 (hora argentina), con tope diario y ventana configurables en `app_config.trial_reminder`; ver [recordatorio](RECORDATORIO_PRUEBA.md) | Aplicar la migración, desplegar el worker y verificar el primer envío en producción |
 
 La mensualidad Agencia vigente es una medida de períodos pagados; no es MRR de suscripciones con débito automático. Las devoluciones del piloto se registran después de verificarlas en el proveedor, por el importe total, empezando por el período más nuevo si existen renovaciones adelantadas. La configuración no modifica el importe histórico de una compra.
 

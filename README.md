@@ -100,6 +100,8 @@ hace…»; el orden por recientes y el componente de antigüedad usan el mismo r
    ([notifications/](worker/notifications)), que decide según el nivel mínimo,
    la frecuencia, el tope diario y el dedupe, y envía por Telegram, email y el
    inbox web (o los junta en el digest diario). Lo ya visto no se re-notifica.
+   Aparte, cuando una prueba gratis termina sin compra, el worker manda un único
+   email para elegir un plan ([recordatorio](docs/RECORDATORIO_PRUEBA.md)).
 7. **Enrichment** ([enrich.py](worker/pipeline/enrich.py)): las publicaciones
    con al menos un match se completan con `fetch_detail()` (descripción,
    versión, transmisión, vendedor, todas las fotos), con una cola por fuente.

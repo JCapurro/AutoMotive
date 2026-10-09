@@ -11,7 +11,7 @@ export const metadata: Metadata = { title: "Política de privacidad" };
 // before a public launch.
 export default function PrivacyPage() {
   return (
-    <LegalPage title="Política de privacidad" updated="7 de octubre de 2026">
+    <LegalPage title="Política de privacidad" updated="9 de octubre de 2026">
       <p>
         Ese Auto es un servicio en etapa de piloto que monitorea publicaciones de autos usados y te avisa cuando
         aparece una que coincide con tu búsqueda. Esta política explica qué datos tuyos usamos, para qué y cómo
@@ -22,7 +22,8 @@ export default function PrivacyPage() {
       <ul>
         <li>
           <strong>Tu email</strong>, para crear tu cuenta e ingresar con contraseña. Te enviamos emails para
-          confirmar el registro, recuperar la contraseña y, si lo elegís, recibir alertas.
+          confirmar el registro, recuperar la contraseña, avisarte una única vez cuando termina tu prueba gratis y,
+          si lo elegís, recibir alertas.
         </li>
         <li>
           <strong>Tus búsquedas</strong>: vehículo, filtros, preferencias y un punto de referencia para el radio de

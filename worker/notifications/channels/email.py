@@ -2,8 +2,9 @@
 digest, HTML + text. No tracking pixels (sección 7.3): "opened" is the first
 click on a /r/ link.
 
-The Idempotency-Key is the notification id, so a retry after a timeout
-doesn't send the same email twice. With a WEB_BASE_URL every email carries
+The Idempotency-Key is the notification id (trial-reminder-<user_id> for
+the free-trial reminder), so a retry after a timeout doesn't send the same
+email twice. With a WEB_BASE_URL every email carries
 List-Unsubscribe with one-click POST (RFC 8058) besides the footer link.
 """
 from __future__ import annotations
@@ -37,16 +38,24 @@ class ResendEmailChannel:
         if not notification.email:
             return SendResult(False, "el usuario no tiene email")
         msg = templates.email(notification, self.links, self.clock())
-        body = {"from": self.sender, "to": [notification.email], "subject": msg.subject,
+        return await self.send_message(notification.email, msg,
+                                       idempotency_key=f"notification-{notification.id}",
+                                       unsubscribe_token=notification.unsubscribe_token)
+
+    async def send_message(self, to: str, msg: templates.EmailMessage, *, idempotency_key: str,
+                           unsubscribe_token: str | None) -> SendResult:
+        """POST an already rendered email (an alert, or the free-trial reminder,
+        notifications/trial_reminder.py). The key must be unique per email."""
+        body = {"from": self.sender, "to": [to], "subject": msg.subject,
                 "html": msg.html, "text": msg.text}
-        if one_click := self.links.unsubscribe_one_click(notification.unsubscribe_token):
+        if one_click := self.links.unsubscribe_one_click(unsubscribe_token):
             body["headers"] = {"List-Unsubscribe": f"<{one_click}>",
                                "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"}
         try:
             r = await self.client.post(
                 RESEND_URL,
                 headers={"Authorization": f"Bearer {self.api_key}",
-                         "Idempotency-Key": f"notification-{notification.id}"},
+                         "Idempotency-Key": idempotency_key},
                 json=body,
             )
         except httpx.HTTPError as e:

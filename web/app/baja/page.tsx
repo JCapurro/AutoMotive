@@ -11,7 +11,8 @@ import { unsubscribe } from "./actions";
 export const metadata: Metadata = { title: "Dejar de recibir emails", robots: { index: false } };
 
 /**
- * The link at the foot of every alert email (F7, punto 7). Opening it changes
+ * The link at the foot of every alert email and of the free-trial reminder
+ * (F7, punto 7; docs/RECORDATORIO_PRUEBA.md). Opening it changes
  * nothing — mail scanners open links too —; the button does.
  */
 export default async function UnsubscribePage({ searchParams }: PageProps<"/baja">) {
@@ -27,7 +28,7 @@ export default async function UnsubscribePage({ searchParams }: PageProps<"/baja
           <CardHeader>
             <CardTitle className="text-lg">Listo, no te mandamos más emails</CardTitle>
             <CardDescription>
-              Tus búsquedas siguen activas y podés consultar los resultados en Inicio. Podés volver a activar el
+              Tus búsquedas y resultados siguen en tu cuenta. Podés volver a activar el
               email desde <Link href="/app/settings" className="underline">Ajustes</Link>.
             </CardDescription>
           </CardHeader>
@@ -36,7 +37,7 @@ export default async function UnsubscribePage({ searchParams }: PageProps<"/baja
             <CardHeader>
               <CardTitle className="text-lg">¿Dejar de recibir emails?</CardTitle>
               <CardDescription>
-                Dejamos de mandarte alertas por email. Tus búsquedas siguen activas en la web.
+                Dejamos de mandarte alertas y avisos por email. Tus búsquedas y resultados siguen en tu cuenta.
               </CardDescription>
             </CardHeader>
             <CardContent>

@@ -126,6 +126,34 @@ class ResendEmailChannelTests(unittest.IsolatedAsyncioTestCase):
         result = await ch.send(OPPORTUNITY)
         self.assertEqual((result.ok, result.retry), (False, True))
 
+    async def test_send_message_posts_a_rendered_email_with_its_own_key(self):
+        """The free-trial reminder reuses the POST: its key never collides with a notification's."""
+        from datetime import datetime, timezone
+
+        from notifications import templates
+
+        ch, seen = self.channel(lambda r: httpx.Response(200, json={"id": "email_9"}))
+        msg = templates.trial_reminder_email(datetime(2026, 9, 27, 12, tzinfo=timezone.utc), LINKS,
+                                             "tok-9", NOW, None)
+        result = await ch.send_message("ana@automotive.test", msg, idempotency_key="trial-reminder-u1",
+                                       unsubscribe_token="tok-9")
+        self.assertEqual((result.ok, result.provider_id), (True, "email_9"))
+        req = seen[0]
+        self.assertEqual(req.headers["Idempotency-Key"], "trial-reminder-u1")
+        self.assertEqual(req.headers["Authorization"], "Bearer re_test_key")
+        body = json.loads(req.content)
+        self.assertEqual(body["to"], ["ana@automotive.test"])
+        self.assertEqual(body["subject"], "Terminó tu prueba gratis en Ese Auto")
+        self.assertEqual((body["text"], body["html"]), (msg.text, msg.html))
+        self.assertEqual(body["headers"], {"List-Unsubscribe": "<https://automotive.app/api/baja?t=tok-9>",
+                                           "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"})
+
+        ch, seen = self.channel(lambda r: httpx.Response(422, json={"message": "nope"}))
+        result = await ch.send_message("ana@automotive.test", msg, idempotency_key="k",
+                                       unsubscribe_token=None)
+        self.assertEqual((result.ok, result.retry), (False, False))
+        self.assertNotIn("headers", json.loads(seen[0].content))
+
 
 class WebChannelTests(unittest.IsolatedAsyncioTestCase):
     async def test_the_row_is_the_delivery(self):

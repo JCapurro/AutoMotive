@@ -544,6 +544,8 @@ Hay una interfaz `Channel.send(notification) → result`, y cada adapter vive en
 
   Si no hay `published_at`, se dice "detectado hace X" y no "publicado hace X" (§11, principio 5: no fingir certeza).
 
+- **Recordatorio de fin de prueba:** es un email aparte, fuera del motor de alertas y de `notifications`, con su propio registro `trial_reminders` y el mismo adapter de Resend; ver [RECORDATORIO_PRUEBA.md](RECORDATORIO_PRUEBA.md).
+
 ### 7.3 Tracking de aperturas y clics
 
 - Todo link sale como `https://<web>/r/<notification_id>?to=detail|listing`. Es un route handler de Next.js que actualiza `clicked_at` (y `opened_at` si estaba vacío), inserta el evento `alert_clicked` y redirige.
@@ -1051,4 +1053,5 @@ F8 separa la captura de la demanda. Por fuente, se recorre el catálogo de usado
 | `watchlist_matched` | `{enabled:true, unseen_hours:6, recheck_hours:12, max_age_days:60, per_source:20}` | — |
 | `collector_failure_alert_after` | `3` | — |
 | `plan_limits` | ver sección 12 | — |
+| `trial_reminder` | `{enabled:true, delay_hours:0, window_hours:48, send_from:"09:00", send_until:"21:00", max_per_day:30}`; ver [recordatorio de fin de prueba](RECORDATORIO_PRUEBA.md) | — |
 | — (`sources.crawl_interval_seconds`) | ver sección 5.1 | `ALERT_RESCRAPE_INTERVAL_SECONDS` |
