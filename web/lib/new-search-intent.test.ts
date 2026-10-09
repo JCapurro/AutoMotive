@@ -1,14 +1,19 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, expect, it, vi } from "vitest";
+import type { SearchLimit } from "./assisted";
 import type { DetectedLocation } from "./search-location";
 
-const state = vi.hoisted(() => ({ headers: {} as Record<string, string> }));
-beforeEach(() => { state.headers = {}; });
+const state = vi.hoisted(() => ({ headers: {} as Record<string, string>, access: null as unknown }));
+beforeEach(() => { state.headers = {}; state.access = null; });
 vi.mock("next/headers", () => ({ headers: async () => new Headers(state.headers) }));
 
 vi.mock("@/lib/auth", () => ({ requireUser: vi.fn().mockResolvedValue({ id: "user" }) }));
-vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({}) }));
+vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ rpc: async () => ({ data: state.access }) }) }));
+vi.mock("@/lib/config", async () => {
+  const { DEFAULT_PLAN_LIMITS, DEFAULT_PRO_OFFER } = await import("@/lib/pro");
+  return { webConfig: async () => ({ planLimits: DEFAULT_PLAN_LIMITS, proOffer: DEFAULT_PRO_OFFER }) };
+});
 vi.mock("@/app/app/searches/form-data", () => ({
   loadFormData: async () => ({ catalog: [], sources: [], defaultFrequency: "daily" }),
 }));
@@ -17,8 +22,12 @@ vi.mock("@/components/app/search-form", () => ({
     createElement("span", { "data-form-zone": approximateLocation?.label }),
 }));
 vi.mock("@/components/app/assisted-search", () => ({
-  AssistedSearch: ({ initialText, approximateLocation }: { initialText: string; approximateLocation: DetectedLocation | null }) =>
-    createElement("textarea", { defaultValue: initialText, "data-assisted-zone": approximateLocation?.label }),
+  AssistedSearch: ({ initialText, approximateLocation, limit }: {
+    initialText: string; approximateLocation: DetectedLocation | null; limit: SearchLimit | null;
+  }) => createElement("textarea", {
+    defaultValue: initialText, "data-assisted-zone": approximateLocation?.label,
+    "data-capacity": limit?.capacity, "data-upsell": limit?.upsell ?? undefined,
+  }),
 }));
 
 import NewSearchPage from "@/app/app/searches/new/page";
@@ -50,4 +59,17 @@ it("passes the automatic connection zone to the assisted and structured flows", 
   expect(structuredTab.props.children.props.approximateLocation).toEqual({
     label: "Córdoba (zona aproximada)", lat: -31.42, lon: -64.19, approximate: true,
   });
+});
+
+it("hands the plan's room and the Particular offer to a trial", async () => {
+  state.access = { plan: "free", enforced: true, state: "available", active_searches: 0, limits: { max_profiles: 1 } };
+  const html = renderToStaticMarkup(await NewSearchPage({ params: Promise.resolve({}), searchParams: Promise.resolve({}) }));
+  expect(html).toContain('data-capacity="1"');
+  expect(html).toContain("data-upsell=\"Con Particular seguís hasta 3 modelos a la vez por $\u00a015.000.\"");
+});
+
+it("doesn't limit the request while the pilot doesn't enforce limits", async () => {
+  state.access = { plan: "free", enforced: false, state: "pilot", active_searches: 4, limits: { max_profiles: 1 } };
+  const html = renderToStaticMarkup(await NewSearchPage({ params: Promise.resolve({}), searchParams: Promise.resolve({}) }));
+  expect(html).not.toContain("data-capacity");
 });

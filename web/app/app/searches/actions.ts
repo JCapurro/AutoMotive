@@ -3,7 +3,7 @@
 import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { ASSISTED_MAX_CHARS, ASSISTED_MIN_CHARS, ASSISTED_WORKER_STALE_MS } from "@/lib/assisted";
+import { ASSISTED_MAX_CHARS, ASSISTED_MIN_CHARS, ASSISTED_WORKER_STALE_MS, AssistedOutput } from "@/lib/assisted";
 import { requireUser } from "@/lib/auth";
 import type { Frequency } from "@/lib/copy";
 import { track } from "@/lib/events";
@@ -111,6 +111,8 @@ export async function saveSearch(id: number | null, raw: SearchInput, origin?: S
       profile_id: data.id,
       ...(origin ? { llm_job_id: origin.jobId, edited: origin.edited } : {}),
     });
+    // Several reviewed models report the request when the review ends (finishAssisted).
+    if (!origin?.stay) await recordSearchRequest(supabase, user.id, origin?.mode === "assisted" ? origin.jobId : null, origin?.mode ?? "structured");
     // The free trial's 72 hours start with the first active search (/app/pro).
     const { count } = await supabase.from("search_profiles").select("id", { count: "exact", head: true });
     if (count === 1) await queuePixel("StartTrial", { content_name: "first_search" }, `trial:${user.id}`);
@@ -133,6 +135,41 @@ export async function saveSearch(id: number | null, raw: SearchInput, origin?: S
   if (error) return { error: "No pudimos guardar los cambios. Probá de nuevo." };
   await track(supabase, user.id, "search_profile_updated", { profile_id: id, filters_changed: rematch });
   redirect(`/app/searches/${id}`);
+}
+
+type Client = Awaited<ReturnType<typeof createClient>>;
+
+/**
+ * search_created, once per request: the plan, the models the request named
+ * and the searches created from them. A structured form is one model.
+ */
+async function recordSearchRequest(supabase: Client, userId: string, jobId: number | null, mode: string): Promise<void> {
+  const { data: access } = await supabase.rpc("my_plan_snapshot");
+  const plan = (access as { plan?: string } | null)?.plan ?? null;
+  if (jobId == null) {
+    await track(supabase, userId, "search_created", { plan, mode, models_detected: 1, searches_created: 1 });
+    return;
+  }
+  const job = String(jobId);
+  const { data: recorded } = await supabase.from("events").select("id").eq("name", "search_created").eq("props->>llm_job_id", job).limit(1);
+  if (recorded?.length) return;
+  const [{ data: row }, { count }] = await Promise.all([
+    supabase.from("llm_jobs").select("output").eq("id", jobId).maybeSingle(),
+    supabase.from("events").select("id", { count: "exact", head: true }).eq("name", "search_profile_created").eq("props->>llm_job_id", job),
+  ]);
+  const output = AssistedOutput.safeParse(row?.output);
+  await track(supabase, userId, "search_created", {
+    plan, mode, llm_job_id: jobId,
+    models_detected: output.success ? output.data.drafts.length : null,
+    searches_created: count ?? 0,
+  });
+}
+
+/** The review of an assisted request ended (models saved, discarded or none fit the plan). */
+export async function finishAssisted(jobId: number): Promise<void> {
+  const user = await requireUser();
+  if (!Number.isSafeInteger(jobId) || jobId <= 0) return;
+  await recordSearchRequest(await createClient(), user.id, jobId, "assisted");
 }
 
 /** What the user typed for an assisted job (RLS: only their own jobs). */

@@ -5,7 +5,10 @@ import { headers } from "next/headers";
 import { AssistedSearch } from "@/components/app/assisted-search";
 import { SearchForm } from "@/components/app/search-form";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import type { SearchLimit } from "@/lib/assisted";
 import { requireUser } from "@/lib/auth";
+import { webConfig } from "@/lib/config";
+import { type PlanLimits, planPrice, searchCapacity } from "@/lib/pro";
 import type { SearchValues } from "@/lib/search-form";
 import { searchIntentPrompt } from "@/lib/search-intent";
 import { approximateLocationFromHeaders } from "@/lib/search-location";
@@ -20,7 +23,22 @@ export default async function NewSearchPage({ searchParams }: PageProps<"/app/se
   const approximateLocation = approximateLocationFromHeaders(await headers());
   const prompt = searchIntentPrompt((await searchParams).prompt);
   const supabase = await createClient();
-  const { catalog, sources, defaultFrequency } = await loadFormData(supabase);
+  const [{ catalog, sources, defaultFrequency }, { data: snapshot }, cfg] = await Promise.all([
+    loadFormData(supabase),
+    supabase.rpc("my_plan_snapshot"),
+    webConfig(),
+  ]);
+  // One model is one search: a request with more models than the plan has room for asks which to activate.
+  const access = (snapshot ?? null) as PlanLimits | null;
+  const capacity = searchCapacity(access);
+  const limit: SearchLimit | null = access && capacity != null ? {
+    capacity,
+    maxProfiles: access.limits.max_profiles ?? capacity,
+    activeSearches: access.active_searches ?? 0,
+    upsell: access.plan === "free"
+      ? `Con Particular seguís hasta ${cfg.planLimits.pass.maxProfiles} modelos a la vez por ${planPrice(cfg.proOffer.pass_30.amount)}.`
+      : null,
+  } : null;
 
   const initial: SearchValues = {
     name: "",
@@ -68,7 +86,7 @@ export default async function NewSearchPage({ searchParams }: PageProps<"/app/se
           />
         </TabsContent>
         <TabsContent value="assisted" forceMount className="pt-3 data-[state=inactive]:hidden">
-          <AssistedSearch catalog={catalog} sources={sources} base={initial} initialText={prompt} approximateLocation={approximateLocation} />
+          <AssistedSearch catalog={catalog} sources={sources} base={initial} initialText={prompt} approximateLocation={approximateLocation} limit={limit} />
         </TabsContent>
       </Tabs>
     </div>

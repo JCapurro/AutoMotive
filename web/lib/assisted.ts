@@ -165,6 +165,33 @@ export function addedVehicle(from: SearchValues): SearchValues {
   return { ...from, name: "", make: "", model: "", trim: "", trims: [], trim_strict: false };
 }
 
+/**
+ * Room for new searches under enforced plan limits (one model = one search):
+ * `capacity` more can be activated now; `upsell` is shown when asking to choose.
+ */
+export type SearchLimit = { capacity: number; maxProfiles: number; activeSearches: number; upsell: string | null };
+
+/** After the parse: review every model, choose the ones that fit the plan, or none fits. */
+export function afterParse(found: number, limit: SearchLimit | null | undefined): "review" | "choose" | "full" {
+  if (!limit || found <= limit.capacity) return "review";
+  return limit.capacity > 0 ? "choose" : "full";
+}
+
+/** "tu plan permite una búsqueda activa." or "te queda lugar para 2 búsquedas más en tu plan." */
+export function roomText(limit: SearchLimit): string {
+  const searches = (n: number, more = "") => (n === 1 ? `una búsqueda${more}` : `${n} búsquedas${more}`);
+  return limit.activeSearches === 0
+    ? `tu plan permite ${searches(limit.maxProfiles, limit.maxProfiles === 1 ? " activa" : " activas")}.`
+    : `te queda lugar para ${searches(limit.capacity, " más")} en tu plan.`;
+}
+
+/** Picking models: like a radio with room for one, up to `capacity` otherwise. */
+export function toggleChoice(selected: number[], index: number, capacity: number): number[] {
+  if (selected.includes(index)) return selected.filter((i) => i !== index);
+  if (capacity === 1) return [index];
+  return selected.length < capacity ? [...selected, index] : selected;
+}
+
 export function draftTitle(draft: AssistedDraft, index: number): string {
   const { make, model, trim, trims } = draft.values;
   const versions = [...new Set([...trims, trim].filter(Boolean))];

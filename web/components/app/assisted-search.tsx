@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 
-import { startAssisted } from "@/app/app/searches/actions";
+import { finishAssisted, startAssisted } from "@/app/app/searches/actions";
 import { SearchForm } from "@/components/app/search-form";
 import { SearchPromptInput } from "@/components/search-prompt-input";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -18,9 +18,13 @@ import {
   ASSISTED_MAX_VEHICLES,
   ASSISTED_POLL_MS,
   AssistedOutput,
+  type SearchLimit,
   addedVehicle,
+  afterParse,
   draftTitle,
   draftToValues,
+  roomText,
+  toggleChoice,
 } from "@/lib/assisted";
 import type { Catalog } from "@/lib/catalog";
 import type { SearchValues } from "@/lib/search-form";
@@ -44,6 +48,10 @@ type Phase =
   | { kind: "idle" }
   | { kind: "waiting"; jobId: number }
   | { kind: "review"; jobId: number; drafts: Reviewed[]; active: number }
+  /** More models than the plan has room for: pick which ones to review. */
+  | { kind: "choose"; jobId: number; drafts: Reviewed[]; selected: number[] }
+  /** The plan has no room for another active search. */
+  | { kind: "full"; jobId: number; found: number }
   | { kind: "failed"; jobId: number | null; reason: "error" | "empty" | "manual" | "unavailable" };
 
 type JobRow = { status: string; output: unknown };
@@ -60,7 +68,9 @@ const FALLBACK_TITLE = {
  * Modo asistido (§12, sección 8.4): the user writes what they want, the
  * worker's LLM proposes one search per vehicle, and each proposal opens as a
  * pre-filled structured form to correct and confirm. If the LLM fails, times
- * out or finds no vehicle, the empty structured form takes over.
+ * out or finds no vehicle, the empty structured form takes over. With
+ * enforced plan limits (`limit`), a request with more models than the plan's
+ * room first asks which ones to activate.
  */
 export function AssistedSearch({
   catalog,
@@ -68,12 +78,14 @@ export function AssistedSearch({
   base,
   initialText = "",
   approximateLocation = null,
+  limit = null,
 }: {
   catalog: Catalog;
   sources: Source[];
   base: SearchValues;
   initialText?: string;
   approximateLocation?: DetectedLocation | null;
+  limit?: SearchLimit | null;
 }) {
   const [text, setText] = useState(initialText);
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
@@ -139,16 +151,17 @@ export function AssistedSearch({
       } else if (!parsed.data.drafts.length) {
         setPhase({ kind: "failed", jobId: waitingJob, reason: "empty" });
       } else {
-        setPhase({
-          kind: "review",
-          jobId: waitingJob,
-          active: 0,
-          drafts: parsed.data.drafts.map((draft, i) => ({
-            title: draftTitle(draft, i),
-            ...draftToValues(draft, base),
-            state: "pending",
-          })),
-        });
+        const drafts: Reviewed[] = parsed.data.drafts.map((draft, i) => ({
+          title: draftTitle(draft, i),
+          ...draftToValues(draft, base),
+          state: "pending",
+        }));
+        const next = afterParse(drafts.length, limit);
+        if (next === "choose") setPhase({ kind: "choose", jobId: waitingJob, drafts, selected: [] });
+        else if (next === "full") {
+          setPhase({ kind: "full", jobId: waitingJob, found: drafts.length });
+          void finishAssisted(waitingJob);
+        } else setPhase({ kind: "review", jobId: waitingJob, active: 0, drafts });
       }
     };
 
@@ -184,7 +197,7 @@ export function AssistedSearch({
       clearTimeout(deadline);
       if (channel) void supabase.removeChannel(channel);
     };
-  }, [waitingJob, supabase, base]);
+  }, [waitingJob, supabase, base, limit]);
 
   function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -221,18 +234,21 @@ export function AssistedSearch({
   const review = phase.kind === "review" ? phase : null;
   const done = review != null && review.drafts.every((d) => d.state !== "pending");
   const savedCount = review?.drafts.filter((d) => d.state === "saved").length ?? 0;
+  const reviewJob = review?.jobId ?? null;
   useEffect(() => {
     if (!done) return;
+    if (reviewJob != null) void finishAssisted(reviewJob);
     if (savedCount) {
       toast(savedCount === 1 ? "Guardamos tu búsqueda" : `Guardamos tus ${savedCount} búsquedas`);
       router.push("/app");
     }
-  }, [done, savedCount, router]);
+  }, [done, savedCount, reviewJob, router]);
 
   if (phase.kind === "review") {
     const single = phase.drafts.length === 1;
     const found = phase.drafts.filter((d) => !d.added).length;
-    const canAdd = phase.drafts.length < ASSISTED_MAX_VEHICLES;
+    const room = Math.min(limit?.capacity ?? ASSISTED_MAX_VEHICLES, ASSISTED_MAX_VEHICLES);
+    const canAdd = phase.drafts.length < ASSISTED_MAX_VEHICLES && phase.drafts.filter((d) => d.state !== "discarded").length < room;
     const addButton = canAdd ? (
       <Button type="button" size="sm" variant="ghost" onClick={addVehicle}>
         <Plus aria-hidden /> Agregar otro vehículo
@@ -325,6 +341,29 @@ export function AssistedSearch({
     );
   }
 
+  if (phase.kind === "choose" && limit) {
+    return (
+      <ModelChoice
+        text={text}
+        onEdit={() => setPhase({ kind: "idle" })}
+        limit={limit}
+        titles={phase.drafts.map((d) => d.title)}
+        selected={phase.selected}
+        onToggle={(i) => setPhase({ ...phase, selected: toggleChoice(phase.selected, i, limit.capacity) })}
+        onContinue={() => setPhase({
+          kind: "review",
+          jobId: phase.jobId,
+          active: 0,
+          drafts: [...phase.selected].sort((a, b) => a - b).map((i) => phase.drafts[i]),
+        })}
+      />
+    );
+  }
+
+  if (phase.kind === "full" && limit) {
+    return <PlanFull text={text} onEdit={() => setPhase({ kind: "idle" })} limit={limit} found={phase.found} />;
+  }
+
   if (phase.kind === "failed") {
     return (
       <div className="space-y-4">
@@ -404,6 +443,83 @@ function RequestSummary({ text, onEdit, children }: { text: string; onEdit: () =
         </Button>
       </div>
       <p className="text-sm text-muted-foreground">{children}</p>
+    </div>
+  );
+}
+
+/** More models than the plan's room: the detected ones, to pick which to activate. */
+export function ModelChoice({ text, onEdit, limit, titles, selected, onToggle, onContinue }: {
+  text: string;
+  onEdit: () => void;
+  limit: SearchLimit;
+  titles: string[];
+  selected: number[];
+  onToggle: (index: number) => void;
+  onContinue: () => void;
+}) {
+  const one = limit.capacity === 1;
+  return (
+    <div className="space-y-4">
+      <RequestSummary text={text} onEdit={onEdit}>
+        Encontramos {titles.length} modelos en tu pedido. Cada modelo es una búsqueda y {roomText(limit)}
+      </RequestSummary>
+      <form
+        className="max-w-2xl space-y-4 rounded-xl bg-card p-4 ring-1 ring-foreground/10"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (selected.length) onContinue();
+        }}
+      >
+        <fieldset className="space-y-2.5">
+          <legend className="mb-1 text-sm font-medium">
+            {one ? "Elegí cuál querés activar" : `Elegí cuáles querés activar (hasta ${limit.capacity})`}
+          </legend>
+          {titles.map((title, i) => (
+            <label key={i} className="flex items-center gap-2.5 text-sm">
+              <input
+                type={one ? "radio" : "checkbox"}
+                name="assisted-model"
+                value={i}
+                checked={selected.includes(i)}
+                disabled={!one && !selected.includes(i) && selected.length >= limit.capacity}
+                onChange={() => onToggle(i)}
+                className="size-4 accent-primary"
+              />
+              {title}
+            </label>
+          ))}
+        </fieldset>
+        {limit.upsell ? (
+          <p className="text-sm text-muted-foreground">
+            {limit.upsell}{" "}
+            <Link href="/app/pro?plan=pass_30" className="font-medium underline underline-offset-3">Ver planes</Link>
+          </p>
+        ) : null}
+        <Button type="submit" disabled={!selected.length}>Continuar</Button>
+      </form>
+    </div>
+  );
+}
+
+/** The plan's active searches are all in use. */
+export function PlanFull({ text, onEdit, limit, found }: { text: string; onEdit: () => void; limit: SearchLimit; found: number }) {
+  const active = limit.activeSearches === 1 ? "una búsqueda activa" : `${limit.activeSearches} búsquedas activas`;
+  return (
+    <div className="space-y-4">
+      <RequestSummary text={text} onEdit={onEdit}>
+        Encontramos {found === 1 ? "un modelo" : `${found} modelos`} en tu pedido, pero ya tenés {active}: el máximo de tu plan.
+      </RequestSummary>
+      <Alert data-testid="assisted-plan-full">
+        <AlertTitle>Para activar otra búsqueda, pausá una de las que tenés.</AlertTitle>
+        <AlertDescription>
+          {limit.upsell ? <p>{limit.upsell}</p> : null}
+          <p>
+            <Link href="/app" className="underline underline-offset-3">Ver mis búsquedas</Link>
+            {" · "}
+            <Link href="/app/pro" className="underline underline-offset-3">Ver planes</Link>
+          </p>
+        </AlertDescription>
+      </Alert>
     </div>
   );
 }
