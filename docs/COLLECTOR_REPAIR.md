@@ -44,3 +44,11 @@ El worker está en **149.50.157.195**, SSH **5021**, usuario SSH **root**, direc
 Revisar `list` para distinguir `pending`, `dispatching`, `open`, `needs_input`, `resolved` y `cancelled`. Resolver solo significa que el chequeo observó la fuente sana; consultar el chat para saber si hubo un cambio o recuperación externa. No abrir chats por snapshots viejos. No avisar en cada sondeo sin cambios; comunicar solamente nuevos chats, errores del despacho o intervención requerida.
 
 Para pausar, editar la automatización desde Codex. Eso detiene el despacho; el VPS sigue guardando los incidentes. Para desactivar la captura, retirar solamente el trigger de esta migración; conservar la tabla como historial.
+
+## Estado de activación — 9/10/2026
+
+- Migración `20261015120000` aplicada en producción; trigger habilitado y permisos privados verificados.
+- Automatización **Reparar collectors en Revisar** activa en Codex cada cinco minutos.
+- 51 pruebas pasaron y el flujo completo del CLI pasó en una base local aislada.
+- La prueba contra producción devolvió cola vacía; aún no se observó la creación automática de un chat por un incidente real.
+- El ajuste del chequeo para incluir inventarios compartidos está integrado y probado localmente. Su instalación en el VPS espera autenticación en la terminal SSH abierta; hasta entonces el VPS conserva su cobertura anterior.
