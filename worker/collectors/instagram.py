@@ -169,6 +169,8 @@ class InstagramScraper(BaseScraper):
     account = ""
     MAX_SCROLLS = 6
     SETTLE_MS = 2_500
+    RENDER_POLL_MS = 500
+    RENDER_POLLS = 30
 
     def __init__(self, *, storage_state: str | None = None, max_posts: int | None = None):
         self.storage_state = storage_state if storage_state is not None else getattr(config, "INSTAGRAM_STORAGE_STATE", "")
@@ -379,12 +381,29 @@ class InstagramScraper(BaseScraper):
         status = response.status if response else 0
         self._check_status(status)
         await page.wait_for_timeout(self.SETTLE_MS)
-        result = Page(status, page.url, await page.content())
-        if urlparse(result.url).hostname not in {"instagram.com", "www.instagram.com"}:
-            raise CollectorBlocked(f"{self.name}: unexpected Instagram redirect")
-        if any(part in urlparse(result.url).path for part in ("/accounts/login", "/challenge", "/checkpoint")):
-            raise CollectorBlocked(f"{self.name}: Instagram login or verification redirect")
-        return result
+        for attempt in range(self.RENDER_POLLS + 1):
+            result = Page(status, page.url, await page.content())
+            if urlparse(result.url).hostname not in {"instagram.com", "www.instagram.com"}:
+                raise CollectorBlocked(f"{self.name}: unexpected Instagram redirect")
+            if any(part in urlparse(result.url).path for part in ("/accounts/login", "/challenge", "/checkpoint")):
+                raise CollectorBlocked(f"{self.name}: Instagram login or verification redirect")
+            if status != 200:
+                return result
+            try:
+                if _POST.fullmatch(urlparse(url).path):
+                    self.parse_detail(result.html, url, status)
+                else:
+                    self.profile_post_urls(result.html)
+            except RuntimeError as exc:
+                pending = ("unrecognized Instagram profile feed" in str(exc)
+                           or "cannot verify complete caption for post" in str(exc))
+                if not pending:
+                    return result  # Semantic failures are handled by the caller.
+                if attempt == self.RENDER_POLLS:
+                    raise
+                await page.wait_for_timeout(self.RENDER_POLL_MS)
+                continue
+            return result
 
     def _state(self) -> str | None:
         if self.storage_state and not Path(self.storage_state).is_file():

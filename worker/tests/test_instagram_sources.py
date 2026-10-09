@@ -291,3 +291,42 @@ def test_sold_pins_do_not_consume_recent_discovery_budget():
     html = html_media(web_media("VENDIDO\n" + ONLY_CAPTION, code="PinnedSold"), web_media())
     html += '<main><a href="/p/PinnedSold/">Pinned</a><a href="/p/DeISPZ4jh7c/">Current</a></main>'
     assert OnlyCars.profile_post_urls(html) == [ONLY_URL]
+
+
+@pytest.mark.parametrize("url,ready_html", [
+    ("https://www.instagram.com/onlycarsusados/", '<main><a href="/p/DeISPZ4jh7c/">Car</a></main>'),
+    (ONLY_URL, html_media(web_media())),
+])
+def test_load_waits_for_delayed_authenticated_content(url, ready_html):
+    class DelayedPage(FakePage):
+        waited = 0
+
+        async def wait_for_timeout(self, timeout):
+            self.waited += timeout
+
+        async def content(self):
+            return "<html><title>Instagram</title></html>" if self.waited < 3500 else ready_html
+
+    page = DelayedPage({url: (200, ready_html)})
+    result = asyncio.run(OnlyCars(storage_state="")._load(page, url))
+    assert result.html == ready_html
+
+
+def test_load_does_not_retry_a_login_redirect():
+    class RedirectPage(FakePage):
+        waits = []
+
+        async def goto(self, url, **kwargs):
+            self.url = "https://www.instagram.com/accounts/login/"
+            return SimpleNamespace(status=200)
+
+        async def wait_for_timeout(self, timeout):
+            self.waits.append(timeout)
+
+        async def content(self):
+            return "<html>Login</html>"
+
+    page = RedirectPage({})
+    with pytest.raises(CollectorBlocked):
+        asyncio.run(OnlyCars(storage_state="")._load(page, ONLY_URL))
+    assert page.waits == [OnlyCars.SETTLE_MS]

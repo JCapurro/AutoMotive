@@ -20,6 +20,8 @@ import asyncio
 import logging
 import re
 import urllib.parse
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 
 import httpx
 from http_clients import async_client
@@ -39,6 +41,21 @@ def _slug(s: str) -> str:
     s = s.lower().strip()
     s = s.translate(str.maketrans("áéíóúñü", "aeiounu"))
     return re.sub(r"[^a-z0-9]+", "-", s).strip("-")
+
+
+def _retry_after(response: httpx.Response) -> float:
+    value = response.headers.get("Retry-After", "").strip()
+    if not value:
+        return 0
+    try:
+        if re.fullmatch(r"[0-9]+", value):
+            return int(value)
+        retry_at = parsedate_to_datetime(value)
+        if retry_at.tzinfo is None:
+            retry_at = retry_at.replace(tzinfo=timezone.utc)
+        return max(0, (retry_at - datetime.now(timezone.utc)).total_seconds())
+    except (TypeError, ValueError, OverflowError):
+        return 0
 
 
 def _to_int(s: str | None) -> int | None:
@@ -77,6 +94,7 @@ class AutoCosmosScraper(BaseScraper):
     PAGE_PAUSE_SECONDS = 2.0
     RETRIES = 2
     RETRY_PAUSE_SECONDS = 10.0
+    MAX_RETRY_AFTER_SECONDS = 120.0
     # Pages take up to a minute to come back when the site is loaded.
     TIMEOUT = httpx.Timeout(60.0, connect=15.0)
     transport: httpx.AsyncBaseTransport | None = None     # tests
@@ -238,9 +256,11 @@ class AutoCosmosScraper(BaseScraper):
 
     async def _get(self, cx: httpx.AsyncClient, url: str) -> httpx.Response:
         """GET, retried on a network error or a 5xx; the last answer or error wins."""
+        pause = 0.0
         for attempt in range(self.RETRIES + 1):
             if attempt:
-                await asyncio.sleep(self.RETRY_PAUSE_SECONDS * attempt)
+                await asyncio.sleep(pause)
+            pause = self.RETRY_PAUSE_SECONDS * (attempt + 1)
             try:
                 r = await cx.get(url)
             except httpx.TransportError:
@@ -249,6 +269,14 @@ class AutoCosmosScraper(BaseScraper):
                 continue
             if r.status_code < 500 or attempt == self.RETRIES:
                 return r
+            requested_pause = _retry_after(r)
+            if requested_pause > self.MAX_RETRY_AFTER_SECONDS:
+                log.warning("autocosmos: %s asks Retry-After=%ss; deferring to a later run",
+                            url, requested_pause)
+                return r
+            pause = max(pause, requested_pause)
+            log.warning("autocosmos: %s answered %d; retrying in %ss (%d/%d)",
+                        url, r.status_code, pause, attempt + 1, self.RETRIES)
         raise AssertionError("unreachable")
 
     async def search(self, filters: dict) -> list[Listing]:

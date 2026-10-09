@@ -6,6 +6,7 @@ import json
 import logging
 import re
 from urllib.parse import urlencode, urlparse
+from uuid import uuid4
 
 import httpx
 from http_clients import async_client
@@ -19,6 +20,10 @@ from .base import CollectorBlocked, Listing, ListingDetail
 logger = logging.getLogger(__name__)
 
 
+class _InconsistentCatalog(RuntimeError):
+    """Ranges from a changing index cannot be combined into one inventory."""
+
+
 class GrupoRandazzoScraper(PublicCatalogScraper):
     name = "gruporandazzo"
     STRICT_DETAIL_ID = True
@@ -30,6 +35,8 @@ class GrupoRandazzoScraper(PublicCatalogScraper):
     PAGE_SIZE = 50
     MAX_PAGES = 50
     PAGE_DELAY = .2
+    MAX_SCAN_ATTEMPTS = 3
+    SCAN_RETRY_DELAY = 1
 
     @staticmethod
     def _data(html: str) -> tuple[dict, str | None]:
@@ -189,20 +196,24 @@ class GrupoRandazzoScraper(PublicCatalogScraper):
         product["currency"] = currency
         return product
 
-    async def _api_catalog(self, offset: int, currency: str, state_field: int) -> tuple[list[Listing], list[str], int]:
+    async def _api_catalog(self, offset: int, currency: str, state_field: int,
+                           scan_id: str) -> tuple[list[Listing], list[str], int]:
         params = [("fq", f"C:/{self.CATEGORY_ID}/"),
                   ("fq", f"specificationFilter_{state_field}:Disponible"),
                   ("_from", str(offset)), ("_to", str(offset + self.PAGE_SIZE - 1)),
-                  ("O", "OrderByReleaseDateDESC")]
+                  ("O", "OrderByReleaseDateDESC"), ("_eseauto_scan", scan_id)]
         response, records = await self._public_json(self.API + "?" + urlencode(params))
         interval = re.fullmatch(r"(\d+)-(\d+)/(\d+)", response.headers.get("resources", ""))
         if not interval or not isinstance(records, list):
             raise RuntimeError("gruporandazzo: catalog range metadata missing")
         start, end, total = map(int, interval.groups())
         if start != offset or end not in (offset + self.PAGE_SIZE - 1, min(offset + self.PAGE_SIZE - 1, total - 1)):
-            raise RuntimeError("gruporandazzo: incorrect catalog range")
+            raise _InconsistentCatalog(
+                f"gruporandazzo: incorrect catalog range at offset={offset}: {interval[0]}")
         if len(records) != min(self.PAGE_SIZE, max(0, total - offset)):
-            raise RuntimeError("gruporandazzo: incomplete catalog range")
+            raise _InconsistentCatalog(
+                f"gruporandazzo: incomplete catalog range at offset={offset}: "
+                f"range={interval[0]} records={len(records)}")
         products = [self._api_product(record, currency) for record in records]
         available = False
         for product in products:
@@ -240,27 +251,49 @@ class GrupoRandazzoScraper(PublicCatalogScraper):
         state_fields = [f.get("Id") for f in fields if isinstance(f, dict) and f.get("Name") == "Estado"] if isinstance(fields, list) else []
         if len(state_fields) != 1 or not isinstance(state_fields[0], int):
             raise RuntimeError("gruporandazzo: public Estado facet missing")
+        for attempt in range(1, self.MAX_SCAN_ATTEMPTS + 1):
+            try:
+                # The public API caches each URL for 300 seconds independently.
+                # A new key per scan avoids mixing previously cached ranges;
+                # it does not freeze the index, so coverage checks remain strict.
+                items = await self._scan_catalog(currency, state_fields[0], uuid4().hex)
+                return [item for item in items if matches_vehicle(item, filters)]
+            except _InconsistentCatalog as e:
+                if attempt == self.MAX_SCAN_ATTEMPTS:
+                    raise
+                logger.warning("%s; restarting complete inventory scan (attempt %s/%s)",
+                               e, attempt + 1, self.MAX_SCAN_ATTEMPTS)
+                await asyncio.sleep(self.SCAN_RETRY_DELAY * attempt)
+        raise RuntimeError("gruporandazzo: no inventory scan attempts configured")
+
+    async def _scan_catalog(self, currency: str, state_field: int,
+                            scan_id: str) -> list[Listing]:
         result, seen, expected = {}, set(), None
         for page_number in range(1, self.MAX_PAGES + 1):
             if page_number > 1:
                 await asyncio.sleep(self.PAGE_DELAY)
             offset = (page_number - 1) * self.PAGE_SIZE
-            items, ids, total = await self._api_catalog(offset, currency, state_fields[0])
+            items, ids, total = await self._api_catalog(offset, currency, state_field, scan_id)
             if expected is None:
                 expected = total
             if total != expected or total < 0:
-                raise RuntimeError("gruporandazzo: inventory changed during pagination")
+                raise _InconsistentCatalog(
+                    f"gruporandazzo: inventory changed during pagination at offset={offset}: "
+                    f"expected={expected} total={total}")
             if len(ids) != len(set(ids)) or seen.intersection(ids):
-                raise RuntimeError("gruporandazzo: repeated or incorrect pagination page")
+                raise _InconsistentCatalog(
+                    f"gruporandazzo: repeated or incorrect pagination page at offset={offset}")
             seen.update(ids)
             for item in items:
                 if item.listing_id in result:
                     raise RuntimeError("gruporandazzo: vehicle reference shared by different IDs")
                 result[item.listing_id] = item
             if len(seen) == expected:
-                return [item for item in result.values() if matches_vehicle(item, filters)]
+                return list(result.values())
             if len(ids) != self.PAGE_SIZE or len(seen) > expected:
-                raise RuntimeError("gruporandazzo: incomplete pagination")
+                raise _InconsistentCatalog(
+                    f"gruporandazzo: incomplete pagination at offset={offset}: "
+                    f"seen={len(seen)} expected={expected}")
         raise RuntimeError("gruporandazzo: pagination limit reached")
 
     @classmethod

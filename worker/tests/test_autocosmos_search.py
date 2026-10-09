@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import unittest
+from datetime import datetime, timezone
+from unittest.mock import AsyncMock, patch
 from urllib.parse import parse_qs, urlparse
 
 import httpx
@@ -85,6 +87,47 @@ class AutoCosmosSearchTests(unittest.IsolatedAsyncioTestCase):
 
         with self.assertRaises(httpx.HTTPStatusError):
             await scraper(site).search(FILTERS)
+
+    async def test_503_respects_the_site_retry_after_before_retrying(self):
+        responses = [httpx.Response(503, headers={"Retry-After": "30"}),
+                     httpx.Response(200, text=page(range(1, 3), more=False))]
+        s = AutoCosmosScraper()
+        s.transport = httpx.MockTransport(lambda request: responses.pop(0))
+        with patch("collectors.autocosmos.asyncio.sleep", new_callable=AsyncMock) as sleep:
+            found = await s.search(FILTERS)
+        self.assertEqual(len(found), 2)
+        sleep.assert_awaited_once_with(30)
+
+    async def test_retry_after_http_date_uses_utc(self):
+        responses = [httpx.Response(503, headers={"Retry-After": "Fri, 09 Oct 2026 13:00:45 GMT"}),
+                     httpx.Response(200, text=page(range(1, 3), more=False))]
+        s = AutoCosmosScraper()
+        s.transport = httpx.MockTransport(lambda request: responses.pop(0))
+        with patch("collectors.autocosmos.datetime") as clock, \
+                patch("collectors.autocosmos.asyncio.sleep", new_callable=AsyncMock) as sleep:
+            clock.now.return_value = datetime(2026, 10, 9, 13, 0, tzinfo=timezone.utc)
+            found = await s.search(FILTERS)
+        self.assertEqual(len(found), 2)
+        sleep.assert_awaited_once_with(45)
+
+    async def test_invalid_retry_after_keeps_existing_backoff(self):
+        responses = [httpx.Response(503, headers={"Retry-After": "not-a-date"}),
+                     httpx.Response(200, text=page(range(1, 3), more=False))]
+        s = AutoCosmosScraper()
+        s.transport = httpx.MockTransport(lambda request: responses.pop(0))
+        with patch("collectors.autocosmos.asyncio.sleep", new_callable=AsyncMock) as sleep:
+            found = await s.search(FILTERS)
+        self.assertEqual(len(found), 2)
+        sleep.assert_awaited_once_with(10)
+
+    async def test_long_retry_after_stops_without_retrying_too_early(self):
+        responses = [httpx.Response(503, headers={"Retry-After": "3600"})]
+        s = AutoCosmosScraper()
+        s.transport = httpx.MockTransport(lambda request: responses.pop(0))
+        with patch("collectors.autocosmos.asyncio.sleep", new_callable=AsyncMock) as sleep:
+            with self.assertRaises(httpx.HTTPStatusError):
+                await s.search(FILTERS)
+        sleep.assert_not_awaited()
 
     async def test_a_later_page_down_keeps_what_was_read(self):
         site = Site({1: page(range(1, 3), more=True)},

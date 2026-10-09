@@ -65,7 +65,22 @@ Si Instagram empieza a exigir autenticación, crear la sesión local de forma ma
 python -m tools.instagram_login
 ```
 
-El usuario inicia sesión en el navegador que abre el comando y confirma su guardado en la terminal. Configurar `INSTAGRAM_STORAGE_STATE=ig_state.json` en `.env`; el archivo queda ignorado por Git. No se creó ni reutilizó una sesión privada durante esta implementación.
+El comando abre Google Chrome instalado con un perfil exclusivo en `.ig_chrome_profile/`, que conserva el estado entre intentos. El usuario inicia sesión y completa cualquier verificación manual antes de confirmar el guardado en la terminal. Playwright se conecta después del login para exportar la sesión; si la ventana sigue en login o verificación, no reemplaza el archivo existente. Configurar `INSTAGRAM_STORAGE_STATE=ig_state.json` en `.env`; tanto la sesión como el perfil quedan ignorados por Git. El archivo contiene credenciales de sesión: al trasladarlo al worker, restringir su lectura al usuario del servicio y probar ambas fuentes desde el servidor.
+
+Con sesión iniciada, Instagram puede demorar más que los 2,5 segundos iniciales en renderizar el feed o el caption. El collector comprueba cada 500 ms si puede verificar el contenido, hasta 15 segundos adicionales. Una redirección a login o verificación sigue siendo un bloqueo; un timeout o contenido incompleto no se convierten en cero resultados. Revalidación local del 9 de octubre de 2026: con límite de 24 posts, **11 avisos de Only Cars y 20 de SC Clasificados**, sin ingesta ni notificaciones. Las pruebas de Instagram y login suman **54 passed**. El acceso y la ingesta desde producción se verifican por separado.
+
+## Recuperación de Instagram — 9 de octubre de 2026
+
+Ambas fuentes acumulaban 51 fallos consecutivos en el VPS por redirección de Instagram al login. El servidor carecía de `ig_state.json` y de la configuración de sesión. La sesión exportada tras el login manual y el ajuste de espera se probaron primero desde la IP del VPS, bajo el usuario `automotive`: 11 avisos de Only Cars y 20 de SC Clasificados, sin ingesta.
+
+Se instaló el collector comprobando que el archivo anterior coincidiera con la versión base, con respaldo privado para revertir. La sesión quedó en `/opt/automotive/ig_state.json`, propiedad de `automotive`, con permisos `0600`, y se agregó `INSTAGRAM_STORAGE_STATE=ig_state.json` al `.env`. El servicio `automotive-worker.service` se reinició después de terminar los recorridos activos; nuevo PID `91918`. Se adelantó únicamente la próxima ejecución de los dos targets de Instagram.
+
+| Fuente | Ejecución real | Finalización, Argentina | Leídos y persistidos | Nuevos | Actualizados |
+|---|---|---|---|---|---|
+| Only Cars | `8823`, `ok` | 10:12:07 | 11 | 4 | 5 |
+| SC Clasificados | `8824`, `ok` | 10:12:11 | 20 | 9 | 10 |
+
+La lectura posterior de producción confirmó `consecutive_failures=0` en ambas fuentes, un match actualizado de cada una, ausencia de errores del pipeline para esos targets y heartbeat reciente del nuevo proceso. Los targets conservaron su cadencia de dos horas, con próximas ejecuciones desde las 12:12 de Argentina. Esta evidencia corresponde a esos ciclos completados. El ajuste quedó aplicado directamente en el VPS y en este checkout; todavía no se publicó mediante commit/push.
 
 ## Validación de código
 
