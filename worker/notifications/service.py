@@ -203,7 +203,8 @@ class Notifier:
         users = {e.audience.user_id for e in events}
         existing = await repo.existing_keys(users, {e.listing_id for e in events})
         counts = await repo.sent_today(users, start_of_day(now))
-        decisions = decide_all(events, await load_rules(), sent_today=counts, existing=existing)
+        caps = await repo.alert_caps(users)
+        decisions = decide_all(events, await load_rules(), sent_today=counts, existing=existing, caps=caps)
         ids = await repo.insert_decisions(decisions)
         if decisions:
             log.info("notifications: %d events → %d decisions, %d new rows", len(events),

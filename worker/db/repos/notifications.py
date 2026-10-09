@@ -113,6 +113,19 @@ async def sent_today(user_ids: Iterable[str], since: datetime) -> dict[str, int]
     return {r["user_id"]: r["n"] for r in rows}
 
 
+async def alert_caps(user_ids: Iterable[str]) -> dict[str, int]:
+    """Each user's daily limit of immediate alerts (public.immediate_alert_cap:
+    the plan's, or alerts_max_per_user_day in the open pilot)."""
+    users = list(dict.fromkeys(user_ids))
+    if not users:
+        return {}
+    async with connection() as cx:
+        rows = await (await cx.execute(
+            "SELECT u::text AS user_id, public.immediate_alert_cap(u) AS cap "
+            "  FROM unnest(%s::uuid[]) AS u", (users,))).fetchall()
+    return {r["user_id"]: r["cap"] for r in rows if r["cap"] is not None}
+
+
 async def insert_decisions(decisions: Iterable[Any]) -> list[int]:
     """Insert engine Decisions; a (user, channel, dedupe_key) already there is
     skipped (§15). Returns the new ids."""
@@ -170,13 +183,16 @@ async def mark_sent(notification_id: int, *, provider_id: str | None = None,
             "UPDATE notifications SET status = 'sent', sent_at = now(), error = NULL, "
             "       attempts = attempts + 1, payload = payload || %s "
             " WHERE id = %s RETURNING user_id, kind::text AS kind, channel::text AS channel, "
-            "       listing_id, payload->'match'->>'level' AS level",
+            "       listing_id, search_profile_id, payload->'match'->>'level' AS level, "
+            "       public.plan_limits_for(user_id)->>'plan' AS plan",
             (Jsonb({**(extra or {}), **({"delivery": delivery} if delivery else {})}),
              notification_id))).fetchone()
         if row:
+            # Every kind but 'digest' is an immediate alert (the plan's measure).
             await insert_event(cx, row["user_id"], "alert_sent", {
                 "notification_id": notification_id, "kind": row["kind"], "channel": row["channel"],
-                "listing_id": row["listing_id"], "level": row["level"]})
+                "listing_id": row["listing_id"], "level": row["level"], "plan": row["plan"],
+                "search_profile_id": row["search_profile_id"]})
 
 
 async def mark_retry(notification_id: int, error: str) -> None:

@@ -122,7 +122,7 @@ class CommercialTests(PostgresTestCase):
         second = await self.pay('pro_monthly','tx-002')
         after = (await self.rows("SELECT plan_expires_at FROM profiles WHERE id=%s", self.user))[0]['plan_expires_at']
         self.assertEqual((after-before).days,30)
-        for _ in range(10): await self.search()
+        for _ in range(20): await self.search()
         with self.assertRaisesRegex(Exception,'plan_limit_exceeded'): await self.search()
         with self.assertRaisesRegex(Exception,'refund_newer_period_first'):
             await self.rows("SELECT refund_commercial_payment(%s,'refund-001')", first, actor=self.admin)
@@ -158,12 +158,31 @@ class CommercialTests(PostgresTestCase):
         self.assertEqual(await targets.due_targets(), [])
         self.assertEqual(await self.rows("INSERT INTO notifications(user_id,kind,channel,dedupe_key) VALUES (%s,'price_drop','web','saved:2') RETURNING id",self.user), [])
 
+    async def test_each_plan_sets_its_daily_immediate_alerts(self):
+        async def cap(user):
+            return (await self.rows("SELECT immediate_alert_cap(%s) AS n", user))[0]['n']
+        pid = await self.search()
+        self.assertEqual((await self.access())['state'], 'trial')
+        self.assertEqual(await cap(self.user), 3)
+        self.assertEqual((await notifications.profile_audiences([pid]))[pid]['frequency'], 'immediate')
+        await self.pay()
+        self.assertEqual(await cap(self.user), 10)
+        agency = await self.account()
+        await self.pay('pro_monthly', 'tx-agency', user=agency)
+        self.assertEqual(await cap(agency), 50)
+        # The open pilot keeps the global alerts_max_per_user_day.
+        await self.rows("UPDATE app_config SET value=jsonb_set(value,'{enforced}','false') WHERE key='plan_limits'")
+        self.assertEqual(await cap(agency), 10)
+
     async def test_free_notifications_resolve_frequency_at_delivery(self):
+        # A plan without immediate alerts (immediate_alerts_per_day = 0).
+        await self.rows("UPDATE app_config SET value=jsonb_set(value,'{free,immediate_alerts_per_day}','0') WHERE key='plan_limits'")
         pid = await self.search()
         audience = await notifications.profile_audiences([pid])
         self.assertEqual(audience[pid]['frequency'],'daily')
         await self.pay()
-        nid = (await self.rows("INSERT INTO notifications(user_id,search_profile_id,kind,channel,dedupe_key) VALUES (%s,%s,'new_match','web','new:1') RETURNING id",self.user,pid))[0]['id']
+        lid = (await self.rows("INSERT INTO listings(source,external_id,url,title) VALUES ('mercadolibre','freq-1','https://example.test/freq-1','Fiesta') RETURNING id"))[0]['id']
+        nid = (await self.rows("INSERT INTO notifications(user_id,search_profile_id,listing_id,kind,channel,dedupe_key) VALUES (%s,%s,%s,'new_match','web','new:1') RETURNING id",self.user,pid,lid))[0]['id']
         await self.rows("UPDATE profiles SET plan_expires_at=now()-interval '1 second' WHERE id=%s",self.user)
         self.assertEqual((await self.access())['state'],'trial')
         self.assertFalse(await notifications.prepare_delivery(nid))
@@ -224,11 +243,11 @@ class CommercialTests(PostgresTestCase):
 
     async def test_server_caps_results_across_offsets(self):
         pid = await self.search()
-        await self.rows("INSERT INTO listings(source,external_id,url,title,make,model) SELECT 'mercadolibre',i::text,'https://example.test/'||i,'Fiesta','Ford','Fiesta' FROM generate_series(1,60) i")
+        await self.rows("INSERT INTO listings(source,external_id,url,title,make,model) SELECT 'mercadolibre',i::text,'https://example.test/'||i,'Fiesta','Ford','Fiesta' FROM generate_series(1,120) i")
         await self.rows("INSERT INTO matches(search_profile_id,listing_id,score,level,score_breakdown,match_reasons,scoring_version) SELECT %s,id,80,'high','{}','{}','test' FROM listings",pid)
-        self.assertEqual(len(await self.rows("SELECT * FROM search_results(%s,'all','recent',100,0)",pid,actor=self.user)),50)
-        self.assertEqual(len(await self.rows("SELECT * FROM search_results(%s,'all','recent',100,45)",pid,actor=self.user)),5)
-        self.assertEqual(await self.rows("SELECT * FROM search_results(%s,'all','recent',100,50)",pid,actor=self.user),[])
+        self.assertEqual(len(await self.rows("SELECT * FROM search_results(%s,'all','recent',200,0)",pid,actor=self.user)),100)
+        self.assertEqual(len(await self.rows("SELECT * FROM search_results(%s,'all','recent',200,95)",pid,actor=self.user)),5)
+        self.assertEqual(await self.rows("SELECT * FROM search_results(%s,'all','recent',200,100)",pid,actor=self.user),[])
         await self.rows("UPDATE profiles SET free_trial_started_at=now()-interval '4 days' WHERE id=%s",self.user)
         self.assertEqual(await self.rows("INSERT INTO matches(search_profile_id,listing_id,score,level,score_breakdown,match_reasons,scoring_version) VALUES (%s,1,90,'high','{}','{}','test') ON CONFLICT(search_profile_id,listing_id) DO UPDATE SET score=90 RETURNING id",pid),[])
         with self.assertRaisesRegex(Exception,'plan_access_expired'):

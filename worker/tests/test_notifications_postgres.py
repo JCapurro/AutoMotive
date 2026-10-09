@@ -146,6 +146,42 @@ class NotificationsCase(PostgresTestCase):
         await super().asyncTearDown()
 
 
+class PlanCapTests(NotificationsCase):
+    """plan_limits.immediate_alerts_per_day: each plan sets the user's daily cap."""
+
+    LIMITS = {"enforced": True,
+              "free": {"max_profiles": 1, "max_visible_results": 100, "immediate_alerts_per_day": 3},
+              "pass": {"max_profiles": 3, "immediate_alerts_per_day": 10},
+              "pro": {"max_profiles": 20, "immediate_alerts_per_day": 50}}
+
+    async def high_matches(self, n: int) -> None:
+        await self.matched(*[await self.match(self.profile, await self.listing(), "high", 90) for _ in range(n)])
+
+    async def emailed(self) -> list[dict]:
+        return [r for r in await self.notifications("email") if r["listing_id"] is not None]
+
+    async def test_a_trial_gets_three_immediate_alerts_and_the_fourth_goes_to_the_digest(self):
+        await self.set_config("plan_limits", self.LIMITS)
+        async with db.connection() as cx:
+            await cx.execute("UPDATE profiles SET free_trial_started_at = now() WHERE id = %s", (self.user,))
+        await self.high_matches(4)
+        rows = await self.emailed()
+        self.assertEqual([r["status"] for r in rows], ["queued", "queued", "queued", "digest"])
+        self.assertEqual(rows[3]["payload"]["degraded"], "daily_cap")
+
+    async def test_an_agency_gets_fifty_immediate_alerts_a_day(self):
+        await self.set_config("plan_limits", self.LIMITS)
+        async with db.connection() as cx:
+            await cx.execute("UPDATE profiles SET plan = 'pro', plan_expires_at = now() + interval '20 days' "
+                             " WHERE id = %s", (self.user,))
+            for i in range(48):  # immediate alerts already sent today
+                await cx.execute("INSERT INTO notifications (user_id, search_profile_id, kind, channel, status, "
+                                 "  dedupe_key) VALUES (%s, %s, 'new_match', 'email', 'sent', %s)",
+                                 (self.user, self.profile, f"match:earlier-{i}"))
+        await self.high_matches(3)
+        self.assertEqual([r["status"] for r in await self.emailed()], ["queued", "queued", "digest"])
+
+
 class AlertTypesTests(NotificationsCase):
     """Acceptance: the three types of §22 reach Telegram and email with the right copy."""
 

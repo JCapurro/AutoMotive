@@ -38,9 +38,9 @@ insert into public.app_config (key, value) values
   ('collector_failure_alert_after', '3'),
   ('plan_limits', '{
      "enforced": false,
-     "free": {"max_profiles": 1, "max_visible_results": 50, "immediate_alerts": false},
-     "pro":  {"max_profiles": 10, "immediate_alerts": true, "crawl_priority": "high"},
-     "pass": {"max_profiles": 10, "immediate_alerts": true, "crawl_priority": "high"}
+     "free": {"max_profiles": 1, "max_visible_results": 100, "immediate_alerts_per_day": 3},
+     "pass": {"max_profiles": 3, "immediate_alerts_per_day": 10},
+     "pro":  {"max_profiles": 20, "immediate_alerts_per_day": 50}
    }'),
   ('repost',                        '{"window_days": 60, "price_tol_pct": 10}'),
   ('enrichment',                    '{"batch_per_source": 20, "max_age_days": 30}'),

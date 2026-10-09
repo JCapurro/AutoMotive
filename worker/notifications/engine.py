@@ -1,6 +1,6 @@
 """The notification decision (sección 7.1). Pure: no database, no channels.
 
-    decide(event, rules, sent_today=…) → zero or more Decisions (one per channel)
+    decide(event, rules, sent_today=…, cap=…) → zero or more Decisions (one per channel)
 
 | Event                             | Condition                                         | kind          |
 |-----------------------------------|---------------------------------------------------|---------------|
@@ -14,10 +14,12 @@
 Rules:
   * frequency: `immediate` → status 'queued' (sent right away); `daily` →
     'digest'. price_drop of a saved listing is always immediate.
-  * daily cap (alerts_max_per_user_day) over immediate alerts: the ones past
-    it become 'digest' with payload.degraded = 'daily_cap'. One alert on three
-    channels counts once. A saved listing's price_drop is not capped (it is
-    "always immediate") but it counts.
+  * daily cap over immediate alerts: the user's plan sets it
+    (plan_limits.immediate_alerts_per_day, public.immediate_alert_cap), with
+    alerts_max_per_user_day as the default. The ones past it become 'digest'
+    with payload.degraded = 'daily_cap'. One alert on three channels counts
+    once. A saved listing's price_drop is not capped (it is "always
+    immediate") but it counts.
   * dedupe_key: match:<listing_id> for new_match and opportunity (a listing is
     announced once, whatever its level), price_drop:<listing_id>:<snapshot_id>,
     listing_gone:<listing_id>. The table enforces it per (user, channel).
@@ -134,15 +136,17 @@ def classify(event: Event, rules: Rules) -> _Plan | None:
     return None
 
 
-def decide(event: Event, rules: Rules, *, sent_today: int = 0) -> list[Decision]:
+def decide(event: Event, rules: Rules, *, sent_today: int = 0, cap: int | None = None) -> list[Decision]:
     """Notifications for one event, one per deliverable channel. `sent_today`
-    is how many immediate alerts the user already got today (ART)."""
+    is how many immediate alerts the user already got today (ART); `cap` is
+    the user's daily limit (default: rules.alerts_max_per_user_day)."""
     plan = classify(event, rules)
     if plan is None or not event.audience.channels:
         return []
     payload = dict(event.payload)
     status = plan.status
-    if status == QUEUED and plan.capped and sent_today >= rules.alerts_max_per_user_day:
+    cap = rules.alerts_max_per_user_day if cap is None else cap
+    if status == QUEUED and plan.capped and sent_today >= cap:
         status = DIGEST
         payload["degraded"] = DEGRADED_CAP
     if event.kind == MATCH and event.repost:
@@ -159,11 +163,14 @@ def _priority(event: Event) -> tuple:
 
 
 def decide_all(events: Iterable[Event], rules: Rules, *, sent_today: Mapping[str, int] | None = None,
-               existing: set[tuple[str, str]] | None = None) -> list[Decision]:
+               existing: set[tuple[str, str]] | None = None,
+               caps: Mapping[str, int] | None = None) -> list[Decision]:
     """Decide a batch. One alert per (user, dedupe_key), from the event with
     the highest level; keys in `existing` (user_id, dedupe_key) were already
-    notified and are skipped without counting towards the cap."""
+    notified and are skipped without counting towards the cap. `caps` is each
+    user's daily limit; a user without one gets rules.alerts_max_per_user_day."""
     counts = dict(sent_today or {})
+    caps = caps or {}
     done = set(existing or ())
     out: list[Decision] = []
     for event in sorted(events, key=_priority):
@@ -173,7 +180,8 @@ def decide_all(events: Iterable[Event], rules: Rules, *, sent_today: Mapping[str
         key = (event.audience.user_id, plan.dedupe_key)
         if key in done:
             continue
-        decisions = decide(event, rules, sent_today=counts.get(event.audience.user_id, 0))
+        decisions = decide(event, rules, sent_today=counts.get(event.audience.user_id, 0),
+                           cap=caps.get(event.audience.user_id))
         if not decisions:
             continue
         done.add(key)

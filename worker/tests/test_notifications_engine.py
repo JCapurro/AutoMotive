@@ -147,6 +147,35 @@ class DailyCapTests(unittest.TestCase):
         self.assertEqual({d.listing_id: d.status for d in out}, {1: "digest", 2: "queued"})
 
 
+class PlanCapTests(unittest.TestCase):
+    """plan_limits.immediate_alerts_per_day: each user's plan sets the cap."""
+
+    def test_the_fourth_alert_of_a_trial_goes_to_the_digest(self):
+        events = [match("high", listing=i, score=90 - i) for i in (1, 2, 3, 4)]
+        out = decide_all(events, RULES, caps={"u1": 3})
+        self.assertEqual({d.listing_id: d.status for d in out}, {1: "queued", 2: "queued", 3: "queued", 4: "digest"})
+        self.assertEqual({d.payload.get("degraded") for d in out if d.listing_id == 4}, {DEGRADED_CAP})
+
+    def test_each_user_has_their_own_cap(self):
+        trial, agency = aud("trial"), aud("agency")
+        events = [match("high", listing=i, audience=a) for i in range(1, 13) for a in (trial, agency)]
+        out = decide_all(events, RULES, caps={"trial": 3, "agency": 50}, sent_today={"agency": 40})
+        queued = {u: len({d.listing_id for d in out if d.user_id == u and d.status == "queued"})
+                  for u in ("trial", "agency")}
+        self.assertEqual(queued, {"trial": 3, "agency": 10})
+
+    def test_without_a_cap_the_rules_default_applies(self):
+        events = [match("high", listing=i) for i in (1, 2, 3)]
+        out = decide_all(events, Rules(alerts_max_per_user_day=2), caps={"someone_else": 50})
+        self.assertEqual(sorted(d.status for d in out if d.channel == "web"), ["digest", "queued", "queued"])
+
+    def test_a_zero_cap_sends_everything_to_the_digest_but_saved_price_drops(self):
+        out = decide_all([match("high", listing=1),
+                          Event(PRICE_DROP, 2, aud(), snapshot_id=1, drop_pct=10, saved=True)],
+                         RULES, caps={"u1": 0})
+        self.assertEqual({(d.kind, d.status) for d in out}, {("opportunity", "digest"), ("price_drop", "queued")})
+
+
 class DedupeAndMultiProfileTests(unittest.TestCase):
     def test_already_notified_keys_are_skipped_and_not_counted(self):
         rules = Rules(alerts_max_per_user_day=1)

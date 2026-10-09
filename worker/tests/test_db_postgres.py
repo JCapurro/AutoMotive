@@ -125,9 +125,8 @@ class AlertRepoTests(PostgresTestCase):
         async with db.connection() as cx:
             hits = await (await cx.execute(
                 "SELECT props FROM events WHERE name = 'plan_limit_hit' ORDER BY id")).fetchall()
-        # The second search goes over max_profiles; both ask for immediate alerts (Pro).
-        self.assertEqual(sorted(h["props"]["limit"] for h in hits),
-                         ["immediate_alerts", "immediate_alerts", "max_profiles"])
+        # The second search goes over max_profiles; the trial includes immediate alerts.
+        self.assertEqual(sorted(h["props"]["limit"] for h in hits), ["max_profiles"])
         self.assertTrue(all(h["props"]["enforced"] is False for h in hits))
 
     async def test_plan_limit_rejects_inserts_when_enforced(self):
