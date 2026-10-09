@@ -1,0 +1,118 @@
+{
+  "version": "landing-2026-10-06",
+  "brand": "Ese Auto",
+  "instagram": "@eseauto.ar",
+  "framework": "HyperFrames 0.8.138",
+  "previous_framework": "0.8.134",
+  "render_job_id": "2f3ad1c9-7f54-461e-b8f3-d04a44df12c8",
+  "composition_hash": "250bcfb5b9e77554",
+  "render_seconds": 180.7,
+  "quality": "delivery (high)",
+  "width": 1080,
+  "height": 1920,
+  "fps": 30,
+  "frames": 720,
+  "duration_seconds": 24.0,
+  "video_codec": "h264",
+  "video_profile": "High",
+  "pixel_format": "yuv420p",
+  "audio_codec": "aac",
+  "sample_rate": 48000,
+  "audio_channels": 2,
+  "music": "Original 120 BPM, unchanged",
+  "native_capture_scale": 3,
+  "landing_capture_date": "2026-10-06",
+  "existing_search_capture_date": "2026-10-05",
+  "files": [
+    {
+      "name": "ESE_AUTO_REEL_LANDING_2026-10-06_1080x1920.mp4",
+      "bytes": 14415005,
+      "sha256": "60fd62506f19292fdb312346b5fea99d60cb2d882793a475ba93b2c202f54cd6"
+    },
+    {
+      "name": "ESE_AUTO_REEL_LANDING_2026-10-06_SIN_AUDIO.mp4",
+      "bytes": 13806960,
+      "sha256": "9404eb5322a8820ac46aa75c2427efad841160a7592a5cd68d0f68e4cf7f9dd5"
+    },
+    {
+      "name": "PORTADA_REEL_LANDING_2026-10-06.png",
+      "bytes": 479755,
+      "sha256": "df86df4c07f8f564d06250bd598723ee84b0d0b1045fefe18a4cf15ac4fce95c"
+    },
+    {
+      "name": "COPY_INSTAGRAM_LANDING_2026-10-06.txt",
+      "bytes": 772,
+      "sha256": "93bcc7551747f5e938ea0955728bc9ed8cd9c0f3ad3bfdafa0caea568203c4ad"
+    },
+    {
+      "name": "TEXTOS_LANDING_2026-10-06.srt",
+      "bytes": 734,
+      "sha256": "35ec8ae524184170e23f0125bfdf5caa5b877c3351f3a687d9e0ab45911c9dd8"
+    },
+    {
+      "name": "PUBLICAR_REEL_LANDING_2026-10-06.md",
+      "bytes": 2646,
+      "sha256": "41355a8a562017cecd2e543e801a0f62855b9d289e8f9d9c129119b72b1b6e09"
+    },
+    {
+      "name": "STORYBOARD_LANDING_2026-10-06.md",
+      "bytes": 1147,
+      "sha256": "71668acf3aa254616cda4bcf65a65c5b7e5e568abed48d369b58c9a9378f1614"
+    }
+  ],
+  "verification": {
+    "full_decode": "PASS",
+    "native_snapshot_comparison": "PASS",
+    "actual_video_frames": [
+      {
+        "seconds": 1.3,
+        "file": "revision\\landing-2026-10-06\\final-1.3s.png",
+        "mean_absolute_pixel_difference_vs_native_snapshot": 2.8925
+      },
+      {
+        "seconds": 3.9,
+        "file": "revision\\landing-2026-10-06\\final-3.9s.png",
+        "mean_absolute_pixel_difference_vs_native_snapshot": 1.9038
+      },
+      {
+        "seconds": 4.7,
+        "file": "revision\\landing-2026-10-06\\final-4.7s.png",
+        "mean_absolute_pixel_difference_vs_native_snapshot": 1.8805
+      },
+      {
+        "seconds": 6.6,
+        "file": "revision\\landing-2026-10-06\\final-6.6s.png",
+        "mean_absolute_pixel_difference_vs_native_snapshot": 1.79
+      },
+      {
+        "seconds": 9.3,
+        "file": "revision\\landing-2026-10-06\\final-9.3s.png",
+        "mean_absolute_pixel_difference_vs_native_snapshot": 1.7687
+      },
+      {
+        "seconds": 11,
+        "file": "revision\\landing-2026-10-06\\final-11s.png",
+        "mean_absolute_pixel_difference_vs_native_snapshot": 1.8009
+      },
+      {
+        "seconds": 14.2,
+        "file": "revision\\landing-2026-10-06\\final-14.2s.png",
+        "mean_absolute_pixel_difference_vs_native_snapshot": 1.8311
+      },
+      {
+        "seconds": 18,
+        "file": "revision\\landing-2026-10-06\\final-18s.png",
+        "mean_absolute_pixel_difference_vs_native_snapshot": 1.9924
+      },
+      {
+        "seconds": 22.5,
+        "file": "revision\\landing-2026-10-06\\final-22.5s.png",
+        "mean_absolute_pixel_difference_vs_native_snapshot": 2.1472
+      }
+    ],
+    "visual_review": "PASS: 9 actual MP4 frames, including all six scenes and the landing controls",
+    "silent_video_stream_matches_main": true,
+    "previous_videos_and_package_preserved": true,
+    "strict_check": "PASS"
+  }
+}

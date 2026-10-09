@@ -1,4 +1,4 @@
-# .media · 15 assets
+# .media · 19 assets
 
 id         type   dur   dims   path                         description
 image_001  image  —     —      .media/images/image_001.png  01-formulario-vacio.png
@@ -16,3 +16,7 @@ image_012  image  —     —      .media/images/image_012.png  05-opcion-2.png
 video_001  video  —     —      .media/video/video_001.mp4   ESE_AUTO_REEL_HYPERFRAMES_HD_1080x1920.mp4
 video_002  video  —     —      .media/video/video_002.mp4   ESE_AUTO_REEL_HYPERFRAMES_HD_SIN_AUDIO.mp4
 image_013  image  —     —      .media/images/image_013.png  PORTADA_REEL_HD.png
+image_014  image  —     —      .media/images/image_014.png  00-landing-hero.png
+image_015  image  —     —      .media/images/image_015.png  01-landing-escrita.png
+video_003  video  —     —      .media/video/video_003.mp4   ESE_AUTO_REEL_LANDING_2026-10-06_1080x1920.mp4
+image_016  image  —     —      .media/images/image_016.png  PORTADA_REEL_LANDING_2026-10-06.png

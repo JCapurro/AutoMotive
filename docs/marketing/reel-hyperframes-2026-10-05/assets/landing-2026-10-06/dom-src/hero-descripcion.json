@@ -1,0 +1,18 @@
+{
+  "controls": [],
+  "font": "Archivo, \"Archivo Fallback\"",
+  "height": 78.375,
+  "html": "<p style=\"display:block;position:static;top:auto;right:auto;bottom:auto;left:auto;width:383.2px;height:78.375px;min-width:0px;max-width:none;min-height:0px;max-height:none;box-sizing:border-box;margin-top:0px;margin-right:0px;margin-bottom:0px;margin-left:0px;padding-top:0px;padding-right:0px;padding-bottom:0px;padding-left:0px;border-top:0px solid rgb(216, 221, 230);border-right:0px solid rgb(216, 221, 230);border-bottom:0px solid rgb(216, 221, 230);border-left:0px solid rgb(216, 221, 230);border-radius:0px;background-color:rgba(0, 0, 0, 0);background-image:none;background-size:auto;color:rgb(78, 90, 115);opacity:1;font-family:Archivo, &quot;Archivo Fallback&quot;;font-size:19px;font-weight:400;font-stretch:100%;font-style:normal;font-variant-numeric:lining-nums tabular-nums;font-feature-settings:normal;font-kerning:auto;word-spacing:0px;text-wrap:wrap;letter-spacing:normal;line-height:26.125px;text-align:start;text-decoration:none;text-transform:none;white-space:normal;overflow:visible;overflow-x:visible;overflow-y:visible;text-overflow:clip;word-break:normal;overflow-wrap:normal;flex-direction:row;flex-grow:0;flex-shrink:1;flex-basis:auto;flex-wrap:nowrap;align-items:normal;justify-content:normal;align-self:auto;gap:normal;column-gap:normal;row-gap:normal;grid-template-columns:none;grid-template-rows:none;grid-column:auto;grid-row:auto;transform:none;transform-origin:191.6px 39.1875px;object-fit:fill;object-position:50% 50%;appearance:none;box-shadow:none;list-style:outside none disc;vertical-align:baseline;fill:rgb(0, 0, 0);stroke:none;stroke-width:1px;margin:0!important;\">Ese Auto monitorea las publicaciones y te avisa cuando aparece uno que vale la pena mirar.</p>",
+  "rect": {
+    "bottom": 363.0375061035156,
+    "height": 78.375,
+    "left": 16,
+    "right": 399.2000122070313,
+    "top": 284.6625061035156,
+    "width": 383.2000122070313,
+    "x": 16,
+    "y": 284.6625061035156
+  },
+  "text": "Ese Auto monitorea las publicaciones y te avisa cuando aparece uno que vale la pena mirar.",
+  "width": 383.2000122070313
+}

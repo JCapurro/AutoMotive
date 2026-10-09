@@ -1,0 +1,55 @@
+{
+  "full_decode": "PASS",
+  "native_snapshot_comparison": "PASS",
+  "actual_video_frames": [
+    {
+      "seconds": 1.3,
+      "file": "revision\\landing-2026-10-06\\final-1.3s.png",
+      "mean_absolute_pixel_difference_vs_native_snapshot": 2.8925
+    },
+    {
+      "seconds": 3.9,
+      "file": "revision\\landing-2026-10-06\\final-3.9s.png",
+      "mean_absolute_pixel_difference_vs_native_snapshot": 1.9038
+    },
+    {
+      "seconds": 4.7,
+      "file": "revision\\landing-2026-10-06\\final-4.7s.png",
+      "mean_absolute_pixel_difference_vs_native_snapshot": 1.8805
+    },
+    {
+      "seconds": 6.6,
+      "file": "revision\\landing-2026-10-06\\final-6.6s.png",
+      "mean_absolute_pixel_difference_vs_native_snapshot": 1.79
+    },
+    {
+      "seconds": 9.3,
+      "file": "revision\\landing-2026-10-06\\final-9.3s.png",
+      "mean_absolute_pixel_difference_vs_native_snapshot": 1.7687
+    },
+    {
+      "seconds": 11,
+      "file": "revision\\landing-2026-10-06\\final-11s.png",
+      "mean_absolute_pixel_difference_vs_native_snapshot": 1.8009
+    },
+    {
+      "seconds": 14.2,
+      "file": "revision\\landing-2026-10-06\\final-14.2s.png",
+      "mean_absolute_pixel_difference_vs_native_snapshot": 1.8311
+    },
+    {
+      "seconds": 18,
+      "file": "revision\\landing-2026-10-06\\final-18s.png",
+      "mean_absolute_pixel_difference_vs_native_snapshot": 1.9924
+    },
+    {
+      "seconds": 22.5,
+      "file": "revision\\landing-2026-10-06\\final-22.5s.png",
+      "mean_absolute_pixel_difference_vs_native_snapshot": 2.1472
+    }
+  ],
+  "visual_review": "PASS: 9 actual MP4 frames, including all six scenes and the landing controls",
+  "silent_video_stream_matches_main": true,
+  "previous_videos_and_package_preserved": true,
+  "strict_check": "PASS"
+}

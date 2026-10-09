@@ -1,0 +1,18 @@
+{
+  "controls": [],
+  "font": "Archivo, \"Archivo Fallback\"",
+  "height": 105.26250457763672,
+  "html": "<h1 style=\"display:block;position:static;top:auto;right:auto;bottom:auto;left:auto;width:383.2px;height:105.262px;min-width:0px;max-width:640.872px;min-height:0px;max-height:none;box-sizing:border-box;margin-top:0px;margin-right:0px;margin-bottom:0px;margin-left:0px;padding-top:0px;padding-right:0px;padding-bottom:0px;padding-left:0px;border-top:0px solid rgb(216, 221, 230);border-right:0px solid rgb(216, 221, 230);border-bottom:0px solid rgb(216, 221, 230);border-left:0px solid rgb(216, 221, 230);border-radius:0px;background-color:rgba(0, 0, 0, 0);background-image:none;background-size:auto;color:rgb(20, 33, 61);opacity:1;font-family:Archivo, &quot;Archivo Fallback&quot;;font-size:34.4px;font-weight:800;font-stretch:110%;font-style:normal;font-variant-numeric:lining-nums tabular-nums;font-feature-settings:normal;font-kerning:auto;word-spacing:0px;text-wrap:balance;letter-spacing:-1.032px;line-height:35.088px;text-align:start;text-decoration:none;text-transform:none;white-space:normal;overflow:visible;overflow-x:visible;overflow-y:visible;text-overflow:clip;word-break:normal;overflow-wrap:normal;flex-direction:row;flex-grow:0;flex-shrink:1;flex-basis:auto;flex-wrap:nowrap;align-items:normal;justify-content:normal;align-self:auto;gap:normal;column-gap:normal;row-gap:normal;grid-template-columns:none;grid-template-rows:none;grid-column:auto;grid-row:auto;transform:none;transform-origin:191.6px 52.6312px;object-fit:fill;object-position:50% 50%;appearance:none;box-shadow:none;list-style:outside none disc;vertical-align:baseline;fill:rgb(0, 0, 0);stroke:none;stroke-width:1px;margin:0!important;\">Decinos cuál. Te avisamos cuando aparezca.</h1>",
+  "rect": {
+    "bottom": 252.66251373291016,
+    "height": 105.26250457763672,
+    "left": 16,
+    "right": 399.2000122070313,
+    "top": 147.40000915527344,
+    "width": 383.2000122070313,
+    "x": 16,
+    "y": 147.40000915527344
+  },
+  "text": "Decinos cuál. Te avisamos cuando aparezca.",
+  "width": 383.2000122070313
+}

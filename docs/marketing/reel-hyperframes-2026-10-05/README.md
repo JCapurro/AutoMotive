@@ -1,6 +1,12 @@
 # Ese Auto · proyecto HyperFrames
 
-Composición de 24 segundos, 1080 × 1920, 30 fps. Exportada con HyperFrames 0.8.134 y animaciones GSAP 3.14.2. Cada una de las seis escenas tiene una línea de tiempo que se puede recorrer y editar.
+Composición de 24 segundos, 1080 × 1920, 30 fps. HyperFrames se actualizó de 0.8.134 a 0.8.138 para esta revisión; GSAP se mantiene en 3.14.2. Cada una de las seis escenas tiene una línea de tiempo que se puede recorrer y editar.
+
+La revisión actual muestra el formulario público de la landing del 6 de octubre. El archivo para publicar es `ESE_AUTO_REEL_LANDING_2026-10-06_1080x1920.mp4`; las instrucciones y el copy están en `PUBLICAR_REEL_LANDING_2026-10-06.md`. Las versiones HD anteriores siguen conservadas. Para exportar la revisión actual, usá un nombre nuevo:
+
+```powershell
+.\hf.ps1 render --output ESE_AUTO_REEL_LANDING_2026-10-06_1080x1920.mp4 --fps 30 --quality delivery --workers 4
+```
 
 ## Editar
 

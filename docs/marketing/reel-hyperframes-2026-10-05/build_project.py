@@ -25,15 +25,15 @@ COMMON = """
 """
 
 
-def capture(name, width, id="", extra=""):
-    image_path = ROOT / 'assets' / 'capturas-hd' / f'{name}.png'
+def capture(name, width, id="", extra="", folder="capturas-hd"):
+    image_path = ROOT / 'assets' / folder / f'{name}.png'
     with Image.open(image_path) as source:
         source_width, source_height = source.size
     assert source_width >= width * 1.12, 'Capture must stay sharp during camera zooms'
     height = source_height * width / source_width
     ident = f' id="{id}"' if id else ""
     return (f'<div{ident} class="view" style="width:{width}px;height:{height:.2f}px;{extra}">'
-            f'<img id="capture-{name}" src="assets/capturas-hd/{name}.png" '
+            f'<img id="capture-{name}" src="assets/{folder}/{name}.png" '
             f'alt="Componente completo de Ese Auto, capturado en alta definicion"></div>')
 
 
@@ -71,21 +71,25 @@ def build():
     tl.to(q('.world'),{z:-800,rotationY:30,x:-900,opacity:0,duration:.45,ease:'power3.in'},2.55);
     """);
 
-    phone = capture("01-formulario-vacio", 440, "search-empty")
-    written = capture("02-busqueda-escrita", 840, "search-written")
+    landing_folder = "landing-2026-10-06"
+    phone = capture("00-landing-hero", 440, "search-empty", folder=landing_folder)
+    written = capture("01-landing-escrita", 840, "search-written", folder=landing_folder)
+    focus = json.loads((ROOT / 'assets' / landing_folder / 'CAPTURAS_LANDING.json').read_text(encoding='utf8'))[1]['focus']
+    focus_style = ';'.join(f'{key}:{value:.2f}px' for key,value in focus.items())
     scene("ea-busqueda", 5, """
     .phone-stage{position:absolute;left:266px;top:570px;width:480px;height:780px;transform-style:preserve-3d;transform-origin:50% 40%}
     .hardware{position:absolute;inset:0;border:4px solid #91a2b4;border-radius:68px;background:#263d55;box-shadow:45px 50px 90px #071321bb,inset 0 0 0 9px #0e1d30}
     .phone-surface{position:absolute;left:20px;top:55px;width:440px;height:655px;border-radius:46px;background:#fbfbf8;overflow:hidden}
-    #search-empty{position:absolute;left:0;top:55px}
+    #search-empty{position:absolute;left:0;top:20px}
     .cutout{position:absolute;left:177px;top:21px;width:125px;height:20px;border-radius:20px;background:#0b1728}
     .written-panel{left:78px;top:635px;width:846px;transform-origin:50% 50%}
-    .search-focus{position:absolute;left:43px;top:516px;width:244px;height:78px;border:7px solid #f4d447;border-radius:16px;pointer-events:none}
+    .search-focus{position:absolute;border:7px solid #f4d447;border-radius:16px;pointer-events:none}
+    #search-note{top:1425px}
     """, f'''
     <div class="eyebrow">01 · TU BÚSQUEDA</div><h2 class="headline"><span class="line">Contá qué auto</span><span class="line">buscás.</span></h2>
     <div class="phone-stage"><div class="hardware"></div><div class="phone-surface">{phone}</div><div class="cutout"></div></div>
-    <div class="panel written-panel">{written}<div class="search-focus"></div></div>
-    <p class="note">Modelo, presupuesto y zona · revisá antes de guardar.</p>
+    <div class="panel written-panel">{written}<div class="search-focus" style="{focus_style}"></div></div>
+    <p class="note" id="search-note">Empezá en eseauto.com.ar · continuá con tu cuenta.</p>
     ''', """
     // Adaptación del recurso oficial parallax-device-dive con pantalla auténtica.
     tl.fromTo(q('.phone-stage'),{y:480,z:-600,scale:.76,rotationX:22,rotationY:-38,opacity:0},{y:0,z:0,scale:1,rotationX:5,rotationY:-13,opacity:1,duration:.75,ease:'power3.out'},0);
@@ -117,7 +121,7 @@ def build():
     <h2 id="zone-title"><span class="line">Ajustá presupuesto</span><span class="line">y zona.</span></h2>
     <div class="filter-group"><div class="panel filter-model">{model}</div><div class="panel filter-year">{year}</div><div class="panel filter-km">{km}</div></div>
     <div class="zone-group"><div class="panel money">{money}</div><div class="panel zone">{zone}</div></div>
-    <p class="note">Podés corregir los filtros antes de guardar.</p>
+    <p class="note">Después de guardar: revisión inicial de al menos 2 minutos.</p>
     ''', """
     tl.fromTo(q('#filters-title,.eyebrow'),{x:-180,opacity:0},{x:0,opacity:1,duration:.4,ease:'power3.out'},.05);
     tl.fromTo(q('.filter-group .panel'),{x:-850,z:-450,rotationY:48,opacity:0},{x:0,z:0,rotationY:0,opacity:1,duration:.6,stagger:.19,ease:'power4.out'},.05);
@@ -226,7 +230,8 @@ def build():
 </div><script>const tl=gsap.timeline({{paused:true}});tl.to('.route-art',{{x:-30,y:55,rotation:3,duration:24,ease:'none'}},0);tl.to('.route-dash',{{strokeDashoffset:-1800,duration:24,ease:'none'}},0);tl.fromTo('.glow',{{scale:.85,opacity:.55}},{{scale:1.2,opacity:1,duration:4,repeat:5,yoyo:true,ease:'sine.inOut'}},0);window.__timelines['ea-main']=tl;</script></body></html>'''
     (ROOT / "index.html").write_text(index, encoding="utf-8")
     (ROOT / "index.motion.json").write_text(json.dumps({"duration":24,"assertions":[{"kind":"keepsMoving","withinSelector":"#ea-root","maxStaticSec":1.3}]}),encoding="utf-8")
-    print(json.dumps({"framework":"HyperFrames 0.8.134","scenes":len(slots),"duration":24,"project":str(ROOT)}))
+    version = json.loads((ROOT / 'package.json').read_text(encoding='utf8'))['dependencies']['hyperframes']
+    print(json.dumps({"framework":f"HyperFrames {version}","scenes":len(slots),"duration":24,"project":str(ROOT)}))
 
 
 if __name__ == "__main__":

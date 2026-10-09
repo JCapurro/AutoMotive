@@ -1,0 +1,26 @@
+[
+  {
+    "name": "00-landing-hero",
+    "x": 16,
+    "y": 16,
+    "width": 1246,
+    "height": 1746,
+    "source": "public landing 2026-10-06",
+    "scale": 3
+  },
+  {
+    "name": "01-landing-escrita",
+    "x": 1296,
+    "y": 16,
+    "width": 1198,
+    "height": 1003,
+    "source": "public landing draft 2026-10-06",
+    "scale": 3,
+    "focus": {
+      "left": 10.833666819917088,
+      "top": 571.0528765950822,
+      "width": 359.6678378831687,
+      "height": 104.585167509544
+    }
+  }
+]
