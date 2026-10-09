@@ -17,6 +17,7 @@ import httpx
 from notifications import templates
 from notifications.channels.base import Notification, SendResult
 from notifications.links import Links
+from notifications.email_assets import logo_attachment
 
 
 RESEND_URL = "https://api.resend.com/emails"
@@ -45,9 +46,10 @@ class ResendEmailChannel:
     async def send_message(self, to: str, msg: templates.EmailMessage, *, idempotency_key: str,
                            unsubscribe_token: str | None) -> SendResult:
         """POST an already rendered email (an alert, or the free-trial reminder,
-        notifications/trial_reminder.py). The key must be unique per email."""
+        notifications/trial_reminder.py). The key must be unique per email.
+        Every rendered email shows the inline logo, so it always goes attached."""
         body = {"from": self.sender, "to": [to], "subject": msg.subject,
-                "html": msg.html, "text": msg.text}
+                "html": msg.html, "text": msg.text, "attachments": [logo_attachment()]}
         if one_click := self.links.unsubscribe_one_click(unsubscribe_token):
             body["headers"] = {"List-Unsubscribe": f"<{one_click}>",
                                "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"}

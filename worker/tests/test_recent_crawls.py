@@ -145,10 +145,11 @@ class MercadoLibreWindowTests(unittest.IsolatedAsyncioTestCase):
 
 class FacebookPage:
     """A virtualized feed: each scroll replaces, rather than appends, cards."""
-    def __init__(self, batches, *, expire_after=None):
+    def __init__(self, batches, *, expire_after=None, body="Marketplace"):
         self.batches, self.index = batches, 0
         self.url = ""
         self.expire_after = expire_after
+        self.body = body
         self.close = AsyncMock()
         self.wait_for_timeout = AsyncMock()
         self.mouse = MagicMock(wheel=AsyncMock(side_effect=self.scroll))
@@ -166,7 +167,7 @@ class FacebookPage:
 
     def locator(self, selector):
         if selector == "body":
-            return MagicMock(inner_text=AsyncMock(return_value="Marketplace"))
+            return MagicMock(inner_text=AsyncMock(return_value=self.body))
         anchors = []
         for identifier, age in self.batches[self.index]:
             a = MagicMock(inner_text=AsyncMock(return_value=(
@@ -207,6 +208,38 @@ class FacebookWindowTests(unittest.IsolatedAsyncioTestCase):
         results = await self.search(page, publication_days=1)
         self.assertEqual([l.listing_id for l in results], ['2'])
         self.assertIn("daysSinceListed=1", page.url)
+
+    async def test_confirmed_no_publications_with_login_prompt_is_successful_empty_search(self):
+        # Visible text from the VPS: the login invitation accompanies a search,
+        # rather than replacing its explicit no-results message.
+        body = ('Iniciar sesión\nMarketplace\nResultados de la búsqueda\n'
+                'Fecha de publicación: Últimas 24 horas\n'
+                'No se encontraron publicaciones para "Hyundai i30" '
+                'en un radio de 65 kilómetros\n'
+                'Haz una nueva búsqueda.\nVe más en Facebook\n'
+                'Correo electrónico o número de teléfono\nContraseña\nIniciar sesión')
+        results = await self.search(FacebookPage([[]], body=body),
+                                    marca="Hyundai", modelo="i30", publication_days=1)
+        self.assertEqual(results, [])
+        self.assertTrue(results.complete)
+        self.assertIsNone(results.reason)
+        self.assertEqual(results.unknown_dates, 0)
+
+    async def test_unconfirmed_empty_feed_is_still_blocked(self):
+        for body in ("Marketplace", "Marketplace\nCargando...",
+                     "Iniciar sesión\nCorreo electrónico\nContraseña"):
+            with self.subTest(body=body):
+                page = FacebookPage([[]], body=body)
+                with self.assertRaisesRegex(fb.CollectorBlocked, "empty feed"):
+                    await self.search(page)
+                page.close.assert_awaited_once()
+
+    async def test_expired_session_is_not_mistaken_for_no_publications(self):
+        page = FacebookPage([[]], expire_after=1,
+                            body='No se encontraron publicaciones para "Hyundai i30"')
+        with self.assertRaisesRegex(fb.CollectorBlocked, "session expired"):
+            await self.search(page)
+        page.close.assert_awaited_once()
 
     async def test_scroll_cap_and_expired_session_preserve_partial_results(self):
         with patch.object(fb.config, "RECENT_FB_MAX_SCROLLS", 1):
