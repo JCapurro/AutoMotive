@@ -38,11 +38,22 @@ Después de incorporar la rama a `main`, actualizar el checkout del VPS y
 reiniciar el servicio existente:
 
 ```bash
-cd /opt/automotive
-git pull --ff-only
+# Como root (ssh automotive-vps). Git siempre como `automotive`, dueño del
+# checkout: como root falla por "dubious ownership". `set -e` evita reiniciar
+# el código viejo si la actualización falla.
+set -e
+G="sudo -u automotive git -C /opt/automotive"
+$G fetch origin
+test -z "$($G status --porcelain --untracked-files=no)"   # sin parches en caliente
+$G merge --ff-only origin/main
+test "$($G rev-parse HEAD)" = "$($G rev-parse origin/main)"
 systemctl restart automotive-worker.service
 systemctl status automotive-worker.service --no-pager
 ```
+
+Si `status` muestra archivos modificados, son parches en caliente: commitearlos
+en `main` antes de desplegar. Nunca usar `git clean` (borra `.env`, las sesiones
+`*_state.json`, `.ml_chrome_profile/` y `logs/`).
 
 `WEB_BASE_URL` debe apuntar a `https://www.eseauto.com.ar`. No ejecutar un
 reenvío masivo de notificaciones anteriores: los nuevos envíos usan el nuevo
