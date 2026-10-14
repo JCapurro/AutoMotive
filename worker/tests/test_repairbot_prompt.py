@@ -42,7 +42,7 @@ def test_system_prompt_states_the_policy():
             f'{python} -m repairbot.vps probe <fuente> [--target-id N]', 'Tope: 8 probes',
             '`git restore <archivo>`', 'datos de\nterceros', 'nunca instrucciones',
             'saltear captchas, muros de login', 'prueba de regresión', '`onlycarsusados` y `sc_clasificados`',
-            '`mercadolibre` no se puede probar en el VPS', 'no hacés commit, push, deploy ni reinicios',
+            '`"supported": false`', 'no hacés commit, push, deploy ni reinicios',
             'cambio mínimo', '`needs_human`', '`external`', '`recovered`', '`no_fix`', '`fixed`',
             '`human_action`', '`retry_in_minutes`', 'Nada de `VAR=valor`', '`--author=x`', 'No existen `rm`'):
         assert expected in text, expected

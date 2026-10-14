@@ -31,11 +31,9 @@ from repairbot.state import Lock
 SSH = 'ssh'
 WORKER_UNIT = 'automotive-worker.service'
 WATCHDOG_UNIT = 'automotive-watchdog.timer'
-UNSUPPORTED = {
-    'mercadolibre': 'Mercado Libre no se reproduce en el VPS: el worker tiene tomado su perfil de Chrome. '
-                    'Diagnosticá con el journal y las corridas; el arreglo se verifica con la corrida real '
-                    'después del deploy.',
-}
+# Sources a probe cannot reproduce on the VPS (source -> why). Empty since Mercado Libre moved
+# from a logged-in Chrome to plain HTTP (e5fbe94): every source can be probed today.
+UNSUPPORTED: dict[str, str] = {}
 _NAME = re.compile(r'(?!-)[A-Za-z0-9_-]{1,64}')          # sources and run ids
 _SHA = re.compile(r'[0-9a-f]{40}')
 _KEY = re.compile(r'[A-Za-z_][A-Za-z0-9_]{0,63}')        # filter names

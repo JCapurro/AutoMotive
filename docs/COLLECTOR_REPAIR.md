@@ -81,7 +81,7 @@ Todo intento que no llega a pushear (cualquier `outcome` salvo un `fixed` public
 - **El lanzador no corre el clon de Claude**: la tarea corre desde `launcher\worker`, un clon aparte que el guard no deja leer ni editar a la sesión y que solo avanza por fast-forward a `main`. Lo que deja una sesión sin revisar nunca se importa en el proceso que tiene las claves.
 - **Fail-closed**: `claude -p` ignora en silencio un settings inválido, así que el lanzador mata la sesión si antes de `init` no vio el canario del guard, o si `init` no muestra `dontAsk`, ninguna MCP y exactamente las herramientas pedidas.
 - **Compuertas y rollback** (arriba) son la segunda línea. Cada deploy termina en un email, y también cada rechazo o rendición.
-- `vps.probe` lleva al VPS solo código dentro del alcance permitido y lo corre como `automotive`, sin ingesta, con tope de 8 probes por intento. Mercado Libre no se prueba así (el worker tiene tomado su perfil de Chrome).
+- `vps.probe` lleva al VPS solo código dentro del alcance permitido y lo corre como `automotive`, sin ingesta, con tope de 8 probes por intento.
 
 ## Dónde vive cada cosa
 
@@ -148,7 +148,7 @@ Si `status` muestra archivos modificados, son parches en caliente: commitearlos 
 ## Herramientas de la sesión
 
 - `python -m tools.repro_target <fuente> [--target-id N] [--no-db] [--json] [--limit-sample 5] [--timeout 270] [k=v ...]`: una búsqueda sin ingesta (no escribe corridas, avisos ni `geocode_cache`). `--target-id` lee el target (solo lectura) y arma los filtros como el scheduler; `--no-db` no abre la base. Códigos: 0 ok, 2 incompleta, 3 bloqueada (login, captcha, sesión), 4 red / HTTP 5xx / timeout, 1 otro error.
-- `python -m repairbot.vps status | logs <fuente> [--minutes N] [--lines N] | probe <fuente> [--target-id N] [k=v ...]`: lo único del VPS que ve Claude. `probe` solo corre dentro de un intento (`REPAIRBOT_RUN_ID`) y declina `mercadolibre`. Este CLI no tiene `deploy`, `restart` ni `cleanup`.
+- `python -m repairbot.vps status | logs <fuente> [--minutes N] [--lines N] | probe <fuente> [--target-id N] [k=v ...]`: lo único del VPS que ve Claude. `probe` solo corre dentro de un intento (`REPAIRBOT_RUN_ID`); declina las fuentes de `vps.UNSUPPORTED` (hoy ninguna). Este CLI no tiene `deploy`, `restart` ni `cleanup`.
 
 ## Riesgos residuales
 

@@ -249,8 +249,8 @@ def main(argv=None) -> int   # CLI para Claude: SOLO `status`, `logs <source>`, 
   `python -m tools.repro_target ... --json` con `DISPLAY=:99`, `XAUTHORITY`, y rutas absolutas
   `FB_STORAGE_STATE`, `INSTAGRAM_STORAGE_STATE`, `ML_BROWSER_PROFILE_DIR` a los archivos reales.
   El código probado es siempre el del clon (sin cambios = el desplegado; con cambios = candidato).
-  `mercadolibre` no se prueba así (el worker tiene tomado el perfil de Chrome): devuelve
-  `{"supported": false, "reason": ...}`.
+  Una fuente en `vps.UNSUPPORTED` devuelve `{"supported": false, "reason": ...}` sin tocar el VPS
+  (hoy ninguna: Mercado Libre pasó de Chrome logueado a HTTP).
 - `run_id` y nombres de fuente se validan con `^[A-Za-z0-9_-]{1,64}$` antes de entrar a un script remoto.
   Los scripts remotos usan `set -euo pipefail`.
 - El CLI no expone `deploy`, `restart_worker` ni `cleanup`.

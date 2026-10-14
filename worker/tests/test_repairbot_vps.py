@@ -581,10 +581,12 @@ def test_probe_counter_caps_the_probes_of_a_run(staged):
     assert len(runner.calls) == 3
 
 
-def test_probe_declines_mercadolibre_without_touching_the_vps(lean):
+def test_probe_declines_an_unsupported_source_without_touching_the_vps(lean, monkeypatch):
+    assert vps.UNSUPPORTED == {}                            # Mercado Libre is plain HTTP now
+    monkeypatch.setitem(vps.UNSUPPORTED, 'mercadolibre', 'no se reproduce acá')
     runner = FakeSsh()
     result = vps.probe(lean, lean.repo, 'mercadolibre', target_id=5, filters=None, run_id='run-1', runner=runner)
-    assert result['supported'] is False and 'perfil de Chrome' in result['reason']
+    assert result['supported'] is False and 'no se reproduce' in result['reason']
     assert set(result) == {'supported', 'reason'}
     assert runner.calls == [] and not (lean.runs_dir / 'run-1').exists()
     with pytest.raises(VpsError, match='run_id'):           # still validated
@@ -741,7 +743,6 @@ def test_cli_probe_uses_the_run_of_the_environment(cli, bot, monkeypatch):
     blob = re.search(r"\.encode\(\)\)' (\S+)\)\n", script)[1]
     assert json.loads(base64.b64decode(blob)) == {'marca': 'Ford Ka', 'anio_min': '2015', 'q': 'a=b'}
     assert (bot.runs_dir / 'run-7' / 'probes').read_text() == '1'
-    assert cli('probe', 'mercadolibre', '--target-id', '5').json['supported'] is False
     assert cli('probe', 'kavak', 'sin-igual').code == 2
     cli('probe', 'kavak', replies=[probe_reply('{}')])
     result = cli('probe', 'kavak', replies=[probe_reply('{}')])

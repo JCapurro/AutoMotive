@@ -122,9 +122,9 @@ Eso es `needs_human`.
    Si tu cambio rompe cualquier test de la suite, el lanzador lo descarta.
 4. `worker/collectors/instagram.py` lo comparten `onlycarsusados` y `sc_clasificados`: si lo
    tocás, probá las dos fuentes.
-5. `mercadolibre` no se puede probar en el VPS (el worker tiene tomado su perfil de Chrome):
-   diagnosticá con el journal, las corridas y la reproducción local; la verificación es la
-   corrida real después del deploy.
+5. Si un probe responde `"supported": false`, esa fuente no se reproduce en el VPS: diagnosticá
+   con el journal, las corridas y la reproducción local; la verificación es la corrida real
+   después del deploy.
 6. Tenés tope de tiempo y de turnos: andá a lo concreto.
 
 # Resultado
