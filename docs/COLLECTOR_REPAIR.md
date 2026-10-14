@@ -184,6 +184,6 @@ Si `status` muestra archivos modificados, son parches en caliente: commitearlos 
   - las consultas nuevas sobre el esquema real (`EXPLAIN` para el `UPDATE`);
   - `vps.probe` en el VPS: Mardel Usados encontró 323 avisos, y Mercado Libre, target 7 por `--target-id`, 2 avisos completos;
   - un tick real desde el lanzador y la tarea programada con `pythonw` (resultado 0).
-- Instalado con `ops\install-repairbot.ps1`: `C:utomotive-botepo`, `C:utomotive-bot\launcher` y la tarea `\AutoMotive\RepairBot` cada 5 minutos.
+- Instalado con `ops\install-repairbot.ps1`: `C:\automotive-bot\repo`, `C:\automotive-bot\launcher` y la tarea `\AutoMotive\RepairBot` cada 5 minutos.
 - Al activarlo no había incidentes abiertos: el de Mercado Libre (security challenge) se cerró a las 13:37, con el collector HTTP. El primer arreglo de punta a punta (Claude, push, deploy y verificación) va a ocurrir con el próximo incidente real; cada resultado llega por email.
 - Pendiente del dueño: pausar la automatización **Reparar collectors en Revisar** en Codex.
