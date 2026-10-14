@@ -15,7 +15,7 @@ from pgcase import PostgresTestCase, requires_db
 pytestmark = [pytest.mark.db, requires_db]
 
 
-class CommercialTests(PostgresTestCase):
+class CommercialCase(PostgresTestCase):
     async def asyncSetUp(self):
         await super().asyncSetUp()
         async with db.connection() as cx:
@@ -53,6 +53,9 @@ class CommercialTests(PostgresTestCase):
 
     async def pay(self, offer='pass_30', ref='tx-001', user=None, actor=None):
         return (await self.rows("SELECT record_commercial_payment(%s,%s,'Mercado Pago',%s,now(),null) AS id", user or self.user, offer, ref, actor=actor or self.admin))[0]['id']
+
+
+class CommercialTests(CommercialCase):
 
     async def test_default_score_sort_and_recent_sort_use_publication(self):
         pid = await self.search()
@@ -266,3 +269,69 @@ class CommercialTests(PostgresTestCase):
         self.assertEqual(await self.rows("INSERT INTO matches(search_profile_id,listing_id,score,level,score_breakdown,match_reasons,scoring_version) VALUES (%s,1,90,'high','{}','{}','test') ON CONFLICT(search_profile_id,listing_id) DO UPDATE SET score=90 RETURNING id",pid),[])
         with self.assertRaisesRegex(Exception,'plan_access_expired'):
             await self.rows("INSERT INTO llm_jobs(user_id,kind,input) VALUES (%s,'parse_search','{}')",self.user)
+
+
+class ProFeaturesTests(CommercialCase):
+    """Fase 3: the threshold and the CSV export are Pro's (plan_limits.pro), and admins'."""
+
+    async def asyncSetUp(self):
+        await super().asyncSetUp()
+        await self.rows("UPDATE app_config SET value = jsonb_set(value, '{pro}', value->'pro' || "
+                        "'{\"threshold_alerts\": true, \"csv_export\": true}') WHERE key = 'plan_limits'")
+
+    async def listing_match(self, pid, ref, level='good', price_ref='{}', **listing):
+        cols = {"source": "mercadolibre", "external_id": ref, "url": f"https://example.test/{ref}", "title": "Ford Fiesta",
+                "make": "Ford", "model": "Fiesta", "trim": "Titanium", "year": 2017, "mileage_km": 98000,
+                "price": 10300, "currency": "USD", **listing}
+        [row] = await self.rows(f"INSERT INTO listings({','.join(cols)}) VALUES ({','.join(['%s'] * len(cols))}) RETURNING id",
+                                *cols.values())
+        await self.rows("INSERT INTO matches(search_profile_id,listing_id,score,level,score_breakdown,match_reasons,"
+                        "scoring_version,price_ref) VALUES (%s,%s,84,%s,'{}','{}','test',%s)", pid, row['id'], level, price_ref)
+        return row['id']
+
+    async def feature(self, user, name):
+        return (await self.rows("SELECT my_plan_feature(%s) AS ok", name, actor=user))[0]['ok']
+
+    async def test_only_pro_and_admins_have_them(self):
+        self.assertFalse(await self.feature(self.user, 'csv_export'))           # trial available
+        await self.pay()
+        self.assertFalse(await self.feature(self.user, 'threshold_alerts'))     # Particular
+        with self.assertRaisesRegex(Exception, 'plan_feature_unavailable'):
+            await self.rows("SELECT * FROM export_search_results()", actor=self.user)
+        agency = await self.account()
+        await self.pay('pro_monthly', 'tx-pro', user=agency)
+        self.assertTrue(await self.feature(agency, 'threshold_alerts'))
+        self.assertTrue(await self.feature(agency, 'csv_export'))
+        self.assertTrue(await self.feature(self.admin, 'csv_export'))
+        await self.rows("UPDATE profiles SET plan_expires_at = now() - interval '1 second' WHERE id = %s", agency)
+        self.assertFalse(await self.feature(agency, 'csv_export'))
+
+    async def test_export_is_what_the_results_page_lists(self):
+        await self.pay('pro_monthly')
+        fiesta = await self.search()
+        corolla = (await self.rows("INSERT INTO search_profiles(user_id,name,filters) VALUES (%s,'Corolla',"
+                                   "'{\"make\":\"Toyota\",\"model\":\"Corolla\"}') RETURNING id", self.user))[0]['id']
+        cheap = await self.listing_match(fiesta, 'cheap', 'high',
+                                         '{"n": 8, "median": 11700, "diff_pct": 12.4, "level_used": "model"}')
+        await self.listing_match(fiesta, 'few', price_ref='{"n": 2, "median": 11000, "diff_pct": 30, "level_used": "make"}')
+        gone = await self.listing_match(fiesta, 'gone')
+        await self.rows("UPDATE listings SET status = 'gone' WHERE id = %s", gone)
+        discarded = await self.listing_match(fiesta, 'discarded')
+        await self.rows("INSERT INTO user_listing_interactions(user_id,listing_id,status) VALUES (%s,%s,'discarded')",
+                        self.user, discarded)
+        await self.listing_match(corolla, 'corolla', make='Toyota', model='Corolla')
+        other = await self.account()
+        foreign = (await self.rows("INSERT INTO search_profiles(user_id,name,filters,enabled) VALUES (%s,'Ajena','{}',false) RETURNING id", other))[0]['id']
+        await self.listing_match(foreign, 'foreign')
+
+        rows = await self.rows("SELECT * FROM export_search_results()", actor=self.user)
+        self.assertEqual(sorted(r['url'].rsplit('/', 1)[1] for r in rows), ['cheap', 'corolla', 'few'])
+        [first] = [r for r in rows if r['url'].endswith('/cheap')]
+        self.assertEqual((first['search_name'], first['source_name'], first['version'], first['year'], first['mileage_km'],
+                          first['price'], first['currency'], first['comparables_pct'], first['score']),
+                         ('Fiesta', 'MercadoLibre', 'Titanium', 2017, 98000, 10300, 'USD', -12, 84))
+        self.assertIsNone([r for r in rows if r['url'].endswith('/few')][0]['comparables_pct'])   # not enough comparables
+        only = await self.rows("SELECT url FROM export_search_results(%s)", corolla, actor=self.user)
+        self.assertEqual([r['url'] for r in only], ['https://example.test/corolla'])
+        self.assertEqual(await self.rows("SELECT * FROM export_search_results(%s)", foreign, actor=self.user), [])
+

@@ -43,7 +43,7 @@ export async function deleteAccount(): Promise<{ error: string } | void> {
   const supabase = await createClient();
   const { error } = await supabase.rpc("delete_my_account");
   // Returned, not thrown: the client can't tell a throw from this redirect.
-  if (error) return { error: error.message.includes("cancel_subscription_before_deleting") ? "Primero cancelá Agencia desde Ajustes y esperá la confirmación de Mercado Pago. Después podés borrar tu cuenta." : "No pudimos borrar la cuenta. Probá de nuevo." };
+  if (error) return { error: error.message.includes("cancel_subscription_before_deleting") ? "Primero cancelá Pro desde Ajustes y esperá la confirmación de Mercado Pago. Después podés borrar tu cuenta." : "No pudimos borrar la cuenta. Probá de nuevo." };
   // The user no longer exists: clear the cookies whatever Auth answers.
   await supabase.auth.signOut({ scope: "local" }).catch(() => undefined);
   redirect("/?cuenta=borrada");

@@ -7,7 +7,7 @@ import { PLAN_NAMES } from "@/lib/pro";
 
 export const metadata: Metadata = { title: "Usuarios" };
 
-const WAITLIST: Record<string, string> = { pro_monthly: "Agencia", pass_30: "Particular", pass_90: "Pase anterior 90 días" };
+const WAITLIST: Record<string, string> = { pro_monthly: "Pro", pass_30: "Particular", pass_90: "Pase anterior 90 días" };
 
 // sección 10, "Usuarios": plan, searches, alerts per day, last activity.
 export default async function UsersPage() {

@@ -138,7 +138,8 @@ class Notifier:
                         channels=deliverable(row.get("channels") or (), row, self.available),
                         frequency=row.get("frequency") or "immediate",
                         min_level=row.get("min_level") or "good",
-                        profile_id=row.get("profile_id"))
+                        profile_id=row.get("profile_id"),
+                        threshold_pct=row.get("threshold_pct"))
 
     async def on_matches(self, candidates: list[MatchCandidate], rows: Mapping[int, Mapping[str, Any]], *,
                          now: datetime | None = None) -> list[int]:

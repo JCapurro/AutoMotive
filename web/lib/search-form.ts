@@ -43,6 +43,14 @@ export const SearchInput = z
     seller_type: z.enum(["", "private", "dealer"]).default(""),
     notification_frequency: z.enum(["immediate", "daily"]).default("immediate"),
     notify_min_level: z.enum(["high", "good", "match", "low"]).default("good"),
+    // Pro (3.2): "avisame solo si está X% o más por debajo de comparables".
+    opportunity_threshold_pct: z
+      .number("Escribí un número entero.")
+      .int("Escribí un número entero.")
+      .min(1, "Elegí entre 1 y 90 %.")
+      .max(90, "Elegí entre 1 y 90 %.")
+      .nullable()
+      .default(null),
   })
   .refine((v) => v.year_min == null || v.year_max == null || v.year_min <= v.year_max, {
     message: "El año «desde» no puede ser mayor que el «hasta».",
@@ -96,6 +104,7 @@ export function toColumns(v: SearchValues, allSources: string[]) {
     radius_km: v.location?.radius_km ?? null,
     notification_frequency: v.notification_frequency,
     notify_min_level: v.notify_min_level,
+    opportunity_threshold_pct: v.opportunity_threshold_pct,
   };
 }
 
@@ -127,6 +136,7 @@ export function fromProfile(p: SearchProfile, allSources: string[]): SearchValue
     seller_type: prefs.seller_type ?? "",
     notification_frequency: p.notification_frequency,
     notify_min_level: p.notify_min_level as Level,
+    opportunity_threshold_pct: p.opportunity_threshold_pct ?? null,
   };
 }
 

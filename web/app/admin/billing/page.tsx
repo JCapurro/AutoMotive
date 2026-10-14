@@ -35,7 +35,7 @@ export default async function BillingPage() {
       <dl className="grid gap-4 rounded-xl border p-5 sm:grid-cols-3">
         <div><dt className="text-sm text-muted-foreground">Ingresos confirmados del mes</dt><dd className="text-xl font-bold">{planPrice(revenue?.confirmed_revenue ?? 0)}</dd></div>
         <div><dt className="text-sm text-muted-foreground">Particular vendidos este mes</dt><dd className="text-xl font-bold">{revenue?.particular_sales ?? 0}</dd></div>
-        <div><dt className="text-sm text-muted-foreground">Mensualidades Agencia vigentes</dt><dd className="text-xl font-bold">{planPrice(revenue?.agency_monthly_equivalent ?? 0)}</dd></div>
+        <div><dt className="text-sm text-muted-foreground">Mensualidades Pro vigentes</dt><dd className="text-xl font-bold">{planPrice(revenue?.agency_monthly_equivalent ?? 0)}</dd></div>
       </dl>
       <p className="text-sm text-muted-foreground">Las mensualidades vigentes incluyen períodos asistidos y automáticos; no equivalen por sí solas a suscripciones autorizadas.
         Devoluciones registradas este mes: {planPrice(revenue?.refunds ?? 0)}. Costos y horas se registran en la planilla operativa del piloto.</p>

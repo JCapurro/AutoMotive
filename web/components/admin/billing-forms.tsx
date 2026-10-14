@@ -39,7 +39,7 @@ export function PaymentForm({ users, offer }: { users: { id: string; email: stri
     <label className="text-sm">Nota para auditoría<input name="note" maxLength={1000} className={field} /></label>
     <label className="flex items-start gap-2 text-sm sm:col-span-2"><input required type="checkbox" name="verified" className="mt-1" />
       Verifiqué en el proveedor el estado aprobado, la cuenta destinataria y el importe completo en ARS.
-      Guardar activa 30 días; una renovación Agencia extiende desde el vencimiento vigente.</label>
+      Guardar activa 30 días; una renovación Pro extiende desde el vencimiento vigente.</label>
     <Button type="submit" disabled={pending} className="sm:col-span-2">Registrar pago y activar período</Button>
   </form>;
 }
@@ -48,7 +48,7 @@ export function PilotLaunch({ enabled, limits, freeUsers, excessSearches }: { en
   const [pending, start] = useTransition();
   return <section className="space-y-3 rounded-xl border p-5 text-sm">
     <h2 className="font-semibold">{enabled ? "Piloto comercial habilitado" : "Habilitar el piloto comercial"}</h2>
-    {enabled ? <p>Free dura 72 horas; Particular permite {limits.pass.maxProfiles} búsquedas activas y Agencia, {limits.pro.maxProfiles}. Los pagos y las renovaciones se verifican manualmente.</p> : <>
+    {enabled ? <p>Free dura 72 horas; Particular permite {limits.pass.maxProfiles} búsquedas activas y Pro, {limits.pro.maxProfiles}. Los pagos y las renovaciones se verifican manualmente.</p> : <>
       <p>Hay {freeUsers} cuentas gratuitas con búsquedas activas. Las que todavía no iniciaron una prueba recibirán 72 horas desde la habilitación.
         Hay {excessSearches} búsquedas por encima de la capacidad nominal. Se pausarán los excedentes y las búsquedas con acceso vencido;
         se mantienen las más antiguas dentro del límite y todo el historial.</p>

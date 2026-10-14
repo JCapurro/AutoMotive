@@ -182,6 +182,44 @@ class PlanCapTests(NotificationsCase):
         self.assertEqual([r["status"] for r in await self.emailed()], ["queued", "queued", "digest"])
 
 
+class OpportunityThresholdTests(NotificationsCase):
+    """Pro (3.2): the search's threshold, only while the plan includes it."""
+
+    LIMITS = PlanCapTests.LIMITS
+    emailed = PlanCapTests.emailed
+
+    async def plan(self, plan: str, threshold: int | None) -> None:
+        await self.set_config("plan_limits", {**self.LIMITS, "pro": {**self.LIMITS["pro"], "threshold_alerts": True}})
+        async with db.connection() as cx:
+            await cx.execute("UPDATE profiles SET plan = %s, plan_expires_at = now() + interval '20 days' "
+                             " WHERE id = %s", (plan, self.user))
+            await cx.execute("UPDATE search_profiles SET opportunity_threshold_pct = %s WHERE id = %s",
+                             (threshold, self.profile))
+            for i in range(50):  # the daily cap is already used up
+                await cx.execute("INSERT INTO notifications (user_id, search_profile_id, kind, channel, status, "
+                                 "  dedupe_key) VALUES (%s, %s, 'new_match', 'email', 'sent', %s)",
+                                 (self.user, self.profile, f"match:earlier-{i}"))
+
+    async def test_what_reaches_it_is_immediate_past_the_cap_and_does_not_count(self):
+        await self.plan("pro", 10)
+        reached = await self.match(self.profile, await self.listing(), "high", 90, diff_pct=12.0)
+        short = await self.match(self.profile, await self.listing(), "high", 90, diff_pct=4.0)
+        await self.matched(reached, short)
+        rows = await self.emailed()
+        self.assertEqual([(r["listing_id"], r["status"], r["payload"].get("threshold_pct"), r["payload"].get("degraded"))
+                          for r in rows],
+                         [(reached.listing_id, "queued", 10, None), (short.listing_id, "digest", None, None)])
+        since = datetime.now(timezone.utc) - timedelta(days=1)
+        self.assertEqual(await repo.sent_today([self.user], since), {self.user: 50})
+
+    async def test_another_plan_ignores_it(self):
+        await self.plan("pass", 10)
+        self.assertIsNone((await repo.profile_audiences([self.profile]))[self.profile]["threshold_pct"])
+        await self.matched(await self.match(self.profile, await self.listing(), "high", 90, diff_pct=30.0))
+        [row] = await self.emailed()
+        self.assertEqual((row["status"], row["payload"].get("degraded")), ("digest", "daily_cap"))
+
+
 class AlertTypesTests(NotificationsCase):
     """Acceptance: the three types of §22 reach Telegram and email with the right copy."""
 

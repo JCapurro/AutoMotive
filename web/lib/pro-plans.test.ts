@@ -43,7 +43,8 @@ it.each(modes)("offers exactly the three paid plans from Adquirir plan in mode %
   const page = await ProPage({ searchParams: Promise.resolve({}), params: Promise.resolve({}) });
   const html = renderToStaticMarkup(page);
   expect(html.match(/type="radio"/g)).toHaveLength(3);
-  for (const name of ["Particular", "Agencia", "Custom"]) expect(html).toContain(`>${name}</span>`);
+  for (const name of ["Particular", "Pro", "Custom"]) expect(html).toContain(`>${name}</span>`);
+  expect(html).not.toContain("Agencia");
   expect(html).toContain("A convenir");
   expect(html).not.toContain("Prueba gratis");
   expect(html).not.toContain('value="free"');
@@ -62,7 +63,7 @@ it.each(modes)("routes a selected Custom plan to a WhatsApp consultation in mode
   expect(html).not.toContain('data-testid="waitlist-joined"');
 });
 
-it("keeps Particular and Agencia prices tied to the configured offer", () => {
+it("keeps Particular and Pro prices tied to the configured offer", () => {
   const offer = { ...DEFAULT_PRO_OFFER, pass_30: { ...DEFAULT_PRO_OFFER.pass_30, amount: 18000 } };
   const html = renderToStaticMarkup(createElement(ProPlans, { offer, limits: DEFAULT_PLAN_LIMITS, current: null, placement: "plans", automatic: true, recommended: "pro_monthly" }));
   expect(html).toContain(planPrice(18000));
@@ -79,7 +80,7 @@ it("describes the same negotiated Custom scope on public and acquisition pages",
   }
 });
 
-it("shows the phase 1 plan cards with the limits the backend applies", () => {
+it("shows the plan cards with the limits and features the backend applies", () => {
   const html = renderToStaticMarkup(createElement(PublicPlans, { cfg: { proOffer: DEFAULT_PRO_OFFER, planLimits: DEFAULT_PLAN_LIMITS, automaticPayments: true, commercialPilot: true }, signedIn: false }));
   for (const copy of [
     "por 3 días · sin tarjeta", "1 búsqueda activa", "Hasta 100 resultados", "Hasta 3 avisos inmediatos por día y resumen diario",
@@ -87,8 +88,9 @@ it("shows the phase 1 plan cards with the limits the backend applies", () => {
     "por 30 días · pago único", "Seguí hasta tres opciones a la vez y recibí avisos para encontrar tu próximo auto.",
     "Hasta 3 búsquedas activas", "Hasta 10 avisos inmediatos por día y resumen diario",
     "Sin renovación automática. Si todavía no lo encontraste, extendés 30 días con un clic.",
-    "Para agencias y revendedores. Monitoreá más modelos y oportunidades de compra desde una misma cuenta.",
-    "Hasta 20 búsquedas activas", "Hasta 50 avisos inmediatos por día y resumen diario",
+    ">Pro<", "Para agencias y revendedores que necesitan llegar primero.",
+    "Hasta 20 búsquedas activas", "Avisos inmediatos sin tope de las oportunidades que elegís",
+    "Exportá los resultados a una planilla",
     "Renovación mensual automática. Cancelás desde Ajustes y conservás el período pagado.",
     "Una búsqueda es un modelo, con sus versiones, años, kilómetros, presupuesto y zona. Si querés seguir varios modelos, cada uno cuenta como una búsqueda.",
     "Los avisos que pasan el tope del día van al resumen.",
@@ -96,6 +98,12 @@ it("shows the phase 1 plan cards with the limits the backend applies", () => {
   ]) expect(html).toContain(copy);
   expect(html.match(/Todos los resultados disponibles/g)).toHaveLength(2);
   expect(html).not.toContain("Pricing");
+  expect(html).not.toContain("Agencia");
+  // Without the features in plan_limits, Pro shows its daily cap and no export.
+  const plain = { ...DEFAULT_PLAN_LIMITS, pro: { ...DEFAULT_PLAN_LIMITS.pro, thresholdAlerts: false, csvExport: false } };
+  const without = renderToStaticMarkup(createElement(PublicPlans, { cfg: { proOffer: DEFAULT_PRO_OFFER, planLimits: plain, automaticPayments: true, commercialPilot: true }, signedIn: false }));
+  expect(without).toContain("Hasta 50 avisos inmediatos por día y resumen diario");
+  expect(without).not.toContain("Exportá los resultados a una planilla");
 });
 
 it("follows app_config.plan_limits instead of fixed numbers", () => {

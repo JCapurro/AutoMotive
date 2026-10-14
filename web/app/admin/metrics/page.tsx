@@ -8,7 +8,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 export const metadata: Metadata = { title: "Métricas" };
 
-const WAITLIST: Record<string, string> = { pro_monthly: "Agencia", pass_30: "Particular", pass_90: "Pase anterior 90 días" };
+const WAITLIST: Record<string, string> = { pro_monthly: "Pro", pass_30: "Particular", pass_90: "Pase anterior 90 días" };
 const CTA_EVENTS = ["pro_cta_viewed", "pro_cta_clicked", "waitlist_joined", "purchase_requested", "plan_limit_hit"] as const;
 
 function levelLabel(level: string | null): string {

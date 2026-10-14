@@ -73,9 +73,14 @@ export async function saveSearch(id: number | null, raw: SearchInput, origin?: S
     return { error: "Revisá los campos marcados.", fields };
   }
   const supabase = await createClient();
-  const vehicle = await canonical(supabase, parsed.data);
+  const [vehicle, { data: thresholdAlerts }] = await Promise.all([
+    canonical(supabase, parsed.data),
+    supabase.rpc("my_plan_feature", { p_feature: "threshold_alerts" }),
+  ]);
   if (!vehicle) return { error: "Elegí una marca y un modelo de la lista.", fields: { model: "Modelo desconocido." } };
-  const values = { ...parsed.data, make: vehicle.make, model: vehicle.model };
+  // Only a plan with the threshold (Pro) keeps one; any other plan saves none.
+  const values = { ...parsed.data, make: vehicle.make, model: vehicle.model,
+    opportunity_threshold_pct: thresholdAlerts ? parsed.data.opportunity_threshold_pct : null };
   const sources = await enabledSources(supabase);
   const valid = values.sources.filter((s) => sources.includes(s));
   if (!valid.length) return { error: "Elegí al menos una fuente.", fields: { sources: "Elegí al menos una fuente." } };
@@ -100,7 +105,7 @@ export async function saveSearch(id: number | null, raw: SearchInput, origin?: S
       .select("id")
       .single();
     if (error) {
-      if (error.message.includes("plan_access_expired")) return { error: "Tu acceso venció. Elegí Particular o Agencia en Planes para volver a buscar." };
+      if (error.message.includes("plan_access_expired")) return { error: "Tu acceso venció. Elegí Particular o Pro en Planes para volver a buscar." };
       if (error.message.includes("plan_limit_exceeded")) {
         return { error: "Llegaste al máximo de búsquedas de tu plan." };
       }

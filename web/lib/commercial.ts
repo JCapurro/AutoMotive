@@ -14,7 +14,7 @@ export const PaymentInput = z.object({
 });
 export const COMMERCIAL_ERRORS: Record<string, string> = {
   payment_reference_conflict: "Esa referencia ya pertenece a otra cuenta o plan.",
-  paid_plan_already_active: "La cuenta ya tiene un período pago vigente. Solo Agencia permite renovar por adelantado.",
+  paid_plan_already_active: "La cuenta ya tiene un período pago vigente. Solo Pro permite renovar por adelantado.",
   invalid_payment: "Revisá la referencia y la fecha: debe ser un pago de los últimos 30 días, sin fecha futura.",
   invalid_offer: "La oferta de cobro no está configurada correctamente.",
   admin_required: "Solo un administrador puede confirmar pagos.",

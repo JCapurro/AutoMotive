@@ -176,6 +176,76 @@ class PlanCapTests(unittest.TestCase):
         self.assertEqual({(d.kind, d.status) for d in out}, {("opportunity", "digest"), ("price_drop", "queued")})
 
 
+def pro(threshold=10, user="u1", **kw) -> Audience:
+    """A Pro search with an opportunity threshold (3.2)."""
+    return Audience(user, ("web",), kw.get("frequency", "immediate"), kw.get("min_level", "good"),
+                    kw.get("profile_id", 1), threshold)
+
+
+def below(pct) -> dict:
+    """The payload of a listing pct % below comparables (None: not enough of them)."""
+    return {"match": {"score": 80, "level": "high", "diff_pct": pct}}
+
+
+class OpportunityThresholdTests(unittest.TestCase):
+    """Pro (3.2): what reaches the search's threshold is alerted at once without
+    the daily cap; the rest goes to the digest."""
+
+    def test_everything_at_least_ten_percent_below_is_immediate_past_fifty_a_day(self):
+        events = [match("high", listing=i, score=99, audience=pro(10), payload=below(10 + i % 7)) for i in range(60)]
+        out = decide_all(events, RULES, caps={"u1": 50}, sent_today={"u1": 50})
+        self.assertEqual({d.status for d in out}, {"queued"})
+        self.assertEqual(len(out), 60)
+        self.assertEqual({d.payload["threshold_pct"] for d in out}, {10})
+        self.assertNotIn("degraded", out[0].payload)
+
+    def test_four_percent_below_goes_only_to_the_digest(self):
+        out = decide(match("high", audience=pro(10), payload=below(4)), RULES)
+        self.assertEqual(kinds(out), [("opportunity", "digest")])
+        self.assertNotIn("threshold_pct", out[0].payload)
+        self.assertNotIn("degraded", out[0].payload)
+
+    def test_without_comparables_it_goes_to_the_digest(self):
+        for payload in (below(None), {}):
+            self.assertEqual(kinds(decide(match("good", audience=pro(10), payload=payload), RULES)),
+                             [("new_match", "digest")])
+
+    def test_reaching_it_alerts_even_below_the_minimum_level(self):
+        out = decide(match("match", audience=pro(10, min_level="high"), payload=below(12.5)), RULES)
+        self.assertEqual(kinds(out), [("new_match", "queued")])
+        # Not reaching it, below the minimum: silent, as without a threshold.
+        self.assertEqual(decide(match("match", audience=pro(10, min_level="high"), payload=below(5)), RULES), [])
+
+    def test_a_daily_search_keeps_its_frequency(self):
+        out = decide(match("high", audience=pro(10, frequency="daily"), payload=below(20)), RULES)
+        self.assertEqual(kinds(out), [("opportunity", "digest")])
+
+    def test_threshold_alerts_do_not_use_up_the_cap_of_the_other_searches(self):
+        with_threshold = [match("high", listing=i, score=99, audience=pro(10, profile_id=1), payload=below(15))
+                          for i in range(1, 61)]
+        without = [match("high", listing=i, score=90, audience=aud(channels=("web",), profile_id=2))
+                   for i in range(100, 160)]
+        out = decide_all(with_threshold + without, RULES, caps={"u1": 50})
+        queued = [d for d in out if d.status == "queued"]
+        self.assertEqual(len([d for d in queued if d.profile_id == 1]), 60)
+        self.assertEqual(len([d for d in queued if d.profile_id == 2]), 50)
+        self.assertEqual({d.payload.get("degraded") for d in out if d.status == "digest"}, {DEGRADED_CAP})
+
+    def test_without_a_threshold_it_works_like_agencia(self):
+        events = [match("high", listing=i, score=90, audience=aud(channels=("web",)), payload=below(30))
+                  for i in range(51)]
+        out = decide_all(events, RULES, caps={"u1": 50})
+        self.assertEqual(sorted(d.status for d in out).count("queued"), 50)
+
+    def test_price_drops_of_matches_follow_the_threshold_and_saved_ones_stay_immediate(self):
+        def drop(pct_below, **kw):
+            return Event(PRICE_DROP, 10, kw.pop("audience", pro(10)), snapshot_id=7, drop_pct=6, level="good",
+                         score=70, payload=below(pct_below), **kw)
+        self.assertEqual(kinds(decide(drop(11), RULES, sent_today=99, cap=50)), [("price_drop", "queued")])
+        self.assertEqual(kinds(decide(drop(3), RULES)), [("price_drop", "digest")])
+        self.assertEqual(kinds(decide(drop(3, saved=True), RULES)), [("price_drop", "queued")])
+
+
 class DedupeAndMultiProfileTests(unittest.TestCase):
     def test_already_notified_keys_are_skipped_and_not_counted(self):
         rules = Rules(alerts_max_per_user_day=1)

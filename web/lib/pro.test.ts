@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  planFeatures,
   accountAlertCap, alertCapsText, bannerCopy, canAcquirePlan, DEFAULT_PLAN_LIMITS, DEFAULT_PRO_OFFER, extendsPass, includesImmediateAlerts,
   isPlacement, isWaitlistPlan, planLimits, proOffer, searchCapacity, visibleResults,
 } from "./pro";
@@ -70,8 +71,13 @@ describe("planLimits", () => {
       enforced: true,
       free: { max_profiles: 1, max_visible_results: 100, immediate_alerts_per_day: 3 },
       pass: { max_profiles: 3, immediate_alerts_per_day: 10 },
-      pro: { max_profiles: 15, immediate_alerts_per_day: 50 },
-    })).toEqual({ ...DEFAULT_PLAN_LIMITS, pro: { maxProfiles: 15, maxVisibleResults: null, immediateAlertsPerDay: 50 } });
+      pro: { max_profiles: 15, immediate_alerts_per_day: 50, threshold_alerts: true, csv_export: true },
+    })).toEqual({ ...DEFAULT_PLAN_LIMITS,
+      pro: { maxProfiles: 15, maxVisibleResults: null, immediateAlertsPerDay: 50, thresholdAlerts: true, csvExport: true } });
+  });
+  it("gives a feature only to the plans that say true", () => {
+    const limits = planLimits({ pro: { max_profiles: 20, threshold_alerts: "true", csv_export: true }, pass: { max_profiles: 3 } });
+    expect([limits.pro.thresholdAlerts, limits.pro.csvExport, limits.pass.csvExport]).toEqual([false, true, false]);
   });
   it("reads the legacy boolean as the database does: the global cap or none", () => {
     const legacy = planLimits({
@@ -79,17 +85,25 @@ describe("planLimits", () => {
       pass: { max_profiles: 3, immediate_alerts: true },
       pro: { max_profiles: 10, immediate_alerts: true },
     }, 10);
-    expect(legacy.free).toEqual({ maxProfiles: 1, maxVisibleResults: 50, immediateAlertsPerDay: 0 });
-    expect(legacy.pro).toEqual({ maxProfiles: 10, maxVisibleResults: null, immediateAlertsPerDay: 10 });
+    expect(legacy.free).toEqual({ maxProfiles: 1, maxVisibleResults: 50, immediateAlertsPerDay: 0, thresholdAlerts: false, csvExport: false });
+    expect(legacy.pro).toEqual({ maxProfiles: 10, maxVisibleResults: null, immediateAlertsPerDay: 10, thresholdAlerts: false, csvExport: false });
   });
   it("keeps the defaults for a missing config or plan, and rejects junk", () => {
     expect(planLimits(null)).toEqual(DEFAULT_PLAN_LIMITS);
     expect(planLimits({ free: { max_profiles: "1", immediate_alerts_per_day: -2 } }).free)
-      .toEqual({ maxProfiles: 1, maxVisibleResults: null, immediateAlertsPerDay: 0 });
+      .toEqual({ maxProfiles: 1, maxVisibleResults: null, immediateAlertsPerDay: 0, thresholdAlerts: false, csvExport: false });
   });
   it("words the per-plan alert caps for the plans page and terms", () => {
     expect(alertCapsText(DEFAULT_PLAN_LIMITS)).toBe(
-      "Particular incluye hasta 10 avisos inmediatos de nuevas coincidencias por día y Agencia, hasta 50; los que pasan el tope van al resumen.");
+      "Particular incluye hasta 10 avisos inmediatos de nuevas coincidencias por día y Pro, hasta 50, o sin tope para las oportunidades que elegís; los que pasan el tope van al resumen.");
+    expect(alertCapsText({ ...DEFAULT_PLAN_LIMITS, pro: { ...DEFAULT_PLAN_LIMITS.pro, thresholdAlerts: false } })).toBe(
+      "Particular incluye hasta 10 avisos inmediatos de nuevas coincidencias por día y Pro, hasta 50; los que pasan el tope van al resumen.");
+  });
+  it("lists Pro's card lines from its features", () => {
+    expect(planFeatures(DEFAULT_PLAN_LIMITS.pro)).toEqual(["Hasta 20 búsquedas activas", "Todos los resultados disponibles",
+      "Avisos inmediatos sin tope de las oportunidades que elegís", "Exportá los resultados a una planilla", "Historial y favoritos"]);
+    expect(planFeatures(DEFAULT_PLAN_LIMITS.pass)).toEqual(["Hasta 3 búsquedas activas", "Todos los resultados disponibles",
+      "Hasta 10 avisos inmediatos por día y resumen diario", "Historial y favoritos"]);
   });
 });
 
@@ -115,7 +129,7 @@ describe("account limits", () => {
     expect(includesImmediateAlerts({ ...trial, enforced: false, limits: { immediate_alerts_per_day: 0 } })).toBe(true);
   });
   it("words the plans banner without fixed limits", () => {
-    expect(bannerCopy("results", 100).body).toBe("Tu plan muestra hasta 100 publicaciones por búsqueda. Particular y Agencia muestran todos los resultados disponibles.");
+    expect(bannerCopy("results", 100).body).toBe("Tu plan muestra hasta 100 publicaciones por búsqueda. Particular y Pro muestran todos los resultados disponibles.");
     expect(bannerCopy("plan_limit").body).not.toMatch(/\d/);
   });
 });

@@ -29,9 +29,9 @@ export default async function ProPage({ searchParams }: PageProps<"/app/pro">) {
         <p className="text-sm font-medium text-amber-700">Planes de Ese Auto</p>
         <h1 className="text-2xl font-semibold tracking-tight">Elegí cuánto querés buscar</h1>
         <p className="text-muted-foreground">
-          Particular acompaña la compra de tu próximo auto. Agencia sirve para buscar vehículos habitualmente.
+          Particular acompaña la compra de tu próximo auto. Pro es para agencias y revendedores que necesitan llegar primero.
           Custom se adapta a tus necesidades, con alcance y precio a convenir.
-          {cfg.automaticPayments ? " Particular y Agencia se pagan en Mercado Pago; activamos tu acceso al confirmar el pago." : cfg.commercialPilot ? " Coordinamos el pago y verificamos cada alta durante este piloto." : " Particular y Agencia todavía están en lista de espera."}
+          {cfg.automaticPayments ? " Particular y Pro se pagan en Mercado Pago; activamos tu acceso al confirmar el pago." : cfg.commercialPilot ? " Coordinamos el pago y verificamos cada alta durante este piloto." : " Particular y Pro todavía están en lista de espera."}
         </p>
       </header>
       {extending && access?.expires_at ? <p role="status" className="rounded-xl bg-emerald-50 p-4 text-sm text-emerald-950 ring-1 ring-emerald-200">

@@ -1,4 +1,4 @@
-import { Pencil } from "lucide-react";
+import { Download, Pencil } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -59,7 +59,7 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
 
   const supabase = await createClient();
   const profileId = Number(id);
-  const [{ data: profile }, { data: results }, { data: counts }, { data: planLimits }, { data: sources }] = await Promise.all([
+  const [{ data: profile }, { data: results }, { data: counts }, { data: planLimits }, { data: sources }, { data: canExport }] = await Promise.all([
     supabase.from("search_profiles").select("*").eq("id", profileId).maybeSingle(),
     supabase.rpc("search_results", {
       p_profile_id: profileId,
@@ -71,6 +71,7 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
     supabase.rpc("search_result_counts", { p_profile_id: profileId }),
     supabase.rpc("my_plan_limits"),
     supabase.from("sources").select("id,name,enabled").order("priority"),
+    supabase.rpc("my_plan_feature", { p_feature: "csv_export" }),
   ]);
   if (!profile) notFound();
 
@@ -111,6 +112,13 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
                 <Pencil aria-hidden /> Editar
               </Link>
             </Button>
+            {canExport ? (
+              <Button asChild variant="outline" size="sm">
+                <a href={`/app/searches/${profile.id}/export`} download>
+                  <Download aria-hidden /> Descargar CSV
+                </a>
+              </Button>
+            ) : null}
           </div>
         </div>
         <SearchCriteriaSummary

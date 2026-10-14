@@ -9,11 +9,11 @@ export const metadata: Metadata = { title: "Config" };
 
 // What each app_config key rules (Apéndice A). Unknown keys still show up.
 const HINTS: Record<string, string> = {
-  plan_limits: "Límites por plan: max_profiles (búsquedas activas), max_visible_results (resultados por búsqueda; sin valor = todos) e immediate_alerts_per_day (avisos inmediatos por día, hora argentina; el resto va al resumen). La web muestra estos mismos valores. Con enforced = false solo se mide plan_limit_hit; con true se aplican.",
+  plan_limits: "Límites por plan: max_profiles (búsquedas activas), max_visible_results (resultados por búsqueda; sin valor = todos) e immediate_alerts_per_day (avisos inmediatos por día, hora argentina; el resto va al resumen). Funciones: threshold_alerts (umbral de oportunidad por búsqueda) y csv_export (descargar resultados), true para darlas. La web muestra estos mismos valores. Con enforced = false solo se mide plan_limit_hit; con true se aplican.",
   validation_criteria: "Umbrales de los 6 criterios del §53 (v_validation_criteria) y el objetivo de activación.",
   pro_cta: "Cuándo se ofrece ver planes: alertas clickeadas o límites alcanzados (§52).",
   pro_offer: "Oferta en ARS por 30 días y versión. Las nuevas confirmaciones usan estos importes; los pagos anteriores conservan su precio.",
-  agency_founders: "Precio fundador: cuántas suscripciones de Agencia son fundadoras (slots) y cuántos meses mantienen el precio de su primer pago (months). Solo lo registra en billing_checkouts; no cambia ningún cobro.",
+  agency_founders: "Precio fundador: cuántas suscripciones de Agencia (Pro desde la fase 3) son fundadoras (slots) y cuántos meses mantienen el precio de su primer pago (months). Solo lo registra en billing_checkouts; no cambia ningún cobro.",
   commercial_pilot: "Habilitar desde Cobros para iniciar las pruebas existentes y aplicar límites en la misma operación.",
   lifecycle_emails: "Mails del plan (docs/MAILS_DE_PLAN.md). enabled (false los apaga todos), kinds (cada tipo prendido o apagado: trial_no_matches, prueba sin coincidencias a las 24 h; trial_ended, fin de la prueba; pass_expiring y pass_expires_today, vencimiento de Particular; count_after_expiry, conteo a los 7, 14 y 21 días de vencer, que apagado también deja de rastrear una vez por día los modelos de las búsquedas vencidas), send_from / send_until (horario de envío, hora argentina, HH:MM), window_hours (pasado ese plazo ya no se manda; mayor que la noche fuera de horario) y max_per_day (tope de mails por día entre todos los tipos; Resend gratis permite 100 por día entre alertas y estos mails).",
   collector_failure_alert_after: "Fallas seguidas de una fuente antes de avisar por Telegram al admin.",

@@ -8,7 +8,7 @@ import { webConfig } from "@/lib/config";
 
 export const metadata: Metadata = {
   title: "Planes",
-  description: "Compará la prueba gratis, Particular, Agencia y Custom con precio a convenir. Elegí cómo buscar con Ese Auto.",
+  description: "Compará la prueba gratis, Particular, Pro y Custom con precio a convenir. Elegí cómo buscar con Ese Auto.",
 };
 
 export default async function PlanesPage() {

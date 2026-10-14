@@ -3,7 +3,7 @@ import { Check } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import type { WebConfig } from "@/lib/config";
-import { alertsText, CUSTOM_PLAN, inWords, OFFER_TIER, PLAN_COPY, planPrice, resultsText, searchesText, WAITLIST_PLANS } from "@/lib/pro";
+import { alertsText, CUSTOM_PLAN, inWords, OFFER_TIER, PLAN_COPY, planFeatures, planPrice, resultsText, searchesText, WAITLIST_PLANS } from "@/lib/pro";
 
 type PricingConfig = Pick<WebConfig, "proOffer" | "planLimits" | "automaticPayments" | "commercialPilot">;
 type PublicPlan = {
@@ -48,8 +48,8 @@ export function PublicPlans({ cfg, signedIn }: { cfg: PricingConfig; signedIn: b
         period: plan === "pass_30" ? `${copy.period} · pago único` : copy.period,
         pitch: plan === "pass_30"
           ? `Seguí hasta ${inWords(caps.maxProfiles)} opciones a la vez y recibí avisos para encontrar tu próximo auto.`
-          : "Para agencias y revendedores. Monitoreá más modelos y oportunidades de compra desde una misma cuenta.",
-        features: [searchesText(caps), resultsText(caps), alertsText(caps), "Historial y favoritos"],
+          : copy.pitch,
+        features: planFeatures(caps),
         terms: plan === "pass_30" ? "Sin renovación automática. Si todavía no lo encontraste, extendés 30 días con un clic."
           : cfg.automaticPayments ? "Renovación mensual automática. Cancelás desde Ajustes y conservás el período pagado."
             : "Durante el piloto: períodos de 30 días y renovación manual, sin débito automático.",

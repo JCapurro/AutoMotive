@@ -9,26 +9,31 @@ export function isWaitlistPlan(value: unknown): value is WaitlistPlan {
 export function isPlacement(value: unknown): value is Placement {
   return typeof value === "string" && (PLACEMENTS as readonly string[]).includes(value);
 }
-export const PLAN_NAMES = { free: "Prueba gratis", pass: "Particular", pro: "Agencia" } as const;
+export const PLAN_NAMES = { free: "Prueba gratis", pass: "Particular", pro: "Pro" } as const;
 export type PlanTier = keyof typeof PLAN_NAMES;
 /** The plan each offer buys (profiles.plan). */
 export const OFFER_TIER: Record<WaitlistPlan, Exclude<PlanTier, "free">> = { pass_30: "pass", pro_monthly: "pro" };
 export const PLAN_COPY: Record<WaitlistPlan, { name: string; period: string; pitch: string }> = {
   pass_30: { name: "Particular", period: "por 30 días", pitch: "Para encontrar tu próximo auto. Pago único." },
-  pro_monthly: { name: "Agencia", period: "por mes", pitch: "Para quienes buscan vehículos habitualmente." },
+  pro_monthly: { name: "Pro", period: "por mes", pitch: "Para agencias y revendedores que necesitan llegar primero." },
 };
 
 /**
  * What each plan includes: app_config.plan_limits, the same values the
  * database and the worker apply. Pages show these, never their own numbers.
  * maxVisibleResults null = all of them; immediateAlertsPerDay 0 = digest only.
+ * thresholdAlerts: the per-search opportunity threshold (3.2); csvExport: the
+ * results as a spreadsheet (3.3). Both are Pro's.
  */
-export type PlanCaps = { maxProfiles: number; maxVisibleResults: number | null; immediateAlertsPerDay: number };
+export type PlanCaps = {
+  maxProfiles: number; maxVisibleResults: number | null; immediateAlertsPerDay: number;
+  thresholdAlerts: boolean; csvExport: boolean;
+};
 export type PlanLimitsConfig = Record<PlanTier, PlanCaps>;
 export const DEFAULT_PLAN_LIMITS: PlanLimitsConfig = {
-  free: { maxProfiles: 1, maxVisibleResults: 100, immediateAlertsPerDay: 3 },
-  pass: { maxProfiles: 3, maxVisibleResults: null, immediateAlertsPerDay: 10 },
-  pro: { maxProfiles: 20, maxVisibleResults: null, immediateAlertsPerDay: 50 },
+  free: { maxProfiles: 1, maxVisibleResults: 100, immediateAlertsPerDay: 3, thresholdAlerts: false, csvExport: false },
+  pass: { maxProfiles: 3, maxVisibleResults: null, immediateAlertsPerDay: 10, thresholdAlerts: false, csvExport: false },
+  pro: { maxProfiles: 20, maxVisibleResults: null, immediateAlertsPerDay: 50, thresholdAlerts: true, csvExport: true },
 };
 function whole(value: unknown, min: number): number | null {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= min ? value : null;
@@ -50,6 +55,8 @@ export function planLimits(value: unknown, globalCap = 10): PlanLimitsConfig {
       maxProfiles: whole(limits.max_profiles, 0) ?? DEFAULT_PLAN_LIMITS[tier].maxProfiles,
       maxVisibleResults: whole(limits.max_visible_results, 1),
       immediateAlertsPerDay: alertCap(limits, globalCap),
+      thresholdAlerts: limits.threshold_alerts === true,
+      csvExport: limits.csv_export === true,
     };
   }
   return out;
@@ -68,10 +75,18 @@ export function searchesText(caps: PlanCaps, upTo = true): string {
 export function resultsText(caps: PlanCaps): string {
   return caps.maxVisibleResults == null ? "Todos los resultados disponibles" : `Hasta ${caps.maxVisibleResults} resultados`;
 }
-/** "Particular incluye hasta 10 avisos inmediatos … y Agencia, hasta 50; …" */
+/** "Particular incluye hasta 10 avisos inmediatos … y Pro, hasta 50 …; …" */
 export function alertCapsText(limits: PlanLimitsConfig): string {
   const pass = limits.pass.immediateAlertsPerDay, pro = limits.pro.immediateAlertsPerDay;
-  return `Particular incluye hasta ${counted(pass, "aviso inmediato", "avisos inmediatos")} de nuevas coincidencias por día y Agencia, hasta ${pro}; los que pasan el tope van al resumen.`;
+  const threshold = limits.pro.thresholdAlerts ? ", o sin tope para las oportunidades que elegís" : "";
+  return `Particular incluye hasta ${counted(pass, "aviso inmediato", "avisos inmediatos")} de nuevas coincidencias por día y Pro, hasta ${pro}${threshold}; los que pasan el tope van al resumen.`;
+}
+export const THRESHOLD_FEATURE = "Avisos inmediatos sin tope de las oportunidades que elegís";
+export const EXPORT_FEATURE = "Exportá los resultados a una planilla";
+/** A paid plan's card lines: what plan_limits says it includes (Pro: the threshold and the export). */
+export function planFeatures(caps: PlanCaps): string[] {
+  return [searchesText(caps), resultsText(caps), caps.thresholdAlerts ? THRESHOLD_FEATURE : alertsText(caps),
+    ...(caps.csvExport ? [EXPORT_FEATURE] : []), "Historial y favoritos"];
 }
 export function alertsText(caps: PlanCaps): string {
   const n = caps.immediateAlertsPerDay;
@@ -105,7 +120,10 @@ export type PlanLimits = {
   state?: "pilot" | "available" | "trial" | "paid" | "expired";
   expires_at?: string | null; trial_started_at?: string | null; trial_expires_at?: string | null;
   active_searches?: number;
-  limits: { max_profiles?: number; max_visible_results?: number; immediate_alerts_per_day?: number; immediate_alerts?: boolean };
+  limits: {
+    max_profiles?: number; max_visible_results?: number; immediate_alerts_per_day?: number; immediate_alerts?: boolean;
+    threshold_alerts?: boolean; csv_export?: boolean;
+  };
 };
 /** Custom is arranged over WhatsApp. wa.me wants the full international number: 54 9 11 3345-4741. */
 export const CUSTOM_WHATSAPP = "5491133454741";
@@ -144,14 +162,14 @@ export type BannerReason = "activity" | "plan_limit" | "results";
 /** The plans banner. No fixed limits: `maxResults` is what the account's plan shows. */
 export function bannerCopy(reason: BannerReason, maxResults: number | null = null): { title: string; body: string } {
   if (reason === "activity") {
-    return { title: "Seguí buscando con Ese Auto", body: "Particular y Agencia suman búsquedas activas y más avisos inmediatos por día." };
+    return { title: "Seguí buscando con Ese Auto", body: "Particular y Pro suman búsquedas activas y más avisos inmediatos por día." };
   }
   if (reason === "plan_limit") {
-    return { title: "Elegí capacidad para tus búsquedas", body: "Llegaste al máximo de búsquedas activas de tu plan. Particular y Agencia permiten seguir más modelos a la vez." };
+    return { title: "Elegí capacidad para tus búsquedas", body: "Llegaste al máximo de búsquedas activas de tu plan. Particular y Pro permiten seguir más modelos a la vez." };
   }
   return {
     title: "¿Querés ver todos los resultados?",
-    body: `${maxResults != null ? `Tu plan muestra hasta ${maxResults} publicaciones por búsqueda.` : "Tu plan muestra parte de los resultados."} Particular y Agencia muestran todos los resultados disponibles.`,
+    body: `${maxResults != null ? `Tu plan muestra hasta ${maxResults} publicaciones por búsqueda.` : "Tu plan muestra parte de los resultados."} Particular y Pro muestran todos los resultados disponibles.`,
   };
 }
 /** Daily immediate alerts of the account's plan; null while the pilot doesn't enforce limits. */
@@ -180,8 +198,9 @@ export function accessDate(value: string): string {
     timeZone: "America/Argentina/Buenos_Aires" }).format(new Date(value));
 }
 /**
- * Precio fundador: the first Agencia subscriptions keep the amount they
- * started with until founder_price_until (billing_checkouts). Null otherwise.
+ * Precio fundador: the first Agencia subscriptions (Pro since fase 3) keep
+ * the amount they started with until founder_price_until (billing_checkouts).
+ * Null otherwise.
  */
 export function founderNote(checkout: { amount: number; founder_number?: number | null; founder_price_until?: string | null }): string | null {
   if (checkout.founder_number == null || !checkout.founder_price_until) return null;

@@ -20,6 +20,12 @@ Rules:
     with payload.degraded = 'daily_cap'. One alert on three channels counts
     once. A saved listing's price_drop is not capped (it is "always
     immediate") but it counts.
+  * opportunity threshold (Pro, 3.2): a search with one alerts a new match,
+    or a price drop of a match, that is at least that % below comparables
+    at once, outside the daily cap and without counting towards it
+    (payload.threshold_pct); whatever doesn't reach it, or has no
+    comparables, goes to the digest. Reaching it alerts even below
+    notify_min_level. A saved listing's price_drop stays always immediate.
   * dedupe_key: match:<listing_id> for new_match and opportunity (a listing is
     announced once, whatever its level), price_drop:<listing_id>:<snapshot_id>,
     listing_gone:<listing_id>. The table enforces it per (user, channel).
@@ -50,6 +56,7 @@ class Audience:
     frequency: str = "immediate"              # search_profiles.notification_frequency
     min_level: str = "good"                   # search_profiles.notify_min_level
     profile_id: int | None = None
+    threshold_pct: int | None = None          # search_profiles.opportunity_threshold_pct, if the plan has it
 
 
 @dataclass(frozen=True)
@@ -101,7 +108,19 @@ class _Plan:
     kind: str
     dedupe_key: str
     status: str
-    capped: bool          # subject to the daily cap
+    capped: bool              # subject to the daily cap
+    threshold: bool = False   # reached the search's threshold: outside the cap
+
+
+def below_comparables(event: Event) -> float | None:
+    """How far below comparables the listing is, in % (None without enough of them)."""
+    diff = (event.payload.get("match") or {}).get("diff_pct")
+    return float(diff) if isinstance(diff, (int, float)) and not isinstance(diff, bool) else None
+
+
+def _reaches(event: Event) -> bool:
+    diff = below_comparables(event)
+    return diff is not None and diff >= event.audience.threshold_pct
 
 
 def classify(event: Event, rules: Rules) -> _Plan | None:
@@ -112,10 +131,15 @@ def classify(event: Event, rules: Rules) -> _Plan | None:
     by_frequency = QUEUED if a.frequency == "immediate" else DIGEST
 
     if event.kind == MATCH:
-        if event.backfill or event.level is None or not at_least(event.level, a.min_level):
+        if event.backfill or event.level is None:
             return None
         kind = "opportunity" if event.level == "high" and not event.repost else "new_match"
-        return _Plan(kind, f"match:{event.listing_id}", by_frequency, True)
+        key = f"match:{event.listing_id}"
+        if a.threshold_pct is not None and _reaches(event):
+            return _Plan(kind, key, by_frequency, False, threshold=True)
+        if not at_least(event.level, a.min_level):
+            return None
+        return _Plan(kind, key, DIGEST if a.threshold_pct is not None else by_frequency, True)
 
     if event.kind == PRICE_DROP:
         if event.drop_pct is None or event.drop_pct < rules.price_drop_min_pct:
@@ -126,6 +150,10 @@ def classify(event: Event, rules: Rules) -> _Plan | None:
         key = f"price_drop:{event.listing_id}:{event.snapshot_id or 0}"
         if event.saved:
             return _Plan("price_drop", key, QUEUED, False)
+        if a.threshold_pct is not None:
+            if _reaches(event):
+                return _Plan("price_drop", key, by_frequency, False, threshold=True)
+            return _Plan("price_drop", key, DIGEST, True)
         return _Plan("price_drop", key, by_frequency, True)
 
     if event.kind == LISTING_GONE:
@@ -151,6 +179,8 @@ def decide(event: Event, rules: Rules, *, sent_today: int = 0, cap: int | None =
         payload["degraded"] = DEGRADED_CAP
     if event.kind == MATCH and event.repost:
         payload["repost"] = True
+    if plan.threshold:
+        payload["threshold_pct"] = event.audience.threshold_pct
     a = event.audience
     return [Decision(a.user_id, plan.kind, ch, status, plan.dedupe_key, event.listing_id,
                      event.match_id, a.profile_id, payload)
@@ -185,7 +215,7 @@ def decide_all(events: Iterable[Event], rules: Rules, *, sent_today: Mapping[str
         if not decisions:
             continue
         done.add(key)
-        if decisions[0].immediate:
+        if decisions[0].immediate and not plan.threshold:
             counts[event.audience.user_id] = counts.get(event.audience.user_id, 0) + 1
         out += decisions
     return out

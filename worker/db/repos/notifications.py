@@ -16,6 +16,9 @@ from db.pool import connection
 
 
 _CONTACT = "p.telegram_chat_id, p.email, p.email_unsubscribe_token::text AS unsubscribe_token "
+# The search's opportunity threshold, only while the plan includes it (Pro, 3.2).
+_THRESHOLD = ("CASE WHEN public.plan_feature(sp.user_id, 'threshold_alerts') "
+              "THEN sp.opportunity_threshold_pct END AS threshold_pct ")
 
 
 async def profile_audiences(profile_ids: Iterable[int]) -> dict[int, dict[str, Any]]:
@@ -27,7 +30,7 @@ async def profile_audiences(profile_ids: Iterable[int]) -> dict[int, dict[str, A
         rows = await (await cx.execute(
             "SELECT sp.id AS profile_id, sp.name AS profile_name, sp.user_id, "
             "       public.effective_search_frequency(sp.user_id, sp.notification_frequency)::text AS frequency, "
-            "       sp.notify_min_level::text AS min_level, sp.channels, " + _CONTACT +
+            "       sp.notify_min_level::text AS min_level, sp.channels, " + _THRESHOLD + ", " + _CONTACT +
             "  FROM search_profiles sp JOIN profiles p ON p.id = sp.user_id "
             " WHERE sp.id = ANY(%s) AND public.search_access_active(sp.id)", (ids,))).fetchall()
     return {r["profile_id"]: r for r in rows}
@@ -62,7 +65,7 @@ async def listing_audiences(listing_ids: Iterable[int]) -> list[dict[str, Any]]:
             "         m.id AS match_id, m.level::text AS level, m.score, m.price_ref, m.red_flags, "
             "         sp.id AS profile_id, sp.name AS profile_name, "
             "         public.effective_search_frequency(sp.user_id, sp.notification_frequency)::text AS frequency, "
-            "         sp.notify_min_level::text AS min_level, sp.channels "
+            "         sp.notify_min_level::text AS min_level, sp.channels, " + _THRESHOLD +
             "    FROM matches m JOIN search_profiles sp ON sp.id = m.search_profile_id "
             "   WHERE m.listing_id = ANY(%(ids)s) AND public.search_access_active(sp.id) "
             "   ORDER BY sp.user_id, m.listing_id, m.level, m.score DESC "
@@ -73,7 +76,7 @@ async def listing_audiences(listing_ids: Iterable[int]) -> list[dict[str, Any]]:
             "SELECT coalesce(best.user_id, ix.user_id)::text AS user_id, "
             "       coalesce(best.listing_id, ix.listing_id) AS listing_id, "
             "       best.match_id, best.level, best.score, best.price_ref, best.red_flags, "
-            "       best.profile_id, best.profile_name, "
+            "       best.profile_id, best.profile_name, best.threshold_pct, "
             "       coalesce(best.frequency, public.effective_search_frequency(p.id, 'immediate')::text) AS frequency, "
             "       coalesce(best.min_level, 'good') AS min_level, "
             "       coalesce(best.channels, "
@@ -101,7 +104,8 @@ async def existing_keys(user_ids: Iterable[str], listing_ids: Iterable[int]) -> 
 
 async def sent_today(user_ids: Iterable[str], since: datetime) -> dict[str, int]:
     """Immediate alerts per user since `since` (the start of the day, ART):
-    distinct dedupe keys, so one alert on three channels counts once."""
+    distinct dedupe keys, so one alert on three channels counts once. Alerts
+    that reached a search's threshold (payload.threshold_pct) don't count."""
     users = list(dict.fromkeys(user_ids))
     if not users:
         return {}
@@ -109,7 +113,8 @@ async def sent_today(user_ids: Iterable[str], since: datetime) -> dict[str, int]
         rows = await (await cx.execute(
             "SELECT user_id::text AS user_id, count(DISTINCT dedupe_key) AS n FROM notifications "
             " WHERE user_id = ANY(%s::uuid[]) AND created_at >= %s AND kind <> 'digest' "
-            "   AND status IN ('queued', 'sent', 'failed') GROUP BY user_id", (users, since))).fetchall()
+            "   AND status IN ('queued', 'sent', 'failed') AND NOT payload ? 'threshold_pct' "
+            " GROUP BY user_id", (users, since))).fetchall()
     return {r["user_id"]: r["n"] for r in rows}
 
 

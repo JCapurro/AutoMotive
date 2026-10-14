@@ -27,7 +27,7 @@ export function BillingStatus({ checkout }: { checkout: { id: string; offer: str
       {cancellable && !confirm ? <Button variant="outline" disabled={pending} onClick={() => setConfirm(true)}>Cancelar suscripción</Button> : null}
     </div>
     {cancellable && confirm ? <div className="space-y-2" role="group" aria-label="Confirmar baja">
-      <p>¿Confirmás la baja de los próximos cobros de Agencia? Conservás el acceso ya pagado.</p>
+      <p>¿Confirmás la baja de los próximos cobros de Pro? Conservás el acceso ya pagado.</p>
       <Button variant="destructive" disabled={pending} onClick={() => start(async () => { const result = await stopSubscription(checkout.id); if (result.error) toast.error(result.error); else { setConfirm(false); toast.success("Baja confirmada en Mercado Pago."); } })}>Confirmar baja</Button>{" "}
       <Button variant="outline" disabled={pending} onClick={() => setConfirm(false)}>Volver</Button>
     </div> : null}

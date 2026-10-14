@@ -71,7 +71,7 @@ export async function createCheckout(userId: string, offer: "pass_30" | "pro_mon
       external_reference: checkout.id, payer: { email }, back_urls: { success: back, pending: back, failure: back }, auto_return: "approved",
       notification_url: new URL("/api/mercadopago/webhook", site).href,
     } : {
-      reason: "Ese Auto · Agencia", external_reference: checkout.id, payer_email: email, status: "pending", back_url: back,
+      reason: "Ese Auto · Pro", external_reference: checkout.id, payer_email: email, status: "pending", back_url: back,
       auto_recurring: { frequency: 1, frequency_type: "months", transaction_amount: checkout.amount, currency_id: checkout.currency },
     };
     const result = await api(offer === "pass_30" ? "/checkout/preferences" : "/preapproval", "POST", body, checkout.id);

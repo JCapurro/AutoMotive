@@ -23,7 +23,7 @@ export default async function NewSearchPage({ searchParams }: PageProps<"/app/se
   const approximateLocation = approximateLocationFromHeaders(await headers());
   const prompt = searchIntentPrompt((await searchParams).prompt);
   const supabase = await createClient();
-  const [{ catalog, sources, defaultFrequency }, { data: snapshot }, cfg] = await Promise.all([
+  const [{ catalog, sources, defaultFrequency, thresholdAlerts }, { data: snapshot }, cfg] = await Promise.all([
     loadFormData(supabase),
     supabase.rpc("my_plan_snapshot"),
     webConfig(),
@@ -61,6 +61,7 @@ export default async function NewSearchPage({ searchParams }: PageProps<"/app/se
     seller_type: "",
     notification_frequency: defaultFrequency,
     notify_min_level: "good",
+    opportunity_threshold_pct: null,
   };
 
   return (
@@ -83,6 +84,7 @@ export default async function NewSearchPage({ searchParams }: PageProps<"/app/se
             initial={initial}
             profileId={null}
             approximateLocation={approximateLocation}
+            thresholdAlerts={thresholdAlerts}
           />
         </TabsContent>
         <TabsContent value="assisted" forceMount className="pt-3 data-[state=inactive]:hidden">

@@ -49,12 +49,19 @@ type Draft = {
   seller_type: "" | "private" | "dealer";
   notification_frequency: "immediate" | "daily";
   notify_min_level: SearchValues["notify_min_level"];
+  opportunity_threshold_pct: string;
 };
 
 /** "11.500" → 11500; "" → null. */
 function amount(text: string): number | null {
   const digits = text.replace(/\D/g, "");
   return digits ? Number(digits) : null;
+}
+
+/** "10" → 10; "7,5" → 7.5 (the schema refuses it: whole percents only); "" → null. */
+function percentInput(text: string): number | null {
+  const clean = text.trim().replace("%", "").replace(",", ".");
+  return clean ? Number(clean) : null;
 }
 
 /** A new search starts with an approximate zone, refined silently if permission exists. */
@@ -101,6 +108,7 @@ function draftFrom(v: SearchValues, isNew: boolean, approximateLocation: Detecte
     seller_type: v.seller_type,
     notification_frequency: v.notification_frequency,
     notify_min_level: v.notify_min_level,
+    opportunity_threshold_pct: v.opportunity_threshold_pct?.toString() ?? "",
   };
 }
 
@@ -141,6 +149,7 @@ function toInput(d: Draft): SearchInput {
     seller_type: d.seller_type,
     notification_frequency: d.notification_frequency,
     notify_min_level: d.notify_min_level,
+    opportunity_threshold_pct: percentInput(d.opportunity_threshold_pct),
   };
 }
 
@@ -156,6 +165,7 @@ export function SearchForm({
   origin,
   onSaved,
   approximateLocation = null,
+  thresholdAlerts = false,
 }: {
   catalog: Catalog;
   sources: Source[];
@@ -169,6 +179,8 @@ export function SearchForm({
   /** With origin.stay: the new search's id, instead of navigating to it. */
   onSaved?: (id: number) => void;
   approximateLocation?: DetectedLocation | null;
+  /** The plan includes the opportunity threshold (Pro, 3.2). */
+  thresholdAlerts?: boolean;
 }) {
   const fid = (key: string) => (idPrefix ? `${idPrefix}-${key}` : key);
   const isNew = profileId == null && !initial.location;
@@ -208,7 +220,8 @@ export function SearchForm({
 
   const input = useMemo(() => toInput({ ...d, trims: [...new Set([...d.trims, versionText.trim()].filter(Boolean))] }), [d, versionText]);
   const locationReady = !((d.place === "current" && !d.current) || (d.place === "city" && !d.city));
-  const previewKey = JSON.stringify({ ...input, locationReady, name: "", notification_frequency: "", notify_min_level: "" });
+  const previewKey = JSON.stringify({ ...input, locationReady, name: "", notification_frequency: "", notify_min_level: "",
+    opportunity_threshold_pct: null });
 
   useEffect(() => {
     if (!input.make || !input.model || !locationReady) return;
@@ -680,6 +693,29 @@ export function SearchForm({
                 ))}
               </NativeSelect>
             </Field>
+            {thresholdAlerts ? (
+              <Field
+                id={fid("opportunity_threshold_pct")}
+                label="Umbral de oportunidad (opcional)"
+                hint="Lo que llega a ese porcentaje te lo avisamos al instante, sin tope diario. El resto, y lo que no tiene comparables, va al resumen diario. Vacío: avisos inmediatos hasta el tope diario de tu plan."
+                error={fieldError("opportunity_threshold_pct")}
+                className="sm:col-span-2"
+              >
+                <div className="flex flex-wrap items-center gap-2 text-sm">
+                  <span>Avisame al instante si está</span>
+                  <Input
+                    id={fid("opportunity_threshold_pct")}
+                    value={d.opportunity_threshold_pct}
+                    onChange={(e) => set("opportunity_threshold_pct", e.target.value)}
+                    inputMode="numeric"
+                    placeholder="10"
+                    className="w-20"
+                    aria-describedby={fid("opportunity_threshold_pct-unit")}
+                  />
+                  <span id={fid("opportunity_threshold_pct-unit")}>% o más por debajo de comparables</span>
+                </div>
+              </Field>
+            ) : null}
             <Field id={fid("name")} label="Nombre de la búsqueda" className="sm:col-span-2">
               <Input
                 id={fid("name")}

@@ -549,13 +549,13 @@ isOneToOne: false
                   ]
                 },"search_profiles": {
                   Row: {
-                    "bootstrapped_at": string | null,"channels": (string)[],"created_at": string,"enabled": boolean,"filters": NonNullable<Json>,"id": number,"name": string,"notification_frequency": Database["public"]['Enums']["notify_frequency"],"notify_min_level": Database["public"]['Enums']["match_level"],"origin_lat": number | null,"origin_lon": number | null,"preferences": NonNullable<Json>,"radius_km": number | null,"raw_query": string | null,"rematch_requested_at": string | null,"updated_at": string,"user_id": string
+                    "bootstrapped_at": string | null,"channels": (string)[],"created_at": string,"enabled": boolean,"filters": NonNullable<Json>,"id": number,"name": string,"notification_frequency": Database["public"]['Enums']["notify_frequency"],"notify_min_level": Database["public"]['Enums']["match_level"],"opportunity_threshold_pct": number | null,"origin_lat": number | null,"origin_lon": number | null,"preferences": NonNullable<Json>,"radius_km": number | null,"raw_query": string | null,"rematch_requested_at": string | null,"updated_at": string,"user_id": string
                   }
                   Insert: {
-                    "bootstrapped_at"?: string | null,"channels"?: (string)[],"created_at"?: string,"enabled"?: boolean,"filters": NonNullable<Json>,"id"?: never,"name": string,"notification_frequency"?: Database["public"]['Enums']["notify_frequency"],"notify_min_level"?: Database["public"]['Enums']["match_level"],"origin_lat"?: number | null,"origin_lon"?: number | null,"preferences"?: NonNullable<Json>,"radius_km"?: number | null,"raw_query"?: string | null,"rematch_requested_at"?: string | null,"updated_at"?: string,"user_id": string
+                    "bootstrapped_at"?: string | null,"channels"?: (string)[],"created_at"?: string,"enabled"?: boolean,"filters": NonNullable<Json>,"id"?: never,"name": string,"notification_frequency"?: Database["public"]['Enums']["notify_frequency"],"notify_min_level"?: Database["public"]['Enums']["match_level"],"opportunity_threshold_pct"?: number | null,"origin_lat"?: number | null,"origin_lon"?: number | null,"preferences"?: NonNullable<Json>,"radius_km"?: number | null,"raw_query"?: string | null,"rematch_requested_at"?: string | null,"updated_at"?: string,"user_id": string
                   }
                   Update: {
-                    "bootstrapped_at"?: string | null,"channels"?: (string)[],"created_at"?: string,"enabled"?: boolean,"filters"?: NonNullable<Json>,"id"?: never,"name"?: string,"notification_frequency"?: Database["public"]['Enums']["notify_frequency"],"notify_min_level"?: Database["public"]['Enums']["match_level"],"origin_lat"?: number | null,"origin_lon"?: number | null,"preferences"?: NonNullable<Json>,"radius_km"?: number | null,"raw_query"?: string | null,"rematch_requested_at"?: string | null,"updated_at"?: string,"user_id"?: string
+                    "bootstrapped_at"?: string | null,"channels"?: (string)[],"created_at"?: string,"enabled"?: boolean,"filters"?: NonNullable<Json>,"id"?: never,"name"?: string,"notification_frequency"?: Database["public"]['Enums']["notify_frequency"],"notify_min_level"?: Database["public"]['Enums']["match_level"],"opportunity_threshold_pct"?: number | null,"origin_lat"?: number | null,"origin_lon"?: number | null,"preferences"?: NonNullable<Json>,"radius_km"?: number | null,"raw_query"?: string | null,"rematch_requested_at"?: string | null,"updated_at"?: string,"user_id"?: string
                   }
                   Relationships: [
                     {
@@ -1052,6 +1052,22 @@ isOneToOne: false
 "expire_commercial_access":
 { Args: { "p_user"?: string }; Returns: number
                            },
+"export_search_results":
+{ Args: { "p_profile_id"?: number }; Returns: {
+              "comparables_pct": number | null,
+"currency": string | null,
+"detected_at": string | null,
+"mileage_km": number | null,
+"price": number | null,
+"score": number | null,
+"search_name": string | null,
+"source_name": string | null,
+"title": string | null,
+"url": string | null,
+"version": string | null,
+"year": number | null
+            }[]
+                           },
 "haversine_km":
 { Args: { "lat1": number,"lat2": number,"lon1": number,"lon2": number }; Returns: number
                            },
@@ -1060,6 +1076,9 @@ isOneToOne: false
                            },
 "link_telegram":
 { Args: { "p_chat_id": number,"p_code": string,"p_telegram_user_id": number }; Returns: string
+                           },
+"my_plan_feature":
+{ Args: { "p_feature": string }; Returns: boolean
                            },
 "my_plan_limits":
 { Args: Record<PropertyKey, never>; Returns: Json

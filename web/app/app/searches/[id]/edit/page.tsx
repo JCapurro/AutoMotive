@@ -39,6 +39,7 @@ export default async function EditSearchPage({ params }: PageProps<"/app/searche
         sources={formData.sources}
         initial={fromProfile(profile, formData.sources.map((s) => s.id))}
         profileId={profile.id}
+        thresholdAlerts={formData.thresholdAlerts}
       />
     </div>
   );

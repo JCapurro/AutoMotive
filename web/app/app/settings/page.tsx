@@ -83,7 +83,7 @@ export default async function SettingsPage() {
               <Button asChild variant="outline"><Link href="/app/pro?plan=pass_30">Extender 30 días</Link></Button>
               <p className="text-sm text-muted-foreground">Los 30 días se suman a tu vencimiento.</p>
             </div> : null}
-            {access?.state === "expired" ? <p className="text-sm text-muted-foreground">Si activás Particular, reactivamos tus búsquedas anteriores, hasta {cfg.planLimits.pass.maxProfiles}. Con Agencia, reanudalas desde sus resultados.</p> : null}
+            {access?.state === "expired" ? <p className="text-sm text-muted-foreground">Si activás Particular, reactivamos tus búsquedas anteriores, hasta {cfg.planLimits.pass.maxProfiles}. Con Pro, reanudalas desde sus resultados.</p> : null}
             {waitlist?.plan ? (
               <p className="text-sm text-muted-foreground">
                 {cfg.commercialPilot ? "Solicitaste" : "Estás en la lista de espera de"} {isWaitlistPlan(waitlist.plan) ? PLAN_COPY[waitlist.plan].name : waitlist.plan}.
