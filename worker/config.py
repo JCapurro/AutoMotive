@@ -26,6 +26,8 @@ CRAWL_JITTER_SECONDS = float(os.getenv("CRAWL_JITTER_SECONDS", "8"))
 RECENT_ML_MAX_PAGES = max(1, int(os.getenv("RECENT_ML_MAX_PAGES", "100")))
 RECENT_FB_MAX_SCROLLS = max(1, int(os.getenv("RECENT_FB_MAX_SCROLLS", "200")))
 RECENT_ML_DETAIL_SECONDS = max(0, float(os.getenv("RECENT_ML_DETAIL_SECONDS", "8")))
+# Mercado Libre ads read for their date in one scan; past it the scan is incomplete and resumes later.
+RECENT_ML_MAX_DATE_FETCHES = max(1, int(os.getenv("RECENT_ML_MAX_DATE_FETCHES", "200")))
 RECENT_FB_DETAIL_SECONDS = max(0, float(os.getenv("RECENT_FB_DETAIL_SECONDS", "30")))
 # Enrichment of matched listings (sección 5.5) and the watchlist refresher
 # (sección 5.6) wake up this often; each listing is checked at most daily.

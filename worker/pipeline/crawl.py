@@ -158,7 +158,9 @@ def scraper_filters(target: dict[str, Any]) -> dict[str, Any]:
     f: dict[str, Any] = {"marca": target.get("make"), "modelo": target.get("model"),
                          "anio_min": q.get("year_min"), "anio_max": q.get("year_max"),
                          "km_max": q.get("km_max"),
-                         "origin_lat": q.get("origin_lat"), "origin_lon": q.get("origin_lon")}
+                         "origin_lat": q.get("origin_lat"), "origin_lon": q.get("origin_lon"),
+                         # Only searches with ended access want it (2.5): a collector may read less.
+                         "count_only": True if q.get("count_only") is True else None}
     f.update(target_window(target))
     return {k: v for k, v in f.items() if v is not None}
 

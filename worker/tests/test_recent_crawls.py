@@ -80,6 +80,11 @@ class WindowTests(unittest.TestCase):
 
 
 class MercadoLibreWindowTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        patcher = patch.dict(ml._dates, {}, clear=True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     async def search(self, outcomes, *, page_size=1, **filters):
         http = FakeHttp(outcomes)
         with http.patch(), patch.object(ml, "_page_pause", AsyncMock()), patch.object(ml, "PAGE_SIZE", page_size):
@@ -109,6 +114,26 @@ class MercadoLibreWindowTests(unittest.IsolatedAsyncioTestCase):
                                           page_size=48, publication_days=1, published_today_only=True)
         self.assertEqual(http.asked, [today_url])
         self.assertEqual([l.listing_id for l in results], ["MLA2"])
+
+    async def test_a_window_of_a_day_or_a_count_only_target_reads_the_today_filter(self):
+        today_url = f"{BASE}/ford/fiesta/_PublishedToday_YES_NoIndex_True"
+        for filters in ({"publication_days": 2, "published_since": NOW - 24 * 3600 - 600},
+                        {"count_only": True}):
+            with self.subTest(**filters):
+                results, http = await self.search([(today_url, card("5"), 200)], page_size=48, **filters)
+                self.assertEqual((http.asked, [l.listing_id for l in results]), ([today_url], ["MLA5"]))
+
+    async def test_an_ad_s_date_is_read_once_and_a_scan_reads_a_limited_number(self):
+        detail = AsyncMock(return_value=NOW - 40 * DAY)
+        page = (f"{BASE}/ford/fiesta/_NoIndex_True", card("1") + card("2") + card("3"), 200)
+        with patch.object(ml.MercadoLibreScraper, "_publication_date", detail), \
+                patch.object(ml.config, "RECENT_ML_DETAIL_SECONDS", 0), \
+                patch.object(ml.config, "RECENT_ML_MAX_DATE_FETCHES", 2):
+            first, _ = await self.search([page], page_size=48)
+            second, _ = await self.search([page], page_size=48)
+        self.assertEqual((first.complete, first.reason, first.unknown_dates), (False, "mercadolibre: date fetch limit reached", 1))
+        self.assertEqual((second.complete, second.unknown_dates), (True, 0))
+        self.assertEqual(detail.await_count, 3)          # MLA1 and MLA2 once, MLA3 on the second scan
 
     async def test_today_s_results_are_kept_without_reading_each_ad(self):
         """The ad's page says "hace 1 día" for an ad Mercado Libre lists as published today."""

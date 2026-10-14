@@ -66,6 +66,13 @@ def _slug(s: str) -> str:
 
 BASE = "https://autos.mercadolibre.com.ar"
 PAGE_SIZE = 48
+# "Publicados hoy" lists the last day's ads (some say "hace 1 día" on their
+# page), so it covers a window this short; daily targets fit, with margin.
+TODAY_FILTER_SPAN = 25 * 3600
+
+# Dates read from ads, by id, for the worker's lifetime: an ad outside the
+# window is never stored, and would otherwise be read again on every scan.
+_dates: dict[str, int | None] = {}
 
 
 def _build_url(filters: dict, page: int = 1, *, today: bool = False) -> str:
@@ -359,17 +366,24 @@ class MercadoLibreScraper(BaseScraper):
         return detail.listing.published_at if detail.listing else None
 
     async def _search_recent(self, filters: dict, window: PublicationWindow) -> SearchResults:
-        """Every result of the window: "Publicados hoy" when it is today,
-        otherwise all of them (relevance order), keeping the ones published
-        inside it. Dates come from stored listings or the ad itself.
+        """Every result of the window, kept if published inside it.
 
-        Today's results are kept as they come: Mercado Libre's own filter
-        vouches for them, while an ad's page only says "hace 1 día" (no exact
-        date on the public pages). Without a stored date, detection time stands
-        in, which the half-hourly crawl keeps close to publication."""
+        A window of up to TODAY_FILTER_SPAN, or a count-only target (2.5), is
+        read through "Publicados hoy": one request, and its results are kept
+        as they come, since Mercado Libre's own filter vouches for them while
+        an ad's page only says "hace 1 día" (the public pages carry no exact
+        date). Without a stored date, detection time stands in, which the
+        half-hourly crawl keeps close to publication.
+
+        A longer window (a first run, a gap) reads every result in relevance
+        order, dating each from stored listings, the ads already read or the
+        ad itself, up to RECENT_ML_MAX_DATE_FETCHES ads per scan."""
         results = SearchResults()
         seen: set[str] = set()
         known = filters.get("known_publication_dates") or {}
+        today = (window.today_only or filters.get("count_only") is True
+                 or window.until - window.since <= TODAY_FILTER_SPAN)
+        fetched = 0
         pages = 0
         try:
             while True:
@@ -378,7 +392,7 @@ class MercadoLibreScraper(BaseScraper):
                     break
                 if pages:
                     await _page_pause()
-                url = _build_url(filters, page=pages + 1, today=window.today_only)
+                url = _build_url(filters, page=pages + 1, today=today)
                 cards = _results((await _get(url, "search")).html)
                 if not cards:
                     break
@@ -394,13 +408,18 @@ class MercadoLibreScraper(BaseScraper):
                         continue
                     if listing.published_at is None:
                         listing.published_at = known.get(listing.listing_id)
-                    if window.today_only:
+                    if today:
                         results.append(listing)
                         continue
-                    if listing.published_at is None:
+                    if listing.published_at is None and listing.listing_id in _dates:
+                        listing.published_at = _dates[listing.listing_id]
+                    elif listing.published_at is None and fetched >= config.RECENT_ML_MAX_DATE_FETCHES:
+                        results.complete, results.reason = False, "mercadolibre: date fetch limit reached"
+                    elif listing.published_at is None:
+                        fetched += 1
                         await asyncio.sleep(config.RECENT_ML_DETAIL_SECONDS)
                         try:
-                            listing.published_at = await self._publication_date(listing)
+                            listing.published_at = _dates[listing.listing_id] = await self._publication_date(listing)
                         except CollectorBlocked:
                             raise
                         except Exception as exc:
@@ -416,8 +435,9 @@ class MercadoLibreScraper(BaseScraper):
             if not seen:
                 raise
             results.complete, results.reason = False, f"mercadolibre: {type(exc).__name__}: {exc}"
-        log.info("mercadolibre publication window: pages=%d kept=%d unknown_dates=%d complete=%s reason=%s",
-                 pages, len(results), results.unknown_dates, results.complete, results.reason)
+        log.info("mercadolibre publication window: today=%s pages=%d dates_read=%d kept=%d unknown_dates=%d "
+                 "complete=%s reason=%s", today, pages, fetched, len(results), results.unknown_dates,
+                 results.complete, results.reason)
         return results
 
     parse_detail = staticmethod(parse_detail)
