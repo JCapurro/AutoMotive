@@ -7,6 +7,8 @@ ml_state.json
 .ig_chrome_profile/
 
 # Runtime data
+# Repair bot probe staging on the VPS (/opt/automotive/.repairbot/<run_id>)
+.repairbot/
 *.db
 *.sqlite
 *.sqlite3
