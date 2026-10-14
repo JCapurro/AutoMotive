@@ -16,7 +16,8 @@ export function BillingStatus({ checkout }: { checkout: { id: string; offer: str
     <h2 className="font-semibold">{monthly ? PLAN_COPY.pro_monthly.name : PLAN_COPY.pass_30.name} · {STATUS[checkout.status] ?? "Verificación pendiente"}</h2>
     <p>{planPrice(checkout.amount)} ARS {monthly ? "por mes" : "por 30 días, pago único"}.</p>
     {founder ? <p data-testid="founder-price" className="font-medium">{founder}</p> : null}
-    <p>El acceso se habilita con cada pago aprobado. Al volver de Mercado Pago puede demorar unos minutos. Después, reactivá tus búsquedas pausadas.</p>
+    <p>El acceso se habilita con cada pago aprobado. Al volver de Mercado Pago puede demorar unos minutos.
+      {monthly ? " Después, reactivá tus búsquedas pausadas." : " Si tu acceso había vencido, reactivamos tus búsquedas anteriores."}</p>
     {checkout.next_payment_at && checkout.status === "authorized" ? <p>Próximo cobro previsto: {accessDate(checkout.next_payment_at)}.</p> : null}
     {checkout.status === "cancelled" ? <p>Se detuvieron las renovaciones. El período ya pagado sigue vigente hasta su vencimiento.</p> : null}
     {checkout.sync_error ? <p role="status">La verificación requiere revisión. Contactanos si ya pagaste; evitá pagar otra vez.</p> : null}

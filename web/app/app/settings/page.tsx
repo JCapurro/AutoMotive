@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireUser } from "@/lib/auth";
 import { webConfig } from "@/lib/config";
-import { accountAlertCap, isWaitlistPlan, PLAN_COPY, PLAN_NAMES, accessDescription, accessDate, planPrice, type PlanLimits } from "@/lib/pro";
+import { accountAlertCap, extendsPass, isWaitlistPlan, PLAN_COPY, PLAN_NAMES, accessDescription, accessDate, planPrice, type PlanLimits } from "@/lib/pro";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = { title: "Ajustes" };
@@ -79,7 +79,11 @@ export default async function SettingsPage() {
               <p className="text-sm text-muted-foreground">Si contrataste con un enlace de suscripción de Mercado Pago, cancelalo también desde tu cuenta de Mercado Pago. Este aviso por sí solo no detiene sus cobros.</p>
               <RenewalButton declined={declined} />
             </> : null}
-            {access?.state === "expired" ? <p className="text-sm text-muted-foreground">Después de activar un plan, reanudá las búsquedas que quieras seguir desde sus resultados.</p> : null}
+            {extendsPass(access) ? <div className="flex flex-wrap items-center gap-3">
+              <Button asChild variant="outline"><Link href="/app/pro?plan=pass_30">Extender 30 días</Link></Button>
+              <p className="text-sm text-muted-foreground">Los 30 días se suman a tu vencimiento.</p>
+            </div> : null}
+            {access?.state === "expired" ? <p className="text-sm text-muted-foreground">Si activás Particular, reactivamos tus búsquedas anteriores, hasta {cfg.planLimits.pass.maxProfiles}. Con Agencia, reanudalas desde sus resultados.</p> : null}
             {waitlist?.plan ? (
               <p className="text-sm text-muted-foreground">
                 {cfg.commercialPilot ? "Solicitaste" : "Estás en la lista de espera de"} {isWaitlistPlan(waitlist.plan) ? PLAN_COPY[waitlist.plan].name : waitlist.plan}.

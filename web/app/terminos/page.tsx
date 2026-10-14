@@ -40,6 +40,8 @@ export default async function TermsPage() {
         una sola vez por cuenta, {free.maxVisibleResults == null ? "todos los resultados disponibles" : `hasta ${free.maxVisibleResults} resultados por búsqueda`}
         {free.immediateAlertsPerDay > 0 ? `, ${alerts(free)} y resumen diario` : " y resumen diario"}. Editar, pausar o reemplazar la búsqueda no reinicia el plazo.</p>
       <p>Particular cuesta {planPrice(proOffer.pass_30.amount)} ARS por 30 días, permite {searches(pass)} y {alerts(pass)}, y no se renueva automáticamente.
+        Si lo comprás con el acceso vigente, los 30 días se suman a tu vencimiento; si lo comprás después de vencer, rigen desde
+        la aprobación del pago y reactivamos tus búsquedas anteriores, hasta {pass.maxProfiles}.
         Agencia cuesta {planPrice(proOffer.pro_monthly.amount)} ARS y permite {searches(pro)} y {alerts(pro)} en una cuenta.
         {automaticPayments ? " Agencia se cobra cada mes mediante una suscripción de Mercado Pago hasta que la canceles. El acceso corresponde al mes calendario de cada débito aprobado. No hay otra prueba gratis ni almacenamiento de tarjetas en S Auto." : " En el piloto asistido, Agencia se activa por 30 días con renovación manual. La administración confirma el pago externo antes de activar el período."}</p>
       <p>Al vencer el acceso se detienen nuevas coincidencias y alertas, incluidos los favoritos; se conserva el historial.

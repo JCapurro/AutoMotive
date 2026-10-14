@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  accountAlertCap, alertCapsText, bannerCopy, canAcquirePlan, DEFAULT_PLAN_LIMITS, DEFAULT_PRO_OFFER, includesImmediateAlerts,
+  accountAlertCap, alertCapsText, bannerCopy, canAcquirePlan, DEFAULT_PLAN_LIMITS, DEFAULT_PRO_OFFER, extendsPass, includesImmediateAlerts,
   isPlacement, isWaitlistPlan, planLimits, proOffer, searchCapacity, visibleResults,
 } from "./pro";
 
@@ -11,6 +11,11 @@ describe("canAcquirePlan", () => {
   it.each(["pass", "pro"] as const)("hides acquisition for active %s access, including manual grants", (plan) => {
     expect(canAcquirePlan({ plan, enforced: true, active: true, state: "paid", limits: {} })).toBe(false);
     expect(canAcquirePlan({ plan, enforced: false, active: true, state: "pilot", limits: {} })).toBe(false);
+  });
+  it("knows a running Particular can be extended (2.4), from Ajustes and Planes", () => {
+    expect(extendsPass({ plan: "pass", enforced: true, active: true, state: "paid", limits: {} })).toBe(true);
+    expect(extendsPass({ plan: "pro", enforced: true, active: true, state: "paid", limits: {} })).toBe(false);
+    expect(extendsPass(null)).toBe(false);
   });
   it.each(["pass", "pro"] as const)("allows acquisition after %s access expires", (plan) => {
     expect(canAcquirePlan({ plan, enforced: true, active: false, state: "expired", limits: {} })).toBe(true);

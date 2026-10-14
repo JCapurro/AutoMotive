@@ -131,6 +131,10 @@ export function canAcquirePlan(access: PlanLimits | null): boolean {
   if (!access) return false;
   return access.plan === "free" || access.active === false;
 }
+/** A running Particular can be extended: the new 30 days add up to its end (2.4). */
+export function extendsPass(access: PlanLimits | null): boolean {
+  return access?.plan === "pass" && access.state === "paid" && access.active !== false;
+}
 export type ProCtaState = {
   show: boolean; reason: "activity" | "plan_limit" | null; plan?: string;
   alert_clicks?: number; waitlist_plan?: WaitlistPlan | null;

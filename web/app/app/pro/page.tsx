@@ -5,7 +5,7 @@ import { ProPlans } from "@/components/app/pro-plans";
 import { BillingStatus } from "@/components/app/billing-status";
 import { requireUser } from "@/lib/auth";
 import { webConfig } from "@/lib/config";
-import { alertCapsText, isPlacement, isWaitlistPlan, PRO_BENEFITS } from "@/lib/pro";
+import { accessDate, alertCapsText, extendsPass, isPlacement, isWaitlistPlan, type PlanLimits, PRO_BENEFITS } from "@/lib/pro";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = { title: "Planes" };
@@ -14,11 +14,14 @@ export default async function ProPage({ searchParams }: PageProps<"/app/pro">) {
   await requireUser();
   const { from, plan } = await searchParams;
   const supabase = await createClient();
-  const [{ data: waitlist }, cfg, { data: checkouts }] = await Promise.all([
+  const [{ data: waitlist }, cfg, { data: checkouts }, { data: snapshot }] = await Promise.all([
     supabase.from("pro_waitlist").select("plan").maybeSingle(),
     webConfig(),
     supabase.from("billing_checkouts").select("id,offer,amount,status,init_point,next_payment_at,sync_error,created_at,founder_number,founder_price_until").order("created_at", { ascending: false }).limit(3),
+    supabase.rpc("my_plan_snapshot"),
   ]);
+  const access = (snapshot ?? null) as PlanLimits | null;
+  const extending = extendsPass(access);
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -31,6 +34,9 @@ export default async function ProPage({ searchParams }: PageProps<"/app/pro">) {
           {cfg.automaticPayments ? " Particular y Agencia se pagan en Mercado Pago; activamos tu acceso al confirmar el pago." : cfg.commercialPilot ? " Coordinamos el pago y verificamos cada alta durante este piloto." : " Particular y Agencia todavía están en lista de espera."}
         </p>
       </header>
+      {extending && access?.expires_at ? <p role="status" className="rounded-xl bg-emerald-50 p-4 text-sm text-emerald-950 ring-1 ring-emerald-200">
+        Tenés Particular hasta el {accessDate(access.expires_at)}. Si lo extendés, los 30 días se suman a tu vencimiento.
+      </p> : null}
 
       <ul className="grid gap-2 sm:grid-cols-2">
         {PRO_BENEFITS.map((b) => (
@@ -45,7 +51,7 @@ export default async function ProPage({ searchParams }: PageProps<"/app/pro">) {
         offer={cfg.proOffer}
         limits={cfg.planLimits}
         current={isWaitlistPlan(waitlist?.plan) ? waitlist.plan : null}
-        recommended={isWaitlistPlan(plan) || plan === "custom" ? plan : undefined}
+        recommended={isWaitlistPlan(plan) || plan === "custom" ? plan : extending ? "pass_30" : undefined}
         placement={isPlacement(from) ? from : "plans"}
         pilot={cfg.commercialPilot}
         automatic={cfg.automaticPayments}

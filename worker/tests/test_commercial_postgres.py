@@ -116,6 +116,20 @@ class CommercialTests(PostgresTestCase):
         self.assertEqual(ledger['currency'], 'ARS')
         self.assertEqual(ledger['duration'].days, 30)
 
+    async def test_a_pass_recorded_by_hand_extends_from_its_end(self):
+        """2.4 also holds for payments an admin records."""
+        await self.pay()
+        first_end = (await self.rows("SELECT plan_expires_at FROM profiles WHERE id=%s", self.user))[0]['plan_expires_at']
+        second = await self.pay(ref='tx-002')
+        [period] = await self.rows("SELECT period_start, period_end FROM commercial_payments WHERE id=%s", second)
+        self.assertEqual((period['period_start'], (period['period_end'] - period['period_start']).days), (first_end, 30))
+        self.assertEqual((await self.rows("SELECT plan_expires_at FROM profiles WHERE id=%s", self.user))[0]['plan_expires_at'],
+                         period['period_end'])
+        [event] = await self.rows("SELECT props FROM events WHERE name='pass_extended' AND user_id=%s", self.user)
+        self.assertTrue(event['props']['before_expiry'])
+        with self.assertRaisesRegex(Exception, 'paid_plan_already_active'):
+            await self.pay('pro_monthly', 'tx-003')
+
     async def test_agency_renewal_and_refund_newest_first(self):
         first = await self.pay('pro_monthly')
         before = (await self.rows("SELECT plan_expires_at FROM profiles WHERE id=%s", self.user))[0]['plan_expires_at']

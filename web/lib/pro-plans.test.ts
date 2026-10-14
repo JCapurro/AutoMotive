@@ -2,11 +2,12 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ config: vi.fn(), waitlist: vi.fn() }));
+const mocks = vi.hoisted(() => ({ config: vi.fn(), waitlist: vi.fn(), access: vi.fn() }));
 vi.mock("@/lib/auth", () => ({ requireUser: vi.fn().mockResolvedValue({ id: "account" }) }));
 vi.mock("@/lib/config", () => ({ webConfig: mocks.config }));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: vi.fn().mockResolvedValue({
+    rpc: async () => ({ data: mocks.access() }),
     from: (table: string) => ({
       select: () => table === "pro_waitlist"
         ? { maybeSingle: mocks.waitlist }
@@ -28,6 +29,7 @@ import { CUSTOM_PLAN, DEFAULT_PLAN_LIMITS, DEFAULT_PRO_OFFER, planPrice } from "
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.waitlist.mockResolvedValue({ data: null });
+  mocks.access.mockReturnValue(null);
 });
 
 const modes = [
@@ -83,7 +85,8 @@ it("shows the phase 1 plan cards with the limits the backend applies", () => {
     "por 3 días · sin tarjeta", "1 búsqueda activa", "Hasta 100 resultados", "Hasta 3 avisos inmediatos por día y resumen diario",
     "Las 72 horas empiezan al activar tu búsqueda. Una prueba por cuenta, sin cobro automático.",
     "por 30 días · pago único", "Seguí hasta tres opciones a la vez y recibí avisos para encontrar tu próximo auto.",
-    "Hasta 3 búsquedas activas", "Hasta 10 avisos inmediatos por día y resumen diario", "Sin renovación automática.",
+    "Hasta 3 búsquedas activas", "Hasta 10 avisos inmediatos por día y resumen diario",
+    "Sin renovación automática. Si todavía no lo encontraste, extendés 30 días con un clic.",
     "Para agencias y revendedores. Monitoreá más modelos y oportunidades de compra desde una misma cuenta.",
     "Hasta 20 búsquedas activas", "Hasta 50 avisos inmediatos por día y resumen diario",
     "Renovación mensual automática. Cancelás desde Ajustes y conservás el período pagado.",
@@ -106,3 +109,12 @@ it("follows app_config.plan_limits instead of fixed numbers", () => {
   expect(internal).toContain("Hasta 15 búsquedas activas · una cuenta");
   expect(internal).toContain("Hasta 3 búsquedas activas · una cuenta");
 });
+
+it("offers a running Particular to extend it, with the days adding up to its end", async () => {
+  mocks.config.mockResolvedValue({ proOffer: DEFAULT_PRO_OFFER, planLimits: DEFAULT_PLAN_LIMITS, automaticPayments: true, commercialPilot: true });
+  mocks.access.mockReturnValue({ plan: "pass", enforced: true, active: true, state: "paid", expires_at: "2026-11-20T15:00:00Z", limits: {} });
+  const html = renderToStaticMarkup(await ProPage({ searchParams: Promise.resolve({}), params: Promise.resolve({}) }));
+  expect(html).toContain("Si lo extendés, los 30 días se suman a tu vencimiento.");
+  expect(html).toContain('checked="" value="pass_30"');
+});
+
