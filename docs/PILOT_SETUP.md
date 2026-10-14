@@ -315,8 +315,21 @@ powershell -ExecutionPolicy Bypass -File ops\update.ps1
 
 El script hace un backup, aplica las migraciones pendientes a la base de la
 nube (`npx supabase db push` con el `DATABASE_URL` del `.env`), instala las
-dependencias, compila la web y reinicia las tareas Web y Worker. Si el build
-falla, la versión anterior sigue corriendo.
+dependencias, compila la web y reinicia las tareas Web y Worker. Una tarea
+deshabilitada no se arranca: Worker lo está a propósito desde que el worker
+corre en el VPS, y no tiene que arrancar (sería un segundo worker contra la
+misma base).
+
+La web local queda parada mientras compila: el `next start` en marcha tiene
+abiertos módulos nativos de `web\node_modules` y `npm ci` no puede borrarlos.
+El script detiene sólo los procesos de la tarea Web y deja el `node_modules` y
+el `.next` de la versión anterior en `.update\previous`. Si el build falla,
+vuelven a `web\` y Web arranca otra vez con la versión anterior. Si otro
+proceso usa esa carpeta (un `next dev` o el e2e corriendo desde el mismo
+`web\`), el script no lo corta: avisa cuáles son, deja Web andando con la
+versión anterior y hay que cerrarlos y volver a correrlo. Si encuentra un
+`.update\previous` de una corrida cortada, se niega a seguir hasta que lo
+borres o lo devuelvas a `web\`.
 
 **Tests.** Corren contra el stack **local** (`npx supabase start` a mano, con
 Docker), nunca contra la nube:
