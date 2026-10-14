@@ -182,9 +182,18 @@ def batch_handler(notifier: Notifier) -> crawl.BatchHandler:
     return handle
 
 
+async def _counting_profiles() -> list[dict]:
+    """The searches 2.5 counts; if reading them fails, active searches still crawl."""
+    try:
+        return await db.counting_profiles()
+    except Exception:
+        await log_error("count_after_expiry", "counting_profiles", traceback.format_exc())
+        return []
+
+
 async def tick(notifier: Notifier, stop: asyncio.Event | None = None,
                on_health: crawl.HealthHandler | None = None) -> None:
-    await crawl.sync_targets(await db.enabled_profiles(), await db.counting_profiles())
+    await crawl.sync_targets(await db.enabled_profiles(), await _counting_profiles())
     await rematch.run_pending()
     due = await crawl.crawl_due(batch_handler(notifier), jitter_seconds=CRAWL_JITTER_SECONDS, stop=stop,
                                 on_health=on_health)
