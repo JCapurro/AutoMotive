@@ -2,9 +2,8 @@
 digest, HTML + text. No tracking pixels (sección 7.3): "opened" is the first
 click on a /r/ link.
 
-The Idempotency-Key is the notification id (trial-reminder-<user_id> for
-the free-trial reminder), so a retry after a timeout doesn't send the same
-email twice. With a WEB_BASE_URL every email carries
+The Idempotency-Key is the notification id (lifecycle-<id> for a plan
+email), so a retry after a timeout doesn't send the same email twice. With a WEB_BASE_URL every email carries
 List-Unsubscribe with one-click POST (RFC 8058) besides the footer link.
 """
 from __future__ import annotations
@@ -45,8 +44,8 @@ class ResendEmailChannel:
 
     async def send_message(self, to: str, msg: templates.EmailMessage, *, idempotency_key: str,
                            unsubscribe_token: str | None) -> SendResult:
-        """POST an already rendered email (an alert, or the free-trial reminder,
-        notifications/trial_reminder.py). The key must be unique per email.
+        """POST an already rendered email (an alert, or a plan email,
+        notifications/lifecycle.py). The key must be unique per email.
         Every rendered email shows the inline logo, so it always goes attached."""
         body = {"from": self.sender, "to": [to], "subject": msg.subject,
                 "html": msg.html, "text": msg.text, "attachments": [logo_attachment()]}

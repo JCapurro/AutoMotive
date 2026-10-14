@@ -4,6 +4,7 @@
     <WEB_BASE_URL>/r/<id>?to=detail         → the listing's page in Ese Auto
     <WEB_BASE_URL>/r/<id>?to=listing&l=<listing_id>   (one item of a digest)
 
+the button of a plan email (docs/MAILS_DE_PLAN.md) is /m/<lifecycle_email_id>,
 and every email carries the user's unsubscribe link (F7, punto 7):
 
     <WEB_BASE_URL>/baja?t=<token>           → a page with a confirm button
@@ -37,6 +38,11 @@ class Links:
 
     def detail(self, notification_id: int, listing_id: int | None = None) -> str | None:
         return self._r(notification_id, "detail", listing_id) if self.tracked else None
+
+    def lifecycle(self, email_id: int) -> str:
+        """The button of a plan email (lifecycle_emails): /m/<id> records the
+        click and redirects to the email's target."""
+        return f"{self.base_url}/m/{email_id}"
 
     def unsubscribe(self, token: str | None) -> str | None:
         return f"{self.base_url}/baja?{urlencode({'t': token})}" if self.tracked and token else None

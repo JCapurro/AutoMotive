@@ -17,7 +17,7 @@ from notifications.digest import digest_loop
 from notifications.links import Links
 from notifications.ops import SourceAlerts
 from notifications.service import Notifier
-from notifications.trial_reminder import run_trial_reminders
+from notifications.lifecycle import run_lifecycle_emails
 from pipeline import heartbeat
 from pipeline.enrich import enrich_pass
 from pipeline.llm_jobs import llm_jobs_loop
@@ -133,8 +133,8 @@ async def amain() -> None:
         asyncio.create_task(_every("notifications", NOTIFY_TICK_SECONDS,
                                    lambda _stop: notifier.deliver(), stop)),
         asyncio.create_task(digest_loop(notifier, stop)),
-        asyncio.create_task(_every("trial_reminders", TRIAL_REMINDER_TICK_SECONDS,
-                                   lambda _stop: run_trial_reminders(notifier.channels.get("email"), links),
+        asyncio.create_task(_every("plan_emails", TRIAL_REMINDER_TICK_SECONDS,
+                                   lambda _stop: run_lifecycle_emails(notifier.channels.get("email"), links),
                                    stop)),
         asyncio.create_task(nightly_loop(stop)),
         asyncio.create_task(llm_jobs_loop(build_provider(), stop)),

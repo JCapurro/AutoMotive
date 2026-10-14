@@ -73,8 +73,8 @@ WEB_BASE_URL = os.getenv("WEB_BASE_URL", "").strip().rstrip("/")
 # The queue of immediate notifications is drained after every crawl batch and
 # also this often (retries, rows queued by other loops).
 NOTIFY_TICK_SECONDS = int(os.getenv("NOTIFY_TICK_SECONDS", "60"))
-# The free-trial reminder (docs/RECORDATORIO_PRUEBA.md) looks for trials that
-# ended this often; app_config.trial_reminder sets hours, delay and daily cap.
+# The plan emails (docs/MAILS_DE_PLAN.md) look for due events this often;
+# app_config.lifecycle_emails sets kinds, hours and the daily cap.
 TRIAL_REMINDER_TICK_SECONDS = int(os.getenv("TRIAL_REMINDER_TICK_SECONDS", "900"))
 
 # LLM layer (sección 8): OpenAI Luna for the assisted parser; the Claude

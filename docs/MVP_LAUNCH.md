@@ -29,8 +29,8 @@ excedentes quedan pausadas y conservan su historial. Las cuentas nuevas inician
 su prueba al activar su primera búsqueda. Editar, pausar o reemplazar no reinicia
 el plazo.
 
-Al vencer la prueba sin compra, el worker manda un único email que invita a
-elegir un plan; ver [recordatorio de fin de prueba](RECORDATORIO_PRUEBA.md).
+Al vencer la prueba sin compra, el worker manda un email que invita a seguir con
+Particular; ver [mails del plan](MAILS_DE_PLAN.md).
 
 ## MercadoLibre
 

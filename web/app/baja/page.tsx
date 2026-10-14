@@ -11,8 +11,8 @@ import { unsubscribe } from "./actions";
 export const metadata: Metadata = { title: "Dejar de recibir emails", robots: { index: false } };
 
 /**
- * The link at the foot of every alert email and of the free-trial reminder
- * (F7, punto 7; docs/RECORDATORIO_PRUEBA.md). Opening it changes
+ * The link at the foot of every alert email and of the plan emails
+ * (F7, punto 7; docs/MAILS_DE_PLAN.md). Opening it changes
  * nothing — mail scanners open links too —; the button does.
  */
 export default async function UnsubscribePage({ searchParams }: PageProps<"/baja">) {

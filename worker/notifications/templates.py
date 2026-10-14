@@ -21,13 +21,13 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime
 from html import escape
 from typing import Any, Mapping
 
 from intelligence import copy
 from notifications.channels.base import Notification
-from notifications.email_html import AR, MONTHS, render as render_email_html
+from notifications.email_html import render as render_email_html
 from notifications.links import Links
 from notifications.media import image_urls
 
@@ -355,82 +355,110 @@ def web(n: Notification, links: Links, now: datetime) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Free-trial reminder (docs/RECORDATORIO_PRUEBA.md): one email per account
-# when the 72 h trial ends without a plan. Not an alert: no listing, no /r/
-# link, its own footer (the account no longer has active searches).
+# Plan emails (docs/MAILS_DE_PLAN.md): one per account and event, sent by
+# notifications/lifecycle.py from the lifecycle_emails ledger. Not alerts: no
+# listing and no /r/ link; the button goes through /m/<id>, which records
+# lifecycle_email_clicked. The copy is the plans document's (fase 2): de vos,
+# never «en tiempo real», «todos los portales» or «el más barato», and a
+# sentence whose number is 0 is left out.
 # ---------------------------------------------------------------------------
 
-TRIAL_REMINDER_SUBJECT = "Terminó tu prueba gratis en Ese Auto"
-TRIAL_REMINDER_EYEBROW = "TU PRUEBA GRATIS"
-TRIAL_REMINDER_TITLE = "Terminó tu prueba de 3 días"
-TRIAL_REMINDER_PREHEADER = ("Tus resultados y favoritos siguen guardados. "
-                            "Elegí un plan para volver a recibir alertas.")
-TRIAL_REMINDER_ENDED = "Tu prueba gratis venció el {date} a las {time} (hora de Argentina)."
-TRIAL_REMINDER_PAUSED = ("Pausamos tu búsqueda y dejamos de mandarte alertas. "
-                         "Conservamos tus resultados y favoritos.")
-TRIAL_REMINDER_PLANS = ("Para volver a monitorear, elegí Particular ({particular} por {days} días, "
-                        "pago único) o Agencia ({agencia} por mes).")
-TRIAL_REMINDER_PLANS_FALLBACK = "Para volver a monitorear, elegí Particular o Agencia."
-TRIAL_REMINDER_AFTER = "Después de pagar, reactivás tu búsqueda desde Ese Auto."
-TRIAL_REMINDER_CTA = "Ver planes"
-TRIAL_REMINDER_NOTE = "La prueba gratis no genera cobros: solo pagás si elegís un plan."
-TRIAL_REMINDER_FOOTER = ("Recibís este email porque activaste una búsqueda gratis en Ese Auto. "
-                         "Es el único aviso que te mandamos sobre el fin de la prueba.")
-# Plain UTM link: /r/ only tracks listings.
-TRIAL_REMINDER_PATH = "/app/pro?utm_source=email&utm_medium=email&utm_campaign=trial_reminder"
+LIFECYCLE_EYEBROW = {"trial_no_matches": "TU PRUEBA GRATIS", "trial_ended": "TU PRUEBA GRATIS"}
+LIFECYCLE_FOOTER = {
+    "trial_no_matches": "Recibís este email porque activaste una búsqueda gratis en Ese Auto.",
+    "trial_ended": "Recibís este email porque activaste una búsqueda gratis en Ese Auto.",
+}
+
+NO_MATCHES_SUBJECT = "Tu búsqueda de {model} todavía no tuvo coincidencias nuevas"
+NO_MATCHES_SUBJECT_ANY = "Tu búsqueda todavía no tuvo coincidencias nuevas"
+NO_MATCHES_BODY = ("En las primeras 24 horas no apareció ningún auto nuevo con tus filtros. "
+                   "Si ampliás años, kilómetros o zona, vas a ver más opciones en lo que queda de la prueba.")
+NO_MATCHES_CTA = "Ajustar filtros"
+
+TRIAL_ENDED_SUBJECT = "Terminó tu prueba: encontramos {found} para tu búsqueda"
+TRIAL_ENDED_TITLE = "Terminó tu prueba"
+TRIAL_ENDED_FOUND = "En 3 días encontramos {found} para tu búsqueda{model}{below}."
+TRIAL_ENDED_BELOW = ", y {n} {verb} por debajo de publicaciones comparables"
+TRIAL_ENDED_OFFER = ("Para seguir recibiendo avisos, Particular sale {price} por {days} días, "
+                     "con {searches} búsquedas y pago único.")
+TRIAL_ENDED_OFFER_FALLBACK = "Para seguir recibiendo avisos, elegí Particular."
+TRIAL_ENDED_KEEP = "Tu historial y tus favoritos quedan guardados."
+TRIAL_ENDED_CTA = "Seguir con Particular"
 
 
-def _offer_price(offer: Mapping[str, Any], plan: str) -> tuple[str, int | None] | None:
-    """("ARS 15.000", 30) from app_config.pro_offer[plan]; None if it isn't usable."""
-    price = offer.get(plan)
-    if not isinstance(price, Mapping):
-        return None
-    amount, currency, days = price.get("amount"), price.get("currency"), price.get("days")
-    if isinstance(amount, bool) or not isinstance(currency, str) or not currency.strip():
+def _count(value: Any) -> int:
+    return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else 0
+
+
+def _cars(n: int) -> str:
+    return f"{n} auto" if n == 1 else f"{n} autos"
+
+
+def _pesos(amount: Any) -> str | None:
+    """$15.000, as the plans document writes prices; None if the amount isn't usable."""
+    if isinstance(amount, bool):
         return None
     try:
-        amount = float(amount)
+        value = float(amount)
     except (TypeError, ValueError):
         return None
-    if not math.isfinite(amount) or amount <= 0:
+    if not math.isfinite(value) or value <= 0:
         return None
-    if isinstance(days, bool) or not isinstance(days, int) or days <= 0:
-        days = None
-    return copy.money(amount, currency.strip()), days
+    return "$" + f"{value:,.0f}".replace(",", ".")
 
 
-def trial_reminder_plans(offer: Mapping[str, Any] | None) -> str:
-    """The plan line with the current prices, or without them if pro_offer is
-    missing or invalid (never a wrong price)."""
-    if isinstance(offer, Mapping):
-        particular, agencia = _offer_price(offer, "pass_30"), _offer_price(offer, "pro_monthly")
-        if particular and agencia and particular[1]:
-            return TRIAL_REMINDER_PLANS.format(particular=particular[0], days=particular[1],
-                                               agencia=agencia[0])
-    return TRIAL_REMINDER_PLANS_FALLBACK
+def particular_offer(offer: Mapping[str, Any] | None, limits: Mapping[str, Any] | None) -> str:
+    """Particular's price, days and searches from app_config (pro_offer,
+    plan_limits); without a usable price, the plan without numbers (never a wrong one)."""
+    price = offer.get("pass_30") if isinstance(offer, Mapping) else None
+    if isinstance(price, Mapping) and price.get("currency") == "ARS":
+        amount, days = _pesos(price.get("amount")), price.get("days")
+        if amount and isinstance(days, int) and not isinstance(days, bool) and days > 0:
+            pass_limits = limits.get("pass") if isinstance(limits, Mapping) else None
+            searches = pass_limits.get("max_profiles") if isinstance(pass_limits, Mapping) else None
+            if not (isinstance(searches, int) and not isinstance(searches, bool) and searches > 0):
+                searches = 3
+            return TRIAL_ENDED_OFFER.format(price=amount, days=days, searches=searches)
+    return TRIAL_ENDED_OFFER_FALLBACK
 
 
-def trial_reminder_email(trial_expires_at: datetime, links: Links, unsubscribe_token: str | None,
-                         now: datetime, offer: Mapping[str, Any] | None) -> EmailMessage:
-    """The free-trial reminder: subject, text and HTML. Dates in Argentina's time."""
-    if trial_expires_at.tzinfo is None:
-        trial_expires_at = trial_expires_at.replace(tzinfo=timezone.utc)
-    ended = trial_expires_at.astimezone(AR)
-    plans_url = f"{links.base_url}{TRIAL_REMINDER_PATH}"
-    c = Content(TRIAL_REMINDER_TITLE, TRIAL_REMINDER_SUBJECT,
-                lines=[TRIAL_REMINDER_ENDED.format(date=f"{ended.day} de {MONTHS[ended.month - 1]}",
-                                                   time=f"{ended:%H:%M}"),
-                       TRIAL_REMINDER_PAUSED, trial_reminder_plans(offer), TRIAL_REMINDER_AFTER],
-                link=Link(TRIAL_REMINDER_CTA, plans_url), notes=[TRIAL_REMINDER_NOTE])
-    unsubscribe = links.unsubscribe(unsubscribe_token)
+def lifecycle_content(kind: str, payload: Mapping[str, Any], url: str, *,
+                      offer: Mapping[str, Any] | None = None,
+                      limits: Mapping[str, Any] | None = None) -> tuple[Content, str]:
+    """The email of one ledger row: its Content and its title."""
+    model = payload.get("model") if isinstance(payload.get("model"), str) and payload["model"].strip() else None
+    if kind == "trial_no_matches":
+        subject = NO_MATCHES_SUBJECT.format(model=model) if model else NO_MATCHES_SUBJECT_ANY
+        return Content(subject, subject, lines=[NO_MATCHES_BODY], link=Link(NO_MATCHES_CTA, url)), subject
+    if kind == "trial_ended":
+        found, below = _count(payload.get("found")), _count(payload.get("below"))
+        lines = []
+        if found:
+            below_text = (TRIAL_ENDED_BELOW.format(n=below, verb="estaba" if below == 1 else "estaban")
+                          if below else "")
+            lines.append(TRIAL_ENDED_FOUND.format(found=_cars(found), model=f" de {model}" if model else "",
+                                                  below=below_text))
+        lines += [particular_offer(offer, limits), TRIAL_ENDED_KEEP]
+        subject = TRIAL_ENDED_SUBJECT.format(found=_cars(found)) if found else TRIAL_ENDED_TITLE
+        return Content(TRIAL_ENDED_TITLE, subject, lines=lines, link=Link(TRIAL_ENDED_CTA, url)), TRIAL_ENDED_TITLE
+    raise ValueError(f"unknown plan email kind: {kind}")
 
-    text = [c.header, *c.lines, f"{c.link.label}: {c.link.url}", "", *c.notes,
-            "", "—", TRIAL_REMINDER_FOOTER]
+
+def lifecycle_email(row: Mapping[str, Any], links: Links, now: datetime, *,
+                    offer: Mapping[str, Any] | None = None,
+                    limits: Mapping[str, Any] | None = None) -> EmailMessage:
+    """A plan email for a lifecycle_emails row (id, kind, payload, unsubscribe_token)."""
+    kind = row["kind"]
+    c, title = lifecycle_content(kind, row.get("payload") or {}, links.lifecycle(row["id"]),
+                                 offer=offer, limits=limits)
+    footer = LIFECYCLE_FOOTER[kind]
+    unsubscribe = links.unsubscribe(row.get("unsubscribe_token"))
+
+    text = [c.header, *c.lines, f"{c.link.label}: {c.link.url}", "", "—", footer]
     if unsubscribe:
         text.append(f"{UNSUBSCRIBE}: {unsubscribe}")
 
-    html = render_email_html(c, kind="trial_reminder", now=now, day=None, detail_url=None, app_url=None,
-                             unsubscribe_url=unsubscribe, footer=TRIAL_REMINDER_FOOTER,
-                             unsubscribe_label=UNSUBSCRIBE, eyebrow=TRIAL_REMINDER_EYEBROW,
-                             title=TRIAL_REMINDER_TITLE, preheader=TRIAL_REMINDER_PREHEADER)
+    html = render_email_html(c, kind=kind, now=now, day=None, detail_url=None, app_url=None,
+                             unsubscribe_url=unsubscribe, footer=footer, unsubscribe_label=UNSUBSCRIBE,
+                             eyebrow=LIFECYCLE_EYEBROW[kind], title=title, preheader=c.lines[0])
     return EmailMessage(c.subject, "\n".join(text), html)

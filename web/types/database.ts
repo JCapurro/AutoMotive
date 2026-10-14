@@ -7,6 +7,12 @@ export type Database = {
 
   "public": {
           Tables: {
+      lifecycle_emails: {
+        Row: { id: number; user_id: string; kind: string; event_key: string; search_profile_id: number | null; payload: Json; target: string; status: string; attempts: number; error: string | null; provider_id: string | null; created_at: string; sent_at: string | null; clicked_at: string | null }
+        Insert: { user_id: string; kind: string; event_key: string; target: string; search_profile_id?: number | null; payload?: Json; status?: string; attempts?: number; error?: string | null; provider_id?: string | null; created_at?: string; sent_at?: string | null; clicked_at?: string | null }
+        Update: { status?: string; attempts?: number; error?: string | null; provider_id?: string | null; sent_at?: string | null; clicked_at?: string | null }
+        Relationships: []
+      }
       platform_health_checks: {
         Row: { id: number; checked_at: string; checks: Json; email_pending: boolean; last_email_at: string | null }
         Insert: { id: number; checked_at: string; checks: Json; email_pending?: boolean; last_email_at?: string | null }
@@ -1191,6 +1197,9 @@ isOneToOne: false
         isOneToOne: false
         isSetofReturn: true
       } },
+"track_lifecycle_click":
+{ Args: { "p_id": number }; Returns: string | null
+                           },
 "track_notification_click":
 { Args: { "p_listing_id"?: number,"p_notification_id": number,"p_to"?: string }; Returns: {
               "listing_id": number,"url": string

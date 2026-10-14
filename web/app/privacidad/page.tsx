@@ -22,8 +22,8 @@ export default function PrivacyPage() {
       <ul>
         <li>
           <strong>Tu email</strong>, para crear tu cuenta e ingresar con contraseña. Te enviamos emails para
-          confirmar el registro, recuperar la contraseña, avisarte una única vez cuando termina tu prueba gratis y,
-          si lo elegís, recibir alertas.
+          confirmar el registro, recuperar la contraseña, avisarte sobre tu prueba gratis y tu plan (por ejemplo,
+          cuando termina la prueba) y, si lo elegís, recibir alertas. Todos esos avisos traen un enlace para dejar de recibirlos.
         </li>
         <li>
           <strong>Tus búsquedas</strong>: vehículo, filtros, preferencias y un punto de referencia para el radio de

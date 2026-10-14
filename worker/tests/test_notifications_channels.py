@@ -133,23 +133,21 @@ class ResendEmailChannelTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((result.ok, result.retry), (False, True))
 
     async def test_send_message_posts_a_rendered_email_with_its_own_key(self):
-        """The free-trial reminder reuses the POST: its key never collides with a notification's."""
-        from datetime import datetime, timezone
-
+        """A plan email reuses the POST: its key never collides with a notification's."""
         from notifications import templates
 
         ch, seen = self.channel(lambda r: httpx.Response(200, json={"id": "email_9"}))
-        msg = templates.trial_reminder_email(datetime(2026, 9, 27, 12, tzinfo=timezone.utc), LINKS,
-                                             "tok-9", NOW, None)
-        result = await ch.send_message("ana@automotive.test", msg, idempotency_key="trial-reminder-u1",
+        msg = templates.lifecycle_email({"id": 9, "kind": "trial_ended", "payload": {"found": 2},
+                                         "unsubscribe_token": "tok-9"}, LINKS, NOW)
+        result = await ch.send_message("ana@automotive.test", msg, idempotency_key="lifecycle-9",
                                        unsubscribe_token="tok-9")
         self.assertEqual((result.ok, result.provider_id), (True, "email_9"))
         req = seen[0]
-        self.assertEqual(req.headers["Idempotency-Key"], "trial-reminder-u1")
+        self.assertEqual(req.headers["Idempotency-Key"], "lifecycle-9")
         self.assertEqual(req.headers["Authorization"], "Bearer re_test_key")
         body = json.loads(req.content)
         self.assertEqual(body["to"], ["ana@automotive.test"])
-        self.assertEqual(body["subject"], "Terminó tu prueba gratis en Ese Auto")
+        self.assertEqual(body["subject"], "Terminó tu prueba: encontramos 2 autos para tu búsqueda")
         self.assertEqual((body["text"], body["html"]), (msg.text, msg.html))
         [logo] = body["attachments"]
         self.assertEqual(logo["content_id"], "ese-auto-logo")
