@@ -56,6 +56,27 @@ class CommercialCase(PostgresTestCase):
 
 
 class CommercialTests(CommercialCase):
+    async def test_admin_access_survives_expiry_and_exceeds_agency_capacity(self):
+        await self.rows("UPDATE profiles SET free_trial_started_at=now()-interval '4 days', "
+                        "plan='pro', plan_expires_at=now()-interval '1 day' WHERE id=%s", self.admin)
+        access = (await self.rows("SELECT my_plan_snapshot() AS v", actor=self.admin))[0]['v']
+        self.assertEqual((access['plan'], access['state'], access['active']), ('pro', 'paid', True))
+        self.assertIsNone(access['expires_at'])
+        # No max_profiles, max_visible_results or per-day cap: the legacy boolean
+        # gives the global alerts_max_per_user_day, like the open pilot.
+        self.assertEqual(access['limits'], {'immediate_alerts': True})
+        self.assertEqual((await self.rows("SELECT immediate_alert_cap(%s) AS n", self.admin))[0]['n'], 10)
+        [agency] = await self.rows("SELECT (value->'pro'->>'max_profiles')::int AS n FROM app_config WHERE key='plan_limits'")
+        for _ in range(agency['n'] + 1):
+            result = await self.rows("INSERT INTO search_profiles(user_id,name,filters) "
+                                     "VALUES (%s,'Admin Fiesta','{\"make\":\"Ford\",\"model\":\"Fiesta\"}') "
+                                     "RETURNING id", self.admin, actor=self.admin)
+        self.assertTrue((await self.rows("SELECT search_access_active(%s) AS active", result[0]['id']))[0]['active'])
+        await self.rows("UPDATE profiles SET role='user' WHERE id=%s", self.admin)
+        access = (await self.rows("SELECT my_plan_snapshot() AS v", actor=self.admin))[0]['v']
+        self.assertEqual(access['state'], 'expired')
+        self.assertEqual(access['limits']['max_profiles'], 1)
+        self.assertFalse((await self.rows("SELECT search_access_active(%s) AS active", result[0]['id']))[0]['active'])
 
     async def test_default_score_sort_and_recent_sort_use_publication(self):
         pid = await self.search()
