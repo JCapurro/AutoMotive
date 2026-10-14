@@ -74,7 +74,7 @@ export function PublicPlans({ cfg, signedIn }: { cfg: PricingConfig; signedIn: b
             <p className="mt-5 text-sm text-muted-foreground">{plan.terms}</p>
             <div className="pt-6">
               <Button asChild variant={plan.id === "pass_30" ? "default" : "outline"} className="h-auto min-h-10 w-full whitespace-normal py-2 text-center">
-                {plan.id === "custom" ? <a href={plan.href}>{plan.cta}</a> : <Link href={plan.href}>{plan.cta}</Link>}
+                {plan.id === "custom" ? <a href={plan.href} target="_blank" rel="noopener noreferrer">{plan.cta}</a> : <Link href={plan.href}>{plan.cta}</Link>}
               </Button>
             </div>
           </article>

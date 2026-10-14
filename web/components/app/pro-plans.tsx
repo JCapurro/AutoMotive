@@ -78,7 +78,7 @@ export function ProPlans({ offer, limits, current, placement, pilot = false, rec
           : <>Estás en la lista de espera de <strong>{PLAN_COPY[joined].name}</strong>. Te avisamos cuando abramos las altas; no se genera ningún cobro.</>}
       </p> : null}
       {plan === "custom" ? <Button asChild size="lg" className="h-11 w-full px-5 text-base sm:w-auto">
-        <a href={CUSTOM_PLAN.href}>{CUSTOM_PLAN.cta}</a>
+        <a href={CUSTOM_PLAN.href} target="_blank" rel="noopener noreferrer">{CUSTOM_PLAN.cta}</a>
       </Button> : <Button type="submit" size="lg" className="h-11 w-full px-5 text-base sm:w-auto" disabled={pending || (!automatic && joined === plan)}>
         {automatic ? "Continuar en Mercado Pago" : joined && joined !== plan ? "Cambiar mi solicitud" : pilot ? `Solicitar ${PLAN_COPY[plan].name}` : "Sumarme a la lista de espera"}
       </Button>}

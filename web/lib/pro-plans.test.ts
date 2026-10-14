@@ -47,13 +47,13 @@ it.each(modes)("offers exactly the three paid plans from Adquirir plan in mode %
   expect(html).not.toContain('value="free"');
 });
 
-it.each(modes)("routes a selected Custom plan to a consultation in mode %j", async (mode) => {
+it.each(modes)("routes a selected Custom plan to a WhatsApp consultation in mode %j", async (mode) => {
   mocks.config.mockResolvedValue({ proOffer: DEFAULT_PRO_OFFER, planLimits: DEFAULT_PLAN_LIMITS, ...mode });
   mocks.waitlist.mockResolvedValue({ data: { plan: "pass_30" } });
   const page = await ProPage({ searchParams: Promise.resolve({ plan: "custom" }), params: Promise.resolve({}) });
   const html = renderToStaticMarkup(page);
   expect(html).toContain('checked="" value="custom"');
-  expect(html).toContain('href="mailto:contacto@eseauto.com.ar?subject=');
+  expect(html).toContain('href="https://wa.me/5491133454741?text=Hola');
   expect(html).toContain("Consultar Custom");
   expect(html).not.toContain('type="submit"');
   expect(html).not.toContain("Continuar en Mercado Pago");

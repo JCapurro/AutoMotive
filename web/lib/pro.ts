@@ -107,9 +107,10 @@ export type PlanLimits = {
   active_searches?: number;
   limits: { max_profiles?: number; max_visible_results?: number; immediate_alerts_per_day?: number; immediate_alerts?: boolean };
 };
+/** Custom is arranged over WhatsApp. wa.me wants the full international number: 54 9 11 3345-4741. */
+export const CUSTOM_WHATSAPP = "5491133454741";
 export const CUSTOM_PLAN = {
   id: "custom" as const,
-  label: "Para necesidades específicas",
   name: "Custom",
   price: "A convenir",
   period: "según alcance y duración",
@@ -122,7 +123,7 @@ export const CUSTOM_PLAN = {
   ],
   terms: "Acordamos el alcance, el precio y las condiciones antes de activar el servicio.",
   cta: "Consultar Custom",
-  href: `mailto:contacto@eseauto.com.ar?subject=${encodeURIComponent("Consulta por plan Custom")}&body=${encodeURIComponent("Hola, me interesa un plan Custom de Ese Auto.\n\nNecesito buscar:\nCantidad de búsquedas:\nModelos y zonas:\nDuración estimada:\n")}`,
+  href: `https://wa.me/${CUSTOM_WHATSAPP}?text=${encodeURIComponent("Hola, me interesa un plan Custom de Ese Auto.\n\nNecesito buscar:\nCantidad de búsquedas:\nModelos y zonas:\nDuración estimada:\n")}`,
 };
 export type PlanChoice = WaitlistPlan | typeof CUSTOM_PLAN.id;
 /** The snapshot resolves expiry; a stored plan name alone doesn't prove paid access. */
