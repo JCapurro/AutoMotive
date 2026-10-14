@@ -485,6 +485,8 @@ _GIT_LOG = _plus(
             '--until': 'text', '--before': 'text', '--author': 'text', '--committer': 'text', '--grep': 'text',
             '--format': 'text', '--date': 'text', '-L': 'text'})
 # No -C, -c, --git-dir, --work-tree, --output, --no-index, --ext-diff, -p/-i/-e on add or restore.
+# restore is the only one that writes files: no -s/--source (it only undoes the session's own edits)
+# and its paths follow the rule of Edit and Write.
 _GIT = {
     'status': dict(short='sbvz', long='short branch long verbose null show-stash renames no-renames ahead-behind '
                                       'no-ahead-behind porcelain= untracked-files= ignored= column= no-column'),
@@ -501,7 +503,7 @@ _GIT = {
     'rev-parse': dict(short='q', long='short= abbrev-ref= symbolic-full-name verify quiet show-toplevel '
                                       'show-prefix show-cdup is-inside-work-tree all'),
     'add': dict(short='AuNvn', long='all update intent-to-add verbose dry-run'),
-    'restore': dict(short='SWq', long='staged worktree quiet', valued={'-s': 'text', '--source': 'text'}),
+    'restore': dict(short='SWq', long='staged worktree quiet'),
 }
 
 
@@ -536,7 +538,10 @@ def _git(args: list[str], shell: Shell) -> None:
                     'ls-files, rev-parse, branch --show-current, add, restore, stash list; sin opciones globales)')
     operands, _ = _options(rest, shell, attached=True, **_GIT[command])
     for operand in operands:
-        _git_operand(operand, shell)
+        if command == 'restore':
+            shell.path(operand, write=True)   # every operand is a pathspec it may overwrite
+        else:
+            _git_operand(operand, shell)
 
 
 def _pytest(args: list[str], shell: Shell) -> None:

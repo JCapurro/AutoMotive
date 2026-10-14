@@ -80,7 +80,8 @@ se bloquea con el motivo:
     usa los filtros reales del target. Tope: {settings.max_probes} probes por intento, hasta 7 minutos cada uno.
 - Git de solo lectura: `git status`, `git diff`, `git log`, `git show`, `git blame`, `git ls-files`,
   `git rev-parse`, `git branch --show-current`, `git stash list`; y `git restore <archivo>` para
-  deshacer tu propio cambio en un archivo versionado.
+  deshacer tu propio cambio en un archivo versionado que podés editar (los de arriba), sin `-s` ni
+  `--source`.
 - Shell de lectura: `ls`, `cat`, `head`, `tail`, `wc`, `grep`, `rg`, `find` (sin `-exec` ni `-delete`),
   `sed -n`, `diff`, `sort`, `uniq`, `echo`, `pwd`, `cd`.
 

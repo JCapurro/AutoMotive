@@ -17,9 +17,13 @@ from repairbot.vps import VpsError
 INCIDENT = '0b0f7a52-5f43-4c7e-9a8e-1b2c3d4e5f60'
 OTHER = '6d1e2f30-0a4b-4c5d-8e9f-a0b1c2d3e4f5'
 START = datetime(2026, 10, 14, 15, 0, tzinfo=timezone.utc)
-HEAD, FIX, BASE, REVERT = '1' * 40, 'a' * 40, 'b' * 40, 'c' * 40
+HEAD, FIX, BASE, REVERT, LATER = '1' * 40, 'a' * 40, 'b' * 40, 'c' * 40, 'f' * 40
 HOSTNAME = 'vps-6488403-x'
 WORKER = Path(bot.__file__).resolve().parents[1]
+
+
+class Killed(BaseException):
+    """The process dies at that point (Task Scheduler's limit, a reboot): no handler runs."""
 
 
 def iso(moment: datetime) -> str:
@@ -171,11 +175,17 @@ class FakeGit(Fake):
         self.push_error = None
         self.revert_error = None
         self.pending = None
+        self.dirty = False          # edits of a session still in the clone
+        self.landed_fix = None      # what landed() finds on origin/main
+        self.landed_revert = None
+        self.landed_error = None
+        self.launcher_error = None
 
     def sync(self):
         self.call('sync')
         if self.sync_error:
             raise self.sync_error
+        self.dirty = False
         return HEAD
 
     def changed_paths(self):
@@ -197,7 +207,7 @@ class FakeGit(Fake):
 
     def commit(self, message):
         self.call('commit', message)
-        self.pending = FIX
+        self.pending, self.dirty = FIX, False
         return 'd' * 40
 
     def push(self):
@@ -213,9 +223,21 @@ class FakeGit(Fake):
         self.pending = REVERT
         return 'e' * 40
 
+    def landed(self, run_id, reverts=None):
+        self.call('landed', run_id, reverts)
+        if self.landed_error:
+            raise self.landed_error
+        return self.landed_revert if reverts else self.landed_fix
+
     def parent(self, sha):
         self.call('parent', sha)
         return {FIX: BASE, REVERT: FIX}[sha]
+
+    def update_launcher(self):
+        self.call('update_launcher')
+        if self.launcher_error:
+            raise self.launcher_error
+        return HEAD
 
 
 class FakeVps(Fake):
@@ -242,8 +264,11 @@ class FakeVps(Fake):
     def deploy(self, sha, base):
         self.call('deploy', sha, base)
         if self.deploys:
-            return {'prev_head': base, 'head': base, 'reason': '', **self.deploys.pop(0)}
-        return {'ok': True, 'code': 'deployed', 'prev_head': base, 'head': sha, 'reason': ''}
+            result = self.deploys.pop(0)
+            if isinstance(result, BaseException):
+                raise result
+            return {'prev_head': base, 'head': base, 'contains': False, 'reason': '', **result}
+        return {'ok': True, 'code': 'deployed', 'prev_head': base, 'head': sha, 'contains': True, 'reason': ''}
 
     def restart(self):
         self.call('restart')
@@ -269,6 +294,7 @@ class FakeClaude(Fake):
     def run(self, **options):
         self.call('run', options)
         self.world.clock.advance(minutes=self.minutes)
+        self.world.git.dirty = True   # the session edited the clone
         return self.results.pop(0) if self.results else success()
 
 
@@ -359,7 +385,7 @@ def world(tmp_path):
 def test_nothing_to_do(world):
     summary = world.tick()
     assert summary['ok'] and summary['actions'] == [] and summary['claude_runs'] == 0
-    assert world.names() == ['db.active_incidents', 'db.claim']
+    assert world.names() == ['db.active_incidents', 'db.claim', 'git.update_launcher']
     with st.Lock(world.settings.state_dir / 'bot.lock') as lock:
         assert lock.acquired   # released
 
@@ -373,7 +399,9 @@ def test_claim_fix_publish_deploy_kick_restart(world):
         'db.claim', 'db.attach', 'claude.preflight', 'git.sync', 'vps.status', 'vps.logs', 'db.incident_context',
         'claude.run', 'vps.cleanup', 'git.changed_paths', 'git.diff_lines', 'git.compile', 'git.tests',
         'git.changed_paths', 'vps.status', 'git.commit', 'git.push', 'git.parent', 'vps.deploy',
-        'db.failing_targets', 'db.running_runs', 'vps.restart', 'db.now', 'db.kick', 'db.runs_since'])
+        'db.running_runs', 'db.failing_targets', 'vps.restart', 'db.now', 'db.kick', 'db.runs_since',
+        'git.update_launcher'])
+    assert world.names().count('git.sync') == 1 and 'git.landed' not in world.names()
     (incident_id, token, thread), = world.args('db.attach')
     state = world.state()
     run_id = state.attempts[0].run_id
@@ -384,6 +412,7 @@ def test_claim_fix_publish_deploy_kick_restart(world):
     assert options['run_dir'] == world.settings.runs_dir / run_id
     assert 0 < options['deadline_s'] <= world.settings.claude_timeout_s
     assert '<incident_context>' in options['prompt'] and 'Tests:' in options['system_prompt']
+    assert 'sin `-s` ni\n  `--source`' in options['system_prompt']   # the guard refuses git restore --source
     (message,), = world.args('git.commit')
     assert message.startswith('fix(kavak): Leer el precio del bloque nuevo')
     assert f'Repair-Incident: {INCIDENT}' in message and f'Repair-Run: {run_id}' in message
@@ -634,11 +663,49 @@ def test_owner_hands_an_incident_back(world):
 def test_resolved_incident_closes_local_state(world):
     deployed(world)
     world.seed('waiting', [tried(1)], incident_id=OTHER, source='autocity', minutes=5)
+    world.db.runs = [{'id': 99, 'target_id': 7, 'status': 'ok', 'found': 0, 'error': None}]
     world.db.resolve(INCIDENT)
     world.db.resolve(OTHER)
     world.tick()
     assert world.state().phase == 'done' and world.state(OTHER).phase == 'done'
+    assert world.state().attempts[0].outcome == 'verified'
     assert world.kinds() == ['fixed'] and world.notify.sent[0]['incident_id'] == INCIDENT
+
+
+def test_a_monitor_closure_without_a_post_deploy_run_is_unverified(world):
+    # An overdue search stops being overdue as soon as the bot kicks it: the closure proves nothing.
+    deployed(world, targets=(7, 9), require_found=True)
+    world.db.runs = [{'id': 98, 'target_id': 7, 'status': 'ok', 'found': 0, 'error': None},
+                     {'id': 99, 'target_id': 9, 'status': 'failed', 'found': 0, 'error': 'x'}]
+    world.db.resolve()
+    world.tick()
+    state = world.state()
+    assert state.phase == 'done' and state.attempts[0].outcome == 'unverified'
+    assert 'sin una corrida posterior' in state.attempts[0].detail
+    assert world.kinds() == ['unverified'] and 'faltan [7, 9]' in world.notify.sent[0]['text']
+    (source, targets, since), = world.args('db.runs_since')
+    assert targets == [7, 9] and since == START - timedelta(minutes=5)
+    assert not {'git.revert', 'vps.deploy'} & set(world.names())
+
+
+def test_a_monitor_closure_needs_every_kicked_target_to_run_well(world):
+    # A healthy kicked target running fine says nothing about the overdue one that never ran.
+    deployed(world, targets=(7, 9), require_found=True)
+    world.db.runs = [{'id': 98, 'target_id': 7, 'status': 'ok', 'found': 3, 'error': None}]
+    world.db.resolve()
+    world.tick()
+    state = world.state()
+    assert state.phase == 'done' and state.attempts[0].outcome == 'unverified'
+    assert world.kinds() == ['unverified'] and 'faltan [9]' in world.notify.sent[0]['text']
+
+
+def test_a_monitor_closure_after_every_kicked_target_ran_well_is_fixed(world):
+    deployed(world, targets=(7, 9), require_found=True)
+    world.db.runs = [{'id': 98, 'target_id': 7, 'status': 'ok', 'found': 3, 'error': None},
+                     {'id': 99, 'target_id': 9, 'status': 'ok', 'found': 1, 'error': None}]
+    world.db.resolve()
+    world.tick()
+    assert world.state().attempts[0].outcome == 'verified' and world.kinds() == ['fixed']
 
 
 def test_done_state_reopens_when_the_monitor_keeps_reporting(world):
@@ -767,6 +834,312 @@ def test_resumes_a_deploy_cut_after_the_push(world):
     assert world.state().deploy['stage'] == 'live'
 
 
+# --------------------------------------------------------------------------------------
+# Cut or uncertain publication: a later tick settles it from origin/main and the VPS
+# --------------------------------------------------------------------------------------
+
+def test_a_tick_killed_during_the_push_is_settled_by_landed_on_the_next_one(world):
+    world.db.add()
+    world.git.push_error = Killed()
+    world.git.landed_fix = FIX   # the push reached origin before the process died
+    with pytest.raises(Killed):
+        world.tick()
+    state = world.state()
+    assert state.phase == 'deployed' and state.deploy == {'stage': 'pushing', 'run_id': state.attempts[0].run_id,
+                                                          'local': 'd' * 40}
+    world.git.push_error = None
+    world.clock.advance(minutes=5)
+    world.tick()
+    assert world.args('git.landed') == [(state.attempts[0].run_id, None)]
+    assert in_order(world.names(), ['git.landed', 'git.parent', 'vps.deploy', 'vps.restart', 'db.kick'])
+    assert 'claude.run' not in world.names() and 'git.push' not in world.names()
+    state = world.state()
+    assert state.deploy['stage'] == 'live' and state.deploy['commit'] == FIX and state.attempts[0].commit == FIX
+
+
+def test_a_push_killed_before_it_landed_fails_the_attempt_on_the_next_tick(world):
+    world.db.add()
+    world.git.push_error = Killed()
+    with pytest.raises(Killed):
+        world.tick()
+    world.git.push_error = None
+    world.clock.advance(minutes=5)
+    world.db.claim = lambda owner: None
+    world.tick()
+    state = world.state()
+    assert state.phase == 'waiting' and state.attempts[0].outcome == 'publish_failed' and state.deploy is None
+    assert 'vps.deploy' not in world.names() and world.notify.sent == []
+
+
+def test_a_push_that_raised_but_landed_goes_live(world):
+    world.db.add()
+    world.git.push_error = GitError('push sin confirmar (sin respuesta en 180s); después git fetch origin: sin respuesta')
+    world.git.landed_fix = FIX
+    world.tick()
+    assert in_order(world.names(), ['git.push', 'git.landed', 'vps.deploy', 'vps.restart', 'db.kick'])
+    state = world.state()
+    assert state.phase == 'deployed' and state.deploy['stage'] == 'live' and state.attempts[0].commit == FIX
+    assert 'git.revert' not in world.names()
+
+
+def test_a_push_whose_outcome_is_unknown_waits_for_origin(world):
+    world.db.add()
+    world.git.push_error = GitError('git push origin HEAD:main: sin respuesta en 180s')
+    world.git.landed_error = GitError('git fetch origin: sin respuesta en 180s')
+    summary = world.tick()
+    state = world.state()
+    assert state.phase == 'deployed' and state.deploy['stage'] == 'pushing'
+    assert not summary['ok'] and 'no se sabe si el arreglo llegó a main' in summary['errors'][0]
+    assert world.kinds() == ['bot_error'] and 'vps.deploy' not in world.names()
+    world.clock.advance(minutes=5)
+    world.git.push_error = world.git.landed_error = None
+    world.git.landed_fix = FIX
+    world.tick()
+    assert world.args('vps.deploy') == [(FIX, BASE)] and world.state().deploy['stage'] == 'live'
+
+
+def test_a_rollback_cut_after_the_revert_push_is_finished_on_the_next_tick(world):
+    deployed(world)
+    world.db.runs = [{'id': 99, 'target_id': 7, 'status': 'failed', 'found': 0, 'error': 'HTTP 403'}]
+    world.vps.deploys = [Killed()]   # dies while deploying the revert
+    with pytest.raises(Killed):
+        world.tick()
+    state = world.state()
+    assert state.phase == 'deployed' and state.deploy['stage'] == 'reverted' and state.deploy['revert'] == REVERT
+    assert world.notify.sent == []
+    world.clock.advance(minutes=5)
+    world.tick()
+    assert world.args('vps.deploy') == [(REVERT, FIX)] and world.names().count('vps.restart') == 1
+    assert 'git.revert' not in world.names() and 'git.push' not in world.names()
+    state = world.state()
+    assert state.phase == 'waiting' and state.attempts[0].outcome == 'rolled_back'
+    assert 'HTTP 403' in state.attempts[0].detail and world.kinds() == ['rollback']
+
+
+def test_a_revert_push_cut_short_is_not_pushed_twice(world):
+    deployed(world)
+    world.db.runs = [{'id': 99, 'target_id': 7, 'status': 'failed', 'found': 0, 'error': 'HTTP 403'}]
+    world.git.push_error = Killed()
+    with pytest.raises(Killed):
+        world.tick()
+    assert world.state().deploy['stage'] == 'reverting'
+    world.git.push_error = None
+    world.git.landed_revert = REVERT   # it reached origin
+    world.clock.advance(minutes=5)
+    world.tick()
+    assert world.args('git.landed') == [('run-1', FIX)]
+    assert not {'git.revert', 'git.push'} & set(world.names())
+    assert world.args('vps.deploy') == [(REVERT, FIX)] and world.kinds() == ['rollback']
+    assert world.state().attempts[0].outcome == 'rolled_back'
+
+
+def test_a_revert_push_cut_before_it_landed_is_redone(world):
+    deployed(world)
+    world.db.runs = [{'id': 99, 'target_id': 7, 'status': 'failed', 'found': 0, 'error': 'HTTP 403'}]
+    world.git.push_error = Killed()
+    with pytest.raises(Killed):
+        world.tick()
+    world.git.push_error = None
+    world.clock.advance(minutes=5)
+    world.tick()
+    assert in_order(world.names(), ['git.landed', 'git.sync', 'git.revert', 'git.push', 'vps.deploy', 'vps.restart'])
+    assert world.kinds() == ['rollback'] and world.state().deploy['revert'] == REVERT
+
+
+def test_a_revert_push_that_raised_but_landed_goes_on(world):
+    deployed(world)
+    world.db.runs = [{'id': 99, 'target_id': 7, 'status': 'failed', 'found': 0, 'error': 'HTTP 403'}]
+    world.git.push_error = GitError('git push origin HEAD:main: sin respuesta en 180s')
+    world.git.landed_revert = REVERT
+    world.tick()
+    assert world.args('vps.deploy') == [(REVERT, FIX)] and world.kinds() == ['rollback']
+    assert world.state().attempts[0].outcome == 'rolled_back'
+
+
+def test_an_unpublish_cut_after_the_revert_push_ends_in_its_email(world):
+    world.vps.deploys = [{'ok': False, 'code': 'pending_changes', 'reason': 'hay cambios sin desplegar'}]
+    world.db.add()
+    world.db.needs_input = lambda incident_id, note: (_ for _ in ()).throw(Killed())   # dies in to_person
+    with pytest.raises(Killed):
+        world.tick()
+    assert world.state().deploy['stage'] == 'reverted' and world.notify.sent == []
+    del world.db.needs_input
+    world.clock.advance(minutes=5)
+    world.tick()
+    assert 'vps.deploy' not in world.names() and 'git.revert' not in world.names()
+    state = world.state()
+    assert state.phase == 'needs_input' and state.attempts[0].outcome == 'deploy_blocked'
+    assert world.kinds() == ['deploy_blocked'] and 'el VPS no cambió' in world.notify.sent[0]['text']
+
+
+@pytest.mark.parametrize('stage', ['reverting', 'reverted'])
+def test_a_closed_incident_with_a_revert_in_flight_is_never_fixed(world, stage):
+    state = deployed(world)
+    state.deploy.update(stage=stage, undo={'kind': 'rollback', 'why': 'la corrida 99 falló', 'label': 'verificación fallida',
+                                           'deploy_it': True, 'blocked': False})
+    if stage == 'reverted':
+        state.deploy['revert'] = REVERT
+    world.store.save(state)
+    world.git.landed_revert = REVERT
+    world.db.runs = [{'id': 100, 'target_id': 7, 'status': 'ok', 'found': 3, 'error': None}]
+    world.db.resolve()
+    world.tick()
+    assert world.kinds() == ['rollback'] and 'El monitor ya cerró el incidente.' in world.notify.sent[0]['text']
+    assert world.args('vps.deploy') == [(REVERT, FIX)] and 'git.revert' not in world.names()
+    state = world.state()
+    assert state.phase == 'done' and state.attempts[0].outcome == 'rolled_back'
+
+
+def test_a_closed_incident_with_a_push_cut_short_reports_the_commit_on_main(world):
+    world.seed('deployed', [tried(1, None)], deploy={'stage': 'pushing', 'run_id': 'run-1', 'local': 'd' * 40})
+    world.git.landed_fix = FIX
+    world.db.resolve()
+    world.tick()
+    state = world.state()
+    assert state.phase == 'done' and state.attempts[0].commit == FIX and state.deploy['stage'] == 'pushed'
+    assert world.kinds() == ['deploy_blocked'] and FIX in world.notify.sent[0]['text']
+    assert 'vps.deploy' not in world.names()
+
+
+def test_unknown_deploy_state_never_reverts_and_retries(world):
+    world.vps.deploys = [{'ok': False, 'code': 'unknown_state', 'head': None,
+                          'reason': 'el VPS no respondió en 180s; no se pudo releer el HEAD del VPS'}]
+    world.db.add()
+    world.tick()
+    state = world.state()
+    assert state.phase == 'deployed' and state.deploy['stage'] == 'pushed' and state.attempts[0].outcome is None
+    assert not {'git.revert', 'vps.restart', 'db.kick'} & set(world.names()) and world.notify.sent == []
+    world.clock.advance(minutes=5)
+    world.tick()
+    assert world.args('vps.deploy') == [(FIX, BASE)] and world.state().deploy['stage'] == 'live'
+
+
+def test_unknown_deploy_state_goes_to_a_person_without_a_revert(world):
+    deployed(world, stage='pushed')
+    unknown = {'ok': False, 'code': 'unknown_state', 'head': None, 'reason': 'sin respuesta'}
+    world.vps.deploys = [dict(unknown)]
+    world.tick()
+    world.clock.advance(seconds=world.settings.verify_timeout_s)
+    world.vps.deploys = [dict(unknown)]
+    world.tick()
+    state = world.state()
+    assert state.phase == 'needs_input' and state.attempts[0].outcome == 'deploy_blocked'
+    assert world.kinds() == ['deploy_blocked'] and 'no lo revirtió' in world.notify.sent[0]['text']
+    assert 'git.revert' not in world.names() and world.db.rows[INCIDENT]['status'] == 'needs_input'
+
+
+def test_a_resumed_deploy_that_cannot_reach_the_vps_does_not_revert_blind(world):
+    deployed(world, stage='pushed')   # an earlier tick may have deployed it before dying
+    world.vps.deploys = [{'ok': False, 'code': 'ssh_error', 'head': None, 'reason': 'ssh terminó con código 255'}]
+    world.tick()
+    assert 'git.revert' not in world.names() and world.state().deploy['stage'] == 'pushed'
+
+
+def test_a_failed_deploy_on_a_vps_that_contains_the_fix_reverts_it_there_too(world):
+    world.vps.deploys = [{'ok': False, 'code': 'moved', 'head': LATER, 'contains': True,
+                          'reason': 'el checkout del VPS cambió mientras se desplegaba'}]
+    world.db.add()
+    world.tick()
+    assert world.args('vps.deploy') == [(FIX, BASE), (REVERT, FIX)]
+    assert world.state().attempts[0].outcome == 'publish_failed' and world.kinds() == ['rollback']
+
+
+def test_a_resumed_deploy_onto_a_vps_already_past_the_fix_goes_live(world):
+    deployed(world, stage='pushed')   # someone deployed main by hand meanwhile
+    world.vps.deploys = [{'ok': True, 'code': 'already', 'prev_head': LATER, 'head': LATER, 'contains': True}]
+    world.tick()
+    assert 'git.revert' not in world.names() and in_order(world.names(), ['vps.deploy', 'vps.restart', 'db.kick'])
+    assert world.state().deploy['stage'] == 'live' and world.state().deploy['prev_head'] == LATER
+
+
+def test_a_dirty_vps_that_already_has_the_fix_is_not_reverted(world):
+    world.vps.deploys = [{'ok': False, 'code': 'dirty', 'head': FIX, 'contains': True,
+                          'reason': 'el checkout del VPS tiene cambios sin commitear: worker/config.py'}]
+    world.db.add()
+    world.tick()
+    assert not {'git.revert', 'vps.restart', 'db.kick'} & set(world.names())
+    state = world.state()
+    assert state.phase == 'needs_input' and state.attempts[0].outcome == 'deploy_blocked'
+    assert world.kinds() == ['deploy_blocked']
+    text = world.notify.sent[0]['text']
+    assert 'ya tiene el arreglo' in text and 'el VPS no cambió' not in text
+
+
+def test_a_failing_target_in_the_middle_of_a_run_is_the_one_verified(world):
+    world.db.targets = [{'id': n, 'make': 'Ford', 'model': f'm{n}', 'query': {}} for n in (1, 2, 3, 4, 5, 17)]
+    world.db.running = [1, 0]   # target 17's retry is running when the fix is deployed
+
+    def failing_targets(source):
+        world.db.call('failing_targets', source)
+        return [] if world.db.running[0] else [17]   # what the old query answered mid-run
+    world.db.failing_targets = failing_targets
+    world.db.runs = [*({'id': n, 'target_id': n, 'status': 'ok', 'found': 3, 'error': None} for n in range(1, 6)),
+                     {'id': 17, 'target_id': 17, 'status': 'failed', 'found': 0, 'error': 'HTTP 403'}]
+    world.db.add()
+    world.tick()
+    assert in_order(world.names(), ['vps.deploy', 'db.running_runs', 'db.failing_targets', 'vps.restart'])
+    assert world.args('db.kick') == [('kavak', [17])]
+    assert world.state().attempts[0].outcome == 'rolled_back' and world.kinds() == ['rollback']
+
+
+# --------------------------------------------------------------------------------------
+# The launcher runs from its own clone; Claude's clone is left clean
+# --------------------------------------------------------------------------------------
+
+def test_the_launcher_clone_is_updated_last_in_every_tick_and_never_in_a_dry_run(world):
+    world.db.add()
+    world.tick()
+    assert world.names().count('git.update_launcher') == 1 and world.names()[-1] == 'git.update_launcher'
+    world.db.error = RuntimeError('el pooler no respondió')
+    world.tick()
+    assert world.names()[-1] == 'git.update_launcher'   # a failed tick still updates
+    world.db.error = None
+    world.tick(dry_run=True)
+    assert 'git.update_launcher' not in world.names()
+
+
+def test_a_launcher_that_cannot_update_is_reported_once_a_day(world):
+    world.git.launcher_error = GitError('lanzador: C:/automotive-bot/launcher tiene cambios locales; no se actualiza')
+    first = world.tick()
+    assert not first['ok'] and 'actualización del lanzador' in first['errors'][0]
+    world.db.error = RuntimeError('el pooler no respondió')
+    second = world.tick()
+    assert [(email['incident_id'], email['kind']) for email in world.notify.sent] == [
+        ('launcher', 'bot_error'), ('bot', 'bot_error')]   # its own daily budget: other errors still reach the owner
+    assert 'no se actualizó el lanzador' in world.notify.sent[0]['subject'] and len(second['errors']) == 2
+    world.clock.advance(days=1)
+    world.db.error = None
+    world.tick()
+    assert [email['incident_id'] for email in world.notify.sent] == ['launcher', 'bot', 'launcher']
+
+
+@pytest.mark.parametrize('result, change', [
+    (success('no_fix'), {}),
+    (success('external'), {}),
+    (success('needs_human', human_action='Renovar la sesión'), {}),
+    (success('recovered'), {}),
+    (failure('timeout'), {}),
+    (failure('rate_limited'), {}),
+    (success(), {'tests_problem': 'la suite de tests falló: salió con código 1'}),
+    (success(), {'push_error': GitError('push: origin/main avanzó y el arreglo no se pudo reaplicar encima')}),
+])
+def test_an_attempt_that_publishes_nothing_leaves_a_clean_clone(world, result, change):
+    world.claude.results = [result]
+    for key, value in change.items():
+        setattr(world.git, key, value)
+    world.db.add()
+    world.tick()
+    assert world.state().attempts[0].commit is None
+    assert in_order(world.names(), ['git.sync', 'claude.run', 'git.sync']) and not world.git.dirty
+
+
+def test_an_attempt_that_raises_after_the_session_still_cleans_the_clone(world):
+    world.db.add()
+    world.git.changed_paths = lambda: (_ for _ in ()).throw(GitError('git diff: falló'))
+    summary = world.tick()
+    assert not summary['ok'] and not world.git.dirty and world.names().count('git.sync') == 2
+
+
 def test_dry_run_has_no_side_effects(world):
     deployed(world)
     world.seed('waiting', [tried(1)], incident_id=OTHER, source='autocity', minutes=5)
@@ -838,11 +1211,11 @@ def test_busy_lock_skips_the_tick(world):
     assert world.names() == [] and 'otra instancia' in summary['skipped']
 
 
-def test_disabled_does_nothing(tmp_path):
+def test_disabled_does_nothing_but_keep_the_launcher_current(tmp_path):
     world = World(tmp_path, enabled=False)
     world.db.add()
     summary = world.tick()
-    assert world.names() == [] and 'pausado' in summary['skipped']
+    assert world.names() == ['git.update_launcher'] and 'pausado' in summary['skipped'] and summary['ok']
 
 
 def test_summary_is_json(world):
@@ -926,6 +1299,10 @@ def test_importing_the_launcher_reads_nothing():
 # python -m repairbot
 # --------------------------------------------------------------------------------------
 
+def no_sleep_call(state):
+    """Stands in for SetThreadExecutionState: tests make no real power calls."""
+
+
 @pytest.fixture
 def cli(tmp_path, monkeypatch):
     from repairbot import __main__ as module
@@ -948,7 +1325,7 @@ def test_main_runs_one_tick_and_prints_one_json_line(cli, capsys):
         calls.append((settings, dry_run))
         return {'ok': True, 'dry_run': dry_run, 'actions': [], 'claude_runs': 0, 'errors': []}
 
-    assert cli.main(['--config', str(cli.config_path), '--dry-run'], tick=fake_tick) == 0
+    assert cli.main(['--config', str(cli.config_path), '--dry-run'], tick=fake_tick, awake=no_sleep_call) == 0
     out = capsys.readouterr().out
     assert out.count('\n') == 1 and json.loads(out)['dry_run'] is True
     settings, dry_run = calls[0]
@@ -959,7 +1336,7 @@ def test_main_runs_one_tick_and_prints_one_json_line(cli, capsys):
 
 def test_main_exit_code_is_2_on_internal_errors(cli, capsys):
     summary = {'ok': False, 'actions': [], 'errors': ['tick: RuntimeError: x']}
-    assert cli.main(['--config', str(cli.config_path)], tick=lambda settings, dry_run: summary) == 2
+    assert cli.main(['--config', str(cli.config_path)], tick=lambda settings, dry_run: summary, awake=no_sleep_call) == 2
     assert json.loads(capsys.readouterr().out)['errors'] == ['tick: RuntimeError: x']
     assert cli.main(['--config', str(cli.config_path.parent / 'missing.json')]) == 2
     assert json.loads(capsys.readouterr().out)['error'].startswith('config: FileNotFoundError')
@@ -973,6 +1350,17 @@ def test_main_status(cli, capsys):
     def broken(settings):
         raise RuntimeError('sin base')
     assert cli.main(['--config', str(cli.config_path), '--status'], status=broken) == 2
+
+
+def test_the_launcher_clone_defaults_to_the_bot_home(cli, tmp_path):
+    from repairbot.settings import load
+
+    assert load(cli.config_path).launcher == tmp_path / 'home' / 'launcher'   # a config.json from before it
+    config = json.loads(cli.config_path.read_text(encoding='utf-8'))
+    cli.config_path.write_text(json.dumps({**config, 'launcher': str(tmp_path / 'lanzador')}), encoding='utf-8')
+    settings = load(cli.config_path)
+    assert settings.launcher == tmp_path / 'lanzador' and isinstance(settings.launcher, Path)
+    assert Settings(**{**settings.__dict__, 'launcher': None}).launcher == tmp_path / 'home' / 'launcher'
 
 
 def test_setup_logging_rotates_in_the_state_dir_once(tmp_path):
@@ -1062,8 +1450,14 @@ def test_vps_and_git_facades_pass_the_runner_through(world, monkeypatch):
     monkeypatch.setattr(vps, 'deploy', lambda settings, sha, base, **kw: seen.append(('deploy', kw)) or {'ok': True})
     monkeypatch.setattr(vps, 'restart_worker', lambda settings, **kw: seen.append(('restart', kw)) or {'ok': True})
     monkeypatch.setattr(gitops, 'sync', lambda repo, **kw: seen.append(('sync', kw)) or HEAD)
+    monkeypatch.setattr(gitops, 'landed', lambda repo, run_id, **kw: seen.append(('landed', repo, run_id, kw)) or FIX)
+    monkeypatch.setattr(gitops, 'update_launcher', lambda path, **kw: seen.append(('launcher', path, kw)) or HEAD)
     assert bot.Vps(world.settings, runner).deploy(FIX, BASE) == {'ok': True}
     assert bot.Vps(world.settings, runner).restart() == {'ok': True}
     assert bot.Git(world.settings, runner).sync() == HEAD
+    assert bot.Git(world.settings, runner).landed('run-1', reverts=FIX) == FIX
+    assert bot.Git(world.settings, runner).update_launcher() == HEAD
     assert seen == [('deploy', {'runner': runner}), ('restart', {'runner': runner}),
-                    ('sync', {'settings': world.settings, 'runner': runner})]
+                    ('sync', {'settings': world.settings, 'runner': runner}),
+                    ('landed', world.settings.repo, 'run-1', {'reverts': FIX, 'runner': runner}),
+                    ('launcher', world.settings.home / 'launcher', {'settings': world.settings, 'runner': runner})]

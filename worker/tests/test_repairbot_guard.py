@@ -55,7 +55,9 @@ ALLOWED = [
         'git blame -L10,20 worker/collectors/kavak.py', 'git ls-files worker/tests', 'git rev-parse HEAD',
         'git rev-parse --abbrev-ref HEAD', 'git branch --show-current', 'git add -A',
         'git add worker/tests/fixtures/html/x.html', 'git restore worker/collectors/kavak.py',
-        'git restore --staged .', 'git restore --source=HEAD~1 worker/collectors/kavak.py', 'git stash list',
+        'git restore --staged worker/collectors/kavak.py', 'git restore -SW -q -- worker/http_clients.py',
+        'git restore worker/tests/fixtures/html/x.html worker/collectors/kavak.py', "git restore 'worker/tests/*'",
+        'cd worker/collectors && git restore kavak.py', 'git stash list',
     ),
     # --- readers on files inside root
     *bash(
@@ -141,6 +143,25 @@ BLOCKED = [
         'git show HEAD:../../../x', "git diff ':(top)../x'", 'git log --author /c/Users/a', 'git add -p',
         'git add -i', 'git add -e', 'git add --pathspec-from-file=x', 'git add .env', 'git restore -p',
         'git blame --contents /c/Users/x a', 'git ls-files -X /c/Users/x', 'git diff -C', 'git log -c',
+    ),
+    # --- git restore: only the session's own edits (no other source), only where Edit and Write may
+    *bash(
+        'git restore --source=HEAD~1 worker/collectors/kavak.py', 'git restore --source HEAD~1 worker/collectors/x.py',
+        'git restore -s HEAD~1 worker/collectors/kavak.py', 'git restore -sHEAD~1 worker/collectors/kavak.py',
+        'git restore -Ws HEAD~1 worker/collectors/kavak.py', 'git restore -WsHEAD~1 worker/collectors/kavak.py',
+        'git restore --sour=HEAD~1 worker/collectors/kavak.py', 'git restore --so HEAD~1 worker/collectors/kavak.py',
+        'git restore --staged --source=HEAD~5 worker/collectors/kavak.py', 'git restore --overlay worker/tests/x',
+        'git restore --source=HEAD~5 worker/repairbot/bot.py', 'git restore --worktree --source=HEAD~5 worker/config.py',
+        'git restore worker/repairbot/bot.py', 'git restore worker/config.py', 'git restore worker/main.py',
+        'git restore worker/collectors/kavak.py worker/repairbot/settings.py', 'git restore -- worker/repairbot/bot.py',
+        'git restore .', 'git restore worker/', 'git restore worker', 'git restore --staged .', "git restore '*'",
+        "git restore 'worker/*'", "git restore 'worker/tests*'", 'git restore worker/tests/../repairbot/bot.py',
+        'cd worker/collectors && git restore ../repairbot/bot.py', 'cd worker && git restore config.py',
+        "git restore ':/worker/repairbot/bot.py'", "git restore ':(top)worker/repairbot/bot.py'",
+        "git restore ':!worker/tests'", 'git restore .gitignore', 'git restore worker/tests/.env',
+        'git restore worker/tests/.git/config', 'git restore /c/Users/Juan/x', 'git restore ../x',
+        'git restore --pathspec-from-file=worker/tests/list.txt', 'git restore --merge worker/collectors/kavak.py',
+        'git restore --ours worker/collectors/kavak.py', 'git restore --conflict=merge worker/collectors/kavak.py',
     ),
     # --- python: only -m with the four modules
     *bash(
@@ -338,6 +359,10 @@ def test_relative_paths_start_from_the_hook_cwd(cwd, command, allowed):
     ('Bash', {'command': '/usr/bin/python3 -m pytest -q'}, True),
     ('Bash', {'command': 'cd worker && cat ../README.md > tests/out.txt'}, True),
     ('Bash', {'command': 'cd worker; echo x > tests/out.txt'}, False),   # if the cd failed that is root/tests
+    ('Bash', {'command': 'git restore worker/tests/a.py'}, True),
+    ('Bash', {'command': 'git restore worker/repairbot/bot.py'}, False),
+    ('Bash', {'command': "git restore ':/worker/repairbot/bot.py'"}, False),   # no ':' check on POSIX
+    ('Bash', {'command': 'git restore -s HEAD~1 worker/tests/a.py'}, False),
     ('Read', {'file_path': '/srv/bot/repo/a'}, True),
     ('Write', {'file_path': '/srv/bot/repo/worker/tests/a.py', 'content': ''}, True),
     ('Bash', {'command': 'cat /etc/passwd'}, False),

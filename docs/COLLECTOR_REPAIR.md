@@ -24,9 +24,9 @@ El modelo lee datos no confiables (errores de corridas, HTML de terceros), así 
 
 ## El ciclo (cada 5 minutos)
 
-1. Lock de instancia única (`state\bot.lock`). Si otra instancia corre, sale sin hacer nada. Con `"enabled": false` en `config.json`, también.
+1. Lock de instancia única (`state\bot.lock`). Si otra instancia corre, sale sin hacer nada. Con `"enabled": false` en `config.json` no hace nada más que el último paso.
 2. Carga del `.env` del checkout principal **solo** `DATABASE_URL`, `RESEND_API_KEY`, `EMAIL_FROM`, `PLATFORM_HEALTH_EMAIL` y `WEB_BASE_URL`.
-3. Lee los incidentes activos. Los estados locales cuyo incidente ya se cerró pasan a `done` (si había un arreglo desplegado sin verificar, avisa la recuperación). Para cada incidente del bot (`thread_id` `claude-bot:<run_id>`):
+3. Lee los incidentes activos. Los estados locales cuyo incidente ya se cerró pasan a `done`, después de cerrar lo que hubiera en curso (ver "Publicación, verificación y rollback"). Para cada incidente del bot (`thread_id` `claude-bot:<run_id>`):
    - **desplegado**: verifica sin Claude (ver abajo);
    - **en espera** con `retry_after` vencido e intentos disponibles: queda para un intento;
    - **intentos agotados** (3 por defecto): `needs_input` en la cola y email "me rendí";
@@ -34,6 +34,9 @@ El modelo lee datos no confiables (errores de corridas, HTML de terceros), así 
    - en `needs_input` en la base: no lo toca, lo tiene una persona.
 4. Si no hay un intento pendiente, reclama el incidente pendiente más viejo (dueño `claude-repair-bot`, solo con un snapshot de salud fresco) y lo asocia en el acto; queda `open` y nadie más lo toma.
 5. Como máximo **una sesión de Claude por tick** y 6 por día. Después de un límite de uso de la suscripción no abre sesiones hasta que se libera.
+6. Al final de cada tick (también si falló o está pausado; nunca con `--dry-run`) avanza el clon del lanzador (`launcher\`) a `origin/main`, solo por fast-forward: el tick siguiente corre el código nuevo de `main`. Si no puede (cambios o commits locales en ese clon, otro `origin`, GitHub sin respuesta), sigue con el código que tenía, lo anota en `state\bot.log` y manda un `bot_error` "no se actualizó el lanzador" como máximo una vez por día, aparte de los otros errores.
+
+Mientras corre un tick, la PC no entra en suspensión por inactividad (cerrar la tapa la suspende igual).
 
 ## Un intento
 
@@ -47,7 +50,9 @@ El modelo lee datos no confiables (errores de corridas, HTML de terceros), así 
 | `external` | Sitio caído o 5xx temporal: espera (`retry_in_minutes` acotado entre 15 minutos y 24 horas; si no viene, 30 min / 2 h / 6 h) y reintenta. |
 | `needs_human` | Captcha, sesión o credenciales vencidas, bloqueo, o un arreglo fuera del alcance: `needs_input` con la acción concreta + email. |
 | `recovered` | La fuente ya anda: `done`; el monitor cierra el incidente. Si una hora después sigue abierto, se reabre. |
-| `no_fix`, error, timeout | Intento fallido; reintento a los 30 min / 2 h / 6 h. Lo que quedó en el clon se descarta en el próximo `sync`. |
+| `no_fix`, error, timeout | Intento fallido; reintento a los 30 min / 2 h / 6 h. |
+
+Todo intento que no llega a pushear (cualquier `outcome` salvo un `fixed` publicado, también un error o un límite de uso) termina con un `sync` del clon de Claude: lo que dejó la sesión se descarta en el acto, no en el intento siguiente.
 
 ### Compuertas antes de publicar (las corre el lanzador, no Claude)
 
@@ -60,17 +65,20 @@ El modelo lee datos no confiables (errores de corridas, HTML de terceros), así 
 
 ### Publicación, verificación y rollback
 
-- Commit `fix(<fuente>): <resumen>` con `Repair-Incident` y `Repair-Run`, push a `origin/main` (con rebase si `main` avanzó; un conflicto es un intento fallido).
-- Deploy: en el VPS, como `automotive`, `git fetch` + `merge --ff-only` del commit + `py_compile` de lo cambiado. Si el VPS tiene commits de `main` sin desplegar que tocan `worker/` o `supabase/`, se niega. Nunca `reset --hard`, `checkout --` ni `clean` en el VPS.
-- Si el deploy no se puede hacer, el commit se revierte en `main` en el acto: `main` nunca queda adelantado a lo desplegado sin avisar. Un rechazo que necesita una persona (checkout sucio, cambios pendientes, host equivocado) termina en `needs_input` + email `deploy_blocked`.
-- Espera hasta 5 minutos a que no haya corridas en curso de esa fuente, reinicia el worker, comprueba que quede estable y recién ahí "patea" los targets fallidos (`next_run_at = now()`): las corridas posteriores ya usan el código nuevo. Sin targets fallidos (parser sin avisos, búsqueda vencida) patea hasta 5 targets activos y exige que traigan avisos.
-- Verificación: una corrida `ok` posterior al deploy en cada target pateado → **verificado** + email. Una corrida `failed` → **rollback** (revert + push + deploy + reinicio) + email, y el intento cuenta como fallido. Sin corridas concluyentes en 25 minutos → **sin verificar** + email (no se revierte; se reintenta con el arreglo puesto). La verificación sigue hasta 10 minutos dentro del mismo tick y continúa en los siguientes. Si el monitor cierra el incidente antes, cuenta como recuperado.
-- Si el tick se corta entre el push y el deploy, el siguiente retoma el deploy.
+- Commit `fix(<fuente>): <resumen>` con `Repair-Incident` y `Repair-Run`, push a `origin/main` (con rebase si `main` avanzó; un conflicto es un intento fallido). Un push que da error puede haber llegado igual (la respuesta se perdió): el bot busca en `origin/main` el commit con el `Repair-Run` del intento. Si está, sigue con el deploy; si no, el intento es `publish_failed`; si GitHub no contesta, vuelve a mirar en el próximo tick (y avisa con `bot_error`).
+- Deploy: en el VPS, como `automotive`, `git fetch` + `merge --ff-only` del commit + `py_compile` de lo cambiado. Si el VPS ya contiene el commit (está en él o en un commit posterior de `main`), no toca nada y sigue (`already`). Si el VPS tiene commits de `main` sin desplegar que tocan `worker/` o `supabase/`, se niega. Nunca `reset --hard`, `checkout --` ni `clean` en el VPS.
+- Si el deploy no se puede hacer, el commit se revierte en `main` en el acto, y también en el VPS cuando el VPS ya lo tenía: `main` nunca queda adelantado a lo desplegado sin avisar. Un rechazo que necesita una persona (checkout sucio, cambios pendientes, host equivocado) termina en `needs_input` + email `deploy_blocked`; si el VPS ya tenía el arreglo (checkout sucio sobre ese commit), no se revierte nada y el worker no se reinicia.
+- Si la respuesta del deploy se pierde y el VPS tampoco contesta después en qué commit quedó (`unknown_state`), el bot **no revierte a ciegas**: vuelve a desplegar en los ticks siguientes (si el commit ya está, sigue) y, pasados 25 minutos sin confirmarlo, deja `needs_input` + `deploy_blocked` sin revertir. Lo mismo cuando un tick retoma un deploy cortado y el VPS no responde.
+- Espera hasta 5 minutos a que no haya corridas en curso de esa fuente y recién ahí elige los targets fallidos: los que tienen su última corrida terminada en `failed` (aunque ya tengan un reintento en curso) o una corrida trabada. Reinicia el worker, comprueba que quede estable y los "patea" (`next_run_at = now()`): las corridas posteriores ya usan el código nuevo. Sin targets fallidos (parser sin avisos, búsqueda vencida) patea hasta 5 targets activos y exige que traigan avisos.
+- Verificación: una corrida `ok` posterior al deploy en cada target pateado → **verificado** + email. Una corrida `failed` → **rollback** (revert + push + deploy + reinicio) + email, y el intento cuenta como fallido. Sin corridas concluyentes en 25 minutos → **sin verificar** + email (no se revierte; se reintenta con el arreglo puesto). La verificación sigue hasta 10 minutos dentro del mismo tick y continúa en los siguientes.
+- Si el monitor cierra el incidente antes, cuenta como **verificado** (`fixed`) solo si cada target pateado tuvo una corrida `ok` (con avisos, si se exigían) después del deploy; si no, queda **sin verificar** + email `unverified`. Patear una búsqueda vencida alcanza para que el monitor deje de verla, aunque todavía no haya corrido.
+- Cada paso queda en `state\<incidente>.json` antes de hacerse (`deploy.stage`: `pushing` → `pushed` → `live`; para deshacer, `reverting` → `reverted`). Si el tick se corta (límite de 90 minutos, reinicio, suspensión), el siguiente lo retoma: confirma el push, hace el deploy o termina el revert (deploy del revert, reinicio si el arreglo había quedado andando y el email `rollback` o `deploy_blocked`). Un revert también se busca por su `Repair-Run` antes de repetirlo. Si el monitor cierra el incidente con un revert a medias, el bot lo termina igual y nunca lo informa como `fixed`.
 
 ## Modelo de seguridad
 
 - **Claude no tiene secretos**: su entorno es una lista blanca, sin `DATABASE_URL` ni claves; tampoco `git push`, `ssh` libre, red propia ni PowerShell.
 - **Guard** (`worker/repairbot/guard.py`, hook `PreToolUse` de todas las herramientas): lista permitida, bloquea por defecto y ante cualquier duda. Lecturas solo dentro del clon; escrituras solo en el alcance permitido; Bash solo con los programas y opciones listados. Los hooks corren una copia del guard fuera del clon.
+- **El lanzador no corre el clon de Claude**: la tarea corre desde `launcher\worker`, un clon aparte que el guard no deja leer ni editar a la sesión y que solo avanza por fast-forward a `main`. Lo que deja una sesión sin revisar nunca se importa en el proceso que tiene las claves.
 - **Fail-closed**: `claude -p` ignora en silencio un settings inválido, así que el lanzador mata la sesión si antes de `init` no vio el canario del guard, o si `init` no muestra `dontAsk`, ninguna MCP y exactamente las herramientas pedidas.
 - **Compuertas y rollback** (arriba) son la segunda línea. Cada deploy termina en un email, y también cada rechazo o rendición.
 - `vps.probe` lleva al VPS solo código dentro del alcance permitido y lo corre como `automotive`, sin ingesta, con tope de 8 probes por intento. Mercado Libre no se prueba así (el worker tiene tomado su perfil de Chrome).
@@ -78,19 +86,20 @@ El modelo lee datos no confiables (errores de corridas, HTML de terceros), así 
 ## Dónde vive cada cosa
 
 - `C:\automotive-bot\` (fuera del checkout del dueño):
-  - `config.json`: configuración sin secretos (rutas, topes, `enabled`). Una clave desconocida es un error.
-  - `repo\`: clon dedicado de GitHub. Se resetea a `origin/main` antes de cada intento: no editarlo a mano.
-  - `state\`: `<incidente>.json` (fase, intentos, deploy), `events.jsonl` (reclamos, sesiones, errores, límites), `bot.log` (rotativo, 2 MB × 5) y `bot.lock`.
+  - `config.json`: configuración sin secretos (rutas, topes, `enabled`). Una clave desconocida es un error. `launcher` es opcional: sin ella, el clon del lanzador es `<home>\launcher`.
+  - `repo\`: clon de GitHub donde trabaja Claude. Se resetea a `origin/main` antes de cada intento y después de uno que no publicó nada: no editarlo a mano.
+  - `launcher\`: otro clon de GitHub, el código que corre la tarea programada. El bot lo avanza a `main` al final de cada tick y nunca lo resetea: no editarlo a mano (con cambios locales deja de actualizarse y avisa).
+  - `state\`: `<incidente>.json` (fase, intentos, deploy), `events.jsonl` (reclamos, sesiones, errores, límites), `bot.log` (rotativo, 2 MB × 5), `bot.lock` y `bot-bootstrap.log` (lo que falla antes de que exista `bot.log`).
   - `runs\<run_id>\`: `prompt.md`, `system_prompt.md`, `settings.json`, `guard.py`, `guard.log`, `stream.jsonl`, `stderr.log` y `probe-<n>.json`.
 - VPS: staging de probes en `/opt/automotive/.repairbot/<run_id>/`, ignorado por git y borrado al final de cada intento.
 
 ## Instalar y activar
 
-1. Incorporar `worker/repairbot/` y `worker/tools/repro_target.py` a `main`: el bot corre el código de `main` desde su clon.
+1. Incorporar `worker/repairbot/` y `worker/tools/repro_target.py` a `main`: el bot corre el código de `main` desde su clon del lanzador.
 2. `claude auth status` tiene que decir `loggedIn` con el `claude.exe` nativo (no el `.cmd`).
 3. `ssh -o BatchMode=yes automotive-vps true` tiene que andar sin contraseña.
-4. Desde la raíz del checkout principal: `powershell -ExecutionPolicy Bypass -File ops\install-repairbot.ps1` (parámetros `-BotHome`, `-Python`, `-EnvFile`, `-Claude`, `-GitBash`). Es idempotente: crea el home, clona, copia `user.name`/`user.email`, escribe `config.json` solo si no existe y registra `\AutoMotive\RepairBot` (cada 5 minutos, `pythonw -m repairbot --config ...`, límite de 90 minutos, sin instancias superpuestas).
-5. Probar sin efectos desde `C:\automotive-bot\repo\worker`: `python -m repairbot --dry-run` y `python -m repairbot --status`.
+4. Desde la raíz del checkout principal: `powershell -ExecutionPolicy Bypass -File ops\install-repairbot.ps1` (parámetros `-BotHome`, `-Python`, `-EnvFile`, `-Claude`, `-GitBash`). Es idempotente: crea el home y los dos clones (`repo\` y `launcher\`, carpetas separadas y sin el `.env`), copia `user.name`/`user.email` al de Claude, escribe `config.json` solo si no existe (si existe, toma sus rutas) y registra `\AutoMotive\RepairBot` (cada 5 minutos, `pythonw -m repairbot --config ...` desde `launcher\worker`, límite de 90 minutos, sin instancias superpuestas). Una instalación anterior se actualiza corriéndolo otra vez: agrega `launcher\` y apunta la tarea ahí.
+5. Probar sin efectos desde `C:\automotive-bot\launcher\worker`: `python -m repairbot --dry-run` y `python -m repairbot --status`.
 6. Desactivar en Codex la automatización **Reparar collectors en Revisar**: las dos no pueden consumir la misma cola.
 
 ## Pausar y desinstalar
@@ -101,7 +110,7 @@ El modelo lee datos no confiables (errores de corridas, HTML de terceros), así 
 ## Leer lo que pasó
 
 - `python -m repairbot --status`: incidentes activos (saneados), estado local y sesiones del día. `--dry-run`: qué haría el próximo tick.
-- Cada tick deja una línea JSON en `state\bot.log`; el código de salida es 2 si hubo un error interno.
+- Cada tick deja una línea JSON en `state\bot.log`; el código de salida es 2 si hubo un error interno. Lo que falla antes de que exista ese log (un `config.json` roto, argumentos inválidos, un log que no se puede abrir) deja una línea con fecha en `<carpeta de config.json>\state\bot-bootstrap.log` (normalmente `C:\automotive-bot\state\`) o, si esa carpeta no se puede escribir, en `%LOCALAPPDATA%\repairbot\bot-bootstrap.log`.
 - Emails (uno por incidente, tipo e intento): `fixed`, `rollback`, `unverified`, `needs_input`, `gave_up`, `deploy_blocked` y `bot_error` (como máximo uno por día). Cada deploy termina en exactamente uno de `fixed`, `rollback`, `unverified` o `deploy_blocked`.
 - Resultado de cada intento en `state\<incidente>.json`: `verified`, `deployed` (esperando verificación), `rolled_back`, `unverified`, `gate_failed`, `publish_failed`, `deploy_blocked`, `external`, `needs_human`, `recovered`, `no_fix`, `timeout`, `max_turns`, `no_output`, `error`, `guard_inactive` / `init_mismatch` (configuración del guard: también manda `bot_error`), `rate_limited` (no consume intento) y `lost` (estado adoptado). `detail` tiene el motivo del lanzador.
 - La cola a mano, desde `worker/` del checkout principal: `python -m tools.collector_repairs list` (también `context <uuid>` y `needs-input <uuid> --note "..."`). Estados: `pending`, `dispatching`, `open`, `needs_input`, `resolved`, `cancelled`.
@@ -115,8 +124,8 @@ El modelo lee datos no confiables (errores de corridas, HTML de terceros), así 
   where id = '<uuid>' and resolved_at is null and status = 'needs_input';
   ```
 
-- **`deploy_blocked`**: el VPS tiene parches en caliente, commits de `main` sin desplegar que tocan `worker/` o `supabase/`, o respondió otro host; o un revert no se pudo hacer solo. Commitear los parches en `main` o desplegar a mano (abajo) y después devolver el incidente como arriba. El email dice si quedó un commit del bot en `main` sin desplegar.
-- **`bot_error`**: ver `state\bot.log`. Causas típicas: Claude Code sin sesión (`claude auth login`), VPS o GitHub inalcanzables, `DATABASE_URL` ausente, el guard que no arrancó.
+- **`deploy_blocked`**: el VPS tiene parches en caliente, commits de `main` sin desplegar que tocan `worker/` o `supabase/`, o respondió otro host; un deploy quedó sin confirmar (`unknown_state`: no se sabe si el VPS tiene el arreglo, y el bot no lo revirtió); o un revert no se pudo hacer o desplegar solo. Mirar en qué commit está el VPS (`python -m repairbot.vps status`), commitear los parches en `main` o desplegar a mano (abajo) y después devolver el incidente como arriba. El email dice si quedó un commit del bot en `main` sin desplegar.
+- **`bot_error`**: ver `state\bot.log`. Causas típicas: Claude Code sin sesión (`claude auth login`), VPS o GitHub inalcanzables (un push sin confirmar se vuelve a mirar solo en el próximo tick), `DATABASE_URL` ausente, el guard que no arrancó. Con el asunto "no se actualizó el lanzador": el clon `launcher\` tiene cambios o commits locales, u otro `origin`; dejarlo igual a `origin/main` a mano (`git -C C:\automotive-bot\launcher status`).
 
 ## Desplegar main a mano
 
@@ -143,7 +152,7 @@ Si `status` muestra archivos modificados, son parches en caliente: commitearlos 
 
 ## Riesgos residuales
 
-- **No hay sandbox de sistema operativo** en Windows: el guard reduce el riesgo, no lo elimina. Un test escrito por el modelo corre con los permisos del usuario de Windows (sin las claves del bot en su entorno, pero puede leer archivos del usuario).
+- **No hay sandbox de sistema operativo** en Windows: el guard reduce el riesgo, no lo elimina. Un test escrito por el modelo corre con los permisos del usuario de Windows (sin las claves del bot en su entorno, pero puede leer y escribir archivos del usuario, el clon del lanzador incluido: si lo cambia, el lanzador deja de actualizarse y avisa, pero el código cambiado ya corre).
 - **Push directo a `main`** sin revisión humana: un arreglo malo llega a producción y se revierte solo si una corrida posterior falla. Un arreglo "sin verificar" queda desplegado.
 - **El probe es ejecución remota de código** dentro del alcance permitido, como `automotive` y con el `.env` de producción del VPS.
 - **Inyección por datos de terceros**: el prompt cerca y marca los datos no confiables, pero un modelo puede equivocarse; las compuertas limitan qué puede salir de eso.

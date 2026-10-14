@@ -64,6 +64,7 @@ LOGS = r'''
 '''
 
 # Facts only: the launcher decides. Nothing in the working tree changes here.
+# contains=1: HEAD is the commit or descends from it (a commit the VPS lacks is in no history of it).
 DEPLOY_INSPECT = r'''
 host=$(hostname)
 printf 'hostname=%s\n' "$host"
@@ -71,9 +72,12 @@ printf 'hostname=%s\n' "$host"
 cd __ROOT__
 head=$(sudo -u automotive -H git rev-parse HEAD)
 printf 'head=%s\n' "$head"
+contains=0
+if sudo -u automotive -H git merge-base --is-ancestor __SHA__ "$head" 2>/dev/null; then contains=1; fi
+printf 'contains=%s\n' "$contains"
 dirty=$(sudo -u automotive -H git status --porcelain --untracked-files=no)
 if [ -n "$dirty" ]; then printf '%s\n' "$dirty" | sed 's/^/dirty=/'; exit 0; fi
-[ "$head" != __SHA__ ] || exit 0
+[ "$contains" = 0 ] || exit 0
 sudo -u automotive -H env GIT_TERMINAL_PROMPT=0 timeout 120 git fetch --quiet origin
 for commit in __SHA__ __BASE__; do
   sudo -u automotive -H git cat-file -e "$commit^{commit}" 2>/dev/null || { echo missing=1; exit 0; }
@@ -101,6 +105,16 @@ if ! output=$(sudo -u automotive -H git diff --name-only --diff-filter=ACMR -z _
   echo fail=py_compile; detail "$output"; exit 0
 fi
 echo done=1
+'''
+
+# Where the checkout is after an apply whose answer was lost or said nothing about it.
+DEPLOY_HEAD = r'''
+[ "$(hostname)" = __HOSTNAME__ ] || { echo fail=wrong_host; exit 0; }
+cd __ROOT__
+head=$(sudo -u automotive -H git rev-parse HEAD)
+contains=0
+if sudo -u automotive -H git merge-base --is-ancestor __SHA__ "$head" 2>/dev/null; then contains=1; fi
+printf '%s\n' "head=$head" "contains=$contains"
 '''
 
 RESTART = r'''
@@ -396,47 +410,85 @@ def probe(settings, repo: Path, source: str, *, target_id: int | None, filters: 
 
 def deploy(settings, sha: str, base: str, **kw) -> dict:
     """Fast-forward the VPS checkout from `base` to `sha` (already pushed). No restart here.
-    Returns {ok, prev_head, head, reason, code}; a refusal or an unreachable VPS is ok=False."""
+    Returns {ok, code, reason, prev_head, head, contains}; a refusal or an unreachable VPS is ok=False.
+    head is the VPS HEAD as last read and contains says whether it is sha or descends from it, so
+    `head == sha or contains` tells whether the VPS has the fix, whatever the code. A VPS that
+    already contains sha is 'already' (ok). With head None the HEAD is unknown: 'ssh_error' and
+    'wrong_host' changed nothing, while 'unknown_state' means the merge was sent but neither its
+    answer nor a second read came back: the VPS may or may not be on sha (contains False then
+    means unknown, not no)."""
     sha, base = _checked(_SHA, sha, 'sha'), _checked(_SHA, base, 'base')
-    result = {'ok': False, 'prev_head': None, 'head': None, 'reason': '', 'code': ''}
+    result = {'ok': False, 'prev_head': None, 'head': None, 'contains': False, 'reason': '', 'code': ''}
 
     def done(code: str, reason: str, ok: bool = False) -> dict:
         result.update(ok=ok, code=code, reason=reason)
         return result
 
+    def settle(code: str, reason: str, *, lost: bool = False) -> dict:
+        """The apply's answer does not say where the checkout ended up: ask again. With `lost`
+        the apply may still be running on the VPS (ssh gave up, the remote script did not), so
+        a HEAD still at prev proves nothing: that is 'unknown_state', never a failure."""
+        try:
+            facts = _facts(_call(settings, DEPLOY_HEAD, kw, sha=sha))
+            why = _one(facts, 'fail') or ('' if _SHA.fullmatch(_one(facts, 'head')) else 'respuesta sin HEAD')
+        except VpsError as error:
+            why = str(error) or type(error).__name__
+        if why:
+            result.update(head=None, contains=False)
+            return done('unknown_state', f'{reason}; no se pudo releer el HEAD del VPS ({why}): '
+                                         f'puede haber quedado o no en {sha[:12]}')
+        head = _one(facts, 'head')
+        result.update(head=head, contains=head == sha or _one(facts, 'contains') == '1')
+        if lost and not result['contains']:
+            return done('unknown_state', f'{reason}; el VPS sigue en {head[:12]}, pero el merge pudo '
+                                         'quedar en curso: puede terminar o no en ' + sha[:12])
+        return done(code, f'{reason} (el VPS está en {head[:12]})')
+
     try:
         facts = _facts(_call(settings, DEPLOY_INSPECT, kw, timeout=240, sha=sha, base=base))
-        host, prev = _one(facts, 'hostname'), _one(facts, 'head')
-        if host != settings.vps_hostname:
-            return done('wrong_host', f'el servidor respondió como {host[:60]!r}, no como {settings.vps_hostname}')
-        if not _SHA.fullmatch(prev):
-            return done('ssh_error', 'el VPS no informó su HEAD')
-        result.update(prev_head=prev, head=prev)
-        if dirty := facts.get('dirty'):
-            return done('dirty', 'el checkout del VPS tiene cambios sin commitear: '
-                        + ', '.join(line[3:] for line in dirty[:10]))
-        if prev == sha:
-            return done('already', 'el commit ya estaba desplegado', ok=True)
-        if 'missing' in facts:
-            return done('missing_commit', 'el VPS no encuentra el commit en origin (¿falta el push?)')
-        if _one(facts, 'on_main') != '1':
-            return done('not_on_main', 'el commit no está en origin/main')
-        blocking = [name for name in (line.strip('"') for line in facts.get('pending', []))
-                    if name.startswith(('worker/', 'supabase/'))]
-        if prev != base and blocking:
-            return done('pending_changes', 'hay cambios sin desplegar que requieren a una persona: '
-                        + ', '.join(blocking[:10]))
-        facts = _facts(_call(settings, DEPLOY_APPLY, kw, timeout=180, sha=sha, prev=prev))
-        result['head'] = _one(facts, 'head') or prev
-        if failure := _one(facts, 'fail'):
-            detail = _safe(_decoded(facts, 'detail'), 600) if 'detail' in facts else ''
-            reason = _DEPLOY_FAILURES.get(failure, f'el deploy falló: {failure}')
-            return done(failure, f'{reason}: {detail}' if detail else reason)
-        if 'done' not in facts or result['head'] != sha:
-            return done('ssh_error', 'el VPS no confirmó el deploy')
-        return done('deployed', '', ok=True)
-    except (VpsError, ValueError) as error:
+    except VpsError as error:
         return done('ssh_error', str(error) or type(error).__name__)
+    host, prev = _one(facts, 'hostname'), _one(facts, 'head')
+    if host != settings.vps_hostname:
+        return done('wrong_host', f'el servidor respondió como {host[:60]!r}, no como {settings.vps_hostname}')
+    if not _SHA.fullmatch(prev):
+        return done('ssh_error', 'el VPS no informó su HEAD')
+    result.update(prev_head=prev, head=prev, contains=prev == sha or _one(facts, 'contains') == '1')
+    if dirty := facts.get('dirty'):
+        return done('dirty', 'el checkout del VPS tiene cambios sin commitear: '
+                    + ', '.join(line[3:] for line in dirty[:10]))
+    if result['contains']:
+        return done('already', 'el commit ya estaba desplegado' if prev == sha
+                    else f'el VPS ya contiene el commit (está en {prev[:12]})', ok=True)
+    if 'missing' in facts:
+        return done('missing_commit', 'el VPS no encuentra el commit en origin (¿falta el push?)')
+    if _one(facts, 'on_main') != '1':
+        return done('not_on_main', 'el commit no está en origin/main')
+    blocking = [name for name in (line.strip('"') for line in facts.get('pending', []))
+                if name.startswith(('worker/', 'supabase/'))]
+    if prev != base and blocking:
+        return done('pending_changes', 'hay cambios sin desplegar que requieren a una persona: '
+                    + ', '.join(blocking[:10]))
+    try:
+        facts = _facts(_call(settings, DEPLOY_APPLY, kw, timeout=180, sha=sha, prev=prev))
+    except VpsError as error:   # the merge may have run before the answer was lost
+        return settle('ssh_error', str(error) or type(error).__name__, lost=True)
+    failure, head = _one(facts, 'fail'), _one(facts, 'head')
+    reason = _DEPLOY_FAILURES.get(failure, f'el deploy falló: {failure}')
+    if failure in ('wrong_host', 'dirty'):   # stopped before the merge: the checkout is still at prev
+        return done(failure, reason)
+    if not _SHA.fullmatch(head):
+        return settle(failure or 'ssh_error', reason if failure else 'el VPS no confirmó el deploy')
+    result.update(head=head, contains=head == sha)   # the merge only ever moves HEAD from prev to sha
+    if failure:
+        try:
+            detail = _safe(_decoded(facts, 'detail'), 600) if 'detail' in facts else ''
+        except ValueError:
+            return done('ssh_error', f'{reason}; el detalle llegó ilegible')
+        return done(failure, f'{reason}: {detail}' if detail else reason)
+    if 'done' not in facts or head != sha:
+        return done('ssh_error', 'el VPS no confirmó el deploy')
+    return done('deployed', '', ok=True)
 
 
 def restart_worker(settings, **kw) -> dict:

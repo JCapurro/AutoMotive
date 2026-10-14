@@ -5,9 +5,10 @@
 Nothing is written: no collector_runs row, no listings, no geocode_cache. The
 database is only read (two SELECTs) and only with --target-id, to build the
 filters the scheduler would use; the pool is closed before the collector runs.
-k=v pairs are the collector's filters (tools.scraper_cli); with --target-id
-they override the target's. --timeout S (default 270, 0 = none) cancels a
-search that hangs, so the browsers are always closed.
+k=v pairs are the collector's filters, typed the way the scheduler types them:
+text (modelo=208 too) except the numeric bounds and published_today_only; with
+--target-id they override the target's. --timeout S (default 270, 0 = none)
+cancels a search that hangs, so the browsers are always closed.
 
 Exit codes: 0 ok, 2 incomplete scan, 3 blocked (login/captcha/session),
 4 network / HTTP 5xx / timeout, 1 anything else (usage errors included).
@@ -17,6 +18,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 from contextlib import redirect_stdout
+import math
 import re
 import socket
 import sys
@@ -36,7 +38,6 @@ import db
 from db.repos import targets as targets_repo
 from pipeline.crawl import scraper_filters
 from tools.collector_repairs import json_text, safe_text
-from tools.scraper_cli import _parse_kv
 
 OK, ERROR, INCOMPLETE, BLOCKED, NETWORK = 0, 1, 2, 3, 4
 # Below the callers' own limits (Claude's default Bash timeout, the VPS probe),
@@ -46,6 +47,13 @@ DEFAULT_TIMEOUT_S = 270
 TARGET_SQL = ('SELECT id, source, make, model, query, first_run_done, last_run_at '
               'FROM crawl_targets WHERE id = %s')
 _HTTP_5XX = re.compile(r'\bHTTP 5\d\d\b')
+# The filters the scheduler (pipeline.crawl.scraper_filters, collectors._recency) and the collectors
+# read as numbers or booleans. Any other key stays text, as a target's make and model do.
+_INTEGERS = frozenset({'anio_min', 'anio_max', 'km_min', 'km_max', 'publication_days', 'published_since',
+                       'publication_until'})
+_NUMBERS = frozenset({'precio_min', 'precio_max', 'origin_lat', 'origin_lon', 'radio_km'})
+_BOOLEANS = frozenset({'published_today_only'})
+_TRUTH = {'true': True, '1': True, 'si': True, 'sí': True, 'false': False, '0': False, 'no': False}
 
 
 class ReproTimeout(TimeoutError):
@@ -120,7 +128,7 @@ async def reproduce(args: argparse.Namespace) -> tuple[dict[str, Any], int]:
     started = time.monotonic()
     try:
         filters = await target_filters(args.source, args.target_id) if args.target_id is not None else {}
-        filters.update(_parse_kv(args.filters))
+        filters.update(args.filters)
         items = await _search(args.source, filters, args.timeout)
         complete = bool(getattr(items, 'complete', True))
         result.update(
@@ -160,10 +168,26 @@ class _Parser(argparse.ArgumentParser):
         self.exit(ERROR, f'{self.prog}: {message}\n')
 
 
-def _pair(value: str) -> str:
-    if not value.partition('=')[0].strip() or '=' not in value:
-        raise argparse.ArgumentTypeError(f'se esperaba clave=valor, no {value!r}')
-    return value
+def _pair(text: str) -> tuple[str, Any]:
+    key, equals, value = text.partition('=')
+    key, value = key.strip(), value.strip()
+    if not equals or not key:
+        raise argparse.ArgumentTypeError(f'se esperaba clave=valor, no {text!r}')
+    try:
+        if key in _INTEGERS:
+            return key, int(value)
+        if key in _NUMBERS:
+            number = int(value) if value.isdigit() else float(value)
+            if not math.isfinite(number):
+                raise ValueError(value)
+            return key, number
+    except ValueError:
+        raise argparse.ArgumentTypeError(f'{key} espera un número, no {value!r}') from None
+    if key in _BOOLEANS:
+        if value.lower() not in _TRUTH:
+            raise argparse.ArgumentTypeError(f'{key} espera true o false, no {value!r}')
+        return key, _TRUTH[value.lower()]
+    return key, value
 
 
 def build_parser() -> argparse.ArgumentParser:

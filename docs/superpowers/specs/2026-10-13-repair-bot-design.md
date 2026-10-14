@@ -30,10 +30,11 @@ elimina (un test malicioso podría leer archivos del usuario). Las compuertas de
 
 - `C:\automotive-bot\` — home del bot, fuera de `C:\Users\Juan` (el guard bloquea todo `C:\Users`).
   - `config.json` — configuración sin secretos (ver `Settings`).
-  - `repo\` — clon completo dedicado de GitHub. El lanzador lo deja igual a `origin/main` antes de cada intento. Nunca se usa el checkout del usuario.
-  - `state\` — `<incident-uuid>.json`, `events.jsonl`, `bot.lock`.
+  - `repo\` — clon completo dedicado de GitHub donde trabaja Claude. El lanzador lo deja igual a `origin/main` antes de cada intento y al terminar uno que no publicó nada. Nunca se usa el checkout del usuario.
+  - `launcher\` (`Settings.launcher`) — otro clon propio de GitHub (no un worktree), del que corre la tarea programada. El guard no deja que la sesión lo lea ni lo edite; el lanzador lo avanza por fast-forward a `origin/main` al final de cada tick (`gitops.update_launcher`) y nunca lo resetea. Así el proceso que tiene las claves nunca importa código de una sesión sin revisar.
+  - `state\` — `<incident-uuid>.json`, `events.jsonl`, `bot.lock`, `bot.log`, `bot-bootstrap.log`.
   - `runs\<run_id>\` — prompt, settings generados, stream de Claude, guard.log, resultados de probes.
-- Código: paquete `worker/repairbot/` (se ejecuta desde el clon: `python -m repairbot` con cwd `repo\worker`).
+- Código: paquete `worker/repairbot/` (se ejecuta desde el clon del lanzador: `python -m repairbot` con cwd `launcher\worker`; las compuertas corren la suite en `repo\worker`).
 - VPS: staging de probes en `/opt/automotive/.repairbot/<run_id>/` (dueño `automotive`, 0700). Está ignorado por git.
 
 ## Ciclo (un tick cada 5 minutos)
@@ -45,9 +46,23 @@ elimina (un test malicioso podría leer archivos del usuario). Las compuertas de
    - estado `waiting` con `retry_after` vencido e intentos < `max_attempts` → nuevo intento.
    - intentos agotados → `needs_input` en la cola + email "me rendí" con el historial.
    - incidente del bot sin estado local (estado perdido) → se adopta con 1 intento consumido.
-   - Estados locales cuyo incidente ya está resuelto/cancelado → `done` (si había deploy sin verificar, se informa recuperación).
+   - Estados locales cuyo incidente ya está resuelto/cancelado → `done`. Con un deploy `live` sin verificar: `fixed` solo si cada target pateado tuvo una corrida `ok` (con `found > 0` si `require_found`) después de `deployed_at`; si no, intento `unverified` + email `unverified` (un kick limpia el reloj de una búsqueda vencida y el monitor cierra sin que haya corrido). Un push o un revert a medias se resuelve igual que en `verify` (abajo) y nunca se informa como `fixed`.
 4. Si no quedó un intento por correr: `claim` (dueño `claude-repair-bot`) y `attach` inmediato con `claude-bot:<run_id>`; el incidente queda `open` y nadie más lo reclama.
 5. Como máximo **un intento con Claude por tick** y `max_sessions_per_day` por día.
+6. Al final de todo tick que tomó el lock (también si falló o `enabled` es falso; nunca en `--dry-run`): `gitops.update_launcher(settings.launcher)`. Un error se registra y se avisa como `bot_error` con su propio tope de uno por día (`incident_id` `launcher`, evento `launcher_error`); el tick siguiente corre el código que había.
+
+### Etapas del deploy (`IncidentState.deploy['stage']`, fase `deployed`)
+
+Cada etapa se guarda **antes** del paso que la puede dejar a medias; un tick posterior la retoma desde `verify`:
+
+| Etapa | Qué se sabe | Al retomar |
+| --- | --- | --- |
+| `pushing` | Commit local `local`; el push pudo llegar o no. | `gitops.landed(run_id)`: sha → `pushed` y deploy; None → `publish_failed`; GitError → sigue `pushing` (error del tick). |
+| `pushed` | En `main`; el VPS no confirmó el deploy. | Deploy otra vez (`already` si ya está). |
+| `live` | Desplegado y reiniciado; en verificación. | Verificar. |
+| `reverting` | Se decidió deshacerlo (`undo`: `kind` rollback/unpublish, `why`, `label`, `deploy_it`, `blocked`); el revert pudo llegar o no. | `landed(run_id, reverts=commit)`: sha → `reverted`; None → sync + revert + push otra vez. |
+| `reverted` | Revert `revert` en `main`. | Deploy del revert si `deploy_it`, reinicio si `kind` es rollback, email `rollback` o `deploy_blocked`, fin del intento. |
+| `blocked` | Lo tiene una persona (fase `needs_input`). | — |
 
 ### Intento
 
@@ -59,16 +74,18 @@ elimina (un test malicioso podría leer archivos del usuario). Las compuertas de
    - `external` (caída/bloqueo temporal del sitio, sin cambio de código) → `waiting`, reintento con `retry_delays_s`.
    - `needs_human` (captcha, sesión vencida, credenciales, cambio fuera del alcance permitido) → `needs_input` con `human_action` + email.
    - `recovered` → `done`; el monitor cierra el incidente.
-   - `no_fix`, error, timeout, compuerta fallida → intento fallido, `waiting`. Cualquier cambio en el clon se descarta con el próximo `sync`.
+   - `no_fix`, error, timeout, compuerta fallida → intento fallido, `waiting`.
+5. Todo intento que no publicó (`attempt.commit` vacío, también si algo levantó una excepción) termina con `gitops.sync`: lo que dejó la sesión sale del clon en el acto.
 
 ### Deploy (solo lanzador)
 
 `vps.deploy(sha, base)`:
-1. `hostname` == `vps_hostname`; árbol sin modificaciones (`git status --porcelain --untracked-files=no` vacío); si no, abortar con motivo.
-2. `prev = HEAD` del VPS. Si `prev != base` (hay commits de `main` sin desplegar que no son del bot): permitido solo si `git diff --name-only prev base` no toca `worker/` ni `supabase/`; si los toca → abortar (`needs_input`: "hay cambios sin desplegar que requieren a una persona").
-3. `git fetch origin` + `git merge --ff-only <sha>` como `automotive`; verificar `HEAD == sha`; `python -m py_compile` de los `.py` cambiados.
-4. `restart_worker`: esperar hasta `wait_idle_s` a que no haya corridas `running` de la fuente afectada (consulta en la base desde la PC), patear targets, `systemctl restart`, comprobar `is-active`.
-5. Rollback = `gitops.revert` + push + `deploy` del revert.
+1. `hostname` == `vps_hostname`; árbol sin modificaciones (`git status --porcelain --untracked-files=no` vacío); si no, abortar con motivo (`dirty` informa igual el HEAD real y `contains`).
+2. `prev = HEAD` del VPS. Si `prev` es `sha` o desciende de él (`contains`), `already` (ok). Si `prev != base` (hay commits de `main` sin desplegar que no son del bot): permitido solo si `git diff --name-only prev base` no toca `worker/` ni `supabase/`; si los toca → abortar (`pending_changes`: "hay cambios sin desplegar que requieren a una persona").
+3. `git fetch origin` + `git merge --ff-only <sha>` como `automotive`; verificar `HEAD == sha`; `python -m py_compile` de los `.py` cambiados. Si la respuesta se pierde o no trae HEAD, se relee el HEAD (`DEPLOY_HEAD`); si tampoco contesta → `unknown_state` (head None: el VPS puede estar o no en `sha`).
+4. El lanzador: `vps_has_it = head == sha or contains` en todo código salvo `unknown_state`. `unknown_state` (o head None al retomar un deploy de un tick cortado) nunca revierte: queda `pushed`, se reintenta en los ticks siguientes y, pasado `verify_timeout_s` desde el primero, `needs_input` + `deploy_blocked` sin revertir. Otro rechazo → revert en `main` (y deploy del revert si `vps_has_it`); un rechazo para una persona (`dirty`, `pending_changes`, `wrong_host`) con `vps_has_it` no revierte nada (`main` no quedó adelantado) y va a `needs_input`.
+5. Esperar hasta `wait_idle_s` a que no haya corridas `running` de la fuente (consulta en la base desde la PC), recién ahí `failing_targets`, `systemctl restart` + comprobar que quede estable, y patear los targets.
+6. Rollback = `gitops.revert` + push + `deploy` del revert + reinicio, por las etapas `reverting`/`reverted`.
 
 Nunca `git reset --hard` ni `checkout --` en el VPS; nunca escribir como root dentro de `/opt/automotive` (siempre `sudo -u automotive`).
 
@@ -86,6 +103,7 @@ THREAD_PREFIX = 'claude-bot:'
 @dataclass(frozen=True)
 class Settings:
     home: Path; repo: Path; env_file: Path; python: Path; claude: Path; git_bash: Path
+    launcher: Path | None = None      # opcional en config.json; None → home/'launcher' (__post_init__)
     ssh_host: str = 'automotive-vps'
     vps_hostname: str = 'vps-6488403-x'
     vps_root: str = '/opt/automotive'
@@ -126,7 +144,8 @@ class IncidentState:
     phase: str = 'new'            # new | deployed | waiting | needs_input | done
     attempts: list[Attempt] = []
     retry_after: str | None = None
-    deploy: dict | None = None    # {commit, prev_head, deployed_at, targets: [int]}
+    deploy: dict | None = None    # {stage, commit, run_id, local, base, prev_head, deployed_at, targets: [int],
+                                  #  require_found, verify_until, unknown_since, undo, revert}; ver "Etapas del deploy"
 class Store:
     def __init__(self, state_dir: Path)
     def load(self, incident_id) -> IncidentState | None
@@ -150,7 +169,7 @@ Ante cualquier excepción o entrada que no entiende: **bloquea**.
 - Rutas (Read/Edit/Write/Glob/Grep): resueltas contra `cwd`; deben quedar dentro de `root`. Edit/Write además solo en `allowed_paths` (misma lista que `Settings`, pasada con `--allow` repetido). Bloqueados en cualquier herramienta los nombres: `.env*`, `.git/` (escritura), `.ssh`, `.claude`, `credentials`, `*_state.json`, `*chrome_profile*`, `id_*`, `*.pem`, `*.key`.
 - Bash: se rechaza si contiene `` ` ``, `$(`, `<(`, `>(`, `eval`, `exec`, redirección a archivos fuera de `root`, o here-docs. Se separa por `&&`, `||`, `;`, `|`, saltos de línea; **cada** segmento debe coincidir con la lista permitida:
   - `cd <ruta dentro de root>`, `pwd`, `ls`, `cat`, `head`, `tail`, `wc`, `grep`, `rg`, `find` (sin `-exec/-delete`), `sed -n`, `diff`, `sort`, `uniq`, `echo`, `true` — con argumentos de ruta dentro de `root`.
-  - `git` solo `status|diff|log|show|blame|ls-files|rev-parse|branch --show-current|add|restore|stash list` (sin `-C`, `-c`, `--git-dir`, `--work-tree`).
+  - `git` solo `status|diff|log|show|blame|ls-files|rev-parse|branch --show-current|add|restore|stash list` (sin `-C`, `-c`, `--git-dir`, `--work-tree`); `restore` sin `-s`/`--source`, con rutas solo dentro de `allowed_paths` (misma regla que Edit/Write).
   - `<python>` (ruta exacta configurada, o `python` a secas) solo como `-m pytest ...`, `-m py_compile ...`, `-m tools.repro_target ...`, `-m repairbot.vps (status|logs|probe) ...`. Nada de `-c`, scripts sueltos ni `-m pip`.
   - Cualquier otro programa (ssh, scp, curl, wget, powershell, cmd, node, npm, rm, mv, cp fuera de root, chmod, taskkill, schtasks, reg, net, …) → bloqueado.
 - Cada decisión se agrega a `--log` (herramienta, veredicto, motivo, comando truncado a 300 caracteres).
@@ -186,13 +205,26 @@ def diff_lines(repo: Path) -> int                # agregadas + quitadas (incluye
 def scope_violations(paths: list[str], allowed: tuple[str, ...]) -> list[str]
 def commit(repo: Path, message: str) -> str      # add -A + commit; devuelve sha
 def push(repo: Path) -> str                      # fetch; si origin/main avanzó: rebase (conflicto → abort + GitError); push origin HEAD:main; devuelve sha final
-def revert(repo: Path, sha: str, message: str) -> str
+def revert(repo: Path, sha: str, message: str, *, run_id: str | None = None) -> str   # agrega 'Repair-Revert: <sha completo>' (y 'Repair-Run' con run_id)
+def landed(repo: Path, run_id: str, *, reverts: str | None = None) -> str | None     # fetch; sha en origin/main del arreglo del run (o de su revert), o None
+def update_launcher(path: Path, *, settings=None) -> str   # fetch + merge --ff-only en el clon del lanzador; devuelve HEAD
 def commit_message(source: str, summary: str, root_cause: str, incident_id: str, run_id: str) -> str
 ```
 `sync` se niega a operar (GitError) si `repo` no es exactamente `Settings.repo` o si su `origin` no es
 el remoto de GitHub esperado: es la única función destructiva. Mensaje de commit:
 `fix(<source>): <summary>` + causa + `Repair-Incident: <uuid>` + `Repair-Run: <run_id>` +
 `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. Push con `GIT_TERMINAL_PROMPT=0`.
+
+- `push` publica exactamente un commit nuevo encima de `origin/main`: si después del rebase HEAD no
+  tiene a `origin/main` como único padre (el rebase lo vació porque `main` ya tenía el cambio, o no
+  había nada nuevo), GitError sin pushear. **Un GitError de `push` no significa que no llegó** (la
+  respuesta se pudo perder): el llamador pregunta a `landed` antes de darlo por fallido.
+- `landed` reconoce los commits por líneas exactas del mensaje: el arreglo tiene `Repair-Run: <run_id>`
+  y ninguna `Repair-Revert:`; su revert tiene las dos (`reverts` = sha completo del arreglo). Un fetch
+  fallido es GitError: el resultado es desconocido y se reintenta en otro tick.
+- `update_launcher` solo hace fast-forward y nunca resetea ni limpia: se niega (GitError `lanzador: ...`)
+  si el clon es `Settings.repo` o está dentro de él, contiene el `.env`, no es un clon propio (un
+  worktree o una subcarpeta), tiene otro `origin`, cambios locales o commits que no están en `origin/main`.
 
 ### `vps.py`
 
@@ -204,7 +236,9 @@ def status(settings, **kw) -> dict        # {hostname, head, dirty: [paths], wor
 def logs(settings, source: str, minutes: int = 180, max_lines: int = 150, **kw) -> str   # journalctl del worker filtrado por la fuente, saneado con safe_text
 def probe(settings, repo: Path, source: str, *, target_id: int | None, filters: dict | None,
           run_id: str, timeout: int = 420, **kw) -> dict
-def deploy(settings, sha: str, base: str, **kw) -> dict   # {ok, prev_head, head, reason}
+def deploy(settings, sha: str, base: str, **kw) -> dict   # {ok, code, reason, prev_head, head, contains}; ver "Deploy"
+    # code: deployed | already (ok) | dirty | pending_changes | wrong_host | missing_commit | not_on_main |
+    #       moved | ff_failed | head_mismatch | py_compile | ssh_error | unknown_state
 def restart_worker(settings, **kw) -> dict                # {ok, active}
 def cleanup(settings, run_id: str, **kw) -> None
 def main(argv=None) -> int   # CLI para Claude: SOLO `status`, `logs <source>`, `probe <source> [--target-id N] [k=v ...]`; imprime JSON
@@ -229,7 +263,7 @@ async def claim(cx, owner) -> dict | None                # db.repos.collector_re
 async def attach(cx, incident_id, token, thread) -> bool
 async def needs_input(cx, incident_id, note) -> bool
 async def incident_context(cx, incident: dict) -> dict   # tools.collector_repairs.build_context
-async def failing_targets(cx, source: str, limit: int = 5) -> list[int]   # targets activos cuya última corrida es 'failed' o lleva >30 min 'running'
+async def failing_targets(cx, source: str, limit: int = 5) -> list[int]   # targets monitoreados cuya última corrida terminada es 'failed' (aunque haya un reintento en curso) o cuya última lleva >30 min 'running'
 async def running_runs(cx, source: str) -> int           # corridas 'running' de los últimos 30 min
 async def kick(cx, source: str, target_ids: list[int]) -> list[int]       # UPDATE crawl_targets SET next_run_at = now() ... RETURNING id
 async def runs_since(cx, source: str, target_ids: list[int], since: datetime) -> list[dict]
@@ -260,7 +294,7 @@ python -m tools.repro_target <source> [--target-id N] [--no-db] [--json] [--limi
 ```python
 def send(settings, *, incident_id: str, source: str, kind: str, subject: str, text: str, n: int = 0, sender=None) -> bool
 ```
-`kind`: `fixed | needs_input | gave_up | rollback | deploy_blocked | bot_error`. Usa
+`kind`: `fixed | needs_input | gave_up | rollback | deploy_blocked | bot_error | unverified`. Usa
 `tools.platform_health.send_email` con `Idempotency-Key = repairbot-<incident>-<kind>-<n>`.
 Nunca levanta: un fallo de correo se registra y devuelve False.
 
@@ -307,6 +341,6 @@ external→retry, agotado→needs_input, adopción, tope diario, dry-run). Las c
 
 ## Operación
 
-- `ops/install-repairbot.ps1`: crea el home, el clon y `config.json`; registra `\AutoMotive\RepairBot` (cada 5 min, usuario actual, interactivo, `MultipleInstances IgnoreNew`, límite 90 min). `ops/uninstall-repairbot.ps1` la quita.
+- `ops/install-repairbot.ps1`: crea el home, los dos clones (`repo\` y `launcher\`, separados, sin el `.env` y con `.git` como carpeta) y `config.json` solo si falta (con `launcher`; uno existente decide las rutas); registra `\AutoMotive\RepairBot` con `WorkingDirectory` `<launcher>\worker` (cada 5 min, usuario actual, interactivo, `MultipleInstances IgnoreNew`, límite 90 min). `ops/uninstall-repairbot.ps1` la quita.
 - Pausar: `"enabled": false` en `config.json` o deshabilitar la tarea. Los incidentes siguen acumulándose en Postgres.
 - `docs/COLLECTOR_REPAIR.md` se reescribe para el bot.

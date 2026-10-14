@@ -55,7 +55,8 @@ class IncidentState:
     phase: str = 'new'            # new | deployed | waiting | needs_input | done
     attempts: list[Attempt] = field(default_factory=list)
     retry_after: str | None = None
-    deploy: dict | None = None    # {commit, prev_head, deployed_at, targets: [int]}
+    deploy: dict | None = None    # {stage, commit, run_id, base, prev_head, deployed_at, targets, undo, ...}:
+                                  # the stages are in repairbot.bot's docstring
     budget_from: int = 0          # attempts before this index predate the owner handing it back
 
     def counted(self) -> int:

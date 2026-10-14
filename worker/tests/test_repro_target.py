@@ -144,6 +144,28 @@ def test_options_and_filters_can_be_interleaved(cli):
     assert cli.filters == [{'marca': 'Ford', 'modelo': 'Fiesta', 'km_max': 90000}]
 
 
+def test_filters_are_typed_like_the_scheduler_types_them(cli):
+    # The scheduler hands a target's model over as text: Peugeot 208 must not reach kavak's _slug as an int.
+    code, _ = cli.invoke([], '--no-db', 'marca=Peugeot', 'modelo=208', 'version=1.6', 'ubicacion=2000',
+                         'anio_min=2015', 'anio_max= 2020 ', 'km_max=90000', 'precio_max=15000.5', 'precio_min=8000',
+                         'origin_lat=-32.95', 'radio_km=50', 'publication_days=3', 'published_today_only=true')
+    assert code == 0
+    filters, = cli.filters
+    assert {key: (type(value), value) for key, value in filters.items()} == {
+        'marca': (str, 'Peugeot'), 'modelo': (str, '208'), 'version': (str, '1.6'), 'ubicacion': (str, '2000'),
+        'anio_min': (int, 2015), 'anio_max': (int, 2020), 'km_max': (int, 90000), 'precio_max': (float, 15000.5),
+        'precio_min': (int, 8000), 'origin_lat': (float, -32.95), 'radio_km': (int, 50),
+        'publication_days': (int, 3), 'published_today_only': (bool, True)}
+
+
+def test_a_numeric_model_overrides_a_target_as_text(cli, database):
+    database.target = dict(id=3, source='kavak', make='Ford', model='Fiesta', first_run_done=True,
+                           last_run_at=None, query={})
+    cli.invoke([], '--target-id', '3', 'marca=Peugeot', 'modelo=2008', 'published_today_only=no', source='kavak')
+    assert cli.filters == [{'marca': 'Peugeot', 'modelo': '2008', 'published_today_only': False}]
+    assert type(cli.filters[0]['published_today_only']) is bool
+
+
 def test_incomplete_scan_exits_2_and_keeps_what_it_found(cli):
     partial = SearchResults([listing(1)], complete=False, reason='límite de páginas alcanzado', unknown_dates=3)
     code, out = cli.invoke(partial, '--json', '--no-db')
@@ -233,6 +255,11 @@ def test_no_db_together_with_target_id_is_rejected_before_anything_runs(cli, cap
     ['fake', '=Ford'],
     ['fake', '--limit-sample', '-1'],
     ['fake', '--target-id', 'siete'],
+    ['fake', 'anio_min=2015.5'],
+    ['fake', 'anio_min='],
+    ['fake', 'km_max=mucho'],
+    ['fake', 'precio_max=inf'],
+    ['fake', 'published_today_only=quizás'],
     [],
 ])
 def test_usage_errors_exit_1_because_2_means_incomplete(cli, monkeypatch, argv):
@@ -241,6 +268,13 @@ def test_usage_errors_exit_1_because_2_means_incomplete(cli, monkeypatch, argv):
         repro.main(argv)
     assert stopped.value.code == 1
     cli.open_pool.assert_not_called()
+
+
+def test_a_filter_with_the_wrong_type_names_the_key(cli, monkeypatch, capsys):
+    monkeypatch.setitem(repro.REGISTRY, 'fake', object)
+    with pytest.raises(SystemExit):
+        repro.main(['fake', 'km_max=90.000km'])
+    assert "km_max espera un número, no '90.000km'" in capsys.readouterr().err
 
 
 def test_target_id_builds_the_scheduler_filters_read_only(cli, database):

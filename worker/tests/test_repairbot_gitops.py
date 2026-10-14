@@ -340,7 +340,74 @@ def test_push_fast_path(env):
     sha = gitops.commit(env.repo, 'fix(kavak): precio')
     assert gitops.push(env.repo) == sha
     assert git(env.origin, 'rev-parse', 'main') == sha
-    assert gitops.push(env.repo) == sha   # nothing left to publish
+    with pytest.raises(GitError, match='único commit nuevo'):   # nothing left to publish: main is not ours
+        gitops.push(env.repo)
+    for n in (1, 2):
+        write(env.repo, 'worker/collectors/kavak.py', f'PRICE = "{n}"\nYEAR = 1\n')
+        gitops.commit(env.repo, f'fix {n}')
+    with pytest.raises(GitError, match='único commit nuevo'):   # one fix is one commit
+        gitops.push(env.repo)
+    assert git(env.origin, 'rev-parse', 'main') == sha
+
+
+@pytest.mark.parametrize('upstream', [
+    {'worker/collectors/kavak.py': 'PRICE = "new"\nYEAR = 1\n'},                       # the same patch
+    {'worker/collectors/kavak.py': 'PRICE = "new"\nYEAR = 1\n', 'docs/b.md': 'x\n'},   # a patch that includes it
+])
+def test_push_never_adopts_a_main_that_already_has_the_fix(env, upstream):
+    write(env.repo, 'worker/collectors/kavak.py', 'PRICE = "new"\nYEAR = 1\n')
+    gitops.commit(env.repo, gitops.commit_message('kavak', 'precio', '', 'inc-1', 'run-1'))
+    human = publish(env.other, 'h human fix', **upstream)
+    with pytest.raises(GitError, match='quedó vacío al rebasar: main ya lo contiene'):
+        gitops.push(env.repo)
+    assert git(env.origin, 'rev-parse', 'main') == human
+    for leftover in ('rebase-merge', 'rebase-apply', 'MERGE_HEAD'):
+        assert not (env.repo / '.git' / leftover).exists()
+    assert git(env.repo, 'status', '--porcelain') == ''
+    assert gitops.landed(env.repo, 'run-1') is None
+
+
+def losing_first_push(meanwhile=None, fetch_fails_after=False):
+    """A runner whose first push reaches origin but whose answer never comes back."""
+    lost = []
+
+    def runner(argv, **kw):
+        if lost and fetch_fails_after and argv[1] == 'fetch':
+            raise subprocess.TimeoutExpired(argv, kw['timeout'])
+        result = subprocess.run(argv, **kw)
+        if argv[1] == 'push' and not lost:
+            lost.append(result.returncode)
+            if meanwhile:
+                meanwhile()
+            raise subprocess.TimeoutExpired(argv, kw['timeout'])
+        return result
+    return runner
+
+
+def test_push_whose_answer_was_lost_returns_the_fix_even_if_main_moved_on(env):
+    write(env.repo, 'worker/collectors/kavak.py', 'PRICE = "new"\nYEAR = 1\n')
+    local = gitops.commit(env.repo, 'fix(kavak): precio')
+    assert gitops.push(env.repo, runner=losing_first_push()) == local == git(env.origin, 'rev-parse', 'main')
+
+    write(env.repo, 'worker/collectors/kavak.py', 'PRICE = "newer"\nYEAR = 1\n')
+    second = gitops.commit(env.repo, 'fix(kavak): otro precio')
+    on_top = []
+
+    def someone_pushes_on_top():
+        git(env.other, 'pull', '--quiet', '--ff-only', 'origin', 'main')
+        on_top.append(publish(env.other, 'encima', **{'docs/c.md': 'x\n'}))
+    assert gitops.push(env.repo, runner=losing_first_push(someone_pushes_on_top)) == second
+    assert git(env.origin, 'rev-parse', 'main~1') == second and git(env.origin, 'rev-parse', 'main') == on_top[0]
+
+
+def test_push_that_cannot_confirm_says_so_and_landed_settles_it(env):
+    write(env.repo, 'worker/collectors/kavak.py', 'PRICE = "new"\nYEAR = 1\n')
+    local = gitops.commit(env.repo, gitops.commit_message('kavak', 'precio', '', 'inc-1', 'run-1'))
+    with pytest.raises(GitError, match='push sin confirmar .*sin respuesta.*después git fetch'):
+        gitops.push(env.repo, runner=losing_first_push(fetch_fails_after=True))
+    assert git(env.origin, 'rev-parse', 'main') == local       # it did land
+    assert gitops.landed(env.repo, 'run-1') == local
+    assert gitops.landed(env.repo, 'run-2') is None
 
 
 def test_push_rebases_when_origin_moved(env):
@@ -409,10 +476,128 @@ def test_revert_undoes_a_published_fix(env):
     assert sha == git(env.repo, 'rev-parse', 'HEAD') != fix
     assert git(env.repo, 'rev-parse', 'HEAD~1') == fix
     assert git(env.repo, 'log', '-1', '--format=%s') == 'revert(kavak): el arreglo no recuperó la fuente'
+    for key, value in (('Repair-Incident', 'inc-1'), ('Repair-Revert', fix)):   # one trailer block
+        assert git(env.repo, 'log', '-1', f'--format=%(trailers:key={key},valueonly)') == value
     assert git(env.repo, 'diff', '--stat', env.base, 'HEAD') == ''   # same tree as before the fix
     assert not (env.repo / 'worker/tests/test_nuevo.py').exists()
     assert git(env.repo, 'status', '--porcelain') == ''
     assert gitops.push(env.repo) == sha
+
+
+def test_revert_names_the_fix_and_the_run_ahead_of_the_co_author(env):
+    write(env.repo, 'worker/collectors/kavak.py', 'PRICE = "new"\nYEAR = 1\n')
+    fix = gitops.commit(env.repo, 'fix')
+    bot_message = f'revert(kavak): deshacer {fix[:12]}\n\nRepair-Incident: inc-1\nRepair-Run: run-1\n{gitops.CO_AUTHOR}\n'
+    for bad, match in (('../x', 'run_id inválido'), ('run-2', 'otro Repair-Run')):
+        with pytest.raises(GitError, match=match):
+            gitops.revert(env.repo, fix, bot_message, run_id=bad)
+    assert git(env.repo, 'rev-parse', 'HEAD') == fix
+    gitops.revert(env.repo, fix[:12], bot_message.replace('Repair-Run: run-1\n', ''), run_id='run-1')
+    assert git(env.repo, 'log', '-1', '--format=%B').split('\n')[-4:] == [
+        'Repair-Incident: inc-1', 'Repair-Run: run-1', f'Repair-Revert: {fix}', gitops.CO_AUTHOR]
+    gitops.revert(env.repo, git(env.repo, 'rev-parse', 'HEAD'), 'revert de nuevo')
+    assert git(env.repo, 'log', '-1', '--format=%B').split('\n')[1:] == ['', f'Repair-Revert: {git(env.repo, "rev-parse", "HEAD~1")}']
+
+
+def test_landed_finds_the_fix_and_its_revert_by_their_run(env):
+    write(env.repo, 'worker/collectors/kavak.py', 'PRICE = "new"\nYEAR = 1\n')
+    gitops.commit(env.repo, gitops.commit_message('kavak', 'precio', '', 'inc-1', 'run-1'))
+    assert gitops.landed(env.repo, 'run-1') is None                       # committed, not pushed
+    fix = gitops.push(env.repo)
+    assert gitops.landed(env.repo, 'run-1') == fix
+    assert gitops.landed(env.repo, 'run-1', reverts=fix) is None
+    write(env.repo, 'docs/b.md', 'nota\n')
+    noise = gitops.commit(env.repo, 'docs: nota\n\nmenciona Repair-Run: run-1 al pasar\n\nRepair-Run: run-10\n')
+    gitops.push(env.repo)
+    assert gitops.landed(env.repo, 'run-1') == fix and gitops.landed(env.repo, 'run-10') == noise
+    message = f'revert(kavak): deshacer\n\nRepair-Incident: inc-1\nRepair-Run: run-1\n{gitops.CO_AUTHOR}\n'
+    gitops.revert(env.repo, fix, message, run_id='run-1')
+    revert = gitops.push(env.repo)
+    assert gitops.landed(env.repo, 'run-1') == fix                        # the fix, not its revert
+    assert gitops.landed(env.repo, 'run-1', reverts=fix) == revert
+    assert gitops.landed(env.repo, 'run-1', reverts=noise) is None
+
+    git(env.other, 'pull', '--quiet', '--ff-only', 'origin', 'main')    # pushed from elsewhere: landed fetches
+    elsewhere = publish(env.other, 'fix(kavak): otra\n\nRepair-Run: run-7', **{'docs/c.md': 'x\n'})
+    assert gitops.landed(env.repo, 'run-7') == elsewhere
+    for bad in ('../x', '', None, 'run 1', 'a\nb'):
+        with pytest.raises(GitError, match='run_id inválido'):
+            gitops.landed(env.repo, bad)
+    for bad in ('HEAD', fix[:12], fix.upper(), 7):
+        with pytest.raises(GitError, match='sha inválido'):
+            gitops.landed(env.repo, 'run-1', reverts=bad)
+
+
+def update(env, path, **kw) -> str:
+    return gitops.update_launcher(path, **{'settings': env.settings, 'origin_url': str(env.origin), **kw})
+
+
+@pytest.fixture
+def launcher(env):
+    return clone(env.origin, env.tmp / 'w' / 'bot home' / 'launcher')
+
+
+def test_update_launcher_fast_forwards_its_own_clone_and_nothing_else(env, launcher):
+    newest = publish(env.other, 'upstream', **{'worker/collectors/kavak.py': 'PRICE = "upstream"\nYEAR = 1\n'})
+    write(launcher, 'worker/__pycache__/kavak.cpython-312.pyc', 'bytecode')   # ignored files are not changes
+    write(env.repo, 'worker/collectors/kavak.py', 'PRICE = "claude"\n')       # Claude's edits stay where they are
+    commands = []
+
+    def recording(argv, **kw):
+        commands.append(argv[1])
+        return subprocess.run(argv, **kw)
+    assert update(env, launcher, runner=recording) == newest
+    assert git(launcher, 'rev-parse', 'HEAD') == newest and git(launcher, 'status', '--porcelain') == ''
+    assert 'upstream' in text(launcher / 'worker/collectors/kavak.py')
+    assert (launcher / 'worker/__pycache__/kavak.cpython-312.pyc').exists()
+    assert set(commands) <= {'rev-parse', 'remote', 'status', 'fetch', 'merge-base', 'merge'}
+    assert git(env.repo, 'rev-parse', 'HEAD') == env.base
+    assert text(env.repo / 'worker/collectors/kavak.py') == 'PRICE = "claude"\n'
+    assert update(env, launcher) == newest
+
+
+def test_update_launcher_refuses_anything_but_a_clean_clone_of_origin(env, launcher, monkeypatch):
+    publish(env.other, 'upstream', **{'docs/b.md': 'nuevo\n'})
+    start = git(launcher, 'rev-parse', 'HEAD')
+    git(launcher, 'worktree', 'add', '--quiet', '--detach', str(env.tmp / 'worktree'))
+    holds_env = Settings(**{**env.settings.__dict__, 'env_file': launcher / '.env'})
+    for path, kw, match in (
+            (env.repo, {}, 'clon de trabajo'),
+            (env.repo / 'worker', {}, 'clon de trabajo'),
+            (launcher / 'worker', {}, 'clon propio'),
+            (env.tmp / 'worktree', {}, 'clon propio'),
+            (launcher, {'origin_url': str(env.tmp / 'another.git')}, 'origin'),
+            (launcher, {'settings': holds_env}, '.env')):
+        with pytest.raises(GitError, match=match):
+            update(env, path, **kw)
+    monkeypatch.setenv('REPAIRBOT_CONFIG', str(env.tmp / 'missing.json'))
+    with pytest.raises(GitError, match='configuración'):
+        gitops.update_launcher(launcher, origin_url=str(env.origin))
+    assert git(env.repo, 'rev-parse', 'HEAD') == git(launcher, 'rev-parse', 'HEAD') == start
+
+    def refused(name: str, content: str) -> None:
+        with pytest.raises(GitError, match='cambios locales'):
+            update(env, launcher)
+        assert git(launcher, 'rev-parse', 'HEAD') == start and text(launcher / name) == content   # nothing discarded
+    kavak = launcher / 'worker/collectors/kavak.py'
+    original = kavak.read_bytes()
+    write(launcher, 'worker/collectors/kavak.py', 'PRICE = "a mano"\n')
+    refused('worker/collectors/kavak.py', 'PRICE = "a mano"\n')
+    kavak.write_bytes(original)
+    write(launcher, 'worker/collectors/nuevo.py', 'x = 1\n')
+    refused('worker/collectors/nuevo.py', 'x = 1\n')
+    (launcher / 'worker/collectors/nuevo.py').unlink()
+    write(launcher, 'worker/staged.py', 'y = 1\n')
+    git(launcher, 'add', 'worker/staged.py')
+    refused('worker/staged.py', 'y = 1\n')
+    git(launcher, 'rm', '--quiet', '--cached', 'worker/staged.py')
+    (launcher / 'worker/staged.py').unlink()
+
+    git(launcher, 'commit', '--quiet', '--allow-empty', '-m', 'local')
+    local = git(launcher, 'rev-parse', 'HEAD')
+    with pytest.raises(GitError, match='commits que no están en origin/main'):
+        update(env, launcher)
+    assert git(launcher, 'rev-parse', 'HEAD') == local
 
 
 def test_revert_rejects_bad_shas_and_cleans_up_after_a_conflict(env):
@@ -499,6 +684,7 @@ def test_every_git_call_is_bounded_non_interactive_and_free_of_launcher_secrets(
     publish(env.other, 'upstream', **{'docs/b.md': 'nuevo\n'})
     pushed = gitops.push(env.repo, runner=recording)
     gitops.revert(env.repo, pushed, 'revert', runner=recording)
+    assert gitops.landed(env.repo, 'run-1', runner=recording) is None
     env.sync(runner=recording)
     gitops.worktree_tar(env.repo, runner=recording)
     assert fix != pushed and len(calls) > 25

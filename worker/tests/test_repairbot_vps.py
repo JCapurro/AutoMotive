@@ -345,61 +345,87 @@ def facts(head=BASE, *lines, host=HOST) -> str:
 
 
 APPLIED = f'head={SHA}\ndone=1\n'
+LOST = subprocess.TimeoutExpired('ssh', 180)
 DEPLOY_CASES = {
-    # name: (replies, base, expected ok, code, prev_head, head, ssh calls, reason fragment)
-    'wrong hostname': (['hostname=otro-servidor\n'], BASE, False, 'wrong_host', None, None, 1, 'otro-servidor'),
-    'dirty tree': ([facts(BASE, 'dirty= M worker/collectors/kavak.py', 'dirty=M  worker/x.py')], BASE,
-                   False, 'dirty', BASE, BASE, 1, 'worker/collectors/kavak.py, worker/x.py'),
-    'prev == base': ([facts(BASE, 'on_main=1'), APPLIED], BASE, True, 'deployed', BASE, SHA, 2, ''),
+    # name: (replies, base, expected ok, code, prev_head, head, contains, ssh calls, reason fragment)
+    'wrong hostname': (['hostname=otro-servidor\n'], BASE, False, 'wrong_host', None, None, False, 1, 'otro-servidor'),
+    'dirty tree': ([facts(BASE, 'contains=0', 'dirty= M worker/collectors/kavak.py', 'dirty=M  worker/x.py')], BASE,
+                   False, 'dirty', BASE, BASE, False, 1, 'worker/collectors/kavak.py, worker/x.py'),
+    'dirty tree already on the commit': ([facts(SHA, 'contains=1', 'dirty= M worker/x.py')], BASE,
+                                         False, 'dirty', SHA, SHA, True, 1, 'worker/x.py'),
+    'dirty tree past the commit': ([facts(OTHER, 'contains=1', 'dirty= M worker/x.py')], BASE,
+                                   False, 'dirty', OTHER, OTHER, True, 1, 'worker/x.py'),
+    'prev == base': ([facts(BASE, 'on_main=1'), APPLIED], BASE, True, 'deployed', BASE, SHA, True, 2, ''),
     'undeployed docs and web only': ([facts(OTHER, 'on_main=1', 'pending=docs/COLLECTOR_REPAIR.md',
                                             'pending=web/app/page.tsx', 'pending=README.md'), APPLIED], BASE,
-                                     True, 'deployed', OTHER, SHA, 2, ''),
+                                     True, 'deployed', OTHER, SHA, True, 2, ''),
     'undeployed worker change': ([facts(OTHER, 'on_main=1', 'pending=docs/a.md', 'pending=worker/pipeline/crawl.py')],
-                                 BASE, False, 'pending_changes', OTHER, OTHER, 1,
+                                 BASE, False, 'pending_changes', OTHER, OTHER, False, 1,
                                  'requieren a una persona: worker/pipeline/crawl.py'),
     'undeployed migration': ([facts(OTHER, 'on_main=1', 'pending=supabase/migrations/20261017_x.sql')], BASE,
-                             False, 'pending_changes', OTHER, OTHER, 1, 'supabase/migrations/20261017_x.sql'),
+                             False, 'pending_changes', OTHER, OTHER, False, 1, 'supabase/migrations/20261017_x.sql'),
     'undeployed quoted worker path': ([facts(OTHER, 'on_main=1', 'pending="worker/a\\303\\261o.py"')], BASE,
-                                      False, 'pending_changes', OTHER, OTHER, 1, 'requieren a una persona'),
-    'already deployed': ([facts(SHA)], BASE, True, 'already', SHA, SHA, 1, 'ya estaba'),
-    'commit not fetched': ([facts(BASE, 'missing=1')], BASE, False, 'missing_commit', BASE, BASE, 1, 'push'),
-    'commit outside main': ([facts(BASE, 'on_main=0')], BASE, False, 'not_on_main', BASE, BASE, 1, 'origin/main'),
+                                      False, 'pending_changes', OTHER, OTHER, False, 1, 'requieren a una persona'),
+    'already deployed': ([facts(SHA, 'contains=1')], BASE, True, 'already', SHA, SHA, True, 1, 'ya estaba'),
+    'already contained by a later commit': ([facts(OTHER, 'contains=1', 'pending=worker/collectors/kavak.py')], BASE,
+                                            True, 'already', OTHER, OTHER, True, 1, 'ya contiene'),
+    'commit not fetched': ([facts(BASE, 'missing=1')], BASE, False, 'missing_commit', BASE, BASE, False, 1, 'push'),
+    'commit outside main': ([facts(BASE, 'on_main=0')], BASE, False, 'not_on_main', BASE, BASE, False, 1,
+                            'origin/main'),
     'ff failure': ([facts(BASE, 'on_main=1'),
                     f'head={BASE}\nfail=ff_failed\ndetail={b64("fatal: Not possible to fast-forward, aborting.")}\n'],
-                   BASE, False, 'ff_failed', BASE, BASE, 2, 'Not possible to fast-forward'),
+                   BASE, False, 'ff_failed', BASE, BASE, False, 2, 'Not possible to fast-forward'),
     'HEAD mismatch': ([facts(BASE, 'on_main=1'), f'head={OTHER}\nfail=head_mismatch\n'], BASE,
-                      False, 'head_mismatch', BASE, OTHER, 2, 'commit esperado'),
+                      False, 'head_mismatch', BASE, OTHER, False, 2, 'commit esperado'),
     'unconfirmed HEAD': ([facts(BASE, 'on_main=1'), f'head={OTHER}\ndone=1\n'], BASE,
-                         False, 'ssh_error', BASE, OTHER, 2, 'no confirmó'),
-    'checkout moved meanwhile': ([facts(BASE, 'on_main=1'), 'fail=moved\n'], BASE,
-                                 False, 'moved', BASE, BASE, 2, 'cambió'),
+                         False, 'ssh_error', BASE, OTHER, False, 2, 'no confirmó'),
+    'checkout moved meanwhile': ([facts(BASE, 'on_main=1'), 'fail=moved\n', f'head={OTHER}\ncontains=0\n'], BASE,
+                                 False, 'moved', BASE, OTHER, False, 3, 'cambió'),
+    'checkout moved onto the commit': ([facts(BASE, 'on_main=1'), 'fail=moved\n', f'head={OTHER}\ncontains=1\n'],
+                                       BASE, False, 'moved', BASE, OTHER, True, 3, 'cambió'),
+    'apply answer without HEAD': ([facts(BASE, 'on_main=1'), '', f'head={SHA}\ncontains=1\n'], BASE,
+                                  False, 'ssh_error', BASE, SHA, True, 3, 'no confirmó'),
     'py_compile': ([facts(BASE, 'on_main=1'),
                     f'head={SHA}\nfail=py_compile\ndetail={b64("SyntaxError: invalid syntax (kavak.py, line 3)")}\n'],
-                   BASE, False, 'py_compile', BASE, SHA, 2, 'SyntaxError'),
+                   BASE, False, 'py_compile', BASE, SHA, True, 2, 'SyntaxError'),
     'unreachable': ([(255, '', 'ssh: connect to host: Connection timed out')], BASE,
-                    False, 'ssh_error', None, None, 1, '255'),
-    'connection lost while applying': ([facts(BASE, 'on_main=1'), subprocess.TimeoutExpired('ssh', 180)], BASE,
-                                       False, 'ssh_error', BASE, BASE, 2, 'no respondió'),
-    'no HEAD reported': ([f'hostname={HOST}\n'], BASE, False, 'ssh_error', None, None, 1, 'HEAD'),
+                    False, 'ssh_error', None, None, False, 1, '255'),
+    # The merge ran but its answer was lost: the HEAD read afterwards is the truth.
+    'connection lost after the merge': ([facts(BASE, 'on_main=1'), LOST, f'head={SHA}\ncontains=1\n'], BASE,
+                                        False, 'ssh_error', BASE, SHA, True, 3, 'no respondió'),
+    # ...but a HEAD still at base proves nothing: the remote merge may still be running.
+    'connection lost before the merge': ([facts(BASE, 'on_main=1'), LOST, f'head={BASE}\ncontains=0\n'], BASE,
+                                         False, 'unknown_state', BASE, BASE, False, 3, 'pudo quedar en curso'),
+    'connection lost for good': ([facts(BASE, 'on_main=1'), LOST, (255, '', 'Connection timed out')], BASE,
+                                 False, 'unknown_state', BASE, None, False, 3, 'puede haber quedado o no'),
+    'connection lost, wrong server on the second read': ([facts(BASE, 'on_main=1'), LOST, 'fail=wrong_host\n'],
+                                                         BASE, False, 'unknown_state', BASE, None, False, 3,
+                                                         'no se pudo releer'),
+    'no HEAD reported': ([f'hostname={HOST}\n'], BASE, False, 'ssh_error', None, None, False, 1, 'HEAD'),
     'garbled detail': ([facts(BASE, 'on_main=1'), f'head={BASE}\nfail=ff_failed\ndetail=%%%\n'], BASE,
-                       False, 'ssh_error', BASE, BASE, 2, ''),
+                       False, 'ssh_error', BASE, BASE, False, 2, 'ilegible'),
 }
 
 
 @pytest.mark.parametrize('name', DEPLOY_CASES)
 def test_deploy_decision_table(name):
-    replies, base, ok, code, prev_head, head, calls, fragment = DEPLOY_CASES[name]
+    replies, base, ok, code, prev_head, head, contains, calls, fragment = DEPLOY_CASES[name]
     runner = FakeSsh(*replies)
     result = vps.deploy(settings(), SHA, base, runner=runner)
-    assert set(result) == {'ok', 'prev_head', 'head', 'reason', 'code'}
-    assert (result['ok'], result['code'], result['prev_head'], result['head']) == (ok, code, prev_head, head)
+    assert set(result) == {'ok', 'prev_head', 'head', 'contains', 'reason', 'code'}
+    assert (result['ok'], result['code'], result['prev_head'], result['head'], result['contains']) == (
+        ok, code, prev_head, head, contains)
     assert fragment in result['reason'] and bool(result['reason']) == (code != 'deployed')
     assert len(runner.calls) == calls                       # a refusal never sends the merge
     assert all(call.argv == SSH_ARGV for call in runner.calls)
     for script in runner.scripts:
         assert script.startswith('set -euo pipefail\n')
         assert not [word for word in FORBIDDEN if word in script]
+        as_automotive(script)
     assert 'merge --ff-only' not in runner.scripts[0]
+    for script in runner.scripts[2:]:                       # a second read never merges again
+        assert 'merge --ff-only' not in script and 'fetch' not in script
+        assert f'sudo -u automotive -H git merge-base --is-ancestor {SHA} "$head"' in script
 
 
 def as_automotive(script: str) -> None:
@@ -416,7 +442,9 @@ def test_deploy_scripts_follow_the_step_list():
     inspect, apply = runner.scripts
     order = [f'[ "$host" = {HOST} ] || exit 0', 'cd /opt/automotive',
              'sudo -u automotive -H git rev-parse HEAD',
+             f'sudo -u automotive -H git merge-base --is-ancestor {SHA} "$head"',   # before the dirty exit
              'sudo -u automotive -H git status --porcelain --untracked-files=no',
+             '[ "$contains" = 0 ] || exit 0',
              'sudo -u automotive -H env GIT_TERMINAL_PROMPT=0 timeout 120 git fetch --quiet origin',
              f'sudo -u automotive -H git merge-base --is-ancestor {SHA} origin/main',
              f'diff --name-only "$head" {BASE}']
@@ -894,7 +922,8 @@ def test_bash_deploy_fast_forwards_only_from_a_known_state(local):
     fix = local.publish('fix', **{'worker/collectors/kavak.py': 'PRICE = "fixed"\n'})
     write(local.root, 'untracked.txt', 'ignored by the check\n')
     result = vps.deploy(local.settings, fix, local.base, runner=local)
-    assert result == {'ok': True, 'code': 'deployed', 'prev_head': local.base, 'head': fix, 'reason': ''}
+    assert result == {'ok': True, 'code': 'deployed', 'prev_head': local.base, 'head': fix, 'contains': True,
+                      'reason': ''}
     assert local.head() == fix and (local.root / 'worker/collectors/kavak.py').read_text() == 'PRICE = "fixed"\n'
     assert (local.root / 'untracked.txt').exists()
     assert {'as-automotive git', 'as-automotive env'} <= set(local.log())
@@ -909,7 +938,8 @@ def test_bash_deploy_carries_undeployed_documentation_along(local):
     second = local.publish('fix 2', **{'worker/collectors/kavak.py': 'PRICE = "fixed twice"\n',
                                        'worker/tests/test_kavak.py': 'def test_ok():\n    assert 1\n'})
     result = vps.deploy(local.settings, second, docs, runner=local)
-    assert result == {'ok': True, 'code': 'deployed', 'prev_head': local.base, 'head': second, 'reason': ''}
+    assert result == {'ok': True, 'code': 'deployed', 'prev_head': local.base, 'head': second, 'contains': True,
+                      'reason': ''}
     assert local.head() == second and (local.root / 'docs/b.md').exists()
     no_forbidden_commands(local)
 
@@ -942,6 +972,63 @@ def test_bash_deploy_reports_a_checkout_that_cannot_fast_forward(local):
     result = vps.deploy(local.settings, fix, server_only, runner=local)
     assert (result['ok'], result['code'], result['head']) == (False, 'ff_failed', server_only)
     assert 'no es fast-forward' in result['reason'] and local.head() == server_only
+
+
+@needs_bash
+def test_bash_deploy_of_a_commit_the_vps_already_contains(local):
+    fix = local.publish('fix', **{'worker/collectors/kavak.py': 'PRICE = "fixed"\n'})
+    later = local.publish('later', **{'docs/b.md': 'nuevo\n'})
+    git(local.root, 'fetch', '--quiet', 'origin')
+    git(local.root, 'merge', '--quiet', '--ff-only', later)   # main deployed by hand past the fix
+    result = vps.deploy(local.settings, fix, local.base, runner=local)
+    assert (result['ok'], result['code'], result['prev_head'], result['head'], result['contains']) == (
+        True, 'already', later, later, True)
+    assert 'ya contiene' in result['reason'] and local.head() == later
+
+    write(local.root, 'worker/config.py', 'ROOT = 2\n')        # dirty: refused, but the head is still told
+    result = vps.deploy(local.settings, fix, local.base, runner=local)
+    assert (result['ok'], result['code'], result['head'], result['contains']) == (False, 'dirty', later, True)
+    other = local.publish('other', **{'worker/collectors/otro.py': 'x = 1\n'})
+    result = vps.deploy(local.settings, other, later, runner=local)   # not there yet: not contained
+    assert (result['code'], result['head'], result['contains']) == ('dirty', later, False)
+    no_forbidden_commands(local)
+
+
+class LostApply:
+    """The real scripts, except that the merge's answer never arrives (and, optionally, nothing after it)."""
+
+    def __init__(self, local: LocalVps, reachable_after: bool):
+        self.local, self.reachable_after, self.lost = local, reachable_after, False
+
+    def __call__(self, argv, *, input, timeout, **kw):
+        if self.lost and not self.reachable_after:
+            raise subprocess.TimeoutExpired(argv, timeout)
+        result = self.local(argv, input=input, timeout=timeout, **kw)
+        if 'merge --ff-only' in script_of(input)[0]:
+            self.lost = True
+            raise subprocess.TimeoutExpired(argv, timeout)
+        return result
+
+
+@needs_bash
+def test_bash_deploy_whose_answer_is_lost_reads_the_head_again(local):
+    fix = local.publish('fix', **{'worker/collectors/kavak.py': 'PRICE = "fixed"\n'})
+    result = vps.deploy(local.settings, fix, local.base, runner=LostApply(local, reachable_after=True))
+    assert local.head() == fix                                     # the merge did run
+    assert (result['ok'], result['code'], result['prev_head'], result['head'], result['contains']) == (
+        False, 'ssh_error', local.base, fix, True)
+    assert 'no respondió' in result['reason'] and fix[:12] in result['reason']
+    no_forbidden_commands(local)
+
+
+@needs_bash
+def test_bash_deploy_whose_answer_and_second_read_are_lost_is_unknown(local):
+    fix = local.publish('fix', **{'worker/collectors/kavak.py': 'PRICE = "fixed"\n'})
+    result = vps.deploy(local.settings, fix, local.base, runner=LostApply(local, reachable_after=False))
+    assert local.head() == fix
+    assert (result['ok'], result['code'], result['prev_head'], result['head'], result['contains']) == (
+        False, 'unknown_state', local.base, None, False)
+    assert 'puede haber quedado o no' in result['reason']
 
 
 @needs_bash

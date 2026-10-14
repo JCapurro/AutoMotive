@@ -50,15 +50,17 @@ async def incident_context(cx, incident: dict[str, Any]) -> dict[str, Any]:
 
 
 async def failing_targets(cx, source: str, limit: int = 5) -> list[int]:
-    """Monitored targets whose latest run failed or is stuck, lowest id first.
+    """Monitored targets whose latest finished run failed, also while a retry of it is running,
+    or whose latest run is stuck, lowest id first.
 
     The health check's own query is the subquery, so "monitored" and "latest
     run" (started_at desc, id desc) mean here exactly what they mean there.
+    statuses[1] is its latest 'ok' or 'failed' run.
     """
     from tools.platform_health import COLLECTORS_SQL
     rows = await (await cx.execute(
         'select id from (' + COLLECTORS_SQL + ') health where source = %(source)s and ('
-        " latest_status = 'failed' or (latest_status = 'running'"
+        " statuses[1] = 'failed' or (latest_status = 'running'"
         '   and started_at < now() - make_interval(mins => %(stalled)s)))'
         ' order by id limit %(limit)s',
         {'history': 1, 'source': source, 'stalled': STALLED_MINUTES, 'limit': limit})).fetchall()

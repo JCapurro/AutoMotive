@@ -70,11 +70,12 @@ class QueuePostgresTests(PostgresTestCase):
                 "ON CONFLICT(id) DO UPDATE SET checked_at=excluded.checked_at,checks=excluded.checks",
                 (Jsonb(checks),))
 
-    async def test_failing_targets_are_monitored_targets_whose_latest_run_failed_or_is_stuck(self):
+    async def test_failing_targets_are_monitored_targets_whose_last_finished_run_failed_or_that_are_stuck(self):
         failed = await self.target(model='Fiesta')
         recovered = await self.target(model='Focus')
         stuck = await self.target(model='Ka')
-        busy = await self.target(model='Ranger')
+        busy = await self.target(model='Ranger')             # its retry is running right now: still failing
+        rerun = await self.target(model='Territory')         # healthy and running
         await self.target(model='Kuga')                      # never ran
         inactive = await self.target(model='Mondeo', active=False)
         unmonitored = await self.target(model='Escort', monitored=False)
@@ -87,19 +88,22 @@ class QueuePostgresTests(PostgresTestCase):
         await self.add_run(stuck, 'running', minutes_ago=45)
         await self.add_run(busy, 'failed', minutes_ago=60)
         await self.add_run(busy, 'running', minutes_ago=5)
+        await self.add_run(rerun, 'failed', minutes_ago=90)
+        await self.add_run(rerun, 'ok', minutes_ago=60)
+        await self.add_run(rerun, 'running', minutes_ago=5)
         await self.add_run(inactive, 'failed', minutes_ago=5)
         await self.add_run(unmonitored, 'failed', minutes_ago=5)
         await self.add_run(elsewhere, 'failed', minutes_ago=5, source='autocosmos')
         async with db.connection() as cx:
-            self.assertEqual(await queue.failing_targets(cx, 'kavak'), [failed, stuck])
+            self.assertEqual(await queue.failing_targets(cx, 'kavak'), [failed, stuck, busy])
             self.assertEqual(await queue.failing_targets(cx, 'kavak', limit=1), [failed])
             self.assertEqual(await queue.failing_targets(cx, 'autocosmos'), [elsewhere])
             self.assertEqual(await queue.failing_targets(cx, 'facebook'), [])
-            # The same answer the health snapshot derives from its own rows.
+            # The same answer the health snapshot's own rows give: statuses holds finished runs, newest first.
             rows = await (await cx.execute(COLLECTORS_SQL, {'history': 3})).fetchall()
             now = await queue.db_now(cx)
             expected = [row['id'] for row in rows if row['source'] == 'kavak' and (
-                row['latest_status'] == 'failed' or (row['latest_status'] == 'running' and
+                row['statuses'][:1] == ['failed'] or (row['latest_status'] == 'running' and
                     now - row['started_at'] > timedelta(minutes=queue.STALLED_MINUTES)))]
             self.assertEqual(await queue.failing_targets(cx, 'kavak', limit=100), expected)
 
@@ -275,6 +279,9 @@ class QueueWiringTests(unittest.IsolatedAsyncioTestCase):
         (sql, params), = cx.statements
         self.assertIn(COLLECTORS_SQL, sql)
         self.assertTrue(sql.startswith('select id from ('))
+        # The latest finished run decides: a retry in progress does not hide a failing target.
+        self.assertIn("statuses[1] = 'failed'", sql)
+        self.assertNotIn("latest_status = 'failed'", sql)
         self.assertEqual(params, {'history': 1, 'source': 'kavak', 'stalled': 30, 'limit': 2})
         self.assertEqual(sql.count('%('), 4)   # one placeholder per parameter: none can be left unbound
 

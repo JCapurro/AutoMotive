@@ -21,17 +21,19 @@ _INHERITED = ('SystemRoot', 'WINDIR', 'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH', 'A
               'TEMP', 'TMP', 'USERNAME', 'COMSPEC', 'PATH', 'PATHEXT', 'ProgramFiles', 'ProgramFiles(x86)',
               'ProgramData')
 _PATHS = ('home', 'repo', 'env_file', 'python', 'claude', 'git_bash')
+_OPTIONAL_PATHS = ('launcher',)
 _TUPLES = ('retry_delays_s', 'allowed_paths')
 
 
 @dataclass(frozen=True)
 class Settings:
     home: Path
-    repo: Path
+    repo: Path                    # Claude's workspace: reset to origin/main around every attempt
     env_file: Path
     python: Path
     claude: Path
     git_bash: Path
+    launcher: Path | None = None  # the clone the scheduled task runs from; None: home/'launcher'
     ssh_host: str = 'automotive-vps'
     vps_hostname: str = 'vps-6488403-x'
     vps_root: str = '/opt/automotive'
@@ -49,6 +51,10 @@ class Settings:
     max_probes: int = 8
     allowed_paths: tuple[str, ...] = ('worker/collectors/', 'worker/tests/', 'worker/http_clients.py')
     enabled: bool = True
+
+    def __post_init__(self) -> None:
+        if self.launcher is None:   # configs written before the launcher had its own clone
+            object.__setattr__(self, 'launcher', Path(self.home) / 'launcher')
 
     @property
     def state_dir(self) -> Path:
@@ -69,6 +75,9 @@ def from_dict(raw: dict) -> Settings:
         if key not in values:
             raise ValueError(f'config.json: falta {key}')
         values[key] = Path(values[key])
+    for key in _OPTIONAL_PATHS:
+        if values.get(key) is not None:
+            values[key] = Path(values[key])
     for key in _TUPLES:
         if key in values:
             values[key] = tuple(values[key])

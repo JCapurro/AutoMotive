@@ -3,6 +3,11 @@
 Claude only diagnoses and edits the clone. Everything with an effect outside it (the queue,
 git, the VPS, email) happens here, through Deps, after deterministic gates. Each step saves
 the incident's local state before the next one, so a tick killed halfway resumes or reports.
+
+state.deploy['stage'] while the phase is 'deployed': pushing (the commit may or may not be on
+main: landed() decides) -> pushed (on main, the deploy not confirmed) -> live (deployed, under
+verification); reverting (the revert may or may not be on main) -> reverted (on main). 'blocked':
+a person has it. A later tick resumes any of them.
 """
 from __future__ import annotations
 
@@ -183,8 +188,14 @@ class Git:
     def revert(self, sha: str, message: str) -> str:
         return gitops.revert(self.repo, sha, message, runner=self.runner)
 
+    def landed(self, run_id: str, reverts: str | None = None) -> str | None:
+        return gitops.landed(self.repo, run_id, reverts=reverts, runner=self.runner)
+
     def parent(self, sha: str) -> str:
         return gitops.parent(self.repo, sha, runner=self.runner)
+
+    def update_launcher(self) -> str:
+        return gitops.update_launcher(self.settings.launcher, settings=self.settings, runner=self.runner)
 
 
 class Vps:
@@ -244,6 +255,10 @@ def default_deps(settings: Settings) -> Deps:
 # Helpers
 # --------------------------------------------------------------------------------------
 
+class Unsettled(RuntimeError):
+    """origin did not say whether a push landed: the stage stays and a later tick asks again."""
+
+
 def new_run_id(now: datetime) -> str:
     return f'{now.astimezone(timezone.utc):%Y%m%d-%H%M%S}-{uuid.uuid4().hex[:6]}'
 
@@ -302,17 +317,29 @@ def tick(settings: Settings, deps: Deps | None = None, *, dry_run: bool = False)
     try:
         if not settings.enabled:
             summary['skipped'] = 'el bot está pausado (enabled=false en config.json)'
-            return summary
-        deps = deps or default_deps(settings)
-        run = _Tick(settings, deps, summary)
-        run.plan() if dry_run else run.run()
+        else:
+            deps = deps or default_deps(settings)
+            run = _Tick(settings, deps, summary)
+            run.plan() if dry_run else run.run()
     except Exception as error:   # the per-incident handler missed it: setup, listing, claim
         _Tick.fail(settings, None if dry_run else deps, summary, error)   # a dry run neither mails nor writes
     finally:
-        if lock:
-            lock.release()
+        if lock:   # never in a dry run: it changes nothing, the launcher's clone included
+            try:
+                update_launcher(settings, deps, summary)
+            finally:
+                lock.release()
     summary['ok'] = not summary['errors']
     return summary
+
+
+def update_launcher(settings: Settings, deps: Deps | None, summary: dict) -> None:
+    """Fast-forward the clone the scheduled task runs from, last in every tick: the next tick runs
+    main's launcher. On failure the current code keeps running; it is mailed once a day."""
+    try:
+        (deps.git if deps else Git(settings)).update_launcher()
+    except Exception as error:
+        _Tick.fail(settings, deps, summary, error, 'actualización del lanzador', topic='launcher')
 
 
 class _Tick:
@@ -358,8 +385,10 @@ class _Tick:
                                      subject=f'Bot de reparación: {subject}', text=text, n=n)
 
     @staticmethod
-    def fail(settings: Settings, deps: Deps | None, summary: dict, error: Exception, where: str = 'tick') -> None:
-        """Log it, keep it in the summary and mail it at most once a day. Never raises."""
+    def fail(settings: Settings, deps: Deps | None, summary: dict, error: Exception, where: str = 'tick',
+             *, topic: str = 'bot') -> None:
+        """Log it, keep it in the summary and mail it at most once a day per topic ('bot', or
+        'launcher' for its own updates). Never raises."""
         detail = f'{where}: {type(error).__name__}: {_clip(error, 600)}'
         summary['errors'].append(detail)
         log.error('error en %s', where, exc_info=error)
@@ -368,16 +397,21 @@ class _Tick:
         try:
             store = deps.store or st.Store(settings.state_dir, clock=deps.clock.now)
             day = deps.clock.now().astimezone().strftime('%Y%m%d')
-            mailed = any(event.get('kind') == 'bot_error' and event.get('day') == day and event.get('mailed')
+            kind = f'{topic}_error'
+            mailed = any(event.get('kind') == kind and event.get('day') == day and event.get('mailed')
                          for event in store.events())
             sent = False
             if not mailed:
+                subject, intro = (
+                    ('no se actualizó el lanzador',
+                     f'El bot no pudo actualizar el clon desde el que corre ({settings.launcher}) y sigue con el '
+                     'código que ya tenía. Lo vuelve a intentar al final de cada tick.') if topic == 'launcher' else
+                    ('error interno', 'El bot de reparación tuvo un error y lo va a reintentar en el próximo tick.'))
                 sent = deps.notify.send(
-                    incident_id='bot', source='repairbot', kind='bot_error', n=int(day),
-                    subject='Bot de reparación: error interno',
-                    text=f'El bot de reparación tuvo un error y lo va a reintentar en el próximo tick.\n\n{detail}\n\n'
-                         'Detalle en state\\bot.log. No se manda otro aviso de este tipo hasta mañana.')
-            store.event('bot_error', day=day, mailed=bool(mailed or sent), detail=detail)
+                    incident_id=topic, source='repairbot', kind='bot_error', n=int(day),
+                    subject=f'Bot de reparación: {subject}',
+                    text=f'{intro}\n\n{detail}\n\nDetalle en state\\bot.log. No se manda otro aviso de este tipo hasta mañana.')
+            store.event(kind, day=day, mailed=bool(mailed or sent), detail=detail)
         except Exception:
             log.exception('no se pudo registrar el error')
 
@@ -441,24 +475,67 @@ class _Tick:
         return reason is None
 
     def closed(self, state: st.IncidentState) -> None:
-        """The monitor resolved or cancelled the incident."""
+        """The monitor resolved or cancelled the incident. What the bot had in flight is settled and
+        reported first; an error leaves the state as it was, for the next tick."""
         deploy = state.deploy or {}
         last = state.attempts[-1] if state.attempts else None
-        if state.phase == 'deployed' and deploy.get('stage') == 'pushed':
+        stage = deploy.get('stage') if state.phase == 'deployed' and last else None
+        if stage == 'pushing':
+            stage = self.closed_push(state, last)
+        if stage == 'pushed':
+            if not last.outcome:
+                last.outcome, last.finished_at = 'deploy_blocked', self.iso()
+                last.detail = 'el incidente se cerró con el commit en main sin un deploy confirmado'
             self.mail(state, 'deploy_blocked', f'{state.source} tiene un commit sin desplegar', [
-                f'El incidente se cerró solo, pero el commit {deploy.get("commit")} quedó en main sin desplegar '
-                '(el bot se cortó entre el push y el deploy).',
-                'Desplegalo a mano o revertilo (docs/COLLECTOR_REPAIR.md, "Desplegar main a mano").'],
-                n=last.n if last else 0)
-        elif state.phase == 'deployed':
-            if last and last.outcome == 'deployed':
-                last.outcome, last.finished_at = 'verified', self.iso()
-            self.mail(state, 'fixed', f'{state.source} funciona otra vez', [
-                'El monitor cerró el incidente con el arreglo del bot desplegado (fuente sana o retirada del monitoreo).',
-                f'Commit: {deploy.get("commit")}.'], n=last.n if last else 0)
+                f'El incidente se cerró solo, pero el commit {deploy.get("commit")} quedó en main sin un deploy '
+                'confirmado (el bot se cortó entre el push y el deploy, o el VPS no confirmó el deploy).',
+                'Desplegalo a mano o revertilo (docs/COLLECTOR_REPAIR.md, "Desplegar main a mano").'], n=last.n)
+        elif stage in ('reverting', 'reverted'):   # never 'fixed': the bot had decided to undo it
+            self.finish_revert(state, resumed=True, closing=True)
+        elif stage == 'live':
+            self.closed_live(state, last)
         state.phase, state.retry_after = 'done', None
         self.save(state)
         self.act(state, 'cerrado', 'el monitor cerró el incidente')
+
+    def closed_push(self, state: st.IncidentState, last: st.Attempt) -> str | None:
+        """The stage a push cut short really reached: 'pushed' when it is on main, else None."""
+        landed = self.landed(state, 'el tick se cortó durante el push')
+        if not landed:
+            last.outcome, last.detail, last.finished_at = 'publish_failed', 'el push no llegó a main', self.iso()
+            state.deploy = None
+            return None
+        last.commit = landed
+        state.deploy.update(commit=landed, stage='pushed')
+        return 'pushed'
+
+    def closed_live(self, state: st.IncidentState, last: st.Attempt) -> None:
+        """A closure alone verifies nothing (a kick resets an overdue search's clock): 'fixed'
+        needs a good run of every kicked target after the deploy, as in verify()."""
+        deploy = state.deploy
+        targets = deploy.get('targets') or []
+        runs = (self.db.runs_since(state.source, targets, st.parse_ts(deploy['deployed_at']))
+                if targets and deploy.get('deployed_at') else [])
+        good = sorted({run.get('target_id') for run in runs if run.get('status') == 'ok' and
+                       (not deploy.get('require_found') or (run.get('found') or 0) > 0)})
+        if targets and set(targets) <= set(good):
+            if last.outcome == 'deployed':
+                last.outcome, last.finished_at = 'verified', self.iso()
+            self.mail(state, 'fixed', f'{state.source} funciona otra vez', [
+                'El monitor cerró el incidente con el arreglo del bot desplegado, y los targets '
+                f'{good} tuvieron una corrida exitosa después del deploy.', f'Commit: {deploy.get("commit")}.'],
+                n=last.n)
+            return
+        if last.outcome == 'deployed':
+            last.outcome, last.finished_at = 'unverified', self.iso()
+            last.detail = 'el monitor cerró el incidente sin una corrida posterior al deploy de cada target'
+        missing = [target for target in targets if target not in good]
+        self.mail(state, 'unverified', f'{state.source}: incidente cerrado sin verificar el arreglo', [
+            f'El monitor cerró el incidente, pero no todos los targets pateados ({targets}) tuvieron una '
+            f'corrida exitosa después del deploy del arreglo {deploy.get("commit")}: faltan {missing}.',
+            'El cierre no prueba el arreglo: una búsqueda vencida, por ejemplo, deja de figurar apenas el bot '
+            'la vuelve a programar, aunque todavía no haya corrido.',
+            'El arreglo queda desplegado; si la fuente vuelve a fallar, el monitor abre otro incidente.'], n=last.n)
 
     def reconcile(self, incident: dict) -> st.IncidentState | None:
         """Bring the local state of a bot-owned incident up to date. Returns it when it may need a session."""
@@ -546,14 +623,25 @@ class _Tick:
         self.summary['claude_runs'] += 1
         self.act(state, 'sesión de Claude', run_id)
         try:
-            result = self.deps.claude.run(prompt=task, system_prompt=system, session_id=str(uuid.uuid4()),
-                                          run_dir=self.settings.runs_dir / run_id, deadline_s=self.claude_deadline())
-        finally:
             try:
-                self.vps.cleanup(run_id)
-            except Exception:
-                log.warning('no se limpió el staging de %s', run_id, exc_info=True)
-        self.outcome(incident, state, attempt, result)
+                result = self.deps.claude.run(prompt=task, system_prompt=system, session_id=str(uuid.uuid4()),
+                                              run_dir=self.settings.runs_dir / run_id,
+                                              deadline_s=self.claude_deadline())
+            finally:
+                try:
+                    self.vps.cleanup(run_id)
+                except Exception:
+                    log.warning('no se limpió el staging de %s', run_id, exc_info=True)
+            self.outcome(incident, state, attempt, result)
+        finally:
+            if not attempt.commit:   # nothing reached main: the session's edits leave the clone now
+                self.discard(run_id)
+
+    def discard(self, run_id: str) -> None:
+        try:
+            self.git.sync()
+        except Exception:
+            log.warning('el clon quedó con los cambios de %s: no se pudo sincronizar', run_id, exc_info=True)
 
     def claude_deadline(self) -> int:
         left = TICK_BUDGET_S - (self.now() - self.started).total_seconds() - GATES_RESERVE_S
@@ -678,20 +766,54 @@ class _Tick:
         try:
             message = gitops.commit_message(state.source, attempt.summary, attempt.root_cause,
                                             state.incident_id, attempt.run_id)
-            self.git.commit(message)
+            local = self.git.commit(message)
+        except GitError as error:
+            attempt.outcome, attempt.detail = 'publish_failed', _clip(f'commit: {error}')
+            return self.failed(state, attempt)
+        # From here on main can get the commit without push() saying so (its answer lost, the tick
+        # killed): the stage goes to disk first and landed() settles it.
+        state.phase = 'deployed'
+        state.deploy = {'stage': 'pushing', 'run_id': attempt.run_id, 'local': local}
+        self.save(state)
+        try:
             pushed = self.git.push()
         except GitError as error:
-            attempt.outcome, attempt.detail = 'publish_failed', _clip(f'commit/push: {error}')
-            return self.failed(state, attempt)
-        attempt.commit = pushed
+            return self.settle_push(incident, state, f'push: {error}')
+        self.pushed(incident, state, pushed)
+
+    def landed(self, state: st.IncidentState, why: str, *, reverts: str | None = None) -> str | None:
+        """The attempt's commit on origin/main (its revert, with `reverts`), or None. When origin does
+        not answer it raises Unsettled: the stage stays and a later tick asks again."""
+        try:
+            return self.git.landed(state.attempts[-1].run_id, reverts=reverts)
+        except GitError as error:
+            what = 'el revert' if reverts else 'el arreglo'
+            raise Unsettled(f'no se sabe si {what} llegó a main ({why}); se vuelve a mirar en el próximo '
+                            f'tick: {error}') from None
+
+    def settle_push(self, incident: dict, state: st.IncidentState, why: str, *, in_tick: bool = True) -> None:
+        """push() raised, or a tick was cut during it: a fix on main goes live, else nothing was published."""
+        attempt = state.attempts[-1]
+        landed = self.landed(state, why)
+        if landed:
+            self.act(state, 'push confirmado', f'{why}; el arreglo está en main')
+            return self.pushed(incident, state, landed, in_tick=in_tick)
+        attempt.outcome, attempt.detail = 'publish_failed', _clip(why)
+        state.deploy = None
+        return self.failed(state, attempt)
+
+    def pushed(self, incident: dict, state: st.IncidentState, sha: str, *, in_tick: bool = True) -> None:
+        attempt = state.attempts[-1]
+        attempt.commit = sha
         state.phase = 'deployed'
-        state.deploy = {'commit': pushed, 'run_id': attempt.run_id, 'stage': 'pushed'}
+        state.deploy = {'commit': sha, 'run_id': attempt.run_id, 'stage': 'pushed'}
         self.save(state)
-        self.act(state, 'pusheado', pushed)
-        self.go_live(incident, state)
+        self.act(state, 'pusheado', sha)
+        self.go_live(incident, state, in_tick=in_tick)
 
     def go_live(self, incident: dict, state: st.IncidentState, *, in_tick: bool = True) -> None:
-        """Deploy the pushed fix, restart the worker and kick the targets. Resumes a cut tick too."""
+        """Deploy the pushed fix, restart the worker and kick the targets. Resumes a cut tick too
+        (in_tick False): an earlier tick may have changed the VPS already."""
         deploy, attempt = state.deploy, state.attempts[-1]
         sha = deploy['commit']
         try:
@@ -700,20 +822,22 @@ class _Tick:
             return self.unpublish(state, f'no se pudo calcular la base del deploy: {error}', vps_has_it=False)
         result = self.vps.deploy(sha, deploy['base'])
         if not result.get('ok'):
-            reason = f'{result.get("code")}: {result.get("reason")}'
-            if result.get('code') in BLOCKING_DEPLOY:
-                return self.unpublish(state, reason, vps_has_it=False, blocked=True)
-            return self.unpublish(state, reason, vps_has_it=result.get('head') == sha)
+            code, head = result.get('code'), result.get('head')
+            reason = f'{code}: {result.get("reason")}'
+            if code == 'unknown_state' or (head is None and not in_tick):
+                return self.deploy_unknown(state, reason)
+            return self.unpublish(state, reason, vps_has_it=head == sha or bool(result.get('contains')),
+                                  blocked=code in BLOCKING_DEPLOY)
         deploy['prev_head'] = result.get('prev_head')
+        # After the wait: a failing target whose retry was running is the one to follow.
+        self.wait_idle(state.source)
         targets = self.db.failing_targets(state.source)
         require_found = not targets
         if not targets:   # parser without results or an overdue search: no failed run to follow
             context = self.db.incident_context(incident)
             targets = [row['id'] for row in context.get('targets', [])][:FALLBACK_TARGETS]
-        self.wait_idle(state.source)
         restart = self.vps.restart()
         if not restart.get('ok'):
-            deploy['stage'] = 'live'
             return self.rollback(state, f'el worker no quedó estable después del deploy: {restart.get("reason")}',
                                  label='worker inestable')
         deployed_at = self.db.now()   # runs started after this one ran the new code
@@ -728,6 +852,25 @@ class _Tick:
                         self.started + timedelta(seconds=TICK_BUDGET_S))
             self.verify(incident, state, poll_until=limit)
 
+    def deploy_unknown(self, state: st.IncidentState, reason: str) -> None:
+        """The VPS may or may not have the fix: never revert blind. Later ticks deploy again ('already'
+        when it is there); once the verification time is spent, a person looks."""
+        deploy, attempt = state.deploy, state.attempts[-1]
+        since = st.parse_ts(deploy.setdefault('unknown_since', self.iso()))
+        deploy['stage'] = 'pushed'
+        if self.now() < since + timedelta(seconds=self.settings.verify_timeout_s):
+            self.save(state)
+            return self.act(state, 'deploy sin confirmar', f'{reason}; se reintenta en el próximo tick')
+        deploy['stage'] = 'blocked'
+        attempt.outcome, attempt.finished_at = 'deploy_blocked', self.iso()
+        attempt.detail = _clip(f'deploy sin confirmar: {reason}')
+        self.to_person(state, 'deploy_blocked', f'deploy sin confirmar para {state.source}', attempt.detail, [
+            f'El arreglo {deploy["commit"]} de {state.source} está en main, pero en '
+            f'{self.settings.verify_timeout_s // 60} minutos no se pudo confirmar si el VPS lo tiene: {reason}.',
+            'El bot no lo revirtió (el VPS podría tenerlo) ni reinició el worker. Mirá en qué commit está el VPS '
+            'y desplegá main o revertí el commit a mano (docs/COLLECTOR_REPAIR.md, "Desplegar main a mano").',
+            f'Causa diagnosticada: {attempt.root_cause}'], n=attempt.n)
+
     def wait_idle(self, source: str) -> None:
         """Up to wait_idle_s for the source's runs in progress: a restart would cut them."""
         deadline = self.now() + timedelta(seconds=self.settings.wait_idle_s)
@@ -736,10 +879,17 @@ class _Tick:
 
     def verify(self, incident: dict, state: st.IncidentState, poll_until: datetime | None = None) -> None:
         deploy, attempt = state.deploy or {}, state.attempts[-1]
-        if deploy.get('stage') == 'pushed':   # the tick that pushed was cut before the deploy
+        stage = deploy.get('stage')
+        if stage == 'pushing':   # the tick was cut during the push
+            self.act(state, 'comprobando el push', deploy.get('local', ''))
+            return self.settle_push(incident, state, 'el tick se cortó durante el push', in_tick=False)
+        if stage == 'pushed':   # cut before the deploy finished, or the VPS did not confirm it
             self.act(state, 'retomando el deploy', deploy.get('commit', ''))
             return self.go_live(incident, state, in_tick=False)
-        if deploy.get('stage') != 'live' or not deploy.get('deployed_at') or not deploy.get('verify_until'):
+        if stage in ('reverting', 'reverted'):   # cut while undoing the fix
+            self.act(state, 'retomando el revert', deploy.get('commit', ''))
+            return self.finish_revert(state, resumed=True)
+        if stage != 'live' or not deploy.get('deployed_at') or not deploy.get('verify_until'):
             attempt.outcome, attempt.detail = 'unverified', 'el registro del deploy está incompleto'
             return self.failed(state, attempt)
         targets = deploy.get('targets') or []
@@ -770,73 +920,136 @@ class _Tick:
                 return
             self.clock.sleep(VERIFY_POLL_S)
 
+    # -- undoing a published fix ---------------------------------------------------------
+
     def revert_message(self, state: st.IncidentState, sha: str, label: str) -> str:
         # Only fixed text: run errors and VPS output never leave the machine in a commit.
+        # Its Repair-Run is the attempt's: landed(reverts=...) finds the revert by it.
         attempt = state.attempts[-1]
         return (f'revert({state.source}): deshacer {sha[:12]} ({label})\n\n'
                 f'Repair-Incident: {state.incident_id}\nRepair-Run: {attempt.run_id}\n{gitops.CO_AUTHOR}\n')
 
-    def revert_pushed(self, state: st.IncidentState, label: str, deploy_it: bool) -> str:
-        """Revert the fix on main (and on the VPS when it has it). Returns the revert's sha."""
-        sha = state.deploy['commit']
-        self.git.sync()
-        self.git.revert(sha, self.revert_message(state, sha, label))
-        pushed = self.git.push()
-        state.deploy.update(stage='reverted', revert=pushed)
-        self.save(state)
-        if deploy_it:
-            result = self.vps.deploy(pushed, self.git.parent(pushed))
-            if not result.get('ok'):
-                raise VpsError(f'el VPS no aceptó el revert {pushed[:12]}: {result.get("code")}: {result.get("reason")}')
-        return pushed
-
-    def stuck(self, state: st.IncidentState, attempt: st.Attempt, why: str, error: Exception) -> None:
-        sha = state.deploy.get('commit', '')
-        attempt.outcome, attempt.finished_at = 'deploy_blocked', self.iso()
-        attempt.detail = _clip(f'{why}; además no se pudo revertir: {error}')
-        self.to_person(state, 'deploy_blocked', f'{state.source} necesita un revert a mano', attempt.detail, [
-            f'El commit {sha} del bot está en main y no se pudo revertir solo: {error}.',
-            f'Motivo del revert: {why}.',
-            'Revertilo y desplegá a mano (docs/COLLECTOR_REPAIR.md, "Desplegar main a mano").'], n=attempt.n)
+    def rollback(self, state: st.IncidentState, why: str, label: str = 'verificación fallida') -> None:
+        """The fix is live and made things worse: revert, push, deploy the revert, restart."""
+        self.start_revert(state, 'rollback', why, label, deploy_it=True)
 
     def unpublish(self, state: st.IncidentState, why: str, *, vps_has_it: bool, blocked: bool = False) -> None:
         """The deploy did not happen (or did not finish): main must not stay ahead of the VPS."""
-        attempt = state.attempts[-1]
-        try:
-            revert = self.revert_pushed(state, 'deploy fallido', deploy_it=vps_has_it)
-        except (GitError, VpsError) as error:
-            return self.stuck(state, attempt, f'deploy fallido: {why}', error)
-        attempt.detail = _clip(f'deploy fallido: {why}; revert {revert[:12]} pusheado')
-        if blocked:
-            attempt.outcome, attempt.finished_at = 'deploy_blocked', self.iso()
-            return self.to_person(state, 'deploy_blocked', f'deploy bloqueado para {state.source}', why, [
-                f'El arreglo de {state.source} se pusheó pero el VPS no lo aceptó: {why}.',
-                f'El bot lo revirtió en main ({revert}); el VPS no cambió.',
-                f'Causa diagnosticada: {attempt.root_cause}'], n=attempt.n)
-        attempt.outcome = 'publish_failed'
-        if vps_has_it:
-            self.mail(state, 'rollback', f'{state.source}: deploy revertido', [
-                f'El deploy del arreglo no terminó bien ({why}) y se revirtió en main y en el VPS ({revert}).'],
-                n=attempt.n)
-        self.failed(state, attempt)
+        if blocked and vps_has_it:
+            return self.blocked_with_fix(state, why)
+        self.start_revert(state, 'unpublish', why, 'deploy fallido', deploy_it=vps_has_it, blocked=blocked)
 
-    def rollback(self, state: st.IncidentState, why: str, label: str = 'verificación fallida') -> None:
-        """The fix is live and made things worse: revert, push, deploy the revert, restart."""
-        attempt = state.attempts[-1]
+    def blocked_with_fix(self, state: st.IncidentState, why: str) -> None:
+        """A refusal for a person (a dirty checkout) from a VPS that already has the fix: main is not
+        ahead of it, so nothing is reverted and the worker is not restarted."""
+        deploy, attempt = state.deploy, state.attempts[-1]
+        deploy['stage'] = 'blocked'
+        attempt.outcome, attempt.finished_at = 'deploy_blocked', self.iso()
+        attempt.detail = _clip(f'deploy bloqueado con el arreglo ya en el VPS: {why}')
+        self.to_person(state, 'deploy_blocked', f'deploy bloqueado para {state.source}', why, [
+            f'El VPS ya tiene el arreglo {deploy["commit"]} de {state.source}, pero el deploy no terminó: {why}.',
+            'El bot no lo revirtió (main no quedó adelantado al VPS) ni reinició el worker, que sigue con el '
+            'código anterior hasta el próximo reinicio. Resolvé el VPS y reiniciá o desplegá main a mano '
+            '(docs/COLLECTOR_REPAIR.md, "Desplegar main a mano").',
+            f'Causa diagnosticada: {attempt.root_cause}'], n=attempt.n)
+
+    def start_revert(self, state: st.IncidentState, kind: str, why: str, label: str, *, deploy_it: bool,
+                     blocked: bool = False) -> None:
+        """Record what the revert is for before git is touched: a cut tick finishes it (verify)."""
+        state.deploy.update(stage='reverting', undo={'kind': kind, 'why': _clip(why), 'label': label,
+                                                     'deploy_it': deploy_it, 'blocked': blocked})
+        self.save(state)
+        self.finish_revert(state)
+
+    def push_revert(self, state: st.IncidentState, label: str, *, resumed: bool) -> str:
+        """The fix's revert on origin/main, pushed now unless it is there already. Returns its sha."""
+        deploy = state.deploy
+        sha = deploy['commit']
+        if deploy.get('stage') == 'reverted':
+            return deploy['revert']
+        pushed = self.landed(state, 'el tick se cortó durante el revert', reverts=sha) if resumed else None
+        if not pushed:
+            self.git.sync()
+            self.git.revert(sha, self.revert_message(state, sha, label))
+            try:
+                pushed = self.git.push()
+            except GitError as error:
+                pushed = self.landed(state, f'push: {error}', reverts=sha)
+                if not pushed:
+                    raise
+        deploy.update(stage='reverted', revert=pushed)
+        self.save(state)
+        return pushed
+
+    def finish_revert(self, state: st.IncidentState, *, resumed: bool = False, closing: bool = False) -> None:
+        """Push and deploy the revert, restart when the fix had been live, report and end the attempt.
+        `resumed`: a cut tick left it halfway. `closing`: the monitor closed the incident meanwhile,
+        so the attempt ends without a retry."""
+        deploy, attempt = state.deploy, state.attempts[-1]
+        undo = deploy.get('undo') or {'kind': 'rollback' if deploy.get('deployed_at') else 'unpublish',
+                                      'why': 'un revert quedó a medias', 'label': 'revert retomado',
+                                      'deploy_it': True, 'blocked': False}
+        why = undo['why'] if undo['kind'] == 'rollback' else f'deploy fallido: {undo["why"]}'
         try:
-            revert = self.revert_pushed(state, label, deploy_it=True)
+            revert = self.push_revert(state, undo['label'], resumed=resumed)
+            if undo['deploy_it']:   # 'already' when an earlier tick deployed it
+                result = self.vps.deploy(revert, self.git.parent(revert))
+                if not result.get('ok'):
+                    raise VpsError(f'el VPS no aceptó el revert {revert[:12]}: {result.get("code")}: {result.get("reason")}')
         except (GitError, VpsError) as error:
             return self.stuck(state, attempt, why, error)
-        restart = self.vps.restart()
-        attempt.outcome = 'rolled_back'
-        attempt.detail = _clip(f'{why}; revert {revert[:12]} desplegado'
-                               + ('' if restart.get('ok') else f'; el worker no quedó estable: {restart.get("reason")}'))
-        self.mail(state, 'rollback', f'{state.source}: arreglo revertido', [
-            f'El arreglo {state.deploy.get("commit")} se revirtió: {why}.',
-            f'Revert {revert} desplegado; worker {"reiniciado" if restart.get("ok") else "con problemas: " + str(restart.get("reason"))}.',
-            'El intento cuenta como fallido; el bot vuelve a intentar más tarde.'], n=attempt.n)
-        self.act(state, 'revertido', why)
-        self.failed(state, attempt)
+        retry = 'El monitor ya cerró el incidente.' if closing else \
+            'El intento cuenta como fallido; el bot vuelve a intentar más tarde.'
+        if undo['kind'] == 'rollback':
+            restart = self.vps.restart()
+            attempt.outcome = 'rolled_back'
+            attempt.detail = _clip(f'{why}; revert {revert[:12]} desplegado'
+                                   + ('' if restart.get('ok') else f'; el worker no quedó estable: {restart.get("reason")}'))
+            self.mail(state, 'rollback', f'{state.source}: arreglo revertido', [
+                f'El arreglo {deploy.get("commit")} se revirtió: {why}.',
+                f'Revert {revert} desplegado; worker {"reiniciado" if restart.get("ok") else "con problemas: " + str(restart.get("reason"))}.',
+                retry], n=attempt.n)
+            self.act(state, 'revertido', why)
+            return self.end(state, attempt, closing)
+        attempt.detail = _clip(f'{why}; revert {revert[:12]} pusheado')
+        if undo['blocked']:
+            attempt.outcome, attempt.finished_at = 'deploy_blocked', self.iso()
+            subject = f'deploy bloqueado para {state.source}'
+            lines = [f'El arreglo de {state.source} se pusheó pero el VPS no lo aceptó: {undo["why"]}.',
+                     f'El bot lo revirtió en main ({revert}); el VPS no cambió.',
+                     f'Causa diagnosticada: {attempt.root_cause}']
+            if closing:
+                self.mail(state, 'deploy_blocked', subject, lines, n=attempt.n)
+                return
+            return self.to_person(state, 'deploy_blocked', subject, undo['why'], lines, n=attempt.n)
+        attempt.outcome = 'publish_failed'
+        if undo['deploy_it']:
+            self.mail(state, 'rollback', f'{state.source}: deploy revertido', [
+                f'El deploy del arreglo no terminó bien ({undo["why"]}) y se revirtió en main y en el VPS ({revert}).',
+                retry], n=attempt.n)
+        self.end(state, attempt, closing)
+
+    def end(self, state: st.IncidentState, attempt: st.Attempt, closing: bool) -> None:
+        if closing:
+            attempt.finished_at = attempt.finished_at or self.iso()
+        else:
+            self.failed(state, attempt)
+
+    def stuck(self, state: st.IncidentState, attempt: st.Attempt, why: str, error: Exception) -> None:
+        deploy = state.deploy
+        sha = deploy.get('commit', '')
+        attempt.outcome, attempt.finished_at = 'deploy_blocked', self.iso()
+        attempt.detail = _clip(f'{why}; además no se pudo revertir: {error}')
+        if deploy.get('stage') == 'reverted':
+            lines = [f'El commit {sha} del bot se revirtió en main ({deploy.get("revert")}), pero el revert no se '
+                     f'pudo desplegar: {error}.', f'Motivo del revert: {why}.',
+                     'Desplegá main a mano (docs/COLLECTOR_REPAIR.md, "Desplegar main a mano").']
+        else:
+            lines = [f'El commit {sha} del bot está en main y no se pudo revertir solo: {error}.',
+                     f'Motivo del revert: {why}.',
+                     'Revertilo y desplegá a mano (docs/COLLECTOR_REPAIR.md, "Desplegar main a mano").']
+        self.to_person(state, 'deploy_blocked', f'{state.source} necesita un revert a mano', attempt.detail, lines,
+                       n=attempt.n)
 
     # -- dry run -------------------------------------------------------------------------
 
