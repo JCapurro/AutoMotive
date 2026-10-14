@@ -167,6 +167,63 @@ _KNOWN_LOCATIONS_RAW: dict[str, Coords] = {
     "santiago del estero": (-27.7834, -64.2642),
     "ushuaia": (-54.8019, -68.3030),
     "tierra del fuego": (-54.8019, -68.3030),
+    # Cuyo departments (their seats), as deRuedas locates its ads:
+    # "<departamento> <provincia>". Luján, Junín, San Martín, Rivadavia or
+    # Santa Rosa are also towns 1000 km away, so those carry the province.
+    "capital mendoza": (-32.8895, -68.8458),
+    "godoy cruz": (-32.9286, -68.8351),
+    "guaymallen": (-32.9000, -68.7833),
+    "las heras mendoza": (-32.8500, -68.8167),
+    "lujan de cuyo": (-33.0350, -68.8780),
+    "maipu mendoza": (-32.9833, -68.7833),
+    "san martin mendoza": (-33.0811, -68.4681),
+    "junin mendoza": (-33.1500, -68.4833),
+    "rivadavia mendoza": (-33.1833, -68.4667),
+    "santa rosa mendoza": (-33.2500, -68.1500),
+    "la paz mendoza": (-33.4667, -67.5500),
+    "lavalle mendoza": (-32.7167, -68.6000),
+    "tunuyan": (-33.5766, -69.0140),
+    "tupungato": (-33.3667, -69.1500),
+    "san carlos mendoza": (-33.7667, -69.0500),
+    "san rafael": (-34.6177, -68.3301),
+    "general alvear mendoza": (-34.9667, -67.7000),
+    "malargue": (-35.4755, -69.5843),
+    "capital san juan": (-31.5375, -68.5364),
+    "rawson san juan": (-31.5833, -68.5500),
+    "rivadavia san juan": (-31.5333, -68.6000),
+    "chimbas san juan": (-31.4833, -68.5333),
+    "santa lucia san juan": (-31.5333, -68.5000),
+    "pocito san juan": (-31.6500, -68.5833),
+    "san martin san juan": (-31.5167, -68.3500),
+    "caucete san juan": (-31.6518, -68.2811),
+    "albardon san juan": (-31.4333, -68.5333),
+    "angaco san juan": (-31.4500, -68.4000),
+    "9 de julio san juan": (-31.6667, -68.3833),
+    "25 de mayo san juan": (-31.7333, -68.3167),
+    "sarmiento san juan": (-31.9833, -68.4333),
+    "jachal san juan": (-30.2406, -68.7469),
+    "iglesia san juan": (-30.2167, -69.1333),
+    "calingasta san juan": (-31.4667, -69.4167),
+    "ullum san juan": (-31.4667, -68.7500),
+    "zonda san juan": (-31.5500, -68.7333),
+    "valle fertil san juan": (-30.6333, -67.4667),
+    "capital san luis": (-33.3017, -66.3378),
+    "pueyrredon san luis": (-33.3017, -66.3378),
+    "pedernera san luis": (-33.6757, -65.4578),
+    "chacabuco san luis": (-32.5600, -65.2450),
+    "junin san luis": (-32.3431, -65.2053),
+    "ayacucho san luis": (-32.6000, -66.1333),
+    "belgrano san luis": (-32.6667, -66.4500),
+    "pringles san luis": (-33.0500, -65.6167),
+    "dupuy san luis": (-34.7500, -65.2500),
+    "san martin san luis": (-32.4167, -65.6833),
+    "capital cordoba": (-31.4201, -64.1888),
+    # Córdoba and Santa Fe departments named like a GBA town (their seats).
+    # Never a bare "san martin cordoba": it ties with "general san martin".
+    "san justo cordoba": (-31.4278, -62.0828),           # San Francisco
+    "general san martin cordoba": (-32.4075, -63.2402),  # Villa María
+    "san justo santa fe": (-30.7891, -60.5919),          # San Justo
+    "san martin santa fe": (-31.7676, -61.8285),         # Sastre
 }
 
 KNOWN_LOCATIONS: dict[str, Coords] = {

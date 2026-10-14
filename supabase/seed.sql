@@ -18,7 +18,8 @@ insert into public.sources (id, name, enabled, crawl_interval_seconds, priority,
   ('sc_clasificados','SC Clasificados',    true, 7200,100, 15),
   ('autocity',      'Autocity',           true, 3600,110,  5),
   ('carone',        'Car One',            true, 3600,120,  5),
-  ('gruporandazzo', 'Grupo Randazzo',     true, 3600,130,  5)
+  ('gruporandazzo', 'Grupo Randazzo',     true, 3600,130,  5),
+  ('deruedas',      'deRuedas',           true, 3600,140,  6)
 on conflict (id) do nothing;
 
 -- ---------------------------------------------------------------------------

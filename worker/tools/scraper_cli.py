@@ -76,7 +76,9 @@ _REGIONAL_HOSTS = {"mardelusados.com": "mardelusados", "www.rosariogarage.com": 
                    "rosariogarage.com": "rosariogarage", "usadossantafe.com.ar": "usadossantafe",
                    "autocity.com.ar": "autocity", "www.autocity.com.ar": "autocity",
                    "carone.com.ar": "carone", "www.carone.com.ar": "carone",
-                   "www.gruporandazzo.com": "gruporandazzo", "gruporandazzo.com": "gruporandazzo"}
+                   "www.gruporandazzo.com": "gruporandazzo", "gruporandazzo.com": "gruporandazzo",
+                   # deruedas.com is a parked domain, not this source.
+                   "www.deruedas.com.ar": "deruedas", "deruedas.com.ar": "deruedas"}
 
 
 def _source_of(url: str) -> str | None:
