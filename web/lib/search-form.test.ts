@@ -58,6 +58,17 @@ describe("search form → search_profiles (sección 4.3)", () => {
     expect(r.success).toBe(false);
   });
 
+  it("keeps a whole-percent opportunity threshold, which never changes what matches (3.2)", () => {
+    const values = SearchInput.parse({ ...input, opportunity_threshold_pct: 10 });
+    const columns = toColumns(values, ALL);
+    expect(columns.opportunity_threshold_pct).toBe(10);
+    expect(SearchInput.parse(input).opportunity_threshold_pct).toBeNull();
+    for (const bad of [0, 91, 7.5]) expect(SearchInput.safeParse({ ...input, opportunity_threshold_pct: bad }).success).toBe(false);
+    const stored = { ...columns, id: 1, notification_frequency: "immediate", notify_min_level: "good" } as unknown as SearchProfile;
+    expect(fromProfile(stored, ALL).opportunity_threshold_pct).toBe(10);
+    expect(matchingChanged(stored, toColumns({ ...values, opportunity_threshold_pct: 15 }, ALL))).toBe(false);
+  });
+
   it("round-trips a stored search and knows when matching changes", () => {
     const c = toColumns(input, ALL);
     const stored = { ...c, id: 1, notification_frequency: "immediate", notify_min_level: "good" } as unknown as SearchProfile;
