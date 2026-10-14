@@ -96,9 +96,10 @@ export const PRO_BENEFITS = ["Avisos cuando detectamos coincidencias", "Comparac
   "Puntaje explicado y señales para revisar", "Historial, favoritos y varias búsquedas"];
 export type OfferPrice = { amount: number; currency: "ARS"; days: 30 };
 export type ProOffer = Record<WaitlistPlan, OfferPrice> & { version: string };
+/** As app_config.pro_offer since fase 3 (20261026120000_pro_price): only a fallback. */
 export const DEFAULT_PRO_OFFER: ProOffer = {
-  version: "ars-launch-2026-10", pass_30: { amount: 15_000, currency: "ARS", days: 30 },
-  pro_monthly: { amount: 75_000, currency: "ARS", days: 30 },
+  version: "ars-pro-2026-10", pass_30: { amount: 15_000, currency: "ARS", days: 30 },
+  pro_monthly: { amount: 100_000, currency: "ARS", days: 30 },
 };
 export function proOffer(value: unknown): ProOffer {
   const raw = value && typeof value === "object" ? value as Record<string, unknown> : {};

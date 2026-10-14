@@ -67,7 +67,7 @@ it("keeps Particular and Pro prices tied to the configured offer", () => {
   const offer = { ...DEFAULT_PRO_OFFER, pass_30: { ...DEFAULT_PRO_OFFER.pass_30, amount: 18000 } };
   const html = renderToStaticMarkup(createElement(ProPlans, { offer, limits: DEFAULT_PLAN_LIMITS, current: null, placement: "plans", automatic: true, recommended: "pro_monthly" }));
   expect(html).toContain(planPrice(18000));
-  expect(html).toContain(planPrice(75000));
+  expect(html).toContain(planPrice(100000));
   expect(html).toContain('checked="" value="pro_monthly"');
   expect(html).toContain("Continuar en Mercado Pago");
 });
