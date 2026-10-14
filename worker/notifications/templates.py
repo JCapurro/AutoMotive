@@ -364,12 +364,14 @@ def web(n: Notification, links: Links, now: datetime) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 LIFECYCLE_EYEBROW = {"trial_no_matches": "TU PRUEBA GRATIS", "trial_ended": "TU PRUEBA GRATIS",
-                     "pass_expiring": "TU PLAN PARTICULAR", "pass_expires_today": "TU PLAN PARTICULAR"}
+                     "pass_expiring": "TU PLAN PARTICULAR", "pass_expires_today": "TU PLAN PARTICULAR",
+                     "count_after_expiry": "TU BÚSQUEDA"}
 LIFECYCLE_FOOTER = {
     "trial_no_matches": "Recibís este email porque activaste una búsqueda gratis en Ese Auto.",
     "trial_ended": "Recibís este email porque activaste una búsqueda gratis en Ese Auto.",
     "pass_expiring": "Recibís este email porque tenés Particular en Ese Auto.",
     "pass_expires_today": "Recibís este email porque tenés Particular en Ese Auto.",
+    "count_after_expiry": "Recibís este email porque tuviste una búsqueda activa en Ese Auto.",
 }
 
 NO_MATCHES_SUBJECT = "Tu búsqueda de {model} todavía no tuvo coincidencias nuevas"
@@ -399,6 +401,16 @@ PASS_LAST_DAY = "Desde mañana dejamos de buscar y de avisarte. Tu historial y t
 PASS_KEEP = "Tu historial y tus favoritos quedan guardados."
 PASS_CTA = "Extender 30 días"
 
+# 2.5: the count, never the cars. N is never 0 (no email then).
+COUNT_SUBJECT = {1: "Apareció 1 auto nuevo para tu búsqueda{model}",
+                 "n": "Aparecieron {n} autos nuevos para tu búsqueda{model}"}
+COUNT_FOUND = {1: "Desde que venció tu acceso apareció 1 auto nuevo que coincide con tu búsqueda{below}.",
+               "n": "Desde que venció tu acceso aparecieron {n} autos nuevos que coinciden con tu búsqueda{below}."}
+COUNT_BELOW = {1: ", y 1 está por debajo de comparables", "n": ", y {n} están por debajo de comparables"}
+COUNT_REACTIVATE = {1: "Reactivá para verlo.", "n": "Reactivá para verlos."}
+COUNT_CTA = "Reactivar por {price}"
+COUNT_CTA_FALLBACK = "Reactivar"
+
 
 def _count(value: Any) -> int:
     return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else 0
@@ -421,13 +433,26 @@ def _pesos(amount: Any) -> str | None:
     return "$" + f"{value:,.0f}".replace(",", ".")
 
 
+def _plural(texts: Mapping[Any, str], n: int, **kw: Any) -> str:
+    return texts[1].format(**kw) if n == 1 else texts["n"].format(n=n, **kw)
+
+
+def particular_price(offer: Mapping[str, Any] | None) -> str | None:
+    """Particular's price from app_config.pro_offer ("$15.000"), or None if it isn't usable."""
+    price = offer.get("pass_30") if isinstance(offer, Mapping) else None
+    if isinstance(price, Mapping) and price.get("currency") == "ARS":
+        return _pesos(price.get("amount"))
+    return None
+
+
 def particular_offer(offer: Mapping[str, Any] | None, limits: Mapping[str, Any] | None) -> str:
     """Particular's price, days and searches from app_config (pro_offer,
     plan_limits); without a usable price, the plan without numbers (never a wrong one)."""
     price = offer.get("pass_30") if isinstance(offer, Mapping) else None
-    if isinstance(price, Mapping) and price.get("currency") == "ARS":
-        amount, days = _pesos(price.get("amount")), price.get("days")
-        if amount and isinstance(days, int) and not isinstance(days, bool) and days > 0:
+    amount = particular_price(offer)
+    if amount:
+        days = price.get("days")
+        if isinstance(days, int) and not isinstance(days, bool) and days > 0:
             pass_limits = limits.get("pass") if isinstance(limits, Mapping) else None
             searches = pass_limits.get("max_profiles") if isinstance(pass_limits, Mapping) else None
             if not (isinstance(searches, int) and not isinstance(searches, bool) and searches > 0):
@@ -464,6 +489,16 @@ def lifecycle_content(kind: str, payload: Mapping[str, Any], url: str, *,
             lines.append(PASS_KEEP if ended else PASS_LAST_DAY)
         subject = PASS_SUBJECT[kind]
         return Content(subject, subject, lines=lines, link=Link(PASS_CTA, url)), subject
+    if kind == "count_after_expiry":
+        found, below = _count(payload.get("found")), _count(payload.get("below"))
+        if not found:
+            raise ValueError("count_after_expiry without new listings")
+        subject = _plural(COUNT_SUBJECT, found, model=f" de {model}" if model else "")
+        lines = [_plural(COUNT_FOUND, found, below=_plural(COUNT_BELOW, below) if below else ""),
+                 _plural(COUNT_REACTIVATE, found)]
+        price = particular_price(offer)
+        cta = COUNT_CTA.format(price=price) if price else COUNT_CTA_FALLBACK
+        return Content(subject, subject, lines=lines, link=Link(cta, url)), subject
     raise ValueError(f"unknown plan email kind: {kind}")
 
 

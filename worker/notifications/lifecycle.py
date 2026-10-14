@@ -5,6 +5,7 @@ worker runs again or restarts.
 Every TRIAL_REMINDER_TICK_SECONDS (main.py), with app_config.lifecycle_emails:
 
     record_trial_ends()                           trial_ended events, any hour
+    expired_matches.prune()                       2.5's old counts
           │
     enabled? email channel? WEB_BASE_URL (unsubscribe link)?   no ──> nothing more
           │
@@ -31,6 +32,7 @@ from datetime import datetime, time, timedelta, timezone
 from typing import Any, Mapping
 
 import db
+from db.repos import expired_matches
 from db.repos import lifecycle_emails as repo
 from db.repos.runs import log_error
 from notifications import templates
@@ -44,11 +46,12 @@ log = logging.getLogger("lifecycle")
 
 # The kinds this worker sends, claimed in this order (the daily cap is shared):
 # the ones with a deadline today first.
-KINDS = ("pass_expires_today", "trial_ended", "pass_expiring", "trial_no_matches")
+KINDS = ("pass_expires_today", "trial_ended", "pass_expiring", "trial_no_matches", "count_after_expiry")
 DEFAULTS: dict[str, Any] = {"enabled": True, "send_from": "09:00", "send_until": "21:00",
                             "window_hours": 48, "max_per_day": 30,
                             "kinds": {"trial_no_matches": True, "trial_ended": True,
-                                      "pass_expiring": True, "pass_expires_today": True}}
+                                      "pass_expiring": True, "pass_expires_today": True,
+                                      "count_after_expiry": True}}
 # Why the last tick did nothing without config (logged once, not every tick).
 _skipped_reason: str | None = None
 
@@ -131,6 +134,11 @@ async def run_lifecycle_emails(channel: Any, links: Links, *, now: datetime | No
     except Exception:
         log.exception("record_trial_ends failed")
         await log_error("lifecycle_email", "record_trial_ends", traceback.format_exc())
+    try:
+        await expired_matches.prune()
+    except Exception:
+        log.exception("expired_matches.prune failed")
+        await log_error("lifecycle_email", "expired_matches_prune", traceback.format_exc())
     cfg = settings(await db.get_config("lifecycle_emails", {}))
     if not cfg["enabled"]:
         return _skip("app_config.lifecycle_emails.enabled = false")

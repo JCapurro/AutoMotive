@@ -10,9 +10,11 @@ from __future__ import annotations
 import unittest
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
+from uuid import uuid4
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from psycopg.types.json import Jsonb
 
 import collectors
 import db
@@ -28,6 +30,7 @@ from notifications.ops import SourceAlerts
 from notifications.service import Notifier
 from db.repos import listings as repo_listings, raw_pages
 from db.repos import targets as repo_targets
+from db.repos import config as app_config
 from llm.schemas import ListingFacts
 from pipeline import crawl, enrich, rematch, retention, scheduler, watchlist
 from pipeline.ingest import ingest
@@ -123,7 +126,7 @@ class IngestCase(PostgresTestCase):
         """One crawl-loop tick with every target due, no jitter."""
         async with db.connection() as cx:
             await cx.execute("UPDATE crawl_targets SET next_run_at = NULL")
-        await crawl.sync_targets(await db.enabled_profiles())
+        await crawl.sync_targets(await db.enabled_profiles(), await db.counting_profiles())
         await rematch.run_pending()
         notifier = Notifier({"telegram": TelegramChannel(bot or _FakeBot(), Links()),
                              "web": WebChannel(Links())})
@@ -256,6 +259,90 @@ class RepostTests(IngestCase):
             await cx.execute("UPDATE listings SET first_seen_at = now() - interval '61 days'")
         await ingest([card("B", ubicacion="Munro")], geocode=None)
         self.assertIsNone((await self.listing("B"))["probable_repost_of"])
+
+
+class CountAfterExpiryCrawlTests(IngestCase):
+    """2.5: a search whose access ended keeps its model crawled once a day, and
+    the new listings it would match are only counted (docs/MAILS_DE_PLAN.md).
+    test_lifecycle_emails_postgres.py has the emails."""
+
+    async def asyncSetUp(self) -> None:
+        await super().asyncSetUp()
+        self.saved = await self.rows("SELECT key, value FROM app_config "
+                                     " WHERE key IN ('plan_limits', 'commercial_pilot', 'lifecycle_emails')")
+        await self.execute("UPDATE app_config SET value = jsonb_set(value, '{enforced}', 'true') WHERE key = 'plan_limits'")
+        await self.execute("UPDATE app_config SET value = '{\"enabled\": true}' WHERE key = 'commercial_pilot'")
+        app_config.clear_config_cache()
+
+    async def asyncTearDown(self) -> None:
+        for row in self.saved:
+            await self.execute("UPDATE app_config SET value = %s WHERE key = %s", Jsonb(row["value"]), row["key"])
+        app_config.clear_config_cache()
+        await super().asyncTearDown()
+
+    async def execute(self, sql: str, *params) -> None:
+        async with db.connection() as cx:
+            await cx.execute(sql, params)
+
+    async def web_search(self) -> tuple[str, int]:
+        """A web account whose first search starts its 72 h trial (the plan triggers run)."""
+        [user] = await self.rows(
+            "INSERT INTO auth.users (instance_id, id, aud, role, email, created_at, updated_at) "
+            "VALUES ('00000000-0000-0000-0000-000000000000', gen_random_uuid(), 'authenticated', "
+            "        'authenticated', %s, now(), now()) RETURNING id::text AS id", f"{uuid4()}@automotive.test")
+        [search] = await self.rows(
+            "INSERT INTO search_profiles (user_id, name, filters) VALUES (%s, 'Ford Fiesta', %s) RETURNING id",
+            user["id"], Jsonb({"make": "Ford", "model": "Fiesta", "sources": ["mercadolibre"]}))
+        return user["id"], search["id"]
+
+    async def end_trial(self, user: str) -> None:
+        await self.execute("UPDATE profiles SET free_trial_started_at = now() - interval '73 hours' WHERE id = %s", user)
+
+    async def test_an_ended_trial_is_crawled_once_a_day_and_only_counted(self):
+        user, search = await self.web_search()
+        FakeSource.results["mercadolibre"] = [card("A")]
+        await self.tick()                                       # during the trial
+        await self.execute("UPDATE listings SET first_seen_at = now() - interval '2 hours'")
+        await self.end_trial(user)                              # an hour ago
+        FakeSource.results["mercadolibre"] = [card("A"), card("B")]
+        await self.tick()
+
+        [target] = await self.rows("SELECT query, next_run_at - now() AS wait FROM crawl_targets")
+        self.assertEqual((target["query"].get("count_only"), target["query"].get("count_profile_ids"),
+                          target["query"].get("profile_ids")), (True, [search], None))
+        self.assertGreater(target["wait"], timedelta(hours=23))
+        self.assertEqual(await crawl.crawl_due(), 0)
+        counted = await self.rows("SELECT l.external_id, e.level::text AS level FROM expired_search_matches e "
+                                  "  JOIN listings l ON l.id = e.listing_id WHERE e.search_profile_id = %s", search)
+        self.assertEqual([r["external_id"] for r in counted], ["B"])     # A was there before the end
+        self.assertIn(counted[0]["level"], ("high", "good", "match", "low"))
+        shown = await self.rows("SELECT l.external_id FROM matches m JOIN listings l ON l.id = m.listing_id "
+                                " WHERE m.search_profile_id = %s", search)
+        self.assertEqual([r["external_id"] for r in shown], ["A"])
+        self.assertEqual(await self.rows("SELECT id FROM notifications WHERE user_id = %s", user), [])
+
+    async def test_an_active_search_takes_the_model_back_at_once(self):
+        user, search = await self.web_search()
+        await self.end_trial(user)
+        await crawl.sync_targets(await db.enabled_profiles(), await db.counting_profiles())
+        await self.execute("UPDATE crawl_targets SET next_run_at = now() + interval '20 hours'")
+        [target] = await self.rows("SELECT query FROM crawl_targets")
+        self.assertTrue(target["query"]["count_only"])
+
+        _, other = await self.web_search()
+        await crawl.sync_targets(await db.enabled_profiles(), await db.counting_profiles())
+        [target] = await self.rows("SELECT query, next_run_at FROM crawl_targets")
+        self.assertEqual((target["query"].get("profile_ids"), target["query"].get("count_only")), ([other], None))
+        self.assertIsNone(target["next_run_at"])               # due now, at the source's cadence
+
+    async def test_turning_the_kind_off_stops_the_extra_crawl(self):
+        user, _ = await self.web_search()
+        await self.end_trial(user)
+        await self.execute("UPDATE app_config SET value = jsonb_set(value, '{kinds,count_after_expiry}', 'false') "
+                           " WHERE key = 'lifecycle_emails'")
+        await self.tick()
+        self.assertEqual(await self.rows("SELECT id FROM crawl_targets WHERE active"), [])
+        self.assertEqual(FakeSource.searches, [])
 
 
 class CrawlTargetsTests(IngestCase):

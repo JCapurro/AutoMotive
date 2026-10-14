@@ -26,6 +26,8 @@ from db.repos.geocode import (
 from db.repos.matches import filter_unseen, mark_seen, matched_by_other_profiles
 from db.repos.profiles import (
     alerts_for_target,
+    counting_alerts_for_target,
+    counting_profiles,
     create_alert,
     delete_alert,
     enabled_profiles,
@@ -39,7 +41,8 @@ from db.repos.profiles import (
 )
 
 __all__ = [
-    "alerts_for_target", "close_pool", "connection", "create_alert",
+    "alerts_for_target", "close_pool", "connection", "counting_alerts_for_target",
+    "counting_profiles", "create_alert",
     "delete_alert", "enabled_profiles", "filter_unseen", "get_alert", "get_config",
     "get_geocode_cache", "has_fresh_geocode_failure", "link_telegram", "list_alerts",
     "mark_bootstrapped", "mark_seen", "matched_by_other_profiles", "open_pool", "pending_rematch",

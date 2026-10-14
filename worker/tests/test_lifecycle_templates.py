@@ -29,7 +29,8 @@ LIMITS = {"enforced": True, "free": {"max_profiles": 1}, "pass": {"max_profiles"
 TOKEN = "3f0c1a52-6c55-4a43-9f39-0d8f3c7c2b11"
 # The plans document forbids these in every plan email.
 BANNED = ("en tiempo real", "todos los portales", "el mas barato")
-ALL_ON = {"trial_no_matches": True, "trial_ended": True, "pass_expiring": True, "pass_expires_today": True}
+ALL_ON = {"trial_no_matches": True, "trial_ended": True, "pass_expiring": True, "pass_expires_today": True,
+          "count_after_expiry": True}
 
 
 def render(msg: templates.EmailMessage) -> str:
@@ -51,7 +52,10 @@ class PlanEmailSnapshotTests(unittest.TestCase):
                                                          {"model": "Ford Focus", "found": 12, "below": 3}),
                           "lifecycle_pass_expiring": email("pass_expiring", {"found": 18, "below": 4, "ended": False}),
                           "lifecycle_pass_expires_today": email("pass_expires_today",
-                                                                {"found": 18, "below": 4, "ended": False})}.items():
+                                                                {"found": 18, "below": 4, "ended": False}),
+                          "lifecycle_count_after_expiry": email("count_after_expiry",
+                                                                {"model": "Ford Focus", "found": 9, "below": 2,
+                                                                 "stage": 7})}.items():
             with self.subTest(name=name):
                 text = render(msg)
                 path = SNAPSHOTS / f"{name}.txt"
@@ -161,19 +165,59 @@ class PassExpiryEmailTests(unittest.TestCase):
         self.assertNotIn("Desde mañana", msg.text)
 
 
+class CountAfterExpiryEmailTests(unittest.TestCase):
+    """2.5: what appeared since access ended, never the cars."""
+
+    def lines(self, msg: templates.EmailMessage) -> list[str]:
+        return msg.text.split("\n—\n")[0].splitlines()
+
+    def test_the_plans_document_copy(self):
+        msg = email("count_after_expiry", {"model": "Ford Focus", "found": 9, "below": 2, "stage": 14})
+        self.assertEqual(msg.subject, "Aparecieron 9 autos nuevos para tu búsqueda de Ford Focus")
+        self.assertEqual(self.lines(msg), [
+            "Aparecieron 9 autos nuevos para tu búsqueda de Ford Focus",
+            "Desde que venció tu acceso aparecieron 9 autos nuevos que coinciden con tu búsqueda, "
+            "y 2 están por debajo de comparables.",
+            "Reactivá para verlos.",
+            "Reactivar por $15.000: https://automotive.app/m/41",
+        ])
+
+    def test_one_car_none_below_and_no_model(self):
+        msg = email("count_after_expiry", {"found": 1, "below": 0})
+        self.assertEqual(msg.subject, "Apareció 1 auto nuevo para tu búsqueda")
+        self.assertEqual(self.lines(msg)[1:3], [
+            "Desde que venció tu acceso apareció 1 auto nuevo que coincide con tu búsqueda.",
+            "Reactivá para verlo.",
+        ])
+        self.assertNotIn("comparables", msg.text)
+
+    def test_without_a_usable_price_the_button_names_none(self):
+        msg = email("count_after_expiry", {"model": "Ford Focus", "found": 3, "below": 3},
+                    offer={"pass_30": {"amount": "gratis", "currency": "ARS", "days": 30}})
+        self.assertIn("Reactivar: https://automotive.app/m/41", msg.text)
+        self.assertNotIn("$", msg.text)
+        self.assertIn("y 3 están por debajo de comparables", msg.text)
+
+    def test_never_an_email_about_zero_cars(self):
+        for payload in ({"model": "Ford Focus", "found": 0, "below": 0}, {}):
+            with self.assertRaises(ValueError):
+                email("count_after_expiry", payload)
+
+
 class PlanEmailCopyTests(unittest.TestCase):
     def test_no_banned_or_forbidden_words(self):
         for msg in (email("trial_no_matches", {"model": "Ford Focus"}),
                     email("trial_ended", {"model": "Ford Focus", "found": 12, "below": 3}),
                     email("pass_expiring", {"found": 18, "below": 4}),
-                    email("pass_expires_today", {"found": 18, "below": 4})):
+                    email("pass_expires_today", {"found": 18, "below": 4}),
+                    email("count_after_expiry", {"model": "Ford Focus", "found": 9, "below": 2})):
             text = normalize_text(f"{msg.subject} {msg.text} {msg.html}")
             for term in BANNED + FORBIDDEN_TERMS:
                 self.assertNotRegex(text, rf"\b{normalize_text(term)}\b", term)
 
     def test_unknown_kinds_are_refused(self):
         with self.assertRaises(ValueError):
-            email("count_after_expiry", {})
+            email("pass_renewed", {})
 
 
 class SettingsTests(unittest.TestCase):
@@ -193,8 +237,10 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(cfg["kinds"], ALL_ON)
 
     def test_each_kind_can_be_turned_off(self):
-        cfg = settings({"kinds": {"trial_no_matches": False, "pass_expiring": "false", "count_after_expiry": True}})
-        self.assertEqual(cfg["kinds"], {**ALL_ON, "trial_no_matches": False, "pass_expiring": False})
+        cfg = settings({"kinds": {"trial_no_matches": False, "pass_expiring": "false", "count_after_expiry": " FALSE",
+                                  "pass_renewed": True}})
+        self.assertEqual(cfg["kinds"], {**ALL_ON, "trial_no_matches": False, "pass_expiring": False,
+                                        "count_after_expiry": False})
 
     def test_the_window_outlasts_the_night(self):
         self.assertEqual(settings({"window_hours": 6})["window_hours"], 48.0)

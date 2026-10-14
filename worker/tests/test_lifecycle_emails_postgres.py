@@ -405,6 +405,166 @@ class PassExpiryTests(LifecycleCase):
         self.assertEqual(len(await self.rows("SELECT 1 FROM lifecycle_emails WHERE user_id = %s AND kind = 'pass_expiring'", user)), 2)
 
 
+class CountAfterExpiryTests(LifecycleCase):
+    """2.5: 7, 14 and 21 days after access ended, how many new listings matched
+    the searches it paused. The crawl side is in test_ingest_postgres.py."""
+
+    async def ended_trial(self, days_ago: float, model: str = "Fiesta", make: str = "Ford") -> tuple[str, int]:
+        """An account whose trial ended `days_ago`, with the search that end paused."""
+        user = await self.account(trial_ended_hours_ago=days_ago * 24)
+        profile = await self.search(user, model, make)
+        await self.rows("SELECT expire_commercial_access(%s)", user)
+        return user, profile
+
+    async def ended_plan(self, plan: str, days_ago: float) -> tuple[str, int]:
+        """An account whose pass (or Agencia) ended `days_ago`, never on trial."""
+        user = await self.account(trial_ended_hours_ago=None)
+        await self.rows("UPDATE profiles SET plan = %s, plan_expires_at = now() - make_interval(secs => %s) "
+                        " WHERE id = %s", plan, days_ago * 86400, user)
+        profile = await self.search(user, "Corolla", "Toyota")
+        await self.rows("SELECT expire_commercial_access(%s)", user)
+        return user, profile
+
+    async def counted(self, user: str, profile: int, n: int, *, high: int = 0, end=None) -> None:
+        """n listings counted for the search since its access ended, `high` of them opportunities."""
+        if end is None:
+            [row] = await self.rows("SELECT count_after_expiry_end(%s) AS t", user)
+            end = row["t"]
+        for i in range(n):
+            ref = uuid4().hex[:10]
+            [listing] = await self.rows(
+                "INSERT INTO listings (source, external_id, url, title, make, model) "
+                "VALUES ('mercadolibre', %s, %s, 'Auto', 'Ford', 'Fiesta') RETURNING id", ref, f"https://example.test/{ref}")
+            await self.rows("INSERT INTO expired_search_matches (search_profile_id, listing_id, access_ended_at, level) "
+                            "VALUES (%s, %s, %s, %s)", profile, listing["id"], end, "high" if i < high else "good")
+
+    async def event_key(self, user: str, stage: int) -> str:
+        [row] = await self.rows("SELECT extract(epoch from count_after_expiry_end(%s))::bigint::text AS k", user)
+        return f"{row['k']}:{stage}"
+
+    async def test_day_seven_counts_what_appeared_since_the_end(self):
+        user, profile = await self.ended_trial(7 + 2 / 24)
+        await self.counted(user, profile, 3, high=1)
+
+        self.assertEqual(await self.send(), 1)
+        row = await self.ledger(user, "count_after_expiry")
+        self.assertEqual((row["event_key"], row["search_profile_id"], row["target"]),
+                         (await self.event_key(user, 7), profile, "/app/pro?plan=pass_30"))
+        self.assertEqual({k: row["payload"][k] for k in ("model", "found", "below", "stage")},
+                         {"model": "Ford Fiesta", "found": 3, "below": 1, "stage": 7})
+        [body] = self.emails()
+        self.assertEqual(body["subject"], "Aparecieron 3 autos nuevos para tu búsqueda de Ford Fiesta")
+        self.assertIn("Desde que venció tu acceso aparecieron 3 autos nuevos que coinciden con tu búsqueda, "
+                      "y 1 está por debajo de comparables.", body["text"])
+        self.assertIn(f"Reactivar por $15.000: https://automotive.app/m/{row['id']}", body["text"])
+        self.assertEqual(await self.send(), 0)                  # once per stage
+
+    async def test_nothing_counted_means_no_email_until_something_appears_that_day(self):
+        user, profile = await self.ended_trial(7 + 2 / 24)
+        self.assertEqual(await self.send(), 0)
+        self.assertIsNone(await self.ledger(user, "count_after_expiry"))
+        await self.counted(user, profile, 1)
+        self.assertEqual(await self.send(), 1)
+        self.assertEqual(self.emails()[0]["subject"], "Apareció 1 auto nuevo para tu búsqueda de Ford Fiesta")
+
+    async def test_only_on_days_seven_fourteen_and_twenty_one(self):
+        users = {}
+        for days in (6.9, 7.1, 8.1, 14.1, 21.1, 22.1):
+            user, profile = await self.ended_trial(days)
+            await self.counted(user, profile, 2)
+            users[days] = user
+        self.assertEqual(await self.send(), 3)
+        stages = {days: ((await self.ledger(user, "count_after_expiry")) or {}).get("payload", {}).get("stage")
+                  for days, user in users.items()}
+        self.assertEqual(stages, {6.9: None, 7.1: 7, 8.1: None, 14.1: 14, 21.1: 21, 22.1: None})
+
+    async def test_the_search_that_found_the_most_and_only_this_end(self):
+        user, fiesta = await self.ended_trial(7.1)
+        corolla = await self.search(user, "Corolla", "Toyota")
+        await self.rows("SELECT expire_commercial_access(%s)", user)
+        await self.counted(user, fiesta, 1)
+        await self.counted(user, corolla, 2, high=2)
+        # Counted for an older end: not this email's.
+        await self.counted(user, fiesta, 5, end=datetime(2026, 1, 1, tzinfo=AR))
+        self.assertEqual(await self.send(), 1)
+        row = await self.ledger(user, "count_after_expiry")
+        self.assertEqual((row["search_profile_id"], row["payload"]["found"], row["payload"]["below"]), (corolla, 2, 2))
+
+    async def test_an_expired_pass_too_but_not_agencia(self):
+        pass_user, pass_search = await self.ended_plan("pass", 7.1)
+        agency, agency_search = await self.ended_plan("pro", 7.1)
+        await self.counted(pass_user, pass_search, 2)
+        [end] = await self.rows("SELECT plan_expires_at AS t FROM profiles WHERE id = %s", agency)
+        await self.counted(agency, agency_search, 2, end=end["t"])
+
+        self.assertEqual(await self.send(), 1)
+        self.assertIsNone(await self.ledger(agency, "count_after_expiry"))
+        self.assertEqual(self.emails()[0]["subject"], "Aparecieron 2 autos nuevos para tu búsqueda de Toyota Corolla")
+        self.assertEqual([r["search_profile_id"] for r in await self.rows("SELECT * FROM count_after_expiry_searches()")],
+                         [pass_search])
+
+    async def test_who_is_counted(self):
+        counted, counted_search = await self.ended_trial(3)
+        await self.search(counted, "Corolla", "Toyota")           # enabled after the end: not one it paused
+        manual, manual_search = await self.ended_trial(3)
+        await self.rows("DELETE FROM events WHERE user_id = %s AND name = 'search_paused_by_plan'", manual)
+        old, _ = await self.ended_trial(22.1)
+        unsubscribed, _ = await self.ended_trial(3)
+        await self.rows("UPDATE profiles SET default_channels = '{web}' WHERE id = %s", unsubscribed)
+        buyer, _ = await self.ended_trial(3)
+        await self.rows("INSERT INTO commercial_payments (user_id, offer, offer_version, amount, currency, provider, "
+                        "  reference, paid_at, period_start, period_end, refunded_at) "
+                        "VALUES (%s, 'pass_30', 'v', 15000, 'ARS', 'Mercado Pago', 'tx-refunded', now() - interval '20 days', "
+                        "        now() - interval '20 days', now() + interval '10 days', now() - interval '19 days')", buyer)
+
+        searches = await self.rows("SELECT search_profile_id, user_id::text AS user_id FROM count_after_expiry_searches()")
+        self.assertEqual([(r["search_profile_id"], r["user_id"]) for r in searches], [(counted_search, counted)])
+        # Turning the kind off stops the counting (and its crawling) too.
+        await self.config(kinds={"count_after_expiry": "false"})
+        self.assertEqual(await self.rows("SELECT * FROM count_after_expiry_searches()"), [])
+        await self.config(kinds={"count_after_expiry": True})
+        await self.config("commercial_pilot", enabled=False)
+        self.assertEqual(await self.rows("SELECT * FROM count_after_expiry_searches()"), [])
+
+    async def test_not_while_a_checkout_is_in_progress(self):
+        user, profile = await self.ended_trial(7.1)
+        await self.counted(user, profile, 2)
+        await self.checkout(user, "pending")
+        self.assertEqual(await self.send(), 0)
+        await self.rows("UPDATE billing_checkouts SET created_at = now() - interval '73 hours' WHERE user_id = %s", user)
+        self.assertEqual(await self.send(), 1)
+
+    async def test_buying_stops_them_and_records_the_reactivation(self):
+        user, profile = await self.ended_trial(7.1)
+        await self.counted(user, profile, 2)
+        self.assertEqual(await self.send(), 1)
+        row = await self.ledger(user, "count_after_expiry")
+        await self.rows("SELECT track_lifecycle_click(%s)", row["id"])
+        silent, _ = await self.ended_trial(7.1)                    # never got a count email
+
+        await self.pay(user)
+        await self.pay(silent, "tx-silent")
+        [event] = await self.events(user, "reactivated_from_count_email")
+        self.assertEqual((event["email_id"], event["stage"], event["clicked"], event["days_after_email"]),
+                         (row["id"], 7, True, 0))
+        self.assertEqual(await self.events(silent, "reactivated_from_count_email"), [])
+        [search] = await self.rows("SELECT enabled FROM search_profiles WHERE id = %s", profile)
+        self.assertTrue(search["enabled"])                         # 2.4 brings the search back
+        self.assertEqual(await self.rows("SELECT * FROM count_after_expiry_searches()"), [])
+        # Extending later is not another reactivation.
+        await self.pay(user, "tx-002")
+        self.assertEqual(len(await self.events(user, "reactivated_from_count_email")), 1)
+
+    async def test_a_count_email_waiting_is_skipped_after_a_purchase(self):
+        user, profile = await self.ended_trial(7.1)
+        await self.counted(user, profile, 2)
+        await repo.claim("count_after_expiry", 48, 10)
+        await self.pay(user)
+        self.assertEqual(await self.send(), 0)
+        row = await self.ledger(user, "count_after_expiry")
+        self.assertEqual((row["status"], row["error"]), ("skipped", "not_eligible"))
+
+
 class SendingTests(LifecycleCase):
     """When and how: send hours, the daily cap, failures."""
 

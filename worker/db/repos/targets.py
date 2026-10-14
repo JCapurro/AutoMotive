@@ -1,4 +1,8 @@
-"""crawl_targets and the source cadence they run on (sección 5.1)."""
+"""crawl_targets and the source cadence they run on (sección 5.1).
+
+A `count_only` target (only searches whose access ended, 2.5) runs once a day
+at most, and as soon as an active search joins it, it runs at the source's
+cadence again, starting right away."""
 from __future__ import annotations
 
 from datetime import datetime
@@ -7,6 +11,9 @@ from typing import Any, Iterable
 from psycopg.types.json import Jsonb
 
 from db.pool import connection
+
+# 2.5: a model only searches with ended access want is crawled once a day.
+COUNT_ONLY_INTERVAL_SECONDS = 86_400
 
 
 async def enabled_sources() -> dict[str, dict[str, Any]]:
@@ -20,7 +27,8 @@ async def enabled_sources() -> dict[str, dict[str, Any]]:
 async def sync_targets(specs: Iterable[Any]) -> None:
     """Make crawl_targets mirror `specs` (pipeline.crawl.TargetSpec): upsert the
     wanted ones and deactivate the rest. Adopting a new publication policy resets
-    bootstrap once; ordinary query edits/reactivations keep first_run_done."""
+    bootstrap once; ordinary query edits/reactivations keep first_run_done. A
+    count-only target that gets an active search is due at once."""
     specs = list(specs)
     async with connection() as cx:
         await cx.execute("CREATE TEMP TABLE wanted (source text, make text, model text, query jsonb) "
@@ -37,8 +45,9 @@ async def sync_targets(specs: Iterable[Any]) -> None:
             " , first_run_done = CASE WHEN excluded.query ? 'publication_policy' AND "
             "     crawl_targets.query->'publication_policy' IS DISTINCT FROM excluded.query->'publication_policy' "
             "     THEN false ELSE crawl_targets.first_run_done END "
-            " , next_run_at = CASE WHEN excluded.query ? 'publication_policy' AND "
-            "     crawl_targets.query->'publication_policy' IS DISTINCT FROM excluded.query->'publication_policy' "
+            " , next_run_at = CASE WHEN (excluded.query ? 'publication_policy' AND "
+            "     crawl_targets.query->'publication_policy' IS DISTINCT FROM excluded.query->'publication_policy') "
+            "     OR (crawl_targets.query ? 'count_only' AND NOT excluded.query ? 'count_only') "
             "     THEN NULL ELSE crawl_targets.next_run_at END "
             " WHERE crawl_targets.query IS DISTINCT FROM excluded.query OR NOT crawl_targets.active")
         await cx.execute(
@@ -59,31 +68,37 @@ async def publication_dates(target: dict[str, Any]) -> dict[str, int]:
 
 
 async def due_targets() -> list[dict[str, Any]]:
-    """Active targets of enabled sources whose next_run_at has come (or never ran)."""
+    """Active targets of enabled sources whose next_run_at has come (or never ran),
+    for a search with access; a count-only target was derived this tick from
+    the searches 2.5 counts."""
     async with connection() as cx:
         return await (await cx.execute(
             "SELECT t.id, t.source, t.make, t.model, t.query, t.first_run_done, t.last_run_at, "
             "       s.crawl_interval_seconds "
             "  FROM crawl_targets t JOIN sources s ON s.id = t.source "
             " WHERE t.active AND s.enabled AND (t.next_run_at IS NULL OR t.next_run_at <= now()) "
-            "   AND EXISTS (SELECT 1 FROM search_profiles sp WHERE public.search_access_active(sp.id) "
+            "   AND (t.query->>'count_only' = 'true' "
+            "    OR EXISTS (SELECT 1 FROM search_profiles sp WHERE public.search_access_active(sp.id) "
             "     AND ((t.query->>'inventory' = 'true' AND t.make IS NULL AND t.model IS NULL) OR ("
             "       lower(sp.filters->>'make') IS NOT DISTINCT FROM lower(t.make) "
             "       AND lower(sp.filters->>'model') IS NOT DISTINCT FROM lower(t.model))) "
-            "     AND (NOT sp.filters ? 'sources' OR sp.filters->'sources' ? t.source)) "
+            "     AND (NOT sp.filters ? 'sources' OR sp.filters->'sources' ? t.source))) "
             " ORDER BY s.priority, t.next_run_at NULLS FIRST, t.id")).fetchall()
 
 
 async def finish_target(target_id: int, *, ok: bool, retry_seconds: int,
                         covered_until: datetime | None = None) -> None:
     """Schedule from completion; keep coverage at the successful scan's start.
-    Failure retries without advancing bootstrap or the coverage checkpoint."""
+    Failure retries without advancing bootstrap or the coverage checkpoint.
+    A count-only target waits a day, or the source's interval if longer."""
     async with connection() as cx:
         if ok:
             await cx.execute(
                 "UPDATE crawl_targets t SET last_run_at = coalesce(%s::timestamptz, now()), first_run_done = true, "
-                "  next_run_at = now() + make_interval(secs => s.crawl_interval_seconds) "
-                "  FROM sources s WHERE s.id = t.source AND t.id = %s", (covered_until, target_id))
+                "  next_run_at = now() + make_interval(secs => CASE WHEN t.query->>'count_only' = 'true' "
+                "    THEN greatest(s.crawl_interval_seconds, %s) ELSE s.crawl_interval_seconds END) "
+                "  FROM sources s WHERE s.id = t.source AND t.id = %s",
+                (covered_until, COUNT_ONLY_INTERVAL_SECONDS, target_id))
         else:
             await cx.execute(
                 "UPDATE crawl_targets SET next_run_at = now() + make_interval(secs => %s) "
