@@ -1,14 +1,18 @@
 """The worker's crawl loop.
 
 Each tick:
-  1. crawl_targets are re-derived from the enabled profiles (pipeline/crawl.py);
+  1. crawl_targets are re-derived from the enabled profiles, plus the searches
+     2.5 counts after their access ended (pipeline/crawl.py);
   2. new or edited profiles are bootstrapped silently (pipeline/rematch.py);
   3. due targets are crawled and ingested;
   4. each target's batch is matched and scored against every enabled profile
      of that make/model (intelligence/, sección 6): new and updated listings
      get a match row with reasons, 0–100 score, level, price_ref and red flags;
   5. the batch's new matches and price drops go to the notification engine
-     (notifications/, sección 7), which decides, queues and sends them.
+     (notifications/, sección 7), which decides, queues and sends them;
+  6. the searches whose access ended in the last 3 weeks only count the new
+     listings they would have matched (expired_search_matches, 2.5): no
+     match, no notification (docs/MAILS_DE_PLAN.md).
 
 Scraping no longer happens per alert: two users searching the same model
 share one crawl.
@@ -23,6 +27,7 @@ from datetime import datetime
 
 import db
 from config import TICK_INTERVAL_SECONDS, RECOMMENDED_MAX_AGE_DAYS, CRAWL_JITTER_SECONDS
+from db.repos import expired_matches
 from db.repos import matches as matches_repo
 from db.repos.runs import log_error
 from intelligence.engine import Evaluation
@@ -108,11 +113,35 @@ async def match_alert(staged: _Staged, scorer: Scorer, *, first_run: bool,
     return candidates
 
 
+async def count_after_expiry(target: dict, listing_ids: list[int], scorer: Scorer, *,
+                             first_run: bool, max_age_days: int) -> int:
+    """Step 6: the listings first seen after a counted search's access ended,
+    recent by the notification rule, that the search would have matched. A
+    target's first run is backfill, not news. Returns how many were counted."""
+    if first_run:
+        return 0
+    alerts = await db.counting_alerts_for_target(
+        target["source"], target.get("make"), target.get("model"),
+        inventory=(target.get("query") or {}).get("inventory") is True)
+    rows = scorer.rows
+    counted = []
+    for alert in alerts:
+        for lid in listing_ids:
+            row = rows.get(lid)
+            seen = row.get("first_seen_at") if row else None
+            if seen is None or seen < alert["ended_at"] or not _is_recent(row, max_age_days):
+                continue
+            if (ev := scorer.evaluate(lid, alert["profile"])) is not None:
+                counted.append((alert["id"], lid, alert["ended_at"], ev.level))
+    await expired_matches.store(counted)
+    return len(counted)
+
+
 async def process_batch(notifier: Notifier, target: dict, listing_ids: list[int], *,
                         first_run: bool, events: list = ()) -> None:
-    """Steps 4–5 for one batch of a target's listings: match and score them
-    against the target's profiles, then notify. tools/simulate_alert.py runs
-    it for a single listing."""
+    """Steps 4–6 for one batch of a target's listings: match and score them
+    against the target's profiles, then notify, and count for the searches
+    with ended access. tools/simulate_alert.py runs it for a single listing."""
     scorer = await Scorer.create()
     await scorer.prepare(listing_ids)
     max_age_days = int(await db.get_config("recommended_max_age_days", RECOMMENDED_MAX_AGE_DAYS))
@@ -138,6 +167,10 @@ async def process_batch(notifier: Notifier, target: dict, listing_ids: list[int]
     except Exception:
         await log_error("notify", f"target:{target.get('id')}", traceback.format_exc())
     await notifier.deliver()
+    try:
+        await count_after_expiry(target, listing_ids, scorer, first_run=first_run, max_age_days=max_age_days)
+    except Exception:
+        await log_error("count_after_expiry", f"target:{target.get('id')}", traceback.format_exc())
 
 
 def batch_handler(notifier: Notifier) -> crawl.BatchHandler:
@@ -149,9 +182,18 @@ def batch_handler(notifier: Notifier) -> crawl.BatchHandler:
     return handle
 
 
+async def _counting_profiles() -> list[dict]:
+    """The searches 2.5 counts; if reading them fails, active searches still crawl."""
+    try:
+        return await db.counting_profiles()
+    except Exception:
+        await log_error("count_after_expiry", "counting_profiles", traceback.format_exc())
+        return []
+
+
 async def tick(notifier: Notifier, stop: asyncio.Event | None = None,
                on_health: crawl.HealthHandler | None = None) -> None:
-    await crawl.sync_targets(await db.enabled_profiles())
+    await crawl.sync_targets(await db.enabled_profiles(), await _counting_profiles())
     await rematch.run_pending()
     due = await crawl.crawl_due(batch_handler(notifier), jitter_seconds=CRAWL_JITTER_SECONDS, stop=stop,
                                 on_health=on_health)

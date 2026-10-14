@@ -19,7 +19,7 @@ Precios definidos por el usuario: **Particular ARS 15.000 por 30 días, pago ún
 | COM-10 | Pruebas locales de permisos, período, capacidad, pagos y alertas; web compilada y vista en móvil/escritorio | Prueba con proveedor real/sandbox y login, publicar y habilitar cohorte limitada |
 | COM-01 / COM-07 / COM-09 | Operación externa pendiente | Validar oferta con candidatos, observar cobertura 7 días, presupuesto/hosting, contacto, comprobantes y condiciones |
 | COM-04 autoservicio | Implementado por autorización expresa: checkout alojado por usuario, precio aceptado, firma y activación idempotente | Credenciales, ambas migraciones, despliegue y pruebas con Mercado Pago; ver [guía](MERCADO_PAGO.md) |
-| COM-11 · aviso de fin de prueba | Desde la fase 2 de planes es el mail «Fin de la prueba» (2.2), junto con «Prueba sin coincidencias» (2.1): un mail por cuenta y evento, entre 09:00 y 21:00 (hora argentina), con tope diario en `app_config.lifecycle_emails`; ver [mails del plan](MAILS_DE_PLAN.md) | Faltan 2.3, 2.4 y 2.5 de la fase 2 |
+| COM-11 · aviso de fin de prueba | Desde la fase 2 de planes es el mail «Fin de la prueba» (2.2), junto con «Prueba sin coincidencias» (2.1): un mail por cuenta y evento, entre 09:00 y 21:00 (hora argentina), con tope diario en `app_config.lifecycle_emails`; ver [mails del plan](MAILS_DE_PLAN.md) | Fase 2 completa: 2.3, 2.4 y 2.5 también están listos |
 
 La mensualidad Agencia vigente es una medida de períodos pagados; no es MRR de suscripciones con débito automático. Las devoluciones del piloto se registran después de verificarlas en el proveedor, por el importe total, empezando por el período más nuevo si existen renovaciones adelantadas. La configuración no modifica el importe histórico de una compra.
 

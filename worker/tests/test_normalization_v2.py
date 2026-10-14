@@ -9,7 +9,7 @@ from normalization import transmission as tx
 from normalization.fx import FxQuote
 from normalization.listing import Target, fingerprint, normalize_listing, price_usd
 from normalization.vehicle import CatalogModel, resolve_vehicle
-from pipeline.crawl import TargetSpec, derive_targets, scraper_filters
+from pipeline.crawl import TargetSpec, derive_targets, retry_seconds, scraper_filters
 from pipeline.ingest import merge, price_drop_pct
 
 CATALOG = [
@@ -292,6 +292,24 @@ class CrawlTargetTests(unittest.TestCase):
                                 self._profile(2, sources=["kavak"])], self.SOURCES)
         self.assertEqual([s.source for s in specs], ["kavak"])
         self.assertNotIn("km_max", specs[0].query)
+
+    def test_counted_searches_only_add_the_models_nobody_else_searches(self):
+        """2.5: searches with ended access never touch an active target."""
+        active = [self._profile(1, year_min=2016)]
+        counting = [self._profile(7, year_min=2010), self._profile(8, make="Toyota", model="Corolla", km_max=90_000)]
+        specs = derive_targets(active, self.SOURCES, counting)
+
+        self.assertEqual(specs[:2], derive_targets(active, self.SOURCES))
+        self.assertEqual([s.query for s in specs[:2]], [s.query for s in derive_targets(active, self.SOURCES)])
+        self.assertEqual([(s.source, s.make, s.model) for s in specs[2:]],
+                         [("kavak", "Toyota", "Corolla"), ("mercadolibre", "Toyota", "Corolla")])
+        self.assertEqual(specs[2].query, {"km_max": 90_000, "count_only": True, "count_profile_ids": [8]})
+        self.assertNotIn("profile_ids", specs[3].query)
+
+    def test_a_failed_count_only_target_waits_hours_not_minutes(self):
+        self.assertEqual(retry_seconds({"crawl_interval_seconds": 1800, "query": {"profile_ids": [1]}}), 900)
+        self.assertEqual(retry_seconds({"crawl_interval_seconds": 300, "query": {}}), 300)
+        self.assertEqual(retry_seconds({"crawl_interval_seconds": 1800, "query": {"count_only": True}}), 6 * 3600)
 
     def test_profiles_without_a_vehicle_are_not_crawled(self):
         self.assertEqual(derive_targets([{"id": 1, "filters": {"year_min": 2015}}], self.SOURCES), [])

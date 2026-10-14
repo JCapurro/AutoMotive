@@ -307,6 +307,7 @@ El script es idempotente y tiene modo `--dry-run`.
 
 - **Derivación:** `crawl_targets` se recalcula en cada tick a partir de los `search_profiles` habilitados. Agrupa por `(source, make, model)` y toma el rango más amplio: año mínimo y máximo, `km_max` más alto (o ninguno) y **sin filtro de precio en origen**, porque los precios se convierten de moneda después.
 - **Por qué:** el costo pasa a depender de cuántos modelos se buscan y no de cuántos usuarios hay. Esto también habilita al revendedor del §9, que busca muchos modelos.
+- **Búsquedas vencidas (mail 2.5):** durante las 3 semanas posteriores al vencimiento solo se cuentan. Usan los targets de las búsquedas activas tal como están; si un modelo no lo pide ninguna búsqueda activa, queda un target `count_only` que corre una vez por día. Ver [MAILS_DE_PLAN.md](MAILS_DE_PLAN.md#el-rastreo-de-esas-3-semanas).
 - **Cadencia:** `next_run_at = last_run_at + sources.crawl_interval_seconds`. Valores iniciales:
 
   | Fuente | Intervalo |

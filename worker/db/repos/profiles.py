@@ -237,6 +237,17 @@ async def enabled_profiles() -> list[dict[str, Any]]:
             " WHERE public.search_access_active(id) ORDER BY id")).fetchall()
 
 
+async def counting_profiles() -> list[dict[str, Any]]:
+    """The searches 2.5 counts after their access ended (public.count_after_expiry_searches,
+    docs/MAILS_DE_PLAN.md): count-only crawl targets are derived from them.
+    Call after enabled_profiles(), which pauses the searches an end leaves without access."""
+    async with connection() as cx:
+        return await (await cx.execute(
+            "SELECT sp.id, sp.filters, sp.origin_lat, sp.origin_lon "
+            "  FROM public.count_after_expiry_searches() c "
+            "  JOIN search_profiles sp ON sp.id = c.search_profile_id ORDER BY sp.id")).fetchall()
+
+
 async def pending_rematch() -> list[dict]:
     """Enabled profiles never bootstrapped, or edited since (sección 5.7)."""
     async with connection() as cx:
@@ -262,3 +273,19 @@ async def alerts_for_target(source: str, make: str | None, model: str | None, *,
                       " ORDER BY sp.id",
             (inventory and make is None and model is None, make, model, source))).fetchall()
     return [_to_alert(r) for r in rows]
+
+
+async def counting_alerts_for_target(source: str, make: str | None, model: str | None, *,
+                                     inventory: bool = False) -> list[dict]:
+    """Like alerts_for_target, for the searches 2.5 counts: each alert also
+    carries `ended_at`, the access end it counts from."""
+    async with connection() as cx:
+        rows = await (await cx.execute(
+            "SELECT q.*, c.ended_at FROM (" + _SELECT + ") q "
+            "  JOIN public.count_after_expiry_searches() c ON c.search_profile_id = q.id "
+            " WHERE (%s OR (lower(q.filters->>'make') IS NOT DISTINCT FROM lower(%s) "
+            "   AND lower(q.filters->>'model') IS NOT DISTINCT FROM lower(%s))) "
+            "   AND (NOT q.filters ? 'sources' OR q.filters->'sources' ? %s) "
+            " ORDER BY q.id",
+            (inventory and make is None and model is None, make, model, source))).fetchall()
+    return [{**_to_alert(r), "ended_at": r["ended_at"]} for r in rows]

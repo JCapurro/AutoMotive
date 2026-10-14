@@ -7,6 +7,9 @@ are compared after currency conversion). Scraping cost depends on how many
 models are searched, not on how many users search them.
 Small catalogs/feeds opt into INVENTORY_TARGET: one unfiltered source target,
 without make/model hints, shared by every eligible profile that selects it.
+The searches whose access ended in the last 3 weeks are only counted (2.5,
+docs/MAILS_DE_PLAN.md): they ride the targets above as they are, and a model
+nobody else searches gets a `count_only` target crawled once a day.
 
 Sources run in parallel; the targets of one source run one after the other,
 with jitter. The next run is scheduled after the source's interval. For recent
@@ -36,6 +39,9 @@ log = logging.getLogger("crawl")
 
 # A failed target retries after its interval, but never later than this.
 FAILURE_RETRY_SECONDS = 900
+# A failed count-only target (2.5) waits longer: nobody waits for it, and a
+# source that is blocking requests shouldn't get extra ones.
+COUNT_ONLY_RETRY_SECONDS = 6 * 3600
 
 
 @dataclass(frozen=True)
@@ -69,14 +75,13 @@ def _widest(values: list[Any], pick) -> Any:
     return pick(values)
 
 
-def derive_targets(profiles: list[dict[str, Any]], sources: list[str]) -> list[TargetSpec]:
-    """Group profiles by vehicle, or once per inventory source without filters.
+_Key = tuple[str, str, str]
 
-    `sources` are the enabled sources with a collector; a profile that names
-    its sources only contributes to those.
-    """
-    groups: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
-    names: dict[tuple[str, str, str], tuple[str | None, str | None]] = {}
+
+def _group(profiles: list[dict[str, Any]], sources: list[str]
+           ) -> tuple[dict[_Key, list[dict[str, Any]]], dict[_Key, tuple[str | None, str | None]]]:
+    groups: dict[_Key, list[dict[str, Any]]] = {}
+    names: dict[_Key, tuple[str | None, str | None]] = {}
     for p in profiles:
         f = p.get("filters") or {}
         make, model = f.get("make"), f.get("model")
@@ -92,30 +97,59 @@ def derive_targets(profiles: list[dict[str, Any]], sources: list[str]) -> list[T
             key = (source, normalize_brand(make), normalize_text(model))
             groups.setdefault(key, []).append(p)
             names.setdefault(key, (make, model))
+    return groups, names
 
-    specs: list[TargetSpec] = []
-    for key, members in sorted(groups.items()):
-        if getattr(REGISTRY.get(key[0]), "INVENTORY_TARGET", False):
-            specs.append(TargetSpec(key[0], None, None,
-                                    {"inventory": True, "profile_ids": sorted(m["id"] for m in members)}))
-            continue
-        filters = [m.get("filters") or {} for m in members]
-        query: dict[str, Any] = {
-            "year_min": _widest([f.get("year_min") for f in filters], min),
-            "year_max": _widest([f.get("year_max") for f in filters], max),
-            "km_max": _widest([f.get("km_max") for f in filters], max),
-        }
-        if key[0] in RECENT_SOURCES:
-            query["publication_policy"] = POLICY_VERSION
-        # Facebook searches around a city: the oldest profile with a location picks it.
-        located = next((m for m in sorted(members, key=lambda m: m["id"])
-                        if m.get("origin_lat") is not None), None)
-        if located:
-            query["origin_lat"], query["origin_lon"] = located["origin_lat"], located["origin_lon"]
-        query["profile_ids"] = sorted(m["id"] for m in members)
-        make, model = names[key]
-        specs.append(TargetSpec(key[0], make, model, {k: v for k, v in query.items() if v is not None}))
+
+def _spec(key: _Key, members: list[dict[str, Any]], names: tuple[str | None, str | None], *,
+          count_only: bool = False) -> TargetSpec:
+    # A count-only target lists its searches apart: profile_ids are the active
+    # members (the web reads them).
+    members_ids = sorted(m["id"] for m in members)
+    ids = ({"count_only": True, "count_profile_ids": members_ids} if count_only
+           else {"profile_ids": members_ids})
+    if getattr(REGISTRY.get(key[0]), "INVENTORY_TARGET", False):
+        return TargetSpec(key[0], None, None, {"inventory": True, **ids})
+    filters = [m.get("filters") or {} for m in members]
+    query: dict[str, Any] = {
+        "year_min": _widest([f.get("year_min") for f in filters], min),
+        "year_max": _widest([f.get("year_max") for f in filters], max),
+        "km_max": _widest([f.get("km_max") for f in filters], max),
+    }
+    if key[0] in RECENT_SOURCES:
+        query["publication_policy"] = POLICY_VERSION
+    # Facebook searches around a city: the oldest profile with a location picks it.
+    located = next((m for m in sorted(members, key=lambda m: m["id"])
+                    if m.get("origin_lat") is not None), None)
+    if located:
+        query["origin_lat"], query["origin_lon"] = located["origin_lat"], located["origin_lon"]
+    query.update(ids)
+    make, model = names
+    return TargetSpec(key[0], make, model, {k: v for k, v in query.items() if v is not None})
+
+
+def derive_targets(profiles: list[dict[str, Any]], sources: list[str],
+                   counting: list[dict[str, Any]] = ()) -> list[TargetSpec]:
+    """Group profiles by vehicle, or once per inventory source without filters.
+
+    `sources` are the enabled sources with a collector; a profile that names
+    its sources only contributes to those. `counting` are the searches 2.5
+    counts after their access ended: they never change a target of the active
+    profiles (its query, its cadence or the city Facebook searches around) and
+    only add the vehicles none of those cover, as count-only targets.
+    """
+    groups, names = _group(profiles, sources)
+    specs = [_spec(key, members, names[key]) for key, members in sorted(groups.items())]
+    counted, counted_names = _group(list(counting), sources)
+    specs += [_spec(key, members, counted_names[key], count_only=True)
+              for key, members in sorted(counted.items()) if key not in groups]
     return specs
+
+
+def retry_seconds(target: dict[str, Any]) -> int:
+    """When a failed or incomplete run of this target is tried again."""
+    if (target.get("query") or {}).get("count_only") is True:
+        return COUNT_ONLY_RETRY_SECONDS
+    return min(int(target.get("crawl_interval_seconds") or FAILURE_RETRY_SECONDS), FAILURE_RETRY_SECONDS)
 
 
 def scraper_filters(target: dict[str, Any]) -> dict[str, Any]:
@@ -133,8 +167,7 @@ async def run_target(target: dict[str, Any], on_health: HealthHandler | None = N
     """Scrape and ingest one target, recording a collector_runs row. None if it failed."""
     source = target["source"]
     run_id = await runs.start_run(source, target["id"])
-    retry = min(int(target.get("crawl_interval_seconds") or FAILURE_RETRY_SECONDS),
-                FAILURE_RETRY_SECONDS)
+    retry = retry_seconds(target)
     try:
         scraper = REGISTRY[source]()
         filters = scraper_filters(target)
@@ -196,15 +229,12 @@ async def _run_source(targets: list[dict[str, Any]], on_batch: BatchHandler | No
                 await on_batch(run)
             except Exception:
                 await runs.log_error("notify", f"target:{target['id']}", traceback.format_exc())
-                await targets_repo.finish_target(target["id"], ok=False, retry_seconds=min(
-                    int(target.get("crawl_interval_seconds") or FAILURE_RETRY_SECONDS),
-                    FAILURE_RETRY_SECONDS))
+                await targets_repo.finish_target(target["id"], ok=False, retry_seconds=retry_seconds(target))
                 continue
         # Only now is the first run over: its batch was handled as backfill.
         await targets_repo.finish_target(target["id"], ok=run.complete,
-                                        retry_seconds=0 if run.complete else min(
-                                            int(target.get("crawl_interval_seconds") or FAILURE_RETRY_SECONDS),
-                                            FAILURE_RETRY_SECONDS), covered_until=run.covered_until)
+                                        retry_seconds=0 if run.complete else retry_seconds(target),
+                                        covered_until=run.covered_until)
 
 
 async def crawl_due(on_batch: BatchHandler | None = None, *, jitter_seconds: float = 5.0,
@@ -222,8 +252,9 @@ async def crawl_due(on_batch: BatchHandler | None = None, *, jitter_seconds: flo
     return len(due)
 
 
-async def sync_targets(profiles: list[dict[str, Any]]) -> list[TargetSpec]:
+async def sync_targets(profiles: list[dict[str, Any]],
+                       counting: list[dict[str, Any]] = ()) -> list[TargetSpec]:
     sources = [s for s in await targets_repo.enabled_sources() if s in REGISTRY]
-    specs = derive_targets(profiles, sources)
+    specs = derive_targets(profiles, sources, counting)
     await targets_repo.sync_targets(specs)
     return specs
