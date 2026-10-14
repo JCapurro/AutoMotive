@@ -29,6 +29,7 @@ LIMITS = {"enforced": True, "free": {"max_profiles": 1}, "pass": {"max_profiles"
 TOKEN = "3f0c1a52-6c55-4a43-9f39-0d8f3c7c2b11"
 # The plans document forbids these in every plan email.
 BANNED = ("en tiempo real", "todos los portales", "el mas barato")
+ALL_ON = {"trial_no_matches": True, "trial_ended": True, "pass_expiring": True, "pass_expires_today": True}
 
 
 def render(msg: templates.EmailMessage) -> str:
@@ -47,7 +48,10 @@ class PlanEmailSnapshotTests(unittest.TestCase):
     def test_snapshots(self):
         for name, msg in {"lifecycle_trial_no_matches": email("trial_no_matches", {"model": "Ford Focus"}),
                           "lifecycle_trial_ended": email("trial_ended",
-                                                         {"model": "Ford Focus", "found": 12, "below": 3})}.items():
+                                                         {"model": "Ford Focus", "found": 12, "below": 3}),
+                          "lifecycle_pass_expiring": email("pass_expiring", {"found": 18, "below": 4, "ended": False}),
+                          "lifecycle_pass_expires_today": email("pass_expires_today",
+                                                                {"found": 18, "below": 4, "ended": False})}.items():
             with self.subTest(name=name):
                 text = render(msg)
                 path = SNAPSHOTS / f"{name}.txt"
@@ -124,10 +128,45 @@ class TrialEndedEmailTests(unittest.TestCase):
         self.assertIn("En 3 días encontramos 2 autos para tu búsqueda.", email("trial_ended", {"found": 2}).text)
 
 
+class PassExpiryEmailTests(unittest.TestCase):
+    """2.3: before Particular ends."""
+
+    def lines(self, msg: templates.EmailMessage) -> list[str]:
+        return msg.text.split("\n—\n")[0].splitlines()
+
+    def test_five_days_before(self):
+        msg = email("pass_expiring", {"found": 18, "below": 4, "ended": False})
+        self.assertEqual(msg.subject, "Te quedan 5 días de Ese Auto")
+        self.assertEqual(self.lines(msg), [
+            "Te quedan 5 días de Ese Auto",
+            "Desde que activaste Particular encontramos 18 autos, 4 por debajo de comparables.",
+            "Si todavía no lo encontraste, extendé 30 días más: se suman a tu vencimiento.",
+            "Extender 30 días: https://automotive.app/m/41",
+        ])
+
+    def test_the_last_day_adds_what_happens_tomorrow(self):
+        msg = email("pass_expires_today", {"found": 18, "below": 0, "ended": False})
+        self.assertEqual(msg.subject, "Hoy vence tu acceso a Ese Auto")
+        self.assertEqual(self.lines(msg)[1:4], [
+            "Desde que activaste Particular encontramos 18 autos.",
+            "Si todavía no lo encontraste, extendé 30 días más: se suman a tu vencimiento.",
+            "Desde mañana dejamos de buscar y de avisarte. Tu historial y tus favoritos quedan guardados.",
+        ])
+
+    def test_nothing_found_and_a_pass_that_already_ended_that_morning(self):
+        msg = email("pass_expires_today", {"found": 0, "below": 0, "ended": True})
+        self.assertEqual(self.lines(msg)[1:3], ["Si todavía no lo encontraste, extendé 30 días más.",
+                                                 "Tu historial y tus favoritos quedan guardados."])
+        self.assertNotIn("encontramos", msg.text)
+        self.assertNotIn("Desde mañana", msg.text)
+
+
 class PlanEmailCopyTests(unittest.TestCase):
     def test_no_banned_or_forbidden_words(self):
         for msg in (email("trial_no_matches", {"model": "Ford Focus"}),
-                    email("trial_ended", {"model": "Ford Focus", "found": 12, "below": 3})):
+                    email("trial_ended", {"model": "Ford Focus", "found": 12, "below": 3}),
+                    email("pass_expiring", {"found": 18, "below": 4}),
+                    email("pass_expires_today", {"found": 18, "below": 4})):
             text = normalize_text(f"{msg.subject} {msg.text} {msg.html}")
             for term in BANNED + FORBIDDEN_TERMS:
                 self.assertNotRegex(text, rf"\b{normalize_text(term)}\b", term)
@@ -142,20 +181,20 @@ class SettingsTests(unittest.TestCase):
         cfg = settings({})
         self.assertEqual((cfg["enabled"], cfg["send_from"], cfg["send_until"], cfg["window_hours"], cfg["max_per_day"]),
                          (True, time(9), time(21), 48.0, 30))
-        self.assertEqual(cfg["kinds"], {"trial_ended": True, "trial_no_matches": True})
+        self.assertEqual(cfg["kinds"], ALL_ON)
         self.assertEqual(settings(None), cfg)
-        self.assertEqual(DEFAULTS["kinds"], {"trial_no_matches": True, "trial_ended": True})
+        self.assertEqual(DEFAULTS["kinds"], ALL_ON)
 
     def test_bad_values_fall_back(self):
         cfg = settings({"enabled": "quizás", "send_from": "22:00", "send_until": "08:00", "window_hours": "x",
                         "max_per_day": -1, "kinds": "todos"})
         self.assertEqual((cfg["enabled"], cfg["send_from"], cfg["send_until"], cfg["window_hours"], cfg["max_per_day"]),
                          (True, time(9), time(21), 48.0, 30))
-        self.assertEqual(cfg["kinds"], {"trial_ended": True, "trial_no_matches": True})
+        self.assertEqual(cfg["kinds"], ALL_ON)
 
     def test_each_kind_can_be_turned_off(self):
-        cfg = settings({"kinds": {"trial_no_matches": False, "pass_expiring": True}})
-        self.assertEqual(cfg["kinds"], {"trial_ended": True, "trial_no_matches": False})
+        cfg = settings({"kinds": {"trial_no_matches": False, "pass_expiring": "false", "count_after_expiry": True}})
+        self.assertEqual(cfg["kinds"], {**ALL_ON, "trial_no_matches": False, "pass_expiring": False})
 
     def test_the_window_outlasts_the_night(self):
         self.assertEqual(settings({"window_hours": 6})["window_hours"], 48.0)

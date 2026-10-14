@@ -346,6 +346,65 @@ class TrialNoMatchesTests(LifecycleCase):
         self.assertIsNone(await self.ledger(user, "trial_no_matches"))
 
 
+class PassExpiryTests(LifecycleCase):
+    """2.3: 5 days before a Particular pass ends, and on its last day."""
+
+    async def pass_user(self, ends_sql: str) -> str:
+        """A Particular pass set by hand, ending at `ends_sql` (it started 30 days before)."""
+        user = await self.account(trial_ended_hours_ago=None)
+        await self.rows(f"UPDATE profiles SET plan = 'pass', plan_expires_at = {ends_sql} WHERE id = %s", user)
+        return user
+
+    async def test_five_days_before_with_what_the_pass_found(self):
+        user = await self.pass_user("now() + interval '4 days 20 hours'")
+        profile = await self.search(user, "Corolla", "Toyota")
+        for level, hours in (("high", 100), ("good", 50), ("high", 800)):     # the last one is before the pass
+            await self.match(profile, level=level, hours_ago=hours)
+
+        self.assertEqual(await self.send(), 1)
+        row = await self.ledger(user, "pass_expiring")
+        [ends] = await self.rows("SELECT extract(epoch from plan_expires_at)::bigint::text AS key FROM profiles WHERE id = %s", user)
+        self.assertEqual((row["event_key"], row["target"], row["payload"]["found"], row["payload"]["below"], row["payload"]["ended"]),
+                         (ends["key"], "/app/pro?plan=pass_30", 2, 1, False))
+        [body] = self.emails()
+        self.assertEqual(body["subject"], "Te quedan 5 días de Ese Auto")
+        self.assertIn("Desde que activaste Particular encontramos 2 autos, 1 por debajo de comparables.", body["text"])
+        self.assertIn(f"Extender 30 días: https://automotive.app/m/{row['id']}", body["text"])
+        self.assertEqual(await self.send(), 0)
+
+    async def test_not_too_early_nor_too_late_and_never_for_agencia(self):
+        early = await self.pass_user("now() + interval '6 days'")
+        late = await self.pass_user("now() + interval '3 days'")
+        agency = await self.pass_user("now() + interval '4 days 20 hours'")
+        await self.rows("UPDATE profiles SET plan = 'pro' WHERE id = %s", agency)
+        self.assertEqual(await self.send(), 0)
+        for user in (early, late, agency):
+            self.assertIsNone(await self.ledger(user, "pass_expiring"))
+
+    async def test_the_last_day(self):
+        user = await self.pass_user("(date_trunc('day', now() at time zone 'America/Argentina/Buenos_Aires') "
+                                    " + interval '23 hours 59 minutes') at time zone 'America/Argentina/Buenos_Aires'")
+        self.assertEqual(await self.send(), 1)
+        row = await self.ledger(user, "pass_expires_today")
+        self.assertFalse(row["payload"]["ended"])
+        [body] = self.emails()
+        self.assertEqual(body["subject"], "Hoy vence tu acceso a Ese Auto")
+        self.assertIn("Desde mañana dejamos de buscar y de avisarte.", body["text"])
+
+    async def test_an_extension_moves_the_end_and_its_emails(self):
+        user = await self.pass_user("now() + interval '4 days 20 hours'")
+        [claimed] = await repo.claim("pass_expiring", 48, 10)
+        # Extended before the email went out: that end no longer applies.
+        await self.rows("UPDATE profiles SET plan_expires_at = plan_expires_at + interval '30 days' WHERE id = %s", user)
+        self.assertEqual(await self.send(), 0)
+        row = await self.ledger(user, "pass_expiring")
+        self.assertEqual((row["id"], row["status"], row["error"]), (claimed["id"], "skipped", "not_eligible"))
+        # Five days before the new end, its own email.
+        await self.rows("UPDATE profiles SET plan_expires_at = now() + interval '4 days 21 hours' WHERE id = %s", user)
+        self.assertEqual(await self.send(), 1)
+        self.assertEqual(len(await self.rows("SELECT 1 FROM lifecycle_emails WHERE user_id = %s AND kind = 'pass_expiring'", user)), 2)
+
+
 class SendingTests(LifecycleCase):
     """When and how: send hours, the daily cap, failures."""
 

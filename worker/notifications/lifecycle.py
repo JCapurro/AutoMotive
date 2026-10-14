@@ -42,11 +42,13 @@ from notifications.service import AR
 
 log = logging.getLogger("lifecycle")
 
-# The kinds this worker sends, claimed in this order (the daily cap is shared).
-KINDS = ("trial_ended", "trial_no_matches")
+# The kinds this worker sends, claimed in this order (the daily cap is shared):
+# the ones with a deadline today first.
+KINDS = ("pass_expires_today", "trial_ended", "pass_expiring", "trial_no_matches")
 DEFAULTS: dict[str, Any] = {"enabled": True, "send_from": "09:00", "send_until": "21:00",
                             "window_hours": 48, "max_per_day": 30,
-                            "kinds": {"trial_no_matches": True, "trial_ended": True}}
+                            "kinds": {"trial_no_matches": True, "trial_ended": True,
+                                      "pass_expiring": True, "pass_expires_today": True}}
 # Why the last tick did nothing without config (logged once, not every tick).
 _skipped_reason: str | None = None
 

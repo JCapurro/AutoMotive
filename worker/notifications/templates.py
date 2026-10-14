@@ -363,10 +363,13 @@ def web(n: Notification, links: Links, now: datetime) -> dict[str, Any]:
 # sentence whose number is 0 is left out.
 # ---------------------------------------------------------------------------
 
-LIFECYCLE_EYEBROW = {"trial_no_matches": "TU PRUEBA GRATIS", "trial_ended": "TU PRUEBA GRATIS"}
+LIFECYCLE_EYEBROW = {"trial_no_matches": "TU PRUEBA GRATIS", "trial_ended": "TU PRUEBA GRATIS",
+                     "pass_expiring": "TU PLAN PARTICULAR", "pass_expires_today": "TU PLAN PARTICULAR"}
 LIFECYCLE_FOOTER = {
     "trial_no_matches": "Recibís este email porque activaste una búsqueda gratis en Ese Auto.",
     "trial_ended": "Recibís este email porque activaste una búsqueda gratis en Ese Auto.",
+    "pass_expiring": "Recibís este email porque tenés Particular en Ese Auto.",
+    "pass_expires_today": "Recibís este email porque tenés Particular en Ese Auto.",
 }
 
 NO_MATCHES_SUBJECT = "Tu búsqueda de {model} todavía no tuvo coincidencias nuevas"
@@ -384,6 +387,17 @@ TRIAL_ENDED_OFFER = ("Para seguir recibiendo avisos, Particular sale {price} por
 TRIAL_ENDED_OFFER_FALLBACK = "Para seguir recibiendo avisos, elegí Particular."
 TRIAL_ENDED_KEEP = "Tu historial y tus favoritos quedan guardados."
 TRIAL_ENDED_CTA = "Seguir con Particular"
+
+PASS_SUBJECT = {"pass_expiring": "Te quedan 5 días de Ese Auto",
+                "pass_expires_today": "Hoy vence tu acceso a Ese Auto"}
+PASS_FOUND = "Desde que activaste Particular encontramos {found}{below}."
+PASS_BELOW = ", {n} por debajo de comparables"
+PASS_EXTEND = "Si todavía no lo encontraste, extendé 30 días más: se suman a tu vencimiento."
+# A pass that already ended (early on its last day) restarts from the payment.
+PASS_EXTEND_ENDED = "Si todavía no lo encontraste, extendé 30 días más."
+PASS_LAST_DAY = "Desde mañana dejamos de buscar y de avisarte. Tu historial y tus favoritos quedan guardados."
+PASS_KEEP = "Tu historial y tus favoritos quedan guardados."
+PASS_CTA = "Extender 30 días"
 
 
 def _count(value: Any) -> int:
@@ -441,6 +455,15 @@ def lifecycle_content(kind: str, payload: Mapping[str, Any], url: str, *,
         lines += [particular_offer(offer, limits), TRIAL_ENDED_KEEP]
         subject = TRIAL_ENDED_SUBJECT.format(found=_cars(found)) if found else TRIAL_ENDED_TITLE
         return Content(TRIAL_ENDED_TITLE, subject, lines=lines, link=Link(TRIAL_ENDED_CTA, url)), TRIAL_ENDED_TITLE
+    if kind in PASS_SUBJECT:
+        found, below = _count(payload.get("found")), _count(payload.get("below"))
+        ended = payload.get("ended") is True
+        lines = [PASS_FOUND.format(found=_cars(found), below=PASS_BELOW.format(n=below) if below else "")] if found else []
+        lines.append(PASS_EXTEND_ENDED if ended else PASS_EXTEND)
+        if kind == "pass_expires_today":
+            lines.append(PASS_KEEP if ended else PASS_LAST_DAY)
+        subject = PASS_SUBJECT[kind]
+        return Content(subject, subject, lines=lines, link=Link(PASS_CTA, url)), subject
     raise ValueError(f"unknown plan email kind: {kind}")
 
 

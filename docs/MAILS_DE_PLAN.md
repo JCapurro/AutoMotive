@@ -6,7 +6,7 @@ Son los mails de la fase 2 de [planes](PLANES_2026-10.md), los que llevan a paga
 | --- | --- | --- |
 | 2.1 Prueba sin coincidencias | 24 h después de activar la prueba, sin ninguna coincidencia nueva desde la activación | Listo |
 | 2.2 Fin de la prueba | Al terminar las 72 h, si la cuenta nunca compró | Listo |
-| 2.3 Vencimiento de Particular | 5 días antes y el día que vence el pase | Pendiente: su botón «Extender 30 días» necesita 2.4 |
+| 2.3 Vencimiento de Particular | 5 días antes y el día que vence el pase | Listo |
 | 2.5 Conteo después de vencer | 7, 14 y 21 días después del vencimiento | Pendiente: falta decidir si se siguen rastreando las búsquedas vencidas |
 
 ## Reglas para todos
@@ -34,6 +34,19 @@ Son los mails de la fase 2 de [planes](PLANES_2026-10.md), los que llevan a paga
   - El precio sale de `app_config.pro_offer` y las búsquedas de `plan_limits.pass`. Si la oferta no sirve, la frase nombra Particular sin precio: nunca un precio equivocado.
 - **Botón.** «Seguir con Particular», a `/app/pro?plan=pass_30`: la pantalla de planes con Particular elegido, a un clic de Mercado Pago.
 
+## 2.3 Vencimiento de Particular
+
+- **A quién.** Cuentas con Particular vigente y el checkout abierto.
+- **Cuándo.**
+  - «Te quedan 5 días de Ese Auto»: cuando faltan entre 5 y 4 días.
+  - «Hoy vence tu acceso a Ese Auto»: el día calendario argentino del vencimiento.
+- **Una vez por vencimiento.** La clave del evento es la fecha de fin del pase. Si se extiende, el fin nuevo tiene sus dos mails y el viejo no manda ninguno: si ya estaba reservado, queda `skipped`.
+- **Cuerpo.** «Desde que activaste Particular encontramos {X} autos, {Y} por debajo de comparables. Si todavía no lo encontraste, extendé 30 días más: se suman a tu vencimiento.» El del último día agrega: «Desde mañana dejamos de buscar y de avisarte. Tu historial y tus favoritos quedan guardados.»
+  - X cuenta desde el inicio de la cadena de pases (una extensión empieza donde termina el anterior).
+  - Si X o Y dan 0, su frase no aparece.
+- **Pase que venció de madrugada.** El mail del último día igual sale a las 9, pero sin «Desde mañana dejamos de buscar» ni «se suman a tu vencimiento»: comprar después de vencer cuenta 30 días desde el pago.
+- **Botón.** «Extender 30 días», a `/app/pro?plan=pass_30`.
+
 ## Clics y eventos
 
 - **Clics.** El botón pasa por `/m/<id>` ([ruta](../web/app/m/[emailId]/route.ts)). Esa ruta registra `lifecycle_email_clicked` (con `kind`) y redirige al destino guardado en la fila, que siempre es una ruta del sitio. Las vistas previas de enlaces y los HEAD no cuentan.
@@ -47,7 +60,7 @@ Se edita desde `/admin/config`. Un valor inválido se reemplaza por su valor por
 | Campo | Por defecto | Qué hace |
 | --- | --- | --- |
 | `enabled` | `true` | `false` apaga todos los tipos. |
-| `kinds` | 2.1 y 2.2 prendidos | Prende o apaga cada tipo. |
+| `kinds` | 2.1, 2.2 y 2.3 prendidos | Prende o apaga cada tipo. |
 | `send_from` / `send_until` | `"09:00"` / `"21:00"` | Horario de envío, hora argentina. |
 | `window_hours` | `48` | Plazo para mandar una fila reservada. Pasado ese plazo queda `skipped` (`outside_window`). Tiene que superar la noche sin envíos. |
 | `max_per_day` | `30` | Mails reservados por día calendario argentino, entre todos los tipos. Resend gratis permite 100 por día entre alertas y estos mails. |
