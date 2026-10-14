@@ -13,6 +13,7 @@ const HINTS: Record<string, string> = {
   validation_criteria: "Umbrales de los 6 criterios del §53 (v_validation_criteria) y el objetivo de activación.",
   pro_cta: "Cuándo se ofrece ver planes: alertas clickeadas o límites alcanzados (§52).",
   pro_offer: "Oferta en ARS por 30 días y versión. Las nuevas confirmaciones usan estos importes; los pagos anteriores conservan su precio.",
+  agency_founders: "Precio fundador: cuántas suscripciones de Agencia son fundadoras (slots) y cuántos meses mantienen el precio de su primer pago (months). Solo lo registra en billing_checkouts; no cambia ningún cobro.",
   commercial_pilot: "Habilitar desde Cobros para iniciar las pruebas existentes y aplicar límites en la misma operación.",
   trial_reminder: "Email único a quienes terminaron la prueba gratis sin pagar (docs/RECORDATORIO_PRUEBA.md). enabled (false lo apaga), delay_hours (horas después del fin de la prueba), window_hours (pasado ese plazo ya no se manda; mayor que la noche fuera de horario), send_from / send_until (horario de envío, hora argentina, HH:MM) y max_per_day (tope de avisos por día; Resend gratis permite 100 emails por día entre alertas y avisos).",
   collector_failure_alert_after: "Fallas seguidas de una fuente antes de avisar por Telegram al admin.",

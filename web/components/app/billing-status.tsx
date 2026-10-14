@@ -3,17 +3,19 @@ import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { checkPayment, stopSubscription } from "@/app/app/pro/billing-actions";
 import { Button } from "@/components/ui/button";
-import { accessDate, PLAN_COPY, planPrice } from "@/lib/pro";
+import { accessDate, founderNote, PLAN_COPY, planPrice } from "@/lib/pro";
 
 const STATUS: Record<string, string> = { creating: "Preparando contratación", pending: "Esperando confirmación", authorized: "Suscripción autorizada", paused: "Suscripción pausada", cancelled: "Suscripción cancelada", paid: "Pago aprobado", failed: "Contratación rechazada" };
-export function BillingStatus({ checkout }: { checkout: { id: string; offer: string; amount: number; status: string; init_point: string | null; next_payment_at: string | null; sync_error: string | null; created_at: string } }) {
+export function BillingStatus({ checkout }: { checkout: { id: string; offer: string; amount: number; status: string; init_point: string | null; next_payment_at: string | null; sync_error: string | null; created_at: string; founder_number?: number | null; founder_price_until?: string | null } }) {
   const [pending, start] = useTransition();
   const [confirm, setConfirm] = useState(false);
   const monthly = checkout.offer === "pro_monthly";
   const cancellable = monthly && ["creating", "pending", "authorized", "paused"].includes(checkout.status);
+  const founder = checkout.status === "cancelled" ? null : founderNote(checkout);
   return <section className="space-y-3 rounded-xl border bg-card p-5 text-sm" aria-label="Estado de contratación">
     <h2 className="font-semibold">{monthly ? PLAN_COPY.pro_monthly.name : PLAN_COPY.pass_30.name} · {STATUS[checkout.status] ?? "Verificación pendiente"}</h2>
     <p>{planPrice(checkout.amount)} ARS {monthly ? "por mes" : "por 30 días, pago único"}.</p>
+    {founder ? <p data-testid="founder-price" className="font-medium">{founder}</p> : null}
     <p>El acceso se habilita con cada pago aprobado. Al volver de Mercado Pago puede demorar unos minutos. Después, reactivá tus búsquedas pausadas.</p>
     {checkout.next_payment_at && checkout.status === "authorized" ? <p>Próximo cobro previsto: {accessDate(checkout.next_payment_at)}.</p> : null}
     {checkout.status === "cancelled" ? <p>Se detuvieron las renovaciones. El período ya pagado sigue vigente hasta su vencimiento.</p> : null}

@@ -3,7 +3,7 @@ import { PaymentForm, PilotLaunch, RefundForm } from "@/components/admin/billing
 import { PageHeader, Table, Th, Td, EmptyRow } from "@/components/admin/ui";
 import { requireAdmin } from "@/lib/admin";
 import { webConfig } from "@/lib/config";
-import { accessDate, PLAN_COPY, planPrice, type WaitlistPlan } from "@/lib/pro";
+import { accessDate, founderNote, PLAN_COPY, planPrice, type WaitlistPlan } from "@/lib/pro";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { paymentsConfigured } from "@/lib/mercadopago-server";
 
@@ -16,7 +16,7 @@ export default async function BillingPage() {
     db.from("commercial_payments").select("*").order("verified_at", { ascending: false }).limit(100),
     db.from("commercial_revenue").select("*").maybeSingle(),
     db.from("events").select("user_id,created_at,props").eq("name", "renewal_declined").order("created_at", { ascending: false }).limit(100),
-    db.from("billing_checkouts").select("id,user_id,offer,status,last_synced_at,sync_error").order("created_at", { ascending: false }).limit(100),
+    db.from("billing_checkouts").select("id,user_id,offer,amount,status,last_synced_at,sync_error,founder_number,founder_price_until").order("created_at", { ascending: false }).limit(100),
   ]);
   const email = new Map((users ?? []).map((u) => [u.id, u.email ?? "Solo Telegram"]));
   const pending = (users ?? []).filter((u) => u.waitlist_plan);
@@ -26,7 +26,8 @@ export default async function BillingPage() {
     <p className="rounded border p-4 text-sm">{checkoutError ? "Falta la migración de Mercado Pago." : !paymentsConfigured() ? "Falta configurar los secretos de Mercado Pago y la conciliación." : cfg.automaticPayments ? "Cobro y acceso automáticos habilitados." : "Integración configurada; contratación automática deshabilitada."}</p>
     <section className="space-y-2"><h2 className="font-semibold">Contrataciones de Mercado Pago</h2>
       <ul className="space-y-1 text-sm">{(checkouts ?? []).map((c) => <li key={c.id}>{email.get(c.user_id) ?? c.user_id} · {PLAN_COPY[c.offer as WaitlistPlan]?.name} · {c.status}
-        {c.sync_error ? " · requiere revisión" : ""}{c.last_synced_at ? ` · consultado ${accessDate(c.last_synced_at)}` : " · aún sin conciliación"}<span className="block text-xs text-muted-foreground">{c.id}</span></li>)}</ul>
+        {c.sync_error ? " · requiere revisión" : ""}{c.last_synced_at ? ` · consultado ${accessDate(c.last_synced_at)}` : " · aún sin conciliación"}
+        {c.founder_number != null ? <span className="block">Fundadora n.º {c.founder_number}. {founderNote(c)}</span> : null}<span className="block text-xs text-muted-foreground">{c.id}</span></li>)}</ul>
       <p className="text-sm text-muted-foreground">Enlaces para cobro asistido: <a href="https://mpago.la/2Vf746M" className="underline" target="_blank" rel="noreferrer">Particular</a> · <a href="https://mpago.la/1t6wWDT" className="underline" target="_blank" rel="noreferrer">Agencia</a>. Requieren asociar manualmente el pago y gestionar la suscripción en Mercado Pago.</p>
     </section>
     {error ? <p role="alert" className="rounded border p-4 text-sm">Falta aplicar la migración comercial en esta base. Las altas están pendientes.</p> : <>

@@ -175,6 +175,16 @@ export function accessDate(value: string): string {
   return new Intl.DateTimeFormat("es-AR", { dateStyle: "medium", timeStyle: "short",
     timeZone: "America/Argentina/Buenos_Aires" }).format(new Date(value));
 }
+/**
+ * Precio fundador: the first Agencia subscriptions keep the amount they
+ * started with until founder_price_until (billing_checkouts). Null otherwise.
+ */
+export function founderNote(checkout: { amount: number; founder_number?: number | null; founder_price_until?: string | null }): string | null {
+  if (checkout.founder_number == null || !checkout.founder_price_until) return null;
+  const until = new Intl.DateTimeFormat("es-AR", { dateStyle: "long", timeZone: "America/Argentina/Buenos_Aires" })
+    .format(new Date(checkout.founder_price_until));
+  return `Precio fundador: ${planPrice(checkout.amount)} por mes, fijo hasta el ${until}.`;
+}
 export function accessDescription(access: PlanLimits): string {
   if (access.state === "pilot") return "Piloto abierto: los límites comerciales todavía no están habilitados.";
   if (access.state === "available") return "Tu prueba de 3 días empieza al activar la primera búsqueda.";
