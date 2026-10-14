@@ -174,3 +174,16 @@ Si `status` muestra archivos modificados, son parches en caliente: commitearlos 
 
 - Código del bot escrito en la rama `claude/repair-bot`: `worker/repairbot/` (lanzador, guard, sesión de Claude, git, VPS, estado, emails, prompt), `worker/tools/repro_target.py`, `ops/install-repairbot.ps1` y `ops/uninstall-repairbot.ps1`, con pruebas unitarias sin red ni base.
 - **Activación pendiente**: falta incorporar la rama a `main`, correr las pruebas con base, verificar en vivo el stream de `claude -p`, el guard, ssh y el deploy, instalar la tarea y desactivar la automatización de Codex. Hasta entonces sigue el flujo de Codex del 9/10.
+
+### 14/10/2026 (bot activo)
+
+- En `main` desde `cd83a92`, y el VPS está en ese commit. La revisión adversarial confirmó 14 hallazgos y quedaron corregidos. El único aceptado es el de cerrar la tapa en medio de una sesión, que cuenta como intento. Hay 1981 pruebas sin base.
+- Verificado en vivo:
+  - con `claude -p` 2.1.278 y la suscripción Max: el canario aparece antes de `init`, `dontAsk` sin servidores MCP y exactamente las herramientas esperadas; el guard bloqueó `curl` y `git restore --source`, y con un settings inválido la corrida terminó `guard_inactive`;
+  - `--status` y `--dry-run` contra producción en solo lectura;
+  - las consultas nuevas sobre el esquema real (`EXPLAIN` para el `UPDATE`);
+  - `vps.probe` en el VPS: Mardel Usados encontró 323 avisos, y Mercado Libre, target 7 por `--target-id`, 2 avisos completos;
+  - un tick real desde el lanzador y la tarea programada con `pythonw` (resultado 0).
+- Instalado con `ops\install-repairbot.ps1`: `C:utomotive-botepo`, `C:utomotive-bot\launcher` y la tarea `\AutoMotive\RepairBot` cada 5 minutos.
+- Al activarlo no había incidentes abiertos: el de Mercado Libre (security challenge) se cerró a las 13:37, con el collector HTTP. El primer arreglo de punta a punta (Claude, push, deploy y verificación) va a ocurrir con el próximo incidente real; cada resultado llega por email.
+- Pendiente del dueño: pausar la automatización **Reparar collectors en Revisar** en Codex.
