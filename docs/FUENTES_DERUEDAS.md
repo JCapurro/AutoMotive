@@ -2,7 +2,7 @@
 
 Clasificados de autos de Cuyo: unos 11.700 usados publicados (9.112 en Autos y 2.581 en Utilitarios y Camionetas el 9 de octubre de 2026), alrededor del 78 % en Mendoza y el resto sobre todo en Córdoba, San Juan y Buenos Aires. El sitio es `www.deruedas.com.ar`. **`deruedas.com` es un dominio estacionado y no se usa**: ni el collector ni el CLI lo reconocen como esta fuente.
 
-Código publicado en `main` el 14 de octubre de 2026. Todavía no corre: la migración no está aplicada y el worker del VPS no se actualizó. Ver [Activación](#activación).
+Código publicado en `main` y activo en producción desde el 14 de octubre de 2026. Ver [Activación](#activación).
 
 ## Operación
 
@@ -102,6 +102,6 @@ python -m tools.scraper_cli detail 'https://www.deruedas.com.ar/vendo/Toyota/Cor
 
 ## Activación
 
-**Pendiente.** El código está en `main`, pero la migración `20261023180000_deruedas_source.sql` **no está aplicada** en ningún entorno y el worker del VPS **no se actualizó**: la fuente no existe todavía en `sources` y no corre.
+**Activa desde el 14 de octubre de 2026.** El worker del VPS corre `95e3a7b`, que incluye el collector (desplegado y reiniciado a las 11:21). La migración `20261023180000_deruedas_source.sql` está aplicada en producción: es el `max(version)` de `supabase_migrations.schema_migrations` y `sources` tiene `deruedas` habilitada. Comprobado con el script de aplicación, que encontró la versión ya registrada y terminó sin cambios. Las corridas en producción todavía no se revisaron en `collector_runs`.
 
-Para activarla, en este orden: actualizar el worker del VPS a `main` y reiniciarlo; después aplicar la migración en producción, con una versión mayor que el `max(version)` de `supabase_migrations.schema_migrations` (otras sesiones aplican migraciones desde ramas). En el orden inverso la web ofrecería deRuedas antes de que el worker pueda recorrerla. `supabase/seed.sql` también la habilita: un `db push --include-seed` desde este checkout la activa igual que la migración. Los perfiles que abarcan todas las fuentes la incorporan al habilitarse; los que eligen fuentes conservan su selección. La primera corrida de cada target es un bootstrap silencioso.
+Para activar una fuente nueva con este mismo esquema, en este orden: actualizar el worker del VPS a `main` y reiniciarlo; después aplicar la migración en producción, con una versión mayor que el `max(version)` de `supabase_migrations.schema_migrations` (otras sesiones aplican migraciones desde ramas). En el orden inverso la web ofrecería deRuedas antes de que el worker pueda recorrerla. `supabase/seed.sql` también la habilita: un `db push --include-seed` desde este checkout la activa igual que la migración. Los perfiles que abarcan todas las fuentes la incorporan al habilitarse; los que eligen fuentes conservan su selección. La primera corrida de cada target es un bootstrap silencioso.
