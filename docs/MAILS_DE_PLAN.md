@@ -68,7 +68,7 @@ Son los mails de la fase 2 de [planes](PLANES_2026-10.md), los que llevan a paga
 Juan aprobó el 14/10/2026 rastrear una vez por día, durante esas 3 semanas, los modelos de las búsquedas vencidas.
 
 - **Modelo que ya rastrea otra búsqueda activa** en ese portal: se cuenta con lo que ya se recolecta, sin cambiar la consulta ni la frecuencia de esa búsqueda.
-- **Modelo que no rastrea nadie más:** queda un objetivo `count_only` que corre una vez por día. Si una búsqueda activa vuelve a pedir ese modelo, el objetivo recupera la frecuencia del portal y corre en el momento.
+- **Modelo que no rastrea nadie más:** queda un objetivo `count_only` que corre una vez por día; si falla, reintenta a las 6 horas, no a los 15 minutos de un objetivo activo. Si una búsqueda activa vuelve a pedir ese modelo, el objetivo recupera la frecuencia del portal y corre en el momento.
 - **Duración.** 22 días desde el vencimiento: las 3 semanas más el día del último mail.
 - **Apagado.** Con `kinds.count_after_expiry = false` se corta también este rastreo.
 - **Costo.** No suma plata: el worker corre en el mismo VPS y los portales no cobran. Cada modelo que solo piden búsquedas vencidas agrega una consulta por día y por portal; una búsqueda activa hace decenas por día (Mercado Libre, cada 10 minutos).

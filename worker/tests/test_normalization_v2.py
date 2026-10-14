@@ -9,7 +9,7 @@ from normalization import transmission as tx
 from normalization.fx import FxQuote
 from normalization.listing import Target, fingerprint, normalize_listing, price_usd
 from normalization.vehicle import CatalogModel, resolve_vehicle
-from pipeline.crawl import TargetSpec, derive_targets, scraper_filters
+from pipeline.crawl import TargetSpec, derive_targets, retry_seconds, scraper_filters
 from pipeline.ingest import merge, price_drop_pct
 
 CATALOG = [
@@ -305,6 +305,11 @@ class CrawlTargetTests(unittest.TestCase):
                          [("kavak", "Toyota", "Corolla"), ("mercadolibre", "Toyota", "Corolla")])
         self.assertEqual(specs[2].query, {"km_max": 90_000, "count_only": True, "count_profile_ids": [8]})
         self.assertNotIn("profile_ids", specs[3].query)
+
+    def test_a_failed_count_only_target_waits_hours_not_minutes(self):
+        self.assertEqual(retry_seconds({"crawl_interval_seconds": 1800, "query": {"profile_ids": [1]}}), 900)
+        self.assertEqual(retry_seconds({"crawl_interval_seconds": 300, "query": {}}), 300)
+        self.assertEqual(retry_seconds({"crawl_interval_seconds": 1800, "query": {"count_only": True}}), 6 * 3600)
 
     def test_profiles_without_a_vehicle_are_not_crawled(self):
         self.assertEqual(derive_targets([{"id": 1, "filters": {"year_min": 2015}}], self.SOURCES), [])

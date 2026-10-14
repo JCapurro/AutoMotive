@@ -39,6 +39,9 @@ log = logging.getLogger("crawl")
 
 # A failed target retries after its interval, but never later than this.
 FAILURE_RETRY_SECONDS = 900
+# A failed count-only target (2.5) waits longer: nobody waits for it, and a
+# source that is blocking requests shouldn't get extra ones.
+COUNT_ONLY_RETRY_SECONDS = 6 * 3600
 
 
 @dataclass(frozen=True)
@@ -142,6 +145,13 @@ def derive_targets(profiles: list[dict[str, Any]], sources: list[str],
     return specs
 
 
+def retry_seconds(target: dict[str, Any]) -> int:
+    """When a failed or incomplete run of this target is tried again."""
+    if (target.get("query") or {}).get("count_only") is True:
+        return COUNT_ONLY_RETRY_SECONDS
+    return min(int(target.get("crawl_interval_seconds") or FAILURE_RETRY_SECONDS), FAILURE_RETRY_SECONDS)
+
+
 def scraper_filters(target: dict[str, Any]) -> dict[str, Any]:
     """A target's query in the collectors' filter vocabulary."""
     q = target.get("query") or {}
@@ -157,8 +167,7 @@ async def run_target(target: dict[str, Any], on_health: HealthHandler | None = N
     """Scrape and ingest one target, recording a collector_runs row. None if it failed."""
     source = target["source"]
     run_id = await runs.start_run(source, target["id"])
-    retry = min(int(target.get("crawl_interval_seconds") or FAILURE_RETRY_SECONDS),
-                FAILURE_RETRY_SECONDS)
+    retry = retry_seconds(target)
     try:
         scraper = REGISTRY[source]()
         filters = scraper_filters(target)
@@ -220,15 +229,12 @@ async def _run_source(targets: list[dict[str, Any]], on_batch: BatchHandler | No
                 await on_batch(run)
             except Exception:
                 await runs.log_error("notify", f"target:{target['id']}", traceback.format_exc())
-                await targets_repo.finish_target(target["id"], ok=False, retry_seconds=min(
-                    int(target.get("crawl_interval_seconds") or FAILURE_RETRY_SECONDS),
-                    FAILURE_RETRY_SECONDS))
+                await targets_repo.finish_target(target["id"], ok=False, retry_seconds=retry_seconds(target))
                 continue
         # Only now is the first run over: its batch was handled as backfill.
         await targets_repo.finish_target(target["id"], ok=run.complete,
-                                        retry_seconds=0 if run.complete else min(
-                                            int(target.get("crawl_interval_seconds") or FAILURE_RETRY_SECONDS),
-                                            FAILURE_RETRY_SECONDS), covered_until=run.covered_until)
+                                        retry_seconds=0 if run.complete else retry_seconds(target),
+                                        covered_until=run.covered_until)
 
 
 async def crawl_due(on_batch: BatchHandler | None = None, *, jitter_seconds: float = 5.0,
