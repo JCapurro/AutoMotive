@@ -1,5 +1,5 @@
 -- Planes 2026-10, fase 3 (3.1): Pro replaces Agencia at $100.000 a month for
--- new subscriptions. It touches charges, so it is applied only with Juan's OK.
+-- new subscriptions. It touches charges: Juan approved it on 14/10/2026.
 --
 --   pro_offer.pro_monthly.amount 75000 → 100000, under a new offer version.
 --     Only checkouts started from now on take it: every subscription keeps
