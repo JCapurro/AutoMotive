@@ -87,6 +87,50 @@ class LocationLookupTests(unittest.TestCase):
             self.assertIsNotNone(_lookup_known_location(name),
                                  f"{name!r} should resolve locally")
 
+    def test_cuyo_departments_do_not_resolve_to_their_namesakes(self):
+        # deRuedas locates ads as "<departamento>, <provincia>". Luján, Junín,
+        # San Martín and Santa Rosa are also towns about 1000 km from Cuyo.
+        mendoza, san_juan = (-32.8895, -68.8458), (-31.5375, -68.5364)
+        for name in ("Luján De Cuyo, Mendoza", "Junín, Mendoza", "San Martín, Mendoza",
+                     "Santa Rosa, Mendoza", "Maipú, Mendoza", "Las Heras, Mendoza",
+                     "Rivadavia, Mendoza", "Godoy Cruz, Mendoza", "Capital, Mendoza"):
+            coords = _lookup_known_location(name)
+            self.assertIsNotNone(coords, name)
+            self.assertLess(haversine_km(*coords, *mendoza), 100, name)
+        for name in ("San Martín, San Juan", "Rawson, San Juan", "Rivadavia, San Juan",
+                     "Capital, San Juan"):
+            coords = _lookup_known_location(name)
+            self.assertIsNotNone(coords, name)
+            self.assertLess(haversine_km(*coords, *san_juan), 30, name)
+        self.assertEqual(_lookup_known_location("Capital, San Luis"), _lookup_known_location("San Luis"))
+        self.assertEqual(_lookup_known_location("Capital, Córdoba"), _lookup_known_location("Córdoba"))
+        self.assertLess(haversine_km(*_lookup_known_location("Junín, San Luis"), -33.3017, -66.3378), 160)
+        san_martin_sl = _lookup_known_location("San Martín, San Luis")
+        self.assertLess(haversine_km(*san_martin_sl, -33.3017, -66.3378), 150)
+        self.assertGreater(haversine_km(*san_martin_sl, -34.5763, -58.5364), 500)
+
+    def test_cordoba_and_santa_fe_departments_named_like_gba_towns(self):
+        # Department seats: San Francisco, Villa María, San Justo and Sastre.
+        for name, seat in (("San Justo, Córdoba", (-31.4278, -62.0828)),
+                           ("General San Martín, Córdoba", (-32.4075, -63.2402)),
+                           ("San Justo, Santa Fe", (-30.7891, -60.5919)),
+                           ("San Martín, Santa Fe", (-31.7676, -61.8285))):
+            coords = _lookup_known_location(name)
+            self.assertIsNotNone(coords, name)
+            self.assertLess(haversine_km(*coords, *seat), 20, name)
+        self.assertEqual(_lookup_known_location("San Justo - GBA Oeste"), (-34.6764, -58.5614))
+        self.assertEqual(_lookup_known_location("San Martín - GBA Norte"), (-34.5763, -58.5364))
+
+    def test_namesakes_outside_cuyo_keep_their_coordinates(self):
+        self.assertEqual(_lookup_known_location("Luján, Buenos Aires"), (-34.5703, -59.1051))
+        self.assertEqual(_lookup_known_location("Junín - Bs.As. Interior"), (-34.5934, -60.9486))
+        self.assertEqual(_lookup_known_location("San Martín - GBA Norte"), (-34.5763, -58.5364))
+        self.assertEqual(_lookup_known_location("Santa Rosa, La Pampa"), (-36.6208, -64.2906))
+        self.assertEqual(_lookup_known_location("Mendoza"), (-32.8895, -68.8458))
+        # Ambiguous or unknown places still go to the geocoder instead of a guess.
+        self.assertIsNone(_lookup_known_location("General Las Heras, Buenos Aires"))
+        self.assertIsNone(_lookup_known_location("Capital, Buenos Aires"))
+
 
 class GeocodeNegativeCacheTests(unittest.IsolatedAsyncioTestCase):
     async def test_vehicle_noise_is_not_sent_to_nominatim(self):

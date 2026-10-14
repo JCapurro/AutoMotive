@@ -11,6 +11,7 @@ from .instagram import OnlyCarsUsadosScraper, SCClasificadosScraper
 from .autocity import AutocityScraper
 from .carone import CarOneScraper
 from .gruporandazzo import GrupoRandazzoScraper
+from .deruedas import DeRuedasScraper
 
 REGISTRY = {
     "mercadolibre": MercadoLibreScraper,
@@ -26,6 +27,7 @@ REGISTRY = {
     "autocity": AutocityScraper,
     "carone": CarOneScraper,
     "gruporandazzo": GrupoRandazzoScraper,
+    "deruedas": DeRuedasScraper,
 }
 
 __all__ = ["BaseScraper", "CollectorBlocked", "Listing", "ListingDetail", "REGISTRY"]

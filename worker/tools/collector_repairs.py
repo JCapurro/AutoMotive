@@ -23,6 +23,7 @@ COLLECTOR_FILES = {
     'rosariogarage': 'rosariogarage', 'usadossantafe': 'usadossantafe',
     'onlycarsusados': 'instagram', 'sc_clasificados': 'instagram',
     'autocity': 'autocity', 'carone': 'carone', 'gruporandazzo': 'gruporandazzo',
+    'deruedas': 'deruedas',
 }
 PUBLIC_QUERY_KEYS = {'inventory', 'year_min', 'year_max', 'km_max', 'publication_policy'}
 

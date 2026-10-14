@@ -61,7 +61,7 @@ ML_BROWSER_PROFILE_DIR = str(ROOT / os.getenv("ML_BROWSER_PROFILE_DIR", ".ml_chr
 # Sources offered by the Telegram wizard (the enabled ones live in the sources table).
 SOURCES = ["mercadolibre", "facebook", "v6", "kavak", "autocosmos",
            "mardelusados", "rosariogarage", "usadossantafe", "onlycarsusados", "sc_clasificados",
-           "autocity", "carone", "gruporandazzo"]
+           "autocity", "carone", "gruporandazzo", "deruedas"]
 
 # Notifications (sección 7). The email channel is on when both are set.
 RESEND_API_KEY = os.getenv("RESEND_API_KEY", "").strip()
