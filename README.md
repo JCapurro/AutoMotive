@@ -45,7 +45,7 @@ docs/         PRD y plan técnico
 
 | Fuente | Tipo | Notas |
 |--------|------|-------|
-| **MercadoLibre** | Chrome visible + perfil persistente | Mayor volumen. Conserva la sesión y la verificación en `.ml_chrome_profile` |
+| **MercadoLibre** | HTTP sobre las páginas públicas (`autos.` y `auto.mercadolibre.com.ar`) | Mayor volumen. Sin sesión: lee «Publicados hoy» y la ficha para la fecha |
 | **Facebook Marketplace** | Headless browser + sesión | Particulares — donde aparecen las gangas. Requiere login una vez |
 | **V6** | Headless browser | Particulares + concesionarias, fotos directas |
 | **Kavak** | Headless browser | Inventario certificado, precios estables — buen anclaje para la mediana |
@@ -192,30 +192,17 @@ python -m tools.scraper_cli mercadolibre marca=Toyota modelo=Corolla origin_lat=
 Imprime una tabla con los resultados — sirve para verificar que los selectores
 siguen vivos y para probar nuevos filtros antes de cargarlos como alerta.
 
-### MercadoLibre: sesion web
+### MercadoLibre: páginas públicas
 
-El scraper de MercadoLibre usa el transporte de Tecc: Chrome instalado, visible,
-con un perfil persistente dedicado (`.ml_chrome_profile/`, configurable mediante
-`ML_BROWSER_PROFILE_DIR`). Busquedas y detalles reutilizan el mismo navegador
-durante la corrida y el perfil entre corridas.
-Las cookies de `ml_state.json` ya no se cargan en un navegador headless.
+Desde el 14/10/2026 el scraper de MercadoLibre lee las páginas públicas con pedidos HTTP comunes, sin navegador ni sesión:
 
-Para preparar o verificar ese perfil, primero detene el worker si esta ejecutandose:
+- las búsquedas, en `autos.mercadolibre.com.ar/<marca>/<modelo>/`;
+- las fichas, en `auto.mercadolibre.com.ar/MLA-…`.
 
-```powershell
-cd worker
-python -m collectors.mercadolibre
-```
+Antes usaba un Chrome visible con un perfil propio, con sesión iniciada en `listado.mercadolibre.com.ar`. Esa ruta pide cuenta, y MercadoLibre empezó a mostrarle un desafío de seguridad al Chrome automatizado.
 
-Se abre Chrome sobre una busqueda real de autos. Si aparece un pedido de ingreso
-o verificacion, completalo manualmente y presiona Enter en la consola. El comando
-solo termina con exito cuando la busqueda devuelve publicaciones; el perfil queda
-guardado para las siguientes corridas. No copies el perfil de Tecc ni uses el
-perfil cotidiano de Chrome. Cierra este asistente antes de reanudar el worker;
-solo un proceso puede usar el perfil. Si el worker recibe una verificacion,
-completala en su ventana de Chrome abierta, o detenelo antes de usar el asistente.
-El worker necesita Chrome instalado y una sesion de
-escritorio que pueda abrir ventanas. El proveedor puede volver a exigir verificacion.
+- **Orden y fechas.** La búsqueda pública no ordena por más recientes. El día se lee con el filtro «Publicados hoy»; una ventana de varios días se recorre entera. La fecha de cada aviso sale de las publicaciones guardadas o de su ficha.
+- **Bloqueos.** Un desafío, un pedido de ingreso o un 403/429 frenan la corrida como bloqueo. Nada intenta saltearlos.
 
 ### Correr el bot
 

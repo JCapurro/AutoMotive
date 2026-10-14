@@ -34,23 +34,7 @@ Particular; ver [mails del plan](MAILS_DE_PLAN.md).
 
 ## MercadoLibre
 
-La fuente usa Chrome visible con un perfil persistente propio, como Tecc,
-para las búsquedas y los detalles. Mantiene el navegador abierto durante la corrida.
-Para preparar o verificar el perfil, detené primero el worker si está ejecutándose,
-desde el checkout operativo:
-
-```powershell
-cd C:\Users\Juan\Desktop\AutoMotive\worker
-python -m collectors.mercadolibre
-```
-
-El propietario completa el ingreso/verificación en esa ventana de Chrome y
-presiona Enter para comprobar una búsqueda real de autos. El comando solo
-termina con éxito cuando aparecen publicaciones. El estado queda en
-`.ml_chrome_profile/` (configurable con `ML_BROWSER_PROFILE_DIR`); `ml_state.json`
-ya no se usa. Chrome debe estar instalado y el escritorio disponible para abrir
-ventanas. Después hay que comprobar una corrida real del scraper. Si el proveedor
-mantiene el bloqueo, la fuente continúa degradada y distingue login de captcha.
+Desde el 14/10/2026 la fuente lee las páginas públicas con pedidos HTTP comunes, sin navegador ni sesión: búsquedas en `autos.mercadolibre.com.ar` y fichas en `auto.mercadolibre.com.ar`. Ya no existen el Chrome con perfil propio ni el asistente `python -m collectors.mercadolibre`. Si MercadoLibre pide ingreso o verificación, la corrida falla como bloqueo y la fuente queda degradada, distinguiendo login de captcha. Ver el README.
 
 ## Verificación
 

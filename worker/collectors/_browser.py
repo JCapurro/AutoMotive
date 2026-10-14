@@ -54,11 +54,6 @@ async def browser_context(
 
 async def shutdown() -> None:
     global _pw, _browser
-    from ._mercadolibre_browser import shutdown as mercadolibre_shutdown
-    try:
-        await mercadolibre_shutdown()
-    except Exception:
-        logging.getLogger(__name__).warning("MercadoLibre browser cleanup failed", exc_info=True)
     if _browser:
         try:
             await _browser.close()

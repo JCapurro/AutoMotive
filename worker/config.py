@@ -56,7 +56,6 @@ INSTAGRAM_STORAGE_STATE = str(ROOT / _instagram_state) if _instagram_state else 
 INSTAGRAM_MAX_POSTS = max(1, min(60, int(os.getenv("INSTAGRAM_MAX_POSTS", "24"))))
 # Mercado Libre uses the same persistent, visible Chrome profile for manual
 # verification, search and detail pages (the transport used by Tecc).
-ML_BROWSER_PROFILE_DIR = str(ROOT / os.getenv("ML_BROWSER_PROFILE_DIR", ".ml_chrome_profile"))
 
 # Sources offered by the Telegram wizard (the enabled ones live in the sources table).
 SOURCES = ["mercadolibre", "facebook", "v6", "kavak", "autocosmos",

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+import pathlib
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 from urllib.parse import parse_qs, urlparse
@@ -12,7 +13,7 @@ from collectors.base import Listing, SearchResults
 from collectors._recency import DAY, PublicationWindow, target_window
 from pipeline import crawl
 from pipeline.ingest import IngestResult
-from test_mercadolibre_transport import Page
+from test_mercadolibre_transport import FakeHttp
 
 NOW = 1_700_000_000
 
@@ -29,8 +30,7 @@ def card(identifier, age=None):
             f'<a class="poly-component__title" href="https://auto.mercadolibre.com.ar/MLA-{identifier}-fiesta">Ford Fiesta 2016</a></li>')
 
 
-def next_link(n):
-    return f'<a rel="next" href="https://listado.mercadolibre.com.ar/autos/ford-fiesta_Desde_{n}">Siguiente</a>'
+BASE = "https://autos.mercadolibre.com.ar"
 
 
 class WindowTests(unittest.TestCase):
@@ -80,41 +80,50 @@ class WindowTests(unittest.TestCase):
 
 
 class MercadoLibreWindowTests(unittest.IsolatedAsyncioTestCase):
-    def context(self, page):
-        @asynccontextmanager
-        async def context():
-            yield MagicMock(new_page=AsyncMock(return_value=page))
-        return patch.object(ml, "mercadolibre_context", context)
-
-    async def search(self, outcomes, **filters):
-        page = Page(outcomes)
-        with self.context(page), patch.object(ml, "_page_pause", AsyncMock()):
+    async def search(self, outcomes, *, page_size=1, **filters):
+        http = FakeHttp(outcomes)
+        with http.patch(), patch.object(ml, "_page_pause", AsyncMock()), patch.object(ml, "PAGE_SIZE", page_size):
             results = await ml.MercadoLibreScraper().search(
-                {"publication_days": 30, "publication_until": NOW, **filters})
-        page.close.assert_awaited_once()
-        return results, page
+                {"marca": "Ford", "modelo": "Fiesta", "publication_days": 30, "publication_until": NOW, **filters})
+        return results, http
 
-    async def test_bootstrap_reads_beyond_two_pages_and_does_not_stop_on_an_old_card(self):
-        results, page = await self.search([
-            ("https://listado.mercadolibre.com.ar/autos", card("1", 45) + next_link(49), 200),
-            ("https://listado.mercadolibre.com.ar/autos/ford-fiesta_Desde_49", card("2", 29) + next_link(97), 200),
-            ("https://listado.mercadolibre.com.ar/autos/ford-fiesta_Desde_97", card("3", 1), 200),
+    async def test_bootstrap_reads_every_page_and_does_not_stop_on_an_old_card(self):
+        results, http = await self.search([
+            (f"{BASE}/ford/fiesta/_NoIndex_True", card("1", 45), 200),
+            (f"{BASE}/ford/fiesta/_Desde_2_NoIndex_True", card("2", 29), 200),
+            (f"{BASE}/ford/fiesta/_Desde_3_NoIndex_True", card("3", 1), 200),
+            (f"{BASE}/ford/fiesta/_Desde_4_NoIndex_True", '<div class="ui-search-rescue"></div>', 200),
         ])
         self.assertEqual([l.listing_id for l in results], ["MLA2", "MLA3"])
         self.assertTrue(results.complete)
-        self.assertEqual(len(page.asked), 3)
+        self.assertEqual(http.asked, [f"{BASE}/ford/fiesta/_NoIndex_True", f"{BASE}/ford/fiesta/_Desde_2_NoIndex_True",
+                                      f"{BASE}/ford/fiesta/_Desde_3_NoIndex_True", f"{BASE}/ford/fiesta/_Desde_4_NoIndex_True"])
 
-    async def test_daily_scan_follows_the_real_today_filter_link(self):
-        today_url = "https://autos.mercadolibre.com.ar/ford/fiesta/_PublishedToday_YES"
-        results, page = await self.search([
-            ("https://listado.mercadolibre.com.ar/autos", card("1", 20) + f'<a href="{today_url}">Publicados hoy (2)</a>', 200),
-            (today_url, card("2", 0), 200),
-        ], publication_days=1, published_today_only=True)
-        self.assertEqual(page.asked[1], today_url)
+    async def test_a_short_page_is_the_last(self):
+        results, http = await self.search([(f"{BASE}/ford/fiesta/_NoIndex_True", card("1", 3), 200)], page_size=48)
+        self.assertEqual(([l.listing_id for l in results], len(http.asked)), (["MLA1"], 1))
+
+    async def test_daily_scan_reads_the_today_filter_directly(self):
+        today_url = f"{BASE}/ford/fiesta/_PublishedToday_YES_NoIndex_True"
+        results, http = await self.search([(today_url, card("2", 0), 200)],
+                                          page_size=48, publication_days=1, published_today_only=True)
+        self.assertEqual(http.asked, [today_url])
         self.assertEqual([l.listing_id for l in results], ["MLA2"])
 
-    async def test_page_limit_and_late_wall_are_partial_not_successful_bootstraps(self):
-        first = ("https://listado.mercadolibre.com.ar/autos", card("1", 2) + next_link(49), 200)
+    async def test_today_s_results_are_kept_without_reading_each_ad(self):
+        """The ad's page says "hace 1 día" for an ad Mercado Libre lists as published today."""
+        detail = AsyncMock(return_value=NOW - DAY)
+        today_url = f"{BASE}/ford/fiesta/_PublishedToday_YES_NoIndex_True"
+        with patch.object(ml.MercadoLibreScraper, "_publication_date", detail):
+            results, http = await self.search([(today_url, card("3") + card("4"), 200)], page_size=48,
+                                              publication_days=1, published_today_only=True,
+                                              known_publication_dates={"MLA4": NOW - 3600})
+        self.assertEqual([(l.listing_id, l.published_at) for l in results], [("MLA3", None), ("MLA4", NOW - 3600)])
+        self.assertEqual((results.unknown_dates, http.asked), (0, [today_url]))
+        detail.assert_not_awaited()
+
+    async def test_page_limit_late_wall_and_a_repeated_page_are_partial_not_successful_bootstraps(self):
+        first = (f"{BASE}/ford/fiesta/_NoIndex_True", card("1", 2), 200)
         with patch.object(ml.config, "RECENT_ML_MAX_PAGES", 1):
             results, _ = await self.search([first])
         self.assertFalse(results.complete)
@@ -123,24 +132,34 @@ class MercadoLibreWindowTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(results.complete)
         self.assertIn("security challenge", results.reason)
         self.assertEqual(len(results), 1)
+        results, _ = await self.search([first, first])
+        self.assertFalse(results.complete)
+        self.assertIn("repeated", results.reason)
+
+    async def test_a_wall_on_the_first_page_fails_the_run(self):
+        with self.assertRaisesRegex(ml.CollectorBlocked, "security challenge"):
+            await self.search([("https://www.mercadolibre.com.ar/captcha/wall/logged", "", 200)])
 
     async def test_date_cache_avoids_detail_and_missing_date_never_becomes_recent(self):
         detail = AsyncMock(return_value=None)
         with patch.object(ml.MercadoLibreScraper, "_publication_date", detail), \
                 patch.object(ml.config, "RECENT_ML_DETAIL_SECONDS", 0):
             results, _ = await self.search([
-                ("https://listado.mercadolibre.com.ar/autos", card("1") + card("2"), 200)
-            ], known_publication_dates={"MLA1": NOW - DAY})
+                (f"{BASE}/ford/fiesta/_NoIndex_True", card("1") + card("2"), 200)
+            ], page_size=48, known_publication_dates={"MLA1": NOW - DAY})
         self.assertEqual([l.listing_id for l in results], ["MLA1"])
         self.assertEqual(results.unknown_dates, 1)
         detail.assert_awaited_once()
 
-    def test_pagination_preserves_filters_and_rejects_foreign_or_disabled_links(self):
-        current = "https://autos.mercadolibre.com.ar/ford/fiesta/_PublishedToday_YES"
-        url = current + "_Desde_49"
-        self.assertEqual(ml._search_link(f'<a rel="next" href="{url}">Siguiente</a>', current), url)
-        self.assertIsNone(ml._search_link('<a rel="next" href="https://example.com/next">Next</a>', current))
-        self.assertIsNone(ml._search_link(f'<a rel="next" aria-disabled="true" href="{url}">Next</a>', current))
+    async def test_a_missing_date_is_read_from_the_ad(self):
+        html = (pathlib.Path(__file__).parent / "fixtures" / "html" / "mercadolibre_detail.html").read_text(encoding="utf-8")
+        with patch.object(ml.config, "RECENT_ML_DETAIL_SECONDS", 0):
+            results, http = await self.search([
+                (f"{BASE}/ford/fiesta/_NoIndex_True", card("7"), 200),
+                ("https://auto.mercadolibre.com.ar/MLA-7-fiesta", html, 200),
+            ], page_size=48, publication_days=30, publication_until=2_000_000_000)
+        self.assertEqual(http.asked[1], "https://auto.mercadolibre.com.ar/MLA-7-fiesta")
+        self.assertEqual(results.unknown_dates, 0)
 
 
 class FacebookPage:

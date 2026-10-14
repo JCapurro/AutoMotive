@@ -1,25 +1,26 @@
 """MercadoLibre Argentina scraper.
 
-Search and detail pages use installed, visible Chrome with a dedicated
-persistent profile, matching Tecc's transport. Manual verification opens that
-same profile; a cookie snapshot in a fresh headless context is not used.
+Search and item pages are plain HTTP GETs of the public hosts
+(autos.mercadolibre.com.ar for searches, auto.mercadolibre.com.ar for ads),
+which Mercado Libre serves without a session. The logged-in search at
+listado.mercadolibre.com.ar asks for an account, and in October 2026 it put a
+security challenge in front of the automated Chrome this collector used.
+A challenge or a login wall is never solved: the run fails as blocked.
 """
 from __future__ import annotations
 import asyncio
 import logging
 import random
 import re
-from urllib.parse import urlsplit, urljoin
+from urllib.parse import urlsplit
 
 from bs4 import BeautifulSoup
-from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 
 import config
 from .base import BaseScraper, CollectorBlocked, Listing, ListingDetail, SearchResults
 from ._recency import PublicationWindow
-from ._mercadolibre_browser import mercadolibre_context, shutdown as mercadolibre_shutdown
 from ._dates import publication_date
-from ._http import Page, dedupe, json_ld_of_type, multiline_text, soup, text_of, to_int
+from ._http import Page, dedupe, fetch_page, json_ld_of_type, multiline_text, soup, text_of, to_int
 
 
 log = logging.getLogger("collectors.mercadolibre")
@@ -38,14 +39,6 @@ def _wall_reason(url: str, body_text: str = "") -> str | None:
 
 def _looks_like_login_wall(url: str, body_text: str = "") -> bool:
     return _wall_reason(url, body_text) is not None
-
-
-async def _page_wall_reason(page) -> str | None:
-    try:
-        body_text = await page.locator("body").inner_text(timeout=2_000)
-    except Exception:
-        body_text = ""
-    return _wall_reason(page.url, body_text)
 
 
 def _safe_url(url: str) -> str:
@@ -71,17 +64,18 @@ def _slug(s: str) -> str:
     return _SLUG_RE.sub("-", s).strip("-")
 
 
-def _build_url(filters: dict, page: int = 1) -> str:
-    """Build a MercadoLibre Argentina autos search URL."""
-    parts: list[str] = []
-    for k in ("marca", "modelo", "version"):
-        v = filters.get(k)
-        if v:
-            parts.append(_slug(str(v)))
-    slug = "-".join(parts) if parts else ""
+BASE = "https://autos.mercadolibre.com.ar"
+PAGE_SIZE = 48
 
-    base = "https://listado.mercadolibre.com.ar"
-    path = f"/autos/{slug}" if slug else "/autos"
+
+def _build_url(filters: dict, page: int = 1, *, today: bool = False) -> str:
+    """A public autos search: /<marca>/<modelo>/ and ML's _Filter_value suffixes.
+
+    The public host sorts by relevance (newest first needs an account), so a
+    publication window is read whole, or as "Publicados hoy" for today. The
+    version stays out of the path: the cards are filtered after reading them.
+    """
+    path = "/" + "".join(f"{_slug(str(filters[k]))}/" for k in ("marca", "modelo") if filters.get(k))
 
     # ML encodes filters as _Filter_value pairs appended to the path
     suffix_segments: list[str] = []
@@ -92,15 +86,16 @@ def _build_url(filters: dict, page: int = 1) -> str:
         suffix_segments.append(f"_VEHICLE*YEAR_{lo}-{hi}")
 
     if filters.get("km_max"):
-        suffix_segments.append(f"_KILOMETERS_0-{int(filters['km_max'])}km")
+        suffix_segments.append(f"_KILOMETERS_*-{int(filters['km_max'])}km")
 
-    suffix_segments.append("_OrderId_BEGIN")  # newest first
-    suffix_segments.append("_NoIndex_True")
+    if today:
+        suffix_segments.append("_PublishedToday_YES")
 
     if page > 1:
-        suffix_segments.append(f"_Desde_{(page - 1) * 48 + 1}")
+        suffix_segments.append(f"_Desde_{(page - 1) * PAGE_SIZE + 1}")
 
-    return base + path + "".join(suffix_segments)
+    suffix_segments.append("_NoIndex_True")
+    return BASE + path + "".join(suffix_segments)
 
 
 # ---------- card parsing ----------
@@ -204,24 +199,19 @@ def parse_search(html: str) -> list[Listing]:
     return list(out.values())
 
 
-def _search_link(html: str, current_url: str, *, today: bool = False) -> str | None:
-    """Follow the site's date/pagination links without inventing filter suffixes."""
+def _results(html: str) -> list[Listing]:
+    """The cards of a results page; [] for ML's "no results" placeholder.
+    A page that is neither, or whose cards don't parse, raises: never a
+    silent zero."""
     doc = soup(html)
-    if today:
-        anchors = [a for a in doc.select("a[href]")
-                   if _plain(a.get_text(" ", strip=True)).startswith("publicados hoy")]
-    else:
-        anchors = doc.select(".andes-pagination__button--next a[href], a[rel='next']")
-    for a in anchors:
-        if a.get("aria-disabled") == "true" or a.find_parent(attrs={"aria-disabled": "true"}):
-            continue
-        url = urljoin(current_url, a.get("href", ""))
-        parts = urlsplit(url)
-        if (parts.scheme == "https" and parts.hostname in {
-                "listado.mercadolibre.com.ar", "autos.mercadolibre.com.ar", "vehiculos.mercadolibre.com.ar"}
-                and url != current_url):
-            return url
-    return None
+    if doc.select_one(".ui-search-rescue") is not None:
+        return []
+    if not doc.select("li.ui-search-layout__item"):
+        raise RuntimeError("mercadolibre: the page has no results list")
+    cards = parse_search(html)
+    if not cards:
+        raise ValueError("mercadolibre: result cards exist but none could be parsed")
+    return cards
 
 
 # ---------- detail page ----------
@@ -311,173 +301,121 @@ def parse_detail(html: str, url: str, status: int = 200) -> ListingDetail:
     ))
 
 
+# ---------- transport ----------
+
+async def _get(url: str, what: str, *, allow_404: bool = False) -> Page:
+    """GET a public page. A challenge, a login wall or 403/429 raise
+    CollectorBlocked: the run fails, nothing tries to get past it."""
+    page = await fetch_page(url, timeout=45.0)
+    body = soup(page.html).get_text(" ", strip=True) if page.html else ""
+    if reason := _wall_reason(page.url, body):
+        raise CollectorBlocked(f"mercadolibre {what}: {reason}; HTTP {page.status}; destination={_safe_url(page.url)}")
+    if page.status in (403, 429):
+        raise CollectorBlocked(f"mercadolibre {what}: HTTP {page.status}; destination={_safe_url(page.url)}")
+    if page.status >= 400 and not (allow_404 and page.status == 404):
+        raise RuntimeError(f"mercadolibre {what} HTTP {page.status}: {_safe_url(page.url)}")
+    return page
+
+
 # ---------- scraper ----------
-
-def _blocked(page_number: int, reason: str, url: str, status: int) -> None:
-    """A wall on the first page fails the run; on a later page, keep what we have."""
-    message = f"mercadolibre: {reason}; HTTP {status}; destination={_safe_url(url)}"
-    log.warning(
-        "%s. Complete verification in the existing Chrome window, or stop the worker "
-        "before running python -m collectors.mercadolibre; restart it after verification.",
-        message,
-    )
-    if page_number == 1:
-        raise CollectorBlocked(message)
-
 
 class MercadoLibreScraper(BaseScraper):
     DETAIL_PARSER_VERSION = 2
     name = "mercadolibre"
 
-    MAX_PAGES = 2  # first 96 results per run is plenty for "newest" sort
+    MAX_PAGES = 2  # without a publication window (the CLI): the first 96 results
 
     async def search(self, filters: dict) -> list[Listing]:
         if window := PublicationWindow.from_filters(filters):
             return await self._search_recent(filters, window)
         out: list[Listing] = []
         seen_ids: set[str] = set()
-        async with mercadolibre_context() as ctx:
-            page = await ctx.new_page()
+        for p in range(1, self.MAX_PAGES + 1):
+            if p > 1:
+                await _page_pause()
             try:
-                for p in range(1, self.MAX_PAGES + 1):
-                    if p > 1:
-                        await _page_pause()
-                    url = _build_url(filters, page=p)
-                    status = 0
-                    try:
-                        response = await page.goto(url, timeout=45_000, wait_until="domcontentloaded")
-                        status = response.status if response else 0
-                        if reason := await _page_wall_reason(page):
-                            _blocked(p, reason, page.url, status)
-                            break
-                        if status >= 400:
-                            raise RuntimeError(f"mercadolibre search HTTP {status}: {_safe_url(page.url)}")
-                        await page.wait_for_selector(
-                            "li.ui-search-layout__item, .ui-search-rescue",
-                            timeout=15_000,
-                        )
-                    except CollectorBlocked:
-                        raise
-                    except Exception as exc:
-                        if reason := await _page_wall_reason(page):
-                            _blocked(p, reason, page.url, status)
-                        else:
-                            if p == 1:
-                                raise
-                            log.warning("MercadoLibre scrape failed: %s", exc)
-                        break  # no results / blocked
-                    if await page.locator(".ui-search-rescue").count() > 0:
-                        # ML's "no results" placeholder
-                        break
-                    cards = parse_search(await page.content())
-                    if not cards:
-                        break
-                    for listing in cards:
-                        if listing.listing_id in seen_ids:
-                            continue
-                        seen_ids.add(listing.listing_id)
-                        self.annotate_partial_price(listing)
-                        if self.matches_filters(listing, filters):
-                            out.append(listing)
-            finally:
-                await page.close()
+                cards = _results((await _get(_build_url(filters, page=p), "search")).html)
+            except Exception as exc:
+                # A wall or a failure on the first page fails the run; later, keep what we have.
+                if p == 1:
+                    raise
+                log.warning("MercadoLibre search stopped at page %d: %s", p, exc)
+                break
+            for listing in cards:
+                if listing.listing_id in seen_ids:
+                    continue
+                seen_ids.add(listing.listing_id)
+                self.annotate_partial_price(listing)
+                if self.matches_filters(listing, filters):
+                    out.append(listing)
+            if len(cards) < PAGE_SIZE:
+                break
         return out
 
-    async def _publication_date(self, ctx, listing: Listing) -> int | None:
-        """Cards often omit dates: read the ad instead of using detection time."""
-        page = await ctx.new_page()
-        try:
-            response = await page.goto(listing.url, timeout=45_000, wait_until="domcontentloaded")
-            status = response.status if response else 0
-            if reason := await _page_wall_reason(page):
-                raise CollectorBlocked(f"mercadolibre date: {reason}")
-            if status >= 400 and status != 404:
-                raise RuntimeError(f"mercadolibre date HTTP {status}")
-            if status != 404:
-                try:
-                    await page.wait_for_selector(".ui-pdp-container, h1.ui-pdp-title", timeout=8_000)
-                except PlaywrightTimeoutError:
-                    pass
-            if reason := await _page_wall_reason(page):
-                raise CollectorBlocked(f"mercadolibre date: {reason}")
-            detail = parse_detail(await page.content(), listing.url, status)
-            return detail.listing.published_at if detail.listing else None
-        finally:
-            await page.close()
+    async def _publication_date(self, listing: Listing) -> int | None:
+        """Cards omit dates: read the ad instead of using detection time."""
+        page = await _get(listing.url, "date", allow_404=True)
+        detail = parse_detail(page.html, listing.url, page.status)
+        return detail.listing.published_at if detail.listing else None
 
     async def _search_recent(self, filters: dict, window: PublicationWindow) -> SearchResults:
+        """Every result of the window: "Publicados hoy" when it is today,
+        otherwise all of them (relevance order), keeping the ones published
+        inside it. Dates come from stored listings or the ad itself.
+
+        Today's results are kept as they come: Mercado Libre's own filter
+        vouches for them, while an ad's page only says "hace 1 día" (no exact
+        date on the public pages). Without a stored date, detection time stands
+        in, which the half-hourly crawl keeps close to publication."""
         results = SearchResults()
         seen: set[str] = set()
-        visited: set[str] = set()
         known = filters.get("known_publication_dates") or {}
-        async with mercadolibre_context() as ctx:
-            page = await ctx.new_page()
-            url = _build_url(filters)
-            today_checked = not window.today_only
-            pages = 0
-            try:
-                while True:
-                    if url in visited:
-                        results.complete, results.reason = False, "mercadolibre: pagination repeated a page"
-                        break
-                    visited.add(url)
-                    if pages:
-                        await _page_pause()
-                    response = await page.goto(url, timeout=45_000, wait_until="domcontentloaded")
-                    status = response.status if response else 0
-                    if reason := await _page_wall_reason(page):
-                        raise CollectorBlocked(f"mercadolibre search: {reason}")
-                    if status >= 400:
-                        raise RuntimeError(f"mercadolibre search HTTP {status}")
-                    await page.wait_for_selector("li.ui-search-layout__item, .ui-search-rescue", timeout=15_000)
-                    html = await page.content()
-                    if not today_checked:
-                        today_checked = True
-                        if today_url := _search_link(html, page.url, today=True):
-                            url = today_url
-                            continue
-                        log.warning("MercadoLibre has no Publicados hoy link; verifying dates on unfiltered results")
-                    if soup(html).select_one(".ui-search-rescue") is not None:
-                        break
-                    cards = parse_search(html)
-                    if not cards:
-                        raise ValueError("mercadolibre: result cards exist but none could be parsed")
-                    pages += 1
-                    for listing in cards:
-                        if listing.listing_id in seen:
-                            continue
-                        seen.add(listing.listing_id)
-                        self.annotate_partial_price(listing)
-                        if not self.matches_filters(listing, filters):
-                            continue
-                        if listing.published_at is None:
-                            listing.published_at = known.get(listing.listing_id)
-                        if listing.published_at is None:
-                            await asyncio.sleep(config.RECENT_ML_DETAIL_SECONDS)
-                            try:
-                                listing.published_at = await self._publication_date(ctx, listing)
-                            except CollectorBlocked:
-                                raise
-                            except Exception as exc:
-                                results.complete, results.reason = False, f"mercadolibre date fetch failed: {type(exc).__name__}"
-                                log.warning("Could not read publication date for %s: %s", listing.listing_id, exc)
-                        if listing.published_at is None:
-                            results.unknown_dates += 1
-                        elif window.contains(listing):
-                            results.append(listing)
-                    next_url = _search_link(html, page.url)
-                    if not next_url:
-                        break
-                    if pages >= config.RECENT_ML_MAX_PAGES:
-                        results.complete, results.reason = False, "mercadolibre: publication scan page limit reached"
-                        break
-                    url = next_url
-            except Exception as exc:
-                if not seen:
-                    raise
-                results.complete, results.reason = False, f"mercadolibre: {type(exc).__name__}: {exc}"
-            finally:
-                await page.close()
+        pages = 0
+        try:
+            while True:
+                if pages >= config.RECENT_ML_MAX_PAGES:
+                    results.complete, results.reason = False, "mercadolibre: publication scan page limit reached"
+                    break
+                if pages:
+                    await _page_pause()
+                url = _build_url(filters, page=pages + 1, today=window.today_only)
+                cards = _results((await _get(url, "search")).html)
+                if not cards:
+                    break
+                pages += 1
+                fresh = [c for c in cards if c.listing_id not in seen]
+                if not fresh:
+                    results.complete, results.reason = False, "mercadolibre: pagination repeated a page"
+                    break
+                for listing in fresh:
+                    seen.add(listing.listing_id)
+                    self.annotate_partial_price(listing)
+                    if not self.matches_filters(listing, filters):
+                        continue
+                    if listing.published_at is None:
+                        listing.published_at = known.get(listing.listing_id)
+                    if window.today_only:
+                        results.append(listing)
+                        continue
+                    if listing.published_at is None:
+                        await asyncio.sleep(config.RECENT_ML_DETAIL_SECONDS)
+                        try:
+                            listing.published_at = await self._publication_date(listing)
+                        except CollectorBlocked:
+                            raise
+                        except Exception as exc:
+                            results.complete, results.reason = False, f"mercadolibre date fetch failed: {type(exc).__name__}"
+                            log.warning("Could not read publication date for %s: %s", listing.listing_id, exc)
+                    if listing.published_at is None:
+                        results.unknown_dates += 1
+                    elif window.contains(listing):
+                        results.append(listing)
+                if len(cards) < PAGE_SIZE:
+                    break
+        except Exception as exc:
+            if not seen:
+                raise
+            results.complete, results.reason = False, f"mercadolibre: {type(exc).__name__}: {exc}"
         log.info("mercadolibre publication window: pages=%d kept=%d unknown_dates=%d complete=%s reason=%s",
                  pages, len(results), results.unknown_dates, results.complete, results.reason)
         return results
@@ -485,63 +423,4 @@ class MercadoLibreScraper(BaseScraper):
     parse_detail = staticmethod(parse_detail)
 
     async def fetch_detail_page(self, url: str) -> Page:
-        async with mercadolibre_context() as ctx:
-            page = await ctx.new_page()
-            try:
-                response = await page.goto(url, timeout=45_000, wait_until="domcontentloaded")
-                status = response.status if response else 0
-                if reason := await _page_wall_reason(page):
-                    _blocked(1, reason, page.url, status)
-                if status >= 400 and status != 404:
-                    raise RuntimeError(f"mercadolibre detail HTTP {status}: {_safe_url(page.url)}")
-                if status != 404:
-                    try:
-                        await page.wait_for_selector(".ui-pdp-container, h1.ui-pdp-title", timeout=8_000)
-                    except PlaywrightTimeoutError:
-                        # Paused/finalized ads may lack the normal PDP container.
-                        # The parser handles them, after checking for a wall.
-                        pass
-                    if reason := await _page_wall_reason(page):
-                        _blocked(1, reason, page.url, status)
-                return Page(status, page.url, await page.content())
-            finally:
-                await page.close()
-
-
-# ------ Interactive login: `python -m collectors.mercadolibre` ------
-async def _wait_for_enter() -> None:
-    await asyncio.to_thread(input, "")
-
-
-async def _login_and_save() -> None:
-    async with mercadolibre_context() as ctx:
-        page = await ctx.new_page()
-        try:
-            while True:
-                response = await page.goto(_build_url({}), timeout=45_000, wait_until="domcontentloaded")
-                status = response.status if response else 0
-                if not await _page_wall_reason(page):
-                    try:
-                        await page.wait_for_selector("li.ui-search-layout__item", timeout=15_000)
-                    except PlaywrightTimeoutError:
-                        pass
-                    if status == 200 and await page.locator("li.ui-search-layout__item").count() > 0:
-                        print(f"[mercadolibre] busqueda verificada; perfil guardado en {config.ML_BROWSER_PROFILE_DIR}")
-                        return
-                print(
-                    "La busqueda sigue bloqueada o sin publicaciones. Completa el ingreso/verificacion "
-                    "en esta ventana de Chrome y presiona Enter para volver a comprobar."
-                )
-                await _wait_for_enter()
-        finally:
-            await page.close()
-
-
-if __name__ == "__main__":
-    async def _interactive_main() -> None:
-        try:
-            await _login_and_save()
-        finally:
-            await mercadolibre_shutdown()
-
-    asyncio.run(_interactive_main())
+        return await _get(url, "detail", allow_404=True)

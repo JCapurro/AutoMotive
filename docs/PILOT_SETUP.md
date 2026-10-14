@@ -113,15 +113,14 @@ Ahí te avisan el worker (una fuente que falla 3 veces seguidas) y el watchdog
 2. Mandale cualquier mensaje a tu bot de AutoMotive (tiene que haber un chat
    abierto para que pueda escribirte).
 
-## 6. Sesiones de MercadoLibre y Facebook
+## 6. Sesión de Facebook
 
-En la prueba de fuentes del 28/09, Kavak, V6 y Autocosmos funcionaron.
-MercadoLibre pedía verificación y Facebook devolvía 0 resultados (la sesión es
-de mayo). Desde `worker\`:
+En la prueba de fuentes del 28/09, Kavak, V6 y Autocosmos funcionaron y Facebook
+devolvía 0 resultados (la sesión es de mayo). Desde el 14/10/2026 MercadoLibre no
+necesita sesión: lee sus páginas públicas. Desde `worker\`:
 
 ```powershell
-python -m collectors.mercadolibre   # se abre Chromium: iniciá sesión o completá la verificación, volvé y Enter
-python -m collectors.facebook       # idem con Facebook (conviene una cuenta secundaria)
+python -m collectors.facebook       # se abre Chromium: iniciá sesión o completá la verificación, volvé y Enter (conviene una cuenta secundaria)
 python -m tools.scraper_cli mercadolibre marca=Ford modelo=Fiesta
 python -m tools.scraper_cli facebook marca=Ford modelo=Fiesta
 ```

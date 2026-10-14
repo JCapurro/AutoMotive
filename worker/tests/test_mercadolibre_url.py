@@ -19,8 +19,16 @@ class MercadoLibreUrlTests(unittest.TestCase):
         })
 
         self.assertIn("_VEHICLE*YEAR_2015-2024", url)
-        self.assertIn("_KILOMETERS_0-120000km", url)
+        self.assertIn("_KILOMETERS_*-120000km", url)
         self.assertNotIn("_PriceRange_", url)
+
+    def test_searches_the_public_autos_host_by_make_and_model(self):
+        self.assertEqual(_build_url({"marca": "Volkswagen", "modelo": "Gol Trend", "version": "Pack II"}),
+                         "https://autos.mercadolibre.com.ar/volkswagen/gol-trend/_NoIndex_True")
+        self.assertEqual(_build_url({"marca": "Mercedes-Benz", "modelo": "Clase A"}, page=3, today=True),
+                         "https://autos.mercadolibre.com.ar/mercedes-benz/clase-a/_PublishedToday_YES_Desde_97_NoIndex_True")
+        self.assertNotIn("listado.mercadolibre", _build_url({}))
+        self.assertNotIn("_OrderId_", _build_url({"marca": "Ford", "modelo": "Fiesta"}))
 
     def test_detects_mercadolibre_account_verification_wall(self):
         self.assertTrue(
