@@ -59,8 +59,11 @@ test("F4: búsqueda gratis con el email, backfill, alerta, guardar y guardados",
   await test.step("1. búsqueda gratis solo con el email: sin contraseña ni confirmación", async () => {
     const form = page.locator("#landing-search");
     await form.getByLabel("¿Qué auto buscás?").fill("Ford Fiesta Titanium manual 2016 a 2018 hasta USD 11.500");
-    await form.getByLabel("Tu email").fill(email);
     await form.getByRole("button", { name: "Crear mi búsqueda" }).click();
+    // The email comes in a pop-up, never the login page.
+    const dialog = page.getByRole("dialog", { name: "¿A qué email te avisamos?" });
+    await dialog.getByLabel("Tu email").fill(email);
+    await dialog.getByRole("button", { name: "Crear mi búsqueda" }).click();
     await expect(page).toHaveURL(/\/app\/searches\/new/);
     await expect(page.getByText(`Te vamos a avisar a ${email}`)).toBeVisible();
     const [account] = await query<{ email_only: boolean; method: string }>(

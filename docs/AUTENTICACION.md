@@ -22,11 +22,11 @@ Las contraseñas se envían directamente desde la acción al proveedor; no se gu
 
 Migración [20261029120000_email_only_accounts.sql](../supabase/migrations/20261029120000_email_only_accounts.sql); lógica del servidor en [web/lib/email-only.ts](../web/lib/email-only.ts) y [web/lib/account-proof.ts](../web/lib/account-proof.ts).
 
-**Alta (portada).** El visitante escribe qué auto busca y su email. `startFreeSearch` normaliza el email, pasa por los limitadores y busca la cuenta con `auth_account_for_email`:
+**Alta (portada).** El visitante escribe qué auto busca (un cuadro de tamaño fijo) y toca «Crear mi búsqueda». Recién ahí se abre un pop-up que pide solo el email: el alta nunca abre la página de login, que queda para «Ingresar» y para contratar un plan. `startFreeSearch` normaliza el email, pasa por los limitadores y busca la cuenta con `auth_account_for_email`:
 
 - **Email nuevo**: el servidor crea la cuenta solo-email con `admin.createUser({ email, email_confirm: true })`, sin contraseña (GoTrue guarda igual un hash bcrypt al azar que nadie conoce). Enseguida `mark_email_only_account(uid)` pone `profiles.email_only = true`; si devuelve false, `admin.deleteUser` y no hay sesión. Después `generateLink({ type: 'magiclink' })` + `verifyOtp` en el cliente con cookies dan la **sesión sin email**: no se manda ningún email y se comprueba que la sesión sea del usuario recién creado. `afterSignIn(..., 'email_only')` registra `signup_completed { method: 'email_only' }` y la web sigue a `/app/searches/new?prompt=…`.
 - **Email de una cuenta solo-email**: no hay sesión. Le mandamos el link para entrar a ese email.
-- **Email de una cuenta completa**: no hay sesión ni email. «Ya tenés una cuenta con este email. Ingresá para crear tu búsqueda», con `/login?next=…` (el email nunca va en la URL).
+- **Email de una cuenta completa** (contraseña o Google, confirmada): no hay sesión sin prueba. El mismo pop-up pide la contraseña (`enterForFreeSearch`, con freno por IP) o manda el link para entrar (`linkForFreeSearch`), y sigue a la búsqueda.
 
 La sesión se emite solo para un email que no existía, en el mismo pedido en que `createUser` funcionó. Nunca para un email existente: eso sería entrar a la cuenta de otro escribiendo su dirección.
 
@@ -51,7 +51,7 @@ Piezas en la base (todas las funciones y tablas nuevas son solo para `service_ro
 - `account_proofs(session_id, user_id, method, created_at)`: la prueba de la casilla (o de Google) por sesión. El `amr` del JWT no sirve: GoTrue emite `otp` para todo `verifyOtp` con token hash, sea recovery o magic link.
 - Trigger `auth_users_guard_email_only` en `auth.users` (BEFORE UPDATE OF encrypted_password, email, email_change): mientras la cuenta sea solo-email, GoTrue no puede ponerle contraseña ni cambiarle el email (`account_required`). Una sesión solo-email puede llamar `updateUser` directo contra GoTrue sin reautenticarse; sin esto, quien escribió un email ajeno dejaría una contraseña que sobrevive a la prueba del dueño.
 - `auth_throttle` + `claim_auth_throttle(kind, key, limit, window)`: limitadores por IP y por cuenta. La IP se guarda como HMAC-SHA256 (con `SUPABASE_SERVICE_ROLE_KEY`; IPv6 por /64) y las filas se borran a los 2 días.
-- `app_config.email_only_signup` es el interruptor: `enabled: false` hace que la portada vuelva al registro con contraseña (`/login?mode=signup`). `per_ip_hour` y `per_day` limitan las cuentas nuevas (pasado el tope, también vuelve al registro con contraseña); `links_per_user_hour`, `links_per_ip_hour` y `lookups_per_ip_hour` limitan los links y las búsquedas de cuenta. Se edita desde `/admin/config`. `app_config.llm_limits.email_only_per_user_hour` (5) limita el modo asistido de estas cuentas.
+- `app_config.email_only_signup` es el interruptor: con `enabled: false` el pop-up dice que por ahora no se pueden crear búsquedas nuevas (no manda al registro). `per_ip_hour` y `per_day` limitan las cuentas nuevas (pasado el tope, el mismo aviso); `links_per_user_hour`, `links_per_ip_hour` y `lookups_per_ip_hour` limitan los links y las búsquedas de cuenta. Se edita desde `/admin/config`. `app_config.llm_limits.email_only_per_user_hour` (5) limita el modo asistido de estas cuentas.
 - `admin_users.email_only`: la pastilla «Solo email» en `/admin/users`.
 
 Otros detalles:

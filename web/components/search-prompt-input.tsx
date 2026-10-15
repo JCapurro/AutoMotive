@@ -11,14 +11,15 @@ export function SearchPromptInput({ value, onChange, disabled = false, showExamp
   onChange: (text: string) => void;
   disabled?: boolean;
   showExamples?: boolean;
-  /** The landing: shorter help and no counter until it matters, so the email and the button stay near the fold. */
+  /** The landing: shorter help and no counter, so the button stays near the fold. */
   compact?: boolean;
   invalid?: boolean;
   /** An error shown next to the field, read along with the help. */
   describedBy?: string;
 }) {
   const id = useId();
-  const counter = !compact || value.length > ASSISTED_MAX_CHARS - 200;
+  // The landing never shows the counter: appearing midway would shift the form (maxLength still applies).
+  const counter = !compact;
   return (
     <div className="space-y-3">
       <div className="space-y-1.5">
@@ -29,6 +30,7 @@ export function SearchPromptInput({ value, onChange, disabled = false, showExamp
               Si buscás varios, nombralos todos. Revisás los filtros antes de guardar.</>}
         </p>
       </div>
+      {/* Fixed size: it doesn't grow while typing nor resize by hand; long text scrolls inside. */}
       <Textarea
         id={id}
         value={value}
@@ -39,7 +41,7 @@ export function SearchPromptInput({ value, onChange, disabled = false, showExamp
         disabled={disabled}
         aria-invalid={invalid || undefined}
         aria-describedby={[`${id}-help`, counter ? `${id}-count` : null, describedBy].filter(Boolean).join(" ")}
-        className={compact ? "min-h-24 bg-background text-base" : "min-h-28 bg-background text-base"}
+        className={compact ? "h-24 resize-none bg-background text-base field-sizing-fixed" : "h-28 resize-none bg-background text-base field-sizing-fixed"}
       />
       {counter ? <p id={`${id}-count`} className="text-right text-xs text-muted-foreground">
         {value.length}/{ASSISTED_MAX_CHARS}

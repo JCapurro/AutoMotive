@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const m = vi.hoisted(() => ({
   currentUser: vi.fn(), accountForEmail: vi.fn(), claimThrottle: vi.fn(), sendEntryLink: vi.fn(), afterSignIn: vi.fn(),
-  createUser: vi.fn(), generateLink: vi.fn(), deleteUser: vi.fn(), rpc: vi.fn(), verifyOtp: vi.fn(), signOut: vi.fn(),
+  createUser: vi.fn(), generateLink: vi.fn(), deleteUser: vi.fn(), rpc: vi.fn(), verifyOtp: vi.fn(), signOut: vi.fn(), signInWithPassword: vi.fn(),
   config: { enabled: true, perIpHour: 10, perDay: 100, linksPerUserHour: 3, linksPerIpHour: 20, lookupsPerIpHour: 30 },
 }));
 vi.mock("@/lib/auth", () => ({ currentUser: m.currentUser }));
@@ -16,9 +16,9 @@ vi.mock("@/lib/signup", () => ({ afterSignIn: m.afterSignIn }));
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({ auth: { admin: { createUser: m.createUser, generateLink: m.generateLink, deleteUser: m.deleteUser } }, rpc: m.rpc }),
 }));
-vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ auth: { verifyOtp: m.verifyOtp, signOut: m.signOut } }) }));
+vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ auth: { verifyOtp: m.verifyOtp, signOut: m.signOut, signInWithPassword: m.signInWithPassword } }) }));
 
-import { startFreeSearch } from "@/app/actions";
+import { enterForFreeSearch, linkForFreeSearch, startFreeSearch } from "@/app/actions";
 
 const prompt = "Fiesta manual & Polo en Córdoba";
 const href = `/app/searches/new?${new URLSearchParams({ prompt })}`;
@@ -72,9 +72,9 @@ describe("a new email", () => {
     expect(m.verifyOtp).not.toHaveBeenCalled();
   });
 
-  it("falls back to the regular signup past the per-IP or daily brake", async () => {
+  it("says so past the per-IP or daily brake, without sending to the login", async () => {
     m.claimThrottle.mockImplementation(async (kind: string) => kind !== "free_search_signup_ip");
-    expect(await startFreeSearch(input)).toEqual({ status: "signup", href: `/login?${new URLSearchParams({ mode: "signup", next: href })}` });
+    expect(await startFreeSearch(input)).toMatchObject({ status: "unavailable" });
     expect(m.createUser).not.toHaveBeenCalled();
   });
 });
@@ -92,7 +92,7 @@ describe("an email that already exists", () => {
 
   it("of a full account is sent to the login, with no email and no session", async () => {
     m.accountForEmail.mockResolvedValue({ user_id: "full", email_only: false, confirmed: true });
-    expect(await startFreeSearch(input)).toEqual({ status: "existing_account", href: `/login?${new URLSearchParams({ next: href })}` });
+    expect(await startFreeSearch(input)).toEqual({ status: "existing_account", email: "persona@example.com" });
     expect(m.sendEntryLink).not.toHaveBeenCalled();
     expect(m.generateLink).not.toHaveBeenCalled();
   });
@@ -139,9 +139,9 @@ describe("the form", () => {
     expect(m.createUser).not.toHaveBeenCalled();
   });
 
-  it("uses the regular signup while the free path is switched off", async () => {
+  it("pauses while the free path is switched off", async () => {
     m.config.enabled = false;
-    expect(await startFreeSearch(input)).toMatchObject({ status: "signup" });
+    expect(await startFreeSearch(input)).toMatchObject({ status: "unavailable" });
     expect(m.accountForEmail).not.toHaveBeenCalled();
   });
 
@@ -151,9 +151,35 @@ describe("the form", () => {
     expect(m.createUser).not.toHaveBeenCalled();
   });
 
-  it("brakes repeated lookups from one IP, leaving the regular signup open", async () => {
+  it("brakes repeated lookups from one IP", async () => {
     m.claimThrottle.mockResolvedValue(false);
-    expect(await startFreeSearch(input)).toMatchObject({ status: "signup" });
+    expect(await startFreeSearch(input)).toMatchObject({ status: "unavailable" });
     expect(m.accountForEmail).not.toHaveBeenCalled();
+  });
+});
+
+describe("an email with a password, from the same pop-up", () => {
+  it("signs in and goes on to the search", async () => {
+    m.signInWithPassword.mockResolvedValue({ error: null });
+    expect(await enterForFreeSearch({ ...input, password: "su-clave" })).toEqual({ status: "created", href, signedUp: false });
+    expect(m.signInWithPassword).toHaveBeenCalledWith({ email: "persona@example.com", password: "su-clave" });
+    expect(m.afterSignIn).toHaveBeenCalledOnce();
+  });
+
+  it("asks again on a wrong password, without signing in", async () => {
+    m.signInWithPassword.mockResolvedValue({ error: { code: "invalid_credentials" } });
+    expect(await enterForFreeSearch({ ...input, password: "otra" })).toMatchObject({ status: "error", field: "password" });
+    expect(m.afterSignIn).not.toHaveBeenCalled();
+  });
+
+  it("brakes repeated attempts from one IP", async () => {
+    m.claimThrottle.mockResolvedValue(false);
+    expect(await enterForFreeSearch({ ...input, password: "su-clave" })).toMatchObject({ status: "error", field: "password" });
+    expect(m.signInWithPassword).not.toHaveBeenCalled();
+  });
+
+  it("sends the link to enter instead, with the search as the destination", async () => {
+    expect(await linkForFreeSearch(input)).toEqual({ status: "existing_email_only", email: "persona@example.com" });
+    expect(m.sendEntryLink).toHaveBeenCalledWith("persona@example.com", href);
   });
 });
