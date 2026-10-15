@@ -69,6 +69,10 @@ EMAIL_FROM = os.getenv("EMAIL_FROM", "").strip()
 # (sección 7.3), which the web serves, and of the links the bot sends. Empty:
 # alert links go straight to the listing, untracked.
 WEB_BASE_URL = os.getenv("WEB_BASE_URL", "").strip().rstrip("/")
+# Signs the email links into the app (to=detail, /m/<id>) so an email-only
+# account opens them signed in (docs/AUTENTICACION.md, «Links firmados»). The
+# same value as the web's ALERT_LINK_SECRET, at least 32 characters.
+ALERT_LINK_SECRET = os.getenv("ALERT_LINK_SECRET", "").strip()
 # The queue of immediate notifications is drained after every crawl batch and
 # also this often (retries, rows queued by other loops).
 NOTIFY_TICK_SECONDS = int(os.getenv("NOTIFY_TICK_SECONDS", "60"))
@@ -125,6 +129,9 @@ def startup_warnings(env: dict | None = None, which=None) -> list[str]:
                    "sin /r/<id>; no se miden aperturas ni clics (§53) y no hay «Ver en Automotive»")
     elif not base.startswith("https://"):
         out.append("WEB_BASE_URL no es https: Telegram no muestra el botón «Ver en Automotive»")
+    if base and len(g.get("ALERT_LINK_SECRET", "")) < 32:
+        out.append("sin ALERT_LINK_SECRET (32 caracteres o más): los links de los emails no se firman y "
+                   "una cuenta solo-email sin sesión va a la publicación original en vez de a Ese Auto")
     if not (g["RESEND_API_KEY"] and g["EMAIL_FROM"]):
         out.append("email desactivado: faltan RESEND_API_KEY / EMAIL_FROM (canal obligatorio del §21)")
     if g.get("TELEGRAM_ENABLED", False) and not g["TELEGRAM_ADMIN_CHAT_ID"]:

@@ -57,7 +57,7 @@ class TestDatabaseGuardTests(unittest.TestCase):
 class StartupWarningsTests(unittest.TestCase):
     """F7, punto 5: every channel or metric the .env leaves off is logged at startup."""
 
-    FULL = {"WEB_BASE_URL": "https://automotive.example", "RESEND_API_KEY": "re_x",
+    FULL = {"WEB_BASE_URL": "https://automotive.example", "ALERT_LINK_SECRET": "x" * 32, "RESEND_API_KEY": "re_x",
             "EMAIL_FROM": "alertas@automotive.example", "TELEGRAM_ADMIN_CHAT_ID": "1",
             "LLM_PROVIDER": "anthropic", "ANTHROPIC_API_KEY": "sk-x", "CLAUDE_CLI_PATH": "",
             "GEOCODING_ENABLED": True, "TELEGRAM_ENABLED": True}
@@ -84,3 +84,6 @@ class StartupWarningsTests(unittest.TestCase):
         self.assertEqual(self.warnings(LLM_PROVIDER="openai", OPENAI_API_KEY="sk-x"), [])
         self.assertIn("stub", self.warnings(LLM_PROVIDER="local")[0])
         self.assertIn("radio", self.warnings(GEOCODING_ENABLED=False)[0])
+        self.assertIn("ALERT_LINK_SECRET", self.warnings(ALERT_LINK_SECRET="")[0])
+        self.assertIn("ALERT_LINK_SECRET", self.warnings(ALERT_LINK_SECRET="x" * 31)[0])
+        self.assertEqual(self.warnings(WEB_BASE_URL="", ALERT_LINK_SECRET="")[1:], [])

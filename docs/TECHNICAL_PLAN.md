@@ -1030,6 +1030,7 @@ F8 separa la captura de la demanda. Por fuente, se recorre el catálogo de usado
 | `TELEGRAM_TOKEN`, `TELEGRAM_ADMIN_CHAT_ID` | Bot y alertas operativas |
 | `RESEND_API_KEY`, `EMAIL_FROM` | Canal email |
 | `WEB_BASE_URL` | Para armar `/r/<id>` y los links al detalle |
+| `ALERT_LINK_SECRET` | Firma los links de los emails que llevan a la app; el mismo valor en la web ([AUTENTICACION.md](AUTENTICACION.md#links-firmados-en-los-emails)) |
 | `LLM_PROVIDER` (`claude_cli`/`local`), `CLAUDE_CLI_PATH`, `CLAUDE_CLI_MODEL`, `LLM_TIMEOUT_SECONDS`, `LOCAL_LLM_BASE_URL`, `LOCAL_LLM_MODEL` | Capa LLM |
 | `TICK_INTERVAL_SECONDS` | Tick del loop (se mantiene) |
 | `GEOCODING_ENABLED`, `GEOCODING_USER_AGENT`, `FB_STORAGE_STATE`, `ML_STORAGE_STATE` | Se mantienen |
@@ -1037,6 +1038,7 @@ F8 separa la captura de la demanda. Por fuente, se recorre el catálogo de usado
 **Web (`.env.local`):**
 - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` (o la publishable key);
 - `SUPABASE_SERVICE_ROLE_KEY` (solo del lado del servidor);
+- `ALERT_LINK_SECRET` (solo del lado del servidor; `ALERT_LINK_SECRET_PREVIOUS` mientras se rota);
 - `NEXT_PUBLIC_TELEGRAM_BOT_USERNAME`.
 
 **Reglas de negocio (`app_config`), con los valores iniciales:**

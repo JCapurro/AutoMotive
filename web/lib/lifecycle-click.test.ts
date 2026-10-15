@@ -12,6 +12,7 @@ vi.mock("@/lib/supabase/admin", () => ({
   }),
 }));
 vi.mock("@/lib/origin", () => ({ requestOrigin: () => "https://www.eseauto.com.ar" }));
+vi.mock("server-only", () => ({}));
 
 import { GET, HEAD } from "@/app/m/[emailId]/route";
 import { lifecycleEmailId, lifecycleTarget } from "./lifecycle-click";

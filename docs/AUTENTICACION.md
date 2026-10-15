@@ -15,6 +15,7 @@ Rutas:
 - `/auth/callback`: soporta token hash y el intercambio PKCE `exchangeCodeForSession`.
 - `/auth/reset-password`: valida la sesión en página y acción, cambia la contraseña con `updateUser` y cierra las sesiones con `signOut`. Una sesión solo-email va a `/app/cuenta`.
 - `/app/cuenta`: la cuenta solo-email confirma su email y elige contraseña; pasa a cuenta completa.
+- `/r/<id>` y `/m/<id>`: los links de los emails. Firmados, inician la sesión de una cuenta solo-email ([Links firmados en los emails](#links-firmados-en-los-emails)).
 
 Las contraseñas se envían directamente desde la acción al proveedor; no se guardan en tablas, eventos ni estado devuelto a la interfaz. La recuperación no genera `signup_completed`.
 
@@ -58,9 +59,44 @@ Otros detalles:
 
 - `signOut({ scope: 'others' })` corta los refresh tokens, pero los access tokens ya emitidos siguen valiendo hasta que vencen (JWT ES256, verificados localmente por `getClaims`): hasta 1 hora. Los pasos sensibles (`/app/cuenta`, `startPayment`) usan `getUser()`, y `delete_my_account` exige que el `session_id` del JWT siga existiendo en `auth.sessions`: quien escribió el email no puede borrar la cuenta que el dueño acaba de recuperar.
 - No hay doble opt-in: el pie de las alertas dice «¿No fuiste vos? Dejá de recibirlos» ([templates.py](../worker/notifications/templates.py)) y `/baja` funciona sin entrar.
-- Un clic en «Ver auto en Ese Auto» (`/r/<id>?to=detail`) sin sesión, de una cuenta solo-email, va a la publicación original en vez de al login.
-- Eventos: `signup_completed { method: 'email_only' }` en el alta y `account_completed { method: 'password' | 'google' }` al pasar a cuenta completa (en `/app/cuenta` o con Google). Desde el 15/10/2026 los «registrados» de `v_activation` incluyen las cuentas solo-email.
-- Fuera de v1: links firmados en `/r` y `/m` que inicien sesión, cambiar el email de una cuenta solo-email, email de bienvenida y manejo de rebotes.
+- Un clic en «Ver auto en Ese Auto» (`/r/<id>?to=detail`) sin sesión, de una cuenta solo-email, inicia sesión si el link está firmado y es reciente ([Links firmados en los emails](#links-firmados-en-los-emails)); si no, va a la publicación original en vez de al login.
+- Eventos: `signup_completed { method: 'email_only' }` en el alta, `account_completed { method: 'password' | 'google' }` al pasar a cuenta completa (en `/app/cuenta` o con Google) y `alert_link_signin { link: 'r' | 'm', id }` cuando un link firmado inicia sesión. Desde el 15/10/2026 los «registrados» de `v_activation` incluyen las cuentas solo-email.
+- Fuera de v1: cambiar el email de una cuenta solo-email, email de bienvenida y manejo de rebotes.
+
+## Links firmados en los emails
+
+Código: [web/lib/alert-session.ts](../web/lib/alert-session.ts) (con las rutas [`/r`](../web/app/r/[notificationId]/route.ts) y [`/m`](../web/app/m/[emailId]/route.ts)) y [worker/notifications/links.py](../worker/notifications/links.py). Sin migración.
+
+**Para qué.** La cuenta solo-email no tiene contraseña y casi siempre nace en el navegador de Instagram o Facebook, que no comparte cookies con Gmail ni con Chrome. Sin firma, «Ver auto en Ese Auto» lleva a esa persona a la publicación original (el login le pediría un link). Con firma, el link del email abre el detalle en Ese Auto con sesión.
+
+**La firma.** Con `ALERT_LINK_SECRET`, el worker agrega `&s=<firma>` a los links de los emails que llevan a la app: «Ver auto en Ese Auto» (`/r/<id>?to=detail`, también cada auto del resumen diario con `&l=`) y el botón de los mails de plan (`/m/<id>`). La firma es HMAC-SHA256 con el secreto sobre `v1:<r|m>:<id>:<user_id>`, recortada a 128 bits, en base64url (22 caracteres). Ata el tipo de email, el id de la fila y su dueño: los ids son correlativos y solos no prueban nada; sin el secreto no se firma otro id. Los links a la publicación original (`to=listing`), los de Telegram y los de la bandeja web nunca se firman.
+
+**Cuándo inicia sesión.** Solo si se cumple todo; si no, el link hace lo de siempre:
+
+- la firma vale con `ALERT_LINK_SECRET` o, mientras se rota, con `ALERT_LINK_SECRET_PREVIOUS` (de 32 caracteres o más: más cortos se ignoran, en la web y en el worker);
+- la fila salió por email: `notifications` con `channel = 'email'` y `status = 'sent'`, o `lifecycle_emails` con `status = 'sent'` y destino dentro de `/app`;
+- su `sent_at` tiene menos de **7 días** (`ALERT_LINK_MAX_AGE_DAYS`): el reloj es el de la base, el link no lleva una fecha que se pueda editar;
+- es un clic de verdad: ni `HEAD` ni un bot de vista previa (`isPreview`);
+- este navegador no tiene sesión, de nadie;
+- el dueño sigue siendo solo-email (`profiles.email_only`). Una cuenta completa sigue como siempre: el detalle, a través del login;
+- queda cupo en el freno por cuenta: `app_config.email_only_signup.alert_sessions_per_user_hour` (10 por hora si la clave no está; `0` lo apaga sin deploy).
+
+**Cómo.** El GET cuenta el clic y, en vez del redirect, contesta una página mínima («Abriendo Ese Auto…») que se envía sola por POST a la misma URL (sin JavaScript, con el botón «Continuar»). El POST exige el `Origin` del sitio, vuelve a comprobar todo y recién ahí crea la sesión igual que el alta de la portada: `admin.generateLink({ type: 'magiclink' })` + `verifyOtp` en el cliente con cookies, sin mandar ningún email. Comprueba que la sesión sea del dueño y que la cuenta siga solo-email después de crearla (si no, `signOut({ scope: 'local' })`). Registra `alert_link_signin` y redirige (303) al detalle o al destino del mail de plan. Si algo falla, `/r` manda a la publicación original y `/m` al destino, que pasa por el login.
+
+**Qué puede esa sesión.** Lo mismo que la del alta: ver y editar búsquedas, alertas y ajustes. **No guarda prueba de la casilla** (`account_proofs`): `/app/cuenta` pide «Confirmá tu email» antes de elegir contraseña, `auth_users_guard_email_only` sigue rechazando contraseña y cambio de email, y comprar exige cuenta completa (`startPayment` y `billing_checkouts_guard_account`). Tampoco cierra otras sesiones ni borra MFA o Telegram (`secure_email_only_account`): eso queda para la prueba de verdad, el link para entrar.
+
+### Modelo de amenazas
+
+| Riesgo | Qué pasa | Qué lo limita |
+|---|---|---|
+| **Email reenviado** | Quien recibe el email reenviado y abre «Ver auto en Ese Auto» en un navegador sin sesión entra a la cuenta del dueño: ve y edita búsquedas, puede dar de baja los emails o borrar la cuenta. | 7 días desde el envío. Solo cuentas solo-email: prueba gratis, sin contraseña ni pago, y la sesión no puede elegir contraseña, cambiar el email ni pagar. El dueño la corta con el link para entrar (la prueba cierra las demás sesiones) o eligiendo contraseña. Es el modelo de los links mágicos de un newsletter: reenviar el email es compartir la cuenta. La baja ya funcionaba sin sesión (`/baja`). |
+| **Scanners de links** (Defender Safe Links, Mimecast, Proofpoint, antivirus) | Abren los links antes que la persona. | El GET no crea sesión: hace falta JavaScript y un POST con el `Origin` del sitio. Los bots de vista previa y los `HEAD` ni siquiera reciben la página. Un scanner que ejecuta JavaScript en un sandbox se queda con una sesión descartable, que no puede más que la del dueño y muere cuando el dueño prueba la casilla. El link no es de un solo uso, así que el scanner no se lo gasta a la persona. El clic se cuenta como antes (el conteo ya incluía los GET de los scanners). |
+| **Vencimiento** | Un link viejo: un email archivado, reenviado meses después. | Pasados 7 días del `sent_at`, el link vuelve al comportamiento anterior. La sesión ya creada dura como cualquier otra de Supabase: en el plan gratis no se puede acotar por sesión (time-box e inactividad son del plan Pro). La cortan la prueba de la casilla o una contraseña nueva, que cierran las demás sesiones. |
+| **Alguien escribió un email ajeno en la portada** | Esa persona ya tiene sesión. El dueño real, al abrir sus alertas, entra a la misma cuenta: las dos sesiones conviven. | A quien escribió el email el link firmado no le da nada nuevo. El dueño lo echa con el link para entrar (cierra las demás sesiones y borra MFA y Telegram). Riesgo que queda: si el dueño nunca prueba la casilla, quien escribió su email ve lo que el dueño agregue a la cuenta. |
+| **Login CSRF** | Alguien le pasa a otra persona, sin sesión, el link firmado de su propia cuenta solo-email: esa persona queda dentro de la cuenta ajena. | Solo navegadores sin sesión y cuentas solo-email; pasa igual con cualquier link mágico, también con el de recuperación. El POST desde otro sitio da 403. |
+| **Fuga del secreto** | Con `ALERT_LINK_SECRET` y el UUID de un usuario se firma un link para cualquier email suyo de los últimos 7 días. | El secreto está al lado de `DATABASE_URL` (VPS) y de `SUPABASE_SERVICE_ROLE_KEY` (Vercel), que ya dan acceso a todo: no agrega superficie. Rotarlo (abajo) invalida los links firmados con el anterior. |
+| **Fuga del link** (historial, logs) | La URL con `s=` queda en el historial del navegador y en los logs de Vercel. | Vale solo para esa fila y ese dueño, 7 días. La página intermedia lleva `Referrer-Policy: same-origin` y `Cache-Control: no-store`; en el redirect a la publicación original el navegador manda como Referer a Gmail, no a `/r`. |
+| **Efectos en Auth** | `generateLink` reemplaza el token de recuperación: un link para entrar pedido antes deja de funcionar. Cuenta como envío para el intervalo mínimo por usuario (otro link en el mismo minuto da 429). El `verifyOtp` gasta del balde «token verifications» por IP, que comparten todas las IP de Vercel con el alta. | Freno por cuenta (`alert_sessions_per_user_hour`). Un 429 cae al comportamiento anterior. Con sesión en ese navegador no se crea otra. |
 
 ## Configuración del proyecto alojado antes de publicar
 
@@ -88,6 +124,20 @@ Otros detalles:
 11. VPS: desplegar el worker (cambió el pie de los emails). El repair bot no despliega si hay commits de `main` sin desplegar que tocan `worker/` o `supabase/` ([COLLECTOR_REPAIR.md](COLLECTOR_REPAIR.md)).
 12. Prueba en producción con una casilla de Juan: portada → email → búsqueda creada sin abrir ningún email; el mismo email otra vez → link; link → `/app/cuenta` → contraseña; `/app/pro` → «Continuar en Mercado Pago» con una cuenta solo-email pide la cuenta. Al final, borrar esa cuenta desde Ajustes.
 13. Las primeras semanas, mirar en Resend los rebotes. La cuota la vigila el monitor: avisa por email al 80% de la diaria o la mensual (`docs/PLATFORM_HEALTH.md`).
+
+### Checklist de los links firmados
+
+Va después del checklist anterior (necesita las cuentas solo-email en producción). No hay migración. Cada paso en producción, con el OK de Juan.
+
+1. **Generar el secreto** una sola vez, en la máquina de Juan, sin pegarlo en chats, issues ni commits: `python -c "import secrets; print(secrets.token_urlsafe(48))"` (64 caracteres).
+2. **Vercel → Settings → Environment Variables**: `ALERT_LINK_SECRET` con ese valor, solo en **Production** (las previews no tienen por qué iniciar sesiones de usuarios reales) y marcada como Sensitive. Las variables valen para los deploys nuevos: después, deploy de la web con este código.
+3. **VPS** (`ssh automotive-vps`): agregar `ALERT_LINK_SECRET=<el mismo valor>` a `/opt/automotive/.env` sin cambiarle dueño ni permisos, desplegar el worker como dice [EMAIL_ALERTS.md](EMAIL_ALERTS.md#activación) (`merge --ff-only` y `systemctl restart automotive-worker.service`) y confirmar que el arranque no loguea «sin ALERT_LINK_SECRET». El orden entre 2 y 3 da igual (la web vieja ignora `s`, la nueva sin secreto también); con la web primero, el primer email firmado ya funciona. Si en el paso 4 del checklist anterior no se subió «token verifications», revisarlo: estos `verifyOtp` también corren desde Vercel.
+4. **Prueba con una casilla de Juan**: búsqueda gratis desde una ventana de incógnito (o el navegador de Instagram); esperar una alerta por email; abrir «Ver auto en Ese Auto» en otro navegador sin sesión → «Abriendo Ese Auto…» → el detalle, con sesión. En esa sesión, `/app/cuenta` muestra «Confirmá tu email» (no «Elegí una contraseña») y «Continuar en Mercado Pago» en `/app/pro` pide la cuenta. En `events` aparece `alert_link_signin`. Con una letra cambiada en `s`, el mismo link lleva a la publicación original. Al final, borrar la cuenta desde Ajustes.
+5. **Las primeras semanas**: comparar `alert_link_signin` con los `alert_clicked` de `to = 'detail'` y buscar `alert link sign-in skipped` en los logs de Vercel (429 de Auth, freno por cuenta).
+
+**Apagar.** Al instante y sin deploy: `"alert_sessions_per_user_hour": 0` en `app_config.email_only_signup` (`/admin/config`). Del todo: borrar `ALERT_LINK_SECRET` en Vercel y redeploy; los links ya enviados vuelven al comportamiento anterior. En el worker, sin el secreto los emails nuevos salen sin firma.
+
+**Rotar.** En Vercel, `ALERT_LINK_SECRET_PREVIOUS` = el valor viejo y `ALERT_LINK_SECRET` = el nuevo; deploy. En el VPS, el nuevo en `.env` y reiniciar el worker. A los 7 días, borrar `ALERT_LINK_SECRET_PREVIOUS` y redeploy. Si el viejo se filtró, no ponerlo como `_PREVIOUS`: los links ya enviados dejan de iniciar sesión y llevan a la publicación original.
 
 ## Desarrollo
 

@@ -30,6 +30,10 @@ y acceder al aviso original.
   píxeles de apertura. Telegram y la bandeja web conservan su comportamiento.
 - Sin `WEB_BASE_URL`, los enlaces de autos conservan el destino externo y el
   resumen no oculta resultados: no hay web configurada donde consultar el resto.
+- Con `ALERT_LINK_SECRET`, «Ver auto en Ese Auto» (y cada auto del resumen) y el
+  botón de los mails de plan llevan `&s=<firma>`: una cuenta solo-email los abre
+  con sesión aunque el navegador no la tenga ([AUTENTICACION.md](AUTENTICACION.md#links-firmados-en-los-emails)).
+  Sin el secreto salen sin firma, como antes.
 
 ## Activación
 

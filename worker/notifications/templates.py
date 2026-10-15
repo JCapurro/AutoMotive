@@ -180,10 +180,11 @@ def _notes(p: Mapping[str, Any], listing: Mapping[str, Any]) -> list[str]:
     return notes
 
 
-def content(n: Notification, links: Links, now: datetime) -> Content:
+def content(n: Notification, links: Links, now: datetime, *, owner: str | None = None) -> Content:
+    """`owner` signs the links into the app (emails only, notifications/links.py)."""
     p = n.payload
     if n.kind == "digest":
-        return _digest(n, links)
+        return _digest(n, links, owner)
     listing = p.get("listing") or {}
     match = p.get("match") or {}
     car = vehicle(listing)
@@ -222,7 +223,7 @@ def content(n: Notification, links: Links, now: datetime) -> Content:
     return c
 
 
-def _digest(n: Notification, links: Links) -> Content:
+def _digest(n: Notification, links: Links, owner: str | None = None) -> Content:
     p = n.payload
     items = p.get("items") or []
 
@@ -230,7 +231,7 @@ def _digest(n: Notification, links: Links) -> Content:
         listing = it.get("listing") or {}
         url = links.listing(n.id, listing.get("url") or "", it.get("listing_id"))
         visual = {"images": image_urls(listing.get("images")),
-                  "detail_url": links.detail(n.id, it["listing_id"]) if it.get("listing_id") is not None else None}
+                  "detail_url": links.detail(n.id, it["listing_id"], owner=owner) if it.get("listing_id") is not None else None}
         match = it.get("match") or {}
         details = [str(x) for x in (km(listing), listing.get("location_text")) if x]
         if it["section"] == "price_drops":
@@ -318,8 +319,8 @@ class EmailMessage:
 
 
 def email(n: Notification, links: Links, now: datetime) -> EmailMessage:
-    c = content(n, links, now)
-    detail = links.detail(n.id) if n.kind != "digest" and n.listing_id is not None else None
+    c = content(n, links, now, owner=n.user_id)
+    detail = links.detail(n.id, owner=n.user_id) if n.kind != "digest" and n.listing_id is not None else None
     # Keep Telegram/source links as they are. Email's main action brings people
     # to the analysis in Ese Auto, using the existing click-tracking route.
     if detail:
@@ -515,7 +516,7 @@ def lifecycle_email(row: Mapping[str, Any], links: Links, now: datetime, *,
                     limits: Mapping[str, Any] | None = None) -> EmailMessage:
     """A plan email for a lifecycle_emails row (id, kind, payload, unsubscribe_token)."""
     kind = row["kind"]
-    c, title = lifecycle_content(kind, row.get("payload") or {}, links.lifecycle(row["id"]),
+    c, title = lifecycle_content(kind, row.get("payload") or {}, links.lifecycle(row["id"], owner=row.get("user_id")),
                                  offer=offer, limits=limits)
     footer = LIFECYCLE_FOOTER[kind]
     unsubscribe = links.unsubscribe(row.get("unsubscribe_token"))

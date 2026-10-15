@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 
+import { type AlertLink, alertLinkOwner, continuePage, isAppPath, signedAction, signInFromAlertLink } from "@/lib/alert-session";
 import { lifecycleEmailId, lifecycleTarget } from "@/lib/lifecycle-click";
 import { requestOrigin } from "@/lib/origin";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -26,13 +27,28 @@ async function peek(id: number): Promise<string | null> {
   return data?.target ?? null;
 }
 
+const GONE = "Este link no existe o ya no está disponible.";
+
+function redirect(request: NextRequest, target: string, status: 302 | 303) {
+  const response = NextResponse.redirect(new URL(target, requestOrigin(request)), status);
+  response.headers.set("Cache-Control", "no-store");
+  return response;
+}
+
+/**
+ * Without a session /app sends an email-only account (no password) to the
+ * login; a signed, recent email link signs the owner in first (lib/alert-session.ts).
+ */
 async function handle(request: NextRequest, emailId: string, count: boolean) {
   const id = lifecycleEmailId(emailId);
   const target = lifecycleTarget(id == null ? null : count ? await track(id) : await peek(id));
-  if (!target) return new NextResponse("Este link no existe o ya no está disponible.", { status: 404 });
-  const response = NextResponse.redirect(new URL(target, requestOrigin(request)), 302);
-  response.headers.set("Cache-Control", "no-store");
-  return response;
+  if (id == null || !target) return new NextResponse(GONE, { status: 404 });
+  // Only a real click may sign someone in: never a link preview or a HEAD request.
+  const link: AlertLink = { scope: "m", id, signature: request.nextUrl.searchParams.get("s") };
+  if (count && isAppPath(target) && await alertLinkOwner(link)) {
+    return continuePage(signedAction(`/m/${id}`, { s: link.signature }));
+  }
+  return redirect(request, target, 302);
 }
 
 export async function GET(request: NextRequest, ctx: RouteContext<"/m/[emailId]">) {
@@ -43,4 +59,17 @@ export async function GET(request: NextRequest, ctx: RouteContext<"/m/[emailId]"
 export async function HEAD(request: NextRequest, ctx: RouteContext<"/m/[emailId]">) {
   const { emailId } = await ctx.params;
   return handle(request, emailId, false);
+}
+
+/** The page of a signed link posts here (the click was already counted): sign in, then go on. */
+export async function POST(request: NextRequest, ctx: RouteContext<"/m/[emailId]">) {
+  if (request.headers.get("origin") !== requestOrigin(request)) return new NextResponse("Solicitud inválida", { status: 403 });
+  const { emailId } = await ctx.params;
+  const id = lifecycleEmailId(emailId);
+  const target = lifecycleTarget(id == null ? null : await peek(id));
+  if (id == null || !target) return new NextResponse(GONE, { status: 404 });
+  const link: AlertLink = { scope: "m", id, signature: request.nextUrl.searchParams.get("s") };
+  const owner = await alertLinkOwner(link);
+  if (owner !== null) await signInFromAlertLink(owner, link);
+  return redirect(request, target, 303);
 }

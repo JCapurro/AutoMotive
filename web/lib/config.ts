@@ -31,6 +31,8 @@ export type EmailOnlySignup = {
   linksPerUserHour: number;
   linksPerIpHour: number;
   lookupsPerIpHour: number;
+  /** Sessions a signed email link may start per account and hour (lib/alert-session.ts); 0 turns them off. */
+  alertSessionsPerUserHour: number;
 };
 
 /** Missing or malformed values fall back to the migration's defaults; enabled only when explicitly true. */
@@ -47,6 +49,7 @@ export function emailOnlySignup(raw: unknown): EmailOnlySignup {
     linksPerUserHour: count("links_per_user_hour", 3),
     linksPerIpHour: count("links_per_ip_hour", 20),
     lookupsPerIpHour: count("lookups_per_ip_hour", 30),
+    alertSessionsPerUserHour: count("alert_sessions_per_user_hour", 10),
   };
 }
 

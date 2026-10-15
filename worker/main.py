@@ -7,7 +7,8 @@ from telegram.ext import Application
 
 from config import (EMAIL_FROM, ENRICH_TICK_SECONDS, HEARTBEAT_SECONDS, LOG_FILE, LOG_KEEP_DAYS,
                     NOTIFY_TICK_SECONDS, RESEND_API_KEY, TELEGRAM_ADMIN_CHAT_ID, TELEGRAM_ENABLED, TELEGRAM_TOKEN,
-                    TRIAL_REMINDER_TICK_SECONDS, WATCHLIST_TICK_SECONDS, WEB_BASE_URL, startup_warnings)
+                    TRIAL_REMINDER_TICK_SECONDS, WATCHLIST_TICK_SECONDS, WEB_BASE_URL, ALERT_LINK_SECRET,
+                    startup_warnings)
 import db
 from bot.handlers import register
 from llm import build_provider
@@ -87,7 +88,7 @@ async def amain() -> None:
 
     await db.open_pool()
 
-    links = Links(WEB_BASE_URL)
+    links = Links(WEB_BASE_URL, ALERT_LINK_SECRET)
     app = Application.builder().token(TELEGRAM_TOKEN).build() if TELEGRAM_ENABLED else None
     if app is not None:
         register(app, links)
