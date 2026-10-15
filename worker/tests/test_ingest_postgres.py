@@ -321,6 +321,19 @@ class CountAfterExpiryCrawlTests(IngestCase):
         self.assertEqual([r["external_id"] for r in shown], ["A"])
         self.assertEqual(await self.rows("SELECT id FROM notifications WHERE user_id = %s", user), [])
 
+    async def test_a_new_portal_first_pass_is_not_counted_on_its_next_runs(self):
+        # deRuedas, 2026-10-14: its first pass was found again the next day,
+        # first seen after the end, and counted as news.
+        user, search = await self.web_search()
+        await self.end_trial(user)
+        FakeSource.results["mercadolibre"] = [card("A")]
+        await self.tick()                                       # the target's first run: history
+        FakeSource.results["mercadolibre"] = [card("A"), card("B")]
+        await self.tick()
+        counted = await self.rows("SELECT l.external_id FROM expired_search_matches e "
+                                  "  JOIN listings l ON l.id = e.listing_id WHERE e.search_profile_id = %s", search)
+        self.assertEqual([r["external_id"] for r in counted], ["B"])
+
     async def test_an_active_search_takes_the_model_back_at_once(self):
         user, search = await self.web_search()
         await self.end_trial(user)

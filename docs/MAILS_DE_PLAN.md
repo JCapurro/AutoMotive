@@ -54,7 +54,7 @@ Son los mails de la fase 2 de [planes](PLANES_2026-10.md), los que llevan a paga
   - se vieron por primera vez después del vencimiento;
   - son recientes según la regla de los avisos (`recommended_max_age_days`).
 
-  El worker las evalúa con el mismo motor que las coincidencias, pero las guarda en `expired_search_matches`: no se muestran en la web ni generan avisos. «Por debajo de comparables» corresponde al nivel `high`. La primera pasada de un portal nuevo se toma como historial y no se cuenta.
+  El worker las evalúa con el mismo motor que las coincidencias, pero las guarda en `expired_search_matches`: no se muestran en la web ni generan avisos. «Por debajo de comparables» corresponde al nivel `high`. La primera pasada de un portal nuevo se toma como historial y no se cuenta, tampoco cuando las corridas siguientes la vuelven a encontrar: no cuenta nada visto por primera vez antes de que terminara la primera corrida exitosa del objetivo (`collector_runs`).
 - **Cuándo.** Los días 7, 14 y 21 después del vencimiento, cada uno durante 24 horas. Son 3 mails como máximo. Si N da 0, ese día no sale nada; si aparece algo más tarde ese mismo día, el mail sale en ese momento.
 - **Qué búsqueda.** Si había varias, la que más encontró.
 - **Asunto.** «Aparecieron {N} autos nuevos para tu búsqueda de {modelo}». Con uno solo: «Apareció 1 auto nuevo para tu búsqueda de {modelo}».
@@ -121,4 +121,5 @@ El worker revisa cada `TRIAL_REMINDER_TICK_SECONDS` (900 s). El nombre se conser
 - **Qué significa `sent`.** Que Resend aceptó el mail; rebotes y quejas no se registran.
 - **Duración de la prueba.** Las reservas usan las 72 h de `plan_limits_for`. Si cambia esa duración, hay que revisar `claim_lifecycle_emails` y `count_after_expiry_end`.
 - **El conteo de 2.5 es un piso.** Cuando otra búsqueda activa rastrea el mismo modelo con filtros más estrechos (por ejemplo, desde 2018, si la vencida pedía desde 2012), la vencida solo ve lo que trae esa consulta.
+- **Reinicio de bootstrap.** Si un cambio de `POLICY_VERSION` repite la carga inicial de Mercado Libre o Facebook, lo que esa carga trae por primera vez puede contarse en las corridas siguientes: el historial se mide desde la primera corrida exitosa del objetivo, no desde la última carga inicial.
 - **Publicaciones que ya no están.** N incluye las publicaciones que aparecieron aunque ya no estén publicadas; al reactivar solo se ven las que siguen activas.

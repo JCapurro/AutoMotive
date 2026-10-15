@@ -63,6 +63,16 @@ async def finish_run(run_id: int, *, ok: bool, found: int | None = None, new: in
                         None if ok else error)
 
 
+async def bootstrapped_at(target_id: int) -> datetime | None:
+    """When the target's first successful run ended: what it had found by
+    then is history, not news (2.5). None until it has one."""
+    async with connection() as cx:
+        row = await (await cx.execute(
+            "SELECT min(finished_at) AS at FROM collector_runs WHERE target_id = %s AND status = 'ok'",
+            (target_id,))).fetchone()
+    return row["at"] if row else None
+
+
 async def log_error(stage: str, ref: str | None, error: str) -> None:
     """Record a pipeline error. Never raises: observability must not break the pipeline."""
     try:

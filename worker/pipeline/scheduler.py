@@ -29,7 +29,7 @@ import db
 from config import TICK_INTERVAL_SECONDS, RECOMMENDED_MAX_AGE_DAYS, CRAWL_JITTER_SECONDS
 from db.repos import expired_matches
 from db.repos import matches as matches_repo
-from db.repos.runs import log_error
+from db.repos.runs import bootstrapped_at, log_error
 from intelligence.engine import Evaluation
 from notifications.service import MatchCandidate, Notifier
 from pipeline import crawl, rematch
@@ -117,19 +117,25 @@ async def count_after_expiry(target: dict, listing_ids: list[int], scorer: Score
                              first_run: bool, max_age_days: int) -> int:
     """Step 6: the listings first seen after a counted search's access ended,
     recent by the notification rule, that the search would have matched. A
-    target's first run is backfill, not news. Returns how many were counted."""
+    target's first run is backfill, not news, also on the next runs that find
+    it again: a portal enabled after the end loads its stock then. Returns how
+    many were counted."""
     if first_run:
         return 0
     alerts = await db.counting_alerts_for_target(
         target["source"], target.get("make"), target.get("model"),
         inventory=(target.get("query") or {}).get("inventory") is True)
+    if not alerts:
+        return 0
+    history = await bootstrapped_at(target["id"]) if target.get("id") is not None else None
     rows = scorer.rows
     counted = []
     for alert in alerts:
         for lid in listing_ids:
             row = rows.get(lid)
             seen = row.get("first_seen_at") if row else None
-            if seen is None or seen < alert["ended_at"] or not _is_recent(row, max_age_days):
+            if (seen is None or seen < alert["ended_at"] or (history is not None and seen <= history)
+                    or not _is_recent(row, max_age_days)):
                 continue
             if (ev := scorer.evaluate(lid, alert["profile"])) is not None:
                 counted.append((alert["id"], lid, alert["ended_at"], ev.level))
