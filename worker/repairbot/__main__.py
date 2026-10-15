@@ -20,6 +20,7 @@ from pathlib import Path
 import subprocess
 import sys
 
+from repairbot import watchdog
 from repairbot.settings import DEFAULT_CONFIG, load, load_env
 
 LOG_BYTES = 2_000_000
@@ -137,7 +138,8 @@ def heal(settings, runner=subprocess.run) -> str:
         return f'lanzador sin actualizar: {type(error).__name__}: {error} ({first})'
 
 
-def main(argv: list[str] | None = None, *, tick=None, status=None, awake=None, healer=heal) -> int:
+def main(argv: list[str] | None = None, *, tick=None, status=None, awake=None, healer=heal,
+         arm=None) -> int:
     parser = argparse.ArgumentParser(prog='python -m repairbot', description='Bot de reparación de collectors.')
     parser.add_argument('--dry-run', action='store_true', help='informa qué haría, sin reclamar, escribir ni correr nada')
     parser.add_argument('--status', action='store_true', help='incidentes activos y estado local del bot')
@@ -183,6 +185,14 @@ def main(argv: list[str] | None = None, *, tick=None, status=None, awake=None, h
             log.exception('--status falló')
             _print({'ok': False, 'error': f'{type(error).__name__}: {error}'})
             return 2
+
+    def hung(elapsed: float) -> None:
+        message = (f'tick colgado: sin terminar después de {elapsed / 60:.0f} min; se corta '
+                   'para que el próximo arranque normal')
+        log.error(message)
+        bootstrap_log(message, args.config)
+
+    (arm or watchdog.arm)(watchdog.IDLE_LIMIT_S, hung)
     try:
         with keep_awake(awake):
             if tick is None:
@@ -198,6 +208,8 @@ def main(argv: list[str] | None = None, *, tick=None, status=None, awake=None, h
         bootstrap_log(message, args.config)
         _print({'ok': False, 'error': message})
         return 2
+    finally:
+        watchdog.disarm()   # the watch ends with the tick, never with whatever runs this process next
     log.info('tick: %s', json.dumps(summary, ensure_ascii=False, default=str))
     _print(summary)
     return 2 if summary.get('errors') else 0

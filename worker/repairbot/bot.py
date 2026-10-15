@@ -21,7 +21,7 @@ import time
 from typing import Any
 import uuid
 
-from repairbot import gitops, state as st
+from repairbot import gitops, state as st, watchdog
 from repairbot.gitops import GitError
 from repairbot.settings import THREAD_PREFIX, Settings, child_env
 from repairbot.vps import VpsError
@@ -477,6 +477,8 @@ class _Tick:
     def closed(self, state: st.IncidentState) -> None:
         """The monitor resolved or cancelled the incident. What the bot had in flight is settled and
         reported first; an error leaves the state as it was, for the next tick."""
+        if state.phase == 'deployed':
+            watchdog.extend(watchdog.LONG_LIMIT_S)
         deploy = state.deploy or {}
         last = state.attempts[-1] if state.attempts else None
         stage = deploy.get('stage') if state.phase == 'deployed' and last else None
@@ -542,6 +544,8 @@ class _Tick:
         state = self.store.load(incident['id'])
         if state is None:
             state = self.adopt(incident)
+        if state.phase == 'deployed':   # verifying, resuming or undoing a deploy takes minutes
+            watchdog.extend(watchdog.LONG_LIMIT_S)
         if incident.get('status') == 'needs_input':
             return None   # a person has it
         if state.phase == 'needs_input':
@@ -596,6 +600,7 @@ class _Tick:
     def attempt(self, incident: dict, state: st.IncidentState, run_id: str | None = None) -> None:
         from repairbot import prompt
 
+        watchdog.extend(watchdog.LONG_LIMIT_S)   # a session, gates and a deploy: not a hang
         self.claude_used = True   # one session per tick, also when this one does not get to start
         problem = self.deps.claude.preflight()
         if problem:

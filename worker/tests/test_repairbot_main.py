@@ -11,7 +11,7 @@ import types
 
 import pytest
 
-from repairbot import __main__ as cli
+from repairbot import __main__ as cli, watchdog
 
 AWAKE = cli.ES_CONTINUOUS | cli.ES_SYSTEM_REQUIRED
 
@@ -227,3 +227,44 @@ def test_off_windows_there_is_nothing_to_call(monkeypatch):
 def test_on_windows_it_is_kernel32s_function():
     function = cli._execution_state()    # looked up, never called here
     assert function.__name__ == 'SetThreadExecutionState'
+
+
+def test_every_tick_runs_under_the_idle_watchdog_and_disarms_after(config):
+    armed = []
+
+    def arm(seconds, on_expire):
+        armed.append((seconds, on_expire))
+        watchdog._deadline = float('inf')           # as if armed
+
+    def tick(settings, dry_run):
+        assert watchdog._deadline is not None       # watched while it runs
+        return {'errors': []}
+
+    assert cli.main(['--config', str(config)], tick=tick, awake=lambda state: None, arm=arm) == 0
+    assert [seconds for seconds, _ in armed] == [watchdog.IDLE_LIMIT_S]
+    assert watchdog._deadline is None
+
+
+def test_a_crashing_tick_still_disarms(config):
+    def tick(settings, dry_run):
+        raise RuntimeError('boom')
+
+    cli.main(['--config', str(config)], tick=tick, awake=lambda state: None,
+             arm=lambda seconds, on_expire: None, healer=lambda settings: 'ok')
+    assert watchdog._deadline is None
+
+
+def test_a_hung_tick_leaves_a_trace(config, pythonw):
+    hooks = []
+    cli.main(['--config', str(config)], tick=lambda settings, dry_run: {'errors': []},
+             awake=lambda state: None, arm=lambda seconds, on_expire: hooks.append(on_expire))
+    hooks[0](660.0)
+    text = (config.parent / 'state' / cli.BOOTSTRAP_LOG).read_text(encoding='utf-8')
+    assert 'tick colgado' in text and '11 min' in text
+
+
+def test_status_is_not_watched(config):
+    armed = []
+    cli.main(['--config', str(config), '--status'], status=lambda settings: {},
+             arm=lambda seconds, on_expire: armed.append(seconds))
+    assert armed == []

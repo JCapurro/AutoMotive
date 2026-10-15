@@ -8,7 +8,7 @@ import sys
 
 import pytest
 
-from repairbot import bot, state as st
+from repairbot import bot, state as st, watchdog
 from repairbot.claude_runner import RunResult
 from repairbot.gitops import GitError
 from repairbot.settings import Settings
@@ -1461,3 +1461,21 @@ def test_vps_and_git_facades_pass_the_runner_through(world, monkeypatch):
                     ('sync', {'settings': world.settings, 'runner': runner}),
                     ('landed', world.settings.repo, 'run-1', {'reverts': FIX, 'runner': runner}),
                     ('launcher', world.settings.home / 'launcher', {'settings': world.settings, 'runner': runner})]
+
+
+def test_real_work_extends_the_watchdog_and_bookkeeping_does_not(world, monkeypatch):
+    extended = []
+    monkeypatch.setattr(watchdog, 'extend', extended.append)
+    world.tick()                                    # nothing to do: listing and the launcher only
+    assert extended == []
+    world.db.add()
+    world.tick()                                    # a session, gates and a deploy
+    assert extended and set(extended) == {watchdog.LONG_LIMIT_S}
+
+
+def test_verifying_a_deploy_extends_the_watchdog(world, monkeypatch):
+    extended = []
+    monkeypatch.setattr(watchdog, 'extend', extended.append)
+    deployed(world)
+    world.tick()
+    assert watchdog.LONG_LIMIT_S in extended
