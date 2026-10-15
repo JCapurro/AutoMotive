@@ -104,6 +104,13 @@ class LocationLookupTests(unittest.TestCase):
             self.assertLess(haversine_km(*coords, *san_juan), 30, name)
         self.assertEqual(_lookup_known_location("Capital, San Luis"), _lookup_known_location("San Luis"))
         self.assertEqual(_lookup_known_location("Capital, Córdoba"), _lookup_known_location("Córdoba"))
+        # Nominatim placed these two in San Juan (production, 2026-10-14).
+        self.assertEqual(_lookup_known_location("Capital, Santa Fe"), _lookup_known_location("Santa Fe"))
+        self.assertEqual(_lookup_known_location("Capital, Entre Ríos"), _lookup_known_location("Paraná"))
+        self.assertEqual(_lookup_known_location("Capital, Neuquén"), _lookup_known_location("Neuquén"))
+        self.assertEqual(_lookup_known_location("Capital, La Pampa"), _lookup_known_location("Santa Rosa, La Pampa"))
+        chacabuco = _lookup_known_location("Chacabuco, Buenos Aires")
+        self.assertLess(haversine_km(*chacabuco, -34.6417, -60.4731), 5)
         self.assertLess(haversine_km(*_lookup_known_location("Junín, San Luis"), -33.3017, -66.3378), 160)
         san_martin_sl = _lookup_known_location("San Martín, San Luis")
         self.assertLess(haversine_km(*san_martin_sl, -33.3017, -66.3378), 150)

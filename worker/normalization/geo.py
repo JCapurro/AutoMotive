@@ -224,7 +224,20 @@ _KNOWN_LOCATIONS_RAW: dict[str, Coords] = {
     "general san martin cordoba": (-32.4075, -63.2402),  # Villa María
     "san justo santa fe": (-30.7891, -60.5919),          # San Justo
     "san martin santa fe": (-31.7676, -61.8285),         # Sastre
+    "chacabuco buenos aires": (-34.6417, -60.4731),
 }
+# deRuedas also writes "Capital, <Provincia>" for the other provinces. Left to
+# Nominatim, "Capital, Santa Fe" landed in San Juan. Never Buenos Aires: CABA
+# or La Plata is ambiguous there, so it stays with the geocoder.
+for _province, _capital in (
+        ("santa fe", "santa fe"), ("entre rios", "parana"), ("tucuman", "tucuman"),
+        ("salta", "salta"), ("jujuy", "jujuy"), ("catamarca", "catamarca"),
+        ("la rioja", "la rioja"), ("santiago del estero", "santiago del estero"),
+        ("corrientes", "corrientes"), ("chaco", "resistencia"), ("misiones", "posadas"),
+        ("formosa", "formosa"), ("neuquen", "neuquen"), ("rio negro", "viedma"),
+        ("la pampa", "santa rosa"), ("chubut", "chubut"), ("santa cruz", "rio gallegos"),
+        ("tierra del fuego", "ushuaia")):
+    _KNOWN_LOCATIONS_RAW[f"capital {_province}"] = _KNOWN_LOCATIONS_RAW[_capital]
 
 KNOWN_LOCATIONS: dict[str, Coords] = {
     normalize_location_query(name): coords for name, coords in _KNOWN_LOCATIONS_RAW.items()
