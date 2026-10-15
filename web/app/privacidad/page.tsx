@@ -11,7 +11,7 @@ export const metadata: Metadata = { title: "Política de privacidad" };
 // before a public launch.
 export default function PrivacyPage() {
   return (
-    <LegalPage title="Política de privacidad" updated="9 de octubre de 2026">
+    <LegalPage title="Política de privacidad" updated="15 de octubre de 2026">
       <p>
         Ese Auto es un servicio en etapa de piloto que monitorea publicaciones de autos usados y te avisa cuando
         aparece una que coincide con tu búsqueda. Esta política explica qué datos tuyos usamos, para qué y cómo
@@ -21,10 +21,13 @@ export default function PrivacyPage() {
       <h2>Qué datos usamos</h2>
       <ul>
         <li>
-          <strong>Tu email</strong>, para crear tu cuenta e ingresar con contraseña. Te enviamos emails para
-          confirmar el registro, recuperar la contraseña, avisarte sobre tu prueba gratis y tu plan (por ejemplo,
-          cuando termina la prueba, o cuántos autos nuevos aparecieron para tu búsqueda en las 3 semanas después de
-          que venció) y, si lo elegís, recibir alertas. Todos esos avisos traen un enlace para dejar de recibirlos.
+          <strong>Tu email</strong>. Para la búsqueda gratis te pedimos solo tu email, sin contraseña ni
+          confirmación. Lo usamos para mandarte las alertas de tu búsqueda y los avisos sobre tu prueba gratis y tu
+          plan (por ejemplo, cuando termina la prueba, o cuántos autos nuevos aparecieron para tu búsqueda en las 3
+          semanas después de que venció). Para volver a entrar desde otro dispositivo te mandamos un link a ese
+          email. Para contratar un plan te pedimos crear una cuenta: confirmar tu email y elegir una contraseña.
+          También te escribimos para confirmar el registro o recuperar la contraseña. Las alertas y los avisos
+          traen un link para dejar de recibirlos.
         </li>
         <li>
           <strong>Tus búsquedas</strong>: vehículo, filtros, preferencias y un punto de referencia para el radio de
@@ -41,9 +44,24 @@ export default function PrivacyPage() {
         <li>
           <strong>Lo que escribís en el modo asistido</strong>, para convertirlo en filtros que después revisás.
         </li>
+        <li>
+          <strong>Un identificador cifrado de tu IP</strong>: cuando dejás tu email para crear una búsqueda o pedís
+          un link para entrar, guardamos un identificador cifrado (un hash) de tu dirección IP para prevenir abusos,
+          como crear muchas búsquedas o pedir muchos links desde la misma conexión. Lo borramos a los 2 días como
+          máximo y no guardamos la IP en sí.
+        </li>
       </ul>
       <p>
         Las publicaciones de autos que mostramos son públicas y vienen de otros sitios; no forman parte de tus datos.
+      </p>
+
+      <h2>Si te llegan emails que no pediste</h2>
+      <p>
+        Para la búsqueda gratis no te pedimos confirmar el email antes de mandarte alertas (no hay doble opt-in).
+        Por eso cada alerta y cada aviso de la prueba o del plan trae al pie un link para dejar de recibirlos. Si
+        alguien escribió tu dirección y te llegan emails de Ese Auto que no pediste, tocá ese link y confirmá con
+        un clic: no te mandamos más, sin que tengas que entrar ni tener contraseña. Si además querés que borremos
+        esa búsqueda y tu email, escribinos a <Contact email={contactEmail} />.
       </p>
 
       <h2>Para qué</h2>
@@ -71,16 +89,17 @@ export default function PrivacyPage() {
 
       <h2>Cuánto tiempo</h2>
       <p>
-        Mientras tengas la cuenta. Si la borrás, eliminamos tu email, tus búsquedas, alertas y todo tu historial; solo
-        queda un registro anónimo de que una cuenta se dio de baja.
+        Mientras tengas la cuenta, también la que se crea con solo tu email al crear una búsqueda. Si la borrás,
+        eliminamos tu email, tus búsquedas, alertas y todo tu historial; solo queda un registro anónimo de que una
+        cuenta se dio de baja. El identificador cifrado de tu IP se borra a los 2 días como máximo.
       </p>
 
       <h2 id="cookies">Cookies</h2>
       <p>
         Usamos cookies propias para mantener tu sesión iniciada. Si las aceptás en el aviso de cookies, también usamos
         Google Analytics 4 para medir visitas y acciones de uso, y el Pixel de Meta (Facebook e Instagram) para medir si nuestros anuncios
-        funcionan: registra las páginas que visitás acá y acciones como crear la cuenta,
-        crear una búsqueda, guardar una publicación o iniciar la contratación de un plan. Google Analytics no recibe el texto ni los filtros de tus búsquedas. Cuando un pago se aprueba, se lo informamos
+        funcionan: registra las páginas que visitás acá y acciones como dejar tu email para crear una búsqueda,
+        crear una cuenta, guardar una búsqueda o una publicación, o iniciar la contratación de un plan. Google Analytics no recibe el texto ni los filtros de tus búsquedas. Cuando un pago se aprueba, se lo informamos
         a Meta desde nuestro servidor con el plan, el importe, un identificador cifrado de tu cuenta, tu dirección IP,
         tu navegador y los identificadores de esas cookies. No le mandamos tu email, tus búsquedas ni otros datos de
         tu cuenta. Mientras no las aceptes, o si las rechazás, el Pixel no le envía datos a Meta y tampoco le informamos los pagos.
@@ -98,8 +117,9 @@ export default function PrivacyPage() {
         Podés acceder, rectificar y suprimir tus datos en cualquier momento (Ley 25.326 de Protección de Datos
         Personales). Casi todo lo podés hacer vos desde <Link href="/app/settings">Ajustes</Link>: cambiar los
         canales, dejar de recibir emails (también con el link al pie de cada email) o borrar tu cuenta. Para
-        cualquier otro pedido escribinos a <Contact email={contactEmail} /> y te respondemos dentro de los plazos
-        que fija la ley.
+        borrar tus datos sin contraseña, en Ingresar pedí el link para entrar (te llega a tu email) y andá a
+        Ajustes → «Borrar mi cuenta». Si no podés entrar, o para cualquier otro pedido, escribinos a{" "}
+        <Contact email={contactEmail} /> y te respondemos dentro de los plazos que fija la ley.
       </p>
       <p>
         La Agencia de Acceso a la Información Pública, órgano de control de la Ley 25.326, atiende las denuncias y

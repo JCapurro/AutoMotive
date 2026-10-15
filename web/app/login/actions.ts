@@ -1,23 +1,34 @@
 "use server";
 
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { callbackUrl } from "@/lib/auth-links";
+import { accountForEmail, linkError, sendEntryLink } from "@/lib/email-only";
 import { safeNext } from "@/lib/navigation";
 import { supabaseAnonKey, supabaseUrl } from "@/lib/env";
 import { afterSignIn } from "@/lib/signup";
 import { createClient } from "@/lib/supabase/server";
 
 export type AuthMode = "login" | "signup" | "recover";
-export type LoginState = { email?: string; error?: string; sent?: boolean; confirmationRequired?: boolean; next: string };
+/**
+ * `entry`: we sent the link to enter instead of what the form asked for —
+ * "password" when the email has no password yet (email-only account),
+ * "signup" when it already has a free search.
+ */
+export type LoginState = { email?: string; error?: string; sent?: boolean; entry?: "password" | "signup"; confirmationRequired?: boolean; next: string };
 const Email = z.email({ error: "Ingresá un email válido." });
-async function callbackUrl(next: string): Promise<string> {
-  const h = await headers();
-  const origin = process.env.SITE_URL?.replace(/\/$/, "") ?? h.get("origin") ?? `http://${h.get("host")}`;
-  return `${origin}/auth/callback?next=${encodeURIComponent(next)}`;
-}
 function emailError(error: { status?: number }): string {
   return error.status === 429 ? "Pediste varios emails seguidos. Esperá un minuto y probá de nuevo." : "No pudimos mandar el email. Probá de nuevo.";
+}
+/** An email-only account (the free search) has no password: it enters with the link. */
+async function emailOnly(email: string) {
+  try {
+    const account = await accountForEmail(email);
+    return account?.email_only ? account : null;
+  } catch (error) {
+    console.error("account lookup failed:", error instanceof Error ? error.message : error);
+    return null;
+  }
 }
 export async function authenticate(mode: AuthMode, prev: LoginState, form: FormData): Promise<LoginState> {
   const next = safeNext(String(form.get("next") ?? prev.next));
@@ -34,10 +45,18 @@ export async function authenticate(mode: AuthMode, prev: LoginState, form: FormD
   }
   const supabase = await createClient();
   if (mode === "recover") {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: await callbackUrl("/auth/reset-password") });
-    return error ? { ...state, error: emailError(error) } : { ...state, sent: true };
+    // Neutral on purpose: the same link serves a forgotten password and an email-only account.
+    const result = await sendEntryLink(email, next);
+    return result === "sent" ? { ...state, sent: true } : { ...state, error: linkError(result) };
   }
   if (mode === "signup") {
+    // The email already has a free search: Auth would refuse the signup, the link
+    // proves the inbox and lets them choose a password.
+    const existing = await emailOnly(email);
+    if (existing) {
+      const result = await sendEntryLink(email, next, existing);
+      return result === "sent" ? { ...state, sent: true, entry: "signup" } : { ...state, error: linkError(result) };
+    }
     const { data, error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: await callbackUrl(next) } });
     if (error) return { ...state, error: error.code === "weak_password" ? "Elegí una contraseña más segura." : emailError(error) };
     // A misconfigured provider must not leave an unconfirmed signup signed in.
@@ -48,7 +67,16 @@ export async function authenticate(mode: AuthMode, prev: LoginState, form: FormD
     return { ...state, sent: true };
   }
   const { error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) return { ...state, confirmationRequired: error.code === "email_not_confirmed", error: error.code === "email_not_confirmed" ? "Confirmá tu email antes de ingresar. Revisá tu bandeja de entrada y spam." : "No pudimos ingresar. Revisá tu email y contraseña o recuperá tu contraseña." };
+  if (error) {
+    if (error.code === "invalid_credentials") {
+      const existing = await emailOnly(email);
+      if (existing) {
+        const result = await sendEntryLink(email, next, existing);
+        return result === "sent" ? { ...state, sent: true, entry: "password" } : { ...state, error: linkError(result) };
+      }
+    }
+    return { ...state, confirmationRequired: error.code === "email_not_confirmed", error: error.code === "email_not_confirmed" ? "Confirmá tu email antes de ingresar. Revisá tu bandeja de entrada y spam." : "No pudimos ingresar. Revisá tu email y contraseña, o pedí un link para entrar." };
+  }
   await afterSignIn(supabase);
   redirect(next);
 }

@@ -23,9 +23,10 @@ export default async function TermsPage() {
   const { proOffer, planLimits, automaticPayments } = await webConfig();
   const { free, pass, pro } = planLimits;
   return (
-    <LegalPage title="Términos de uso" updated="9 de octubre de 2026">
+    <LegalPage title="Términos de uso" updated="15 de octubre de 2026">
       <p>
-        Al crear una cuenta en Ese Auto aceptás estos términos. Si no estás de acuerdo, no uses el servicio.
+        Al crear una búsqueda con tu email o una cuenta en Ese Auto aceptás estos términos. Si no estás de acuerdo,
+        no uses el servicio.
       </p>
 
       <h2>El servicio</h2>
@@ -37,7 +38,7 @@ export default async function TermsPage() {
 
       <h2>Prueba y planes</h2>
       <p>La prueba gratis permite {searches(free)} durante 72 horas corridas desde su primera activación,
-        una sola vez por cuenta, {free.maxVisibleResults == null ? "todos los resultados disponibles" : `hasta ${free.maxVisibleResults} resultados por búsqueda`}
+        una sola vez por email o cuenta, {free.maxVisibleResults == null ? "todos los resultados disponibles" : `hasta ${free.maxVisibleResults} resultados por búsqueda`}
         {free.immediateAlertsPerDay > 0 ? `, ${alerts(free)} y resumen diario` : " y resumen diario"}. Editar, pausar o reemplazar la búsqueda no reinicia el plazo.</p>
       <p>Particular cuesta {planPrice(proOffer.pass_30.amount)} ARS por 30 días, permite {searches(pass)} y {alerts(pass)}, y no se renueva automáticamente.
         Si lo comprás con el acceso vigente, los 30 días se suman a tu vencimiento; si lo comprás después de vencer, rigen desde
@@ -80,8 +81,15 @@ export default async function TermsPage() {
 
       <h2>Tu cuenta</h2>
       <p>
-        Usá un email que sea tuyo y no compartas tu contraseña ni los links de confirmación o recuperación. No uses el servicio para fines ilegales ni
-        intentes acceder a datos de otros usuarios o sobrecargar el sistema. Podemos suspender cuentas que lo hagan.
+        Para la búsqueda gratis alcanza con tu email: al crearla queda creada tu cuenta, sin contraseña. Para volver a
+        entrar, por ejemplo desde otro dispositivo, te mandamos un link a ese email. Ese link da acceso a tu cuenta,
+        así que usá un email que sea tuyo, mantené privada tu casilla y no reenvíes los links que te mandamos.
+        Para contratar un plan necesitás una cuenta con el email confirmado y una contraseña: no compartas tu
+        contraseña ni los links de confirmación o recuperación.
+      </p>
+      <p>
+        No uses el servicio para fines ilegales ni intentes acceder a datos de otros usuarios o sobrecargar el sistema.
+        Podemos suspender cuentas que lo hagan.
         Podés borrar tu cuenta desde <Link href="/app/settings">Ajustes</Link>, después de confirmar la baja de una suscripción activa.
       </p>
 

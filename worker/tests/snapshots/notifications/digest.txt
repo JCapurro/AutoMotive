@@ -36,7 +36,7 @@ Ya no están disponibles
 Ver mis búsquedas: https://automotive.app/app
 
 —
-Recibís este correo porque tenés búsquedas activas en Ese Auto.
+Recibís este email porque se creó una búsqueda en Ese Auto con esta dirección.
 === email html ===
 <!doctype html><html lang="es"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -77,5 +77,5 @@ Recibís este correo porque tenés búsquedas activas en Ese Auto.
 <p style="margin:0;margin-top:6px;color:#4e5a73;font-size:12px;line-height:19px">112.000 km</p>
 <p style="margin:0;margin-top:6px;color:#4e5a73;font-size:12px;line-height:19px">Palermo, Capital Federal</p></td></tr></table><div style="margin-top:18px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;"><tr><td bgcolor="#ffe14d" style="padding:16px 18px;border-radius:5px;text-align:center"><a href="https://automotive.app/r/43?to=detail&amp;l=504" style="color:#14213d;text-decoration:none;font-size:15px;line-height:22px;font-weight:bold;display:block">Ver auto en Ese Auto &rarr;</a></td></tr></table></div></td></tr><tr><td height="16" style="font-size:0;line-height:0">&nbsp;</td></tr></table>
 <div style="margin-top:18px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;"><tr><td bgcolor="#ffe14d" style="padding:16px 18px;border-radius:5px;text-align:center"><a href="https://automotive.app/app" style="color:#14213d;text-decoration:none;font-size:15px;line-height:22px;font-weight:bold;display:block">Ver mis búsquedas en Ese Auto &rarr;</a></td></tr></table></div></td></tr></table><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;"><tr><td class="pad" bgcolor="#f1f3f7" style="padding:22px 28px;border-top:1px solid #d8dde6"><p style="margin:0;font-size:16px;line-height:23px;font-weight:bold;color:#14213d">Menos buscar. Más encontrar.</p>
-<p style="margin:0;margin-top:10px;font-size:11px;line-height:18px;color:#4e5a73">Recibís este correo porque tenés búsquedas activas en Ese Auto.</p></td></tr></table></td></tr></table></div><!--[if mso]></td></tr></table><![endif]--></td></tr></table>
+<p style="margin:0;margin-top:10px;font-size:11px;line-height:18px;color:#4e5a73">Recibís este email porque se creó una búsqueda en Ese Auto con esta dirección.</p></td></tr></table></td></tr></table></div><!--[if mso]></td></tr></table><![endif]--></td></tr></table>
 </body></html>

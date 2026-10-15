@@ -1,4 +1,12 @@
+import { loadEnvConfig } from "@next/env";
 import { defineConfig, devices } from "@playwright/test";
+
+// The build reads web/.env.local; the free search creates real Auth users, so
+// never run against a hosted project. Export the local stack's values first.
+loadEnvConfig(process.cwd(), true);
+if (!["localhost", "127.0.0.1", "::1"].includes(new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "http://127.0.0.1:54321").hostname)) {
+  throw new Error("Las pruebas e2e requieren Supabase local: exportá NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY y SUPABASE_SERVICE_ROLE_KEY del stack local.");
+}
 
 /**
  * e2e against the local Supabase stack (`npx supabase start` from the repo

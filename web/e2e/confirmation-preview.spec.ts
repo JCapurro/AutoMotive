@@ -42,12 +42,12 @@ test("una vista previa no consume el enlace y una cuenta confirmada puede ingres
     const recovery = await admin.auth.admin.generateLink({ type: "recovery", email });
     if (recovery.error || !recovery.data.properties) throw new Error("No se pudo generar la recuperación local");
     await page.goto(`${base}/auth/confirm?token_hash=${recovery.data.properties.hashed_token}&type=recovery`);
-    await page.getByRole("button", { name: "Elegir nueva contraseña" }).click();
-    await expect(page).toHaveURL(/\/auth\/reset-password$/);
+    await page.getByRole("button", { name: "Continuar" }).click();
+    await expect(page).toHaveURL(/\/auth\/reset-password(\?next=%2Fapp)?$/);
     await page.getByLabel("Nueva contraseña", { exact: true }).fill(replacement);
     await page.getByLabel("Repetí la contraseña").fill(replacement);
     await page.getByRole("button", { name: "Guardar contraseña" }).click();
-    await expect(page).toHaveURL(/\/login\?password=updated$/);
+    await expect(page).toHaveURL(/\/login\?password=updated(&next=%2Fapp)?$/);
     await page.getByLabel("Email", { exact: true }).fill(email);
     await page.getByLabel("Contraseña", { exact: true }).fill(replacement);
     await page.getByRole("button", { name: "Ingresar", exact: true }).click();

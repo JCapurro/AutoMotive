@@ -41,6 +41,7 @@ export default async function UsersPage() {
                 <Td className="max-w-56">
                   <span className="block truncate">{u.email ?? "Solo Telegram"}</span>
                   {u.role === "admin" ? <Pill tone="warn">admin</Pill> : null}
+                  {u.email_only ? <Pill>solo email</Pill> : null}
                 </Td>
                 <Td className="whitespace-nowrap">
                   {u.plan ? PLAN_NAMES[u.plan] : "—"}

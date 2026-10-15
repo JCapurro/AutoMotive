@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import { type ClickTarget, destination, isPreview, parseClick } from "@/lib/tracking";
 import { requestOrigin } from "@/lib/origin";
 
@@ -38,6 +39,21 @@ async function peek(notificationId: number, listingId: number | null): Promise<R
   return listing ? { listing_id: listing.id, url: listing.url } : null;
 }
 
+/**
+ * An email-only account (free search) has no password: without a session on
+ * this browser the detail page would end at the login. Its alert opens the
+ * listing at the source instead; the email already shows the comparison.
+ */
+async function signedOutEmailOnly(notificationId: number): Promise<boolean> {
+  const { data: claims } = await (await createClient()).auth.getClaims();
+  if (claims?.claims?.sub) return false;
+  const admin = createAdminClient();
+  const { data: n } = await admin.from("notifications").select("user_id").eq("id", notificationId).maybeSingle();
+  if (!n) return false;
+  const { data: profile } = await admin.from("profiles").select("email_only").eq("id", n.user_id).maybeSingle();
+  return profile?.email_only === true;
+}
+
 async function handle(request: NextRequest, notificationId: string, count: boolean) {
   const click = parseClick(notificationId, request.nextUrl.searchParams);
   if (!click) return new NextResponse("Link inválido", { status: 404 });
@@ -45,7 +61,8 @@ async function handle(request: NextRequest, notificationId: string, count: boole
     ? await track(click.notificationId, click.to, click.listingId)
     : await peek(click.notificationId, click.listingId);
   if (!row) return new NextResponse("Esta alerta no existe o ya no está disponible.", { status: 404 });
-  const url = new URL(destination(click.to, row, click.notificationId), requestOrigin(request));
+  const to = click.to === "detail" && await signedOutEmailOnly(click.notificationId) ? "listing" : click.to;
+  const url = new URL(destination(to, row, click.notificationId), requestOrigin(request));
   const response = NextResponse.redirect(url, 302);
   response.headers.set("Cache-Control", "no-store");
   return response;

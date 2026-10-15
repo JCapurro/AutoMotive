@@ -34,6 +34,8 @@ export async function query<T extends Record<string, unknown> = Record<string, u
  */
 export async function resetE2E(): Promise<void> {
   await query(`delete from auth.users where email like $1`, [`%@${E2E_EMAIL_DOMAIN}`]);
+  // The free search's per-IP brakes: every local request shares one bucket.
+  await query(`delete from public.auth_throttle`);
   await query(`delete from public.listings where external_id like $1 or url like 'https://example.test/%'`, [
     `${E2E_LISTING_PREFIX}%`,
   ]);

@@ -69,7 +69,7 @@ export default async function Landing({ searchParams }: PageProps<"/">) {
             Decinos cuál. Te avisamos cuando aparezca.
           </h1>
           <div className="mt-8 grid items-start gap-10 md:mt-12 md:grid-cols-2 md:gap-12">
-            <div>
+            <div id="crear-busqueda" className="scroll-mt-24">
               <div className="max-w-[42ch] space-y-2 text-[19px] leading-snug text-muted-foreground">
                 <p>Ese Auto monitorea las publicaciones y te avisa cuando aparece uno que vale la pena mirar.</p>
               </div>
@@ -131,8 +131,8 @@ export default async function Landing({ searchParams }: PageProps<"/">) {
             <h2 className="type-display max-w-[20ch] text-[1.9rem] leading-[1.05] md:text-[2.8rem]">
               Vos elegís qué auto querés. Ese Auto busca por vos.
             </h2>
-            <Button type="submit" form="landing-search" className="mt-7 h-11 px-4.5 text-[15px]">
-              Crear mi búsqueda
+            <Button asChild className="mt-7 h-11 px-4.5 text-[15px]">
+              <a href="#crear-busqueda">Crear mi búsqueda</a>
             </Button>
           </div>
         </section>

@@ -3,9 +3,17 @@ import { NextRequest } from "next/server";
 const mocks = vi.hoisted(() => ({ auth: {
   signUp: vi.fn(), signInWithPassword: vi.fn(), resetPasswordForEmail: vi.fn(), resend: vi.fn(),
   signOut: vi.fn(), getUser: vi.fn(), updateUser: vi.fn(), verifyOtp: vi.fn(), exchangeCodeForSession: vi.fn(),
-}, afterSignIn: vi.fn() }));
-vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ auth: mocks.auth }) }));
+}, afterSignIn: vi.fn(), profile: null as { email_only: boolean } | null, accountForEmail: vi.fn(), sendEntryLink: vi.fn(), afterRecoveryLink: vi.fn() }));
+vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({
+  auth: mocks.auth,
+  from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: mocks.profile }) }) }) }),
+}) }));
 vi.mock("@/lib/signup", () => ({ afterSignIn: mocks.afterSignIn }));
+vi.mock("@/lib/email-only", () => ({
+  accountForEmail: mocks.accountForEmail, sendEntryLink: mocks.sendEntryLink,
+  linkError: (result: string) => result === "busy" ? "Ya te mandamos un link hace un momento." : "No se pudo.",
+}));
+vi.mock("@/lib/account-proof", () => ({ afterRecoveryLink: mocks.afterRecoveryLink, completeWithGoogle: vi.fn() }));
 vi.mock("next/headers", () => ({ headers: async () => new Headers({ origin: "https://eseauto.com.ar" }) }));
 vi.mock("next/navigation", () => ({ redirect: (path: string) => { throw new Error(`redirect:${path}`); } }));
 import { authenticate, resendConfirmation } from "@/app/login/actions";
@@ -21,6 +29,14 @@ beforeEach(() => {
   for (const mock of Object.values(mocks.auth)) mock.mockResolvedValue({ error: null });
   mocks.auth.signUp.mockResolvedValue({ data: { session: null }, error: null });
   mocks.auth.getUser.mockResolvedValue({ data: { user: { id: "user" } }, error: null });
+  mocks.profile = { email_only: false };
+  mocks.accountForEmail.mockResolvedValue(null);
+  mocks.sendEntryLink.mockResolvedValue("sent");
+  // A full account: the password form, with the inner destination.
+  mocks.afterRecoveryLink.mockImplementation(async (_client: unknown, next: string) => {
+    const { afterRecovery } = await import("@/lib/navigation");
+    return `/auth/reset-password?${new URLSearchParams({ next: afterRecovery(next) })}`;
+  });
 });
 describe("password authentication", () => {
   it("signs up without completing registration until confirmation", async () => {
@@ -69,14 +85,37 @@ describe("password authentication", () => {
     const result = await authenticate("login", { next: "/app" }, form(credentials));
     expect(result.error).not.toContain("secret detail");
   });
-  it("requests Supabase recovery without enumerating accounts", async () => {
-    expect((await authenticate("recover", { next: "/app" }, form({ email: credentials.email }))).sent).toBe(true);
-    expect(mocks.auth.resetPasswordForEmail).toHaveBeenCalledWith("person@example.com", { redirectTo: "https://eseauto.com.ar/auth/callback?next=%2Fauth%2Freset-password" });
+  it("sends the link to enter without enumerating accounts", async () => {
+    expect((await authenticate("recover", { next: "/app/pro?plan=pass_30" }, form({ email: credentials.email }))).sent).toBe(true);
+    expect(mocks.sendEntryLink).toHaveBeenCalledWith("person@example.com", "/app/pro?plan=pass_30");
     expect(mocks.afterSignIn).not.toHaveBeenCalled();
   });
   it("handles email rate limits", async () => {
-    mocks.auth.resetPasswordForEmail.mockResolvedValue({ error: { status: 429 } });
-    expect((await authenticate("recover", { next: "/app" }, form(credentials))).error).toContain("Esperá un minuto");
+    mocks.sendEntryLink.mockResolvedValue("busy");
+    expect((await authenticate("recover", { next: "/app" }, form(credentials))).error).toContain("Ya te mandamos");
+  });
+  it("sends the link to an email-only account that tried a password", async () => {
+    const account = { user_id: "lite", email_only: true, confirmed: true };
+    mocks.auth.signInWithPassword.mockResolvedValue({ error: { code: "invalid_credentials" } });
+    mocks.accountForEmail.mockResolvedValue(account);
+    const result = await authenticate("login", { next: "/app/listings/1" }, form(credentials));
+    expect(result).toMatchObject({ sent: true, entry: "password" });
+    expect(mocks.sendEntryLink).toHaveBeenCalledWith("person@example.com", "/app/listings/1", account);
+    expect(mocks.afterSignIn).not.toHaveBeenCalled();
+  });
+  it("keeps a wrong password on a full account generic, without sending anything", async () => {
+    mocks.auth.signInWithPassword.mockResolvedValue({ error: { code: "invalid_credentials" } });
+    mocks.accountForEmail.mockResolvedValue({ user_id: "full", email_only: false, confirmed: true });
+    expect((await authenticate("login", { next: "/app" }, form(credentials))).error).toBeTruthy();
+    expect(mocks.sendEntryLink).not.toHaveBeenCalled();
+  });
+  it("answers a signup over a free search with the link instead of Auth's signup", async () => {
+    const account = { user_id: "lite", email_only: true, confirmed: true };
+    mocks.accountForEmail.mockResolvedValue(account);
+    const result = await authenticate("signup", { next: "/app/pro?plan=pass_30" }, form(credentials));
+    expect(result).toMatchObject({ sent: true, entry: "signup" });
+    expect(mocks.auth.signUp).not.toHaveBeenCalled();
+    expect(mocks.sendEntryLink).toHaveBeenCalledWith("person@example.com", "/app/pro?plan=pass_30", account);
   });
   it("resends the signup confirmation", async () => {
     await resendConfirmation({ next: "/app" }, form(credentials));
@@ -86,28 +125,34 @@ describe("password authentication", () => {
 describe("password updates", () => {
   it("rejects unsigned requests", async () => {
     mocks.auth.getUser.mockResolvedValue({ data: { user: null }, error: null });
-    expect((await updatePassword({}, form(credentials))).error).toContain("venció");
+    expect((await updatePassword("/app", {}, form(credentials))).error).toContain("venció");
     expect(mocks.auth.updateUser).not.toHaveBeenCalled();
   });
   it("validates repeated password on the server", async () => {
-    expect((await updatePassword({}, form({ ...credentials, confirmPassword: "different" }))).error).toContain("no coinciden");
+    expect((await updatePassword("/app", {}, form({ ...credentials, confirmPassword: "different" }))).error).toContain("no coinciden");
     expect(mocks.auth.updateUser).not.toHaveBeenCalled();
   });
   it("updates through Supabase and signs out", async () => {
-    await expect(updatePassword({}, form(credentials))).rejects.toThrow("redirect:/login?password=updated");
+    await expect(updatePassword("/app/pro?plan=pass_30", {}, form(credentials))).rejects.toThrow("redirect:/login?password=updated&next=%2Fapp%2Fpro%3Fplan%3Dpass_30");
     expect(mocks.auth.updateUser).toHaveBeenCalledWith({ password: credentials.password });
     expect(mocks.auth.signOut).toHaveBeenCalled();
   });
   it("keeps provider rejection visible without claiming success", async () => {
     mocks.auth.updateUser.mockResolvedValue({ error: { code: "same_password" } });
-    expect((await updatePassword({}, form(credentials))).error).toContain("distinta");
+    expect((await updatePassword("/app", {}, form(credentials))).error).toContain("distinta");
     expect(mocks.auth.signOut).not.toHaveBeenCalled();
+  });
+  it("never sets a password on an email-only account here", async () => {
+    mocks.profile = { email_only: true };
+    await expect(updatePassword("/app/settings", {}, form(credentials))).rejects.toThrow("redirect:/app/cuenta?next=%2Fapp%2Fsettings");
+    expect(mocks.auth.updateUser).not.toHaveBeenCalled();
   });
 });
 describe("email links", () => {
   it("forces recovery to the password form and skips registration metrics", async () => {
     const response = await confirm(confirmationRequest("https://eseauto.com.ar/auth/confirm?token_hash=test&type=recovery&next=/admin"));
-    expect(response.headers.get("location")).toBe("https://eseauto.com.ar/auth/reset-password");
+    expect(response.headers.get("location")).toBe("https://eseauto.com.ar/auth/reset-password?next=%2Fapp");
+    expect(mocks.afterRecoveryLink.mock.calls[0][1]).toBe("/auth/reset-password");
     expect(mocks.auth.verifyOtp).toHaveBeenCalledWith({ type: "recovery", token_hash: "test" });
     expect(mocks.afterSignIn).not.toHaveBeenCalled();
   });
@@ -117,9 +162,20 @@ describe("email links", () => {
     expect(mocks.auth.verifyOtp).not.toHaveBeenCalled();
     expect(mocks.afterSignIn).not.toHaveBeenCalled();
   });
+  it("carries the destination of a recovery link through its password step", async () => {
+    const next = `/auth/reset-password?${new URLSearchParams({ next: "/app/pro?plan=pass_30" })}`;
+    const response = await confirm(confirmationRequest(`https://eseauto.com.ar/auth/confirm?${new URLSearchParams({ token_hash: "test", type: "recovery", next })}`));
+    expect(response.headers.get("location")).toBe("https://eseauto.com.ar/auth/reset-password?next=%2Fapp%2Fpro%3Fplan%3Dpass_30");
+    expect(mocks.afterRecoveryLink.mock.calls[0][1]).toBe(next);
+  });
+  it("drops an external destination nested in a recovery link", async () => {
+    const next = `/auth/reset-password?${new URLSearchParams({ next: "/\tevil.example" })}`;
+    const response = await confirm(confirmationRequest(`https://eseauto.com.ar/auth/confirm?${new URLSearchParams({ token_hash: "test", type: "recovery", next })}`));
+    expect(response.headers.get("location")).toBe("https://eseauto.com.ar/auth/reset-password?next=%2Fapp");
+  });
   it("exchanges a PKCE recovery code without marking registration", async () => {
     const response = await callback(new NextRequest("https://eseauto.com.ar/auth/callback?code=test&next=/auth/reset-password"));
-    expect(response.headers.get("location")).toBe("https://eseauto.com.ar/auth/reset-password");
+    expect(response.headers.get("location")).toBe("https://eseauto.com.ar/auth/reset-password?next=%2Fapp");
     expect(mocks.auth.exchangeCodeForSession).toHaveBeenCalledWith("test");
     expect(mocks.afterSignIn).not.toHaveBeenCalled();
   });

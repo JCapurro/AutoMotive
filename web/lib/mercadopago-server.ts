@@ -49,7 +49,7 @@ async function saveCheckout(id: string, update: Database["public"]["Tables"]["bi
 export async function createCheckout(userId: string, offer: "pass_30" | "pro_monthly", email: string, version: string, amount: number, attribution?: AdAttribution) {
   if (!paymentsEnabled()) throw new Error("payments_not_configured");
   const { data, error } = await createAdminClient().rpc("begin_billing_checkout", { p_user: userId, p_offer: offer, p_email: email, p_version: version, p_expected_amount: amount });
-  if (error) throw new Error(error.message.includes("offer_changed") ? "offer_changed" : error.message.includes("paid_plan_already_active") ? "paid_plan_already_active" : error.message.includes("checkout_already_open") ? "checkout_already_open" : "billing_database_error");
+  if (error) throw new Error(error.message.includes("account_required") ? "account_required" : error.message.includes("offer_changed") ? "offer_changed" : error.message.includes("paid_plan_already_active") ? "paid_plan_already_active" : error.message.includes("checkout_already_open") ? "checkout_already_open" : "billing_database_error");
   const checkout = data as BillingCheckout & { new: boolean };
   if (checkout.init_point && ["pending", "creating"].includes(checkout.status)) {
     const url = checkoutUrl(checkout.init_point, process.env.MERCADOPAGO_TEST_MODE === "true");

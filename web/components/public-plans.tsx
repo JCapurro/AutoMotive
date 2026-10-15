@@ -23,7 +23,8 @@ type PublicPlan = {
  * offer and every limit comes from app_config.plan_limits, as the backend applies it.
  */
 export function PublicPlans({ cfg, signedIn }: { cfg: PricingConfig; signedIn: boolean }) {
-  const start = signedIn ? "/app/searches/new" : "/login?next=/app/searches/new";
+  // The trial needs only an email: signed out, it starts at the landing's form.
+  const start = signedIn ? "/app/searches/new" : "/#crear-busqueda";
   const trial = cfg.planLimits.free;
   const plans: PublicPlan[] = [
     {
@@ -33,7 +34,7 @@ export function PublicPlans({ cfg, signedIn }: { cfg: PricingConfig; signedIn: b
       period: "por 3 días · sin tarjeta",
       pitch: "Probá cómo buscamos y comparamos autos antes de elegir un plan.",
       features: [searchesText(trial, false), resultsText(trial), alertsText(trial), "Historial y favoritos"],
-      terms: "Las 72 horas empiezan al activar tu búsqueda. Una prueba por cuenta, sin cobro automático.",
+      terms: "Las 72 horas empiezan al activar tu búsqueda. Sin contraseña: solo tu email. Una prueba por email, sin cobro automático.",
       cta: "Probar gratis",
       href: start,
     },

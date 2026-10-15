@@ -20,13 +20,41 @@ export type WebConfig = {
   planLimits: PlanLimitsConfig;
   commercialPilot: boolean;
   automaticPayments: boolean;
+  /** app_config.email_only_signup: the free search's email-only accounts and their brakes. */
+  emailOnlySignup: EmailOnlySignup;
 };
+
+export type EmailOnlySignup = {
+  enabled: boolean;
+  perIpHour: number;
+  perDay: number;
+  linksPerUserHour: number;
+  linksPerIpHour: number;
+  lookupsPerIpHour: number;
+};
+
+/** Missing or malformed values fall back to the migration's defaults; enabled only when explicitly true. */
+export function emailOnlySignup(raw: unknown): EmailOnlySignup {
+  const value = (raw ?? {}) as Record<string, unknown>;
+  const count = (key: string, fallback: number) => {
+    const n = Number(value[key] ?? fallback);
+    return Number.isFinite(n) && n >= 0 ? Math.floor(n) : fallback;
+  };
+  return {
+    enabled: value.enabled === true,
+    perIpHour: count("per_ip_hour", 10),
+    perDay: count("per_day", 100),
+    linksPerUserHour: count("links_per_user_hour", 3),
+    linksPerIpHour: count("links_per_ip_hour", 20),
+    lookupsPerIpHour: count("lookups_per_ip_hour", 30),
+  };
+}
 
 export const webConfig = cache(async (): Promise<WebConfig> => {
   const { data } = await createAdminClient()
     .from("app_config")
     .select("key, value")
-    .in("key", ["comparables", "watchlist_stale_days", "pro_offer", "commercial_pilot", "plan_limits", "alerts_max_per_user_day"]);
+    .in("key", ["comparables", "watchlist_stale_days", "pro_offer", "commercial_pilot", "plan_limits", "alerts_max_per_user_day", "email_only_signup"]);
   const values = Object.fromEntries((data ?? []).map((row) => [row.key, row.value]));
   const comparables = (values.comparables ?? {}) as { min_n?: number; year_tol?: number; km_tol_pct?: number; max_age_days?: number };
   return {
@@ -41,5 +69,6 @@ export const webConfig = cache(async (): Promise<WebConfig> => {
     planLimits: planLimits(values.plan_limits, Number(values.alerts_max_per_user_day ?? 10)),
     commercialPilot: (values.commercial_pilot as { enabled?: boolean } | undefined)?.enabled === true,
     automaticPayments: paymentsEnabled() && (values.commercial_pilot as { enabled?: boolean } | undefined)?.enabled === true,
+    emailOnlySignup: emailOnlySignup(values.email_only_signup),
   };
 });

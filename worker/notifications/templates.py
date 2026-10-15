@@ -51,7 +51,12 @@ DIGEST_SECTIONS = {
 }
 DIGEST_DEGRADED = ("1 alerta superó el tope diario de avisos inmediatos y quedó en este resumen.",
                    "{n} alertas superaron el tope diario de avisos inmediatos y quedaron en este resumen.")
-EMAIL_FOOTER = "Recibís este correo porque tenés búsquedas activas en Ese Auto."
+# Free searches only ask for an email, with no confirmation (no double
+# opt-in): the alert footer works for whoever typed the address and for whoever
+# owns it. "¿No fuiste vos?" only goes with the unsubscribe link right below it.
+EMAIL_FOOTER = "Recibís este email porque se creó una búsqueda en Ese Auto con esta dirección."
+EMAIL_NOT_YOU = "¿No fuiste vos?"
+UNSUBSCRIBE_ALERTS = "Dejá de recibirlos"
 UNSUBSCRIBE = "Dejar de recibir estos emails"
 # Red flags shown in an alert, warnings first.
 MAX_FLAGS = 2
@@ -337,14 +342,15 @@ def email(n: Notification, links: Links, now: datetime) -> EmailMessage:
     if c.notes:
         text += [""] + c.notes
     unsubscribe = links.unsubscribe(n.unsubscribe_token)
-    text += ["", "—", EMAIL_FOOTER]
+    footer = f"{EMAIL_FOOTER} {EMAIL_NOT_YOU}" if unsubscribe else EMAIL_FOOTER
+    text += ["", "—", footer]
     if unsubscribe:
-        text.append(f"{UNSUBSCRIBE}: {unsubscribe}")
+        text.append(f"{UNSUBSCRIBE_ALERTS}: {unsubscribe}")
 
     html = render_email_html(c, kind=n.kind, now=now, day=n.payload.get("date"),
                              detail_url=detail, app_url=app_url,
-                             unsubscribe_url=unsubscribe, footer=EMAIL_FOOTER,
-                             unsubscribe_label=UNSUBSCRIBE)
+                             unsubscribe_url=unsubscribe, footer=footer,
+                             unsubscribe_label=UNSUBSCRIBE_ALERTS)
     return EmailMessage(c.subject, "\n".join(text), html)
 
 
@@ -366,12 +372,14 @@ def web(n: Notification, links: Links, now: datetime) -> dict[str, Any]:
 LIFECYCLE_EYEBROW = {"trial_no_matches": "TU PRUEBA GRATIS", "trial_ended": "TU PRUEBA GRATIS",
                      "pass_expiring": "TU PLAN PARTICULAR", "pass_expires_today": "TU PLAN PARTICULAR",
                      "count_after_expiry": "TU BÚSQUEDA"}
+# The free-trial ones reach email-only accounts too (nobody confirmed the
+# address), so they don't say the reader created the search.
 LIFECYCLE_FOOTER = {
-    "trial_no_matches": "Recibís este email porque activaste una búsqueda gratis en Ese Auto.",
-    "trial_ended": "Recibís este email porque activaste una búsqueda gratis en Ese Auto.",
+    "trial_no_matches": "Recibís este email porque se activó una búsqueda gratis en Ese Auto con esta dirección.",
+    "trial_ended": "Recibís este email porque se activó una búsqueda gratis en Ese Auto con esta dirección.",
     "pass_expiring": "Recibís este email porque tenés Particular en Ese Auto.",
     "pass_expires_today": "Recibís este email porque tenés Particular en Ese Auto.",
-    "count_after_expiry": "Recibís este email porque tuviste una búsqueda activa en Ese Auto.",
+    "count_after_expiry": "Recibís este email porque hubo una búsqueda activa en Ese Auto con esta dirección.",
 }
 
 NO_MATCHES_SUBJECT = "Tu búsqueda de {model} todavía no tuvo coincidencias nuevas"

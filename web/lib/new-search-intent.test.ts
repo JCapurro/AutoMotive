@@ -4,11 +4,11 @@ import { beforeEach, expect, it, vi } from "vitest";
 import type { SearchLimit } from "./assisted";
 import type { DetectedLocation } from "./search-location";
 
-const state = vi.hoisted(() => ({ headers: {} as Record<string, string>, access: null as unknown }));
-beforeEach(() => { state.headers = {}; state.access = null; });
+const state = vi.hoisted(() => ({ headers: {} as Record<string, string>, access: null as unknown, emailOnly: false }));
+beforeEach(() => { state.headers = {}; state.access = null; state.emailOnly = false; });
 vi.mock("next/headers", () => ({ headers: async () => new Headers(state.headers) }));
 
-vi.mock("@/lib/auth", () => ({ requireUser: vi.fn().mockResolvedValue({ id: "user" }) }));
+vi.mock("@/lib/auth", () => ({ requireUser: vi.fn().mockResolvedValue({ id: "user", email: "user@example.com" }), isEmailOnly: async () => state.emailOnly }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ rpc: async () => ({ data: state.access }) }) }));
 vi.mock("@/lib/config", async () => {
   const { DEFAULT_PLAN_LIMITS, DEFAULT_PRO_OFFER } = await import("@/lib/pro");
@@ -32,6 +32,14 @@ vi.mock("@/components/app/assisted-search", () => ({
 
 import NewSearchPage from "@/app/app/searches/new/page";
 
+it("tells an email-only account where the alerts go", async () => {
+  state.emailOnly = true;
+  const html = renderToStaticMarkup(await NewSearchPage({ params: Promise.resolve({}), searchParams: Promise.resolve({}) }));
+  expect(html).toContain("Te vamos a avisar a <b>user@example.com</b>");
+  state.emailOnly = false;
+  expect(renderToStaticMarkup(await NewSearchPage({ params: Promise.resolve({}), searchParams: Promise.resolve({}) }))).not.toContain("Te vamos a avisar");
+});
+
 it("hands the landing prompt to the assisted flow after authentication", async () => {
   const html = renderToStaticMarkup(await NewSearchPage({
     params: Promise.resolve({}), searchParams: Promise.resolve({ prompt: "Fiesta manual en Córdoba" }),
@@ -54,7 +62,7 @@ it("passes the automatic connection zone to the assisted and structured flows", 
   expect(html).toContain('data-assisted-zone="Córdoba (zona aproximada)"');
   // The inactive structured tab is unmounted by Radix; inspect its props too.
   const children = tree.props.children;
-  const tabs = children[1];
+  const tabs = children.find((child: { props?: { defaultValue?: string } } | null) => child?.props?.defaultValue === "assisted");
   const structuredTab = tabs.props.children[1];
   expect(structuredTab.props.children.props.approximateLocation).toEqual({
     label: "Córdoba (zona aproximada)", lat: -31.42, lon: -64.19, approximate: true,

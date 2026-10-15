@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import Link from "next/link";
 
 import { Logo } from "@/components/logo";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { localMailbox } from "@/lib/env";
+import { isInAppBrowser } from "@/lib/in-app-browser";
 import { safeNext } from "@/lib/navigation";
 
 import { LoginForm } from "./login-form";
@@ -14,16 +16,20 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
   const params = await searchParams;
   const next = safeNext(typeof params.next === "string" ? params.next : null);
   const mode = params.mode === "signup" || params.mode === "recover" ? params.mode : "login";
+  const inApp = isInAppBrowser((await headers()).get("user-agent"));
+  const paying = next.startsWith("/app/pro");
   return (
     <main className="flex min-h-dvh flex-col items-center justify-center gap-6 px-4 py-10">
       <Logo />
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle className="text-lg">{mode === "signup" ? "Creá tu cuenta" : mode === "recover" ? "Recuperá tu contraseña" : "Ingresá a tu cuenta"}</CardTitle>
-          <CardDescription>Guardá tus búsquedas y recibí las alertas.</CardDescription>
+          <CardTitle className="text-lg">{mode === "signup" ? "Creá tu cuenta" : mode === "recover" ? "Entrá con un link" : "Ingresá a tu cuenta"}</CardTitle>
+          <CardDescription>{mode === "recover" ? "Te mandamos un link a tu email para entrar. Sirve si olvidaste tu contraseña o si creaste tu búsqueda solo con tu email."
+            : paying ? "Para contratar un plan, entrá con tu cuenta o pedí un link a tu email."
+              : "Guardá tus búsquedas y recibí las alertas."}</CardDescription>
         </CardHeader>
         <CardContent>
-          <LoginForm key={mode} next={next} mode={mode} linkError={params.error === "link"} googleError={params.error === "google"} mailbox={localMailbox} passwordUpdated={params.password === "updated"} />
+          <LoginForm key={mode} next={next} mode={mode} linkError={params.error === "link"} googleError={params.error === "google"} mailbox={localMailbox} passwordUpdated={params.password === "updated"} inApp={inApp} />
         </CardContent>
       </Card>
       <p className="max-w-sm text-center text-xs text-muted-foreground">

@@ -7,10 +7,11 @@ import { queuePixel } from "@/lib/meta-pixel-server";
 import type { Database } from "@/types/database";
 
 /**
- * After email confirmation, password login or OAuth, record the first sign-in.
+ * After email confirmation, password login, OAuth or the free search's email-only
+ * account (lib/email-only.ts), record the first sign-in.
  * Recovery does not count as a completed registration.
  */
-export async function afterSignIn(supabase: SupabaseClient<Database>, method: "email" | "google" = "email"): Promise<void> {
+export async function afterSignIn(supabase: SupabaseClient<Database>, method: "email" | "google" | "email_only" = "email"): Promise<void> {
   const { data } = await supabase.auth.getClaims();
   const userId = data?.claims?.sub;
   if (!userId) return;

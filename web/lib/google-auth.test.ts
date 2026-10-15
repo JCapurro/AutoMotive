@@ -2,11 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
 const mocks = vi.hoisted(() => ({
-  fetch: vi.fn(), signInWithOAuth: vi.fn(), exchangeCodeForSession: vi.fn(), afterSignIn: vi.fn(),
+  fetch: vi.fn(), signInWithOAuth: vi.fn(), exchangeCodeForSession: vi.fn(), afterSignIn: vi.fn(), completeWithGoogle: vi.fn(),
 }));
 vi.mock("@/lib/env", () => ({ supabaseUrl: "https://auth.example.com", supabaseAnonKey: "public-key" }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ auth: mocks }) }));
 vi.mock("@/lib/signup", () => ({ afterSignIn: mocks.afterSignIn }));
+vi.mock("@/lib/email-only", () => ({ accountForEmail: vi.fn(), sendEntryLink: vi.fn(), linkError: vi.fn() }));
+vi.mock("@/lib/account-proof", () => ({ afterRecoveryLink: vi.fn(), completeWithGoogle: mocks.completeWithGoogle }));
 vi.mock("next/headers", () => ({ headers: async () => new Headers({ origin: "https://eseauto.com.ar" }) }));
 vi.mock("next/navigation", () => ({ redirect: (path: string) => { throw new Error(`redirect:${path}`); } }));
 
@@ -111,5 +113,15 @@ describe("Google callback", () => {
   it("sanitizes callback destinations", async () => {
     const response = await callback(new NextRequest("https://eseauto.com.ar/auth/callback?provider=google&code=valid&next=https://evil.example"));
     expect(response.headers.get("location")).toBe("https://eseauto.com.ar/app");
+  });
+});
+
+describe("Google over an email-only account", () => {
+  it("lets the callback complete the free search's account", async () => {
+    const user = { id: "lite", email: "a@gmail.com", identities: [{ provider: "google" }] };
+    mocks.exchangeCodeForSession.mockResolvedValue({ data: { user }, error: null });
+    const response = await callback(new NextRequest("https://eseauto.com.ar/auth/callback?code=valid&provider=google&next=/app"));
+    expect(response.headers.get("location")).toBe("https://eseauto.com.ar/app");
+    expect(mocks.completeWithGoogle).toHaveBeenCalledWith(expect.anything(), user);
   });
 });

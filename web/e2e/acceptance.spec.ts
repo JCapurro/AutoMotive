@@ -2,13 +2,13 @@ import { expect, type Page, test } from "@playwright/test";
 
 import { EXPECTED_BACKFILL, insertFreshDeal, query } from "./support/db";
 import { E2E_EMAIL_DOMAIN, E2E_LISTING_PREFIX } from "./support/env";
-import { magicLink } from "./support/mail";
 import { worker } from "./support/worker";
 
 /**
  * F4 acceptance (docs/TECHNICAL_PLAN.md, sección 13):
- *   registro → creación de búsqueda → ver el backfill → llega una alerta
- *   simulada → clic en la alerta → "Guardar" → comprado,
+ *   email en la landing (sin contraseña ni confirmación) → creación de
+ *   búsqueda → ver el backfill → llega una alerta simulada → clic en la
+ *   alerta → "Guardar" → comprado,
  * on desktop and on a 375 px phone (the `mobile` project).
  */
 
@@ -42,7 +42,7 @@ async function navigate(page: Page, name: "Inicio" | "Guardados" | "Ajustes") {
   await nav.getByRole("link", { name, exact: false }).first().click();
 }
 
-test("F4: registro, búsqueda, backfill, alerta, guardar y guardados", async ({ page }, testInfo) => {
+test("F4: búsqueda gratis con el email, backfill, alerta, guardar y guardados", async ({ page }, testInfo) => {
   const run = `${testInfo.project.name}-${Date.now()}`;
   const email = `${run}@${E2E_EMAIL_DOMAIN}`;
 
@@ -51,52 +51,47 @@ test("F4: registro, búsqueda, backfill, alerta, guardar y guardados", async ({ 
     await expect(page.getByRole("heading", { name: "Decinos cuál. Te avisamos cuando aparezca." })).toBeVisible();
     await expect(page.getByText("pide USD 2.574 menos")).toBeVisible();
     await expectNoHorizontalScroll(page);
-    await page.getByRole("button", { name: "Crear mi búsqueda" }).first().click();
-    await expect(page).toHaveURL(/\/login\?next=\/app\/searches\/new$/);
   });
 
-  await test.step("1. registro con contraseña y confirmación", async () => {
-    const since = new Date();
-    await page.getByLabel("Email").fill(email);
-    await page.getByRole("link", { name: "Crear cuenta", exact: true }).click();
-    await page.getByLabel("Email", { exact: true }).fill(email);
-    await page.getByLabel("Contraseña", { exact: true }).fill("e2e-password-123");
-    await page.getByLabel("Repetí la contraseña").fill("e2e-password-123");
-    await page.getByRole("button", { name: "Crear cuenta", exact: true }).click();
-    await expect(page.getByText("Revisá tu email")).toBeVisible();
-    await page.goto(await magicLink(email, since));
-    await page.getByRole("button", { name: "Confirmar mi email" }).click();
-    await expect(page).toHaveURL(/\/app\/searches\/new$/);
-    const [signup] = await query(
-      `select e.name from public.events e join public.profiles p on p.id = e.user_id
+  await test.step("1. búsqueda gratis solo con el email: sin contraseña ni confirmación", async () => {
+    const form = page.locator("#landing-search");
+    await form.getByLabel("¿Qué auto buscás?").fill("Ford Fiesta Titanium manual 2016 a 2018 hasta USD 11.500");
+    await form.getByLabel("Tu email").fill(email);
+    await form.getByRole("button", { name: "Crear mi búsqueda" }).click();
+    await expect(page).toHaveURL(/\/app\/searches\/new/);
+    await expect(page.getByText(`Te vamos a avisar a ${email}`)).toBeVisible();
+    const [account] = await query<{ email_only: boolean; method: string }>(
+      `select p.email_only, e.props->>'method' as method from public.events e join public.profiles p on p.id = e.user_id
         where p.email = $1 and e.name = 'signup_completed'`,
       [email],
     );
-    expect(signup).toBeTruthy();
+    expect(account).toEqual({ email_only: true, method: "email_only" });
   });
 
   let profileId = 0;
   await test.step("2. creación de la búsqueda estructurada con preview", async () => {
     await page.getByRole("tab", { name: "Estructurado" }).click();
+    // The landing prompt also opened the assisted tab (its fallback form stays mounted, hidden).
+    const panel = page.getByRole("tabpanel", { name: "Estructurado" });
     await expectNoHorizontalScroll(page);
-    await page.getByLabel("Marca").selectOption("Ford");
-    await page.getByLabel("Modelo").selectOption("Fiesta");
-    await page.getByLabel(/^Versión/).selectOption("Titanium");
-    await page.getByLabel("Año desde").selectOption("2016");
-    await page.getByLabel("Año hasta").selectOption("2018");
-    await page.getByLabel("Precio máximo").fill("11500");
-    await page.getByLabel("Kilometraje máximo").fill("150000");
-    await page.getByText("Manual", { exact: true }).click();
-    await page.getByLabel("Zona").selectOption("amba");
+    await panel.getByLabel("Marca").selectOption("Ford");
+    await panel.getByLabel("Modelo").selectOption("Fiesta");
+    await panel.getByLabel(/^Versiones/).selectOption("Titanium");
+    await panel.getByLabel("Año desde").selectOption("2016");
+    await panel.getByLabel("Año hasta").selectOption("2018");
+    await panel.getByLabel("Precio máximo").fill("11500");
+    await panel.getByLabel("Kilometraje máximo").fill("150000");
+    await panel.getByText("Manual", { exact: true }).click();
+    await panel.getByLabel("Zona").selectOption("amba");
     // What preview_search counts over the whole local database (the seeded market, at least).
     const [{ count }] = await query<{ count: number }>(
       `select (public.preview_search($1::jsonb, -34.6037, -58.3816, 60)->>'count')::int as count`,
       [JSON.stringify(SEARCH_FILTERS)],
     );
     expect(count).toBeGreaterThanOrEqual(EXPECTED_BACKFILL.length);
-    await expect(page.getByTestId("preview-count")).toContainText(`${count} publicaciones actuales coinciden`);
-    await expect(page.getByLabel("Nombre de la búsqueda")).toHaveValue("Ford Fiesta Titanium");
-    await page.getByRole("button", { name: "Crear búsqueda" }).click();
+    await expect(panel.getByTestId("preview-count")).toContainText(`${count} publicaciones actuales coinciden`);
+    await expect(panel.getByLabel("Nombre de la búsqueda")).toHaveValue("Ford Fiesta Titanium");
+    await panel.getByRole("button", { name: "Crear búsqueda" }).click();
     await expect(page).toHaveURL(/\/app\/searches\/\d+$/);
     profileId = Number(page.url().split("/").pop());
     await expect(page.getByRole("status")).toContainText("Estamos buscando coincidencias");

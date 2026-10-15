@@ -6,7 +6,7 @@ import { AssistedSearch } from "@/components/app/assisted-search";
 import { SearchForm } from "@/components/app/search-form";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { SearchLimit } from "@/lib/assisted";
-import { requireUser } from "@/lib/auth";
+import { isEmailOnly, requireUser } from "@/lib/auth";
 import { webConfig } from "@/lib/config";
 import { type PlanLimits, planPrice, searchCapacity } from "@/lib/pro";
 import type { SearchValues } from "@/lib/search-form";
@@ -19,14 +19,15 @@ import { loadFormData } from "../form-data";
 export const metadata: Metadata = { title: "Nueva búsqueda" };
 
 export default async function NewSearchPage({ searchParams }: PageProps<"/app/searches/new">) {
-  await requireUser();
+  const user = await requireUser();
   const approximateLocation = approximateLocationFromHeaders(await headers());
   const prompt = searchIntentPrompt((await searchParams).prompt);
   const supabase = await createClient();
-  const [{ catalog, sources, defaultFrequency, thresholdAlerts }, { data: snapshot }, cfg] = await Promise.all([
+  const [{ catalog, sources, defaultFrequency, thresholdAlerts }, { data: snapshot }, cfg, emailOnly] = await Promise.all([
     loadFormData(supabase),
     supabase.rpc("my_plan_snapshot"),
     webConfig(),
+    isEmailOnly(),
   ]);
   // One model is one search: a request with more models than the plan has room for asks which to activate.
   const access = (snapshot ?? null) as PlanLimits | null;
@@ -70,6 +71,9 @@ export default async function NewSearchPage({ searchParams }: PageProps<"/app/se
         <h1 className="text-xl font-semibold tracking-tight">Nueva búsqueda</h1>
         <p className="text-sm text-muted-foreground">Decinos qué auto estás buscando. Ese Auto monitorea por vos.</p>
       </div>
+      {emailOnly && user.email ? <p className="rounded-lg bg-muted px-4 py-3 text-sm [overflow-wrap:anywhere]">
+        Te vamos a avisar a <b>{user.email}</b>. Si no ves nuestros emails, buscalos en Spam o Promociones.
+      </p> : null}
       <Tabs defaultValue="assisted">
         <TabsList>
           <TabsTrigger value="assisted">

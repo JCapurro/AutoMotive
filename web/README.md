@@ -9,7 +9,9 @@ comunican por tablas (plan técnico, sección 2).
 | Ruta | Qué hay |
 |---|---|
 | `/` | Landing del §50 |
-| `/login` | Email + contraseña; creación de cuenta y recuperación por email |
+| `/` | Landing. Sin sesión, la búsqueda gratis pide solo el email (`startFreeSearch` en `app/actions.ts`): crea una cuenta solo-email y entra sin confirmar (docs/AUTENTICACION.md) |
+| `/login` | Email + contraseña o link para entrar (el email de recuperación); creación de cuenta para contratar un plan |
+| `/app/cuenta` | Una cuenta solo-email confirma su email con un link y elige contraseña; contratar un plan la exige |
 | `/auth/callback`, `/auth/confirm` | Confirmación / recuperación (PKCE o token hash); recuperación en `/auth/reset-password` |
 | `/app` | Dashboard del §28: búsquedas con "N nuevos esta semana · M oportunidades" y oportunidades recientes |
 | `/app/searches/new`, `/app/searches/[id]/edit` | Alta y edición estructurada, con preview "N publicaciones actuales coinciden" (`preview_search`) |

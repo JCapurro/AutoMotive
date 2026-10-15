@@ -78,12 +78,12 @@ export default async function MetricsPage() {
       </Section>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <Section title="Activación (§36)" description="Registrados en la web → con al menos una búsqueda. Por semana de registro.">
+        <Section title="Activación (§36)" description="Con email en la web → con al menos una búsqueda, por semana de alta. Desde el 15/10/2026 incluye las cuentas creadas solo con el email (búsqueda gratis).">
           <Table>
             <thead>
               <tr>
                 <Th>Cohorte</Th>
-                <Th numeric>Registrados</Th>
+                <Th numeric>Con email</Th>
                 <Th numeric>Con búsqueda</Th>
                 <Th numeric>Activación</Th>
               </tr>

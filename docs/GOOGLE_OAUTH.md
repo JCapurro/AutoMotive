@@ -62,6 +62,12 @@ Si también querés probar con Auth local, configurá `[auth.external.google]` e
 - Confirmá que email/contraseña, confirmación y recuperación siguen funcionando.
 - El primer ingreso confirmado con Google registra `signup_completed` con
   `method=google`; los accesos siguientes no repiten el evento de alta.
+- Una cuenta solo-email (la búsqueda gratis) que entra con Google con el mismo
+  email verificado queda completa: el callback registra la prueba y llama a
+  `complete_email_only_account` (docs/AUTENTICACION.md). Verificalo en el
+  proyecto alojado antes de depender de esto: el vínculo automático entre la
+  cuenta solo-email y Google no se puede probar en local. Mantené el vínculo
+  manual de identidades apagado.
 
 Las pruebas unitarias cubren inicio, errores, callback y redirecciones. El flujo
 real necesita un proveedor habilitado y autorización de una cuenta de Google.
