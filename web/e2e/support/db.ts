@@ -149,6 +149,39 @@ export async function seedMarket(): Promise<Record<string, number>> {
   return ids;
 }
 
+/**
+ * The crawl tick's first pass for a search, without scraping: every enabled
+ * source lists the search in a target (its inventory target, if it has one)
+ * and reports a finished run, which ends the results page's preparation.
+ */
+export async function finishFirstCollection(profileId: number, make: string, model: string): Promise<void> {
+  const sources = await query<{ id: string }>(`select id from public.sources where enabled`);
+  for (const { id: source } of sources) {
+    const [target] = await query<{ id: number }>(
+      `with inventory as (
+         update public.crawl_targets set query = jsonb_set(query, '{profile_ids}', coalesce(query->'profile_ids', '[]') || to_jsonb($2::bigint))
+          where source = $1 and make is null and model is null and query->>'inventory' = 'true' and active
+          returning id
+       ), vehicle as (
+         insert into public.crawl_targets (source, make, model, query)
+         select $1, $3, $4, jsonb_build_object('profile_ids', jsonb_build_array($2::bigint))
+          where not exists (select 1 from inventory)
+         on conflict on constraint crawl_targets_unique do update
+           set active = true,
+               query = jsonb_set(crawl_targets.query, '{profile_ids}', coalesce(crawl_targets.query->'profile_ids', '[]') || to_jsonb($2::bigint))
+         returning id
+       )
+       select id from inventory union all select id from vehicle`,
+      [source, profileId, make, model],
+    );
+    await query(
+      `insert into public.collector_runs (source, target_id, finished_at, status, found, new, updated)
+       values ($1, $2, now(), 'ok', 0, 0, 0)`,
+      [source, target.id],
+    );
+  }
+}
+
 /** A listing that "just appeared": a clear opportunity for the e2e search. */
 export async function insertFreshDeal(run: string): Promise<number> {
   return insertListing(`${E2E_LISTING_PREFIX}deal-${run}`, {

@@ -71,18 +71,19 @@ export function ListingCard({
         </Link>
       </h3>
 
-      <p className="type-figure text-lg leading-tight">
-        {money(card.price, card.currency)}
+      {/* Flex so the price, its USD equivalent and the badge wrap on a phone instead of overflowing. */}
+      <p className="type-figure flex min-w-0 flex-wrap items-baseline gap-x-1.5 text-lg leading-tight">
+        <span>{money(card.price, card.currency)}</span>
         {card.price_kind === "cash" && card.price != null ? (
-          <span className="ml-1.5 text-[13px] font-normal [font-stretch:100%] text-muted-foreground">de contado</span>
+          <span className="text-[13px] font-normal [font-stretch:100%] text-muted-foreground">de contado</span>
         ) : null}
         {card.currency === "ARS" && card.price_usd ? (
-          <span className="ml-1.5 text-[13px] font-normal whitespace-nowrap [font-stretch:100%] text-muted-foreground">
+          <span className="text-[13px] font-normal whitespace-nowrap [font-stretch:100%] text-muted-foreground">
             ≈ {money(card.price_usd, "USD")}
           </span>
         ) : null}
         {card.financing_offered ? (
-          <span className="ml-1.5 rounded bg-muted px-1.5 py-0.5 align-[2px] text-[11px] font-semibold whitespace-nowrap [font-stretch:100%] text-muted-foreground">
+          <span className="relative -top-0.5 rounded bg-muted px-1.5 py-0.5 text-[11px] font-semibold whitespace-nowrap [font-stretch:100%] text-muted-foreground">
             Financiable
           </span>
         ) : null}
