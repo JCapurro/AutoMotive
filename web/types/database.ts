@@ -1052,22 +1052,6 @@ isOneToOne: false
 "expire_commercial_access":
 { Args: { "p_user"?: string }; Returns: number
                            },
-"export_search_results":
-{ Args: { "p_profile_id"?: number }; Returns: {
-              "comparables_pct": number | null,
-"currency": string | null,
-"detected_at": string | null,
-"mileage_km": number | null,
-"price": number | null,
-"score": number | null,
-"search_name": string | null,
-"source_name": string | null,
-"title": string | null,
-"url": string | null,
-"version": string | null,
-"year": number | null
-            }[]
-                           },
 "haversine_km":
 { Args: { "lat1": number,"lat2": number,"lon1": number,"lon2": number }; Returns: number
                            },

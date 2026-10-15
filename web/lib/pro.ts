@@ -22,18 +22,17 @@ export const PLAN_COPY: Record<WaitlistPlan, { name: string; period: string; pit
  * What each plan includes: app_config.plan_limits, the same values the
  * database and the worker apply. Pages show these, never their own numbers.
  * maxVisibleResults null = all of them; immediateAlertsPerDay 0 = digest only.
- * thresholdAlerts: the per-search opportunity threshold (3.2); csvExport: the
- * results as a spreadsheet (3.3). Both are Pro's.
+ * thresholdAlerts: the per-search opportunity threshold (3.2), Pro's.
  */
 export type PlanCaps = {
   maxProfiles: number; maxVisibleResults: number | null; immediateAlertsPerDay: number;
-  thresholdAlerts: boolean; csvExport: boolean;
+  thresholdAlerts: boolean;
 };
 export type PlanLimitsConfig = Record<PlanTier, PlanCaps>;
 export const DEFAULT_PLAN_LIMITS: PlanLimitsConfig = {
-  free: { maxProfiles: 1, maxVisibleResults: 100, immediateAlertsPerDay: 3, thresholdAlerts: false, csvExport: false },
-  pass: { maxProfiles: 3, maxVisibleResults: null, immediateAlertsPerDay: 10, thresholdAlerts: false, csvExport: false },
-  pro: { maxProfiles: 20, maxVisibleResults: null, immediateAlertsPerDay: 50, thresholdAlerts: true, csvExport: true },
+  free: { maxProfiles: 1, maxVisibleResults: 100, immediateAlertsPerDay: 3, thresholdAlerts: false },
+  pass: { maxProfiles: 3, maxVisibleResults: null, immediateAlertsPerDay: 10, thresholdAlerts: false },
+  pro: { maxProfiles: 20, maxVisibleResults: null, immediateAlertsPerDay: 50, thresholdAlerts: true },
 };
 function whole(value: unknown, min: number): number | null {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= min ? value : null;
@@ -56,7 +55,6 @@ export function planLimits(value: unknown, globalCap = 10): PlanLimitsConfig {
       maxVisibleResults: whole(limits.max_visible_results, 1),
       immediateAlertsPerDay: alertCap(limits, globalCap),
       thresholdAlerts: limits.threshold_alerts === true,
-      csvExport: limits.csv_export === true,
     };
   }
   return out;
@@ -82,11 +80,10 @@ export function alertCapsText(limits: PlanLimitsConfig): string {
   return `Particular incluye hasta ${counted(pass, "aviso inmediato", "avisos inmediatos")} de nuevas coincidencias por día y Pro, hasta ${pro}${threshold}; los que pasan el tope van al resumen.`;
 }
 export const THRESHOLD_FEATURE = "Avisos inmediatos sin tope de las oportunidades que elegís";
-export const EXPORT_FEATURE = "Exportá los resultados a una planilla";
-/** A paid plan's card lines: what plan_limits says it includes (Pro: the threshold and the export). */
+/** A paid plan's card lines: what plan_limits says it includes (Pro: the threshold). */
 export function planFeatures(caps: PlanCaps): string[] {
   return [searchesText(caps), resultsText(caps), caps.thresholdAlerts ? THRESHOLD_FEATURE : alertsText(caps),
-    ...(caps.csvExport ? [EXPORT_FEATURE] : []), "Historial y favoritos"];
+    "Historial y favoritos"];
 }
 export function alertsText(caps: PlanCaps): string {
   const n = caps.immediateAlertsPerDay;
@@ -123,7 +120,7 @@ export type PlanLimits = {
   active_searches?: number;
   limits: {
     max_profiles?: number; max_visible_results?: number; immediate_alerts_per_day?: number; immediate_alerts?: boolean;
-    threshold_alerts?: boolean; csv_export?: boolean;
+    threshold_alerts?: boolean;
   };
 };
 /** Custom is arranged over WhatsApp. wa.me wants the full international number: 54 9 11 3345-4741. */

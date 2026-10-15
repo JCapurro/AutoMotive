@@ -90,7 +90,6 @@ it("shows the plan cards with the limits and features the backend applies", () =
     "Sin renovación automática. Si todavía no lo encontraste, extendés 30 días con un clic.",
     ">Pro<", "Para agencias y revendedores que necesitan llegar primero.",
     "Hasta 20 búsquedas activas", "Avisos inmediatos sin tope de las oportunidades que elegís",
-    "Exportá los resultados a una planilla",
     "Renovación mensual automática. Cancelás desde Ajustes y conservás el período pagado.",
     "Una búsqueda es un modelo, con sus versiones, años, kilómetros, presupuesto y zona. Si querés seguir varios modelos, cada uno cuenta como una búsqueda.",
     "Los avisos que pasan el tope del día van al resumen.",
@@ -99,11 +98,12 @@ it("shows the plan cards with the limits and features the backend applies", () =
   expect(html.match(/Todos los resultados disponibles/g)).toHaveLength(2);
   expect(html).not.toContain("Pricing");
   expect(html).not.toContain("Agencia");
-  // Without the features in plan_limits, Pro shows its daily cap and no export.
-  const plain = { ...DEFAULT_PLAN_LIMITS, pro: { ...DEFAULT_PLAN_LIMITS.pro, thresholdAlerts: false, csvExport: false } };
+  expect(html).not.toContain("planilla");
+  // Without the threshold in plan_limits, Pro shows its daily cap.
+  const plain = { ...DEFAULT_PLAN_LIMITS, pro: { ...DEFAULT_PLAN_LIMITS.pro, thresholdAlerts: false } };
   const without = renderToStaticMarkup(createElement(PublicPlans, { cfg: { proOffer: DEFAULT_PRO_OFFER, planLimits: plain, automaticPayments: true, commercialPilot: true }, signedIn: false }));
   expect(without).toContain("Hasta 50 avisos inmediatos por día y resumen diario");
-  expect(without).not.toContain("Exportá los resultados a una planilla");
+  expect(without).not.toContain("Avisos inmediatos sin tope de las oportunidades que elegís");
 });
 
 it("follows app_config.plan_limits instead of fixed numbers", () => {

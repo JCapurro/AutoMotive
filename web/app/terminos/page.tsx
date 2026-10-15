@@ -44,7 +44,6 @@ export default async function TermsPage() {
         la aprobación del pago y reactivamos tus búsquedas anteriores, hasta {pass.maxProfiles}.
         Pro cuesta {planPrice(proOffer.pro_monthly.amount)} ARS por mes y permite {searches(pro)} y {alerts(pro)} en una cuenta.
         {pro.thresholdAlerts ? " Cada búsqueda de Pro puede tener un umbral de oportunidad: lo que está ese porcentaje o más por debajo de autos comparables se avisa al instante, sin tope diario, y el resto, igual que lo que no tiene comparables suficientes, va al resumen." : ""}
-        {pro.csvExport ? " Pro permite descargar los resultados en una planilla (CSV)." : ""}
         {automaticPayments ? " Pro se cobra cada mes mediante una suscripción de Mercado Pago hasta que la canceles. El acceso corresponde al mes calendario de cada débito aprobado. No hay otra prueba gratis ni almacenamiento de tarjetas en S Auto." : " En el piloto asistido, Pro se activa por 30 días con renovación manual. La administración confirma el pago externo antes de activar el período."}</p>
       <p>Al vencer el acceso se detienen nuevas coincidencias y alertas, incluidos los favoritos; se conserva el historial.
         Pausar una búsqueda libera capacidad. Cada modelo guardado consume una búsqueda.

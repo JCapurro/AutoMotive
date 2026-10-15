@@ -1,4 +1,4 @@
-import { Download, Pause, Plus } from "lucide-react";
+import { Pause, Plus } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -20,11 +20,10 @@ export const metadata: Metadata = { title: "Inicio" };
 export default async function Dashboard() {
   await requireUser();
   const supabase = await createClient();
-  const [{ data: searches }, { data: opportunities }, { data: cta }, { data: canExport }] = await Promise.all([
+  const [{ data: searches }, { data: opportunities }, { data: cta }] = await Promise.all([
     supabase.rpc("dashboard_summary"),
     supabase.rpc("recent_opportunities", { p_limit: 8 }),
     supabase.rpc("pro_cta_state"),
-    supabase.rpc("my_plan_feature", { p_feature: "csv_export" }),
   ]);
   // §52: "Ver planes" after real activity or a plan limit.
   const pro = (cta ?? null) as ProCtaState | null;
@@ -54,21 +53,11 @@ export default async function Dashboard() {
       <section>
         <div className="flex items-end justify-between gap-3">
           <h1 className="type-heading text-[30px] leading-tight">Mis búsquedas</h1>
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            {canExport ? (
-              <Button asChild variant="outline" className="h-9">
-                {/* A file, not a page: a plain link. */}
-                <a href="/app/searches/export" download>
-                  <Download aria-hidden /> Descargar todas (CSV)
-                </a>
-              </Button>
-            ) : null}
-            <Button asChild variant="outline" className="h-9 md:hidden">
-              <Link href="/app/searches/new">
-                <Plus aria-hidden /> Nueva
-              </Link>
-            </Button>
-          </div>
+          <Button asChild variant="outline" className="h-9 md:hidden">
+            <Link href="/app/searches/new">
+              <Plus aria-hidden /> Nueva
+            </Link>
+          </Button>
         </div>
         {hasPending ? <AutoRefresh /> : null}
         <div className="mt-5 border-t-2 border-foreground">

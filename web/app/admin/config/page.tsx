@@ -9,7 +9,7 @@ export const metadata: Metadata = { title: "Config" };
 
 // What each app_config key rules (Apéndice A). Unknown keys still show up.
 const HINTS: Record<string, string> = {
-  plan_limits: "Límites por plan: max_profiles (búsquedas activas), max_visible_results (resultados por búsqueda; sin valor = todos) e immediate_alerts_per_day (avisos inmediatos por día, hora argentina; el resto va al resumen). Funciones: threshold_alerts (umbral de oportunidad por búsqueda) y csv_export (descargar resultados), true para darlas. La web muestra estos mismos valores. Con enforced = false solo se mide plan_limit_hit; con true se aplican.",
+  plan_limits: "Límites por plan: max_profiles (búsquedas activas), max_visible_results (resultados por búsqueda; sin valor = todos) e immediate_alerts_per_day (avisos inmediatos por día, hora argentina; el resto va al resumen). Funciones: threshold_alerts (umbral de oportunidad por búsqueda), true para darla. La web muestra estos mismos valores. Con enforced = false solo se mide plan_limit_hit; con true se aplican.",
   validation_criteria: "Umbrales de los 6 criterios del §53 (v_validation_criteria) y el objetivo de activación.",
   pro_cta: "Cuándo se ofrece ver planes: alertas clickeadas o límites alcanzados (§52).",
   pro_offer: "Oferta en ARS por 30 días y versión. Las nuevas confirmaciones usan estos importes; los pagos anteriores conservan su precio.",
