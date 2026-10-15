@@ -66,8 +66,10 @@ def _slug(s: str) -> str:
 
 BASE = "https://autos.mercadolibre.com.ar"
 PAGE_SIZE = 48
-# "Publicados hoy" lists the last day's ads (some say "hace 1 día" on their
-# page), so it covers a window this short; daily targets fit, with margin.
+# "Publicados hoy" lists the last 24 hours, not the calendar day: at 00:19 on
+# 15/10/2026 it still listed most ads it had at 18:54 the day before. The hour
+# on top absorbs the window's 10-minute overlap and scheduling delays; a gap of
+# 24 to 25 hours can miss what was published in that margin.
 TODAY_FILTER_SPAN = 25 * 3600
 
 # Dates read from ads, by id, for the worker's lifetime: an ad outside the

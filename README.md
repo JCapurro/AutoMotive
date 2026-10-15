@@ -201,7 +201,7 @@ Desde el 14/10/2026 el scraper de MercadoLibre lee las páginas públicas con pe
 
 Antes usaba un Chrome visible con un perfil propio, con sesión iniciada en `listado.mercadolibre.com.ar`. Esa ruta pide cuenta, y MercadoLibre empezó a mostrarle un desafío de seguridad al Chrome automatizado.
 
-- **Orden y fechas.** La búsqueda pública no ordena por más recientes. El día se lee con el filtro «Publicados hoy»; una ventana de varios días se recorre entera. La fecha de cada aviso sale de las publicaciones guardadas o de su ficha.
+- **Orden y fechas.** La búsqueda pública no ordena por más recientes. Una ventana de hasta 25 horas se lee con el filtro «Publicados hoy», que abarca las últimas 24 horas y no el día calendario (ver `docs/RECENT_PUBLICATIONS.md`). Una ventana más larga se recorre entera, y la fecha de cada aviso sale de las publicaciones guardadas o de su ficha.
 - **Bloqueos.** Un desafío, un pedido de ingreso o un 403/429 frenan la corrida como bloqueo. Nada intenta saltearlos.
 
 ### Correr el bot
