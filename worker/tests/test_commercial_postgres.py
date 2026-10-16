@@ -319,3 +319,43 @@ class ProFeaturesTests(CommercialCase):
         self.assertFalse(any(isinstance(v, dict) and 'csv_export' in v for v in row['value'].values()))
         self.assertEqual(await self.rows("SELECT 1 FROM pg_proc WHERE proname IN ('export_search_results', 'comparables_min_n')"), [])
 
+
+class ModelLessSearchTests(CommercialCase):
+    """Carrocería (docs/CARROCERIA.md): a search without a model, only by body
+    type, is Particular's, Pro's and admins' (model_less_search, 20261028)."""
+
+    SUV = '{"body_types": ["suv"], "price_max": 20000, "currency": "USD"}'
+
+    async def feature(self, user):
+        return (await self.rows("SELECT my_plan_feature('model_less_search') AS ok", actor=user))[0]['ok']
+
+    async def model_less(self, user):
+        return (await self.rows("INSERT INTO search_profiles(user_id,name,filters) VALUES (%s,'SUV',%s) RETURNING id",
+                                user, self.SUV, actor=user))[0]['id']
+
+    async def test_only_paid_plans_and_admins_search_without_a_model(self):
+        self.assertFalse(await self.feature(self.user))                          # trial available
+        with self.assertRaisesRegex(Exception, 'plan_feature_unavailable'):
+            await self.model_less(self.user)
+        self.assertIsNone((await self.access())['trial_started_at'])            # the attempt starts no trial
+        await self.pay()
+        self.assertTrue(await self.feature(self.user))                           # Particular
+        agency = await self.account()
+        await self.pay('pro_monthly', 'tx-pro', user=agency)
+        self.assertTrue(await self.feature(agency))
+        self.assertTrue(await self.feature(self.admin))
+        await self.model_less(self.admin)
+        with self.assertRaisesRegex(Exception, 'search_needs_max_price'):
+            await self.rows("INSERT INTO search_profiles(user_id,name,filters) VALUES (%s,'SUV','{\"body_types\": [\"suv\"]}')",
+                            self.admin, actor=self.admin)
+
+    async def test_an_ended_pass_pauses_it_and_the_next_one_brings_it_back(self):
+        await self.pay()
+        pid = await self.model_less(self.user)
+        self.assertTrue((await self.rows("SELECT search_access_active(%s) AS ok", pid))[0]['ok'])
+        await self.rows("UPDATE profiles SET plan_expires_at = now() - interval '1 second' WHERE id = %s", self.user)
+        self.assertFalse((await self.rows("SELECT search_access_active(%s) AS ok", pid))[0]['ok'])
+        self.assertEqual((await self.rows("SELECT expire_commercial_access(%s) AS n", self.user))[0]['n'], 1)
+        await self.pay(ref='tx-002')
+        [row] = await self.rows("SELECT enabled, search_access_active(id) AS ok FROM search_profiles WHERE id = %s", pid)
+        self.assertEqual((row['enabled'], row['ok']), (True, True))

@@ -7,7 +7,7 @@
 -- the web and the worker record.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(52);
+select plan(53);
 
 delete from auth.users;
 
@@ -308,12 +308,15 @@ select lives_ok($$insert into public.search_profiles (id, user_id, name, filters
                   overriding system value
                   values (9604, '64444444-4444-4444-4444-444444444444', 'u4', '{"make": "Pgtap", "model": "F6"}', 'immediate')$$,
                 'enforced: a free user''s first search');
-select is((select notification_frequency::text from public.search_profiles where id = 9604), 'daily',
-          '... asking for immediate alerts gets the daily digest');
+-- Since 20261007 the preference is stored and readers resolve it (effective_search_frequency).
+select is((select notification_frequency::text from public.search_profiles where id = 9604), 'immediate',
+          '... asking for immediate alerts keeps the preference');
 select throws_ok($$insert into public.search_profiles (user_id, name, filters)
                    values ('64444444-4444-4444-4444-444444444444', 'u4 bis', '{"make": "Pgtap", "model": "F6"}')$$,
                  'P0001', 'plan_limit_exceeded', '... and a second search is rejected');
 reset role;
+select is(public.effective_search_frequency('64444444-4444-4444-4444-444444444444', 'immediate')::text, 'daily',
+          '... which gets the daily digest');
 
 select * from finish();
 rollback;

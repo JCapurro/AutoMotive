@@ -32,9 +32,11 @@ set local request.jwt.claims = '{"sub": "11111111-1111-1111-1111-111111111111", 
 select is((select count(*)::int from public.profiles), 1, 'A sees only its own profile');
 select is((select count(*)::int from public.search_profiles), 1, 'A sees only its own search profiles');
 select is((select name from public.search_profiles), 'A', '... and it is A''s');
+-- A valid search: the BEFORE triggers run before RLS, and '{}' (no model, no
+-- body types) is rejected by search_profiles_enforce_plan_features first.
 select throws_ok(
   $$insert into public.search_profiles (user_id, name, filters)
-    values ('22222222-2222-2222-2222-222222222222', 'x', '{}')$$,
+    values ('22222222-2222-2222-2222-222222222222', 'x', '{"make": "Ford", "model": "Ka"}')$$,
   '42501', null, 'A cannot create search profiles for B');
 
 select is((select count(*)::int from public.matches), 1, 'A sees matches only through its profiles');

@@ -40,8 +40,8 @@ insert into public.app_config (key, value) values
   ('plan_limits', '{
      "enforced": false,
      "free": {"max_profiles": 1, "max_visible_results": 100, "immediate_alerts_per_day": 3},
-     "pass": {"max_profiles": 3, "immediate_alerts_per_day": 10},
-     "pro":  {"max_profiles": 20, "immediate_alerts_per_day": 50}
+     "pass": {"max_profiles": 3, "immediate_alerts_per_day": 10, "model_less_search": true},
+     "pro":  {"max_profiles": 20, "immediate_alerts_per_day": 50, "model_less_search": true}
    }'),
   ('repost',                        '{"window_days": 60, "price_tol_pct": 10}'),
   ('enrichment',                    '{"batch_per_source": 20, "max_age_days": 30}'),
@@ -65,7 +65,8 @@ insert into public.app_config (key, value) values
    }'),
   ('pro_cta',                       '{"min_alert_clicks": 3, "on_limits": ["max_profiles"]}'),
   ('pro_offer',                     '{"pro_monthly": {"price_usd": 15}, "pass_30": {"price_usd": 12}, "pass_90": {"price_usd": 25}}'),
-  ('retention',                     '{"listing_days": 180}')
+  ('retention',                     '{"listing_days": 180}'),
+  ('body_type_targets',             '{"sources": ["mercadolibre", "kavak"], "interval_seconds": 1800}')
 on conflict (key) do nothing;
 
 -- ---------------------------------------------------------------------------
@@ -251,3 +252,71 @@ update public.vehicle_catalog c set timing_belt = v.belt
     ('Honda', 'Fit', false), ('Honda', 'City', false), ('Honda', 'HR-V', false)
   ) as v (make, model, belt)
  where c.make = v.make and c.model = v.model and c.trim is null;
+
+-- Body types (docs/CARROCERIA.md): the model's possible bodies, most common
+-- first; one value = certain. Every row of the model, trims included. Same
+-- list as migration 20261030120100_catalog_body_types.sql, which explains it.
+update public.vehicle_catalog c set body_types = v.body_types::text[]
+  from (values
+    ('Volkswagen', 'Gol', '{hatchback}'), ('Volkswagen', 'Gol Trend', '{hatchback}'),
+    ('Volkswagen', 'Suran', '{monovolumen}'), ('Volkswagen', 'Fox', '{hatchback}'),
+    ('Volkswagen', 'Up', '{hatchback}'), ('Volkswagen', 'Polo', '{hatchback,sedan}'),
+    ('Volkswagen', 'Virtus', '{sedan}'), ('Volkswagen', 'Vento', '{sedan}'),
+    ('Volkswagen', 'Bora', '{sedan}'), ('Volkswagen', 'Golf', '{hatchback}'),
+    ('Volkswagen', 'Saveiro', '{pickup}'), ('Volkswagen', 'Amarok', '{pickup}'),
+    ('Volkswagen', 'T-Cross', '{suv}'), ('Volkswagen', 'Taos', '{suv}'), ('Volkswagen', 'Nivus', '{suv}'),
+    ('Toyota', 'Corolla', '{sedan}'), ('Toyota', 'Corolla Cross', '{suv}'),
+    ('Toyota', 'Etios', '{hatchback,sedan}'), ('Toyota', 'Yaris', '{hatchback,sedan}'),
+    ('Toyota', 'Hilux', '{pickup}'), ('Toyota', 'SW4', '{suv}'),
+    ('Ford', 'Fiesta', '{hatchback,sedan}'), ('Ford', 'Focus', '{sedan,hatchback}'),
+    ('Ford', 'Ka', '{hatchback,sedan}'), ('Ford', 'EcoSport', '{suv}'), ('Ford', 'Ranger', '{pickup}'),
+    ('Ford', 'Territory', '{suv}'), ('Ford', 'Maverick', '{pickup}'),
+    ('Chevrolet', 'Onix', '{hatchback}'), ('Chevrolet', 'Onix Plus', '{sedan}'),
+    ('Chevrolet', 'Prisma', '{sedan}'), ('Chevrolet', 'Cruze', '{sedan,hatchback}'),
+    ('Chevrolet', 'Tracker', '{suv}'), ('Chevrolet', 'S10', '{pickup}'),
+    ('Chevrolet', 'Corsa', '{hatchback,sedan,pickup,rural,utilitario}'),
+    ('Chevrolet', 'Classic', '{sedan}'), ('Chevrolet', 'Agile', '{hatchback}'),
+    ('Chevrolet', 'Spin', '{monovolumen}'),
+    ('Renault', 'Sandero', '{hatchback}'), ('Renault', 'Stepway', '{hatchback}'),
+    ('Renault', 'Logan', '{sedan}'), ('Renault', 'Clio', '{hatchback,sedan}'),
+    ('Renault', 'Kangoo', '{utilitario,monovolumen}'), ('Renault', 'Duster', '{suv}'),
+    ('Renault', 'Kwid', '{hatchback}'), ('Renault', 'Captur', '{suv}'),
+    ('Renault', 'Fluence', '{sedan}'), ('Renault', 'Alaskan', '{pickup}'),
+    ('Fiat', 'Palio', '{hatchback,rural}'), ('Fiat', 'Siena', '{sedan}'), ('Fiat', 'Cronos', '{sedan}'),
+    ('Fiat', 'Argo', '{hatchback}'), ('Fiat', 'Mobi', '{hatchback}'),
+    ('Fiat', 'Uno', '{hatchback,utilitario}'), ('Fiat', 'Punto', '{hatchback}'),
+    ('Fiat', 'Toro', '{pickup}'), ('Fiat', 'Strada', '{pickup}'), ('Fiat', 'Pulse', '{suv}'),
+    ('Peugeot', '208', '{hatchback}'), ('Peugeot', '207', '{hatchback,sedan}'),
+    ('Peugeot', '206', '{hatchback,rural}'), ('Peugeot', '2008', '{suv}'),
+    ('Peugeot', '308', '{hatchback}'), ('Peugeot', '408', '{sedan}'),
+    ('Peugeot', '3008', '{monovolumen,suv}'), ('Peugeot', 'Partner', '{utilitario,monovolumen}'),
+    ('Citroën', 'C3', '{hatchback}'), ('Citroën', 'C3 Aircross', '{hatchback,suv}'),
+    ('Citroën', 'C4', '{hatchback,sedan}'), ('Citroën', 'C4 Lounge', '{sedan}'),
+    ('Citroën', 'C4 Cactus', '{suv}'), ('Citroën', 'Berlingo', '{utilitario,monovolumen}'),
+    ('Honda', 'Civic', '{sedan,hatchback,coupe}'), ('Honda', 'Fit', '{hatchback}'),
+    ('Honda', 'City', '{sedan}'), ('Honda', 'HR-V', '{suv}'), ('Honda', 'CR-V', '{suv}'),
+    ('Honda', 'WR-V', '{suv}'),
+    ('Nissan', 'March', '{hatchback}'), ('Nissan', 'Versa', '{sedan}'), ('Nissan', 'Sentra', '{sedan}'),
+    ('Nissan', 'Note', '{hatchback}'), ('Nissan', 'Tiida', '{hatchback,sedan}'),
+    ('Nissan', 'Kicks', '{suv}'), ('Nissan', 'Frontier', '{pickup}'),
+    ('Jeep', 'Renegade', '{suv}'), ('Jeep', 'Compass', '{suv}'), ('Jeep', 'Commander', '{suv}'),
+    ('Hyundai', 'HB20', '{hatchback,sedan}'), ('Hyundai', 'Creta', '{suv}'),
+    ('Hyundai', 'Tucson', '{suv}'), ('Hyundai', 'i30', '{hatchback}'), ('Hyundai', 'Santa Fe', '{suv}'),
+    ('Kia', 'Picanto', '{hatchback}'), ('Kia', 'Rio', '{hatchback,sedan}'),
+    ('Kia', 'Cerato', '{sedan,hatchback}'), ('Kia', 'Soul', '{suv}'), ('Kia', 'Sportage', '{suv}'),
+    ('Kia', 'Seltos', '{suv}'),
+    ('Audi', 'A1', '{hatchback}'), ('Audi', 'A3', '{sedan,hatchback}'), ('Audi', 'A4', '{sedan}'),
+    ('Audi', 'Q2', '{suv}'), ('Audi', 'Q3', '{suv}'), ('Audi', 'Q5', '{suv}'),
+    ('BMW', 'Serie 1', '{hatchback,coupe}'), ('BMW', 'Serie 3', '{sedan,coupe}'),
+    ('BMW', 'X1', '{suv}'), ('BMW', 'X3', '{suv}'),
+    ('Mercedes-Benz', 'Clase A', '{hatchback,sedan}'), ('Mercedes-Benz', 'Clase C', '{sedan,coupe}'),
+    ('Mercedes-Benz', 'GLA', '{suv}'), ('Mercedes-Benz', 'Sprinter', '{utilitario}'),
+    ('Mini', 'Cooper', '{hatchback,convertible}'), ('Mini', 'Countryman', '{suv}'),
+    ('Subaru', 'Impreza', '{sedan,hatchback}'), ('Subaru', 'XV', '{suv}'),
+    ('Subaru', 'Forester', '{suv}'), ('Subaru', 'Outback', '{suv,rural}'),
+    ('Mitsubishi', 'Lancer', '{sedan}'), ('Mitsubishi', 'ASX', '{suv}'),
+    ('Mitsubishi', 'Outlander', '{suv}'), ('Mitsubishi', 'L200', '{pickup}'),
+    ('Suzuki', 'Swift', '{hatchback}'), ('Suzuki', 'Fun', '{hatchback}'), ('Suzuki', 'Vitara', '{suv}'),
+    ('Suzuki', 'Grand Vitara', '{suv}'), ('Suzuki', 'Jimny', '{suv}')
+  ) as v (make, model, body_types)
+ where lower(c.make) = lower(v.make) and lower(c.model) = lower(v.model);

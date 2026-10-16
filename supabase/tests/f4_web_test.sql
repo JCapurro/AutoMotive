@@ -67,7 +67,7 @@ select results_eq($$select listing_id from public.search_results(9101, 'new')$$,
                   $$values (9101::bigint)$$, 'filter new: not opened yet');
 select results_eq($$select listing_id from public.search_results(9101, 'opportunities')$$,
                   $$values (9101::bigint)$$, 'filter opportunities: 🔥 only');
-select results_eq($$select listing_id from public.search_results(9101, 'all')$$,
+select results_eq($$select listing_id from public.search_results(9101, 'all', 'recent')$$,
                   $$values (9102::bigint), (9101::bigint)$$, 'filter all: no discarded, newest first');
 select results_eq($$select listing_id from public.search_results(9101, 'saved')$$,
                   $$values (9102::bigint)$$, 'filter saved');
