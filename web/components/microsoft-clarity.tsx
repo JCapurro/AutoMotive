@@ -3,7 +3,7 @@
 import { usePathname } from "next/navigation";
 import { useEffect, useSyncExternalStore } from "react";
 
-import { trackingAllowed } from "@/lib/meta-pixel";
+import { trackingAllowed, untrackedPath } from "@/lib/meta-pixel";
 import { clarityProjectId, syncClarityConsent } from "@/lib/microsoft-clarity";
 
 function readConsent(): boolean {
@@ -22,7 +22,7 @@ export function MicrosoftClarity() {
 
   useEffect(() => {
     if (!clarityProjectId) return;
-    const granted = consent && !pathname.startsWith("/auth/");
+    const granted = consent && !untrackedPath(pathname);
     if (window.clarity) {
       syncClarityConsent(granted);
       return;
@@ -42,7 +42,7 @@ export function MicrosoftClarity() {
     script.src = `https://www.clarity.ms/tag/${clarityProjectId}`;
     // Recheck the live choice if consent or the route changed during the download.
     script.addEventListener("load", () => {
-      syncClarityConsent(readConsent() && !window.location.pathname.startsWith("/auth/"));
+      syncClarityConsent(readConsent() && !untrackedPath(window.location.pathname));
     }, { once: true });
     document.head.appendChild(script);
   }, [consent, pathname]);

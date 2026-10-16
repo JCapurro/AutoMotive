@@ -5,7 +5,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useSyncExternalStore } from "react";
 
 import { googleAnalyticsId, hasAnalyticsConsent } from "@/lib/google-analytics";
-import { CONSENT_COOKIE } from "@/lib/meta-pixel";
+import { CONSENT_COOKIE, untrackedPath } from "@/lib/meta-pixel";
 
 const CONSENT_EVENT = "ads-consent";
 
@@ -14,20 +14,21 @@ function subscribe(onChange: () => void) {
   return () => window.removeEventListener(CONSENT_EVENT, onChange);
 }
 
+/** Client navigations only: the landing page_view comes from gtag('config') in the snippet below. */
 function RouteTracking() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const first = useRef(true);
+  const last = useRef<string | null>(null);
 
   useEffect(() => {
-    if (first.current) {
-      first.current = false;
-      return;
-    }
+    const path = `${pathname}${searchParams.size ? `?${searchParams}` : ""}`;
+    // Skip the landing, and a rerun on the same URL (StrictMode runs effects twice in dev).
+    const previous = last.current;
+    last.current = path;
+    if (previous === null || previous === path) return;
     const gtag = (window as unknown as { gtag?: (...args: unknown[]) => void }).gtag;
-    if (pathname.startsWith("/auth/") || !gtag || !hasAnalyticsConsent()) return;
-    const pageLocation = `${window.location.origin}${pathname}${searchParams.size ? `?${searchParams}` : ""}`;
-    gtag("event", "page_view", { page_location: pageLocation, page_path: `${pathname}${searchParams.size ? `?${searchParams}` : ""}` });
+    if (untrackedPath(pathname) || !gtag || !hasAnalyticsConsent()) return;
+    gtag("event", "page_view", { page_location: `${window.location.origin}${path}`, page_path: path });
   }, [pathname, searchParams]);
 
   return null;
@@ -39,22 +40,23 @@ export function GoogleAnalytics() {
   const pathname = usePathname();
 
   useEffect(() => {
-    if (!googleAnalyticsId || pathname.startsWith("/auth/")) return;
+    if (!googleAnalyticsId || untrackedPath(pathname)) return;
     const gtag = (window as unknown as { gtag?: (...args: unknown[]) => void }).gtag;
     // The live cookie, not the hydration snapshot (false on the server): a default grant isn't briefly revoked.
     const state = hasAnalyticsConsent() ? "granted" : "denied";
     gtag?.("consent", "update", { analytics_storage: state, ad_storage: state, ad_user_data: state, ad_personalization: state });
   }, [granted, pathname]);
 
-  if (!googleAnalyticsId || pathname.startsWith("/auth/")) return null;
+  if (!googleAnalyticsId || untrackedPath(pathname)) return null;
+  // The landing page_view rides on config, after the consent default; a visitor who rejected sends none.
   return (
     <>
       <Script src={`https://www.googletagmanager.com/gtag/js?id=${googleAnalyticsId}`} strategy="afterInteractive" />
       <Script id="google-analytics" strategy="afterInteractive">
         {`window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}window.gtag=gtag;
 {const c=/(^|; )${CONSENT_COOKIE}=denied/.test(document.cookie)?'denied':'granted';
-gtag('consent','default',{analytics_storage:c,ad_storage:c,ad_user_data:c,ad_personalization:c});}
-gtag('js',new Date());gtag('config','${googleAnalyticsId}',{send_page_view:false});`}
+gtag('consent','default',{analytics_storage:c,ad_storage:c,ad_user_data:c,ad_personalization:c});
+gtag('js',new Date());gtag('config','${googleAnalyticsId}',{send_page_view:c==='granted'});}`}
       </Script>
       <Suspense fallback={null}><RouteTracking /></Suspense>
     </>

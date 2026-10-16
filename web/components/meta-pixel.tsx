@@ -8,7 +8,7 @@ import { useEffect, useRef, useSyncExternalStore } from "react";
 import { Button } from "@/components/ui/button";
 import { googleAnalyticsId } from "@/lib/google-analytics";
 import { clarityProjectId } from "@/lib/microsoft-clarity";
-import { CONSENT_COOKIE, metaPixelId, pixel, PIXEL_QUEUE_COOKIE, trackingAllowed, type QueuedPixel } from "@/lib/meta-pixel";
+import { CONSENT_COOKIE, metaPixelId, pixel, PIXEL_QUEUE_COOKIE, trackingAllowed, untrackedPath, type QueuedPixel } from "@/lib/meta-pixel";
 
 /** "Ver publicación": the web button and the alert redirect both leave the site through these. */
 const OUTBOUND = /^\/(app\/listings\/\d+\/out|r\/\d+)(\?|$)/;
@@ -84,13 +84,13 @@ export function MetaPixel() {
   const first = useRef(true);
 
   useEffect(() => {
-    if (!metaPixelId || pathname.startsWith("/auth/")) return;
+    if (!metaPixelId || untrackedPath(pathname)) return;
     if (first.current) first.current = false;
     else pixel("PageView");
   }, [pathname]);
 
   useEffect(() => {
-    if (!metaPixelId || pathname.startsWith("/auth/")) return;
+    if (!metaPixelId || untrackedPath(pathname)) return;
     const onClick = (e: MouseEvent) => {
       const a = (e.target as Element | null)?.closest?.("a");
       if (!a) return;
@@ -105,14 +105,14 @@ export function MetaPixel() {
 
   useEffect(() => {
     // The server's queue waits for consent (the cookie lives 10 minutes).
-    if (!metaPixelId || !granted || pathname.startsWith("/auth/")) return;
+    if (!metaPixelId || !granted || untrackedPath(pathname)) return;
     flushQueue();
     // Server Actions that don't navigate (e.g. saving several searches on one page) still set the cookie.
     const timer = window.setInterval(flushQueue, 2000);
     return () => window.clearInterval(timer);
   }, [granted, pathname]);
 
-  if (pathname.startsWith("/auth/") || (!metaPixelId && !googleAnalyticsId && !clarityProjectId)) return null;
+  if (untrackedPath(pathname) || (!metaPixelId && !googleAnalyticsId && !clarityProjectId)) return null;
   return (
     <>
       {metaPixelId ? <Script id="meta-pixel" strategy="afterInteractive">

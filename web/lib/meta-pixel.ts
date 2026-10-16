@@ -23,6 +23,15 @@ export function trackingAllowed(cookie: string): boolean {
   return !cookie.split(";").some((c) => c.trim() === `${CONSENT_COOKIE}=denied`);
 }
 
+/**
+ * Pages whose URL carries a secret: confirmation and reset links (/auth/…) and
+ * the unsubscribe link (/baja?t=…). Meta, GA4 and Clarity never run there,
+ * since all three report the page URL.
+ */
+export function untrackedPath(pathname: string): boolean {
+  return pathname.startsWith("/auth/") || pathname === "/baja";
+}
+
 /** Standard events Meta optimizes on, plus our own (trackCustom). */
 export type PixelEvent =
   | "PageView"
