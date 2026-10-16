@@ -59,7 +59,7 @@ def explain(listing: dict, profile: dict, scorer: Scorer) -> dict[str, Any]:
     return {
         "listing": {k: listing.get(k) for k in ("id", "source", "external_id", "title", "url", "make",
                                                 "model", "trim", "year", "price", "currency",
-                                                "price_usd", "mileage_km", "transmission")},
+                                                "price_usd", "mileage_km", "transmission", "body_type")},
         "profile": {"id": profile["id"], "filters": profile["filters"],
                     "preferences": profile["preferences"]},
         "is_match": result.is_match and not score.excluded,
@@ -77,7 +77,8 @@ def render(data: dict[str, Any], stored: dict | None) -> str:
     lines.append(f"  {l['url']}")
     lines.append(f"  {l['make']} {l['model']} {l['trim'] or '(versión ?)'} · {l['year']} · "
                  f"{copy.money(l['price'], l['currency'])} (USD {copy.number(l['price_usd'])}) · "
-                 f"{copy.number(l['mileage_km'])} km · {l['transmission'] or 'transmisión ?'}")
+                 f"{copy.number(l['mileage_km'])} km · {l['transmission'] or 'transmisión ?'} · "
+                 f"{copy.BODY_TYPE.get(l.get('body_type'), l.get('body_type')) or 'carrocería ?'}")
     lines.append(f"Profile #{data['profile']['id']}: {json.dumps(data['profile']['filters'], ensure_ascii=False)}")
     if data["profile"]["preferences"]:
         lines.append(f"  preferencias: {json.dumps(data['profile']['preferences'], ensure_ascii=False)}")

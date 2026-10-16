@@ -6,8 +6,10 @@ Each tick:
   2. new or edited profiles are bootstrapped silently (pipeline/rematch.py);
   3. due targets are crawled and ingested;
   4. each target's batch is matched and scored against every enabled profile
-     of that make/model (intelligence/, sección 6): new and updated listings
-     get a match row with reasons, 0–100 score, level, price_ref and red flags;
+     of that make/model, and against the searches without a model, only by
+     body type (docs/CARROCERIA.md), whatever target brought it
+     (intelligence/, sección 6): new and updated listings get a match row
+     with reasons, 0–100 score, level, price_ref and red flags;
   5. the batch's new matches and price drops go to the notification engine
      (notifications/, sección 7), which decides, queues and sends them;
   6. the searches whose access ended in the last 3 weeks only count the new
@@ -24,6 +26,7 @@ import time
 import traceback
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Iterable
 
 import db
 from config import TICK_INTERVAL_SECONDS, RECOMMENDED_MAX_AGE_DAYS, CRAWL_JITTER_SECONDS
@@ -31,6 +34,7 @@ from db.repos import expired_matches
 from db.repos import matches as matches_repo
 from db.repos.runs import bootstrapped_at, log_error
 from intelligence.engine import Evaluation
+from intelligence.matching import model_less
 from notifications.service import MatchCandidate, Notifier
 from pipeline import crawl, rematch
 from pipeline.scoring import Scorer
@@ -75,9 +79,22 @@ async def _stage(alert: dict, listing_ids: list[int], scorer: Scorer) -> _Staged
 
 
 async def match_alert(staged: _Staged, scorer: Scorer, *, first_run: bool,
-                      max_age_days: int) -> list[MatchCandidate]:
+                      max_age_days: int, foreign_first_run: bool = False,
+                      backfill_ids: Iterable[int] = ()) -> list[MatchCandidate]:
     """Store one profile's matches for a batch. Returns the new matches the
-    notification engine should consider."""
+    notification engine should consider.
+
+    `foreign_first_run`: the first run of a target that doesn't exist for this
+    profile (a model, inventory or Facebook target reaching a search without
+    a model, docs/CARROCERIA.md). That search is not new, so the target's
+    30-day first pass must not mute it: a listing published recently goes the
+    usual way (stored as news, notified while it is recent); an old one, or
+    one without a publication date (it can't be told from old stock), is
+    backfill. Muting the recent ones would lose them for good: the search's
+    target by body type reads only the last day, and this target's next
+    runs only what was published since. `backfill_ids`: listings of the batch
+    that are not news for this profile (a body type the crawl just filled in,
+    a listing the prefilter had dropped): stored as backfill, never notified."""
     alert, evaluations, fresh, rows = staged.alert, staged.evaluations, staged.fresh, scorer.rows
 
     async def store(ids: list[int], *, backfill: bool) -> dict[int, int]:
@@ -89,9 +106,15 @@ async def match_alert(staged: _Staged, scorer: Scorer, *, first_run: bool,
     # upsert_scored keeps their is_backfill.
     await store([lid for lid in evaluations if lid not in fresh], backfill=True)
 
+    if first_run and foreign_first_run and alert.get("bootstrapped"):
+        dated = {lid for lid in fresh
+                 if rows[lid].get("published_at") is not None and _is_recent(rows[lid], max_age_days)}
+        backfill_ids = {*backfill_ids, *(lid for lid in fresh if lid not in dated)}
+        log.info("profile=%s another target's first run: %d recent publications, %d backfill",
+                 alert["id"], len(dated), len(fresh) - len(dated))
     # A target's first run, or an alert not bootstrapped yet: everything is
     # backfill, nothing is notified (sección 5.7).
-    if first_run or not alert.get("bootstrapped"):
+    elif first_run or not alert.get("bootstrapped"):
         await store(fresh, backfill=True)
         if not alert.get("bootstrapped"):
             await db.mark_bootstrapped(alert["id"])
@@ -99,6 +122,10 @@ async def match_alert(staged: _Staged, scorer: Scorer, *, first_run: bool,
                  "first target run" if first_run else "bootstrap", len(fresh))
         return []
 
+    quiet = set(backfill_ids) & set(fresh)
+    if quiet:
+        await store([lid for lid in fresh if lid in quiet], backfill=True)
+        fresh = [lid for lid in fresh if lid not in quiet]
     match_ids = await store(fresh, backfill=False)
     # Old listings aren't news, and one another profile of this user already
     # had (the same wizard alert split per model) isn't new to the user.
@@ -124,7 +151,7 @@ async def count_after_expiry(target: dict, listing_ids: list[int], scorer: Score
         return 0
     alerts = await db.counting_alerts_for_target(
         target["source"], target.get("make"), target.get("model"),
-        inventory=(target.get("query") or {}).get("inventory") is True)
+        inventory=(target.get("query") or {}).get("inventory") is True, body_type=target.get("body_type"))
     if not alerts:
         return 0
     history = await bootstrapped_at(target["id"]) if target.get("id") is not None else None
@@ -144,25 +171,39 @@ async def count_after_expiry(target: dict, listing_ids: list[int], scorer: Score
 
 
 async def process_batch(notifier: Notifier, target: dict, listing_ids: list[int], *,
-                        first_run: bool, events: list = ()) -> None:
+                        first_run: bool, events: list = (), backfill_ids: Iterable[int] = (),
+                        body_type_filled: Iterable[int] = ()) -> None:
     """Steps 4–6 for one batch of a target's listings: match and score them
     against the target's profiles, then notify, and count for the searches
-    with ended access. tools/simulate_alert.py runs it for a single listing."""
+    with ended access. tools/simulate_alert.py runs it for a single listing.
+
+    `backfill_ids` are old stock for every profile (TargetRun.backfill_ids).
+    `body_type_filled`, listings stored before whose body type this batch
+    filled in or corrected, are old news for the searches without a model:
+    their batches couldn't match them, and a body-type backfill
+    (tools.backfill_body_type) or a better reading is not a new listing."""
+    backfill_ids, body_type_filled = frozenset(backfill_ids), frozenset(body_type_filled)
+    body_target = target.get("body_type") is not None
     scorer = await Scorer.create()
     await scorer.prepare(listing_ids)
     max_age_days = int(await db.get_config("recommended_max_age_days", RECOMMENDED_MAX_AGE_DAYS))
     staged: list[_Staged] = []
     for alert in await db.alerts_for_target(target["source"], target.get("make"), target.get("model"),
                                             telegram_only=False,
-                                            inventory=(target.get("query") or {}).get("inventory") is True):
+                                            inventory=(target.get("query") or {}).get("inventory") is True,
+                                            body_type=target.get("body_type")):
         try:
             staged.append(await _stage(alert, listing_ids, scorer))
         except Exception:
             await log_error("match", f"profile:{alert['id']}", traceback.format_exc())
     candidates: list[MatchCandidate] = []
     for s in staged:
+        without_model = model_less(s.alert["profile"].get("filters") or {})
         try:
-            candidates += await match_alert(s, scorer, first_run=first_run, max_age_days=max_age_days)
+            candidates += await match_alert(
+                s, scorer, first_run=first_run, max_age_days=max_age_days,
+                foreign_first_run=without_model and not body_target,
+                backfill_ids=backfill_ids | body_type_filled if without_model else backfill_ids)
         except Exception:
             await log_error("match", f"profile:{s.alert['id']}", traceback.format_exc())
     # Matches are stored and re-scored: price drops carry the new score.
@@ -184,7 +225,8 @@ def batch_handler(notifier: Notifier) -> crawl.BatchHandler:
         listing_ids = list(dict.fromkeys(run.result.ids.values()))
         if listing_ids:
             await process_batch(notifier, run.target, listing_ids, first_run=run.first_run,
-                                events=run.result.events)
+                                events=run.result.events, backfill_ids=run.backfill_ids,
+                                body_type_filled=run.result.body_type_filled)
     return handle
 
 

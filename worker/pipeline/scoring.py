@@ -35,15 +35,22 @@ class Scorer:
             quote = await quote_for_today(cx)
         return cls(cfg, quote.rate, now or datetime.now(timezone.utc))
 
-    async def prepare(self, listing_ids: Iterable[int]) -> dict[int, dict[str, Any]]:
-        """Load the rows and comparables of these listings (once each)."""
-        ids = [i for i in dict.fromkeys(listing_ids) if i not in self.rows]
-        if ids:
+    async def prepare(self, listing_ids: Iterable[int], *,
+                      refs_limit: int | None = None) -> dict[int, dict[str, Any]]:
+        """Load the rows and comparables of these listings (once each).
+        `refs_limit`: comparables only for the first that many ids; the rest
+        are scored without a price reference (the nightly re-score adds it)."""
+        ids = list(dict.fromkeys(listing_ids))
+        new = [i for i in ids if i not in self.rows]
+        if new:
             async with db.connection() as cx:
-                self.rows.update(await listings_repo.rows_for_scoring(cx, ids))
-                for i in ids:
-                    if i in self.rows:
-                        self.refs[i] = await comparables.fetch(cx, i, self.cfg.comparables)
+                self.rows.update(await listings_repo.rows_for_scoring(cx, new))
+        wanted = [i for i in ids if i in self.rows]
+        if refs_limit is not None:
+            wanted = wanted[:max(0, refs_limit)]
+        if missing := [i for i in wanted if i not in self.refs]:
+            async with db.connection() as cx:
+                self.refs.update(await comparables.fetch_many(cx, missing, self.cfg.comparables))
         return self.rows
 
     def evaluate(self, listing_id: int, profile: dict[str, Any]) -> Evaluation | None:

@@ -31,6 +31,11 @@ SELECT sp.id, sp.name, sp.filters, sp.preferences, sp.origin_lat, sp.origin_lon,
   JOIN profiles p ON p.id = sp.user_id
 """
 
+# A search without a model, only by body type (docs/CARROCERIA.md). One
+# without a body type either matches nothing (intelligence/matching.py).
+_MODEL_LESS = ("(public.search_is_model_less({0}.filters) "
+               " AND public.search_body_types({0}.filters) IS NOT NULL)")
+
 
 def _epoch(ts) -> int | None:
     return int(ts.timestamp()) if ts else None
@@ -258,27 +263,48 @@ async def pending_rematch() -> list[dict]:
 
 
 async def alerts_for_target(source: str, make: str | None, model: str | None, *,
-                            telegram_only: bool = True, inventory: bool = False) -> list[dict]:
+                            telegram_only: bool = True, inventory: bool = False,
+                            body_type: str | None = None) -> list[dict]:
     """Enabled profiles a crawl target's batch is for: same make/model, and the
     source among the profile's sources (all of them when it has none). An
-    inventory target reaches every model, still checking access and source. By
-    default only the Telegram-linked ones; matching (F2) takes every profile."""
+    inventory target reaches every model, still checking access and source.
+    Every batch also reaches the searches without a model (docs/CARROCERIA.md):
+    an SUV a model target, Facebook or deRuedas brought is still "any SUV"; a
+    target by body type (`body_type`) reaches only those. By default only the
+    Telegram-linked ones; matching (F2) takes every profile."""
     telegram = " AND p.telegram_chat_id IS NOT NULL" if telegram_only else ""
     async with connection() as cx:
         rows = await (await cx.execute(
             _SELECT + " WHERE public.search_access_active(sp.id)" + telegram +
-                      "   AND (%s OR (lower(sp.filters->>'make') IS NOT DISTINCT FROM lower(%s) "
-                      "   AND lower(sp.filters->>'model') IS NOT DISTINCT FROM lower(%s))) "
-                      "   AND (NOT sp.filters ? 'sources' OR sp.filters->'sources' ? %s) "
+                      "   AND (" + _MODEL_LESS.format("sp") + " OR (%(body_type)s::text IS NULL AND ("
+                      "     %(inventory)s OR (lower(sp.filters->>'make') IS NOT DISTINCT FROM lower(%(make)s) "
+                      "     AND lower(sp.filters->>'model') IS NOT DISTINCT FROM lower(%(model)s))))) "
+                      "   AND (NOT sp.filters ? 'sources' OR sp.filters->'sources' ? %(source)s) "
                       " ORDER BY sp.id",
-            (inventory and make is None and model is None, make, model, source))).fetchall()
+            {"inventory": inventory and make is None and model is None and body_type is None,
+             "make": make, "model": model, "body_type": body_type, "source": source})).fetchall()
+    return [_to_alert(r) for r in rows]
+
+
+async def model_less_alerts() -> list[dict]:
+    """Enabled searches without a model, only by body type, with access
+    (docs/CARROCERIA.md): a listing whose body type a detail page filled in
+    is matched against them (pipeline/rematch.py)."""
+    async with connection() as cx:
+        rows = await (await cx.execute(
+            _SELECT + " WHERE public.search_access_active(sp.id) AND " + _MODEL_LESS.format("sp") +
+                      " ORDER BY sp.id")).fetchall()
     return [_to_alert(r) for r in rows]
 
 
 async def counting_alerts_for_target(source: str, make: str | None, model: str | None, *,
-                                     inventory: bool = False) -> list[dict]:
+                                     inventory: bool = False, body_type: str | None = None) -> list[dict]:
     """Like alerts_for_target, for the searches 2.5 counts: each alert also
-    carries `ended_at`, the access end it counts from."""
+    carries `ended_at`, the access end it counts from. 2.5 counts models: a
+    search without a model is never counted (count_after_expiry_searches
+    leaves it out too) and a target by body type has nothing to count."""
+    if body_type is not None:
+        return []
     async with connection() as cx:
         rows = await (await cx.execute(
             "SELECT q.*, c.ended_at FROM (" + _SELECT + ") q "
@@ -286,6 +312,7 @@ async def counting_alerts_for_target(source: str, make: str | None, model: str |
             " WHERE (%s OR (lower(q.filters->>'make') IS NOT DISTINCT FROM lower(%s) "
             "   AND lower(q.filters->>'model') IS NOT DISTINCT FROM lower(%s))) "
             "   AND (NOT q.filters ? 'sources' OR q.filters->'sources' ? %s) "
+            "   AND NOT public.search_is_model_less(q.filters) "
             " ORDER BY q.id",
             (inventory and make is None and model is None, make, model, source))).fetchall()
     return [{**_to_alert(r), "ended_at": r["ended_at"]} for r in rows]

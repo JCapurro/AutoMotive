@@ -17,7 +17,10 @@ concurrent sources and failed attempts.
 
 After a pass the matches of the listings that changed are re-scored
 (pipeline/rescore.py): transmission or version may go from unknown to a
-value, and the description feeds the red flags (sección 5.5).
+value, and the description feeds the red flags (sección 5.5). A listing
+whose body type the page filled in is matched against the searches without
+a model, which an unknown body type fails (docs/CARROCERIA.md): as backfill,
+like the re-score, so nothing is notified (pipeline/rematch.py).
 """
 from __future__ import annotations
 
@@ -40,6 +43,7 @@ from normalization.description_claims import input_hash
 from normalization.description_facts import VERSION, from_llm, parse as parse_facts, trim_page_noise
 from normalization.listing import Target
 from pipeline.ingest import IngestResult, ListingEvent, ingest
+from pipeline.rematch import match_model_less
 from pipeline.rescore import rescore_listings
 
 
@@ -218,6 +222,15 @@ async def enrich_pass(stop: asyncio.Event | None = None) -> IngestResult:
 
 
 async def rescore_changed(result: IngestResult) -> int:
-    """Re-score the matches of the listings a detail pass updated."""
-    changed = [e.listing_id for e in result.events if e.kind == "listing_updated"]
-    return await rescore_listings(changed) if changed else 0
+    """Re-score the matches of the listings a detail pass updated or gave
+    another body type (the reason changes, even when no event says so), and
+    match the ones it gave a body type against the searches without a model."""
+    changed = list(dict.fromkeys([e.listing_id for e in result.events if e.kind == "listing_updated"]
+                                 + result.body_type_filled))
+    n = await rescore_listings(changed) if changed else 0
+    if result.body_type_filled:
+        try:
+            n += await match_model_less(result.body_type_filled)
+        except Exception:
+            await log_error("rematch", "body_type_filled", traceback.format_exc())
+    return n

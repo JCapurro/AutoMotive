@@ -9,6 +9,9 @@ the same dict it wrote, so its behavior doesn't change while it runs on
 Postgres. Keys the plan has no slot for yet are kept under
 `preferences.legacy_extra`; the legacy opportunity thresholds live under
 `preferences.legacy_opportunity` until the 0–100 score replaces them (F2).
+The wizard has no body type step, but `carroceria` (a list of codes of
+normalization/body_type.py) carries filters.body_types both ways, so editing
+an alert from Telegram doesn't drop it (docs/CARROCERIA.md).
 """
 from __future__ import annotations
 
@@ -28,7 +31,7 @@ _MAPPED_KEYS = {
     "marca", "marcas", "modelo", "modelos", "version", "anios", "anio_min", "anio_max",
     "precio_min", "precio_max", "moneda", "km_min", "km_max", "transmision",
     "combustible", "vendedor", "sources", "origin_lat", "origin_lon", "radio_km",
-    "descuento_pct", "precio_max_oportunidad",
+    "descuento_pct", "precio_max_oportunidad", "carroceria",
 }
 
 
@@ -63,6 +66,8 @@ def to_profile(legacy: dict, make: str | None, model: str | None) -> dict:
     if trans := legacy.get("transmision"):
         filters["transmission"] = _TRANSMISSION_TO_PLAN.get(normalize_text(trans), trans)
     _put(filters, "fuel", legacy.get("combustible"))
+    body = legacy.get("carroceria")
+    _put(filters, "body_types", [body] if isinstance(body, str) else list(body or []))
     _put(filters, "sources", legacy.get("sources"))
 
     preferences: dict[str, Any] = {}
@@ -105,6 +110,7 @@ def to_legacy(filters: dict, preferences: dict, origin_lat: float | None = None,
     _put(out, "precio_max", filters.get("price_max"))
     _put(out, "moneda", filters.get("currency"))
     _put(out, "combustible", filters.get("fuel"))
+    _put(out, "carroceria", filters.get("body_types"))
     if trans := filters.get("transmission"):
         out["transmision"] = _TRANSMISSION_TO_WIZARD.get(trans, trans)
     if seller := preferences.get("seller_type"):

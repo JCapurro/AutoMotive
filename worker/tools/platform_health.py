@@ -21,28 +21,29 @@ from aio import run
 from collectors._recency import POLICY_VERSION, SOURCES as RECENT_SOURCES
 import config
 import db
+from db.repos.targets import INTERVAL_SECONDS, PROFILE_WANTS_TARGET
+from normalization.body_type import LABELS as BODY_TYPE_LABELS
 from notifications.ops import last_error_line
 from pipeline.heartbeat import last_beat
 from tools.watchdog import check_web, transitions, worker_problem
 
 STATE_FILE = config.ROOT / "logs" / "platform_health_state.json"
 
-COLLECTORS_SQL = """
+# The targets the worker runs (db/repos/targets.py: the same profile predicate
+# and cadence as due_targets).
+COLLECTORS_SQL = f"""
 with eligible as (
-  select t.*, s.name, s.crawl_interval_seconds
+  select t.*, s.name, {INTERVAL_SECONDS} as crawl_interval_seconds
   from crawl_targets t join sources s on s.id=t.source
   where t.active and s.enabled and exists (
     select 1 from search_profiles sp where public.search_access_active(sp.id)
-      and ((t.query->>'inventory' = 'true' and t.make is null and t.model is null) or (
-        lower(sp.filters->>'make') is not distinct from lower(t.make)
-        and lower(sp.filters->>'model') is not distinct from lower(t.model)))
-      and (not sp.filters ? 'sources' or sp.filters->'sources' ? t.source)
+      and {PROFILE_WANTS_TARGET}
   )
 )
-select t.id, t.source, t.name, t.make, t.model, t.query, t.created_at, t.updated_at, t.next_run_at,
+select t.id, t.source, t.name, t.make, t.model, t.body_type, t.query, t.created_at, t.updated_at, t.next_run_at,
   t.crawl_interval_seconds, latest.started_at, latest.status as latest_status,
-  latest.error as latest_error, coalesce(history.statuses, '{}') as statuses,
-  coalesce(history.found, '{}') as found,
+  latest.error as latest_error, coalesce(history.statuses, '{{}}') as statuses,
+  coalesce(history.found, '{{}}') as found,
   exists(select 1 from collector_runs r where r.target_id=t.id and r.status='ok'
     and r.found>0 and r.started_at>now()-interval '7 days') as had_results
 from eligible t
@@ -85,7 +86,8 @@ def collector_checks(rows: list[dict], now: datetime, *, failures: int = 3,
         key = f"collector:{row['source']}"
         checks.setdefault(key, None)
         statuses = row['statuses']
-        target = " ".join(p for p in (row.get('make'), row.get('model')) if p) or f"target {row['id']}"
+        target = (BODY_TYPE_LABELS.get(row['body_type'], row['body_type']) if row.get('body_type') else
+                  " ".join(p for p in (row.get('make'), row.get('model')) if p) or f"target {row['id']}")
         reason = None
         if len(statuses) >= failures and all(s == 'failed' for s in statuses[:failures]):
             reason = f"{failures} corridas fallidas consecutivas. {safe_error(row['latest_error'])}"

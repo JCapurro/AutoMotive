@@ -27,7 +27,7 @@ COLLECTOR_FILES = {
     'autocity': 'autocity', 'carone': 'carone', 'gruporandazzo': 'gruporandazzo',
     'deruedas': 'deruedas',
 }
-PUBLIC_QUERY_KEYS = {'inventory', 'year_min', 'year_max', 'km_max', 'publication_policy'}
+PUBLIC_QUERY_KEYS = {'inventory', 'year_min', 'year_max', 'km_max', 'publication_policy', 'interval_seconds'}
 
 _SECRET_NAME = re.compile(r'TOKEN|SECRET|PASSWORD|API_KEY|DATABASE_URL')
 _SENSITIVE = re.compile(
@@ -99,7 +99,8 @@ def build_context(incident: dict, health: dict, targets: list[dict], runs: list[
         'problem': safe_text(incident.get('problem')),
         'health': {'checked_at': health.get('checked_at'),
                    'problem': safe_text((health.get('checks') or {}).get(f'collector:{source}'))},
-        'targets': [{**{key: row.get(key) for key in ('id', 'make', 'model', 'next_run_at', 'last_run_at')},
+        'targets': [{**{key: row.get(key) for key in ('id', 'make', 'model', 'body_type', 'next_run_at',
+                                                        'last_run_at')},
                      'query': {key: value for key, value in (row.get('query') or {}).items()
                                if key in PUBLIC_QUERY_KEYS}}
                     for row in targets],
@@ -160,7 +161,7 @@ async def context_rows(cx, incident: dict) -> tuple[dict, list[dict], list[dict]
     """Health snapshot, active targets and recent runs: the rows build_context takes."""
     health = await (await cx.execute('SELECT checked_at,checks FROM platform_health_checks WHERE id=1')).fetchone()
     targets = await (await cx.execute(
-        'SELECT id,make,model,query,next_run_at,last_run_at FROM crawl_targets '
+        'SELECT id,make,model,body_type,query,next_run_at,last_run_at FROM crawl_targets '
         'WHERE source=%s AND active ORDER BY id LIMIT 100', (incident['source'],))).fetchall()
     recent = await (await cx.execute(
         'SELECT id,target_id,status,started_at,finished_at,found,new,updated,error '

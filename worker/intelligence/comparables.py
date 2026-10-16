@@ -18,7 +18,7 @@ matches.price_ref) and the database call.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from typing import Any, Mapping
+from typing import Any, Iterable, Mapping
 
 
 LEVELS = ("trim_transmission", "transmission", "model")
@@ -70,3 +70,23 @@ async def fetch(cx, listing_id: int, cfg: Mapping[str, Any] | None = None) -> Pr
         (listing_id, cfg.get("min_n"), cfg.get("year_tol"), cfg.get("km_tol_pct"),
          cfg.get("max_age_days")))).fetchone()
     return PriceRef.from_json(row["ref"] if row else None)
+
+
+# fetch_many's ids per statement.
+_CHUNK = 200
+
+
+async def fetch_many(cx, listing_ids: Iterable[int], cfg: Mapping[str, Any] | None = None
+                     ) -> dict[int, PriceRef | None]:
+    """fetch() for many listings, one round trip per _CHUNK ids instead of
+    one per listing (the worker on the VPS, the database at Supabase)."""
+    cfg = cfg or {}
+    ids = list(dict.fromkeys(listing_ids))
+    refs: dict[int, PriceRef | None] = {}
+    for start in range(0, len(ids), _CHUNK):
+        rows = await (await cx.execute(
+            "SELECT i AS id, comparables(i, %s, %s, %s, %s) AS ref FROM unnest(%s::bigint[]) AS i",
+            (cfg.get("min_n"), cfg.get("year_tol"), cfg.get("km_tol_pct"), cfg.get("max_age_days"),
+             ids[start:start + _CHUNK]))).fetchall()
+        refs.update({r["id"]: PriceRef.from_json(r["ref"]) for r in rows})
+    return refs

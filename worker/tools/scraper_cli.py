@@ -10,7 +10,13 @@ Examples:
     python -m tools.scraper_cli kavak marca=Volkswagen modelo=Gol
     python -m tools.scraper_cli autocosmos precio_max=15000 moneda=USD
     python -m tools.scraper_cli facebook marca=Ford modelo=Ranger
+    python -m tools.scraper_cli mercadolibre carroceria=suv anio_min=2015
     python -m tools.scraper_cli detail https://www.autocosmos.com.ar/auto/usado/ford/ka/15l-s/ff56ff47...
+
+carroceria=<code> without marca/modelo is a target by body type
+(docs/CARROCERIA.md): only the collectors whose BODY_TYPES list the code
+search it. The CARROCERÍA column is the body type normalization would give
+each card, without the catalog.
 
 `detail` reads one ad's page (the source comes from the URL) and prints what
 the parser and the description's rules make of it: the published and the
@@ -33,6 +39,7 @@ except Exception:
 from collectors import REGISTRY
 from collectors._browser import shutdown as browser_shutdown
 from collectors._loop import run_collector
+from normalization import body_type
 from normalization.description_facts import parse as parse_facts, resolve_price
 from normalization.fx import usd_ars_rate
 from normalization.geo import filter_listings_by_radius
@@ -64,6 +71,15 @@ def _fmt(v, width: int) -> str:
     if len(s) > width:
         s = s[: width - 1] + "…"
     return s.ljust(width)
+
+
+def _body_type(item) -> str | None:
+    """The card's body type as normalization resolves it, without the catalog."""
+    code, _, _ = body_type.resolve(item.marca, item.modelo, (),
+                                   item.carroceria or body_type.raw_from_attributes(item.atributos),
+                                   item.version, item.titulo, item.url,
+                                   doors_value=(item.atributos or {}).get("Puertas"))
+    return body_type.LABELS.get(code) if code else None
 
 
 def _money(amount: float | None, currency: str | None) -> str:
@@ -123,6 +139,7 @@ async def detail(url: str, html_out: str | None, source: str | None = None) -> N
     if price.mismatch:
         print(f"otro precio: {_money(price.mismatch.amount, price.mismatch.currency)} en la descripción")
     print(f"año / km:    {item.anio or '-'} / {item.km or '-'}")
+    print(f"carrocería:  {_body_type(item) or '-'}" + (f"  (fuente: {item.carroceria})" if item.carroceria else ""))
     if facts is None:
         print("\n(sin descripción)")
         return
@@ -153,6 +170,9 @@ async def main() -> None:
     filters = _parse_kv(sys.argv[2:])
     print(f"→ scraper: {src}")
     print(f"→ filtros: {filters}\n")
+    if (code := filters.get("carroceria")) and not any(filters.get(k) for k in ("marca", "modelo")) \
+            and code not in getattr(REGISTRY[src], "BODY_TYPES", frozenset()):
+        print(f"⚠ {src} no declara la carrocería {code!r} en BODY_TYPES: el worker no le crea ese target\n")
 
     await db.open_pool()   # geocode cache for the radius filter
     scraper = REGISTRY[src]()
@@ -182,15 +202,15 @@ async def main() -> None:
         return
 
     print(_fmt("ID", 14), _fmt("PUBLICADO", 20), _fmt("PRECIO", 14), _fmt("AÑO", 5),
-          _fmt("KM", 10), _fmt("UBIC", 18), _fmt("TÍTULO", 60))
-    print("-" * 125)
+          _fmt("KM", 10), _fmt("CARROCERÍA", 12), _fmt("UBIC", 18), _fmt("TÍTULO", 60))
+    print("-" * 138)
     for r in results[:30]:
         precio = f"{r.moneda or ''} {int(r.precio):,}".replace(",", ".") if r.precio else "-"
         km = f"{r.km:,}".replace(",", ".") if r.km else "-"
         published = (datetime.fromtimestamp(r.published_at, timezone.utc).isoformat()
                      if r.published_at is not None else "desconocida")
         print(_fmt(r.listing_id, 14), _fmt(published, 20), _fmt(precio, 14), _fmt(r.anio, 5),
-              _fmt(km, 10), _fmt(r.ubicacion, 18), _fmt(r.titulo, 60))
+              _fmt(km, 10), _fmt(_body_type(r), 12), _fmt(r.ubicacion, 18), _fmt(r.titulo, 60))
 
     print("\nPrimera URL:", results[0].url)
     if not complete:

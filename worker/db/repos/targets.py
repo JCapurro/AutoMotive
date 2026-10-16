@@ -2,7 +2,8 @@
 
 A `count_only` target (only searches whose access ended, 2.5) runs once a day
 at most, and as soon as an active search joins it, it runs at the source's
-cadence again, starting right away."""
+cadence again, starting right away. A target by body type (docs/CARROCERIA.md)
+runs at its own cadence, query.interval_seconds (app_config.body_type_targets)."""
 from __future__ import annotations
 
 from datetime import datetime
@@ -14,6 +15,23 @@ from db.pool import connection
 
 # 2.5: a model only searches with ended access want is crawled once a day.
 COUNT_ONLY_INTERVAL_SECONDS = 86_400
+
+# Whether search profile `sp` wants crawl target `t`, for the three shapes of
+# pipeline/crawl.py: an inventory target (no make, model or body type) serves
+# every search, a model target the searches of its make/model, and a target by
+# body type the searches without a model that want it. A target by body type
+# also has make and model null: without `t.body_type IS NULL` any model-less
+# search would want every one of them. tools/platform_health.py uses it too.
+PROFILE_WANTS_TARGET = (
+    "((t.query->>'inventory' = 'true' AND t.make IS NULL AND t.model IS NULL AND t.body_type IS NULL)"
+    "  OR (t.body_type IS NULL AND lower(sp.filters->>'make') IS NOT DISTINCT FROM lower(t.make)"
+    "      AND lower(sp.filters->>'model') IS NOT DISTINCT FROM lower(t.model))"
+    "  OR (t.body_type IS NOT NULL AND public.search_is_model_less(sp.filters)"
+    "      AND sp.filters->'body_types' ? t.body_type))"
+    " AND (NOT sp.filters ? 'sources' OR sp.filters->'sources' ? t.source)")
+
+# The cadence of a target: its own (a target by body type) or its source's.
+INTERVAL_SECONDS = "coalesce((t.query->>'interval_seconds')::int, s.crawl_interval_seconds)"
 
 
 async def enabled_sources() -> dict[str, dict[str, Any]]:
@@ -31,17 +49,18 @@ async def sync_targets(specs: Iterable[Any]) -> None:
     count-only target that gets an active search is due at once."""
     specs = list(specs)
     async with connection() as cx:
-        await cx.execute("CREATE TEMP TABLE wanted (source text, make text, model text, query jsonb) "
-                         "ON COMMIT DROP")
+        await cx.execute("CREATE TEMP TABLE wanted (source text, make text, model text, body_type text, "
+                         "  query jsonb) ON COMMIT DROP")
         if specs:
             async with cx.cursor() as cur:
                 await cur.executemany(
-                    "INSERT INTO wanted VALUES (%s, %s, %s, %s)",
-                    [(s.source, s.make, s.model, Jsonb(s.query)) for s in specs])
+                    "INSERT INTO wanted VALUES (%s, %s, %s, %s, %s)",
+                    [(s.source, s.make, s.model, getattr(s, "body_type", None), Jsonb(s.query))
+                     for s in specs])
         await cx.execute(
-            "INSERT INTO crawl_targets (source, make, model, query, active) "
-            "SELECT source, make, model, query, true FROM wanted "
-            "ON CONFLICT (source, make, model) DO UPDATE SET query = excluded.query, active = true "
+            "INSERT INTO crawl_targets (source, make, model, body_type, query, active) "
+            "SELECT source, make, model, body_type, query, true FROM wanted "
+            "ON CONFLICT (source, make, model, body_type) DO UPDATE SET query = excluded.query, active = true "
             " , first_run_done = CASE WHEN excluded.query ? 'publication_policy' AND "
             "     crawl_targets.query->'publication_policy' IS DISTINCT FROM excluded.query->'publication_policy' "
             "     THEN false ELSE crawl_targets.first_run_done END "
@@ -53,12 +72,21 @@ async def sync_targets(specs: Iterable[Any]) -> None:
         await cx.execute(
             "UPDATE crawl_targets t SET active = false WHERE active AND NOT EXISTS ("
             "  SELECT 1 FROM wanted w WHERE w.source = t.source "
-            "     AND w.make IS NOT DISTINCT FROM t.make AND w.model IS NOT DISTINCT FROM t.model)")
+            "     AND w.make IS NOT DISTINCT FROM t.make AND w.model IS NOT DISTINCT FROM t.model "
+            "     AND w.body_type IS NOT DISTINCT FROM t.body_type)")
 
 
 async def publication_dates(target: dict[str, Any]) -> dict[str, int]:
-    """Reuse stored publication dates, avoiding a detail request on every daily read."""
+    """Reuse stored publication dates, avoiding a detail request on every daily read.
+    A target by body type reads at most the last 25 hours (collectors/_recency.py):
+    the dates of its body type seen in the last two days."""
     async with connection() as cx:
+        if target.get("body_type"):
+            rows = await (await cx.execute(
+                "SELECT external_id, published_at FROM listings WHERE source = %s AND body_type = %s "
+                "   AND published_at IS NOT NULL AND last_seen_at >= now() - interval '2 days'",
+                (target["source"], target["body_type"]))).fetchall()
+            return {r["external_id"]: int(r["published_at"].timestamp()) for r in rows}
         rows = await (await cx.execute(
             "SELECT external_id, published_at FROM listings WHERE source = %s "
             " AND lower(make) IS NOT DISTINCT FROM lower(%s) "
@@ -70,33 +98,39 @@ async def publication_dates(target: dict[str, Any]) -> dict[str, int]:
 async def due_targets() -> list[dict[str, Any]]:
     """Active targets of enabled sources whose next_run_at has come (or never ran),
     for a search with access; a count-only target was derived this tick from
-    the searches 2.5 counts."""
+    the searches 2.5 counts. crawl_interval_seconds is the target's cadence."""
     async with connection() as cx:
         return await (await cx.execute(
-            "SELECT t.id, t.source, t.make, t.model, t.query, t.first_run_done, t.last_run_at, "
-            "       s.crawl_interval_seconds "
+            "SELECT t.id, t.source, t.make, t.model, t.body_type, t.query, t.first_run_done, "
+            "      t.prefilter_rejected, "
+            f"      t.last_run_at, {INTERVAL_SECONDS} AS crawl_interval_seconds "
             "  FROM crawl_targets t JOIN sources s ON s.id = t.source "
             " WHERE t.active AND s.enabled AND (t.next_run_at IS NULL OR t.next_run_at <= now()) "
             "   AND (t.query->>'count_only' = 'true' "
             "    OR EXISTS (SELECT 1 FROM search_profiles sp WHERE public.search_access_active(sp.id) "
-            "     AND ((t.query->>'inventory' = 'true' AND t.make IS NULL AND t.model IS NULL) OR ("
-            "       lower(sp.filters->>'make') IS NOT DISTINCT FROM lower(t.make) "
-            "       AND lower(sp.filters->>'model') IS NOT DISTINCT FROM lower(t.model))) "
-            "     AND (NOT sp.filters ? 'sources' OR sp.filters->'sources' ? t.source))) "
+            f"     AND {PROFILE_WANTS_TARGET})) "
             " ORDER BY s.priority, t.next_run_at NULLS FIRST, t.id")).fetchall()
+
+
+async def set_prefilter_rejected(target_id: int, external_ids: Iterable[str]) -> None:
+    """What a target by body type's prefilter dropped (pipeline/crawl.py prefilter)."""
+    async with connection() as cx:
+        await cx.execute("UPDATE crawl_targets SET prefilter_rejected = %s WHERE id = %s",
+                         (sorted(set(external_ids)), target_id))
 
 
 async def finish_target(target_id: int, *, ok: bool, retry_seconds: int,
                         covered_until: datetime | None = None) -> None:
     """Schedule from completion; keep coverage at the successful scan's start.
     Failure retries without advancing bootstrap or the coverage checkpoint.
-    A count-only target waits a day, or the source's interval if longer."""
+    A count-only target waits a day, or the source's interval if longer; a
+    target by body type, its own interval."""
     async with connection() as cx:
         if ok:
             await cx.execute(
                 "UPDATE crawl_targets t SET last_run_at = coalesce(%s::timestamptz, now()), first_run_done = true, "
                 "  next_run_at = now() + make_interval(secs => CASE WHEN t.query->>'count_only' = 'true' "
-                "    THEN greatest(s.crawl_interval_seconds, %s) ELSE s.crawl_interval_seconds END) "
+                f"    THEN greatest(s.crawl_interval_seconds, %s) ELSE {INTERVAL_SECONDS} END) "
                 "  FROM sources s WHERE s.id = t.source AND t.id = %s",
                 (covered_until, COUNT_ONLY_INTERVAL_SECONDS, target_id))
         else:

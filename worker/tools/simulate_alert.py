@@ -3,7 +3,8 @@ Simulate the arrival of a listing: what the crawl does with a new listing of
 a target's batch, from matching on (sección 6 → sección 7).
 
 The listing must already be in `listings`. Every enabled search of its make
-and model scores it; the new matches go through the notification engine
+and model scores it, and every search without a model, only by body type
+(docs/CARROCERIA.md); the new matches go through the notification engine
 (decision, dedupe, daily cap) and are delivered. Only a simulated email adapter is used, so nothing leaves the machine.
 Used by the web's e2e tests ("llega una alerta simulada") and for QA.
 

@@ -44,7 +44,7 @@ OK, ERROR, INCOMPLETE, BLOCKED, NETWORK = 0, 1, 2, 3, 4
 # so a hung search still ends here, with its browsers closed.
 DEFAULT_TIMEOUT_S = 270
 
-TARGET_SQL = ('SELECT id, source, make, model, query, first_run_done, last_run_at '
+TARGET_SQL = ('SELECT id, source, make, model, body_type, query, first_run_done, last_run_at '
               'FROM crawl_targets WHERE id = %s')
 _HTTP_5XX = re.compile(r'\bHTTP 5\d\d\b')
 # The filters the scheduler (pipeline.crawl.scraper_filters, collectors._recency) and the collectors
