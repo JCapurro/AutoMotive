@@ -7,19 +7,25 @@ import { useEffect, useRef, useSyncExternalStore } from "react";
 
 import { Button } from "@/components/ui/button";
 import { googleAnalyticsId } from "@/lib/google-analytics";
-import { GA_CONSENT_COOKIE } from "@/lib/google-analytics";
 import { clarityProjectId } from "@/lib/microsoft-clarity";
-import { CONSENT_COOKIE, metaPixelId, pixel, PIXEL_QUEUE_COOKIE, type QueuedPixel } from "@/lib/meta-pixel";
+import { CONSENT_COOKIE, metaPixelId, pixel, PIXEL_QUEUE_COOKIE, trackingAllowed, type QueuedPixel } from "@/lib/meta-pixel";
 
 /** "Ver publicación": the web button and the alert redirect both leave the site through these. */
 const OUTBOUND = /^\/(app\/listings\/\d+\/out|r\/\d+)(\?|$)/;
 const CONSENT_EVENT = "ads-consent";
 
-type Consent = "granted" | "denied" | null;
+type Choice = "granted" | "denied";
 
-function readConsent(): Consent {
-  const value = document.cookie.split("; ").find((c) => c.startsWith(`${CONSENT_COOKIE}=`))?.split("=")[1];
-  return value === "granted" || value === "denied" ? value : null;
+/** "Cambiar preferencias de cookies" was clicked: the banner is back, the current choice stays until a new one. */
+let reopened = false;
+
+function readAllowed(): boolean {
+  return trackingAllowed(document.cookie);
+}
+
+/** Until the visitor picks, the banner stays up (and tracking runs, see trackingAllowed). */
+function readBanner(): boolean {
+  return reopened || !document.cookie.split("; ").some((c) => c.startsWith(`${CONSENT_COOKIE}=`));
 }
 
 function subscribe(onChange: () => void) {
@@ -27,14 +33,10 @@ function subscribe(onChange: () => void) {
   return () => window.removeEventListener(CONSENT_EVENT, onChange);
 }
 
-function setConsent(value: Consent) {
-  document.cookie = value
-    ? `${CONSENT_COOKIE}=${value}; path=/; max-age=${365 * 86_400}; samesite=lax`
-    : `${CONSENT_COOKIE}=; path=/; max-age=0`;
-  if (value !== "granted") document.cookie = `${PIXEL_QUEUE_COOKIE}=; path=/; max-age=0`;
-  document.cookie = value === "granted"
-    ? `${GA_CONSENT_COOKIE}=granted; path=/; max-age=${365 * 86_400}; samesite=lax`
-    : `${GA_CONSENT_COOKIE}=; path=/; max-age=0; samesite=lax`;
+function setConsent(value: Choice) {
+  reopened = false;
+  document.cookie = `${CONSENT_COOKIE}=${value}; path=/; max-age=${365 * 86_400}; samesite=lax`;
+  if (value === "denied") document.cookie = `${PIXEL_QUEUE_COOKIE}=; path=/; max-age=0`;
   // Already loaded on this page: the snippet doesn't run twice, so switch it directly.
   (window as unknown as { fbq?: (...a: unknown[]) => void }).fbq?.("consent", value === "granted" ? "grant" : "revoke");
   window.dispatchEvent(new Event(CONSENT_EVENT));
@@ -44,7 +46,14 @@ function setConsent(value: Consent) {
 export function ConsentSettings() {
   if (!metaPixelId && !googleAnalyticsId && !clarityProjectId) return null;
   return (
-    <Button variant="outline" size="sm" onClick={() => setConsent(null)}>
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={() => {
+        reopened = true;
+        window.dispatchEvent(new Event(CONSENT_EVENT));
+      }}
+    >
       Cambiar preferencias de cookies
     </Button>
   );
@@ -63,14 +72,14 @@ function flushQueue() {
 }
 
 /**
- * Meta Pixel base code, on every page. Until the visitor accepts the banner it
- * runs with consent revoked (fbq('consent', 'revoke')): installed, but sending
- * nothing. The snippet's PageView covers the load; client navigations fire
- * their own, since the App Router never reloads the page.
+ * Meta Pixel base code, on every page. Consent is granted by default; once the
+ * visitor rejects the banner it runs with consent revoked (fbq('consent',
+ * 'revoke')): installed, but sending nothing. The snippet's PageView covers the
+ * load; client navigations fire their own, since the App Router never reloads the page.
  */
 export function MetaPixel() {
-  const consent = useSyncExternalStore(subscribe, readConsent, () => "denied" as Consent);
-  const granted = consent === "granted";
+  const granted = useSyncExternalStore(subscribe, readAllowed, () => false);
+  const banner = useSyncExternalStore(subscribe, readBanner, () => false);
   const pathname = usePathname();
   const first = useRef(true);
 
@@ -111,10 +120,10 @@ export function MetaPixel() {
 n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
 n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];
 s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
-fbq('consent',/(^|; )${CONSENT_COOKIE}=granted/.test(document.cookie)?'grant':'revoke');
+fbq('consent',/(^|; )${CONSENT_COOKIE}=denied/.test(document.cookie)?'revoke':'grant');
 fbq('init','${metaPixelId}');fbq('track','PageView');`}
       </Script> : null}
-      {consent === null ? <ConsentBanner /> : null}
+      {banner ? <ConsentBanner /> : null}
     </>
   );
 }

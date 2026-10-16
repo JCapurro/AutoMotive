@@ -25,10 +25,13 @@ export function capiEnabled(): boolean {
   return Boolean(metaPixelId && process.env.META_CAPI_TOKEN);
 }
 
-/** At checkout start (a Server Action): what Meta needs to match the later Purchase to the ad click. */
+/**
+ * At checkout start (a Server Action): what Meta needs to match the later
+ * Purchase to the ad click. Granted unless the visitor rejected the banner.
+ */
 export async function readAttribution(): Promise<AdAttribution> {
   const [store, h] = await Promise.all([cookies(), headers()]);
-  if (store.get(CONSENT_COOKIE)?.value !== "granted") return { consent: false };
+  if (store.get(CONSENT_COOKIE)?.value === "denied") return { consent: false };
   const ip = (h.get("x-forwarded-for") ?? "").split(",")[0].trim() || h.get("x-real-ip") || undefined;
   return {
     consent: true,

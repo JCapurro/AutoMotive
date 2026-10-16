@@ -1,7 +1,7 @@
+import { trackingAllowed } from "@/lib/meta-pixel";
+
 /** Google Analytics 4 measurement ID. Empty outside explicitly configured environments. */
 export const googleAnalyticsId = process.env.NEXT_PUBLIC_GA4_ID ?? "";
-
-export const GA_CONSENT_COOKIE = "analytics_consent";
 
 export type AnalyticsValue =
   | string
@@ -24,7 +24,8 @@ export function analyticsAllowed(): boolean {
   return Boolean(googleAnalyticsId && hasAnalyticsConsent());
 }
 
+/** Same banner as the pixel: on unless the visitor rejected it. */
 export function hasAnalyticsConsent(): boolean {
   if (typeof document === "undefined") return false;
-  return document.cookie.split("; ").some((cookie) => cookie === `${GA_CONSENT_COOKIE}=granted`);
+  return trackingAllowed(document.cookie);
 }

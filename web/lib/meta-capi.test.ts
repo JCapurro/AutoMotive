@@ -70,6 +70,19 @@ it("sends nothing without consent, without a token or when already sent", async 
   expect(fetchMock).not.toHaveBeenCalled();
 });
 
+it("reads the ad attribution by default and drops it once the visitor rejects the banner", async () => {
+  const { cookies, headers } = await import("next/headers");
+  const { readAttribution } = await import("./meta-capi");
+  const jar = (values: Record<string, string>) => ({ get: (name: string) => (name in values ? { value: values[name] } : undefined) });
+  vi.mocked(headers).mockResolvedValue(new Headers({ "x-forwarded-for": "190.0.0.1", "user-agent": "UA" }) as never);
+
+  vi.mocked(cookies).mockResolvedValue(jar({ _fbp: "fb.1.1.2" }) as never);
+  expect(await readAttribution()).toMatchObject({ consent: true, fbp: "fb.1.1.2", ip: "190.0.0.1", ua: "UA" });
+
+  vi.mocked(cookies).mockResolvedValue(jar({ ads_consent: "denied", _fbp: "fb.1.1.2" }) as never);
+  expect(await readAttribution()).toEqual({ consent: false });
+});
+
 it("releases the claim when Meta fails, so reconciliation retries", async () => {
   fetchMock.mockResolvedValue({ ok: false, status: 500 });
   const error = vi.spyOn(console, "error").mockImplementation(() => {});

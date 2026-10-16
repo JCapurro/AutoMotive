@@ -4,16 +4,10 @@ import Script from "next/script";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useSyncExternalStore } from "react";
 
-import { GA_CONSENT_COOKIE, googleAnalyticsId, hasAnalyticsConsent } from "@/lib/google-analytics";
+import { googleAnalyticsId, hasAnalyticsConsent } from "@/lib/google-analytics";
 import { CONSENT_COOKIE } from "@/lib/meta-pixel";
 
 const CONSENT_EVENT = "ads-consent";
-type Consent = "granted" | "denied" | null;
-
-function readConsent(): Consent {
-  const value = document.cookie.split("; ").find((cookie) => cookie.startsWith(`${CONSENT_COOKIE}=`))?.split("=")[1];
-  return value === "granted" || value === "denied" ? value : null;
-}
 
 function subscribe(onChange: () => void) {
   window.addEventListener(CONSENT_EVENT, onChange);
@@ -39,25 +33,18 @@ function RouteTracking() {
   return null;
 }
 
-/** GA4 uses the same explicit cookie choice as the existing analytics consent banner. */
+/** GA4 follows the cookie banner: on by default, off once the visitor rejects it. */
 export function GoogleAnalytics() {
-  const consent = useSyncExternalStore(subscribe, readConsent, () => "denied" as Consent);
+  const granted = useSyncExternalStore(subscribe, hasAnalyticsConsent, () => false);
   const pathname = usePathname();
 
   useEffect(() => {
     if (!googleAnalyticsId || pathname.startsWith("/auth/")) return;
     const gtag = (window as unknown as { gtag?: (...args: unknown[]) => void }).gtag;
-    const granted = consent === "granted";
-    if (gtag) gtag("consent", "update", {
-      analytics_storage: granted ? "granted" : "denied",
-      ad_storage: granted ? "granted" : "denied",
-      ad_user_data: granted ? "granted" : "denied",
-      ad_personalization: granted ? "granted" : "denied",
-    });
-    document.cookie = granted
-      ? `${GA_CONSENT_COOKIE}=granted; path=/; max-age=${365 * 86_400}; samesite=lax`
-      : `${GA_CONSENT_COOKIE}=; path=/; max-age=0; samesite=lax`;
-  }, [consent, pathname]);
+    // The live cookie, not the hydration snapshot (false on the server): a default grant isn't briefly revoked.
+    const state = hasAnalyticsConsent() ? "granted" : "denied";
+    gtag?.("consent", "update", { analytics_storage: state, ad_storage: state, ad_user_data: state, ad_personalization: state });
+  }, [granted, pathname]);
 
   if (!googleAnalyticsId || pathname.startsWith("/auth/")) return null;
   return (
@@ -65,7 +52,8 @@ export function GoogleAnalytics() {
       <Script src={`https://www.googletagmanager.com/gtag/js?id=${googleAnalyticsId}`} strategy="afterInteractive" />
       <Script id="google-analytics" strategy="afterInteractive">
         {`window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}window.gtag=gtag;
-gtag('consent','default',{analytics_storage:'denied',ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied'});
+{const c=/(^|; )${CONSENT_COOKIE}=denied/.test(document.cookie)?'denied':'granted';
+gtag('consent','default',{analytics_storage:c,ad_storage:c,ad_user_data:c,ad_personalization:c});}
 gtag('js',new Date());gtag('config','${googleAnalyticsId}',{send_page_view:false});`}
       </Script>
       <Suspense fallback={null}><RouteTracking /></Suspense>

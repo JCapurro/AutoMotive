@@ -3,11 +3,11 @@
 import { usePathname } from "next/navigation";
 import { useEffect, useSyncExternalStore } from "react";
 
-import { CONSENT_COOKIE } from "@/lib/meta-pixel";
+import { trackingAllowed } from "@/lib/meta-pixel";
 import { clarityProjectId, syncClarityConsent } from "@/lib/microsoft-clarity";
 
 function readConsent(): boolean {
-  return document.cookie.split(";").some((cookie) => cookie.trim() === `${CONSENT_COOKIE}=granted`);
+  return trackingAllowed(document.cookie);
 }
 
 function subscribe(onChange: () => void) {
@@ -15,7 +15,7 @@ function subscribe(onChange: () => void) {
   return () => window.removeEventListener("ads-consent", onChange);
 }
 
-/** Load the supplied Clarity tag only after the visitor accepts analytics. */
+/** Load the supplied Clarity tag unless the visitor rejected analytics. */
 export function MicrosoftClarity() {
   const consent = useSyncExternalStore(subscribe, readConsent, () => false);
   const pathname = usePathname();

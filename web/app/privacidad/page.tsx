@@ -11,7 +11,7 @@ export const metadata: Metadata = { title: "Política de privacidad" };
 // before a public launch.
 export default function PrivacyPage() {
   return (
-    <LegalPage title="Política de privacidad" updated="15 de octubre de 2026">
+    <LegalPage title="Política de privacidad" updated="16 de octubre de 2026">
       <p>
         Ese Auto es un servicio en etapa de piloto que monitorea publicaciones de autos usados y te avisa cuando
         aparece una que coincide con tu búsqueda. Esta política explica qué datos tuyos usamos, para qué y cómo
@@ -76,11 +76,11 @@ export default function PrivacyPage() {
         <li>Mercado Pago procesa los cobros. Recibe el email indicado y una referencia de la contratación. Guardamos importes, fechas, estado e identificadores del pago para verificar tu acceso; no guardamos números de tarjeta ni códigos de seguridad.</li>
         <li>Resend, que envía los emails (tu dirección y el contenido de la alerta).</li>
         <li>
-          Meta (Facebook e Instagram), solo si aceptás sus cookies: las páginas que visitás acá y las acciones que
+          Meta (Facebook e Instagram), salvo que rechaces sus cookies: las páginas que visitás acá y las acciones que
           medimos (ver Cookies), sin tu email ni el contenido de tus búsquedas.
         </li>
-        <li>Google Analytics 4, solo si aceptás las cookies de análisis: páginas visitadas y eventos de uso como búsquedas, favoritos y contratación, sin el texto ni los filtros de tus búsquedas.</li>
-        <li>Microsoft Clarity, solo si aceptás las cookies de análisis: mapas de calor y grabaciones de las interacciones con el sitio para detectar dificultades de uso. El contenido de los campos de los formularios se oculta en las grabaciones.</li>
+        <li>Google Analytics 4, salvo que rechaces las cookies de análisis: páginas visitadas y eventos de uso como búsquedas, favoritos y contratación, sin el texto ni los filtros de tus búsquedas.</li>
+        <li>Microsoft Clarity, salvo que rechaces las cookies de análisis: mapas de calor y grabaciones de las interacciones con el sitio para detectar dificultades de uso. El contenido de los campos de los formularios se oculta en las grabaciones.</li>
         <li>
           OpenAI, que interpreta el texto del modo asistido. Recibe ese texto y las opciones del catálogo necesarias
           para convertirlo en filtros, sin tu email ni los identificadores de tu cuenta.
@@ -96,18 +96,19 @@ export default function PrivacyPage() {
 
       <h2 id="cookies">Cookies</h2>
       <p>
-        Usamos cookies propias para mantener tu sesión iniciada. Si las aceptás en el aviso de cookies, también usamos
+        Usamos cookies propias para mantener tu sesión iniciada. Salvo que las rechaces en el aviso de cookies, también usamos
         Google Analytics 4 para medir visitas y acciones de uso, y el Pixel de Meta (Facebook e Instagram) para medir si nuestros anuncios
         funcionan: registra las páginas que visitás acá y acciones como dejar tu email para crear una búsqueda,
         crear una cuenta, guardar una búsqueda o una publicación, o iniciar la contratación de un plan. Google Analytics no recibe el texto ni los filtros de tus búsquedas. Cuando un pago se aprueba, se lo informamos
         a Meta desde nuestro servidor con el plan, el importe, un identificador cifrado de tu cuenta, tu dirección IP,
         tu navegador y los identificadores de esas cookies. No le mandamos tu email, tus búsquedas ni otros datos de
-        tu cuenta. Mientras no las aceptes, o si las rechazás, el Pixel no le envía datos a Meta y tampoco le informamos los pagos.
+        tu cuenta. Estas cookies están activas desde que entrás al sitio; si las rechazás, el Pixel deja de enviarle
+        datos a Meta y tampoco le informamos los pagos.
       </p>
       <ConsentSettings />
       <p>
-        Microsoft Clarity también se activa al aceptar las cookies de análisis. Nos permite ver clics,
-        desplazamientos y recorridos por las páginas. No lo cargamos antes de aceptar ni en las páginas de
+        Microsoft Clarity también se activa salvo que rechaces las cookies de análisis. Nos permite ver clics,
+        desplazamientos y recorridos por las páginas. No lo cargamos si las rechazaste ni en las páginas de
         confirmación y recuperación de acceso. Si cambiás tus preferencias y retirás el consentimiento, detenemos
         la grabación.
       </p>

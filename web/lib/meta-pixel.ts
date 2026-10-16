@@ -10,9 +10,18 @@ export const PIXEL_QUEUE_COOKIE = "px_q";
 /**
  * The visitor's answer to the cookie banner: "granted" or "denied". A cookie,
  * not localStorage, so the server can respect it (Conversions API, see
- * lib/meta-capi.ts). Without "granted" the pixel never loads.
+ * lib/meta-capi.ts). Meta, GA4 and Clarity all read it.
  */
 export const CONSENT_COOKIE = "ads_consent";
+
+/**
+ * Consent is granted by default: no answer yet counts as "granted", and only
+ * "Rechazar" (ads_consent=denied) turns Meta, GA4 and Clarity off. Takes
+ * document.cookie (the server side, lib/meta-capi.ts, checks the same value).
+ */
+export function trackingAllowed(cookie: string): boolean {
+  return !cookie.split(";").some((c) => c.trim() === `${CONSENT_COOKIE}=denied`);
+}
 
 /** Standard events Meta optimizes on, plus our own (trackCustom). */
 export type PixelEvent =
