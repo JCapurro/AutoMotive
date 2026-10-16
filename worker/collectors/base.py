@@ -2,6 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass, asdict, field
 from typing import Any
 
+from normalization import body_type
 from normalization.price_check import keyword_partial
 from ._http import Page, slim_html
 
@@ -27,6 +28,11 @@ class Listing:
     ubicacion: str | None = None
     combustible: str | None = None
     transmision: str | None = None
+    # The source's body type: its own label ("Pick-up B", "452759", a Kavak
+    # slug) or already a code of normalization/body_type.py, which maps it.
+    # A body-type target sets the code only when the source confirms the
+    # filter was applied.
+    carroceria: str | None = None
     vendedor: str | None = None
     # When the platform exposes how recently the ad was posted, store it as
     # a unix timestamp. None = unknown; consumers use the immutable first_seen_at
@@ -91,6 +97,9 @@ class BaseScraper:
     # Bump when parse_detail() changes what it reads: tools/reprocess.py --raw
     # --outdated re-parses the raw_pages stored with an older version.
     DETAIL_PARSER_VERSION: int = 1
+    # Body-type codes this collector can search without a make or model
+    # (search() gets filters["carroceria"] and no "marca"/"modelo").
+    BODY_TYPES: frozenset[str] = frozenset()
 
     async def search(self, filters: dict) -> list[Listing]:
         raise NotImplementedError
@@ -152,6 +161,18 @@ class BaseScraper:
                 return False
         if (t := f.get("transmision")) and item.transmision:
             if t.lower() not in item.transmision.lower():
+                return False
+        if wanted := f.get("carroceria"):
+            # As intelligence/matching.py: an unknown body type passes within
+            # a model, never in a search by body type alone.
+            wanted = {wanted} if isinstance(wanted, str) else set(wanted)
+            source = item.carroceria or body_type.raw_from_attributes(item.atributos)
+            have, _, _ = body_type.resolve(item.marca, item.modelo, (), source, item.version,
+                                           item.titulo, item.url, listing_source=item.source)
+            if have is None:
+                if not any(f.get(k) for k in ("marca", "modelo", "marcas", "modelos")):
+                    return False
+            elif have not in wanted:
                 return False
         if (u := f.get("ubicacion")) and item.ubicacion:
             if u.lower() not in item.ubicacion.lower():

@@ -21,21 +21,22 @@ _fetched_at = 0.0
 
 
 async def load_models(cx: AsyncConnection) -> list[CatalogModel]:
-    """Model-level rows with their trims, aliases and production years."""
+    """Model-level rows with their trims, aliases, production years and body types."""
     global _models, _fetched_at
     if not _models or time.monotonic() - _fetched_at > _TTL_SECONDS:
         rows = await (await cx.execute(
-            "SELECT m.make, m.model, m.aliases, m.year_from, m.year_to, "
+            "SELECT m.make, m.model, m.aliases, m.year_from, m.year_to, m.body_types, "
             "       coalesce(array_agg(t.trim ORDER BY t.trim) FILTER (WHERE t.trim IS NOT NULL), "
             "                '{}') AS trims "
             "  FROM vehicle_catalog m "
             "  LEFT JOIN vehicle_catalog t ON t.make = m.make AND t.model = m.model "
             "                             AND t.trim IS NOT NULL "
             " WHERE m.trim IS NULL "
-            " GROUP BY m.make, m.model, m.aliases, m.year_from, m.year_to"
+            " GROUP BY m.make, m.model, m.aliases, m.year_from, m.year_to, m.body_types"
         )).fetchall()
         _models = [CatalogModel(r["make"], r["model"], tuple(r["aliases"]), tuple(r["trims"]),
-                                r["year_from"], r["year_to"]) for r in rows]
+                                r["year_from"], r["year_to"], tuple(r["body_types"] or ()))
+                   for r in rows]
         _fetched_at = time.monotonic()
     return _models
 

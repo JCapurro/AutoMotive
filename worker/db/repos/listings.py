@@ -18,7 +18,7 @@ Key = tuple[str, str]
 # Columns the pipeline writes; id, first_seen_at, last_seen_at and status are managed here.
 COLUMNS = ("source", "external_id", "url", "title", "description", "make", "model", "trim",
            "year", "price", "currency", "price_usd", "mileage_km", "transmission", "fuel",
-           "location_text", "lat", "lon", "seller_name", "seller_type", "images", "attributes",
+           "body_type", "location_text", "lat", "lon", "seller_name", "seller_type", "images", "attributes",
            "published_at", "price_partial", "price_partial_reason", "normalization_confidence",
            "fingerprint", "probable_repost_of", "price_published", "price_published_currency",
            "price_source", "description_facts")
@@ -218,6 +218,41 @@ async def recent_active(make: str | None, model: str | None, *, days: int,
         params.append(sources)
     async with connection() as cx:
         rows = await (await cx.execute(sql + " ORDER BY first_seen_at DESC", params)).fetchall()
+    return [_pythonic(r) for r in rows]
+
+
+async def recent_active_by_body(body_types: list[str], *, days: int, sources: list[str] | None = None,
+                                year_min: int | None = None, year_max: int | None = None,
+                                km_max: int | None = None, price_max: float | None = None,
+                                currency: str = "USD", fx_rate: float | None = None) -> list[dict]:
+    """Active listings of these body types seen in the last `days`, for the
+    rematch of a search without a model (docs/CARROCERIA.md), on
+    listings_body_type_active_idx. A body type has thousands of listings and
+    scoring each costs a comparables() call, so what intelligence/matching.py
+    would discard is left out here: a year outside [year_min, year_max], km
+    above km_max, a price above `price_max` (in `currency`, converted the way
+    matching.price_in does with `fx_rate`) and partial prices, like
+    preview_search: scoring excludes those from every match (a batch never
+    matches them either, intelligence/scoring.py). Unknown values pass."""
+    async with connection() as cx:
+        rows = await (await cx.execute(
+            "SELECT l.* FROM listings l CROSS JOIN LATERAL (SELECT CASE "
+            "    WHEN l.price IS NULL OR l.price <= 0 THEN NULL "
+            "    WHEN coalesce(nullif(upper(l.currency), ''), %(currency)s) = %(currency)s THEN l.price "
+            "    WHEN %(currency)s = 'USD' THEN coalesce(nullif(l.price_usd, 0), l.price / %(fx)s::numeric) "
+            "    ELSE l.price * %(fx)s::numeric END AS value) p "
+            " WHERE l.status = 'active' AND l.body_type = ANY(%(body_types)s) "
+            "   AND l.last_seen_at >= now() - make_interval(days => %(days)s) "
+            "   AND NOT l.price_partial "
+            "   AND (%(sources)s::text[] IS NULL OR l.source = ANY(%(sources)s)) "
+            "   AND (%(year_min)s::int IS NULL OR l.year IS NULL OR l.year >= %(year_min)s) "
+            "   AND (%(year_max)s::int IS NULL OR l.year IS NULL OR l.year <= %(year_max)s) "
+            "   AND (%(km_max)s::int IS NULL OR l.mileage_km IS NULL OR l.mileage_km <= %(km_max)s) "
+            "   AND (%(price_max)s::numeric IS NULL OR p.value IS NULL OR p.value <= %(price_max)s) "
+            " ORDER BY l.first_seen_at DESC",
+            {"body_types": list(body_types), "days": days, "sources": list(sources) if sources else None,
+             "year_min": year_min, "year_max": year_max, "km_max": km_max, "price_max": price_max,
+             "currency": currency.upper(), "fx": fx_rate})).fetchall()
     return [_pythonic(r) for r in rows]
 
 

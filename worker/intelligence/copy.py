@@ -8,6 +8,8 @@ FORBIDDEN_TERMS and must not appear in any template.
 """
 from __future__ import annotations
 
+from normalization import body_type
+
 
 # §19: "vale exactamente", "precio real", "tasación oficial" — and their stems.
 FORBIDDEN_TERMS = ("vale", "valor real", "precio real", "tasacion", "tasación", "tasado")
@@ -52,6 +54,9 @@ REASON = {
     "km_under": "{km} < {floor}",
     "transmission_other": "es {actual}, se busca {wanted}",
     "fuel_other": "es {actual}, se busca {wanted}",
+    "body_type_other": "es {actual}, se busca {wanted}",
+    "body_type_unknown": "la publicación no informa la carrocería",
+    "no_vehicle": "la búsqueda no tiene modelo ni carrocería",
     "distance": "{place} · {km} km",
     "distance_over": "{place} · {km} km (máximo {radius} km)",
     "no_coords": "no se pudo ubicar la publicación",
@@ -64,6 +69,8 @@ REASON = {
     "color_other": "color {color}, se prefiere {wanted}",
 }
 TRANSMISSION = {"manual": "manual", "automatic": "automática"}
+# Sedán, Hatchback, SUV, Pick-up…: the one list of normalization/body_type.py.
+BODY_TYPE = dict(body_type.LABELS)
 SELLER = {"private": "particular", "dealer": "concesionaria"}
 UNKNOWN_BADGE = "❔ no informado"
 
@@ -94,8 +101,8 @@ EXPLAIN = {
 }
 # Hard-filter names in "transmisión no informada".
 FILTER_NAMES = {"model": "modelo", "year": "año", "price": "precio", "km": "km",
-                "transmission": "transmisión", "fuel": "combustible", "location": "ubicación",
-                "trim": "versión"}
+                "transmission": "transmisión", "fuel": "combustible", "body_type": "carrocería",
+                "location": "ubicación", "trim": "versión"}
 
 LEVEL_LABEL = {"high": "🔥 Alta oportunidad", "good": "🟢 Buena coincidencia",
                "match": "🟡 Coincidencia", "low": "⚪ Baja prioridad"}

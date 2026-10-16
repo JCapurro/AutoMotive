@@ -27,6 +27,9 @@ class CatalogModel:
     trims: tuple[str, ...] = ()
     year_from: int | None = None
     year_to: int | None = None
+    # vehicle_catalog.body_types: the model's possible body types, most
+    # common first; a single one is certain (normalization/body_type.py).
+    body_types: tuple[str, ...] = ()
 
     def names(self) -> list[str]:
         return [normalize_text(self.model), *(normalize_text(a) for a in self.aliases)]

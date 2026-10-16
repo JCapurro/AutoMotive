@@ -5,7 +5,8 @@ Read again what is already stored, without asking the sources (normalization v3)
         Recompute description_facts and the effective price of every listing
         with a description, from the text already stored: the backfill of the
         listings stored before the description counted (they have no raw
-        page). Year, km, transmission and fuel are filled where missing.
+        page). Year, km, transmission and fuel are filled where missing, and
+        the body type from the title, version and attributes (never the text).
         --llm: ask the LLM for the descriptions the rules find ambiguous
         (within app_config.description_facts.llm_daily_cap).
 
@@ -34,6 +35,7 @@ from db.repos.catalog import load_models
 from db.repos.fx import quote_for_today
 from intelligence.copy import money
 from normalization.description_facts import DescriptionFacts, parse, resolve_price
+from normalization.listing import stored_body_type
 from normalization.price_check import keyword_partial
 from normalization.vehicle import CatalogModel, resolve_trim
 from pipeline.enrich import DescriptionLLM, ingest_detail, rescore_changed
@@ -85,6 +87,13 @@ def recompute(row: dict[str, Any], facts: DescriptionFacts | None, *,
             attrs = dict(row.get("attributes") or {})
             attrs["_description_filled"] = list(dict.fromkeys([*attrs.get("_description_filled", []), *filled]))
             new["attributes"] = attrs
+    if not row.get("body_type"):
+        # Never from the description: from the title, the version, the
+        # source's value and the catalog (normalization/body_type.py).
+        code, how = stored_body_type(row, catalog or [])
+        if code:
+            new["body_type"] = code
+            new["attributes"] = {**(new.get("attributes") or row.get("attributes") or {}), "_body_type": how}
     return {k: v for k, v in new.items() if v != row.get(k)}
 
 
@@ -103,7 +112,7 @@ def _line(row: dict[str, Any], changed: dict[str, Any]) -> str:
     if check.get("mismatch"):
         m = check["mismatch"]
         notes.append(f"otro precio en la descripción: {money(m['amount'], m['currency'])}")
-    filled = [c for c in ("year", "mileage_km", "transmission", "fuel") if c in changed]
+    filled = [c for c in ("year", "mileage_km", "transmission", "fuel", "body_type") if c in changed]
     if filled:
         notes.append("completa " + ", ".join(filled))
     return f"#{row['id']:<6} {row['source']:<12} " + " · ".join(notes)

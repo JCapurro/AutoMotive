@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from collectors.base import Listing
+from normalization import body_type
 from normalization import transmission as tx
 from normalization.description_facts import DescriptionFacts, parse as parse_facts, resolve_price
 from normalization.fx import FxQuote
@@ -25,16 +26,23 @@ _CURRENCIES = {"USD": "USD", "U$S": "USD", "US$": "USD", "U$D": "USD", "ARS": "A
 
 # Columns whose change is an 'attrs' snapshot (sección 5.3, "hash(attrs clave)").
 # published_at is left out on purpose: relative dates ("hace 3 días") drift a
-# little on every crawl.
+# little on every crawl. body_type too: filling it in is no news about the car
+# (docs/CARROCERIA.md).
 KEY_ATTRS = ("title", "make", "model", "trim", "year", "transmission", "fuel",
              "location_text", "seller_type", "seller_name")
 
 
 @dataclass(frozen=True)
 class Target:
-    """The crawl target a card was found through: a hint, never the truth."""
+    """The crawl target a card was found through: a hint, never the truth.
+
+    `body_type` is set on a target by body type (no make or model). It never
+    becomes the listing's body type by itself: the collector puts the code in
+    Listing.carroceria only when the source confirms the filter was applied.
+    """
     make: str | None = None
     model: str | None = None
+    body_type: str | None = None
 
 
 def _hash(value: Any) -> str:
@@ -77,6 +85,26 @@ def price_usd(price: float | None, currency: str | None, fx: FxQuote | None) -> 
     return None
 
 
+def catalog_entry(catalog: list[CatalogModel], make: str | None,
+                  model: str | None) -> CatalogModel | None:
+    return next((m for m in catalog if m.make == make and m.model == model), None)
+
+
+def stored_body_type(row: dict[str, Any], catalog: list[CatalogModel]) -> tuple[str | None, dict[str, Any]]:
+    """normalize_listing's body type for a stored `listings` row, from what it
+    kept: the title, the URL, and in `attributes` the version and the source's
+    value (Listing.carroceria or the page's own attribute).
+    Returns (code or None, attributes._body_type)."""
+    attrs = row.get("attributes") or {}
+    entry = catalog_entry(catalog, row.get("make"), row.get("model"))
+    code, method, raw = body_type.resolve(
+        row.get("make"), row.get("model"), entry.body_types if entry else (),
+        attrs.get("carroceria") or body_type.raw_from_attributes(attrs),
+        attrs.get("version") or row.get("trim"), row.get("title"), row.get("url"),
+        doors_value=attrs.get("Puertas"), listing_source=row.get("source"))
+    return code, {"method": method, "raw": raw}
+
+
 def listing_facts(item: Listing, *, now_year: int | None = None) -> DescriptionFacts | None:
     """What the item's title and description state, or what the LLM already
     read from them (item.extra["description_facts"], pipeline/enrich.py)."""
@@ -96,6 +124,7 @@ def normalize_listing(item: Listing, *, catalog: list[CatalogModel], target: Tar
     say the published number is a list price (the cash one wins) or a down
     payment (the total wins). The published number goes to price_published.
     Year, km, transmission and fuel fall back to what the description says.
+    The body type never does (docs/CARROCERIA.md): see normalization/body_type.py.
     """
     target = target or Target()
     vehicle = resolve_vehicle(
@@ -103,24 +132,30 @@ def normalize_listing(item: Listing, *, catalog: list[CatalogModel], target: Tar
         source_version=item.version, target_make=target.make, target_model=target.model,
         year=item.anio,
     )
+    entry = catalog_entry(catalog, vehicle.make, vehicle.model)
     raw_currency = (item.moneda or "").strip().upper() or None
     currency = _CURRENCIES.get(raw_currency) if raw_currency else None
     facts = listing_facts(item, now_year=datetime.now(timezone.utc).year)
     # A version mentioned only in the description may fill a missing trim,
     # but must match the resolved model's catalog. Never replace a page/title trim.
     described_trim = None
-    if facts and not vehicle.trim and facts.claims.get("trim"):
-        model = next((m for m in catalog if m.make == vehicle.make and m.model == vehicle.model), None)
-        if model:
-            described_trim = resolve_trim(model, facts.claims["trim"])
+    if facts and not vehicle.trim and facts.claims.get("trim") and entry:
+        described_trim = resolve_trim(entry, facts.claims["trim"])
 
     attributes: dict[str, Any] = dict(item.atributos)
-    for key, value in (("transmision", item.transmision), ("vendedor", item.vendedor),
+    for key, value in (("transmision", item.transmision), ("carroceria", item.carroceria),
+                       ("vendedor", item.vendedor),
                        ("moneda", item.moneda), ("version", item.version),
                        ("marca", item.marca), ("modelo", item.modelo)):
         if value:
             attributes.setdefault(key, value)
     attributes["_normalization"] = {"method": vehicle.method, "notes": list(vehicle.notes)}
+    body, body_method, body_raw = body_type.resolve(
+        vehicle.make, vehicle.model, entry.body_types if entry else (),
+        item.carroceria or body_type.raw_from_attributes(item.atributos),
+        item.version, item.titulo, item.url, doors_value=item.atributos.get("Puertas"),
+        listing_source=item.source)
+    attributes["_body_type"] = {"method": body_method, "raw": body_raw}
     described = {
         "year": not item.anio,
         "mileage_km": item.km is None,
@@ -158,6 +193,7 @@ def normalize_listing(item: Listing, *, catalog: list[CatalogModel], target: Tar
         "transmission": tx.transmission(item.transmision, item.version, item.titulo)
                         or (facts.transmission if facts else None),
         "fuel": tx.fuel(item.combustible, item.version, item.titulo) or (facts.fuel if facts else None),
+        "body_type": body,
         "location_text": item.ubicacion or None,
         "seller_name": item.vendedor_nombre or None,
         "seller_type": tx.seller_type(item.vendedor),

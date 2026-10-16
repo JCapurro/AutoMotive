@@ -4,7 +4,8 @@
 one reason per filter — `ok`, `fail` or `unknown` — plus one per soft
 preference. A hard `fail` means no match (None). `unknown` never discards
 (the listing may not say its transmission yet, enrichment may fill it) but
-lowers the score's match component.
+lowers the score's match component. The exception is the body type of a
+search without a model (docs/CARROCERIA.md): unknown there is a `fail`.
 
 `listing` is a row of `listings`; `profile` a row of `search_profiles`
 (filters and preferences as in sección 4.3, plus origin_* / radius_km).
@@ -109,10 +110,40 @@ def _range_detail(value: float, lo: float | None, hi: float | None, fmt) -> tupl
     return OK, copy.REASON["km_ok"].format(km=shown, cap=fmt(hi)) if hi is not None else shown
 
 
+# POSIX [[:space:]], what search_is_model_less trims.
+_SPACE = " \t\n\r\f\v"
+
+
+def _absent(value: Any) -> bool:
+    return value is None or (isinstance(value, str) and not value.strip(_SPACE))
+
+
+def model_less(f: Mapping[str, Any]) -> bool:
+    """A search by body type alone (docs/CARROCERIA.md): no make, no model.
+    The database's search_is_model_less rule: missing, null or a blank string
+    is none; anything else (a non-blank string, or a number, boolean or list
+    the database rejects as invalid_filters) is a vehicle."""
+    return _absent(f.get("make")) and _absent(f.get("model"))
+
+
+def wanted_body_types(f: Mapping[str, Any]) -> list[str]:
+    wanted = f.get("body_types") or []
+    return [wanted] if isinstance(wanted, str) else [b for b in wanted if b]
+
+
+def malformed_vehicle(f: Mapping[str, Any]) -> bool:
+    """A make or model that is neither none nor text: the database rejects it
+    (invalid_filters), and a row from before that check matches nothing."""
+    return any(v is not None and not isinstance(v, str) for v in (f.get("make"), f.get("model")))
+
+
 def _model(listing, f) -> Reason | None:
     make, model = f.get("make"), f.get("model")
-    if not make and not model:
-        return None
+    if malformed_vehicle(f):
+        return Reason(FAIL, copy.REASON["no_vehicle"])
+    if model_less(f):
+        # Without a vehicle and without a body type, a search would match every listing.
+        return None if wanted_body_types(f) else Reason(FAIL, copy.REASON["no_vehicle"])
     wanted = " ".join(x for x in (make, model) if x)
     l_make, l_model = listing.get("make"), listing.get("model")
     if (make and not l_make) or (model and not l_model):
@@ -184,6 +215,25 @@ def _choice(value: str | None, wanted: str | None, names: Mapping[str, str], key
     if normalize_text(wanted) not in normalize_text(value):
         return Reason(FAIL, copy.REASON[key].format(actual=shown, wanted=names.get(wanted, wanted)))
     return Reason(OK, shown)
+
+
+def _body_type(listing, f) -> Reason | None:
+    """Exact membership, never a substring. A listing without a body type is
+    `unknown` within a model (it may be filled in later) but fails a search
+    by body type alone, or "any SUV" would match every listing without one."""
+    wanted = wanted_body_types(f)
+    if not wanted:
+        return None
+    have = listing.get("body_type")
+    if not have:
+        if model_less(f):
+            return Reason(FAIL, copy.REASON["body_type_unknown"])
+        return Reason(UNKNOWN, copy.NOT_INFORMED)
+    shown = copy.BODY_TYPE.get(have, have)
+    if have in wanted:
+        return Reason(OK, shown)
+    names = " o ".join(copy.BODY_TYPE.get(b, b) for b in wanted)
+    return Reason(FAIL, copy.REASON["body_type_other"].format(actual=shown, wanted=names))
 
 
 def distance_km(listing, profile) -> float | None:
@@ -305,6 +355,7 @@ def evaluate(listing: Mapping[str, Any], profile: Mapping[str, Any], *,
         "transmission": _choice(listing.get("transmission"), f.get("transmission"),
                                 copy.TRANSMISSION, "transmission_other"),
         "fuel": _choice(listing.get("fuel"), f.get("fuel"), {}, "fuel_other"),
+        "body_type": _body_type(listing, f),
         "location": _location(listing, profile),
         "source": _source(listing, f),
         "trim": _trim(listing, profile),

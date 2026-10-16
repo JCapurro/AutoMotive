@@ -48,8 +48,8 @@ GeocodeFn = Callable[[str], Awaitable[tuple[float, float] | None]]
 # Snapshot change kinds, most important first: a snapshot row carries one.
 CHANGE_KINDS = ("price", "mileage", "description", "images", "attrs")
 
-_DESCRIPTIVE = ("title", "description", "year", "transmission", "fuel", "location_text",
-                "seller_name", "seller_type", "images")
+_DESCRIPTIVE = ("title", "description", "year", "transmission", "fuel", "body_type",
+                "location_text", "seller_name", "seller_type", "images")
 _VEHICLE = ("make", "model", "trim", "normalization_confidence")
 
 
@@ -76,6 +76,11 @@ class IngestResult:
     updated: int = 0
     events: list[ListingEvent] = field(default_factory=list)
     ids: dict[tuple[str, str], int] = field(default_factory=dict)
+    # Stored listings that got a body type in this batch, from unknown or
+    # from another one (a detail page filled or corrected it). No event says
+    # so: body_type is not a key attribute, but searches by body type alone
+    # have to see them.
+    body_type_filled: list[int] = field(default_factory=list)
 
     def extend(self, other: "IngestResult") -> None:
         self.found += other.found
@@ -83,6 +88,7 @@ class IngestResult:
         self.updated += other.updated
         self.events += other.events
         self.ids.update(other.ids)
+        self.body_type_filled += other.body_type_filled
 
 
 @dataclass(frozen=True)
@@ -205,6 +211,10 @@ def merge(existing: dict[str, Any], incoming: dict[str, Any], *,
     out["published_at"] = existing.get("published_at") or incoming.get("published_at")
     attrs_old, attrs_new = existing.get("attributes") or {}, incoming.get("attributes") or {}
     out["attributes"] = {**attrs_old, **attrs_new} if authoritative else {**attrs_new, **attrs_old}
+    # How the body type was decided follows the side whose value stood.
+    side = attrs_new if out["body_type"] == incoming.get("body_type") else attrs_old
+    if "_body_type" in side:
+        out["attributes"]["_body_type"] = side["_body_type"]
 
     # Price: the newest published value wins (cards are for that); the
     # effective one is resolved again from it and the stored facts.
@@ -238,7 +248,7 @@ def merge(existing: dict[str, Any], incoming: dict[str, Any], *,
     new_km = incoming.get("mileage_km")
     out["mileage_km"] = new_km if new_km is not None and not preserve_structured("mileage_km") else existing.get("mileage_km")
     derived = []
-    for col in ("year", "mileage_km", "transmission", "fuel", "trim"):
+    for col in ("year", "mileage_km", "transmission", "fuel", "body_type", "trim"):
         if not _empty(incoming.get(col)) and col not in new_filled and out[col] == incoming[col] and authoritative:
             continue
         if (col in new_filled and out[col] == incoming.get(col) and
@@ -344,6 +354,8 @@ async def _on_update(cx, old: dict[str, Any], row: dict[str, Any], result: Inges
     values, changes = merge(old, row, detail=detail)
     await repo.update_listing(cx, lid, values, detail=detail, seen=seen)
     result.ids[(old["source"], old["external_id"])] = lid
+    if values.get("body_type") and values.get("body_type") != old.get("body_type"):
+        result.body_type_filled.append(lid)
     if not changes:
         return
     before, after = published_view(old), published_view(values)
@@ -400,11 +412,20 @@ async def normalize_items(items: Iterable[Listing], *, target: Target | None = N
 async def ingest(items: Iterable[Listing], *, target: Target | None = None, detail: bool = False,
                  seen: bool = True,
                  geocode: GeocodeFn | None = geocode_location,
-                 config: IngestConfig | None = None) -> IngestResult:
-    """normalize → geocode → upsert. The whole batch is one transaction."""
+                 config: IngestConfig | None = None,
+                 keep: Callable[[dict[str, Any]], bool] | None = None) -> IngestResult:
+    """normalize → keep → geocode → upsert. The whole batch is one transaction.
+    `keep` (a body-type target's prefilter, pipeline/crawl.py) drops normalized
+    rows before they cost a geocode or a row; they still count as found."""
     items = list(items)
-    rows = await normalize_items(items, target=target, geocode=geocode)
-    result = await ingest_rows(rows, detail=detail, config=config or await IngestConfig.load(), seen=seen)
+    rows = await normalize_items(items, target=target, geocode=None)
+    kept = [r for r in rows if keep(r)] if keep is not None else rows
+    if dropped := len(rows) - len(kept):
+        log.info("prefilter (%s): %d of %d listings dropped", target, dropped, len(rows))
+    if geocode is not None:
+        await _geocode_rows(kept, geocode)
+    result = await ingest_rows(kept, detail=detail, config=config or await IngestConfig.load(), seen=seen)
+    result.found += dropped
     # Legacy consumers (the Telegram opportunity engine) read make/model from
     # the Listing: give them the catalog's names instead of the raw ones.
     by_key = {(r["source"], r["external_id"]): r for r in rows}
