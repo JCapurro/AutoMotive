@@ -26,9 +26,10 @@
   {
     "id": "hilux-pesos",
     "text": "Quiero una Hilux SRV 4x4 diesel automática, hasta 35 millones de pesos",
+    "llm_body_types": [],
     "drafts": [
       {"make": "Toyota", "model": "Hilux", "trim": "SRV", "fuel": "diesel", "transmission": "automatic",
-       "price_max": 35000000, "currency": "ARS"}
+       "price_max": 35000000, "currency": "ARS", "body_types": []}
     ]
   },
   {
@@ -56,9 +57,12 @@
   {
     "id": "onix-o-cronos",
     "text": "Busco un auto chico para la ciudad, un Onix o un Cronos, automático, hasta 15 millones",
+    "llm_body_types": [],
     "drafts": [
-      {"make": "Chevrolet", "model": "Onix", "transmission": "automatic", "price_max": 15000000, "currency": "ARS"},
-      {"make": "Fiat", "model": "Cronos", "transmission": "automatic", "price_max": 15000000, "currency": "ARS"}
+      {"make": "Chevrolet", "model": "Onix", "transmission": "automatic", "price_max": 15000000, "currency": "ARS",
+       "body_types": []},
+      {"make": "Fiat", "model": "Cronos", "transmission": "automatic", "price_max": 15000000, "currency": "ARS",
+       "body_types": []}
     ]
   },
   {
@@ -121,8 +125,10 @@
   {
     "id": "kangoo-palos",
     "text": "Kangoo para trabajo, diesel, 2012 en adelante, hasta 5 palos",
+    "llm_body_types": [],
     "drafts": [
-      {"make": "Renault", "model": "Kangoo", "fuel": "diesel", "year_min": 2012, "price_max": 5000000, "currency": "ARS"}
+      {"make": "Renault", "model": "Kangoo", "fuel": "diesel", "year_min": 2012, "price_max": 5000000, "currency": "ARS",
+       "body_types": []}
     ]
   },
   {
@@ -155,6 +161,60 @@
     "drafts": [
       {"make": "Ford", "model": "Fiesta", "trim": "Titanium", "year_min": 2015, "year_max": null, "km_max": 100000},
       {"make": "Volkswagen", "model": "Gol Trend", "trim": "Highline", "year_min": 2015, "year_max": null, "km_max": 100000}
+    ]
+  },
+  {
+    "id": "suv-sin-modelo",
+    "text": "una SUV hasta 20 mil dólares",
+    "drafts": [
+      {"resolved": false, "make": "", "model": "", "body_types": ["suv"], "price_max": 20000, "currency": "USD"}
+    ]
+  },
+  {
+    "id": "sedan-automatico-pesos",
+    "text": "sedán automático hasta 15 millones de pesos",
+    "drafts": [
+      {"resolved": false, "make": "", "model": "", "body_types": ["sedan"], "transmission": "automatic",
+       "price_max": 15000000, "currency": "ARS"}
+    ]
+  },
+  {
+    "id": "suv-o-pickup",
+    "text": "SUV o pick-up 2018 en adelante",
+    "drafts": [
+      {"resolved": false, "make": "", "model": "", "body_types": ["suv", "pickup"], "year_min": 2018, "year_max": null,
+       "price_max": null, "notes_contain": "precio máximo"}
+    ]
+  },
+  {
+    "id": "etios-sedan",
+    "text": "Etios sedán",
+    "drafts": [
+      {"make": "Toyota", "model": "Etios", "trim": "", "body_types": ["sedan"]}
+    ]
+  },
+  {
+    "id": "kangoo-furgon",
+    "text": "Kangoo furgón",
+    "drafts": [
+      {"make": "Renault", "model": "Kangoo", "trim": "", "body_types": ["utilitario"]}
+    ]
+  },
+  {
+    "id": "camioneta-sin-carroceria",
+    "text": "una camioneta hasta 25 mil dólares",
+    "llm_body_types": [],
+    "drafts": [
+      {"resolved": false, "make": "", "model": "", "body_types": [], "price_max": 25000, "currency": "USD"}
+    ]
+  },
+  {
+    "id": "auto-familiar",
+    "text": "un auto familiar, automático, hasta 10 mil dólares",
+    "llm_body_types": [],
+    "drafts": [
+      {"resolved": false, "make": "", "model": "", "body_types": [], "transmission": "automatic",
+       "price_max": 10000, "currency": "USD"}
     ]
   }
 ]

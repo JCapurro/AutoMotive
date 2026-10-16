@@ -1,5 +1,5 @@
 {
-  "recorded_at": "2026-09-29T18:57:01+00:00",
+  "recorded_at": "2026-10-15T17:05:30+00:00",
   "cli_version": "2.1.278 (Claude Code)",
   "model": "haiku",
   "responses": {
@@ -7,14 +7,18 @@
       "type": "result",
       "subtype": "success",
       "is_error": false,
-      "result": "{\"vehicles\":[{\"make\":\"Ford\",\"model\":\"Fiesta\",\"trim\":\"Titanium\",\"trim_strict\":false,\"year_min\":2016,\"year_max\":2018,\"price_max\":11500,\"price_target\":null,\"currency\":\"USD\",\"km_max\":150000,\"km_target\":null,\"transmission\":\"manual\",\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null}]}",
+      "result": "{\"vehicles\":[{\"make\":\"Ford\",\"model\":\"Fiesta\",\"trim\":\"Titanium\",\"trims\":[\"Titanium\"],\"trim_strict\":false,\"body_types\":[],\"year_min\":2016,\"year_max\":2018,\"price_max\":11500,\"price_target\":null,\"currency\":\"USD\",\"km_max\":150000,\"km_target\":null,\"transmission\":\"manual\",\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null}]}",
       "structured_output": {
         "vehicles": [
           {
             "make": "Ford",
             "model": "Fiesta",
             "trim": "Titanium",
+            "trims": [
+              "Titanium"
+            ],
             "trim_strict": false,
+            "body_types": [],
             "year_min": 2016,
             "year_max": 2018,
             "price_max": 11500,
@@ -30,7 +34,7 @@
           }
         ]
       },
-      "duration_ms": 7480,
+      "duration_ms": 7283,
       "models": [
         "claude-haiku-4-5-20251001"
       ]
@@ -39,14 +43,18 @@
       "type": "result",
       "subtype": "success",
       "is_error": false,
-      "result": "{\"vehicles\":[{\"make\":\"Ford\",\"model\":\"Fiesta\",\"trim\":\"Titanium\",\"trim_strict\":false,\"year_min\":2017,\"year_max\":null,\"price_max\":12000,\"price_target\":null,\"currency\":\"USD\",\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null},{\"make\":\"Volkswagen\",\"model\":\"Polo\",\"trim\":\"Highline\",\"trim_strict\":false,\"year_min\":2017,\"year_max\":null,\"price_max\":12000,\"price_target\":null,\"currency\":\"USD\",\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null}]}",
+      "result": "{\"vehicles\":[{\"make\":\"Ford\",\"model\":\"Fiesta\",\"trim\":\"Titanium\",\"trims\":[\"Titanium\"],\"trim_strict\":false,\"body_types\":[],\"year_min\":2017,\"year_max\":null,\"price_max\":12000,\"price_target\":null,\"currency\":\"USD\",\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null},{\"make\":\"Volkswagen\",\"model\":\"Polo\",\"trim\":\"Highline\",\"trims\":[\"Highline\"],\"trim_strict\":false,\"body_types\":[],\"year_min\":2017,\"year_max\":null,\"price_max\":12000,\"price_target\":null,\"currency\":\"USD\",\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null}]}",
       "structured_output": {
         "vehicles": [
           {
             "make": "Ford",
             "model": "Fiesta",
             "trim": "Titanium",
+            "trims": [
+              "Titanium"
+            ],
             "trim_strict": false,
+            "body_types": [],
             "year_min": 2017,
             "year_max": null,
             "price_max": 12000,
@@ -64,7 +72,11 @@
             "make": "Volkswagen",
             "model": "Polo",
             "trim": "Highline",
+            "trims": [
+              "Highline"
+            ],
             "trim_strict": false,
+            "body_types": [],
             "year_min": 2017,
             "year_max": null,
             "price_max": 12000,
@@ -80,7 +92,7 @@
           }
         ]
       },
-      "duration_ms": 7369,
+      "duration_ms": 5857,
       "models": [
         "claude-haiku-4-5-20251001"
       ]
@@ -89,14 +101,18 @@
       "type": "result",
       "subtype": "success",
       "is_error": false,
-      "result": "{\"vehicles\":[{\"make\":\"Volkswagen\",\"model\":\"Gol Trend\",\"trim\":\"Highline\",\"trim_strict\":false,\"year_min\":2015,\"year_max\":2015,\"price_max\":null,\"price_target\":null,\"currency\":null,\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":\"private\",\"location\":\"zona norte\",\"radius_km\":null}]}",
+      "result": "{\"vehicles\":[{\"make\":\"Volkswagen\",\"model\":\"Gol Trend\",\"trim\":\"Highline\",\"trims\":[\"Highline\"],\"trim_strict\":false,\"body_types\":[],\"year_min\":2015,\"year_max\":2015,\"price_max\":null,\"price_target\":null,\"currency\":null,\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":\"private\",\"location\":\"zona norte\",\"radius_km\":null}]}",
       "structured_output": {
         "vehicles": [
           {
             "make": "Volkswagen",
             "model": "Gol Trend",
             "trim": "Highline",
+            "trims": [
+              "Highline"
+            ],
             "trim_strict": false,
+            "body_types": [],
             "year_min": 2015,
             "year_max": 2015,
             "price_max": null,
@@ -112,7 +128,7 @@
           }
         ]
       },
-      "duration_ms": 5005,
+      "duration_ms": 6609,
       "models": [
         "claude-haiku-4-5-20251001"
       ]
@@ -121,14 +137,18 @@
       "type": "result",
       "subtype": "success",
       "is_error": false,
-      "result": "{\"vehicles\":[{\"make\":\"Toyota\",\"model\":\"Hilux\",\"trim\":\"SRV\",\"trim_strict\":false,\"year_min\":null,\"year_max\":null,\"price_max\":35000000,\"price_target\":null,\"currency\":\"ARS\",\"km_max\":null,\"km_target\":null,\"transmission\":\"automatic\",\"fuel\":\"diesel\",\"seller_type\":null,\"location\":null,\"radius_km\":null}]}",
+      "result": "{\"vehicles\":[{\"make\":\"Toyota\",\"model\":\"Hilux\",\"trim\":\"SRV\",\"trims\":[\"SRV\"],\"trim_strict\":false,\"body_types\":[],\"year_min\":null,\"year_max\":null,\"price_max\":35000000,\"price_target\":null,\"currency\":\"ARS\",\"km_max\":null,\"km_target\":null,\"transmission\":\"automatic\",\"fuel\":\"diesel\",\"seller_type\":null,\"location\":null,\"radius_km\":null}]}",
       "structured_output": {
         "vehicles": [
           {
             "make": "Toyota",
             "model": "Hilux",
             "trim": "SRV",
+            "trims": [
+              "SRV"
+            ],
             "trim_strict": false,
+            "body_types": [],
             "year_min": null,
             "year_max": null,
             "price_max": 35000000,
@@ -144,7 +164,7 @@
           }
         ]
       },
-      "duration_ms": 8269,
+      "duration_ms": 7631,
       "models": [
         "claude-haiku-4-5-20251001"
       ]
@@ -153,14 +173,18 @@
       "type": "result",
       "subtype": "success",
       "is_error": false,
-      "result": "{\"vehicles\":[{\"make\":\"Toyota\",\"model\":\"Corolla\",\"trim\":\"XEI\",\"trim_strict\":false,\"year_min\":2019,\"year_max\":2020,\"price_max\":null,\"price_target\":null,\"currency\":null,\"km_max\":80000,\"km_target\":null,\"transmission\":\"automatic\",\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null}]}",
+      "result": "{\"vehicles\":[{\"make\":\"Toyota\",\"model\":\"Corolla\",\"trim\":\"XEI\",\"trims\":[\"XEI\"],\"trim_strict\":false,\"body_types\":[],\"year_min\":2019,\"year_max\":2020,\"price_max\":null,\"price_target\":null,\"currency\":null,\"km_max\":80000,\"km_target\":null,\"transmission\":\"automatic\",\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null}]}",
       "structured_output": {
         "vehicles": [
           {
             "make": "Toyota",
             "model": "Corolla",
             "trim": "XEI",
+            "trims": [
+              "XEI"
+            ],
             "trim_strict": false,
+            "body_types": [],
             "year_min": 2019,
             "year_max": 2020,
             "price_max": null,
@@ -176,7 +200,7 @@
           }
         ]
       },
-      "duration_ms": 6591,
+      "duration_ms": 6707,
       "models": [
         "claude-haiku-4-5-20251001"
       ]
@@ -185,14 +209,16 @@
       "type": "result",
       "subtype": "success",
       "is_error": false,
-      "result": "{\"vehicles\":[{\"make\":\"Toyota\",\"model\":\"Corolla Cross\",\"trim\":null,\"trim_strict\":false,\"year_min\":2022,\"year_max\":null,\"price_max\":null,\"price_target\":null,\"currency\":null,\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":\"hibrido\",\"seller_type\":null,\"location\":null,\"radius_km\":null}]}",
+      "result": "{\"vehicles\":[{\"make\":\"Toyota\",\"model\":\"Corolla Cross\",\"trim\":null,\"trims\":[],\"trim_strict\":false,\"body_types\":[],\"year_min\":2022,\"year_max\":null,\"price_max\":null,\"price_target\":null,\"currency\":null,\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":\"hibrido\",\"seller_type\":null,\"location\":null,\"radius_km\":null}]}",
       "structured_output": {
         "vehicles": [
           {
             "make": "Toyota",
             "model": "Corolla Cross",
             "trim": null,
+            "trims": [],
             "trim_strict": false,
+            "body_types": [],
             "year_min": 2022,
             "year_max": null,
             "price_max": null,
@@ -208,7 +234,7 @@
           }
         ]
       },
-      "duration_ms": 6496,
+      "duration_ms": 6653,
       "models": [
         "claude-haiku-4-5-20251001"
       ]
@@ -217,14 +243,16 @@
       "type": "result",
       "subtype": "success",
       "is_error": false,
-      "result": "{\"vehicles\":[{\"make\":\"Peugeot\",\"model\":\"208\",\"trim\":null,\"trim_strict\":false,\"year_min\":null,\"year_max\":2020,\"price_max\":9000,\"price_target\":null,\"currency\":\"USD\",\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null}]}",
+      "result": "{\"vehicles\":[{\"make\":\"Peugeot\",\"model\":\"208\",\"trim\":null,\"trims\":[],\"trim_strict\":false,\"body_types\":[],\"year_min\":null,\"year_max\":2020,\"price_max\":9000,\"price_target\":null,\"currency\":\"USD\",\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null}]}",
       "structured_output": {
         "vehicles": [
           {
             "make": "Peugeot",
             "model": "208",
             "trim": null,
+            "trims": [],
             "trim_strict": false,
+            "body_types": [],
             "year_min": null,
             "year_max": 2020,
             "price_max": 9000,
@@ -240,7 +268,7 @@
           }
         ]
       },
-      "duration_ms": 5543,
+      "duration_ms": 6069,
       "models": [
         "claude-haiku-4-5-20251001"
       ]
@@ -249,14 +277,16 @@
       "type": "result",
       "subtype": "success",
       "is_error": false,
-      "result": "{\"vehicles\":[{\"make\":\"Chevrolet\",\"model\":\"Onix\",\"trim\":null,\"trim_strict\":false,\"year_min\":null,\"year_max\":null,\"price_max\":15000000,\"price_target\":null,\"currency\":\"ARS\",\"km_max\":null,\"km_target\":null,\"transmission\":\"automatic\",\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null},{\"make\":\"Fiat\",\"model\":\"Cronos\",\"trim\":null,\"trim_strict\":false,\"year_min\":null,\"year_max\":null,\"price_max\":15000000,\"price_target\":null,\"currency\":\"ARS\",\"km_max\":null,\"km_target\":null,\"transmission\":\"automatic\",\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null}]}",
+      "result": "{\"vehicles\":[{\"make\":\"Chevrolet\",\"model\":\"Onix\",\"trim\":null,\"trims\":[],\"trim_strict\":false,\"body_types\":[],\"year_min\":null,\"year_max\":null,\"price_max\":15000000,\"price_target\":null,\"currency\":\"ARS\",\"km_max\":null,\"km_target\":null,\"transmission\":\"automatic\",\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null},{\"make\":\"Fiat\",\"model\":\"Cronos\",\"trim\":null,\"trims\":[],\"trim_strict\":false,\"body_types\":[],\"year_min\":null,\"year_max\":null,\"price_max\":15000000,\"price_target\":null,\"currency\":\"ARS\",\"km_max\":null,\"km_target\":null,\"transmission\":\"automatic\",\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null}]}",
       "structured_output": {
         "vehicles": [
           {
             "make": "Chevrolet",
             "model": "Onix",
             "trim": null,
+            "trims": [],
             "trim_strict": false,
+            "body_types": [],
             "year_min": null,
             "year_max": null,
             "price_max": 15000000,
@@ -274,7 +304,9 @@
             "make": "Fiat",
             "model": "Cronos",
             "trim": null,
+            "trims": [],
             "trim_strict": false,
+            "body_types": [],
             "year_min": null,
             "year_max": null,
             "price_max": 15000000,
@@ -290,7 +322,7 @@
           }
         ]
       },
-      "duration_ms": 6147,
+      "duration_ms": 8033,
       "models": [
         "claude-haiku-4-5-20251001"
       ]
@@ -299,14 +331,18 @@
       "type": "result",
       "subtype": "success",
       "is_error": false,
-      "result": "{\"vehicles\":[{\"make\":\"Volkswagen\",\"model\":\"Amarok\",\"trim\":\"V6\",\"trim_strict\":false,\"year_min\":2018,\"year_max\":2021,\"price_max\":null,\"price_target\":null,\"currency\":null,\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":\"dealer\",\"location\":null,\"radius_km\":null}]}",
+      "result": "{\"vehicles\":[{\"make\":\"Volkswagen\",\"model\":\"Amarok\",\"trim\":\"V6\",\"trims\":[\"V6\"],\"trim_strict\":false,\"body_types\":[],\"year_min\":2018,\"year_max\":2021,\"price_max\":null,\"price_target\":null,\"currency\":null,\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":\"dealer\",\"location\":null,\"radius_km\":null}]}",
       "structured_output": {
         "vehicles": [
           {
             "make": "Volkswagen",
             "model": "Amarok",
             "trim": "V6",
+            "trims": [
+              "V6"
+            ],
             "trim_strict": false,
+            "body_types": [],
             "year_min": 2018,
             "year_max": 2021,
             "price_max": null,
@@ -322,7 +358,7 @@
           }
         ]
       },
-      "duration_ms": 9072,
+      "duration_ms": 7106,
       "models": [
         "claude-haiku-4-5-20251001"
       ]
@@ -331,14 +367,18 @@
       "type": "result",
       "subtype": "success",
       "is_error": false,
-      "result": "{\"vehicles\":[{\"make\":\"Toyota\",\"model\":\"Etios\",\"trim\":\"XLS\",\"trim_strict\":false,\"year_min\":2016,\"year_max\":2016,\"price_max\":8000,\"price_target\":7000,\"currency\":\"USD\",\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null}]}",
+      "result": "{\"vehicles\":[{\"make\":\"Toyota\",\"model\":\"Etios\",\"trim\":\"XLS\",\"trims\":[\"XLS\"],\"trim_strict\":false,\"body_types\":[],\"year_min\":2016,\"year_max\":2016,\"price_max\":8000,\"price_target\":7000,\"currency\":\"USD\",\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null}]}",
       "structured_output": {
         "vehicles": [
           {
             "make": "Toyota",
             "model": "Etios",
             "trim": "XLS",
+            "trims": [
+              "XLS"
+            ],
             "trim_strict": false,
+            "body_types": [],
             "year_min": 2016,
             "year_max": 2016,
             "price_max": 8000,
@@ -354,7 +394,7 @@
           }
         ]
       },
-      "duration_ms": 6252,
+      "duration_ms": 7802,
       "models": [
         "claude-haiku-4-5-20251001"
       ]
@@ -363,14 +403,18 @@
       "type": "result",
       "subtype": "success",
       "is_error": false,
-      "result": "{\"vehicles\":[{\"make\":\"Volkswagen\",\"model\":\"Vento\",\"trim\":\"Highline\",\"trim_strict\":true,\"year_min\":2015,\"year_max\":2017,\"price_max\":null,\"price_target\":null,\"currency\":null,\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":null,\"location\":\"Córdoba\",\"radius_km\":50}]}",
+      "result": "{\"vehicles\":[{\"make\":\"Volkswagen\",\"model\":\"Vento\",\"trim\":\"Highline\",\"trims\":[\"Highline\"],\"trim_strict\":true,\"body_types\":[],\"year_min\":2015,\"year_max\":2017,\"price_max\":null,\"price_target\":null,\"currency\":null,\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":null,\"location\":\"Córdoba\",\"radius_km\":50}]}",
       "structured_output": {
         "vehicles": [
           {
             "make": "Volkswagen",
             "model": "Vento",
             "trim": "Highline",
+            "trims": [
+              "Highline"
+            ],
             "trim_strict": true,
+            "body_types": [],
             "year_min": 2015,
             "year_max": 2017,
             "price_max": null,
@@ -386,7 +430,7 @@
           }
         ]
       },
-      "duration_ms": 9169,
+      "duration_ms": 7164,
       "models": [
         "claude-haiku-4-5-20251001"
       ]
@@ -395,14 +439,18 @@
       "type": "result",
       "subtype": "success",
       "is_error": false,
-      "result": "{\"vehicles\":[{\"make\":\"Ford\",\"model\":\"Ranger\",\"trim\":\"XLT\",\"trim_strict\":false,\"year_min\":null,\"year_max\":null,\"price_max\":null,\"price_target\":null,\"currency\":null,\"km_max\":180000,\"km_target\":null,\"transmission\":\"manual\",\"fuel\":null,\"seller_type\":\"private\",\"location\":null,\"radius_km\":null}]}",
+      "result": "{\"vehicles\":[{\"make\":\"Ford\",\"model\":\"Ranger\",\"trim\":\"XLT\",\"trims\":[\"XLT\"],\"trim_strict\":false,\"body_types\":[],\"year_min\":null,\"year_max\":null,\"price_max\":null,\"price_target\":null,\"currency\":null,\"km_max\":180000,\"km_target\":null,\"transmission\":\"manual\",\"fuel\":null,\"seller_type\":\"private\",\"location\":null,\"radius_km\":null}]}",
       "structured_output": {
         "vehicles": [
           {
             "make": "Ford",
             "model": "Ranger",
             "trim": "XLT",
+            "trims": [
+              "XLT"
+            ],
             "trim_strict": false,
+            "body_types": [],
             "year_min": null,
             "year_max": null,
             "price_max": null,
@@ -418,7 +466,7 @@
           }
         ]
       },
-      "duration_ms": 8200,
+      "duration_ms": 14145,
       "models": [
         "claude-haiku-4-5-20251001"
       ]
@@ -427,14 +475,18 @@
       "type": "result",
       "subtype": "success",
       "is_error": false,
-      "result": "{\"vehicles\":[{\"make\":\"Ford\",\"model\":\"EcoSport\",\"trim\":\"Freestyle\",\"trim_strict\":false,\"year_min\":null,\"year_max\":null,\"price_max\":6500,\"price_target\":null,\"currency\":\"USD\",\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":\"gnc\",\"seller_type\":null,\"location\":null,\"radius_km\":null}]}",
+      "result": "{\"vehicles\":[{\"make\":\"Ford\",\"model\":\"EcoSport\",\"trim\":\"Freestyle\",\"trims\":[\"Freestyle\"],\"trim_strict\":false,\"body_types\":[],\"year_min\":null,\"year_max\":null,\"price_max\":6500,\"price_target\":null,\"currency\":\"USD\",\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":\"gnc\",\"seller_type\":null,\"location\":null,\"radius_km\":null}]}",
       "structured_output": {
         "vehicles": [
           {
             "make": "Ford",
             "model": "EcoSport",
             "trim": "Freestyle",
+            "trims": [
+              "Freestyle"
+            ],
             "trim_strict": false,
+            "body_types": [],
             "year_min": null,
             "year_max": null,
             "price_max": 6500,
@@ -450,7 +502,7 @@
           }
         ]
       },
-      "duration_ms": 5357,
+      "duration_ms": 8041,
       "models": [
         "claude-haiku-4-5-20251001"
       ]
@@ -459,14 +511,16 @@
       "type": "result",
       "subtype": "success",
       "is_error": false,
-      "result": "{\"vehicles\":[{\"make\":\"Tesla\",\"model\":\"Model 3\",\"trim\":null,\"trim_strict\":false,\"year_min\":2021,\"year_max\":2021,\"price_max\":null,\"price_target\":null,\"currency\":null,\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null}]}",
+      "result": "{\"vehicles\":[{\"make\":\"Tesla\",\"model\":\"Model 3\",\"trim\":null,\"trims\":[],\"trim_strict\":false,\"body_types\":[],\"year_min\":2021,\"year_max\":2021,\"price_max\":null,\"price_target\":null,\"currency\":null,\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null}]}",
       "structured_output": {
         "vehicles": [
           {
             "make": "Tesla",
             "model": "Model 3",
             "trim": null,
+            "trims": [],
             "trim_strict": false,
+            "body_types": [],
             "year_min": 2021,
             "year_max": 2021,
             "price_max": null,
@@ -482,7 +536,7 @@
           }
         ]
       },
-      "duration_ms": 6571,
+      "duration_ms": 6605,
       "models": [
         "claude-haiku-4-5-20251001"
       ]
@@ -495,7 +549,7 @@
       "structured_output": {
         "vehicles": []
       },
-      "duration_ms": 3718,
+      "duration_ms": 3690,
       "models": [
         "claude-haiku-4-5-20251001"
       ]
@@ -504,14 +558,16 @@
       "type": "result",
       "subtype": "success",
       "is_error": false,
-      "result": "{\"vehicles\":[{\"make\":\"Renault\",\"model\":\"Stepway\",\"trim\":null,\"trim_strict\":false,\"year_min\":2017,\"year_max\":2019,\"price_max\":null,\"price_target\":null,\"currency\":null,\"km_max\":120000,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":null,\"location\":\"AMBA\",\"radius_km\":null},{\"make\":\"Renault\",\"model\":\"Duster\",\"trim\":null,\"trim_strict\":false,\"year_min\":2017,\"year_max\":2019,\"price_max\":null,\"price_target\":null,\"currency\":null,\"km_max\":120000,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":null,\"location\":\"AMBA\",\"radius_km\":null}]}",
+      "result": "{\"vehicles\":[{\"make\":\"Renault\",\"model\":\"Stepway\",\"trim\":null,\"trims\":[],\"trim_strict\":false,\"body_types\":[],\"year_min\":2017,\"year_max\":2019,\"price_max\":null,\"price_target\":null,\"currency\":null,\"km_max\":120000,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":null,\"location\":\"AMBA\",\"radius_km\":null},{\"make\":\"Renault\",\"model\":\"Duster\",\"trim\":null,\"trims\":[],\"trim_strict\":false,\"body_types\":[],\"year_min\":2017,\"year_max\":2019,\"price_max\":null,\"price_target\":null,\"currency\":null,\"km_max\":120000,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":null,\"location\":\"AMBA\",\"radius_km\":null}]}",
       "structured_output": {
         "vehicles": [
           {
             "make": "Renault",
             "model": "Stepway",
             "trim": null,
+            "trims": [],
             "trim_strict": false,
+            "body_types": [],
             "year_min": 2017,
             "year_max": 2019,
             "price_max": null,
@@ -529,7 +585,9 @@
             "make": "Renault",
             "model": "Duster",
             "trim": null,
+            "trims": [],
             "trim_strict": false,
+            "body_types": [],
             "year_min": 2017,
             "year_max": 2019,
             "price_max": null,
@@ -545,7 +603,7 @@
           }
         ]
       },
-      "duration_ms": 36160,
+      "duration_ms": 31287,
       "models": [
         "claude-haiku-4-5-20251001"
       ]
@@ -554,14 +612,16 @@
       "type": "result",
       "subtype": "success",
       "is_error": false,
-      "result": "{\"vehicles\":[{\"make\":\"Renault\",\"model\":\"Kangoo\",\"trim\":null,\"trim_strict\":false,\"year_min\":2012,\"year_max\":null,\"price_max\":5000000,\"price_target\":null,\"currency\":\"ARS\",\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":\"diesel\",\"seller_type\":null,\"location\":null,\"radius_km\":null}]}",
+      "result": "{\"vehicles\":[{\"make\":\"Renault\",\"model\":\"Kangoo\",\"trim\":null,\"trims\":[],\"trim_strict\":false,\"body_types\":[],\"year_min\":2012,\"year_max\":null,\"price_max\":5000000,\"price_target\":null,\"currency\":\"ARS\",\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":\"diesel\",\"seller_type\":null,\"location\":null,\"radius_km\":null}]}",
       "structured_output": {
         "vehicles": [
           {
             "make": "Renault",
             "model": "Kangoo",
             "trim": null,
+            "trims": [],
             "trim_strict": false,
+            "body_types": [],
             "year_min": 2012,
             "year_max": null,
             "price_max": 5000000,
@@ -577,7 +637,7 @@
           }
         ]
       },
-      "duration_ms": 6734,
+      "duration_ms": 9302,
       "models": [
         "claude-haiku-4-5-20251001"
       ]
@@ -586,14 +646,18 @@
       "type": "result",
       "subtype": "success",
       "is_error": false,
-      "result": "{\"vehicles\":[{\"make\":\"Jeep\",\"model\":\"Renegade\",\"trim\":\"Longitude\",\"trim_strict\":false,\"year_min\":2019,\"year_max\":2019,\"price_max\":18000,\"price_target\":null,\"currency\":\"USD\",\"km_max\":90000,\"km_target\":60000,\"transmission\":\"automatic\",\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null}]}",
+      "result": "{\"vehicles\":[{\"make\":\"Jeep\",\"model\":\"Renegade\",\"trim\":\"Longitude\",\"trims\":[\"Longitude\"],\"trim_strict\":false,\"body_types\":[],\"year_min\":2019,\"year_max\":2019,\"price_max\":18000,\"price_target\":null,\"currency\":\"USD\",\"km_max\":90000,\"km_target\":60000,\"transmission\":\"automatic\",\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null}]}",
       "structured_output": {
         "vehicles": [
           {
             "make": "Jeep",
             "model": "Renegade",
             "trim": "Longitude",
+            "trims": [
+              "Longitude"
+            ],
             "trim_strict": false,
+            "body_types": [],
             "year_min": 2019,
             "year_max": 2019,
             "price_max": 18000,
@@ -609,7 +673,7 @@
           }
         ]
       },
-      "duration_ms": 6300,
+      "duration_ms": 8648,
       "models": [
         "claude-haiku-4-5-20251001"
       ]
@@ -618,14 +682,18 @@
       "type": "result",
       "subtype": "success",
       "is_error": false,
-      "result": "{\"vehicles\":[{\"make\":\"Volkswagen\",\"model\":\"Gol Trend\",\"trim\":\"Pack II\",\"trim_strict\":false,\"year_min\":2012,\"year_max\":2012,\"price_max\":6000,\"price_target\":null,\"currency\":\"USD\",\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null},{\"make\":\"Volkswagen\",\"model\":\"Fox\",\"trim\":\"Highline\",\"trim_strict\":false,\"year_min\":2012,\"year_max\":2012,\"price_max\":6000,\"price_target\":null,\"currency\":\"USD\",\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null},{\"make\":\"Volkswagen\",\"model\":\"Suran\",\"trim\":\"Trendline\",\"trim_strict\":false,\"year_min\":2012,\"year_max\":2012,\"price_max\":6000,\"price_target\":null,\"currency\":\"USD\",\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null}]}",
+      "result": "{\"vehicles\":[{\"make\":\"Volkswagen\",\"model\":\"Gol Trend\",\"trim\":\"Pack II\",\"trims\":[\"Pack II\"],\"trim_strict\":false,\"body_types\":[],\"year_min\":2012,\"year_max\":2012,\"price_max\":6000,\"price_target\":null,\"currency\":\"USD\",\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null},{\"make\":\"Volkswagen\",\"model\":\"Fox\",\"trim\":\"Highline\",\"trims\":[\"Highline\"],\"trim_strict\":false,\"body_types\":[],\"year_min\":2012,\"year_max\":2012,\"price_max\":6000,\"price_target\":null,\"currency\":\"USD\",\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null},{\"make\":\"Volkswagen\",\"model\":\"Suran\",\"trim\":\"Trendline\",\"trims\":[\"Trendline\"],\"trim_strict\":false,\"body_types\":[],\"year_min\":2012,\"year_max\":2012,\"price_max\":6000,\"price_target\":null,\"currency\":\"USD\",\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null}]}",
       "structured_output": {
         "vehicles": [
           {
             "make": "Volkswagen",
             "model": "Gol Trend",
             "trim": "Pack II",
+            "trims": [
+              "Pack II"
+            ],
             "trim_strict": false,
+            "body_types": [],
             "year_min": 2012,
             "year_max": 2012,
             "price_max": 6000,
@@ -643,7 +711,11 @@
             "make": "Volkswagen",
             "model": "Fox",
             "trim": "Highline",
+            "trims": [
+              "Highline"
+            ],
             "trim_strict": false,
+            "body_types": [],
             "year_min": 2012,
             "year_max": 2012,
             "price_max": 6000,
@@ -661,7 +733,11 @@
             "make": "Volkswagen",
             "model": "Suran",
             "trim": "Trendline",
+            "trims": [
+              "Trendline"
+            ],
             "trim_strict": false,
+            "body_types": [],
             "year_min": 2012,
             "year_max": 2012,
             "price_max": 6000,
@@ -677,7 +753,7 @@
           }
         ]
       },
-      "duration_ms": 9587,
+      "duration_ms": 9191,
       "models": [
         "claude-haiku-4-5-20251001"
       ]
@@ -686,14 +762,18 @@
       "type": "result",
       "subtype": "success",
       "is_error": false,
-      "result": "{\"vehicles\":[{\"make\":\"Ford\",\"model\":\"Ka\",\"trim\":\"SE\",\"trim_strict\":false,\"year_min\":2018,\"year_max\":2018,\"price_max\":null,\"price_target\":null,\"currency\":null,\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null}]}",
+      "result": "{\"vehicles\":[{\"make\":\"Ford\",\"model\":\"Ka\",\"trim\":\"SE\",\"trims\":[\"SE\"],\"trim_strict\":false,\"body_types\":[],\"year_min\":2018,\"year_max\":2018,\"price_max\":null,\"price_target\":null,\"currency\":null,\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null}]}",
       "structured_output": {
         "vehicles": [
           {
             "make": "Ford",
             "model": "Ka",
             "trim": "SE",
+            "trims": [
+              "SE"
+            ],
             "trim_strict": false,
+            "body_types": [],
             "year_min": 2018,
             "year_max": 2018,
             "price_max": null,
@@ -709,7 +789,7 @@
           }
         ]
       },
-      "duration_ms": 6038,
+      "duration_ms": 7233,
       "models": [
         "claude-haiku-4-5-20251001"
       ]
@@ -718,14 +798,18 @@
       "type": "result",
       "subtype": "success",
       "is_error": false,
-      "result": "{\"vehicles\":[{\"make\":\"Ford\",\"model\":\"Fiesta\",\"trim\":\"Titanium\",\"trim_strict\":false,\"year_min\":2015,\"year_max\":null,\"price_max\":null,\"price_target\":null,\"currency\":null,\"km_max\":100000,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null},{\"make\":\"Volkswagen\",\"model\":\"Gol Trend\",\"trim\":\"Highline\",\"trim_strict\":false,\"year_min\":2015,\"year_max\":null,\"price_max\":null,\"price_target\":null,\"currency\":null,\"km_max\":100000,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null}]}",
+      "result": "{\"vehicles\":[{\"make\":\"Ford\",\"model\":\"Fiesta\",\"trim\":\"Titanium\",\"trims\":[\"Titanium\"],\"trim_strict\":false,\"body_types\":[],\"year_min\":2015,\"year_max\":null,\"price_max\":null,\"price_target\":null,\"currency\":null,\"km_max\":100000,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null},{\"make\":\"Volkswagen\",\"model\":\"Gol Trend\",\"trim\":\"Highline\",\"trims\":[\"Highline\"],\"trim_strict\":false,\"body_types\":[],\"year_min\":2015,\"year_max\":null,\"price_max\":null,\"price_target\":null,\"currency\":null,\"km_max\":100000,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null}]}",
       "structured_output": {
         "vehicles": [
           {
             "make": "Ford",
             "model": "Fiesta",
             "trim": "Titanium",
+            "trims": [
+              "Titanium"
+            ],
             "trim_strict": false,
+            "body_types": [],
             "year_min": 2015,
             "year_max": null,
             "price_max": null,
@@ -743,7 +827,11 @@
             "make": "Volkswagen",
             "model": "Gol Trend",
             "trim": "Highline",
+            "trims": [
+              "Highline"
+            ],
             "trim_strict": false,
+            "body_types": [],
             "year_min": 2015,
             "year_max": null,
             "price_max": null,
@@ -759,7 +847,256 @@
           }
         ]
       },
-      "duration_ms": 11142,
+      "duration_ms": 12010,
+      "models": [
+        "claude-haiku-4-5-20251001"
+      ]
+    },
+    "una SUV hasta 20 mil dólares": {
+      "type": "result",
+      "subtype": "success",
+      "is_error": false,
+      "result": "{\"vehicles\":[{\"make\":null,\"model\":null,\"trim\":null,\"trims\":[],\"trim_strict\":false,\"body_types\":[\"suv\"],\"year_min\":null,\"year_max\":null,\"price_max\":20000,\"price_target\":null,\"currency\":\"USD\",\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null}]}",
+      "structured_output": {
+        "vehicles": [
+          {
+            "make": null,
+            "model": null,
+            "trim": null,
+            "trims": [],
+            "trim_strict": false,
+            "body_types": [
+              "suv"
+            ],
+            "year_min": null,
+            "year_max": null,
+            "price_max": 20000,
+            "price_target": null,
+            "currency": "USD",
+            "km_max": null,
+            "km_target": null,
+            "transmission": null,
+            "fuel": null,
+            "seller_type": null,
+            "location": null,
+            "radius_km": null
+          }
+        ]
+      },
+      "duration_ms": 8115,
+      "models": [
+        "claude-haiku-4-5-20251001"
+      ]
+    },
+    "sedán automático hasta 15 millones de pesos": {
+      "type": "result",
+      "subtype": "success",
+      "is_error": false,
+      "result": "{\"vehicles\":[{\"make\":null,\"model\":null,\"trim\":null,\"trims\":[],\"trim_strict\":false,\"body_types\":[\"sedan\"],\"year_min\":null,\"year_max\":null,\"price_max\":15000000,\"price_target\":null,\"currency\":\"ARS\",\"km_max\":null,\"km_target\":null,\"transmission\":\"automatic\",\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null}]}",
+      "structured_output": {
+        "vehicles": [
+          {
+            "make": null,
+            "model": null,
+            "trim": null,
+            "trims": [],
+            "trim_strict": false,
+            "body_types": [
+              "sedan"
+            ],
+            "year_min": null,
+            "year_max": null,
+            "price_max": 15000000,
+            "price_target": null,
+            "currency": "ARS",
+            "km_max": null,
+            "km_target": null,
+            "transmission": "automatic",
+            "fuel": null,
+            "seller_type": null,
+            "location": null,
+            "radius_km": null
+          }
+        ]
+      },
+      "duration_ms": 9465,
+      "models": [
+        "claude-haiku-4-5-20251001"
+      ]
+    },
+    "SUV o pick-up 2018 en adelante": {
+      "type": "result",
+      "subtype": "success",
+      "is_error": false,
+      "result": "{\"vehicles\":[{\"make\":null,\"model\":null,\"trim\":null,\"trims\":[],\"trim_strict\":false,\"body_types\":[\"suv\",\"pickup\"],\"year_min\":2018,\"year_max\":null,\"price_max\":null,\"price_target\":null,\"currency\":null,\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null}]}",
+      "structured_output": {
+        "vehicles": [
+          {
+            "make": null,
+            "model": null,
+            "trim": null,
+            "trims": [],
+            "trim_strict": false,
+            "body_types": [
+              "suv",
+              "pickup"
+            ],
+            "year_min": 2018,
+            "year_max": null,
+            "price_max": null,
+            "price_target": null,
+            "currency": null,
+            "km_max": null,
+            "km_target": null,
+            "transmission": null,
+            "fuel": null,
+            "seller_type": null,
+            "location": null,
+            "radius_km": null
+          }
+        ]
+      },
+      "duration_ms": 6680,
+      "models": [
+        "claude-haiku-4-5-20251001"
+      ]
+    },
+    "Etios sedán": {
+      "type": "result",
+      "subtype": "success",
+      "is_error": false,
+      "result": "{\"vehicles\":[{\"make\":\"Toyota\",\"model\":\"Etios\",\"trim\":null,\"trims\":[],\"trim_strict\":false,\"body_types\":[\"sedan\"],\"year_min\":null,\"year_max\":null,\"price_max\":null,\"price_target\":null,\"currency\":null,\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null}]}",
+      "structured_output": {
+        "vehicles": [
+          {
+            "make": "Toyota",
+            "model": "Etios",
+            "trim": null,
+            "trims": [],
+            "trim_strict": false,
+            "body_types": [
+              "sedan"
+            ],
+            "year_min": null,
+            "year_max": null,
+            "price_max": null,
+            "price_target": null,
+            "currency": null,
+            "km_max": null,
+            "km_target": null,
+            "transmission": null,
+            "fuel": null,
+            "seller_type": null,
+            "location": null,
+            "radius_km": null
+          }
+        ]
+      },
+      "duration_ms": 6949,
+      "models": [
+        "claude-haiku-4-5-20251001"
+      ]
+    },
+    "Kangoo furgón": {
+      "type": "result",
+      "subtype": "success",
+      "is_error": false,
+      "result": "{\"vehicles\":[{\"make\":\"Renault\",\"model\":\"Kangoo\",\"trim\":null,\"trims\":[],\"trim_strict\":false,\"body_types\":[\"utilitario\"],\"year_min\":null,\"year_max\":null,\"price_max\":null,\"price_target\":null,\"currency\":null,\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null}]}",
+      "structured_output": {
+        "vehicles": [
+          {
+            "make": "Renault",
+            "model": "Kangoo",
+            "trim": null,
+            "trims": [],
+            "trim_strict": false,
+            "body_types": [
+              "utilitario"
+            ],
+            "year_min": null,
+            "year_max": null,
+            "price_max": null,
+            "price_target": null,
+            "currency": null,
+            "km_max": null,
+            "km_target": null,
+            "transmission": null,
+            "fuel": null,
+            "seller_type": null,
+            "location": null,
+            "radius_km": null
+          }
+        ]
+      },
+      "duration_ms": 9902,
+      "models": [
+        "claude-haiku-4-5-20251001"
+      ]
+    },
+    "una camioneta hasta 25 mil dólares": {
+      "type": "result",
+      "subtype": "success",
+      "is_error": false,
+      "result": "{\"vehicles\":[{\"make\":null,\"model\":null,\"trim\":null,\"trims\":[],\"trim_strict\":false,\"body_types\":[],\"year_min\":null,\"year_max\":null,\"price_max\":25000,\"price_target\":null,\"currency\":\"USD\",\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null}]}",
+      "structured_output": {
+        "vehicles": [
+          {
+            "make": null,
+            "model": null,
+            "trim": null,
+            "trims": [],
+            "trim_strict": false,
+            "body_types": [],
+            "year_min": null,
+            "year_max": null,
+            "price_max": 25000,
+            "price_target": null,
+            "currency": "USD",
+            "km_max": null,
+            "km_target": null,
+            "transmission": null,
+            "fuel": null,
+            "seller_type": null,
+            "location": null,
+            "radius_km": null
+          }
+        ]
+      },
+      "duration_ms": 9435,
+      "models": [
+        "claude-haiku-4-5-20251001"
+      ]
+    },
+    "un auto familiar, automático, hasta 10 mil dólares": {
+      "type": "result",
+      "subtype": "success",
+      "is_error": false,
+      "result": "{\"vehicles\":[{\"make\":null,\"model\":null,\"trim\":null,\"trims\":[],\"trim_strict\":false,\"body_types\":[],\"year_min\":null,\"year_max\":null,\"price_max\":10000,\"price_target\":null,\"currency\":\"USD\",\"km_max\":null,\"km_target\":null,\"transmission\":\"automatic\",\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null}]}",
+      "structured_output": {
+        "vehicles": [
+          {
+            "make": null,
+            "model": null,
+            "trim": null,
+            "trims": [],
+            "trim_strict": false,
+            "body_types": [],
+            "year_min": null,
+            "year_max": null,
+            "price_max": 10000,
+            "price_target": null,
+            "currency": "USD",
+            "km_max": null,
+            "km_target": null,
+            "transmission": "automatic",
+            "fuel": null,
+            "seller_type": null,
+            "location": null,
+            "radius_km": null
+          }
+        ]
+      },
+      "duration_ms": 8149,
       "models": [
         "claude-haiku-4-5-20251001"
       ]

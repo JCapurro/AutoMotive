@@ -1,6 +1,9 @@
-"""Contract of every LLMProvider (sección 8.3): the 20 golden phrases
+"""Contract of every LLMProvider (sección 8.3): the golden phrases
 (fixtures/llm/parse_search_golden.json) produce valid drafts that, normalized
-against the seed catalog, carry the filters the phrase asks for.
+against the seed catalog, carry the filters the phrase asks for. A case's
+`llm_body_types` is what every draft must say before normalization: the
+catalog drops a body type the model only comes in, so the normalized drafts
+alone can't show that the provider inferred one ("auto chico", "para trabajo").
 
 By default the provider is ClaudeCliProvider answering from recorded
 `claude -p` envelopes (fixtures/llm/parse_search_recorded.json, made with
@@ -35,6 +38,9 @@ TODAY = dt.date(2026, 9, 28)
 
 def check_contract(case: dict, drafts: list[SearchDraft]) -> None:
     assert all(isinstance(d, SearchDraft) for d in drafts)
+    if "llm_body_types" in case:
+        said = [d.body_types for d in drafts]
+        assert all(b == case["llm_body_types"] for b in said), f"{case['id']}: body_types {said}"
     output = normalize_drafts(seed_catalog(), drafts, today=TODAY)
     got = output["drafts"]
     expected = case["drafts"]
@@ -55,15 +61,18 @@ def check_contract(case: dict, drafts: list[SearchDraft]) -> None:
         contains = want.pop("location_contains", None)
         if contains:
             assert contains in values["location"].lower(), f"{case['id']}: location {values['location']!r}"
+        note = want.pop("notes_contain", None)
+        if note:
+            assert any(note in n for n in match["notes"]), f"{case['id']}: notes {match['notes']}"
         for key, value in want.items():
             assert values[key] == value, f"{case['id']}: {key} = {values[key]!r}, expected {value!r} ({values})"
         # Editable in the form: the make/model the catalog knows, or blank for the user to pick.
         assert values["model"] == "" or resolved
 
 
-def test_there_are_21_golden_phrases():
-    assert len(GOLDEN) == 21
-    assert len({c["id"] for c in GOLDEN}) == 21
+def test_there_are_28_golden_phrases():
+    assert len(GOLDEN) == 28
+    assert len({c["id"] for c in GOLDEN}) == 28
 
 
 def test_every_golden_phrase_has_a_recording():

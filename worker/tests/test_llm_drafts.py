@@ -3,9 +3,11 @@ from __future__ import annotations
 
 import datetime as dt
 
-from llm.schemas import SearchDraft
+from llm.schemas import SearchDraft, SearchDrafts, json_schema
 from intelligence.matching import match
+from normalization.body_type import CODES as BODY_TYPES
 from normalization.drafts import MAX_VEHICLES, normalize_draft, normalize_drafts
+from normalization.vehicle import CatalogModel
 from seed_catalog import seed_catalog
 
 TODAY = dt.date(2026, 9, 28)
@@ -161,3 +163,120 @@ def test_grouping_does_not_narrow_the_requested_ranges():
     values = out["drafts"][0]["values"]
     assert (values["year_min"], values["year_max"], values["km_max"]) == (2014, 2018, 150000)
     assert out["drafts"][0]["notes"]
+
+
+# ---------------------------------------------------------------------------
+# Body types (docs/CARROCERIA.md)
+# ---------------------------------------------------------------------------
+
+def test_the_schema_offers_the_body_type_codes_in_order():
+    item = json_schema(SearchDrafts)["properties"]["vehicles"]["items"]
+    assert item["properties"]["body_types"]["items"]["enum"] == list(BODY_TYPES)
+    assert "body_types" in item["required"]
+    # Recordings from before the field are still valid answers.
+    assert SearchDraft(**EMPTY).body_types == []
+
+
+def test_a_search_without_a_model_keeps_its_body_types_in_order():
+    out = norm(body_types=["pickup", "suv"], price_max=20000, currency="USD")
+    assert (out["values"]["make"], out["values"]["model"]) == ("", "")
+    assert out["values"]["body_types"] == ["suv", "pickup"]
+    assert not out["resolved"]
+    assert out["notes"] == []
+
+
+def test_a_search_without_a_model_asks_for_a_max_price():
+    out = norm(body_types=["suv", "pickup"], year_min=2018)
+    assert out["values"]["body_types"] == ["suv", "pickup"]
+    assert out["notes"] == ["Para buscar cualquier SUV o Pick-up sin elegir modelo, poné un precio máximo."]
+
+
+def test_body_words_in_the_vehicle_fields_become_body_types():
+    # "Pick-up" alone would resolve fuzzily to the VW Up.
+    for model, codes in (("SUV", ["suv"]), ("Pick-up", ["pickup"]), ("SUV o pick up", ["suv", "pickup"])):
+        values = norm(model=model, price_max=20000, currency="USD")["values"]
+        assert (values["make"], values["model"], values["body_types"]) == ("", "", codes)
+    out = norm(make="Toyota", model="Etios", trim="Sedán", trims=["Sedán", "XLS"])
+    assert out["values"]["trims"] == ["XLS"] and out["values"]["body_types"] == ["sedan"]
+    assert out["notes"] == []
+
+
+def test_a_vehicle_without_model_or_body_type_is_left_for_the_form():
+    for kw in ({"model": "camioneta"}, {"model": "familiar"}, {}):
+        out = norm(price_max=25000, currency="USD", **kw)
+        assert (out["values"]["model"], out["values"]["body_types"]) == ("", [])
+        assert out["notes"] == ["Falta el vehículo: elegilo en el formulario."]
+
+
+def test_within_a_model_only_the_body_types_the_catalog_offers():
+    assert norm(make="Toyota", model="Etios", body_types=["sedan"])["values"]["body_types"] == ["sedan"]
+    assert norm(model="Kangoo", body_types=["utilitario"])["values"]["body_types"] == ["utilitario"]
+    out = norm(model="Etios", body_types=["rural", "sedan"])
+    assert out["values"]["body_types"] == ["sedan"]
+    assert out["notes"] == ["El Etios no viene como Rural: no la usamos como filtro."]
+
+
+def test_a_model_with_one_body_type_offers_no_choice():
+    out = norm(model="Hilux", body_types=["pickup"])
+    assert (out["values"]["body_types"], out["notes"]) == ([], [])
+    out = norm(model="Hilux", body_types=["suv"])
+    assert out["values"]["body_types"] == []
+    assert out["notes"] == ["El Hilux solo viene como Pick-up: no filtramos por SUV."]
+    unknown = [CatalogModel(make="Foo", model="Bar")]
+    out = normalize_draft(unknown, draft(make="Foo", model="Bar", body_types=["sedan"]), today=TODAY)
+    assert out["resolved"] and out["values"]["body_types"] == []
+    assert out["notes"] == ["No sabemos qué carrocerías tiene el Bar: no filtramos por Sedán."]
+
+
+def test_submodels_name_their_body_type():
+    assert norm(model="Palio Weekend")["values"]["body_types"] == ["rural"]
+    assert norm(model="Ka Plus")["values"]["body_types"] == ["sedan"]
+    assert norm(model="A3 Sportback")["values"]["body_types"] == ["hatchback"]
+    # The Oroch is a Duster in the catalog, which only lists it as an SUV: no choice to offer.
+    assert norm(model="Duster Oroch")["values"]["body_types"] == []
+    out = norm(model="Partner", trim="Patagónica")
+    assert (out["values"]["trims"], out["values"]["body_types"]) == (["Patagónica"], ["monovolumen"])
+
+
+def test_an_unknown_vehicle_does_not_become_a_search_by_body_type():
+    for kw in ({"make": "Tesla", "model": "Model 3"}, {"make": "Tesla"}):
+        values = norm(body_types=["sedan"], price_max=40000, currency="USD", **kw)["values"]
+        assert (values["make"], values["model"], values["body_types"]) == ("", "", [])
+    # A known make without a model keeps them: the user still picks the model.
+    out = norm(make="Toyota", body_types=["suv"])
+    assert (out["values"]["make"], out["values"]["body_types"]) == ("Toyota", ["suv"])
+    assert "Falta el modelo" in out["notes"][0]
+
+
+def test_grouping_with_body_types():
+    def group(*drafts):
+        return [d["values"] for d in normalize_drafts(seed_catalog(), list(drafts), today=TODAY)["drafts"]]
+
+    [etios] = group(draft(model="Etios", body_types=["sedan"]), draft(model="Etios", body_types=["hatchback"]))
+    assert etios["body_types"] == ["sedan", "hatchback"]
+    [etios] = group(draft(model="Etios", body_types=["sedan"]), draft(model="Etios"))
+    assert etios["body_types"] == []
+
+    suv = dict(body_types=["suv"], price_max=20000, currency="USD")
+    assert len(group(draft(**suv), draft(**suv))) == 1
+    suv_and_pickup = group(draft(**suv), draft(**{**suv, "body_types": ["pickup"]}))
+    assert [v["body_types"] for v in suv_and_pickup] == [["suv"], ["pickup"]]
+    # Unresolved drafts without body types are still never grouped.
+    assert len(group(draft(make="Tesla", model="Model 3"), draft(make="Tesla", model="Model 3"))) == 2
+
+
+def test_body_types_reach_the_matching():
+    values = norm(body_types=["suv"], price_max=20000, currency="USD")["values"]
+    profile = {"filters": {"body_types": values["body_types"], "price_max": values["price_max"],
+                           "currency": values["currency"]}}
+    assert match({"make": "Toyota", "model": "SW4", "body_type": "suv"}, profile) is not None
+    assert match({"make": "Toyota", "model": "Etios", "body_type": "sedan"}, profile) is None
+    # Without a model, a listing without a body type doesn't count.
+    assert match({"make": "Toyota", "model": "SW4"}, profile) is None
+
+
+def test_every_generic_body_word_has_a_code():
+    from normalization import body_type
+    from normalization.drafts import _BODY_WORDS
+
+    assert {w: body_type.from_source(w) for w in _BODY_WORDS if body_type.from_source(w) is None} == {}

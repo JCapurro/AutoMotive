@@ -17,11 +17,15 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from normalization.body_type import CODES as BODY_TYPE_CODES
+
 # The web form's vocabulary (web/lib/copy.ts).
 Currency = Literal["USD", "ARS"]
 Transmission = Literal["manual", "automatic"]
 Fuel = Literal["nafta", "diesel", "gnc", "hibrido", "electrico"]
 SellerType = Literal["private", "dealer"]
+# docs/CARROCERIA.md: the same codes, in the same order, everywhere.
+BodyType = Literal[BODY_TYPE_CODES]  # type: ignore[valid-type]
 
 MAX_VEHICLES = 5
 
@@ -34,11 +38,17 @@ class SearchDraft(_Strict):
     """One vehicle the user is looking for: a proposed Search Profile (sección 4.3)."""
 
     make: str | None = Field(description="Marca, p. ej. «Ford». null si no se dice y el modelo no la implica.")
-    model: str | None = Field(description="Modelo sin la versión, p. ej. «Fiesta», «Gol Trend», «Corolla Cross».")
+    model: str | None = Field(description="Modelo sin la versión, p. ej. «Fiesta», «Gol Trend», «Corolla Cross». "
+                                          "Nunca una carrocería («SUV», «pick-up»): eso va en body_types.")
     trim: str | None = Field(description="Versión o nivel de equipamiento, p. ej. «Titanium», «Highline».")
     trims: list[str] = Field(default_factory=list, max_length=30,
                             description="Todas las versiones pedidas del mismo modelo; vacío si no especifica versión.")
     trim_strict: bool = Field(description="true solo si pide exclusivamente esa versión («solo Highline»).")
+    # Defaulted, like trims, so recordings from before the field stay valid;
+    # json_schema() still sends it as required.
+    body_types: list[BodyType] = Field(default_factory=list, max_length=len(BODY_TYPE_CODES),
+                                       description="Carrocerías que la persona nombra («SUV», «sedán», «pick-up»); "
+                                                   "vacío si no nombra ninguna. Nunca deducirla del modelo ni del uso.")
     year_min: int | None = Field(description="Año modelo mínimo.")
     year_max: int | None = Field(description="Año modelo máximo.")
     price_max: float | None = Field(description="Precio máximo, en unidades de `currency` (sin abreviar).")
