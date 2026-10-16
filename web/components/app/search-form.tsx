@@ -9,7 +9,14 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
@@ -222,6 +229,8 @@ export function SearchForm({
   const initialMode: Draft["mode"] = savedModelLess && showModes ? "body" : "model";
   const [d, setDraft] = useState<Draft>(() => draftFrom(initial, isNew, approximateLocation, initialMode));
   const [versionText, setVersionText] = useState("");
+  // With catalog versions, the free-text field hides until asked for from the menu.
+  const [otherVersion, setOtherVersion] = useState(false);
   // The proposal as it arrived, to record whether the user corrected it.
   const [pristine] = useState(() =>
     JSON.stringify(toInput(draftFrom(initial, isNew, null, initialMode), offeredBy(initial.make, initial.model))));
@@ -289,11 +298,13 @@ export function SearchForm({
 
   function chooseMake(make: string) {
     setVersionText("");
+    setOtherVersion(false);
     setDraft((prev) => ({ ...prev, make, model: "", trim: "", trims: [], trim_strict: false, fuel: "" }));
   }
 
   function chooseModel(model: string) {
     setVersionText("");
+    setOtherVersion(false);
     setDraft((prev) => ({ ...prev, model, trim: "", trims: [], trim_strict: false }));
   }
 
@@ -308,6 +319,7 @@ export function SearchForm({
     if (!pendingVersion) return;
     chooseTrim(pendingVersion, true);
     setVersionText("");
+    setOtherVersion(false);
   }
 
   function choosePlace(place: string) {
@@ -513,7 +525,8 @@ export function SearchForm({
                       <ChevronDown className="size-4 opacity-50" aria-hidden />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent className="max-h-72">
+                  {/* Focus goes to the free-text field when it was asked for, not back to the trigger. */}
+                  <DropdownMenuContent className="max-h-72" onCloseAutoFocus={(e) => { if (otherVersion) e.preventDefault(); }}>
                     {[...new Set([...entry.trims, ...d.trims])].map((t) => (
                       <DropdownMenuCheckboxItem
                         key={t}
@@ -525,23 +538,28 @@ export function SearchForm({
                         {t}
                       </DropdownMenuCheckboxItem>
                     ))}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onSelect={() => setOtherVersion(true)}>Escribir otra versión…</DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               ) : null}
               {/* Listings carry versions the catalog doesn't (and some models have none). */}
+              {!entry?.trims.length || otherVersion ? (
               <div className="flex gap-2">
                 <Input
                   id={entry?.trims.length ? fid("trim_other") : fid("trim")}
+                  autoFocus={otherVersion}
                   aria-label={entry?.trims.length ? "Otra versión" : undefined}
                   value={versionText}
                   onChange={(e) => setVersionText(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addFreeVersion(); } }}
-                  placeholder={entry?.trims.length ? "¿No está en la lista? Escribila" : "Ej.: Highline"}
+                  placeholder="Ej.: Highline"
                   maxLength={60}
                   disabled={!d.model}
                 />
                 <Button type="button" variant="outline" onClick={addFreeVersion} disabled={!d.model || !pendingVersion}>Agregar versión</Button>
               </div>
+              ) : null}
               {d.trims.length ? (
                 <ul aria-label="Versiones seleccionadas" className="flex flex-wrap gap-2">
                   {d.trims.map((trim) => (
