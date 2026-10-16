@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth";
 import { includesImmediateAlerts, type PlanLimits, visibleResults } from "@/lib/pro";
+import { describeVehicle } from "@/lib/search";
 import { collectionPending } from "@/lib/search-collection";
 import { loadSearchCollection } from "@/lib/search-collection-server";
 import { isSort, type Sort } from "@/lib/sorts";
@@ -100,7 +101,7 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
       <header className="space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <h1 className="type-heading flex min-w-0 max-w-full items-center gap-2 text-[28px] leading-tight">
-            <span className="truncate">{profile.name}</span>
+            <span className="truncate">{profile.name.trim() || describeVehicle(filters) || "Búsqueda"}</span>
             {!profile.enabled ? <Badge variant="secondary">Pausada</Badge> : null}
           </h1>
           <div className="flex flex-wrap items-center gap-2">

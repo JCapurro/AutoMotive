@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Contact, LegalPage } from "@/components/legal-page";
 import { contactEmail } from "@/lib/env";
 import { webConfig } from "@/lib/config";
-import { type PlanCaps, planPrice } from "@/lib/pro";
+import { modelLessText, type PlanCaps, planPrice } from "@/lib/pro";
 
 export const metadata: Metadata = { title: "Términos de uso" };
 export const dynamic = "force-dynamic";
@@ -43,10 +43,11 @@ export default async function TermsPage() {
         Si lo comprás con el acceso vigente, los 30 días se suman a tu vencimiento; si lo comprás después de vencer, rigen desde
         la aprobación del pago y reactivamos tus búsquedas anteriores, hasta {pass.maxProfiles}.
         Pro cuesta {planPrice(proOffer.pro_monthly.amount)} ARS por mes y permite {searches(pro)} y {alerts(pro)} en una cuenta.
+        {modelLessText(planLimits) ? ` ${modelLessText(planLimits)}` : ""}
         {pro.thresholdAlerts ? " Cada búsqueda de Pro puede tener un umbral de oportunidad: lo que está ese porcentaje o más por debajo de autos comparables se avisa al instante, sin tope diario, y el resto, igual que lo que no tiene comparables suficientes, va al resumen." : ""}
         {automaticPayments ? " Pro se cobra cada mes mediante una suscripción de Mercado Pago hasta que la canceles. El acceso corresponde al mes calendario de cada débito aprobado. No hay otra prueba gratis ni almacenamiento de tarjetas en S Auto." : " En el piloto asistido, Pro se activa por 30 días con renovación manual. La administración confirma el pago externo antes de activar el período."}</p>
       <p>Al vencer el acceso se detienen nuevas coincidencias y alertas, incluidos los favoritos; se conserva el historial.
-        Pausar una búsqueda libera capacidad. Cada modelo guardado consume una búsqueda.
+        Pausar una búsqueda libera capacidad. Cada modelo guardado, o cada búsqueda por carrocería sin modelo, consume una búsqueda.
         Los avisos inmediatos de nuevas coincidencias se cuentan por día calendario, en hora de Argentina;
         los que pasan el tope del plan van al resumen. Las bajas de precio de favoritos mantienen su aviso inmediato con acceso vigente.</p>
       <p>{automaticPayments ? "Podés cancelar la suscripción Pro desde Ajustes. Mostramos la baja cuando Mercado Pago la confirma; se detienen las siguientes renovaciones y tu período ya pagado sigue vigente hasta su vencimiento." : "Podés avisar que no querés renovar desde Ajustes. Tu período ya pagado sigue vigente hasta su vencimiento."}

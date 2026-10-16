@@ -88,6 +88,39 @@ export const FUEL: Record<string, string> = {
   electrico: "Eléctrico",
 };
 
+// docs/CARROCERIA.md: the same codes and order as the database, the worker
+// (normalization/body_type.py) and the LLM.
+export const BODY_TYPE_CODES = [
+  "sedan", "hatchback", "suv", "pickup", "rural", "monovolumen", "coupe", "convertible", "utilitario",
+] as const;
+export type BodyType = (typeof BODY_TYPE_CODES)[number];
+export const BODY_TYPE: Record<BodyType, string> = {
+  sedan: "Sedán",
+  hatchback: "Hatchback",
+  suv: "SUV",
+  pickup: "Pick-up",
+  rural: "Rural",
+  monovolumen: "Monovolumen",
+  coupe: "Coupé",
+  convertible: "Convertible",
+  utilitario: "Utilitario",
+};
+
+export function isBodyType(value: unknown): value is BodyType {
+  return typeof value === "string" && (BODY_TYPE_CODES as readonly string[]).includes(value);
+}
+
+/** The known codes of a list, once each, in the canonical order. */
+export function bodyTypeCodes(codes: readonly unknown[] | null | undefined): BodyType[] {
+  return BODY_TYPE_CODES.filter((code) => codes?.includes(code));
+}
+
+/** ["suv", "pickup"] → "SUV o Pick-up"; three or more: "Sedán, SUV o Pick-up". */
+export function bodyTypesText(codes: readonly unknown[] | null | undefined): string {
+  const labels = bodyTypeCodes(codes).map((code) => BODY_TYPE[code]);
+  return labels.length > 1 ? `${labels.slice(0, -1).join(", ")} o ${labels[labels.length - 1]}` : (labels[0] ?? "");
+}
+
 export const CHANNEL: Record<string, string> = { telegram: "Telegram", email: "Email", web: "Web" };
 
 // "¿Por qué apareció?" (§23): what an ok reason says, by match_reasons key.
@@ -98,6 +131,7 @@ export const REASON_OK: Record<string, string> = {
   km: "Kilometraje compatible",
   transmission: "Caja buscada",
   fuel: "Combustible buscado",
+  body_type: "Carrocería buscada",
   location: "Zona compatible",
   source: "Fuente elegida",
   trim: "Versión buscada",
@@ -114,6 +148,7 @@ export const REASON_NAME: Record<string, string> = {
   km: "Kilometraje",
   transmission: "Caja",
   fuel: "Combustible",
+  body_type: "Carrocería",
   location: "Ubicación",
   source: "Fuente",
   trim: "Versión",

@@ -126,3 +126,15 @@ it("offers a running Particular to extend it, with the days adding up to its end
   expect(html).toContain('checked="" value="pass_30"');
 });
 
+
+it("lists the search by body type where plan_limits gives it (docs/CARROCERIA.md)", () => {
+  const cfg = { proOffer: DEFAULT_PRO_OFFER, planLimits: DEFAULT_PLAN_LIMITS, automaticPayments: true, commercialPilot: true };
+  const html = renderToStaticMarkup(createElement(PublicPlans, { cfg, signedIn: false }));
+  // Particular's and Pro's cards, not the trial's.
+  expect(html.match(/Búsqueda por carrocería, sin modelo/g)).toHaveLength(2);
+  expect(html).toContain("Con Particular y Pro también podés buscar por carrocería, sin elegir modelo");
+  const none = { ...cfg, planLimits: { ...DEFAULT_PLAN_LIMITS, pass: { ...DEFAULT_PLAN_LIMITS.pass, modelLessSearch: false },
+    pro: { ...DEFAULT_PLAN_LIMITS.pro, modelLessSearch: false } } };
+  const without = renderToStaticMarkup(createElement(PublicPlans, { cfg: none, signedIn: false }));
+  expect(without).not.toContain("carrocería");
+});

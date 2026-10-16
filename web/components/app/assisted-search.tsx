@@ -79,6 +79,8 @@ export function AssistedSearch({
   initialText = "",
   approximateLocation = null,
   limit = null,
+  thresholdAlerts = false,
+  modelLessSearch = false,
 }: {
   catalog: Catalog;
   sources: Source[];
@@ -86,6 +88,9 @@ export function AssistedSearch({
   initialText?: string;
   approximateLocation?: DetectedLocation | null;
   limit?: SearchLimit | null;
+  /** The plan's features, for every form below (as the structured tab's). */
+  thresholdAlerts?: boolean;
+  modelLessSearch?: boolean;
 }) {
   const [text, setText] = useState(initialText);
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
@@ -153,7 +158,7 @@ export function AssistedSearch({
       } else {
         const drafts: Reviewed[] = parsed.data.drafts.map((draft, i) => ({
           title: draftTitle(draft, i),
-          ...draftToValues(draft, base),
+          ...draftToValues(draft, base, modelLessSearch),
           state: "pending",
         }));
         const next = afterParse(drafts.length, limit);
@@ -197,7 +202,7 @@ export function AssistedSearch({
       clearTimeout(deadline);
       if (channel) void supabase.removeChannel(channel);
     };
-  }, [waitingJob, supabase, base, limit]);
+  }, [waitingJob, supabase, base, limit, modelLessSearch]);
 
   function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -332,6 +337,8 @@ export function AssistedSearch({
                   notes={d.notes}
                   origin={{ mode: "assisted", jobId: phase.jobId, stay: !single }}
                   onSaved={(id) => update(i, { state: "saved", savedId: id })}
+                  thresholdAlerts={thresholdAlerts}
+                  modelLessSearch={modelLessSearch}
                 />
               </>
             )}
@@ -389,6 +396,8 @@ export function AssistedSearch({
           profileId={null}
           approximateLocation={approximateLocation}
           origin={{ mode: "assisted_fallback", jobId: phase.jobId, stay: false }}
+          thresholdAlerts={thresholdAlerts}
+          modelLessSearch={modelLessSearch}
         />
       </div>
     );

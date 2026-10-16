@@ -39,6 +39,8 @@ export type Filters = {
   km_max?: number;
   transmission?: "manual" | "automatic";
   fuel?: string;
+  /** Body type codes (docs/CARROCERIA.md); omitted when empty. Without make and model: a model-less search. */
+  body_types?: string[];
   sources?: string[];
   location_label?: string;
 };

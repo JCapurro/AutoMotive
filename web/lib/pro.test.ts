@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   planFeatures,
   accountAlertCap, alertCapsText, bannerCopy, canAcquirePlan, DEFAULT_PLAN_LIMITS, DEFAULT_PRO_OFFER, extendsPass, includesImmediateAlerts,
-  isPlacement, isWaitlistPlan, planLimits, proOffer, searchCapacity, visibleResults,
+  isPlacement, isWaitlistPlan, modelLessText, planLimits, proOffer, searchCapacity, visibleResults,
 } from "./pro";
 
 const free = (enforced: boolean) => ({ plan: "free" as const, enforced, limits: { max_visible_results: 50 } });
@@ -70,14 +70,19 @@ describe("planLimits", () => {
     expect(planLimits({
       enforced: true,
       free: { max_profiles: 1, max_visible_results: 100, immediate_alerts_per_day: 3 },
-      pass: { max_profiles: 3, immediate_alerts_per_day: 10 },
-      pro: { max_profiles: 15, immediate_alerts_per_day: 50, threshold_alerts: true },
+      pass: { max_profiles: 3, immediate_alerts_per_day: 10, model_less_search: true },
+      pro: { max_profiles: 15, immediate_alerts_per_day: 50, threshold_alerts: true, model_less_search: true },
     })).toEqual({ ...DEFAULT_PLAN_LIMITS,
-      pro: { maxProfiles: 15, maxVisibleResults: null, immediateAlertsPerDay: 50, thresholdAlerts: true } });
+      pro: { maxProfiles: 15, maxVisibleResults: null, immediateAlertsPerDay: 50, thresholdAlerts: true, modelLessSearch: true } });
   });
   it("gives a feature only to the plans that say true", () => {
     const limits = planLimits({ pro: { max_profiles: 20, threshold_alerts: true }, pass: { max_profiles: 3, threshold_alerts: "true" } });
     expect([limits.pro.thresholdAlerts, limits.pass.thresholdAlerts]).toEqual([true, false]);
+    // model_less_search (docs/CARROCERIA.md) the same way.
+    expect([limits.pro.modelLessSearch, limits.pass.modelLessSearch]).toEqual([false, false]);
+    expect(planLimits({ pass: { max_profiles: 3, model_less_search: true } }).pass.modelLessSearch).toBe(true);
+    expect([DEFAULT_PLAN_LIMITS.free, DEFAULT_PLAN_LIMITS.pass, DEFAULT_PLAN_LIMITS.pro].map((p) => p.modelLessSearch))
+      .toEqual([false, true, true]);
   });
   it("reads the legacy boolean as the database does: the global cap or none", () => {
     const legacy = planLimits({
@@ -85,13 +90,13 @@ describe("planLimits", () => {
       pass: { max_profiles: 3, immediate_alerts: true },
       pro: { max_profiles: 10, immediate_alerts: true },
     }, 10);
-    expect(legacy.free).toEqual({ maxProfiles: 1, maxVisibleResults: 50, immediateAlertsPerDay: 0, thresholdAlerts: false });
-    expect(legacy.pro).toEqual({ maxProfiles: 10, maxVisibleResults: null, immediateAlertsPerDay: 10, thresholdAlerts: false });
+    expect(legacy.free).toEqual({ maxProfiles: 1, maxVisibleResults: 50, immediateAlertsPerDay: 0, thresholdAlerts: false, modelLessSearch: false });
+    expect(legacy.pro).toEqual({ maxProfiles: 10, maxVisibleResults: null, immediateAlertsPerDay: 10, thresholdAlerts: false, modelLessSearch: false });
   });
   it("keeps the defaults for a missing config or plan, and rejects junk", () => {
     expect(planLimits(null)).toEqual(DEFAULT_PLAN_LIMITS);
     expect(planLimits({ free: { max_profiles: "1", immediate_alerts_per_day: -2 } }).free)
-      .toEqual({ maxProfiles: 1, maxVisibleResults: null, immediateAlertsPerDay: 0, thresholdAlerts: false });
+      .toEqual({ maxProfiles: 1, maxVisibleResults: null, immediateAlertsPerDay: 0, thresholdAlerts: false, modelLessSearch: false });
   });
   it("words the per-plan alert caps for the plans page and terms", () => {
     expect(alertCapsText(DEFAULT_PLAN_LIMITS)).toBe(
@@ -101,9 +106,17 @@ describe("planLimits", () => {
   });
   it("lists Pro's card lines from its features", () => {
     expect(planFeatures(DEFAULT_PLAN_LIMITS.pro)).toEqual(["Hasta 20 búsquedas activas", "Todos los resultados disponibles",
-      "Avisos inmediatos sin tope de las oportunidades que elegís", "Historial y favoritos"]);
+      "Avisos inmediatos sin tope de las oportunidades que elegís", "Búsqueda por carrocería, sin modelo", "Historial y favoritos"]);
     expect(planFeatures(DEFAULT_PLAN_LIMITS.pass)).toEqual(["Hasta 3 búsquedas activas", "Todos los resultados disponibles",
-      "Hasta 10 avisos inmediatos por día y resumen diario", "Historial y favoritos"]);
+      "Hasta 10 avisos inmediatos por día y resumen diario", "Búsqueda por carrocería, sin modelo", "Historial y favoritos"]);
+    expect(planFeatures({ ...DEFAULT_PLAN_LIMITS.pass, modelLessSearch: false })).not.toContain("Búsqueda por carrocería, sin modelo");
+  });
+  it("words which plans search by body type without a model, from plan_limits", () => {
+    expect(modelLessText(DEFAULT_PLAN_LIMITS)).toBe("Con Particular y Pro también podés buscar por carrocería, sin elegir "
+      + "modelo (por ejemplo, cualquier SUV hasta un precio máximo): cuenta como una búsqueda.");
+    const passless = { ...DEFAULT_PLAN_LIMITS, pass: { ...DEFAULT_PLAN_LIMITS.pass, modelLessSearch: false } };
+    expect(modelLessText(passless)).toMatch(/^Con Pro también podés buscar por carrocería/);
+    expect(modelLessText({ ...passless, pro: { ...DEFAULT_PLAN_LIMITS.pro, modelLessSearch: false } })).toBeNull();
   });
 });
 

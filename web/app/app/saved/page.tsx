@@ -49,7 +49,7 @@ export default async function SavedPage() {
   const [{ data: listings }, { data: snapshots }, { data: matches }] = await Promise.all([
     supabase
       .from("listings")
-      .select("id, title, make, model, trim, year, price, currency, price_usd, mileage_km, location_text, published_at, first_seen_at, images, status, probable_repost_of")
+      .select("id, title, make, model, trim, year, price, currency, price_usd, mileage_km, location_text, published_at, first_seen_at, images, status, probable_repost_of, body_type")
       .in("id", ids),
     supabase
       .from("listing_snapshots")

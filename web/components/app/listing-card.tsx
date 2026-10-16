@@ -1,6 +1,7 @@
 import { Car, MapPin, Star } from "lucide-react";
 import Link from "next/link";
 
+import { BODY_TYPE, isBodyType } from "@/lib/copy";
 import { ageLine, firstImage, km, money, vehicle } from "@/lib/format";
 import type { MatchCard } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -42,7 +43,7 @@ export function ListingCard({
     | "listing_status"
     | "probable_repost_of"
   > &
-    Partial<Pick<MatchCard, "price_kind" | "financing_offered" | "price_usd">>;
+    Partial<Pick<MatchCard, "price_kind" | "financing_offered" | "price_usd" | "body_type">>;
   showProfile?: boolean;
   footer?: React.ReactNode;
 }) {
@@ -90,6 +91,7 @@ export function ListingCard({
 
       <p className="flex min-w-0 flex-wrap gap-x-3.5 text-[13px] text-muted-foreground">
         {mileage ? <span>{mileage}</span> : null}
+        {isBodyType(card.body_type) ? <span>{BODY_TYPE[card.body_type]}</span> : null}
         {card.location_text ? (
           <span className="inline-flex min-w-0 items-center gap-1">
             <MapPin className="size-3 shrink-0" aria-hidden />

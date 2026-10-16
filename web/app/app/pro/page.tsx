@@ -57,7 +57,7 @@ export default async function ProPage({ searchParams }: PageProps<"/app/pro">) {
         automatic={cfg.automaticPayments}
       />
       {(checkouts ?? []).map((checkout) => <BillingStatus key={checkout.id} checkout={checkout} />)}
-      <p className="text-sm text-muted-foreground">Cada modelo guardado cuenta como una búsqueda; pausar libera capacidad.
+      <p className="text-sm text-muted-foreground">Cada modelo guardado, o cada búsqueda por carrocería sin modelo, cuenta como una búsqueda; pausar libera capacidad.
         {" "}{alertCapsText(cfg.planLimits)}{" "}
         En Custom, las condiciones se definen en la propuesta.
         Las bajas de precio de favoritos pueden avisarse de inmediato mientras tu acceso siga vigente.

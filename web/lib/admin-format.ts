@@ -1,3 +1,4 @@
+import { bodyTypesText } from "@/lib/copy";
 import { dateTime, number, pct } from "@/lib/format";
 
 /** Formatting for the admin tables. */
@@ -14,14 +15,17 @@ export function count(value: number | null | undefined): string {
   return number(value == null ? null : Number(value));
 }
 
-/** "Ford Fiesta 2016–2018 · ≤ USD 11.500" from search_profiles.filters. */
+/** "Ford Fiesta · 2016–2018 · ≤ USD 11.500"; "SUV o Pick-up · sin modelo · …" from search_profiles.filters. */
 export function filterSummary(filters: unknown): string {
   const f = (filters ?? {}) as Record<string, unknown>;
-  const parts = [[f.make, f.model].filter(Boolean).join(" ") || "Sin vehículo"];
+  const bodyTypes = bodyTypesText(Array.isArray(f.body_types) ? f.body_types : []);
+  const vehicle = [f.make, f.model].filter(Boolean).join(" ");
+  const parts = [vehicle || (bodyTypes ? `${bodyTypes} · sin modelo` : "Sin vehículo")];
   if (f.year_min || f.year_max) parts.push(`${f.year_min ?? "…"}–${f.year_max ?? "…"}`);
   if (f.price_max) parts.push(`≤ ${f.currency ?? "USD"} ${number(Number(f.price_max))}`);
   if (f.km_max) parts.push(`≤ ${number(Number(f.km_max))} km`);
   if (f.transmission) parts.push(String(f.transmission));
+  if (vehicle && bodyTypes) parts.push(bodyTypes);
   return parts.join(" · ");
 }
 

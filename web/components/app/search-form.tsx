@@ -1,6 +1,7 @@
 "use client";
 
 import { Info, Loader2, LocateFixed, X } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 import { type Preview, type SaveOrigin, previewSearch, saveSearch } from "@/app/app/searches/actions";
@@ -12,10 +13,19 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import type { Catalog } from "@/lib/catalog";
-import { FREQUENCY, FUEL, MIN_LEVEL_OPTIONS, SELLER, TRANSMISSION } from "@/lib/copy";
+import { BODY_TYPE, BODY_TYPE_CODES, type BodyType, FREQUENCY, FUEL, MIN_LEVEL_OPTIONS, SELLER, TRANSMISSION, isBodyType } from "@/lib/copy";
 import { km, money, number, vehicle } from "@/lib/format";
 import { PROVINCES, citiesInProvince, cityById, cityByLocation } from "@/lib/argentina-locations";
-import { type SearchInput, type SearchValues, defaultName, selectedTrims } from "@/lib/search-form";
+import {
+  MODEL_LESS_UNAVAILABLE,
+  MODEL_LESS_UPSELL,
+  type SearchInput,
+  type SearchValues,
+  defaultName,
+  isModelLess,
+  modelBodyTypes,
+  selectedTrims,
+} from "@/lib/search-form";
 import { cn } from "@/lib/utils";
 import { analyticsEvent } from "@/lib/google-analytics";
 import { detectDeviceLocation, type DetectedLocation } from "@/lib/search-location";
@@ -25,6 +35,8 @@ type Source = { id: string; name: string };
 type Draft = {
   name: string;
   nameTouched: boolean;
+  /** "model": make and model; "body": body types only, no model (model_less_search). */
+  mode: "model" | "body";
   make: string;
   model: string;
   trim: string;
@@ -37,6 +49,8 @@ type Draft = {
   km_max: string;
   transmission: "" | "manual" | "automatic";
   fuel: string;
+  /** In "model" mode only the ones the model offers count (toInput); the rest wait for another model. */
+  body_types: BodyType[];
   sources: string[];
   place: string; // "" (todo el país) | "city" | "current" | "saved"
   province: string;
@@ -65,7 +79,12 @@ function percentInput(text: string): number | null {
 }
 
 /** A new search starts with an approximate zone, refined silently if permission exists. */
-function draftFrom(v: SearchValues, isNew: boolean, approximateLocation: DetectedLocation | null = null): Draft {
+function draftFrom(
+  v: SearchValues,
+  isNew: boolean,
+  approximateLocation: DetectedLocation | null = null,
+  mode: Draft["mode"] = "model",
+): Draft {
   let place = isNew ? "current" : "";
   let saved: Draft["saved"] = null;
   let province = "";
@@ -84,6 +103,7 @@ function draftFrom(v: SearchValues, isNew: boolean, approximateLocation: Detecte
   return {
     name: v.name,
     nameTouched: Boolean(v.name) && v.name !== defaultName(v),
+    mode,
     make: v.make,
     model: v.model,
     trim: v.trim,
@@ -96,6 +116,7 @@ function draftFrom(v: SearchValues, isNew: boolean, approximateLocation: Detecte
     km_max: v.km_max != null ? number(v.km_max) : "",
     transmission: v.transmission,
     fuel: v.fuel,
+    body_types: v.body_types,
     sources: v.sources,
     place,
     province,
@@ -127,14 +148,16 @@ function location(d: Draft): SearchInput["location"] {
   return null;
 }
 
-function toInput(d: Draft): SearchInput {
+/** `offered`: the body types the chosen model offers (modelBodyTypes). */
+function toInput(d: Draft, offered: readonly string[]): SearchInput {
+  const byBody = d.mode === "body";
   return {
     name: d.nameTouched ? d.name : "",
-    make: d.make,
-    model: d.model,
-    trim: d.trim,
-    trims: d.trims,
-    trim_strict: d.trim_strict,
+    make: byBody ? "" : d.make,
+    model: byBody ? "" : d.model,
+    trim: byBody ? "" : d.trim,
+    trims: byBody ? [] : d.trims,
+    trim_strict: byBody ? false : d.trim_strict,
     year_min: amount(d.year_min),
     year_max: amount(d.year_max),
     price_max: amount(d.price_max),
@@ -142,6 +165,7 @@ function toInput(d: Draft): SearchInput {
     km_max: amount(d.km_max),
     transmission: d.transmission,
     fuel: d.fuel,
+    body_types: byBody ? d.body_types : d.body_types.filter((code) => offered.includes(code)),
     sources: d.sources,
     location: location(d),
     km_target: amount(d.km_target),
@@ -166,6 +190,7 @@ export function SearchForm({
   onSaved,
   approximateLocation = null,
   thresholdAlerts = false,
+  modelLessSearch = false,
 }: {
   catalog: Catalog;
   sources: Source[];
@@ -181,13 +206,24 @@ export function SearchForm({
   approximateLocation?: DetectedLocation | null;
   /** The plan includes the opportunity threshold (Pro, 3.2). */
   thresholdAlerts?: boolean;
+  /** The plan can search by body type without a model (Particular, Pro; docs/CARROCERIA.md). */
+  modelLessSearch?: boolean;
 }) {
   const fid = (key: string) => (idPrefix ? `${idPrefix}-${key}` : key);
   const isNew = profileId == null && !initial.location;
-  const [d, setDraft] = useState<Draft>(() => draftFrom(initial, isNew, approximateLocation));
+  const offeredBy = (make: string, model: string) =>
+    modelBodyTypes(catalog.find((m) => m.make === make)?.models.find((m) => m.model === model)?.bodyTypes);
+  // A model-less proposal opens by body type when the plan has it; without
+  // it, by model with its body types kept to preselect. A saved model-less
+  // search always opens by body type, locked if the account lost the feature.
+  const savedModelLess = isModelLess(initial) && initial.body_types.length > 0;
+  const showModes = modelLessSearch || (profileId != null && savedModelLess);
+  const initialMode: Draft["mode"] = savedModelLess && showModes ? "body" : "model";
+  const [d, setDraft] = useState<Draft>(() => draftFrom(initial, isNew, approximateLocation, initialMode));
   const [versionText, setVersionText] = useState("");
   // The proposal as it arrived, to record whether the user corrected it.
-  const [pristine] = useState(() => JSON.stringify(toInput(draftFrom(initial, isNew))));
+  const [pristine] = useState(() =>
+    JSON.stringify(toInput(draftFrom(initial, isNew, null, initialMode), offeredBy(initial.make, initial.model))));
   // Until the user picks a zone, the location filled in on mount isn't a correction.
   const placeTouched = useRef(false);
   const locationRequest = useRef(0);
@@ -201,8 +237,12 @@ export function SearchForm({
 
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft((prev) => ({ ...prev, [key]: value }));
 
+  const byBody = d.mode === "body";
+  // By body type without the plan feature: shown, but it can't be saved.
+  const locked = byBody && !modelLessSearch;
   const models = useMemo(() => catalog.find((m) => m.make === d.make)?.models ?? [], [catalog, d.make]);
-  const entry = models.find((m) => m.model === d.model);
+  const entry = byBody ? undefined : models.find((m) => m.model === d.model);
+  const offered = useMemo(() => modelBodyTypes(entry?.bodyTypes), [entry]);
   const cities = useMemo(() => citiesInProvince(d.province), [d.province]);
   const cityNames = useMemo(() => {
     const counts = new Map<string, number>();
@@ -216,15 +256,24 @@ export function SearchForm({
   }, [entry]);
   const fuels = entry?.fuels.length ? entry.fuels : Object.keys(FUEL);
   const pendingVersion = versionText.trim();
-  const autoName = defaultName({ make: d.make, model: d.model, trim: d.trim, trims: [...d.trims, pendingVersion].filter(Boolean) });
 
-  const input = useMemo(() => toInput({ ...d, trims: [...new Set([...d.trims, versionText.trim()].filter(Boolean))] }), [d, versionText]);
+  const input = useMemo(
+    () => toInput({ ...d, trims: [...new Set([...d.trims, versionText.trim()].filter(Boolean))] }, offered),
+    [d, versionText, offered],
+  );
+  const autoName = defaultName(input);
+  // By body type the search needs a max price (lib/search-form.ts): without
+  // one previewSearch rejects the input, which isn't a failed count.
+  const bodyNeedsPrice = byBody && input.price_max == null;
+  const vehicleReady = byBody
+    ? Boolean(input.body_types?.length) && !bodyNeedsPrice && !locked
+    : Boolean(input.make && input.model);
   const locationReady = !((d.place === "current" && !d.current) || (d.place === "city" && !d.city));
   const previewKey = JSON.stringify({ ...input, locationReady, name: "", notification_frequency: "", notify_min_level: "",
     opportunity_threshold_pct: null });
 
   useEffect(() => {
-    if (!input.make || !input.model || !locationReady) return;
+    if (!vehicleReady || !locationReady) return;
     const timer = setTimeout(() => {
       startPreview(async () => {
         const data = await previewSearch(input);
@@ -303,6 +352,19 @@ export function SearchForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once, when a new search opens
   }, []);
 
+  function chooseMode(mode: string) {
+    setErrors({});
+    set("mode", mode === "body" ? "body" : "model");
+  }
+
+  function toggleBodyType(code: string, on: boolean) {
+    if (!isBodyType(code)) return;
+    setDraft((prev) => ({
+      ...prev,
+      body_types: on ? [...new Set([...prev.body_types, code])] : prev.body_types.filter((c) => c !== code),
+    }));
+  }
+
   function toggleSource(id: string, on: boolean) {
     setDraft((prev) => ({
       ...prev,
@@ -313,6 +375,10 @@ export function SearchForm({
   function submit(event: React.FormEvent) {
     event.preventDefault();
     setErrors({});
+    if (locked) {
+      setErrors({ error: MODEL_LESS_UNAVAILABLE });
+      return;
+    }
     if (!locationReady) {
       setErrors({ fields: { location: "Elegí provincia y ciudad o permití el acceso a tu ubicación." } });
       return;
@@ -365,12 +431,51 @@ export function SearchForm({
             </AlertDescription>
           </Alert>
         ) : null}
+        {showModes ? (
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium">Buscar por</legend>
+            <Segmented
+              name={fid("mode")}
+              value={d.mode}
+              onChange={chooseMode}
+              options={[
+                { value: "model", label: "Modelo" },
+                { value: "body", label: "Carrocería" },
+              ]}
+            />
+          </fieldset>
+        ) : null}
         <Card>
           <CardHeader>
             <CardTitle>Vehículo</CardTitle>
-            <CardDescription>Podés incluir varias versiones del mismo modelo. Cada modelo distinto tiene su propia búsqueda.</CardDescription>
+            <CardDescription>
+              {byBody
+                ? "Buscamos autos de cualquier marca y modelo con estas carrocerías, hasta el precio máximo que pongas."
+                : "Podés incluir varias versiones del mismo modelo. Cada modelo distinto tiene su propia búsqueda."}
+            </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
+            {byBody ? (
+              <fieldset className="space-y-2 sm:col-span-2" disabled={locked}>
+                <legend className="text-sm font-medium">Carrocería</legend>
+                <ChipToggles
+                  name={fid("body_types")}
+                  value={d.body_types}
+                  onToggle={toggleBodyType}
+                  options={BODY_TYPE_CODES.map((code) => ({ value: code, label: BODY_TYPE[code] }))}
+                />
+                {locked ? (
+                  <p className="text-sm">
+                    {MODEL_LESS_UNAVAILABLE}{" "}
+                    <Link href="/app/pro" className="font-medium underline underline-offset-3">Ver planes</Link>
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Elegí una o más. Necesita un precio máximo.</p>
+                )}
+                {fieldError("body_types")}
+              </fieldset>
+            ) : (
+            <>
             <Field id={fid("make")} label="Marca" error={fieldError("make")}>
               <NativeSelect id={fid("make")} value={d.make} onChange={(e) => chooseMake(e.target.value)} className="w-full" required>
                 <NativeSelectOption value="">Elegí una marca</NativeSelectOption>
@@ -445,6 +550,23 @@ export function SearchForm({
                 </label>
               ) : null}
             </div>
+            {offered.length ? (
+              <fieldset className="space-y-2 sm:col-span-2">
+                <legend className="text-sm font-medium">
+                  Carrocería <span className="font-normal text-muted-foreground">· Opcional</span>
+                </legend>
+                <ChipToggles
+                  name={fid("body_types")}
+                  value={d.body_types}
+                  onToggle={toggleBodyType}
+                  options={offered.map((code) => ({ value: code, label: BODY_TYPE[code] }))}
+                />
+                <p className="text-xs text-muted-foreground">Sin carrocería elegida, buscamos todas las del modelo.</p>
+                {fieldError("body_types")}
+              </fieldset>
+            ) : null}
+            </>
+            )}
             <Field id={fid("year_min")} label="Año desde">
               <NativeSelect id={fid("year_min")} value={d.year_min} onChange={(e) => set("year_min", e.target.value)} className="w-full">
                 <NativeSelectOption value="">Cualquiera</NativeSelectOption>
@@ -519,6 +641,12 @@ export function SearchForm({
             </details>
           </CardContent>
         </Card>
+        {!modelLessSearch && !locked ? (
+          <p data-testid="model-less-upsell" className="text-sm text-muted-foreground">
+            {MODEL_LESS_UPSELL}{" "}
+            <Link href="/app/pro" className="font-medium underline underline-offset-3">Ver planes</Link>
+          </p>
+        ) : null}
 
         <Card>
           <CardHeader>
@@ -528,7 +656,7 @@ export function SearchForm({
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
-            <Field id={fid("price_max")} label="Precio máximo" error={fieldError("price_max")}>
+            <Field id={fid("price_max")} label="Precio máximo" hint={byBody ? "Obligatorio" : undefined} error={fieldError("price_max")}>
               <div className="flex gap-2">
                 <NativeSelect
                   className="w-24 shrink-0"
@@ -546,6 +674,7 @@ export function SearchForm({
                   onChange={(e) => set("price_max", e.target.value)}
                   onBlur={() => amount(d.price_max) != null && set("price_max", number(amount(d.price_max)))}
                   placeholder={d.currency === "USD" ? "11.500" : "15.000.000"}
+                  required={byBody}
                 />
               </div>
             </Field>
@@ -721,7 +850,7 @@ export function SearchForm({
                 id={fid("name")}
                 value={d.nameTouched ? d.name : autoName}
                 onChange={(e) => setDraft((prev) => ({ ...prev, name: e.target.value, nameTouched: true }))}
-                placeholder="Ej.: Fiesta Titanium"
+                placeholder={byBody ? "Ej.: SUV para la familia" : "Ej.: Fiesta Titanium"}
                 maxLength={80}
               />
             </Field>
@@ -734,15 +863,25 @@ export function SearchForm({
           preview={shownPreview}
           loading={previewing}
           failed={previewFailed}
-          ready={Boolean(d.make && d.model)}
+          ready={vehicleReady}
+          notReady={
+            locked
+              ? "Para contar las publicaciones, elegí un modelo."
+              : byBody
+                ? input.body_types?.length
+                  ? "Poné un precio máximo para ver cuántas publicaciones coinciden hoy."
+                  : "Elegí al menos una carrocería para ver cuántas publicaciones coinciden hoy."
+                : "Elegí marca y modelo para ver cuántas publicaciones coinciden hoy."
+          }
           locationRequired={!locationReady}
         />
+        {locked && !errors.error ? <p className="text-sm text-destructive">{MODEL_LESS_UNAVAILABLE}</p> : null}
         {errors.error ? (
           <p role="alert" className="text-sm text-destructive">
             {errors.error}
           </p>
         ) : null}
-        <Button type="submit" className="h-11 w-full text-base" disabled={saving || (locating && !locationReady)}>
+        <Button type="submit" className="h-11 w-full text-base" disabled={saving || locked || (locating && !locationReady)}>
           {saving ? <Loader2 className="animate-spin" aria-hidden /> : null}
           {profileId ? "Guardar cambios" : "Crear búsqueda"}
         </Button>
@@ -826,24 +965,67 @@ function Segmented({
   );
 }
 
+/** Checkboxes that look like chips (native inputs: keyboard and screen readers work). Wraps on narrow screens. */
+function ChipToggles({
+  name,
+  value,
+  onToggle,
+  options,
+}: {
+  name: string;
+  value: readonly string[];
+  onToggle: (value: string, on: boolean) => void;
+  options: { value: string; label: string }[];
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {options.map((o) => {
+        const on = value.includes(o.value);
+        return (
+          <label
+            key={o.value}
+            className={cn(
+              "cursor-pointer rounded-full border border-border px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted has-focus-visible:ring-2 has-focus-visible:ring-ring has-disabled:cursor-not-allowed has-disabled:opacity-60",
+              on && "border-primary bg-primary font-medium text-primary-foreground hover:bg-primary",
+            )}
+          >
+            <input
+              type="checkbox"
+              name={name}
+              value={o.value}
+              checked={on}
+              onChange={(e) => onToggle(o.value, e.target.checked)}
+              className="sr-only"
+            />
+            {o.label}
+          </label>
+        );
+      })}
+    </div>
+  );
+}
+
 function PreviewCard({
   preview,
   loading,
   failed,
   ready,
+  notReady,
   locationRequired,
 }: {
   preview: Preview | null;
   loading: boolean;
   failed: boolean;
   ready: boolean;
+  /** What to pick before there's something to count. */
+  notReady: string;
   locationRequired: boolean;
 }) {
   return (
     <Card size="sm" aria-live="polite">
       <CardContent className="space-y-3">
         {!ready ? (
-          <p className="text-sm text-muted-foreground">Elegí marca y modelo para ver cuántas publicaciones coinciden hoy.</p>
+          <p className="text-sm text-muted-foreground">{notReady}</p>
         ) : locationRequired ? (
           <p className="text-sm text-muted-foreground">Elegí una ubicación para contar las publicaciones cercanas.</p>
         ) : failed ? (
@@ -862,7 +1044,10 @@ function PreviewCard({
               <ul className="space-y-1.5 border-t pt-3 text-xs">
                 {preview.sample.map((l) => (
                   <li key={l.id} className="flex justify-between gap-2">
-                    <span className="truncate">{vehicle(l)}</span>
+                    <span className="truncate">
+                      {vehicle(l)}
+                      {isBodyType(l.body_type) ? <span className="text-muted-foreground"> · {BODY_TYPE[l.body_type]}</span> : null}
+                    </span>
                     <span className="shrink-0 text-muted-foreground">
                       {[money(l.price, l.currency), km(l.mileage_km)].filter(Boolean).join(" · ")}
                     </span>

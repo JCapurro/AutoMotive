@@ -105,3 +105,22 @@ describe("saved search criteria", () => {
     expect(html({ sources: [], hasLocation: false })).toBe("");
   });
 });
+
+describe("body types in the criteria", () => {
+  it("shows a model-less search's body types in the vehicle's place", () => {
+    const result = html({ name: "Mi próxima camioneta", filters: { body_types: ["suv", "pickup"], price_max: 20_000, currency: "USD" } });
+    expect(result).toContain(">Carrocería<");
+    expect(result).toContain("SUV o Pick-up");
+    expect(result).not.toContain("Vehículo");
+    // Not repeated when the automatic name already says it.
+    expect(html({ name: "SUV o Pick-up hasta USD 20.000", filters: { body_types: ["suv", "pickup"], price_max: 20_000 } }))
+      .not.toContain(">Carrocería<");
+  });
+  it("keeps a model's body types among the extra criteria", () => {
+    const result = html({ name: "Mi Corsa", filters: { make: "Chevrolet", model: "Corsa", body_types: ["rural"], year_min: 2008,
+      price_max: 6_000, km_max: 200_000, transmission: "manual", location_label: "Rosario" } });
+    expect(result.match(/<dt/g)?.length).toBe(7);
+    expect(result).toContain("Chevrolet Corsa");
+    expect(result).toMatch(/<details[\s\S]*Carrocería[\s\S]*Rural/);
+  });
+});

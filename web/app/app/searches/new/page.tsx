@@ -23,7 +23,7 @@ export default async function NewSearchPage({ searchParams }: PageProps<"/app/se
   const approximateLocation = approximateLocationFromHeaders(await headers());
   const prompt = searchIntentPrompt((await searchParams).prompt);
   const supabase = await createClient();
-  const [{ catalog, sources, defaultFrequency, thresholdAlerts }, { data: snapshot }, cfg] = await Promise.all([
+  const [{ catalog, sources, defaultFrequency, thresholdAlerts, modelLessSearch }, { data: snapshot }, cfg] = await Promise.all([
     loadFormData(supabase),
     supabase.rpc("my_plan_snapshot"),
     webConfig(),
@@ -54,6 +54,7 @@ export default async function NewSearchPage({ searchParams }: PageProps<"/app/se
     km_max: null,
     transmission: "",
     fuel: "",
+    body_types: [],
     sources: sources.map((s) => s.id),
     location: null,
     km_target: null,
@@ -85,10 +86,20 @@ export default async function NewSearchPage({ searchParams }: PageProps<"/app/se
             profileId={null}
             approximateLocation={approximateLocation}
             thresholdAlerts={thresholdAlerts}
+            modelLessSearch={modelLessSearch}
           />
         </TabsContent>
         <TabsContent value="assisted" forceMount className="pt-3 data-[state=inactive]:hidden">
-          <AssistedSearch catalog={catalog} sources={sources} base={initial} initialText={prompt} approximateLocation={approximateLocation} limit={limit} />
+          <AssistedSearch
+            catalog={catalog}
+            sources={sources}
+            base={initial}
+            initialText={prompt}
+            approximateLocation={approximateLocation}
+            limit={limit}
+            thresholdAlerts={thresholdAlerts}
+            modelLessSearch={modelLessSearch}
+          />
         </TabsContent>
       </Tabs>
     </div>

@@ -4,8 +4,8 @@ import { beforeEach, expect, it, vi } from "vitest";
 import type { SearchLimit } from "./assisted";
 import type { DetectedLocation } from "./search-location";
 
-const state = vi.hoisted(() => ({ headers: {} as Record<string, string>, access: null as unknown }));
-beforeEach(() => { state.headers = {}; state.access = null; });
+const state = vi.hoisted(() => ({ headers: {} as Record<string, string>, access: null as unknown, modelLessSearch: false }));
+beforeEach(() => { state.headers = {}; state.access = null; state.modelLessSearch = false; });
 vi.mock("next/headers", () => ({ headers: async () => new Headers(state.headers) }));
 
 vi.mock("@/lib/auth", () => ({ requireUser: vi.fn().mockResolvedValue({ id: "user" }) }));
@@ -15,18 +15,19 @@ vi.mock("@/lib/config", async () => {
   return { webConfig: async () => ({ planLimits: DEFAULT_PLAN_LIMITS, proOffer: DEFAULT_PRO_OFFER }) };
 });
 vi.mock("@/app/app/searches/form-data", () => ({
-  loadFormData: async () => ({ catalog: [], sources: [], defaultFrequency: "daily" }),
+  loadFormData: async () => ({ catalog: [], sources: [], defaultFrequency: "daily", thresholdAlerts: false, modelLessSearch: state.modelLessSearch }),
 }));
 vi.mock("@/components/app/search-form", () => ({
   SearchForm: ({ approximateLocation }: { approximateLocation: DetectedLocation | null }) =>
     createElement("span", { "data-form-zone": approximateLocation?.label }),
 }));
 vi.mock("@/components/app/assisted-search", () => ({
-  AssistedSearch: ({ initialText, approximateLocation, limit }: {
-    initialText: string; approximateLocation: DetectedLocation | null; limit: SearchLimit | null;
+  AssistedSearch: ({ initialText, approximateLocation, limit, modelLessSearch }: {
+    initialText: string; approximateLocation: DetectedLocation | null; limit: SearchLimit | null; modelLessSearch?: boolean;
   }) => createElement("textarea", {
     defaultValue: initialText, "data-assisted-zone": approximateLocation?.label,
     "data-capacity": limit?.capacity, "data-upsell": limit?.upsell ?? undefined,
+    "data-model-less": modelLessSearch ? "yes" : undefined,
   }),
 }));
 
@@ -72,4 +73,13 @@ it("doesn't limit the request while the pilot doesn't enforce limits", async () 
   state.access = { plan: "free", enforced: false, state: "pilot", active_searches: 4, limits: { max_profiles: 1 } };
   const html = renderToStaticMarkup(await NewSearchPage({ params: Promise.resolve({}), searchParams: Promise.resolve({}) }));
   expect(html).not.toContain("data-capacity");
+});
+
+it("hands the search by body type to both flows when the plan has it (docs/CARROCERIA.md)", async () => {
+  state.modelLessSearch = true;
+  const tree = await NewSearchPage({ params: Promise.resolve({}), searchParams: Promise.resolve({}) });
+  expect(renderToStaticMarkup(tree)).toContain('data-model-less="yes"');
+  const structuredTab = tree.props.children[1].props.children[1];
+  expect(structuredTab.props.children.props.modelLessSearch).toBe(true);
+  expect(structuredTab.props.children.props.initial.body_types).toEqual([]);
 });

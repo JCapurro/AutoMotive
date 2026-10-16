@@ -1,6 +1,6 @@
 import { Banknote, CalendarDays, CarFront, Check, ChevronDown, Gauge, Loader2, MapPin, Settings2, type LucideIcon } from "lucide-react";
 
-import { FUEL, SELLER, TRANSMISSION } from "@/lib/copy";
+import { FUEL, SELLER, TRANSMISSION, bodyTypesText } from "@/lib/copy";
 import { number } from "@/lib/format";
 import type { SearchSource } from "@/lib/search-collection";
 import type { Filters, Preferences } from "@/lib/types";
@@ -32,8 +32,12 @@ export function SearchCriteriaSummary({ name, filters: f, preferences: p, radius
   const main: Fact[] = [];
   const extra: Fact[] = [];
   const vehicle = [f.make, f.model].filter(Boolean).join(" ");
+  // The grid holds 6 main facts: without a model the body types take the vehicle's place; within one they go below.
+  const bodyTypes = bodyTypesText(f.body_types);
   if (vehicle && !name.toLocaleLowerCase().includes(vehicle.toLocaleLowerCase())) {
     main.push({ label: "Vehículo", value: vehicle, icon: CarFront });
+  } else if (!vehicle && bodyTypes && !name.toLocaleLowerCase().includes(bodyTypes.toLocaleLowerCase())) {
+    main.push({ label: "Carrocería", value: bodyTypes, icon: CarFront });
   }
   const years = range(f.year_min, f.year_max, String);
   if (years) main.push({ label: "Año", value: years, icon: CalendarDays });
@@ -52,6 +56,7 @@ export function SearchCriteriaSummary({ name, filters: f, preferences: p, radius
   }
 
   if (f.fuel) extra.push({ label: "Combustible", value: FUEL[f.fuel] ?? f.fuel });
+  if (vehicle && bodyTypes) extra.push({ label: "Carrocería", value: bodyTypes });
   const strictTrims = f.trim_strict && f.trims?.length ? f.trims : [];
   if (strictTrims.length) extra.push({ label: "Versión", value: strictTrims.join(", ") });
   const preferredTrims = [...new Set([...(strictTrims.length ? [] : f.trims ?? []), ...(p.preferred_trims ?? [])])];

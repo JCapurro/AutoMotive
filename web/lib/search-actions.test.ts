@@ -1,0 +1,127 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+// saveSearch and previewSearch against a fake Supabase client: what reaches
+// search_profiles and preview_search for searches with body types (docs/CARROCERIA.md).
+const state = vi.hoisted(() => ({
+  features: {} as Record<string, boolean>,
+  catalog: null as { make: string; model: string; body_types: string[] } | null,
+  dbError: null as { message: string } | null,
+  inserted: null as Record<string, unknown> | null,
+  updated: null as Record<string, unknown> | null,
+  rpc: [] as [string, Record<string, unknown> | undefined][],
+  tables: [] as string[],
+  track: vi.fn(),
+}));
+
+vi.mock("server-only", () => ({}));
+vi.mock("next/cache", () => ({ refresh: vi.fn() }));
+vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
+vi.mock("@/lib/auth", () => ({ requireUser: vi.fn().mockResolvedValue({ id: "account" }) }));
+vi.mock("@/lib/events", () => ({ track: state.track }));
+vi.mock("@/lib/meta-pixel-server", () => ({ queuePixel: vi.fn() }));
+vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
+vi.mock("@/lib/supabase/server", () => ({
+  createClient: async () => ({
+    rpc: async (name: string, args?: Record<string, unknown>) => {
+      state.rpc.push([name, args]);
+      if (name === "my_plan_feature") return { data: state.features[String(args?.p_feature)] === true };
+      if (name === "preview_search") return { data: { count: 1, sample: [] } };
+      return { data: { plan: "pass" } };
+    },
+    from: (table: string) => {
+      state.tables.push(table);
+      const result = () => {
+        if (table === "vehicle_catalog") return { data: state.catalog };
+        if (table === "sources") return { data: [{ id: "mercadolibre" }, { id: "kavak" }] };
+        if (table === "profiles") return { data: { default_channels: ["email"] } };
+        return { data: { id: 9, filters: {}, preferences: {}, origin_lat: null, origin_lon: null, radius_km: null }, error: state.dbError, count: 1 };
+      };
+      const query: Record<string, unknown> = {};
+      for (const method of ["select", "eq", "ilike", "is", "limit", "in", "order"]) query[method] = () => query;
+      query.insert = (row: Record<string, unknown>) => { state.inserted = row; return query; };
+      query.update = (row: Record<string, unknown>) => { state.updated = row; return query; };
+      query.single = query.maybeSingle = async () => result();
+      query.then = (resolve: (value: unknown) => unknown, reject: (error: unknown) => unknown) => Promise.resolve(result()).then(resolve, reject);
+      return query;
+    },
+  }),
+}));
+
+import { previewSearch, saveSearch } from "@/app/app/searches/actions";
+import { MODEL_LESS_UNAVAILABLE } from "@/lib/search-form";
+
+const STAY = { mode: "assisted" as const, jobId: null, edited: false, stay: true };
+const SUV = { body_types: ["suv" as const, "pickup" as const], price_max: 20000, sources: ["mercadolibre", "kavak"] };
+const CORSA = { make: "chevrolet", model: "corsa", sources: ["mercadolibre", "kavak"] };
+
+beforeEach(() => {
+  state.features = {};
+  state.catalog = null;
+  state.dbError = null;
+  state.inserted = null;
+  state.updated = null;
+  state.rpc = [];
+  state.tables = [];
+  state.track.mockClear();
+});
+
+describe("saveSearch", () => {
+  it("refuses a model-less search without model_less_search, before touching the catalog or the table", async () => {
+    expect(await saveSearch(null, SUV, STAY)).toEqual({ error: MODEL_LESS_UNAVAILABLE });
+    expect(state.inserted).toBeNull();
+    expect(state.tables).not.toContain("vehicle_catalog");
+  });
+
+  it("saves a model-less search without make or model, named by its body types", async () => {
+    state.features.model_less_search = true;
+    expect(await saveSearch(null, SUV, STAY)).toEqual({ savedId: 9 });
+    expect(state.inserted).toMatchObject({
+      name: "SUV o Pick-up hasta USD 20.000",
+      filters: { body_types: ["suv", "pickup"], price_max: 20000, currency: "USD" },
+    });
+    expect(state.inserted?.filters).not.toHaveProperty("make");
+    expect(state.track).toHaveBeenCalledWith(expect.anything(), "account", "search_profile_created", expect.objectContaining({ by_body_type: true }));
+  });
+
+  it("asks for the max price before saving", async () => {
+    state.features.model_less_search = true;
+    const result = await saveSearch(null, { ...SUV, price_max: null }, STAY);
+    expect(result.fields).toEqual({ price_max: "Poné un precio máximo para buscar por carrocería." });
+    expect(state.inserted).toBeNull();
+  });
+
+  it("keeps within a model only the body types the catalog offers for it", async () => {
+    state.catalog = { make: "Chevrolet", model: "Corsa", body_types: ["hatchback", "sedan", "rural"] };
+    await saveSearch(null, { ...CORSA, body_types: ["rural", "suv"] }, STAY);
+    expect(state.inserted).toMatchObject({ name: "Chevrolet Corsa", filters: { make: "Chevrolet", model: "Corsa", body_types: ["rural"] } });
+    expect(state.rpc.map(([name, args]) => args?.p_feature ?? name)).not.toContain("model_less_search");
+    // One body type is certain: no filter.
+    state.catalog = { make: "Chevrolet", model: "S10", body_types: ["pickup"] };
+    await saveSearch(null, { ...CORSA, model: "s10", body_types: ["pickup"] }, STAY);
+    expect(state.inserted?.filters).not.toHaveProperty("body_types");
+  });
+
+  it.each([
+    ["plan_feature_unavailable", { error: MODEL_LESS_UNAVAILABLE }],
+    ["search_needs_model_or_body_type", { error: "Elegí un modelo o al menos una carrocería.",
+      fields: { model: "Elegí un modelo.", body_types: "Elegí al menos una carrocería." } }],
+    ["search_needs_max_price", { error: "Poné un precio máximo para buscar por carrocería.",
+      fields: { price_max: "Poné un precio máximo para buscar por carrocería." } }],
+  ])("words the database's %s when creating and editing", async (code, expected) => {
+    state.features.model_less_search = true;
+    state.dbError = { message: code };
+    expect(await saveSearch(null, SUV, STAY)).toEqual(expected);
+    expect(await saveSearch(9, SUV)).toEqual(expected);
+  });
+});
+
+describe("previewSearch", () => {
+  it("counts a model-less search only for a plan that can save it", async () => {
+    expect(await previewSearch(SUV)).toBeNull();
+    expect(state.rpc.map(([name]) => name)).not.toContain("preview_search");
+    state.features.model_less_search = true;
+    expect(await previewSearch(SUV)).toEqual({ count: 1, sample: [] });
+    const [, args] = state.rpc.find(([name]) => name === "preview_search")!;
+    expect(args?.p_filters).toEqual({ body_types: ["suv", "pickup"], price_max: 20000, currency: "USD" });
+  });
+});

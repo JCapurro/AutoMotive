@@ -33,3 +33,16 @@ describe("whyText", () => {
     expect(keys).toEqual(["model", "zzz"]);
   });
 });
+
+describe("body_type (docs/CARROCERIA.md)", () => {
+  it("orders the body type right after the fuel, before the zone", () => {
+    const keys = orderReasons({
+      location: { result: "ok", detail: "" },
+      body_type: { result: "fail", detail: "es Sedán, se busca SUV" },
+      fuel: { result: "ok", detail: "" },
+      model: { result: "ok", detail: "" },
+    }).map(([k]) => k);
+    expect(keys).toEqual(["model", "fuel", "body_type", "location"]);
+    expect(whyText(1, 2, { body_type: { result: "unknown", detail: "" } }, 50)).toContain("body_type = unknown");
+  });
+});

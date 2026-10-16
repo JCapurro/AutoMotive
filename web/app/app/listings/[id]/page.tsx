@@ -14,10 +14,12 @@ import { requireUser } from "@/lib/auth";
 import { type WebConfig, webConfig } from "@/lib/config";
 import {
   BASE_SELLER_QUESTIONS,
+  BODY_TYPE,
   COMPONENT,
   COMPONENTS,
   FUEL,
   type InteractionStatus,
+  isBodyType,
   LEVEL,
   type Level,
   REASON_NAME,
@@ -111,6 +113,7 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
             <span>
               En <b className="font-semibold text-foreground">{sourceName}</b>
             </span>
+            {isBodyType(listing.body_type) ? <span data-testid="body-type">{BODY_TYPE[listing.body_type]}</span> : null}
             {listing.location_text ? <span>{listing.location_text}</span> : null}
             {ageLine(listing) ? <span>{ageLine(listing)}</span> : null}
             {listing.probable_repost_of ? <span>Re-publicada</span> : null}

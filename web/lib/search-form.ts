@@ -6,7 +6,8 @@
  */
 import { z } from "zod";
 
-import type { Level } from "@/lib/copy";
+import { BODY_TYPE_CODES, type BodyType, type Level, bodyTypeCodes, bodyTypesText, isBodyType } from "@/lib/copy";
+import { money, number } from "@/lib/format";
 import type { Filters, Preferences, SearchProfile } from "@/lib/types";
 
 const year = z.number().int().min(1950).max(2100).nullable().default(null);
@@ -16,8 +17,9 @@ const kilometers = z.number().int().min(0).max(2_000_000).nullable().default(nul
 export const SearchInput = z
   .object({
     name: z.string().trim().max(80).default(""),
-    make: z.string().trim().min(1, "Elegí una marca."),
-    model: z.string().trim().min(1, "Elegí un modelo."),
+    // Both, or neither for a model-less search (docs/CARROCERIA.md): see the superRefine below.
+    make: z.string().trim().default(""),
+    model: z.string().trim().default(""),
     trim: z.string().trim().max(60).default(""),
     trims: z.array(z.string().trim().min(1).max(60)).max(30).default([]),
     trim_strict: z.boolean().default(false),
@@ -28,6 +30,7 @@ export const SearchInput = z
     km_max: kilometers,
     transmission: z.enum(["", "manual", "automatic"]).default(""),
     fuel: z.string().max(20).default(""),
+    body_types: z.array(z.enum(BODY_TYPE_CODES)).max(BODY_TYPE_CODES.length).default([]),
     sources: z.array(z.string().max(40)).max(20).default([]),
     location: z
       .object({
@@ -55,6 +58,23 @@ export const SearchInput = z
   .refine((v) => v.year_min == null || v.year_max == null || v.year_min <= v.year_max, {
     message: "El año «desde» no puede ser mayor que el «hasta».",
     path: ["year_max"],
+  })
+  // A model, or (plans with model_less_search) no make and no model with body
+  // types and a max price. The plan itself is checked by the server and the database.
+  .superRefine((v, ctx) => {
+    const issue = (path: string, message: string) => ctx.addIssue({ code: "custom", path: [path], message });
+    if (v.model && !v.make) issue("make", "Elegí una marca.");
+    if (v.model || (v.make && !v.model)) {
+      if (!v.model) issue("model", "Elegí un modelo.");
+      return;
+    }
+    if (!v.body_types.length) {
+      issue("make", "Elegí una marca.");
+      issue("model", "Elegí un modelo.");
+      issue("body_types", "Elegí al menos una carrocería.");
+    } else if (v.price_max == null) {
+      issue("price_max", "Poné un precio máximo para buscar por carrocería.");
+    }
   });
 
 export type SearchInput = z.input<typeof SearchInput>;
@@ -64,14 +84,56 @@ export function selectedTrims(v: { trim: string; trims?: string[] }): string[] {
   return [...new Set([...(v.trims ?? []), v.trim].filter(Boolean))];
 }
 
-export function defaultName(v: Pick<SearchValues, "make" | "model" | "trim"> & { trims?: string[] }): string {
-  return [v.make, v.model, selectedTrims(v).join(" / ")].filter(Boolean).join(" ").trim().slice(0, 80);
+/** No make and no model: a search by body type only (model_less_search). */
+export function isModelLess(v: { make?: string | null; model?: string | null }): boolean {
+  return !v.make?.trim() && !v.model?.trim();
+}
+
+/** The free trial's line under the vehicle (model_less_search is Particular's and Pro's). */
+export const MODEL_LESS_UPSELL = "Con Particular o Pro también podés buscar por carrocería, sin elegir modelo.";
+/** Saving a model-less search from an account without model_less_search. */
+export const MODEL_LESS_UNAVAILABLE = "Tu plan no incluye la búsqueda por carrocería sin modelo. Elegí un modelo o pasate a Particular o Pro.";
+
+/**
+ * The body types a search within this model can filter by: the catalog's,
+ * most common first, only when it lists two or more (one is certain, none unknown).
+ */
+export function modelBodyTypes(catalog: readonly string[] | null | undefined): BodyType[] {
+  const codes = [...new Set((catalog ?? []).filter(isBodyType))];
+  return codes.length >= 2 ? codes : [];
+}
+
+/** "USD 20.000" · "$ 25.000.000" */
+function priceText(amount: number, currency: string | undefined): string {
+  return currency === "ARS" ? `$ ${number(amount)}` : money(amount, "USD");
+}
+
+/**
+ * "Ford Fiesta Titanium / SE"; without a model, the body types and the max
+ * price: "SUV hasta USD 20.000", "SUV o Pick-up hasta $ 25.000.000".
+ */
+export function defaultName(v: {
+  make?: string; model?: string; trim?: string; trims?: string[];
+  body_types?: readonly string[]; price_max?: number | null; currency?: string;
+}): string {
+  if (isModelLess(v)) {
+    const codes = bodyTypeCodes(v.body_types);
+    if (!codes.length) return "";
+    const price = v.price_max != null ? ` hasta ${priceText(v.price_max, v.currency)}` : "";
+    const name = `${bodyTypesText(codes)}${price}`;
+    return name.length <= 80 ? name : `${codes.length} carrocerías${price}`.slice(0, 80);
+  }
+  return [v.make, v.model, selectedTrims({ trim: v.trim ?? "", trims: v.trims }).join(" / ")]
+    .filter(Boolean).join(" ").trim().slice(0, 80);
 }
 
 /** The hard filters of the form, as `filters` stores them. `allSources`: every enabled source. */
 export function toFilters(v: SearchValues, allSources: string[] = []): Filters {
   const trims = selectedTrims(v);
-  const f: Filters = { make: v.make, model: v.model, trims, trim_strict: trims.length > 0 && v.trim_strict };
+  // A model-less search stores neither make nor model (nor versions): docs/CARROCERIA.md.
+  const f: Filters = isModelLess(v)
+    ? {}
+    : { make: v.make, model: v.model, trims, trim_strict: trims.length > 0 && v.trim_strict };
   if (v.year_min != null) f.year_min = v.year_min;
   if (v.year_max != null) f.year_max = v.year_max;
   if (v.price_max != null) f.price_max = v.price_max;
@@ -79,6 +141,8 @@ export function toFilters(v: SearchValues, allSources: string[] = []): Filters {
   if (v.km_max != null) f.km_max = v.km_max;
   if (v.transmission) f.transmission = v.transmission;
   if (v.fuel) f.fuel = v.fuel;
+  const bodyTypes = bodyTypeCodes(v.body_types);
+  if (bodyTypes.length) f.body_types = bodyTypes;
   // Every source selected = no restriction, so sources added later are searched too.
   const chosen = [...new Set(v.sources)];
   if (chosen.length && !allSources.every((s) => chosen.includes(s))) f.sources = chosen;
@@ -126,6 +190,7 @@ export function fromProfile(p: SearchProfile, allSources: string[]): SearchValue
     km_max: f.km_max ?? null,
     transmission: f.transmission ?? "",
     fuel: f.fuel ?? "",
+    body_types: bodyTypeCodes(f.body_types),
     sources: f.sources?.length ? f.sources : allSources,
     location:
       p.origin_lat != null && p.origin_lon != null && p.radius_km != null

@@ -23,16 +23,17 @@ export const PLAN_COPY: Record<WaitlistPlan, { name: string; period: string; pit
  * database and the worker apply. Pages show these, never their own numbers.
  * maxVisibleResults null = all of them; immediateAlertsPerDay 0 = digest only.
  * thresholdAlerts: the per-search opportunity threshold (3.2), Pro's.
+ * modelLessSearch: searching by body type without a model (docs/CARROCERIA.md).
  */
 export type PlanCaps = {
   maxProfiles: number; maxVisibleResults: number | null; immediateAlertsPerDay: number;
-  thresholdAlerts: boolean;
+  thresholdAlerts: boolean; modelLessSearch: boolean;
 };
 export type PlanLimitsConfig = Record<PlanTier, PlanCaps>;
 export const DEFAULT_PLAN_LIMITS: PlanLimitsConfig = {
-  free: { maxProfiles: 1, maxVisibleResults: 100, immediateAlertsPerDay: 3, thresholdAlerts: false },
-  pass: { maxProfiles: 3, maxVisibleResults: null, immediateAlertsPerDay: 10, thresholdAlerts: false },
-  pro: { maxProfiles: 20, maxVisibleResults: null, immediateAlertsPerDay: 50, thresholdAlerts: true },
+  free: { maxProfiles: 1, maxVisibleResults: 100, immediateAlertsPerDay: 3, thresholdAlerts: false, modelLessSearch: false },
+  pass: { maxProfiles: 3, maxVisibleResults: null, immediateAlertsPerDay: 10, thresholdAlerts: false, modelLessSearch: true },
+  pro: { maxProfiles: 20, maxVisibleResults: null, immediateAlertsPerDay: 50, thresholdAlerts: true, modelLessSearch: true },
 };
 function whole(value: unknown, min: number): number | null {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= min ? value : null;
@@ -55,6 +56,7 @@ export function planLimits(value: unknown, globalCap = 10): PlanLimitsConfig {
       maxVisibleResults: whole(limits.max_visible_results, 1),
       immediateAlertsPerDay: alertCap(limits, globalCap),
       thresholdAlerts: limits.threshold_alerts === true,
+      modelLessSearch: limits.model_less_search === true,
     };
   }
   return out;
@@ -80,10 +82,20 @@ export function alertCapsText(limits: PlanLimitsConfig): string {
   return `Particular incluye hasta ${counted(pass, "aviso inmediato", "avisos inmediatos")} de nuevas coincidencias por día y Pro, hasta ${pro}${threshold}; los que pasan el tope van al resumen.`;
 }
 export const THRESHOLD_FEATURE = "Avisos inmediatos sin tope de las oportunidades que elegís";
+export const MODEL_LESS_FEATURE = "Búsqueda por carrocería, sin modelo";
 /** A paid plan's card lines: what plan_limits says it includes (Pro: the threshold). */
 export function planFeatures(caps: PlanCaps): string[] {
   return [searchesText(caps), resultsText(caps), caps.thresholdAlerts ? THRESHOLD_FEATURE : alertsText(caps),
-    "Historial y favoritos"];
+    ...(caps.modelLessSearch ? [MODEL_LESS_FEATURE] : []), "Historial y favoritos"];
+}
+/**
+ * "Con Particular y Pro también podés buscar por carrocería…", from the plans
+ * plan_limits gives model_less_search; null when no plan has it.
+ */
+export function modelLessText(limits: PlanLimitsConfig): string | null {
+  const plans = (["pass", "pro"] as const).filter((tier) => limits[tier].modelLessSearch).map((tier) => PLAN_NAMES[tier]);
+  if (!plans.length) return null;
+  return `Con ${plans.join(" y ")} también podés buscar por carrocería, sin elegir modelo (por ejemplo, cualquier SUV hasta un precio máximo): cuenta como una búsqueda.`;
 }
 export function alertsText(caps: PlanCaps): string {
   const n = caps.immediateAlertsPerDay;
@@ -120,7 +132,7 @@ export type PlanLimits = {
   active_searches?: number;
   limits: {
     max_profiles?: number; max_visible_results?: number; immediate_alerts_per_day?: number; immediate_alerts?: boolean;
-    threshold_alerts?: boolean;
+    threshold_alerts?: boolean; model_less_search?: boolean;
   };
 };
 /** Custom is arranged over WhatsApp. wa.me wants the full international number: 54 9 11 3345-4741. */

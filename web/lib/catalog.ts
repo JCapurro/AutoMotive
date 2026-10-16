@@ -11,6 +11,8 @@ export type CatalogModel = {
   yearTo: number | null;
   transmissions: string[];
   fuels: string[];
+  /** vehicle_catalog.body_types: most common first; one = certain, none = unknown (docs/CARROCERIA.md). */
+  bodyTypes: string[];
 };
 export type CatalogMake = { make: string; models: CatalogModel[] };
 export type Catalog = CatalogMake[];
@@ -19,7 +21,7 @@ export type Catalog = CatalogMake[];
 export async function loadCatalog(supabase: SupabaseClient<Database>): Promise<Catalog> {
   const { data } = await supabase
     .from("vehicle_catalog")
-    .select("make, model, trim, year_from, year_to, transmissions, fuels")
+    .select("make, model, trim, year_from, year_to, transmissions, fuels, body_types")
     .order("make")
     .order("model")
     .limit(5000);
@@ -29,7 +31,7 @@ export async function loadCatalog(supabase: SupabaseClient<Database>): Promise<C
     makes.set(row.make, models);
     const entry =
       models.get(row.model) ??
-      ({ model: row.model, trims: [], yearFrom: null, yearTo: null, transmissions: [], fuels: [] } as CatalogModel);
+      ({ model: row.model, trims: [], yearFrom: null, yearTo: null, transmissions: [], fuels: [], bodyTypes: [] } as CatalogModel);
     models.set(row.model, entry);
     if (row.trim) {
       entry.trims.push(row.trim);
@@ -38,6 +40,7 @@ export async function loadCatalog(supabase: SupabaseClient<Database>): Promise<C
       entry.yearTo = row.year_to;
       entry.transmissions = row.transmissions;
       entry.fuels = row.fuels;
+      entry.bodyTypes = row.body_types ?? [];
     }
   }
   const collator = new Intl.Collator("es");

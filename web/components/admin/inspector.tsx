@@ -20,6 +20,14 @@ const STATUS_TONE: Record<string, "ok" | "warn" | "bad" | "muted"> = {
   skipped: "muted",
 };
 
+/** "suv · source (SUV)": the code and how the worker decided it (attributes._body_type, docs/CARROCERIA.md). */
+function bodyTypeLine(code: string | null, attributes: unknown): string {
+  const how = (attributes as { _body_type?: { method?: unknown; raw?: unknown } } | null)?._body_type;
+  const method = typeof how?.method === "string" ? how.method : null;
+  const raw = typeof how?.raw === "string" && how.raw ? ` (${how.raw})` : "";
+  return [code ?? "sin dato", method ? `${method}${raw}` : null].filter(Boolean).join(" · ");
+}
+
 /**
  * "¿Por qué se envió?" (sección 10, §45): the listing ↔ search, match_reasons
  * field by field, score_breakdown, price_ref with the cascade level used and
@@ -70,6 +78,7 @@ export function Inspector({ data }: { data: Inspection }) {
               <Row label="Km · caja">
                 {listing.mileage_km != null ? `${number(listing.mileage_km)} km` : "km ?"} · {listing.transmission ?? "caja ?"}
               </Row>
+              <Row label="Carrocería">{bodyTypeLine(listing.body_type, listing.attributes)}</Row>
               <Row label="Ubicación">{listing.location_text ?? "—"}</Row>
               <Row label="Publicado">{when(listing.published_at)}</Row>
               <Row label="Detectado">{when(listing.first_seen_at)}</Row>

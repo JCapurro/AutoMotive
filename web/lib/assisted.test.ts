@@ -3,7 +3,14 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { AssistedOutput, addedVehicle, draftTitle, draftToValues, placeFromText } from "./assisted";
+import {
+  AssistedOutput,
+  MODEL_LESS_DRAFT_NOTE,
+  addedVehicle,
+  draftTitle,
+  draftToValues,
+  placeFromText,
+} from "./assisted";
 import { cityFromText } from "./argentina-locations";
 import { SearchInput, type SearchValues, toFilters } from "./search-form";
 
@@ -129,5 +136,39 @@ describe("placeFromText", () => {
     expect(placeFromText("Una zona que no existe")).toBeUndefined();
     expect(placeFromText("")).toBeUndefined();
     expect(placeFromText(null)).toBeUndefined();
+  });
+});
+
+describe("body types in the drafts (docs/CARROCERIA.md)", () => {
+  const [fiesta] = AssistedOutput.parse(WORKER_OUTPUT).drafts;
+  const suv = { ...fiesta, values: { ...fiesta.values, make: "", model: "", trim: "", trims: [], body_types: ["suv", "pickup"] } };
+
+  it("reads outputs written before body types as none", () => {
+    expect(fiesta.values.body_types).toEqual([]);
+    expect(draftToValues(fiesta, BASE).values.body_types).toEqual([]);
+  });
+
+  it("titles a draft without a model by its body types and keeps them for the form", () => {
+    expect(draftTitle(suv, 2)).toBe("SUV o Pick-up");
+    expect(draftTitle({ ...suv, values: { ...suv.values, body_types: [] } }, 2)).toBe("Vehículo 3");
+    const { values } = draftToValues(suv, BASE);
+    expect(values).toMatchObject({ make: "", model: "", body_types: ["suv", "pickup"] });
+    expect(toFilters(SearchInput.parse({ ...values, price_max: 20000 }))).toMatchObject({ body_types: ["suv", "pickup"] });
+  });
+
+  it("swaps the worker's price advice for the plan's when it can't search by body type alone", () => {
+    const advice = "Para buscar cualquier SUV o Pick-up sin elegir modelo, poné un precio máximo.";
+    const noPrice = { ...suv, notes: [advice, "Otra nota."] };
+    expect(draftToValues(noPrice, BASE).notes).toEqual([advice, "Otra nota."]);
+    expect(draftToValues(noPrice, BASE, false).notes).toEqual(["Otra nota.", MODEL_LESS_DRAFT_NOTE]);
+    // With a model the notes stay as the worker wrote them.
+    expect(draftToValues({ ...fiesta, notes: ["Otra nota."] }, BASE, false).notes).toEqual(["Otra nota."]);
+  });
+
+  it("drops unknown codes and blanks the body types of an added vehicle", () => {
+    const odd = { ...suv, values: { ...suv.values, body_types: ["camioneta", "suv"] } };
+    expect(AssistedOutput.safeParse({ drafts: [odd] }).success).toBe(true);
+    expect(draftToValues(odd, BASE).values.body_types).toEqual(["suv"]);
+    expect(addedVehicle(draftToValues(suv, BASE).values).body_types).toEqual([]);
   });
 });

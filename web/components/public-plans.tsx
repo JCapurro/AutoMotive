@@ -3,7 +3,7 @@ import { Check } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import type { WebConfig } from "@/lib/config";
-import { alertsText, CUSTOM_PLAN, inWords, OFFER_TIER, PLAN_COPY, planFeatures, planPrice, resultsText, searchesText, WAITLIST_PLANS } from "@/lib/pro";
+import { alertsText, CUSTOM_PLAN, inWords, modelLessText, OFFER_TIER, PLAN_COPY, planFeatures, planPrice, resultsText, searchesText, WAITLIST_PLANS } from "@/lib/pro";
 
 type PricingConfig = Pick<WebConfig, "proOffer" | "planLimits" | "automaticPayments" | "commercialPilot">;
 type PublicPlan = {
@@ -82,7 +82,7 @@ export function PublicPlans({ cfg, signedIn }: { cfg: PricingConfig; signedIn: b
       </div>
 
       <div className="mt-8 max-w-3xl space-y-2 border-t pt-6 text-sm text-muted-foreground">
-        <p className="text-base text-foreground">Una búsqueda es un modelo, con sus versiones, años, kilómetros, presupuesto y zona. Si querés seguir varios modelos, cada uno cuenta como una búsqueda.</p>
+        <p className="text-base text-foreground">Una búsqueda es un modelo, con sus versiones, años, kilómetros, presupuesto y zona. Si querés seguir varios modelos, cada uno cuenta como una búsqueda.{modelLessText(cfg.planLimits) ? ` ${modelLessText(cfg.planLimits)}` : ""}</p>
         <p>Todos los planes incluyen comparación con autos similares, explicación del precio y señales para revisar antes de contactar al vendedor. Los avisos que pasan el tope del día van al resumen. Las bajas de precio de tus favoritos se avisan de inmediato mientras el acceso siga vigente. La frecuencia de revisión depende de cada portal.</p>
         <p>Los precios pueden actualizarse. Si tu plan se renueva solo, te avisamos por mail 30 días antes.</p>
         <p>{cfg.automaticPayments

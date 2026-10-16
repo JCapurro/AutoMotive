@@ -45,6 +45,7 @@ type Seed = {
   km: number;
   price: number;
   transmission?: "manual" | "automatic";
+  bodyType?: string | null; // listings.body_type, a docs/CARROCERIA.md code; null = unknown
   place?: [string, number, number];
   publishedDaysAgo?: number;
   description?: string;
@@ -100,10 +101,10 @@ async function insertListing(externalId: string, s: Seed): Promise<number> {
     `insert into public.listings
        (source, external_id, url, title, description, make, model, trim, year, price, currency, price_usd,
         mileage_km, transmission, fuel, location_text, lat, lon, seller_type, published_at, first_seen_at,
-        last_seen_at, fingerprint)
+        last_seen_at, fingerprint, body_type)
      values ('mercadolibre', $1, $2, $3, $4, 'Ford', 'Fiesta', 'Titanium', $5, $6, 'USD', $6, $7, $8, 'nafta',
              $9, $10, $11, 'private', now() - make_interval(days => $12), now() - make_interval(days => $12),
-             now(), $1)
+             now(), $1, $13)
      returning id`,
     [
       externalId,
@@ -118,6 +119,7 @@ async function insertListing(externalId: string, s: Seed): Promise<number> {
       lat,
       lon,
       days,
+      s.bodyType ?? null,
     ],
   );
   const history = [...(s.prices ?? []), [0, s.price] as [number, number]];

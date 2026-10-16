@@ -9,8 +9,9 @@ import { z } from "zod";
 
 import { cityById, cityFromText } from "@/lib/argentina-locations";
 
+import { bodyTypeCodes, bodyTypesText } from "@/lib/copy";
 import { AMBA, PLACES, type Place } from "@/lib/locations";
-import type { SearchValues } from "@/lib/search-form";
+import { type SearchValues, isModelLess } from "@/lib/search-form";
 
 export const ASSISTED_MIN_CHARS = 3;
 export const ASSISTED_MAX_CHARS = 1000;
@@ -45,6 +46,8 @@ const DraftValues = z.object({
   km_target: z.number().int().nullable(),
   transmission: z.enum(["", "manual", "automatic"]),
   fuel: z.string(),
+  // docs/CARROCERIA.md. Outputs written before it have none; unknown codes are dropped.
+  body_types: z.array(z.string()).default([]),
   seller_type: z.enum(["", "private", "dealer"]),
   location: z.string(),
   radius_km: z.number().nullable(),
@@ -113,9 +116,24 @@ export function placeFromText(text: string | null | undefined): Place | undefine
  * text doesn't decide (sources, alert settings, the user's default place).
  * Returns the notes to show above the form (the worker's plus the zone's).
  */
-export function draftToValues(draft: AssistedDraft, base: SearchValues): { values: SearchValues; notes: string[] } {
+/** A proposal by body type alone for an account whose plan can't save one. */
+export const MODEL_LESS_DRAFT_NOTE = "Elegí marca y modelo: buscar solo por carrocería es de Particular y Pro.";
+
+/**
+ * The form's values and notes for one proposal. `modelLessSearch`: whether
+ * the plan can search by body type alone; without it, the worker's advice for
+ * a proposal without a model ("poné un precio máximo") can't be followed.
+ */
+export function draftToValues(
+  draft: AssistedDraft,
+  base: SearchValues,
+  modelLessSearch = true,
+): { values: SearchValues; notes: string[] } {
   const v = draft.values;
-  const notes = [...draft.notes];
+  let notes = [...draft.notes];
+  if (!modelLessSearch && !v.make.trim() && !v.model.trim() && bodyTypeCodes(v.body_types).length) {
+    notes = [...notes.filter((n) => !n.includes("sin elegir modelo")), MODEL_LESS_DRAFT_NOTE];
+  }
   let location = base.location;
   if (v.location) {
     const legacy = placeFromText(v.location);
@@ -144,6 +162,7 @@ export function draftToValues(draft: AssistedDraft, base: SearchValues): { value
       km_max: v.km_max,
       transmission: v.transmission,
       fuel: v.fuel,
+      body_types: bodyTypeCodes(v.body_types),
       location,
       km_target: v.km_target,
       price_target: v.price_target,
@@ -153,7 +172,6 @@ export function draftToValues(draft: AssistedDraft, base: SearchValues): { value
   };
 }
 
-/** "Ford Fiesta Titanium", or a placeholder when the catalog didn't resolve it. */
 /** At most this many vehicles per request, the LLM's and the ones the user adds (worker: MAX_VEHICLES). */
 export const ASSISTED_MAX_VEHICLES = 5;
 
@@ -162,7 +180,7 @@ export const ASSISTED_MAX_VEHICLES = 5;
  * (years, km, price, zone, alerts) from `from`, and the make, model and trim to pick.
  */
 export function addedVehicle(from: SearchValues): SearchValues {
-  return { ...from, name: "", make: "", model: "", trim: "", trims: [], trim_strict: false };
+  return { ...from, name: "", make: "", model: "", trim: "", trims: [], trim_strict: false, body_types: [] };
 }
 
 /**
@@ -192,8 +210,10 @@ export function toggleChoice(selected: number[], index: number, capacity: number
   return selected.length < capacity ? [...selected, index] : selected;
 }
 
+/** "Ford Fiesta Titanium"; "SUV o Pick-up" for a draft without a model; else a placeholder. */
 export function draftTitle(draft: AssistedDraft, index: number): string {
-  const { make, model, trim, trims } = draft.values;
+  const { make, model, trim, trims, body_types: bodyTypes } = draft.values;
   const versions = [...new Set([...trims, trim].filter(Boolean))];
-  return [make, model, versions.join(" / ")].filter(Boolean).join(" ") || `Vehículo ${index + 1}`;
+  const bodies = isModelLess(draft.values) ? bodyTypesText(bodyTypes) : "";
+  return [make, model, versions.join(" / ")].filter(Boolean).join(" ") || bodies || `Vehículo ${index + 1}`;
 }
