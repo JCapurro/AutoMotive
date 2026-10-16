@@ -87,7 +87,7 @@ def _price(container, block: str) -> tuple[float | None, str | None, str | None]
 
 
 class AutoCosmosScraper(BaseScraper):
-    DETAIL_PARSER_VERSION = 2
+    DETAIL_PARSER_VERSION = 3
     name = "autocosmos"
     BASE = "https://www.autocosmos.com.ar"
     MAX_PAGES = 20             # 960 cards: a safety cap, no model comes close today
@@ -228,6 +228,10 @@ class AutoCosmosScraper(BaseScraper):
         images += [(img.get("src") or "").replace("/Small/", "/Large/")
                    for img in car.select(".car-specifics__image img")]
         m = re.search(r"/([0-9a-f]{32})(?:/|$)", url)
+        # The body type is only in the document head, for the ad server:
+        # <meta name="dfp_segmentoNick" content="pick-up"> (the site's ?s=N segments).
+        segment = doc.select_one("meta[name='dfp_segmentoNick'][content]")
+        segment = (segment.get("content") or "").strip() or None if segment else None
 
         return ListingDetail(url, listing=Listing(
             source="autocosmos",
@@ -243,6 +247,7 @@ class AutoCosmosScraper(BaseScraper):
             km=to_int(km_el.get_text() if km_el else None),
             transmision=specs.get("Transmisión"),
             combustible=specs.get("Combustible"),
+            carroceria=segment,
             ubicacion=", ".join(p for p in (city, region) if p) or None,
             vendedor="concesionaria" if dealer else ("particular" if seller and "particular" in seller.lower() else None),
             vendedor_nombre=logo.get("alt") if logo else None,

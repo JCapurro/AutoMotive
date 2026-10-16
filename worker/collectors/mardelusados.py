@@ -47,6 +47,8 @@ class MardelUsadosScraper(PublicCatalogScraper):
                 moneda={"ARS": "ARS", "USD": "USD"}.get(card.get("data-moneda", "").upper()),
                 ubicacion=card.get("data-ciudad") or None,
                 transmision=card.get("data-transmision") or None,
+                # "Utilitario" is a body type; "Auto" and "Camioneta" only a group.
+                carroceria=card.get("data-tipo") or None,
                 combustible=next((v for v in specs if any(w in v.lower() for w in
                                            ("nafta", "diésel", "diesel", "gnc", "eléct", "híbr"))), None),
                 imagenes=[img["src"]] if img else [],

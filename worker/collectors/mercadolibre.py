@@ -6,17 +6,25 @@ which Mercado Libre serves without a session. The logged-in search at
 listado.mercadolibre.com.ar asks for an account, and in October 2026 it put a
 security challenge in front of the automated Chrome this collector used.
 A challenge or a login wall is never solved: the run fails as blocked.
+
+A target by body type (docs/CARROCERIA.md) reads "Publicados hoy" of the
+code's VEHICLE_BODY_TYPE values, and labels the cards with the code only
+when the page shows the filter applied.
 """
 from __future__ import annotations
 import asyncio
+from dataclasses import dataclass
+import json
 import logging
 import random
 import re
+from typing import Any
 from urllib.parse import urlsplit
 
 from bs4 import BeautifulSoup
 
 import config
+from normalization import body_type
 from .base import BaseScraper, CollectorBlocked, Listing, ListingDetail, SearchResults
 from ._recency import PublicationWindow
 from ._dates import publication_date
@@ -76,35 +84,46 @@ TODAY_FILTER_SPAN = 25 * 3600
 # window is never stored, and would otherwise be read again on every scan.
 _dates: dict[str, int | None] = {}
 
+# Mercado Libre's VEHICLE_BODY_TYPE values (category MLA1744, 15/10/2026),
+# most listed first. normalization/body_type.py maps each one to its code:
+# suv is SUV, Off-Road and Crossover; Light Truck (452751) maps to none, so
+# no target searches it.
+BODY_TYPE_IDS = ("479344", "452759", "452758", "452756", "452750", "452752", "452749", "452760",
+                 "452748", "452751", "452754", "452761", "452753", "452755", "452757")
+IDS_BY_BODY_TYPE: dict[str, tuple[str, ...]] = {
+    code: tuple(i for i in BODY_TYPE_IDS if body_type.from_source(i) == code) for code in body_type.CODES}
 
-def _build_url(filters: dict, page: int = 1, *, today: bool = False) -> str:
+
+def _build_url(filters: dict, page: int = 1, *, today: bool = False,
+               body_type_id: str | None = None) -> str:
     """A public autos search: /<marca>/<modelo>/ and ML's _Filter_value suffixes.
 
     The public host sorts by relevance (newest first needs an account), so a
     publication window is read whole, or as "Publicados hoy" for today. The
     version stays out of the path: the cards are filtered after reading them.
+
+    A search by body type (`body_type_id`, no make or model) puts the suffixes
+    in the order Mercado Libre's own pagination links use (15/10/2026): any
+    other order answers with a redirect to that one, a hop more per page.
     """
     path = "/" + "".join(f"{_slug(str(filters[k]))}/" for k in ("marca", "modelo") if filters.get(k))
 
     # ML encodes filters as _Filter_value pairs appended to the path
-    suffix_segments: list[str] = []
-
+    years = km = None
     if filters.get("anio_min") or filters.get("anio_max"):
         lo = int(filters["anio_min"]) if filters.get("anio_min") else 1990
         hi = int(filters["anio_max"]) if filters.get("anio_max") else 2030
-        suffix_segments.append(f"_VEHICLE*YEAR_{lo}-{hi}")
-
+        years = f"_VEHICLE*YEAR_{lo}-{hi}"
     if filters.get("km_max"):
-        suffix_segments.append(f"_KILOMETERS_*-{int(filters['km_max'])}km")
+        km = f"_KILOMETERS_*-{int(filters['km_max'])}km"
+    since = "_PublishedToday_YES" if today else None
+    offset = f"_Desde_{(page - 1) * PAGE_SIZE + 1}" if page > 1 else None
 
-    if today:
-        suffix_segments.append("_PublishedToday_YES")
-
-    if page > 1:
-        suffix_segments.append(f"_Desde_{(page - 1) * PAGE_SIZE + 1}")
-
-    suffix_segments.append("_NoIndex_True")
-    return BASE + path + "".join(suffix_segments)
+    if body_type_id:
+        segments = (offset, since, km, "_NoIndex_True", f"_VEHICLE*BODY*TYPE_{body_type_id}", years)
+    else:
+        segments = (years, km, since, offset, "_NoIndex_True")
+    return BASE + path + "".join(s for s in segments if s)
 
 
 # ---------- card parsing ----------
@@ -223,6 +242,61 @@ def _results(html: str) -> list[Listing]:
     return cards
 
 
+_JSON = json.JSONDecoder()
+
+
+def _embedded(html: str, key: str) -> Any:
+    """The value of the first `"key":` of the state the page embeds, or None."""
+    at = html.find(f'"{key}":')
+    if at < 0:
+        return None
+    try:
+        return _JSON.raw_decode(html, at + len(key) + 3)[0]
+    except ValueError:
+        return None
+
+
+@dataclass(frozen=True)
+class SearchState:
+    """What a results page says about itself, in the state Mercado Libre
+    embeds in it (__NORDIC_RENDERING_CTX__): the filters it applied, as
+    (key, value) pairs, how many results the search has and how many pages
+    it lets read (42 at most: 2,016 results)."""
+    applied: frozenset[tuple[str, str]]
+    total: int | None
+    page_count: int | None
+
+    def applies(self, body_type_id: str) -> bool:
+        """The page shows that body type and "Publicados hoy" applied."""
+        return {("VEHICLE_BODY_TYPE", body_type_id), ("since", "today")} <= self.applied
+
+    @property
+    def truncated(self) -> bool:
+        """More results than the pages Mercado Libre serves."""
+        return (self.total is not None and self.page_count is not None
+                and self.total > self.page_count * PAGE_SIZE)
+
+
+def search_state(html: str) -> SearchState:
+    event = _embedded(html, "event_data")
+    event = event if isinstance(event, dict) else {}
+    applied = event.get("applied_filters")
+    if applied is None:
+        applied = _embedded(html, "applied_filters")
+    pagination = _embedded(html, "pagination")
+    pagination = pagination if isinstance(pagination, dict) else {}
+
+    def number(value: Any) -> int | None:
+        return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+    return SearchState(
+        applied=frozenset((str(f.get("key")), str(f.get("value")))
+                          for f in (applied if isinstance(applied, list) else []) if isinstance(f, dict)),
+        total=number(event.get("total")),
+        page_count=number(pagination.get("page_count")),
+    )
+
+
 # ---------- detail page ----------
 
 _GONE_TEXTS = ("publicacion pausada", "publicacion finalizada", "esta publicacion esta pausada",
@@ -285,6 +359,7 @@ def parse_detail(html: str, url: str, status: int = 200) -> ListingDetail:
     images = dedupe([img.get("data-zoom") or img.get("src")
                      for img in doc.select("figure.ui-pdp-gallery__figure img")])
     brand = ld.get("brand")
+    body = ld.get("bodyType")
 
     return ListingDetail(url, listing=Listing(
         source="mercadolibre",
@@ -300,6 +375,7 @@ def parse_detail(html: str, url: str, status: int = 200) -> ListingDetail:
         km=to_int(specs.get("Kilómetros")),
         combustible=specs.get("Tipo de combustible"),
         transmision=specs.get("Transmisión"),
+        carroceria=specs.get("Tipo de carrocería") or (body if isinstance(body, str) else None),
         vendedor=vendedor,
         vendedor_nombre=seller_name,
         descripcion=multiline_text(doc.select_one(".ui-pdp-description__content")),
@@ -328,13 +404,30 @@ async def _get(url: str, what: str, *, allow_404: bool = False) -> Page:
 
 # ---------- scraper ----------
 
+class BodyTypeNotApplied(RuntimeError):
+    """A results page of a search by body type that doesn't show the filter
+    applied. Its cards can't be labeled with the body type, and the run fails."""
+
+
+def _searched_body_type(filters: dict) -> str | None:
+    """The code a target by body type searches (docs/CARROCERIA.md):
+    filters["carroceria"] without a make or model. None for any other search."""
+    code = filters.get("carroceria")
+    if not code or filters.get("marca") or filters.get("modelo"):
+        return None
+    return str(code)
+
+
 class MercadoLibreScraper(BaseScraper):
-    DETAIL_PARSER_VERSION = 2
+    DETAIL_PARSER_VERSION = 3  # 3: Listing.carroceria ("Tipo de carrocería", JSON-LD bodyType)
     name = "mercadolibre"
+    BODY_TYPES = frozenset(code for code, ids in IDS_BY_BODY_TYPE.items() if ids)
 
     MAX_PAGES = 2  # without a publication window (the CLI): the first 96 results
 
     async def search(self, filters: dict) -> list[Listing]:
+        if code := _searched_body_type(filters):
+            return await self._search_body_type(filters, code)
         if window := PublicationWindow.from_filters(filters):
             return await self._search_recent(filters, window)
         out: list[Listing] = []
@@ -440,6 +533,77 @@ class MercadoLibreScraper(BaseScraper):
         log.info("mercadolibre publication window: today=%s pages=%d dates_read=%d kept=%d unknown_dates=%d "
                  "complete=%s reason=%s", today, pages, fetched, len(results), results.unknown_dates,
                  results.complete, results.reason)
+        return results
+
+    async def _search_body_type(self, filters: dict, code: str) -> SearchResults:
+        """A target by body type (docs/CARROCERIA.md): "Publicados hoy" of each
+        of the code's VEHICLE_BODY_TYPE ids, whatever the publication window,
+        a first run too. A body type is too many listings to date them one by
+        one (29,000 SUVs, of which Mercado Libre serves 2,016), while a day of
+        them fits (about 600); its searches are backfilled from stored listings.
+
+        The cards say nothing about the body. A page vouches for its cards only
+        when its embedded state shows the body type and "today" applied: then
+        each card gets the code in Listing.carroceria. A page that doesn't
+        fails the run: Mercado Libre ignoring the filter would serve every car
+        in the country, all labeled with the code."""
+        ids = IDS_BY_BODY_TYPE.get(code)
+        if not ids:
+            raise ValueError(f"mercadolibre: no VEHICLE_BODY_TYPE for body type {code!r}")
+        known = filters.get("known_publication_dates") or {}
+        results = SearchResults()
+        seen: set[str] = set()
+        pages = 0
+        try:
+            for body_id in ids:
+                page, last = 1, None
+                while pages < config.RECENT_ML_MAX_PAGES:
+                    if pages:
+                        await _page_pause()
+                    url = _build_url(filters, page, today=True, body_type_id=body_id)
+                    html = (await _get(url, "search")).html
+                    pages += 1
+                    cards = _results(html)
+                    if not cards:
+                        break
+                    state = search_state(html)
+                    if not state.applies(body_id):
+                        raise BodyTypeNotApplied(
+                            f"mercadolibre: page {page} of VEHICLE_BODY_TYPE {body_id} doesn't show it and "
+                            f"'Publicados hoy' applied: {_safe_url(url)}")
+                    if page == 1:
+                        last = state.page_count
+                        if state.truncated:
+                            results.complete = False
+                            results.reason = (f"mercadolibre: VEHICLE_BODY_TYPE {body_id} has {state.total} "
+                                              f"results today, more than its {last} pages show")
+                    fresh = [c for c in cards if c.listing_id not in seen]
+                    if not fresh:
+                        results.complete, results.reason = False, "mercadolibre: pagination repeated a page"
+                        break
+                    for listing in fresh:
+                        seen.add(listing.listing_id)
+                        listing.carroceria = code
+                        self.annotate_partial_price(listing)
+                        if not self.matches_filters(listing, filters):
+                            continue
+                        if listing.published_at is None:
+                            listing.published_at = known.get(listing.listing_id)
+                        results.append(listing)
+                    if len(cards) < PAGE_SIZE or (last is not None and page >= last):
+                        break
+                    page += 1
+                else:
+                    results.complete, results.reason = False, "mercadolibre: publication scan page limit reached"
+                    break
+        except BodyTypeNotApplied:
+            raise
+        except Exception as exc:
+            if not seen:
+                raise
+            results.complete, results.reason = False, f"mercadolibre: {type(exc).__name__}: {exc}"
+        log.info("mercadolibre body type %s: ids=%s pages=%d kept=%d complete=%s reason=%s",
+                 code, ",".join(ids), pages, len(results), results.complete, results.reason)
         return results
 
     parse_detail = staticmethod(parse_detail)

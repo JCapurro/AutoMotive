@@ -19,6 +19,8 @@ from .base import CollectorBlocked, Listing, ListingDetail
 
 logger = logging.getLogger(__name__)
 
+_SEGMENT = re.compile(r"\s+[A-E](?=\s|$)")
+
 
 class _InconsistentCatalog(RuntimeError):
     """Ranges from a changing index cannot be combined into one inventory."""
@@ -27,6 +29,7 @@ class _InconsistentCatalog(RuntimeError):
 class GrupoRandazzoScraper(PublicCatalogScraper):
     name = "gruporandazzo"
     STRICT_DETAIL_ID = True
+    DETAIL_PARSER_VERSION = 2
     BASE = "https://www.gruporandazzo.com"
     # Exact href published by the Estado=Disponible facet, verified publicly.
     CATALOG = BASE + "/usados/disponible?map=estado"
@@ -121,6 +124,10 @@ class GrupoRandazzoScraper(PublicCatalogScraper):
             raise RuntimeError("gruporandazzo: vehicle link ID mismatch")
         amount = parse_number(attrs.get("Precio") or "")
         amount = amount if amount and amount > 1 else None
+        # "Pick-up B", "SUV C", "Pick-up B 4x4": the body type, a segment
+        # letter after it. "Sedan" is also what passenger hatchbacks are filed
+        # under (Argo, 208, Onix: 5 doors), and SUVs under "Wagon (obsoleta)".
+        body = _SEGMENT.sub("", attrs.get("Tipo de vehículo") or "").strip() or None
         currency = product.get("currency")
         if currency not in ("ARS", "USD"):
             amount, currency = None, None
@@ -129,7 +136,7 @@ class GrupoRandazzoScraper(PublicCatalogScraper):
             marca=product.get("brand") or None, modelo=attrs.get("Modelo") or None,
             anio=to_int(attrs.get("Año")), km=to_int(attrs.get("Km")),
             precio=amount, moneda=currency, combustible=attrs.get("Combustible") or None,
-            transmision=attrs.get("Caja") or None,
+            transmision=attrs.get("Caja") or None, carroceria=body,
             ubicacion=attrs.get("Sucursal") or attrs.get("Ubicación") or None,
             vendedor="agencia", vendedor_nombre="Grupo Randazzo", atributos=attrs,
             descripcion=multiline_text(soup("<div>" + (product.get("description") or "") + "</div>")),

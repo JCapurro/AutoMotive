@@ -13,6 +13,7 @@ from .base import Listing, ListingDetail
 class AutocityScraper(PublicCatalogScraper):
     name = "autocity"
     STRICT_DETAIL_ID = True
+    DETAIL_PARSER_VERSION = 2
     BASE = "https://autocity.com.ar"
     CATALOG = BASE + "/catalogo/usados/"
     # Identify our client: Autocity rejects the shared Chrome/124 header.
@@ -187,6 +188,13 @@ class AutocityScraper(PublicCatalogScraper):
         summary = text_of(main.select_one(".ac-product-short-desc.firstOne")) or ""
         fuel = next((v.strip() for v in summary.split("|") if re.fullmatch(
                     r"(?i)(nafta|diesel|diésel|gnc|h[ií]brido|el[eé]ctrico)", v.strip())), None)
+        # The body type is the spec sheet's "Segmento" ("Sedán") and the summary's
+        # first part, after the engine: "2 Sedán | Usado | Nafta". Without the
+        # engine size, which alone would read as an Autocosmos segment number.
+        first = summary.split("|")[0] if "|" in summary else ""
+        body = attrs.get("Segmento") or re.sub(r"^\d+(?:[.,]\d+)?\s*", "", first.strip())
+        if body and (body == fuel or re.fullmatch(r"(?i)usado|nuevo|0 ?km", body)):
+            body = None
         amount, currency = price(main.get("data-price"))
         make, model = main.get("data-brand"), main.get("data-model")
         prefix = f"{make} {model} "
@@ -196,6 +204,7 @@ class AutocityScraper(PublicCatalogScraper):
             anio=to_int(main.get("data-ano")), km=to_int(main.get("data-kms")),
             ubicacion=main.get("data-sucursal") or None,
             combustible=fuel, transmision=attrs.get("Tipo de transmisión") or None,
+            carroceria=body or None,
             vendedor="agencia", vendedor_nombre="Autocity", atributos=attrs,
             descripcion=multiline_text(main.select_one(".ac-product-heading")),
             imagenes=dedupe([urljoin(cls.BASE, a["href"]) for a in

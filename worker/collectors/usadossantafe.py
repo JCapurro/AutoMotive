@@ -57,15 +57,20 @@ def _records(doc) -> list[dict]:
 
 class UsadosSantaFeScraper(PublicCatalogScraper):
     name = "usadossantafe"
+    DETAIL_PARSER_VERSION = 2
     BASE = "https://usadossantafe.com.ar"
     CATALOGS = ("/autos", "/camionetas")
-    TYPES = {"Auto", "Camioneta", "SUV", "Furgón", "Utilitario", "Pickup"}
+    # Vehicle types of the two catalogs; the rest (Moto, Lancha…) is out of
+    # scope. /camionetas also files "Pick Up", "Pick Up de Trabajo" and "4x4"
+    # (seen 2026-10-15).
+    TYPES = {"Auto", "Camioneta", "SUV", "Furgón", "Utilitario", "Pickup", "Pick Up",
+             "Pick Up de Trabajo", "4x4"}
     # Whitelist public listing facts for retained raw pages, excluding account,
     # moderation and contact fields embedded by the site's frontend.
     FIELDS = {"id", "tipo", "marca", "modelo", "version", "anio", "kilometraje", "precio",
               "moneda", "combustible", "transmision", "transmisión", "ciudad", "provincia",
               "descripcion", "fecha", "fechaCreacion", "imagen1", "imagen2", "imagen3", "imagen4",
-              "otrasImagenes", "vendido", "activo", "borrado", "rechazado", "etiqueta"}
+              "otrasImagenes", "vendido", "activo", "borrado", "rechazado", "etiqueta", "puertas"}
 
     def __init__(self, *, transport: httpx.AsyncBaseTransport | None = None,
                  render_catalog: Callable[[str], Awaitable[Page]] | None = None):
@@ -93,11 +98,16 @@ class UsadosSantaFeScraper(PublicCatalogScraper):
             precio=amount if amount and amount > 1 else None, moneda=currency,
             combustible=data.get("combustible") or None,
             transmision=data.get("transmision") or data.get("transmisión") or None,
+            # The seller's pick: "SUV", "Pickup", "Furgón" name a body type,
+            # "Auto" and "Camioneta" only a group (normalization tells them apart).
+            carroceria=data.get("tipo") or None,
             ubicacion=data.get("ciudad") or data.get("provincia") or None,
             vendedor="particular" if str(data.get("etiqueta", "")).upper() == "TITULAR" else None,
             descripcion=description, published_at=timestamp(data.get("fechaCreacion") or data.get("fecha")),
             imagenes=dedupe([data.get(f"imagen{i}") for i in range(1, 5)] +
-                            (data.get("otrasImagenes") or [])))
+                            (data.get("otrasImagenes") or [])),
+            # Doors choose among a model's body types (normalization/body_type.py).
+            atributos={"Puertas": str(data["puertas"])} if data.get("puertas") else {})
         return cls.annotate_partial_price(item)
 
     @classmethod
@@ -170,6 +180,10 @@ class UsadosSantaFeScraper(PublicCatalogScraper):
                 if any("Cargar más avisos" == text_of(b) for b in soup(page.html).select("button")):
                     raise RuntimeError("usadossantafe: additional catalog load did not complete")
             for item in self.parse_search(page.html):
+                if item.carroceria is None:
+                    # A card the button rendered has no tipo. Which catalog
+                    # listed it is a coarse group, never a body type by itself.
+                    item.atributos.setdefault("Catálogo", path.strip("/").capitalize())
                 if matches_vehicle(item, filters):
                     seen[item.listing_id] = item
         return list(seen.values())
@@ -205,6 +219,9 @@ class UsadosSantaFeScraper(PublicCatalogScraper):
             anio=to_int(car.get("productionDate")), km=to_int((car.get("mileageFromOdometer") or {}).get("value")),
             precio=amount if amount and amount > 1 else None, moneda=offer.get("priceCurrency"),
             combustible=car.get("fuelType"), transmision=car.get("vehicleTransmission"),
+            # JSON-LD's category repeats the record's tipo.
+            carroceria=next((v for v in (car.get("bodyType"), car.get("category"))
+                             if isinstance(v, str) and v.strip()), None),
             ubicacion=", ".join(v for k in ("addressLocality", "addressRegion") if (v := address.get(k))) or None,
             descripcion=car.get("description"), published_at=timestamp(car.get("datePublished")),
             imagenes=dedupe(car.get("image") if isinstance(car.get("image"), list) else [car.get("image")]))

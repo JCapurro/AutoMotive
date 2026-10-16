@@ -11,19 +11,30 @@ the listing id and the detail URL is `/ar/venta/{slug}?id={id}`.
 Item pages are server-rendered with schema.org JSON-LD and read with a plain
 GET. When a car is sold Kavak serves another car of the same model at that
 URL, so fetch_detail compares the page's canonical slug with the one asked for.
+
+A target by body type (docs/CARROCERIA.md) reads `/ar/usados/{carroceria}`
+with plain GETs instead: Kavak renders those pages on the server, 30 cars a
+page, `?page=N` from 0.
 """
 from __future__ import annotations
-from dataclasses import replace
+import asyncio
+from dataclasses import dataclass, replace
+import logging
+import random
 import re
 from urllib.parse import parse_qs, urlparse
 
 from bs4 import BeautifulSoup
 
-from .base import BaseScraper, Listing, ListingDetail
+from .base import BaseScraper, CollectorBlocked, Listing, ListingDetail, SearchResults
 from ._dates import publication_date
 from ._browser import browser_context
 from ._http import Page, dedupe, fetch_page, slim_html, json_ld_of_type, soup, text_of, to_int
+from normalization import body_type
 from normalization.fx import usd_ars_rate
+
+
+log = logging.getLogger("collectors.kavak")
 
 
 _KM_RE = re.compile(r"([\d\.\,]+)\s*km", re.IGNORECASE)
@@ -31,6 +42,14 @@ _YEAR_RE = re.compile(r"\b(19[8-9]\d|20[0-3]\d)\b")
 _PRICE_RE = re.compile(r"(US\$|u\$s|\$)\s*([\d\.\,]+)", re.IGNORECASE)
 _TESTID_RE = re.compile(r"(\d{4,})$")
 _CARD_SELECTOR = "a[data-testid][href*='/ar/venta/']"
+# The slug's components are joined by "-", their words by "_": the body
+# type is the one before the year ("…-16_se-hatchback-2018").
+_SLUG_BODY_RE = re.compile(r"-([a-z_]+)-(?:19|20)\d{2}$")
+
+# Kavak's "Carrocería" filter (/ar/usados/{value}, 15/10/2026) for each code
+# it has. Its "camioneta" is an SUV or a pick-up: no code searches it.
+BODY_TYPE_SLUGS = {"sedan": "sedan", "hatchback": "hatchback", "suv": "suv", "pickup": "pickup",
+                   "rural": "wagon", "monovolumen": "minivan", "utilitario": "van"}
 
 
 def _slug(s: str) -> str:
@@ -46,6 +65,13 @@ def _to_int(s: str) -> int | None:
 
 def _venta_slug(url: str) -> str:
     return urlparse(url).path.rstrip("/").rsplit("/ar/venta/", 1)[-1]
+
+
+def _slug_body(slug: str) -> str | None:
+    """The body type the card's slug names, as Kavak writes it ("suv",
+    "minivan", "wagon"), when it is one: normalization maps it."""
+    m = _SLUG_BODY_RE.search(slug)
+    return m.group(1) if m and body_type.from_source(m.group(1)) else None
 
 
 def _parse_card(a) -> Listing | None:
@@ -100,6 +126,7 @@ def _parse_card(a) -> Listing | None:
         anio=anio or (int(m.group(1)) if (m := _YEAR_RE.search(slug)) else None),
         km=km,
         transmision=transmision,
+        carroceria=_slug_body(slug),
         ubicacion=location,
         vendedor="concesionaria",  # Kavak is dealer-only
         vendedor_nombre="Kavak",
@@ -160,6 +187,7 @@ def parse_detail(html: str, url: str, status: int = 200) -> ListingDetail:
         km=to_int((car.get("mileageFromOdometer") or {}).get("value")),
         transmision=car.get("vehicleTransmission"),
         combustible=engine.get("fuelType") if isinstance(engine, dict) else None,
+        carroceria=car["bodyType"] if isinstance(car.get("bodyType"), str) else None,
         ubicacion=location,
         vendedor="concesionaria",
         vendedor_nombre="Kavak",
@@ -172,11 +200,65 @@ def parse_detail(html: str, url: str, status: int = 200) -> ListingDetail:
     ))
 
 
+class BodyTypeNotApplied(RuntimeError):
+    """A /ar/usados page of a search by body type that doesn't show the filter
+    applied. The run fails."""
+
+
+@dataclass(frozen=True)
+class ListState:
+    """What a /ar/usados page says about itself in its Next.js flight data
+    (JSON inside JS strings, quotes escaped): the body types of its applied
+    filter, its page count and its result count."""
+    body_types: frozenset[str]
+    pages: int | None
+    total: int | None
+
+
+def list_state(html: str) -> ListState:
+    text = html.replace('\\"', '"')
+    active = re.search(r'"active":\[(.*?)\]', text)
+    pages = re.search(r'"pagination":\{"pages":(\d+)', text)
+    total = re.search(r'"resultsQuantity":"(\d[\d.]*) Resultados?"', text)
+    return ListState(
+        body_types=frozenset(re.findall(r'"key":"body_type","value":"([^"]+)"', active.group(1))
+                             if active else ()),
+        pages=int(pages.group(1)) if pages else None,
+        total=to_int(total.group(1)) if total else None,
+    )
+
+
+def _searched_body_type(filters: dict) -> str | None:
+    """The code a target by body type searches (docs/CARROCERIA.md):
+    filters["carroceria"] without a make or model. None for any other search."""
+    code = filters.get("carroceria")
+    if not code or filters.get("marca") or filters.get("modelo"):
+        return None
+    return str(code)
+
+
+async def _get_list(url: str) -> str:
+    page = await fetch_page(url, timeout=45.0)
+    if page.status in (403, 429):
+        raise CollectorBlocked(f"kavak search: HTTP {page.status}; destination={url}")
+    if page.status >= 400:
+        raise RuntimeError(f"kavak search HTTP {page.status}: {url}")
+    return page.html
+
+
+async def _page_pause() -> None:
+    await asyncio.sleep(random.uniform(2.0, 4.0))
+
+
 class KavakScraper(BaseScraper):
     DETAIL_PARSER_VERSION = 2
     name = "kavak"
     BASE = "https://www.kavak.com/ar/usados"
     MAX_SCROLLS = 30
+    BODY_TYPES = frozenset(BODY_TYPE_SLUGS)
+    # The pages of a body type a run reads at most: SUV had 15 (422 cars) on
+    # 15/10/2026, the whole catalog 47.
+    MAX_BODY_TYPE_PAGES = 40
 
     @staticmethod
     def matches_filters(item: Listing, f: dict) -> bool:
@@ -198,6 +280,8 @@ class KavakScraper(BaseScraper):
         return f"{self.BASE}/" + "-".join(parts)
 
     async def search(self, filters: dict) -> list[Listing]:
+        if code := _searched_body_type(filters):
+            return await self._search_body_type(filters, code)
         url = self._build_url(filters)
         out: list[Listing] = []
         async with browser_context() as ctx:
@@ -220,6 +304,64 @@ class KavakScraper(BaseScraper):
             if self.matches_filters(listing, filters):
                 out.append(listing)
         return out
+
+    async def _search_body_type(self, filters: dict, code: str) -> SearchResults:
+        """A target by body type: the pages of /ar/usados/{slug} up to the
+        count the first one states (or one without new cars), at most
+        MAX_BODY_TYPE_PAGES.
+
+        Each card's slug names its body. A card whose slug doesn't gets the
+        code, and only from a page that shows the filter applied; a page that
+        doesn't show it fails the run: Kavak ignoring the filter would serve
+        its whole catalog."""
+        slug = BODY_TYPE_SLUGS.get(code)
+        if not slug:
+            raise ValueError(f"kavak: no listing for body type {code!r}")
+        results = SearchResults()
+        seen: set[str] = set()
+        page, pages = 0, None
+        try:
+            while pages is None or page < pages:
+                if page >= self.MAX_BODY_TYPE_PAGES:
+                    results.complete = False
+                    results.reason = (f"kavak: read the first {page} pages of /ar/usados/{slug}"
+                                      + (f", of {pages}" if pages else ""))
+                    break
+                if page:
+                    await _page_pause()
+                url = f"{self.BASE}/{slug}" + (f"?page={page}" if page else "")
+                html = await _get_list(url)
+                state = list_state(html)
+                cards = parse_search(html)
+                if not cards:
+                    if page == 0 and state.total != 0:
+                        raise RuntimeError(f"kavak: {url} shows no cars and doesn't say it has none")
+                    break
+                if slug not in state.body_types:
+                    raise BodyTypeNotApplied(f"kavak: {url} doesn't show its body type filter applied")
+                pages = pages or state.pages
+                page += 1
+                fresh = [c for c in cards if c.listing_id not in seen]
+                if not fresh:
+                    if pages is not None and page < pages:
+                        results.complete, results.reason = False, "kavak: pagination repeated a page"
+                    break
+                for listing in fresh:
+                    seen.add(listing.listing_id)
+                    if body_type.from_source(listing.carroceria) is None:
+                        listing.carroceria = code
+                    self.annotate_partial_price(listing)
+                    if self.matches_filters(listing, filters):
+                        results.append(listing)
+        except BodyTypeNotApplied:
+            raise
+        except Exception as exc:
+            if not seen:
+                raise
+            results.complete, results.reason = False, f"kavak: {type(exc).__name__}: {exc}"
+        log.info("kavak body type %s: pages=%d of %s kept=%d complete=%s reason=%s",
+                 code, page, pages, len(results), results.complete, results.reason)
+        return results
 
     parse_detail = staticmethod(parse_detail)
 

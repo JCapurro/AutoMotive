@@ -18,6 +18,7 @@ from .base import CollectorBlocked, Listing, ListingDetail
 class CarOneScraper(PublicCatalogScraper):
     name = "carone"
     STRICT_DETAIL_ID = True
+    DETAIL_PARSER_VERSION = 2
     BASE = "https://carone.com.ar"
     PAGE_SIZE = 50
     MAX_PAGES = 100
@@ -89,7 +90,9 @@ class CarOneScraper(PublicCatalogScraper):
             return None
         if record.get("carone_mileage") == 0:
             return None
-        if (cls._label(record, "carone_type_data") or "").lower() in ("moto", "motocicleta"):
+        # The vehicle type is also its body type ("SEDAN"): normalization maps it.
+        body = cls._label(record, "carone_type_data")
+        if (body or "").lower() in ("moto", "motocicleta"):
             return None
         if not record.get("id") or not record.get("url_key") or not record.get("name"):
             raise RuntimeError("carone: incomplete product identity")
@@ -119,7 +122,8 @@ class CarOneScraper(PublicCatalogScraper):
             version=record.get("carone_version_description") or None,
             anio=record.get("carone_year"), km=record.get("carone_mileage"),
             ubicacion=attrs.get("Sucursal"), combustible=attrs.get("Combustible"),
-            transmision=attrs.get("Transmisión"), vendedor="agencia", vendedor_nombre="Car One",
+            transmision=attrs.get("Transmisión"), carroceria=body or None,
+            vendedor="agencia", vendedor_nombre="Car One",
             atributos=attrs, descripcion=multiline_text(soup(desc.get("html") or "")),
             imagenes=dedupe([image.get("url") for image in record.get("carone_spyne_images") or []]))
         return cls.annotate_partial_price(item)

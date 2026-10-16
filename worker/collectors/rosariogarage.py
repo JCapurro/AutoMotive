@@ -207,6 +207,9 @@ class RosarioGarageScraper(BaseScraper):
                         if item.listing_id in seen:
                             continue
                         seen.add(item.listing_id)
+                        # The category the finder searched: a coarse group
+                        # (the site files SUVs under Autos), never a body type by itself.
+                        item.atributos.setdefault("Rubro", category)
                         self.annotate_partial_price(item)
                         if self.matches_filters(item, filters):
                             out[item.listing_id] = item

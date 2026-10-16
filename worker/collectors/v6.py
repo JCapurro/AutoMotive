@@ -144,7 +144,7 @@ def parse_detail(html: str, url: str, status: int = 200) -> ListingDetail:
         raise ValueError(f"v6 detail without vehicle data: {url}")
 
     # "Kilometraje", "Año", "Vendedor", "Transmisión", "Combustible" (stats) and
-    # "Marca", "Modelo", "Versión", "Tipo" (data grid).
+    # "Marca", "Modelo", "Versión", "Categoría", "Tipo" (data grid).
     specs = _label_values(doc, ".v2-stat-item", ".v2-stat-label", ".v2-stat-value")
     specs.update({k: v for k, v in _label_values(doc, ".v2-data-cell", ".v2-data-label",
                                                  ".v2-data-value").items() if k not in specs})
@@ -171,6 +171,8 @@ def parse_detail(html: str, url: str, status: int = 200) -> ListingDetail:
         km=to_int(specs.get("Kilometraje")) or to_int(mileage),
         transmision=specs.get("Transmisión"),
         combustible=specs.get("Combustible"),
+        # The body type, in Mercado Libre's words ("Hatchback"): V6 imports its ads.
+        carroceria=specs.get("Categoría"),
         ubicacion=text_of(location_row.select_one(".top-carousel-item-location")) if location_row else None,
         vendedor=specs.get("Vendedor") or specs.get("Tipo"),
         descripcion=multiline_text(doc.select_one(".v2-desc-text")),
@@ -181,7 +183,7 @@ def parse_detail(html: str, url: str, status: int = 200) -> ListingDetail:
 
 
 class V6Scraper(BaseScraper):
-    DETAIL_PARSER_VERSION = 2
+    DETAIL_PARSER_VERSION = 3
     name = "v6"
     BASE = "https://www.v6.com.ar/publicaciones"
 
