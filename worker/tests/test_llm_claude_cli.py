@@ -65,7 +65,7 @@ def test_command_line_has_the_isolation_flags_and_no_user_text():
     assert argv[argv.index("--model") + 1] == "haiku"
     assert json.loads(argv[argv.index("--json-schema") + 1]) == json_schema(SearchDrafts)
     system = argv[argv.index("--system-prompt") + 1]
-    assert "Fiesta [S, SE, SEL, Titanium, ST]" in system
+    assert "Fiesta [LX, CLX, Ghia, Ambiente, Edge, Trend, S, S Plus, SE, SE Plus, Titanium, ST, SEL]" in system
     # The user's text only travels on stdin, wrapped as data.
     assert all(text not in arg for arg in argv)
     assert stdin == prompts.parse_search_user(text)
