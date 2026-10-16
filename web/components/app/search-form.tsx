@@ -1,6 +1,6 @@
 "use client";
 
-import { Info, Loader2, LocateFixed, X } from "lucide-react";
+import { ChevronDown, Info, Loader2, LocateFixed, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
@@ -9,6 +9,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
@@ -505,28 +506,42 @@ export function SearchForm({
             </Field>
             <Field id={fid("trim")} label="Versiones" hint="Opcional" className="sm:col-span-2">
               {entry?.trims.length ? (
-                <NativeSelect id={fid("trim")} value="" onChange={(e) => e.target.value && chooseTrim(e.target.value, true)} className="w-full">
-                  <NativeSelectOption value="">{d.trims.length ? "Agregar otra versión" : "Cualquier versión"}</NativeSelectOption>
-                  {entry.trims.filter((t) => !d.trims.includes(t)).map((t) => (
-                    <NativeSelectOption key={t} value={t}>
-                      {t}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelect>
-              ) : (
-                <div className="flex gap-2">
-                  <Input
-                    id={fid("trim")}
-                    value={versionText}
-                    onChange={(e) => setVersionText(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addFreeVersion(); } }}
-                    placeholder="Ej.: Highline"
-                    maxLength={60}
-                    disabled={!d.model}
-                  />
-                  <Button type="button" variant="outline" onClick={addFreeVersion} disabled={!d.model || !pendingVersion}>Agregar versión</Button>
-                </div>
-              )}
+                <DropdownMenu modal={false}>
+                  <DropdownMenuTrigger asChild>
+                    <Button id={fid("trim")} type="button" variant="outline" className="w-full justify-between font-normal">
+                      <span className="truncate">{d.trims.length === 0 ? "Todas las versiones" : d.trims.length === 1 ? "1 versión elegida" : `${d.trims.length} versiones elegidas`}</span>
+                      <ChevronDown className="size-4 opacity-50" aria-hidden />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="max-h-72">
+                    {[...new Set([...entry.trims, ...d.trims])].map((t) => (
+                      <DropdownMenuCheckboxItem
+                        key={t}
+                        checked={d.trims.includes(t)}
+                        onCheckedChange={(on) => chooseTrim(t, on === true)}
+                        // Stay open: several versions are picked in one go.
+                        onSelect={(e) => e.preventDefault()}
+                      >
+                        {t}
+                      </DropdownMenuCheckboxItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : null}
+              {/* Listings carry versions the catalog doesn't (and some models have none). */}
+              <div className="flex gap-2">
+                <Input
+                  id={entry?.trims.length ? fid("trim_other") : fid("trim")}
+                  aria-label={entry?.trims.length ? "Otra versión" : undefined}
+                  value={versionText}
+                  onChange={(e) => setVersionText(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addFreeVersion(); } }}
+                  placeholder={entry?.trims.length ? "¿No está en la lista? Escribila" : "Ej.: Highline"}
+                  maxLength={60}
+                  disabled={!d.model}
+                />
+                <Button type="button" variant="outline" onClick={addFreeVersion} disabled={!d.model || !pendingVersion}>Agregar versión</Button>
+              </div>
               {d.trims.length ? (
                 <ul aria-label="Versiones seleccionadas" className="flex flex-wrap gap-2">
                   {d.trims.map((trim) => (
