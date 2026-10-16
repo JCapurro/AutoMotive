@@ -45,7 +45,7 @@ it.each(["sending", "waiting"])("shows only one progress indicator while %s a pr
   expect(html).toContain("Interpretando tu búsqueda");
   expect(html.match(/animate-spin/g)).toHaveLength(1);
   expect(html.match(/role="status"/g)).toHaveLength(1);
-  // No second "suele tardar" message, and no shortcut to the form until it's slow.
+  // No second "suele tardar" message, and no shortcut to the form: the user just waits.
   expect(html).not.toContain("suele tardar");
   expect(html).not.toContain("Completar el formulario a mano");
 });

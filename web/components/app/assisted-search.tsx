@@ -53,18 +53,14 @@ type Phase =
   | { kind: "choose"; jobId: number; drafts: Reviewed[]; selected: number[] }
   /** The plan has no room for another active search. */
   | { kind: "full"; jobId: number; found: number }
-  | { kind: "failed"; jobId: number | null; reason: "error" | "empty" | "manual" | "unavailable" };
+  | { kind: "failed"; jobId: number | null; reason: "error" | "empty" | "unavailable" };
 
 type JobRow = { status: string; output: unknown };
-
-/** How long the loader waits before offering to fill the form by hand. */
-const ASSISTED_SLOW_MS = 20_000;
 
 // Sección 8.4, paso 6: the structured form takes over.
 const FALLBACK_TITLE = {
   error: "No pude interpretarlo, completá los filtros",
   empty: "No encontramos un vehículo en tu pedido, completá los filtros",
-  manual: "Completá los filtros",
   unavailable: "El intérprete no está disponible ahora, completá los filtros",
 } as const;
 
@@ -99,7 +95,6 @@ export function AssistedSearch({
   const [text, setText] = useState(initialText);
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const [error, setError] = useState<string | null>(null);
-  const [slowJob, setSlowJob] = useState<number | null>(null);
   const [sending, startSending] = useTransition();
   const [supabase] = useState(createClient);
   const router = useRouter();
@@ -208,13 +203,6 @@ export function AssistedSearch({
       if (channel) void supabase.removeChannel(channel);
     };
   }, [waitingJob, supabase, base, limit, modelLessSearch]);
-
-  // The loader is all the user sees while it's quick; past ASSISTED_SLOW_MS it offers the form.
-  useEffect(() => {
-    if (waitingJob == null) return;
-    const timer = setTimeout(() => setSlowJob(waitingJob), ASSISTED_SLOW_MS);
-    return () => clearTimeout(timer);
-  }, [waitingJob]);
 
   function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -386,7 +374,7 @@ export function AssistedSearch({
   if (phase.kind === "failed") {
     return (
       <div className="space-y-4">
-        <Alert variant={phase.reason === "manual" ? "default" : "destructive"} data-testid="assisted-fallback">
+        <Alert variant="destructive" data-testid="assisted-fallback">
           <PenLine aria-hidden />
           <AlertTitle>
             {FALLBACK_TITLE[phase.reason]}
@@ -446,16 +434,6 @@ export function AssistedSearch({
             <DialogTitle>Interpretando tu búsqueda…</DialogTitle>
             <DialogDescription>Un momento, estamos armando los filtros.</DialogDescription>
           </div>
-          {waitingJob != null && slowJob === waitingJob ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => setPhase({ kind: "failed", jobId: waitingJob, reason: "manual" })}
-            >
-              Completar el formulario a mano
-            </Button>
-          ) : null}
         </DialogContent>
       </Dialog>
     </form>
