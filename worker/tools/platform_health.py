@@ -1,4 +1,5 @@
 """Platform and collector health, run by the existing five-minute watchdog.
+Also warns before Resend's email quota runs out (resend:hoy / resend:mes).
 
 python -m tools.platform_health [--dry] [--json]
 Email only on failure/recovery transitions; failed sends retry the same payload.
@@ -28,6 +29,16 @@ from pipeline.heartbeat import last_beat
 from tools.watchdog import check_web, transitions, worker_problem
 
 STATE_FILE = config.ROOT / "logs" / "platform_health_state.json"
+ART = timezone(timedelta(hours=-3))
+
+RESEND_USAGE_URL = 'https://api.resend.com/usage'
+QUOTA_KEYS = {'daily': 'resend:hoy', 'monthly': 'resend:mes'}
+QUOTA_BLIND = 'resend:uso'
+QUOTA_RECOVERED = {'resend:hoy': 'el uso del día ya no está cerca del límite',
+                   'resend:mes': 'el uso del mes ya no está cerca del límite',
+                   'resend:uso': 'ya se puede leer el uso de Resend'}
+UNREADABLE = ("Resend devolvió el uso en un formato desconocido: el aviso de cuota no funciona "
+              "hasta adaptar tools/platform_health.py.")
 
 # The targets the worker runs (db/repos/targets.py: the same profile predicate
 # and cadence as due_targets).
@@ -138,6 +149,135 @@ async def inspect_database(previous: dict[str, str | None] | None = None) -> dic
         await db.close_pool()
 
 
+class QuotaUnknown(Exception):
+    """Resend didn't answer this time (network, 5xx, 429): keep the previous verdict."""
+
+
+class QuotaBlind(Exception):
+    """The usage can't be read until someone acts; the message says what to fix."""
+
+
+def key_problem(response: httpx.Response) -> str:
+    """What a 4xx from /usage means for the owner. The same key sends every email."""
+    try:
+        name = response.json().get('name')
+    except (ValueError, AttributeError):
+        name = None
+    name = name if isinstance(name, str) and re.fullmatch(r'[a-z_]{1,40}', name) else None
+    status = response.status_code
+    if status == 401 and name == 'restricted_api_key':
+        return ("no se puede leer el uso de Resend (HTTP 401): la API key solo tiene permiso de envío. "
+                "Los emails salen, pero no hay aviso de cuota hasta usar una key con Full access.")
+    if status in (400, 401, 403):
+        return (f"Resend rechaza la API key (HTTP {status}{', ' + name if name else ''}): está mal, revocada "
+                "o suspendida. Mientras no se cambie no sale ningún email: alertas, mails de plan ni estos avisos.")
+    return f"no se pudo leer el uso de Resend (HTTP {status}): el aviso de cuota no funciona."
+
+
+def resend_usage(get=None) -> dict:
+    """Resend's own count for the whole account: the worker's emails, Auth's
+    links (SMTP), these warnings and received emails. Needs a full-access key."""
+    get = get or (lambda: httpx.get(RESEND_USAGE_URL, timeout=15,
+                                    headers={'Authorization': f'Bearer {config.RESEND_API_KEY}'}))
+    try:
+        response = get()
+    except httpx.HTTPError as error:
+        raise QuotaUnknown(type(error).__name__) from None
+    if response.status_code == 429 or response.status_code >= 500:
+        raise QuotaUnknown(f'HTTP {response.status_code}')
+    if not response.is_success:
+        raise QuotaBlind(key_problem(response))
+    try:
+        emails = response.json()['emails']
+    except (ValueError, KeyError, TypeError):
+        emails = None
+    if not isinstance(emails, dict):
+        raise QuotaBlind(UNREADABLE)
+    return emails
+
+
+def renewal(resets_at) -> datetime | None:
+    try:
+        at = datetime.fromisoformat(str(resets_at).replace('Z', '+00:00'))
+    except ValueError:
+        return None
+    if at.tzinfo is None:
+        return None
+    # Resend reports a window's last millisecond (23:59:59.999Z): show the minute it renews.
+    if at.second or at.microsecond:
+        at = at.replace(second=0, microsecond=0) + timedelta(minutes=1)
+    return at.astimezone(ART)
+
+
+def thousands(n: int) -> str:
+    return f'{n:,}'.replace(',', '.')
+
+
+def quota_checks(emails: dict, pct: int, now: datetime | None = None) -> dict[str, str | None]:
+    today = (now or datetime.now(ART)).astimezone(ART).date()
+    windows = {window: emails.get(window) for window in QUOTA_KEYS}
+
+    def counts(quota, limitless: bool) -> bool:
+        number = lambda n: type(n) is int and n >= 0
+        return (isinstance(quota, dict) and number(quota.get('used')) and 'limit' in quota
+                and ((limitless and quota['limit'] is None) or (number(quota['limit']) and quota['limit'] > 0)))
+
+    # A paid plan has no daily limit (null), and past its monthly one it bills or pauses instead.
+    if not (counts(windows['daily'], True) and counts(windows['monthly'], False)):
+        raise QuotaBlind(UNREADABLE)
+    paid = windows['daily']['limit'] is None
+    checks: dict[str, str | None] = {}
+    for window, key in QUOTA_KEYS.items():
+        used, limit = windows[window]['used'], windows[window]['limit']
+        if limit is None or used * 100 < limit * pct:
+            checks[key] = None
+            continue
+        at = renewal(windows[window].get('resets_at'))
+        if window == 'daily':
+            period = 'de hoy'
+            when = at and f"{'hoy' if at.date() == today else f'el {at:%d/%m}'} a las {at:%H:%M} (hora argentina)"
+        else:
+            period, when = 'del mes', at and f"el {at:%d/%m}"
+        if paid:
+            renews = f" La cuota se renueva {when}." if when else ""
+            checks[key] = (f"se superaron los {thousands(limit)} emails del mes del plan de Resend.{renews} "
+                           "Revisá en Resend si está cobrando los emails extra o si frenó los envíos."
+                           if used >= limit else
+                           f"{thousands(used)} de {thousands(limit)} emails del mes ({used * 100 // limit}%).{renews} "
+                           "Revisá en Resend qué hace tu plan al superar la cuota: cobrar los emails extra o frenar los envíos.")
+            continue
+        rejects = (f"Resend rechaza los emails nuevos (alertas, mails de plan y links para entrar) "
+                   f"hasta que se renueve la cuota{', ' + when if when else ''}.")
+        if used >= limit:
+            checks[key] = (f"se agotaron los {thousands(limit)} emails {period}: {rejects} "
+                           "Para no cortar los envíos, hay que pasar a un plan pago de Resend.")
+        else:
+            checks[key] = (f"{thousands(used)} de {thousands(limit)} emails {period} ({used * 100 // limit}%). "
+                           f"Al llegar a {thousands(limit)}, {rejects} "
+                           "Si pasa seguido, conviene pasar a un plan pago de Resend.")
+    return checks
+
+
+def email_quota(previous: dict[str, str | None], get=None, now: datetime | None = None) -> dict[str, str | None]:
+    """Warns before Resend's quota runs out: past it, every email bounces with 429."""
+    pct = config.PLATFORM_HEALTH_EMAIL_QUOTA_PCT
+    if pct <= 0 or not config.RESEND_API_KEY:
+        return {}
+    keep = {key: previous[key] for key in (*QUOTA_KEYS.values(), QUOTA_BLIND) if key in previous}
+    try:
+        checks = quota_checks(resend_usage(get), pct, now)
+    except QuotaBlind as error:
+        # Open warnings stay open until a reading closes them; nothing unread shows as OK.
+        return {**{key: problem for key, problem in keep.items() if problem}, QUOTA_BLIND: str(error)}
+    except QuotaUnknown as error:
+        print(f'No se pudo leer el uso de Resend: {error}', file=sys.stderr)
+        return keep
+    # Readable again: this run closes the warning with its own email; the next one drops the key.
+    if previous.get(QUOTA_BLIND):
+        checks[QUOTA_BLIND] = None
+    return checks
+
+
 def load_state(path: Path) -> dict:
     if not path.exists():
         return {'checks': {}}
@@ -180,13 +320,21 @@ def notify_changes(current: dict[str, str | None], path: Path = STATE_FILE,
     previous = state['checks']
     if current.get('base'):
         current = {**{k: v for k, v in previous.items() if k != 'base' and k != 'web'}, **current}
-    messages = transitions(previous, current)
+    messages = transitions(previous, current, QUOTA_RECOVERED)
     if messages:
         if not (config.PLATFORM_HEALTH_EMAIL and config.RESEND_API_KEY and config.EMAIL_FROM):
             raise RuntimeError('faltan PLATFORM_HEALTH_EMAIL / RESEND_API_KEY / EMAIL_FROM')
-        stamp = datetime.now(timezone(timedelta(hours=-3))).strftime('%d/%m/%Y %H:%M ART')
-        failing = any(message.startswith('🔴') for message in messages)
-        subject = 'Ese Auto: falla en la plataforma de scraping' if failing else 'Ese Auto: scraping recuperado'
+        stamp = datetime.now(ART).strftime('%d/%m/%Y %H:%M ART')
+        quota = {*QUOTA_KEYS.values(), QUOTA_BLIND}
+        red = {name for name, problem in current.items() if problem and not previous.get(name)}
+        green = {name for name, problem in current.items() if not problem and previous.get(name)}
+        if red:
+            subject = 'Ese Auto: aviso de la cuota de emails (Resend)' if red <= quota else 'Ese Auto: falla en la plataforma de scraping'
+        elif green <= quota:
+            subject = ('Ese Auto: novedades de la cuota de emails (Resend)' if any(current.get(key) for key in quota)
+                       else 'Ese Auto: la cuota de emails (Resend) volvió a la normalidad')
+        else:
+            subject = 'Ese Auto: scraping recuperado'
         text = f"Chequeo de salud · {stamp}\n\n" + '\n'.join(messages)
         if config.WEB_BASE_URL:
             text += f"\n\nRevisar fuentes: {config.WEB_BASE_URL}/app/health"
@@ -259,6 +407,7 @@ def main() -> int:
             previous = (state.get('pending') or {}).get('checks', state['checks'])
             checks = run(inspect_database(previous))
             checks['web'] = check_web(config.WEB_BASE_URL)
+            checks.update(email_quota(previous))
             if args.json:
                 print(json.dumps(checks, ensure_ascii=False))
             else:

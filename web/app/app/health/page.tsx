@@ -11,6 +11,7 @@ const NAMES: Record<string, string> = {
   base: "Base de datos", worker: "Worker", web: "Web",
   "collector:mercadolibre": "MercadoLibre", "collector:facebook": "Facebook",
   "collector:kavak": "Kavak", "collector:v6": "V6", "collector:autocosmos": "Autocosmos",
+  "resend:hoy": "Emails de hoy (Resend)", "resend:mes": "Emails del mes (Resend)", "resend:uso": "Cuota de Resend",
 };
 
 export default async function HealthPage() {
@@ -32,7 +33,7 @@ export default async function HealthPage() {
       <div className={needsAttention ? "rounded-lg bg-amber-50 p-4 text-amber-950" : "rounded-lg bg-emerald-50 p-4 text-emerald-950"}>
         <p className="font-semibold">{error ? "No se pudo leer el chequeo" : stale ? "Sin chequeo reciente" : problems ? `${problems} componentes necesitan revisión` : snapshot?.email_pending ? "Aviso por email pendiente" : "La plataforma está funcionando"}</p>
         <p className="mt-1 text-sm">Último chequeo: {snapshot ? when(snapshot.checked_at) : "todavía no se ejecutó"}.</p>
-        {stale ? <p className="mt-1 text-sm">El monitor corre en tu PC. Revisá que esté encendida y que el watchdog esté ejecutándose.</p> : null}
+        {stale ? <p className="mt-1 text-sm">El monitor corre en el servidor (VPS). Revisá que el timer automotive-watchdog esté activo.</p> : null}
       </div>
       <div className="overflow-x-auto rounded-lg border">
         <table className="w-full text-left text-sm">
@@ -49,7 +50,7 @@ export default async function HealthPage() {
         </table>
       </div>
       {!Object.keys(checks).some((name) => name.startsWith("collector:")) ? <p className="text-sm text-muted-foreground">No hay collectors con búsquedas activas para evaluar en este chequeo.</p> : null}
-      <p className="text-sm text-muted-foreground">Los collectors se revisan cuando tienen búsquedas activas. Tres fallas seguidas activan el aviso; también se detectan corridas trabadas, búsquedas vencidas y corridas vacías después de haber obtenido resultados.</p>
+      <p className="text-sm text-muted-foreground">Los collectors se revisan cuando tienen búsquedas activas. Tres fallas seguidas activan el aviso; también se detectan corridas trabadas, búsquedas vencidas y corridas vacías después de haber obtenido resultados. También avisa cuando los emails de Resend llegan al 80% de la cuota diaria o mensual.</p>
       <p className="text-sm text-muted-foreground">{snapshot?.email_pending ? "Hay un aviso por email pendiente de envío. El próximo chequeo volverá a intentarlo." : "Sin avisos pendientes de envío."} Último aviso enviado: {snapshot?.last_email_at ? when(snapshot.last_email_at) : "todavía no hay envíos registrados"}.</p>
     </div>
   );

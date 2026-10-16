@@ -208,3 +208,174 @@ class DeliveryTests(unittest.TestCase):
             with self.assertRaises(OSError):
                 with health.exclusive_check(self.path):
                     self.fail('second check acquired the lock')
+
+    def test_quota_emails_have_their_own_subject_and_recovery(self):
+        up = {'base': None, 'collector:kavak': None, 'resend:hoy': None}
+        health.notify_changes(up, self.path, self.sender)
+        health.notify_changes({**up, 'resend:hoy': '85 de 100 emails de hoy'}, self.path, self.sender)
+        self.assertEqual(self.sent[-1]['email']['subject'], 'Ese Auto: aviso de la cuota de emails (Resend)')
+        self.assertIn('resend:hoy: 85 de 100 emails de hoy', self.sent[-1]['email']['text'])
+        health.notify_changes(up, self.path, self.sender)
+        self.assertEqual(self.sent[-1]['email']['subject'], 'Ese Auto: la cuota de emails (Resend) volvió a la normalidad')
+        self.assertIn('resend:hoy: el uso del día ya no está cerca del límite', self.sent[-1]['email']['text'])
+
+    def test_an_unreadable_key_alerts_once_and_its_fix_is_announced(self):
+        restricted = httpx.Response(401, json={'name': 'restricted_api_key'})
+        def offline():
+            raise httpx.ConnectTimeout('timeout')
+        def run(get):
+            previous = health.load_state(self.path)['checks']
+            health.notify_changes({'base': None, **health.email_quota(previous, get)}, self.path, self.sender)
+        with patch.object(health.config, 'PLATFORM_HEALTH_EMAIL_QUOTA_PCT', 80):
+            for get in (lambda: httpx.Response(200, json=usage()), lambda: restricted, offline, lambda: restricted):
+                run(get)
+            self.assertEqual(len(self.sent), 1)
+            self.assertIn('resend:uso: no se puede leer', self.sent[0]['email']['text'])
+            run(lambda: httpx.Response(200, json=usage()))
+            self.assertEqual(len(self.sent), 2)
+            self.assertIn('resend:uso: ya se puede leer el uso de Resend', self.sent[1]['email']['text'])
+            run(lambda: httpx.Response(200, json=usage()))
+        self.assertEqual(len(self.sent), 2)
+        self.assertNotIn('resend:uso', health.load_state(self.path)['checks'])
+
+    def test_a_recovered_window_does_not_announce_normal_while_the_other_warns(self):
+        health.notify_changes({'resend:hoy': '85 de 100', 'resend:mes': '2.500 de 3.000'}, self.path, self.sender)
+        health.notify_changes({'resend:hoy': None, 'resend:mes': '2.500 de 3.000'}, self.path, self.sender)
+        self.assertEqual(self.sent[-1]['email']['subject'], 'Ese Auto: novedades de la cuota de emails (Resend)')
+
+    def test_a_quota_warning_with_a_scraping_recovery_is_about_the_quota(self):
+        health.notify_changes({'collector:kavak': 'falló', 'resend:hoy': None}, self.path, self.sender)
+        health.notify_changes({'collector:kavak': None, 'resend:hoy': '85 de 100'}, self.path, self.sender)
+        self.assertEqual(self.sent[-1]['email']['subject'], 'Ese Auto: aviso de la cuota de emails (Resend)')
+        self.assertIn('collector:kavak: volvió a funcionar', self.sent[-1]['email']['text'])
+
+    def test_a_collector_failure_alongside_keeps_the_scraping_subject(self):
+        health.notify_changes({'collector:kavak': None, 'resend:hoy': None}, self.path, self.sender)
+        health.notify_changes({'collector:kavak': 'falló', 'resend:hoy': '85 de 100'}, self.path, self.sender)
+        self.assertIn('falla en la plataforma', self.sent[-1]['email']['subject'])
+
+
+def usage(daily=2, monthly=159, *, daily_limit=100, monthly_limit=3000):
+    """GET /usage as Resend answered it on 2026-10-16 (the parts we read)."""
+    return {'object': 'usage', 'emails': {
+        'daily': {'used': daily, 'limit': daily_limit, 'sent': daily, 'received': 0, 'resets_at': '2026-10-16T23:59:59.999Z'},
+        'monthly': {'used': monthly, 'limit': monthly_limit, 'sent': monthly, 'received': 0, 'resets_at': '2026-11-04T14:33:32.454Z'}}}
+
+
+class EmailQuotaTests(unittest.TestCase):
+    def setUp(self):
+        for name, value in [('RESEND_API_KEY', 're_test'), ('PLATFORM_HEALTH_EMAIL_QUOTA_PCT', 80)]:
+            patched = patch.object(health.config, name, value)
+            patched.start()
+            self.addCleanup(patched.stop)
+
+    def check(self, body=None, previous=None, status=200, now=datetime(2026, 10, 16, 15, tzinfo=timezone.utc)):
+        response = httpx.Response(status, json=usage() if body is None else body)
+        return health.email_quota(previous or {}, lambda: response, now)
+
+    def test_quiet_below_the_threshold(self):
+        self.assertEqual(self.check(usage(79, 2399)), {'resend:hoy': None, 'resend:mes': None})
+
+    def test_daily_warning_says_how_many_and_when_it_renews(self):
+        problem = self.check(usage(85))['resend:hoy']
+        self.assertIn('85 de 100 emails de hoy (85%)', problem)
+        self.assertIn('hoy a las 21:00 (hora argentina)', problem)
+        self.assertIn('links para entrar', problem)
+
+    def test_after_21_the_daily_renewal_carries_its_date(self):
+        body = usage(85)
+        body['emails']['daily']['resets_at'] = '2026-10-17T23:59:59.999Z'
+        problem = self.check(body, now=datetime(2026, 10, 17, 1, 30, tzinfo=timezone.utc))['resend:hoy']
+        self.assertIn('el 17/10 a las 21:00 (hora argentina)', problem)
+
+    def test_monthly_warning_uses_thousands_and_the_renewal_day(self):
+        checks = self.check(usage(10, 2450))
+        self.assertIsNone(checks['resend:hoy'])
+        self.assertIn('2.450 de 3.000 emails del mes (81%)', checks['resend:mes'])
+        self.assertIn('el 04/11', checks['resend:mes'])
+        self.assertIn('plan pago', checks['resend:mes'])
+
+    def test_exhausted_quota_says_emails_bounce(self):
+        problem = self.check(usage(100))['resend:hoy']
+        self.assertIn('se agotaron los 100 emails de hoy', problem)
+        self.assertIn('rechaza', problem)
+
+    def test_threshold_is_configurable_and_zero_turns_it_off(self):
+        with patch.object(health.config, 'PLATFORM_HEALTH_EMAIL_QUOTA_PCT', 50):
+            self.assertIsNotNone(self.check(usage(50))['resend:hoy'])
+        with patch.object(health.config, 'PLATFORM_HEALTH_EMAIL_QUOTA_PCT', 0):
+            self.assertEqual(self.check(usage(100, 3000)), {})
+
+    def test_paid_plan_has_no_daily_limit(self):
+        self.assertIsNone(self.check(usage(5000, 10, daily_limit=None, monthly_limit=50000))['resend:hoy'])
+
+    def test_paid_plan_does_not_advise_a_paid_plan(self):
+        for used in (40000, 50000):
+            with self.subTest(used=used):
+                problem = self.check(usage(10, used, daily_limit=None, monthly_limit=50000))['resend:mes']
+                self.assertIn('50.000', problem)
+                self.assertIn('Revisá en Resend', problem)
+                self.assertNotIn('plan pago', problem)
+                self.assertNotIn('rechaza', problem)
+
+    def test_no_key_means_no_email_at_all_and_nothing_to_check(self):
+        with patch.object(health.config, 'RESEND_API_KEY', ''):
+            self.assertEqual(health.email_quota({}, lambda: self.fail('called Resend without a key')), {})
+
+    def test_asks_resend_with_the_key(self):
+        with patch.object(health.httpx, 'get', return_value=httpx.Response(200, json=usage())) as get:
+            health.email_quota({})
+        self.assertEqual(get.call_args.args[0], 'https://api.resend.com/usage')
+        self.assertEqual(get.call_args.kwargs['headers']['Authorization'], 'Bearer re_test')
+
+    def test_an_unanswered_check_keeps_the_previous_verdict(self):
+        previous = {'resend:hoy': '85 de 100', 'resend:mes': None, 'collector:kavak': None}
+        def offline():
+            raise httpx.ConnectTimeout('timeout')
+        self.assertEqual(health.email_quota(previous, offline), {'resend:hoy': '85 de 100', 'resend:mes': None})
+        for status in (503, 429):
+            with self.subTest(status=status):
+                self.assertEqual(self.check({}, previous, status), {'resend:hoy': '85 de 100', 'resend:mes': None})
+        self.assertEqual(self.check({}, {}, 503), {})
+        self.assertEqual(self.check({}, {'resend:uso': 'key'}, 503), {'resend:uso': 'key'})
+
+    def test_a_sending_only_key_is_reported_not_ignored(self):
+        body = {'statusCode': 401, 'message': 'This API key is restricted to only send emails', 'name': 'restricted_api_key'}
+        checks = self.check(body, {'resend:hoy': None}, 401)
+        self.assertIn('solo tiene permiso de envío', checks['resend:uso'])
+        self.assertIn('Full access', checks['resend:uso'])
+        self.assertNotIn('resend:hoy', checks)  # unread: no OK row
+        self.assertNotIn('re_test', checks['resend:uso'])
+
+    def test_a_rejected_key_says_no_email_goes_out(self):
+        for status, name in ((400, 'validation_error'), (403, 'suspended_api_key'), (401, 'validation_error')):
+            with self.subTest(status=status, name=name):
+                problem = self.check({'statusCode': status, 'message': 'API key is invalid', 'name': name}, {}, status)['resend:uso']
+                self.assertIn(f'Resend rechaza la API key (HTTP {status}, {name})', problem)
+                self.assertIn('no sale ningún email', problem)
+        self.assertNotIn('<b>', self.check({'name': '<b>x</b>'}, {}, 403)['resend:uso'])
+
+    def test_an_unreadable_answer_is_reported_not_shown_as_ok(self):
+        for body in ({'object': 'usage'}, {'emails': {'daily': {}}}, {'emails': []}):
+            with self.subTest(body=body):
+                self.assertIn('formato desconocido', self.check(body, {'resend:hoy': None})['resend:uso'])
+        self.assertIn('HTTP 404', self.check({'name': 'not_found'}, {}, 404)['resend:uso'])
+        for daily, monthly in (({'used': 100, 'max': 100}, {'used': 3000, 'max': 3000}),
+                               ({'used': 100, 'limit': '100'}, {'used': 3000, 'limit': 3000}),
+                               ({'used': 1, 'limit': None}, {'used': 3000, 'limit': None}),
+                               ({'used': 1, 'limit': 100}, {'used': 3000, 'limit': 0}),
+                               ({'used': True, 'limit': 100}, {'used': 1, 'limit': 3000})):
+            with self.subTest(daily=daily, monthly=monthly):
+                self.assertIn('formato desconocido', self.check({'emails': {'daily': daily, 'monthly': monthly}})['resend:uso'])
+
+    def test_while_unreadable_only_open_warnings_stay(self):
+        checks = self.check({'name': 'restricted_api_key'}, {'resend:hoy': '85 de 100', 'resend:mes': None}, 401)
+        self.assertEqual(set(checks), {'resend:hoy', 'resend:uso'})
+        self.assertEqual(checks['resend:hoy'], '85 de 100')
+
+    def test_renewal_rounds_resends_last_millisecond(self):
+        self.assertEqual(health.renewal('2026-10-16T23:59:59.999Z'), datetime(2026, 10, 16, 21, 0, tzinfo=health.ART))
+        self.assertIsNone(health.renewal(None))
+        self.assertIsNone(health.renewal('2026-10-16T23:59:59'))
+        self.assertIn('hasta que se renueve la cuota.', self.check({'emails': {
+            'daily': {'used': 90, 'limit': 100}, 'monthly': {'used': 90, 'limit': 3000}}})['resend:hoy'])

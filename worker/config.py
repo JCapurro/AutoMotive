@@ -107,6 +107,8 @@ WATCHDOG_STALE_MINUTES = int(os.getenv("WATCHDOG_STALE_MINUTES", "10"))
 PLATFORM_HEALTH_EMAIL = os.getenv("PLATFORM_HEALTH_EMAIL", "").strip()
 PLATFORM_HEALTH_RUN_TIMEOUT_MINUTES = max(1, int(os.getenv("PLATFORM_HEALTH_RUN_TIMEOUT_MINUTES", "30")))
 PLATFORM_HEALTH_EMPTY_RUNS = max(0, int(os.getenv("PLATFORM_HEALTH_EMPTY_RUNS", "3")))
+# Percent of Resend's daily/monthly email quota that triggers the warning; 0 turns it off.
+PLATFORM_HEALTH_EMAIL_QUOTA_PCT = min(100, max(0, int(os.getenv("PLATFORM_HEALTH_EMAIL_QUOTA_PCT", "80"))))
 
 
 def startup_warnings(env: dict | None = None, which=None) -> list[str]:

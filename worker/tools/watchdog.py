@@ -62,15 +62,17 @@ def check_web(base_url: str, get: Callable[[str], httpx.Response] | None = None)
     return None if r.status_code < 500 else f"{base_url} responde {r.status_code}"
 
 
-def transitions(previous: dict[str, str | None], current: dict[str, str | None]) -> list[str]:
-    """The messages to send: what started failing and what recovered."""
+def transitions(previous: dict[str, str | None], current: dict[str, str | None],
+                recovered: dict[str, str] | None = None) -> list[str]:
+    """The messages to send: what started failing and what recovered.
+    `recovered` words a check's recovery when "volvió a funcionar" doesn't fit."""
     out = []
     for name, problem in current.items():
         before = previous.get(name)
         if problem and not before:
             out.append(f"🔴 AutoMotive · {name}: {problem}")
         elif not problem and before:
-            out.append(f"🟢 AutoMotive · {name}: volvió a funcionar")
+            out.append(f"🟢 AutoMotive · {name}: {(recovered or {}).get(name, 'volvió a funcionar')}")
     return out
 
 

@@ -23,6 +23,7 @@ class ConfigTests(unittest.TestCase):
             self.assertEqual(config.OPENAI_MODEL, "gpt-6-luna")
             self.assertEqual(config.OPENAI_API_KEY, "")
             self.assertFalse(config.TELEGRAM_ENABLED)
+            self.assertEqual(config.PLATFORM_HEALTH_EMAIL_QUOTA_PCT, 80)
         finally:
             sys.modules.pop("config", None)
             if original_config is not None:

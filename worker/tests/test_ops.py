@@ -39,6 +39,10 @@ class TransitionTests(unittest.TestCase):
         self.assertEqual(transitions(down, up), ["🟢 AutoMotive · worker: volvió a funcionar"])
         self.assertEqual(transitions({}, up), [])              # first run, all fine
 
+    def test_a_check_can_word_its_recovery(self):
+        self.assertEqual(transitions({"resend:hoy": "85 de 100"}, {"resend:hoy": None}, {"resend:hoy": "se renovó la cuota diaria"}),
+                         ["🟢 AutoMotive · resend:hoy: se renovó la cuota diaria"])
+
 
 class EnvFileTests(unittest.TestCase):
     """tools/supabase_keys.py rewrites .env files in place."""

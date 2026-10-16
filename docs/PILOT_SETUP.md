@@ -89,8 +89,14 @@ total: 1 a 2 horas, más lo que tarde en propagarse el DNS.
    `mail.tudominio.com.ar`) → región **São Paulo**. Resend ofrece cargar los
    registros DNS en Cloudflare automáticamente; si no, copiá los registros MX,
    SPF y DKIM en Cloudflare → *DNS*. Esperá a que el dominio quede **Verified**.
-3. *API Keys → Create API key* con permiso **Sending access**. Guardala: se
-   usa en dos lugares (paso 7: el `.env` del worker y el SMTP de Supabase).
+3. *API Keys → Create API key*, dos claves:
+   - Una con permiso **Full access** para el `.env` del worker (paso 7). Con
+     ella el monitor lee la cuota y avisa antes de llegar al límite
+     (`docs/PLATFORM_HEALTH.md`). Con Sending access los emails salen igual,
+     pero `/app/health` queda marcando `resend:uso` en «Revisar»; para usar
+     igual una de Sending access, poné `PLATFORM_HEALTH_EMAIL_QUOTA_PCT=0`.
+   - Otra con **Sending access** para el SMTP de Supabase (paso 7): ahí
+     alcanza con enviar.
 4. Elegí el remitente, por ejemplo `alertas@tudominio.com.ar`.
 
 ## 4. API key de Anthropic (modo asistido)
@@ -150,7 +156,7 @@ El proyecto en la nube **no lee** `supabase\config.toml` ni `supabase\.env`
    | Host | `smtp.resend.com` |
    | Port | `465` |
    | Username | `resend` |
-   | Password | la API key de Resend (paso 3) |
+   | Password | la API key de Resend con Sending access (paso 3) |
 
 3. *Authentication → Rate Limits*: **emails por hora** en `60`.
 4. *Authentication → Emails → Templates*: en **Magic Link** y en **Confirm
@@ -181,7 +187,7 @@ y números. Completá además:
 
 ```ini
 WEB_BASE_URL=https://automotive.tudominio.com.ar
-RESEND_API_KEY=re_...
+RESEND_API_KEY=re_...          # la de Full access (paso 3)
 EMAIL_FROM=Automotive <alertas@tudominio.com.ar>
 TELEGRAM_ADMIN_CHAT_ID=123456789            # el del paso 5
 LLM_PROVIDER=anthropic

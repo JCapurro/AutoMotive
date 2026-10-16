@@ -87,7 +87,7 @@ Otros detalles:
 10. Vercel: `SUPABASE_SERVICE_ROLE_KEY` en Production (también firma el hash de la IP). Después, deploy de la web.
 11. VPS: desplegar el worker (cambió el pie de los emails). El repair bot no despliega si hay commits de `main` sin desplegar que tocan `worker/` o `supabase/` ([COLLECTOR_REPAIR.md](COLLECTOR_REPAIR.md)).
 12. Prueba en producción con una casilla de Juan: portada → email → búsqueda creada sin abrir ningún email; el mismo email otra vez → link; link → `/app/cuenta` → contraseña; `/app/pro` → «Continuar en Mercado Pago» con una cuenta solo-email pide la cuenta. Al final, borrar esa cuenta desde Ajustes.
-13. Las primeras semanas, mirar en Resend los envíos por día y los rebotes.
+13. Las primeras semanas, mirar en Resend los rebotes. La cuota la vigila el monitor: avisa por email al 80% de la diaria o la mensual (`docs/PLATFORM_HEALTH.md`).
 
 ## Desarrollo
 
