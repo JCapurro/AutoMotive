@@ -44,7 +44,7 @@ export default async function AdminHome() {
           <Stat
             label="Activación"
             value={percent(activation.data?.activation_pct ?? null)}
-            note={`${count(activation.data?.with_search)} de ${count(activation.data?.signed_up)} registrados · objetivo ${percent(activation.data?.target_pct ?? 70)}`}
+            note={`${count(activation.data?.with_search)} de ${count(activation.data?.signed_up)} con email · objetivo ${percent(activation.data?.target_pct ?? 70)}`}
           />
           <Stat
             label="Alertas por usuario y día (7 días)"

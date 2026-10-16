@@ -28,8 +28,9 @@ export default async function UnsubscribePage({ searchParams }: PageProps<"/baja
           <CardHeader>
             <CardTitle className="text-lg">Listo, no te mandamos más emails</CardTitle>
             <CardDescription>
-              Tus búsquedas y resultados siguen en tu cuenta. Podés volver a activar el
-              email desde <Link href="/app/settings" className="underline">Ajustes</Link>.
+              Tus búsquedas siguen guardadas. Si querés volver a recibirlos, activá el email
+              desde <Link href="/app/settings" className="underline">Ajustes</Link>. ¿No tenés
+              contraseña? Al entrar, pedí que te mandemos un link.
             </CardDescription>
           </CardHeader>
         ) : token ? (
@@ -37,7 +38,7 @@ export default async function UnsubscribePage({ searchParams }: PageProps<"/baja
             <CardHeader>
               <CardTitle className="text-lg">¿Dejar de recibir emails?</CardTitle>
               <CardDescription>
-                Dejamos de mandarte alertas y avisos por email. Tus búsquedas y resultados siguen en tu cuenta.
+                Dejamos de mandarte alertas y avisos por email. Tus búsquedas siguen guardadas.
               </CardDescription>
             </CardHeader>
             <CardContent>

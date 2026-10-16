@@ -20,6 +20,7 @@ vi.mock("@/app/app/pro/billing-actions", () => ({ startPayment: vi.fn() }));
 vi.mock("@/components/app/billing-status", () => ({ BillingStatus: () => null }));
 vi.mock("@/lib/meta-pixel", () => ({ pixel: vi.fn() }));
 vi.mock("@/lib/google-analytics", () => ({ analyticsEvent: vi.fn() }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
 import ProPage from "@/app/app/pro/page";
 import { ProPlans } from "@/components/app/pro-plans";
@@ -84,7 +85,7 @@ it("shows the plan cards with the limits and features the backend applies", () =
   const html = renderToStaticMarkup(createElement(PublicPlans, { cfg: { proOffer: DEFAULT_PRO_OFFER, planLimits: DEFAULT_PLAN_LIMITS, automaticPayments: true, commercialPilot: true }, signedIn: false }));
   for (const copy of [
     "por 3 días · sin tarjeta", "1 búsqueda activa", "Hasta 100 resultados", "Hasta 3 avisos inmediatos por día y resumen diario",
-    "Las 72 horas empiezan al activar tu búsqueda. Una prueba por cuenta, sin cobro automático.",
+    "Las 72 horas empiezan al activar tu búsqueda. Sin contraseña: solo tu email. Una prueba por email, sin cobro automático.",
     "por 30 días · pago único", "Seguí hasta tres opciones a la vez y recibí avisos para encontrar tu próximo auto.",
     "Hasta 3 búsquedas activas", "Hasta 10 avisos inmediatos por día y resumen diario",
     "Sin renovación automática. Si todavía no lo encontraste, extendés 30 días con un clic.",

@@ -1,5 +1,6 @@
 "use client";
 import { CheckCircle2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { joinWaitlist } from "@/app/app/pro/actions";
@@ -15,6 +16,7 @@ export function ProPlans({ offer, limits, current, placement, pilot = false, rec
   const [plan, setPlan] = useState<PlanChoice>(recommended ?? current ?? "pass_30");
   const [joined, setJoined] = useState<WaitlistPlan | null>(current);
   const [pending, start] = useTransition();
+  const router = useRouter();
   return (
     <form className="space-y-4" onSubmit={(e) => {
       e.preventDefault();
@@ -22,7 +24,9 @@ export function ProPlans({ offer, limits, current, placement, pilot = false, rec
       start(async () => {
         if (automatic) {
           const result = await startPayment(plan, true, offer.version, offer[plan].amount);
-          if (result.error) toast.error(result.error);
+          // Free-search accounts only have an email: paying needs it confirmed and a password.
+          if (result.needsAccount) router.push(`/app/cuenta?${new URLSearchParams({ next: `/app/pro?plan=${plan}` })}`);
+          else if (result.error) toast.error(result.error);
           else if (result.url) {
             pixel("InitiateCheckout", { content_ids: [plan], value: offer[plan].amount, currency: offer[plan].currency });
             analyticsEvent("begin_checkout", { currency: offer[plan].currency, value: offer[plan].amount, items: [{ item_id: plan, item_name: PLAN_COPY[plan].name }] });
@@ -83,7 +87,7 @@ export function ProPlans({ offer, limits, current, placement, pilot = false, rec
         {automatic ? "Continuar en Mercado Pago" : joined && joined !== plan ? "Cambiar mi solicitud" : pilot ? `Solicitar ${PLAN_COPY[plan].name}` : "Sumarme a la lista de espera"}
       </Button>}
       {automatic && plan !== "custom" ? <p className="text-sm text-muted-foreground">
-        Al adquirir este plan, usted está de acuerdo con <a href="/terminos" target="_blank" rel="noreferrer" className="underline underline-offset-4">términos y condiciones</a>.
+        Al contratar este plan aceptás los <a href="/terminos" target="_blank" rel="noreferrer" className="underline underline-offset-4">Términos y condiciones</a>.
       </p> : null}
     </form>
   );

@@ -61,11 +61,15 @@ ver el aviso. La web y las alertas distinguen «Publicado hace…» de «Detecta
 hace…»; el orden por recientes y el componente de antigüedad usan el mismo respaldo.
 ## Cómo funciona
 
-1. Creás una búsqueda en la web (`/app/searches/new`): marca, modelo y versión
-   del catálogo, años, precio máximo (USD o ARS), km, transmisión, combustible,
-   zona + radio (o el preset AMBA), fuentes, preferencias blandas, frecuencia y
-   nivel mínimo de alerta. Mientras la escribís ves cuántas publicaciones
-   actuales coinciden. Un modelo por búsqueda (§13).
+1. Creás una búsqueda en la web. Para la prueba gratis alcanza con contar en
+   la portada qué auto buscás y dejar tu email, sin contraseña ni confirmación;
+   para contratar un plan hace falta una cuenta con el email confirmado y
+   contraseña ([acceso](docs/AUTENTICACION.md)). En `/app/searches/new` elegís
+   marca, modelo y versión del catálogo, años, precio máximo (USD o ARS), km,
+   transmisión, combustible, zona + radio (o el preset AMBA), fuentes,
+   preferencias blandas, frecuencia y nivel mínimo de alerta. Mientras la
+   escribís ves cuántas publicaciones actuales coinciden. Un modelo por
+   búsqueda (§13).
 2. **Crawl targets** ([crawl.py](worker/pipeline/crawl.py)): en cada tick
    (`TICK_INTERVAL_SECONDS`, 5 min) las búsquedas habilitadas se agrupan por
    (fuente, marca, modelo) con el rango más amplio de años y km y **sin precio**.

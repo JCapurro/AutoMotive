@@ -1,14 +1,14 @@
 import { expect, type Page, test } from "@playwright/test";
 
-import { EXPECTED_BACKFILL, insertFreshDeal, query } from "./support/db";
+import { EXPECTED_BACKFILL, finishFirstCollection, insertFreshDeal, query } from "./support/db";
 import { E2E_EMAIL_DOMAIN, E2E_LISTING_PREFIX } from "./support/env";
-import { magicLink } from "./support/mail";
 import { worker } from "./support/worker";
 
 /**
  * F4 acceptance (docs/TECHNICAL_PLAN.md, sección 13):
- *   registro → creación de búsqueda → ver el backfill → llega una alerta
- *   simulada → clic en la alerta → "Guardar" → comprado,
+ *   email en la landing (sin contraseña ni confirmación) → creación de
+ *   búsqueda → ver el backfill → llega una alerta simulada → clic en la
+ *   alerta → "Guardar" → comprado,
  * on desktop and on a 375 px phone (the `mobile` project).
  */
 
@@ -28,6 +28,9 @@ const SEARCH_FILTERS = {
   transmission: "manual",
 };
 
+// AMBA as a user sets it: Ciudad de Buenos Aires (lib/argentina-locations.ts) with a 60 km radius.
+const AMBA = { label: "Ciudad de Buenos Aires, CABA", lat: -34.6037, lon: -58.3816, radius_km: 60 };
+
 const mobile = (page: Page) => (page.viewportSize()?.width ?? 1280) < 768;
 
 /** Nothing sticks out sideways: the page never scrolls horizontally. */
@@ -42,7 +45,7 @@ async function navigate(page: Page, name: "Inicio" | "Guardados" | "Ajustes") {
   await nav.getByRole("link", { name, exact: false }).first().click();
 }
 
-test("F4: registro, búsqueda, backfill, alerta, guardar y guardados", async ({ page }, testInfo) => {
+test("F4: búsqueda gratis con el email, backfill, alerta, guardar y guardados", async ({ page }, testInfo) => {
   const run = `${testInfo.project.name}-${Date.now()}`;
   const email = `${run}@${E2E_EMAIL_DOMAIN}`;
 
@@ -51,62 +54,67 @@ test("F4: registro, búsqueda, backfill, alerta, guardar y guardados", async ({ 
     await expect(page.getByRole("heading", { name: "Decinos cuál. Te avisamos cuando aparezca." })).toBeVisible();
     await expect(page.getByText("pide USD 2.574 menos")).toBeVisible();
     await expectNoHorizontalScroll(page);
-    await page.getByRole("button", { name: "Crear mi búsqueda" }).first().click();
-    await expect(page).toHaveURL(/\/login\?next=\/app\/searches\/new$/);
   });
 
-  await test.step("1. registro con contraseña y confirmación", async () => {
-    const since = new Date();
-    await page.getByLabel("Email").fill(email);
-    await page.getByRole("link", { name: "Crear cuenta", exact: true }).click();
-    await page.getByLabel("Email", { exact: true }).fill(email);
-    await page.getByLabel("Contraseña", { exact: true }).fill("e2e-password-123");
-    await page.getByLabel("Repetí la contraseña").fill("e2e-password-123");
-    await page.getByRole("button", { name: "Crear cuenta", exact: true }).click();
-    await expect(page.getByText("Revisá tu email")).toBeVisible();
-    await page.goto(await magicLink(email, since));
-    await page.getByRole("button", { name: "Confirmar mi email" }).click();
-    await expect(page).toHaveURL(/\/app\/searches\/new$/);
-    const [signup] = await query(
-      `select e.name from public.events e join public.profiles p on p.id = e.user_id
+  await test.step("1. búsqueda gratis solo con el email: sin contraseña ni confirmación", async () => {
+    const form = page.locator("#landing-search");
+    await form.getByLabel("¿Qué auto buscás?").fill("Ford Fiesta Titanium manual 2016 a 2018 hasta USD 11.500");
+    await form.getByRole("button", { name: "Crear mi búsqueda" }).click();
+    // The email comes in a pop-up, never the login page.
+    const dialog = page.getByRole("dialog", { name: "¿A qué email te avisamos?" });
+    await dialog.getByLabel("Tu email").fill(email);
+    await dialog.getByRole("button", { name: "Crear mi búsqueda" }).click();
+    await expect(page).toHaveURL(/\/app\/searches\/new/);
+    await expect(page.getByText(`Te vamos a avisar a ${email}`)).toBeVisible();
+    const [account] = await query<{ email_only: boolean; method: string }>(
+      `select p.email_only, e.props->>'method' as method from public.events e join public.profiles p on p.id = e.user_id
         where p.email = $1 and e.name = 'signup_completed'`,
       [email],
     );
-    expect(signup).toBeTruthy();
+    expect(account).toEqual({ email_only: true, method: "email_only" });
   });
 
   let profileId = 0;
   await test.step("2. creación de la búsqueda estructurada con preview", async () => {
     await page.getByRole("tab", { name: "Estructurado" }).click();
+    // The landing prompt also opened the assisted tab (its fallback form stays mounted, hidden).
+    const panel = page.getByRole("tabpanel", { name: "Estructurado" });
     await expectNoHorizontalScroll(page);
-    await page.getByLabel("Marca").selectOption("Ford");
-    await page.getByLabel("Modelo").selectOption("Fiesta");
-    await page.getByLabel(/^Versión/).selectOption("Titanium");
-    await page.getByLabel("Año desde").selectOption("2016");
-    await page.getByLabel("Año hasta").selectOption("2018");
-    await page.getByLabel("Precio máximo").fill("11500");
-    await page.getByLabel("Kilometraje máximo").fill("150000");
-    await page.getByText("Manual", { exact: true }).click();
-    await page.getByLabel("Zona").selectOption("amba");
+    await panel.getByLabel("Marca").selectOption("Ford");
+    await panel.getByLabel("Modelo").selectOption("Fiesta");
+    await panel.getByLabel(/^Versiones/).selectOption("Titanium");
+    await panel.getByLabel("Año desde").selectOption("2016");
+    await panel.getByLabel("Año hasta").selectOption("2018");
+    await panel.getByLabel("Precio máximo").fill("11500");
+    await panel.getByLabel("Kilometraje máximo").fill("150000");
+    await panel.getByText("Manual", { exact: true }).click();
+    // A new search starts at "Mi ubicación actual", unknown here (no permission, no Vercel headers).
+    await panel.getByText("Ubicación manual", { exact: true }).click();
+    await panel.getByLabel("Provincia").selectOption({ label: "Ciudad Autónoma de Buenos Aires" });
+    await panel.getByLabel("Localidad").selectOption({ label: "Ciudad de Buenos Aires" });
+    await panel.getByLabel("Radio (km)").fill(String(AMBA.radius_km));
     // What preview_search counts over the whole local database (the seeded market, at least).
     const [{ count }] = await query<{ count: number }>(
-      `select (public.preview_search($1::jsonb, -34.6037, -58.3816, 60)->>'count')::int as count`,
-      [JSON.stringify(SEARCH_FILTERS)],
+      `select (public.preview_search($1::jsonb, $2, $3, $4)->>'count')::int as count`,
+      [JSON.stringify(SEARCH_FILTERS), AMBA.lat, AMBA.lon, AMBA.radius_km],
     );
     expect(count).toBeGreaterThanOrEqual(EXPECTED_BACKFILL.length);
-    await expect(page.getByTestId("preview-count")).toContainText(`${count} publicaciones actuales coinciden`);
-    await expect(page.getByLabel("Nombre de la búsqueda")).toHaveValue("Ford Fiesta Titanium");
-    await page.getByRole("button", { name: "Crear búsqueda" }).click();
+    await expect(panel.getByTestId("preview-count")).toContainText(`${count} publicaciones actuales coinciden`);
+    await expect(panel.getByLabel("Nombre de la búsqueda")).toHaveValue("Ford Fiesta Titanium");
+    await panel.getByRole("button", { name: "Crear búsqueda" }).click();
     await expect(page).toHaveURL(/\/app\/searches\/\d+$/);
     profileId = Number(page.url().split("/").pop());
-    await expect(page.getByRole("status")).toContainText("Estamos buscando coincidencias");
+    await expect(page.getByRole("status")).toContainText("Estamos preparando tus resultados");
 
-    const [profile] = await query<{ filters: Record<string, unknown>; radius_km: number; channels: string[] }>(
-      `select filters, radius_km, channels from public.search_profiles where id = $1`,
-      [profileId],
-    );
-    expect(profile.filters).toEqual({ ...SEARCH_FILTERS, location_label: "AMBA" });
-    expect(profile.radius_km).toBe(60);
+    const [profile] = await query<{
+      filters: Record<string, unknown>;
+      origin_lat: number;
+      origin_lon: number;
+      radius_km: number;
+      channels: string[];
+    }>(`select filters, origin_lat, origin_lon, radius_km, channels from public.search_profiles where id = $1`, [profileId]);
+    expect(profile.filters).toEqual({ ...SEARCH_FILTERS, location_label: AMBA.label });
+    expect([profile.origin_lat, profile.origin_lon, profile.radius_km]).toEqual([AMBA.lat, AMBA.lon, AMBA.radius_km]);
     expect(profile.channels).toEqual(["email"]);
   });
 
@@ -121,6 +129,8 @@ test("F4: registro, búsqueda, backfill, alerta, guardar y guardados", async ({ 
       expect.arrayContaining(EXPECTED_BACKFILL.map((key) => `${E2E_LISTING_PREFIX}${key}`)),
     );
     expect(matched.every((m) => m.is_backfill)).toBe(true);
+    // The page keeps "preparando" until every source finished a first pass for this search.
+    await finishFirstCollection(profileId, SEARCH_FILTERS.make, SEARCH_FILTERS.model);
     await expect(page.getByTestId("listing-card")).toHaveCount(matched.length, { timeout: 20_000 });
     await expect(page.getByRole("status")).toHaveCount(0);
     await expectNoHorizontalScroll(page);
@@ -158,6 +168,8 @@ test("F4: registro, búsqueda, backfill, alerta, guardar y guardados", async ({ 
     await page.getByRole("button", { name: "Descartar" }).click();
     await page.getByRole("radio", { name: "Demasiado caro" }).check();
     await page.getByRole("button", { name: "Descartar", exact: true }).last().click();
+    // Disabled already while the action is pending: wait for it to be saved before leaving.
+    await expect(page.getByText("Publicación descartada")).toBeVisible();
     await expect(page.getByRole("button", { name: "Descartar", exact: true })).toBeDisabled();
     await page.goto(`/app/searches/${profileId}?f=discarded`);
     await expect(page.getByTestId("listing-card")).toHaveCount(1);

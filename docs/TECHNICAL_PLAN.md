@@ -664,7 +664,7 @@ Mientras no existe la web, hay un inspector por CLI: `python -m tools.explain_ma
 
 **Catálogo de eventos** (`events.name`):
 
-- **Cuenta:** `signup_completed`.
+- **Cuenta:** `signup_completed` (`method: email|google|email_only`; `email_only` es la búsqueda gratis creada solo con el email, desde el 15/10/2026), `account_completed` (`method: password|google`: una cuenta solo-email probó su casilla o Google y pasó a cuenta completa; ver [AUTENTICACION.md](AUTENTICACION.md)).
 - **Búsquedas:** `search_profile_created` (`mode: assisted|structured`), `search_profile_updated`, `search_profile_paused`.
 - **Alertas:** `alert_sent`, `alert_clicked`.
 - **Publicaciones:** `listing_detail_viewed`, `listing_outbound_clicked`, `listing_status_changed`, `listing_saved`, `listing_discarded` (`reason`).
@@ -677,7 +677,7 @@ Mientras no existe la web, hay un inspector por CLI: `python -m tools.explain_ma
 | Vista | Definición |
 |---|---|
 | `v_north_star_weekly` | Publicaciones **relevantes** abiertas desde una alerta, por usuario activo y por semana. *Relevante* = clickeada desde una alerta y no descartada con un motivo que indique que no era match (`automatic`, `wrong_trim`, `location`) |
-| `v_activation` | Registrados → con 1 o más profiles (objetivo 70%, §36) |
+| `v_activation` | Registrados → con 1 o más profiles (objetivo 70%, §36). *Registrados* = cuentas con email; desde el 15/10/2026 incluye las cuentas solo-email de la búsqueda gratis, así que la serie salta ese día (desaparece la confirmación del email). El admin las muestra como «Con email» |
 | `v_first_value` | Tiempo desde la creación del profile hasta el primer match de nivel ≥ good (incluye backfill) |
 | `v_alert_funnel` | Por nivel y canal: enviadas → clickeadas → guardadas → descartadas |
 | `v_high_score_engagement` | Engagement con high contra match/good (§37). Si no hay diferencia, el score no aporta |

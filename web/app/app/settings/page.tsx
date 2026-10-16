@@ -22,7 +22,7 @@ export default async function SettingsPage() {
   const [{ data: profile }, { data: waitlist }, { data: rawAccess }, { data: payments }, { data: declines }, { data: subscriptions }] = await Promise.all([
     supabase
       .from("profiles")
-      .select("email, plan, default_channels, default_notification_frequency")
+      .select("email, plan, default_channels, default_notification_frequency, email_only")
       .single(),
     supabase.from("pro_waitlist").select("plan").maybeSingle(),
     supabase.rpc("my_plan_limits"),
@@ -106,6 +106,11 @@ export default async function SettingsPage() {
           <CardTitle>Cuenta</CardTitle>
           <CardDescription>{profile?.email ?? user.email}</CardDescription>
         </CardHeader>
+        {profile?.email_only ? <CardContent className="space-y-3 border-b pb-5">
+          <p className="text-sm [overflow-wrap:anywhere]">Recibís las alertas en <b>{profile.email ?? user.email}</b>. Todavía no elegiste una contraseña: para entrar desde otro dispositivo, pedí un link en Ingresar.</p>
+          <Button asChild variant="outline"><Link href="/app/cuenta?next=%2Fapp%2Fsettings">Elegir contraseña</Link></Button>
+          <p className="text-xs text-muted-foreground">Si cerrás sesión, para volver pedí un link en Ingresar: te llega a este email. ¿El email está mal? Borrá tu cuenta y creá la búsqueda de nuevo con el correcto.</p>
+        </CardContent> : null}
         <CardContent className="flex flex-wrap items-center justify-between gap-3">
           <form action="/auth/signout" method="post">
             <Button type="submit" variant="outline">

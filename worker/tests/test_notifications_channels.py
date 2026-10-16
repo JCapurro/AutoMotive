@@ -110,12 +110,17 @@ class ResendEmailChannelTests(unittest.IsolatedAsyncioTestCase):
         body = json.loads(seen[0].content)
         self.assertEqual(body["headers"], {"List-Unsubscribe": "<https://automotive.app/api/baja?t=tok-123>",
                                            "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"})
-        self.assertIn("Dejar de recibir estos emails: https://automotive.app/baja?t=tok-123", body["text"])
+        # No double opt-in: the footer speaks to whoever owns the address.
+        self.assertIn("Recibís este email porque se creó una búsqueda en Ese Auto con esta dirección. "
+                      "¿No fuiste vos?\nDejá de recibirlos: https://automotive.app/baja?t=tok-123", body["text"])
         self.assertIn('href="https://automotive.app/baja?t=tok-123"', body["html"])
+        self.assertIn("¿No fuiste vos?</p>", body["html"])
 
         ch, seen = self.channel(lambda r: httpx.Response(200, json={"id": "email_2"}))
         await ch.send(PRICE_DROP)  # no token (e.g. an old row): no link, no header
-        self.assertNotIn("headers", json.loads(seen[0].content))
+        old = json.loads(seen[0].content)
+        self.assertNotIn("headers", old)
+        self.assertNotIn("¿No fuiste vos?", old["text"] + old["html"])   # no question without the link
 
     async def test_rate_limit_and_server_errors_are_retried(self):
         for status, retry in ((429, True), (503, True), (422, False)):

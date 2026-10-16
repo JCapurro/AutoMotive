@@ -4,11 +4,11 @@ import { beforeEach, expect, it, vi } from "vitest";
 import type { SearchLimit } from "./assisted";
 import type { DetectedLocation } from "./search-location";
 
-const state = vi.hoisted(() => ({ headers: {} as Record<string, string>, access: null as unknown, modelLessSearch: false }));
-beforeEach(() => { state.headers = {}; state.access = null; state.modelLessSearch = false; });
+const state = vi.hoisted(() => ({ headers: {} as Record<string, string>, access: null as unknown, modelLessSearch: false, emailOnly: false }));
+beforeEach(() => { state.headers = {}; state.access = null; state.modelLessSearch = false; state.emailOnly = false; });
 vi.mock("next/headers", () => ({ headers: async () => new Headers(state.headers) }));
 
-vi.mock("@/lib/auth", () => ({ requireUser: vi.fn().mockResolvedValue({ id: "user" }) }));
+vi.mock("@/lib/auth", () => ({ requireUser: vi.fn().mockResolvedValue({ id: "user", email: "user@example.com" }), isEmailOnly: async () => state.emailOnly }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ rpc: async () => ({ data: state.access }) }) }));
 vi.mock("@/lib/config", async () => {
   const { DEFAULT_PLAN_LIMITS, DEFAULT_PRO_OFFER } = await import("@/lib/pro");
@@ -33,6 +33,14 @@ vi.mock("@/components/app/assisted-search", () => ({
 
 import NewSearchPage from "@/app/app/searches/new/page";
 
+it("tells an email-only account where the alerts go", async () => {
+  state.emailOnly = true;
+  const html = renderToStaticMarkup(await NewSearchPage({ params: Promise.resolve({}), searchParams: Promise.resolve({}) }));
+  expect(html).toContain("Te vamos a avisar a <b>user@example.com</b>");
+  state.emailOnly = false;
+  expect(renderToStaticMarkup(await NewSearchPage({ params: Promise.resolve({}), searchParams: Promise.resolve({}) }))).not.toContain("Te vamos a avisar");
+});
+
 it("hands the landing prompt to the assisted flow after authentication", async () => {
   const html = renderToStaticMarkup(await NewSearchPage({
     params: Promise.resolve({}), searchParams: Promise.resolve({ prompt: "Fiesta manual en Córdoba" }),
@@ -55,7 +63,7 @@ it("passes the automatic connection zone to the assisted and structured flows", 
   expect(html).toContain('data-assisted-zone="Córdoba (zona aproximada)"');
   // The inactive structured tab is unmounted by Radix; inspect its props too.
   const children = tree.props.children;
-  const tabs = children[1];
+  const tabs = children.find((child: { props?: { defaultValue?: string } } | null) => child?.props?.defaultValue === "assisted");
   const structuredTab = tabs.props.children[1];
   expect(structuredTab.props.children.props.approximateLocation).toEqual({
     label: "Córdoba (zona aproximada)", lat: -31.42, lon: -64.19, approximate: true,
@@ -79,7 +87,8 @@ it("hands the search by body type to both flows when the plan has it (docs/CARRO
   state.modelLessSearch = true;
   const tree = await NewSearchPage({ params: Promise.resolve({}), searchParams: Promise.resolve({}) });
   expect(renderToStaticMarkup(tree)).toContain('data-model-less="yes"');
-  const structuredTab = tree.props.children[1].props.children[1];
+  const tabs = tree.props.children.find((child: { props?: { defaultValue?: string } } | null) => child?.props?.defaultValue === "assisted");
+  const structuredTab = tabs.props.children[1];
   expect(structuredTab.props.children.props.modelLessSearch).toBe(true);
   expect(structuredTab.props.children.props.initial.body_types).toEqual([]);
 });

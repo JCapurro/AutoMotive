@@ -13,6 +13,18 @@ export type Database = {
         Update: { status?: string; attempts?: number; error?: string | null; provider_id?: string | null; sent_at?: string | null; clicked_at?: string | null }
         Relationships: []
       }
+      account_proofs: {
+        Row: { session_id: string; user_id: string; method: string; created_at: string }
+        Insert: { session_id: string; user_id: string; method: string; created_at?: string }
+        Update: { session_id?: string; user_id?: string; method?: string; created_at?: string }
+        Relationships: []
+      }
+      auth_throttle: {
+        Row: { id: number; kind: string; key: string; created_at: string }
+        Insert: { id?: never; kind: string; key: string; created_at?: string }
+        Update: { id?: never; kind?: string; key?: string; created_at?: string }
+        Relationships: []
+      }
       platform_health_checks: {
         Row: { id: number; checked_at: string; checks: Json; email_pending: boolean; last_email_at: string | null }
         Insert: { id: number; checked_at: string; checks: Json; email_pending?: boolean; last_email_at?: string | null }
@@ -517,13 +529,13 @@ isOneToOne: true
                   ]
                 },"profiles": {
                   Row: {
-                    "created_at": string,"default_channels": (string)[],"default_notification_frequency": Database["public"]['Enums']["notify_frequency"],"default_origin_label": string | null,"default_origin_lat": number | null,"default_origin_lon": number | null,"email": string | null,"email_unsubscribe_token": string,"free_trial_started_at": string | null,"id": string,"phone": string | null,"plan": Database["public"]['Enums']["user_plan"],"plan_expires_at": string | null,"role": Database["public"]['Enums']["user_role"],"telegram_chat_id": number | null,"telegram_link_code": string,"telegram_user_id": number | null,"updated_at": string
+                    "created_at": string,"default_channels": (string)[],"default_notification_frequency": Database["public"]['Enums']["notify_frequency"],"default_origin_label": string | null,"default_origin_lat": number | null,"default_origin_lon": number | null,"email": string | null,"email_only": boolean,"email_unsubscribe_token": string,"free_trial_started_at": string | null,"id": string,"phone": string | null,"plan": Database["public"]['Enums']["user_plan"],"plan_expires_at": string | null,"role": Database["public"]['Enums']["user_role"],"telegram_chat_id": number | null,"telegram_link_code": string,"telegram_user_id": number | null,"updated_at": string
                   }
                   Insert: {
-                    "created_at"?: string,"default_channels"?: (string)[],"default_notification_frequency"?: Database["public"]['Enums']["notify_frequency"],"default_origin_label"?: string | null,"default_origin_lat"?: number | null,"default_origin_lon"?: number | null,"email"?: string | null,"email_unsubscribe_token"?: string,"free_trial_started_at"?: string | null,"id": string,"phone"?: string | null,"plan"?: Database["public"]['Enums']["user_plan"],"plan_expires_at"?: string | null,"role"?: Database["public"]['Enums']["user_role"],"telegram_chat_id"?: number | null,"telegram_link_code"?: string,"telegram_user_id"?: number | null,"updated_at"?: string
+                    "created_at"?: string,"default_channels"?: (string)[],"default_notification_frequency"?: Database["public"]['Enums']["notify_frequency"],"default_origin_label"?: string | null,"default_origin_lat"?: number | null,"default_origin_lon"?: number | null,"email"?: string | null,"email_only"?: boolean,"email_unsubscribe_token"?: string,"free_trial_started_at"?: string | null,"id": string,"phone"?: string | null,"plan"?: Database["public"]['Enums']["user_plan"],"plan_expires_at"?: string | null,"role"?: Database["public"]['Enums']["user_role"],"telegram_chat_id"?: number | null,"telegram_link_code"?: string,"telegram_user_id"?: number | null,"updated_at"?: string
                   }
                   Update: {
-                    "created_at"?: string,"default_channels"?: (string)[],"default_notification_frequency"?: Database["public"]['Enums']["notify_frequency"],"default_origin_label"?: string | null,"default_origin_lat"?: number | null,"default_origin_lon"?: number | null,"email"?: string | null,"email_unsubscribe_token"?: string,"free_trial_started_at"?: string | null,"id"?: string,"phone"?: string | null,"plan"?: Database["public"]['Enums']["user_plan"],"plan_expires_at"?: string | null,"role"?: Database["public"]['Enums']["user_role"],"telegram_chat_id"?: number | null,"telegram_link_code"?: string,"telegram_user_id"?: number | null,"updated_at"?: string
+                    "created_at"?: string,"default_channels"?: (string)[],"default_notification_frequency"?: Database["public"]['Enums']["notify_frequency"],"default_origin_label"?: string | null,"default_origin_lat"?: number | null,"default_origin_lon"?: number | null,"email"?: string | null,"email_only"?: boolean,"email_unsubscribe_token"?: string,"free_trial_started_at"?: string | null,"id"?: string,"phone"?: string | null,"plan"?: Database["public"]['Enums']["user_plan"],"plan_expires_at"?: string | null,"role"?: Database["public"]['Enums']["user_role"],"telegram_chat_id"?: number | null,"telegram_link_code"?: string,"telegram_user_id"?: number | null,"updated_at"?: string
                   }
                   Relationships: [
 
@@ -717,7 +729,7 @@ isOneToOne: false
                   ]
                 },"admin_users": {
                   Row: {
-                    "alerts_7d": number | null,"created_at": string | null,"email": string | null,"enabled_searches": number | null,"id": string | null,"last_activity_at": string | null,"plan": Database["public"]['Enums']["user_plan"] | null,"plan_expires_at": string | null,"role": Database["public"]['Enums']["user_role"] | null,"searches": number | null,"telegram_linked": boolean | null,"telegram_only": boolean | null,"waitlist_plan": string | null
+                    "alerts_7d": number | null,"created_at": string | null,"email": string | null,"email_only": boolean | null,"enabled_searches": number | null,"id": string | null,"last_activity_at": string | null,"plan": Database["public"]['Enums']["user_plan"] | null,"plan_expires_at": string | null,"role": Database["public"]['Enums']["user_role"] | null,"searches": number | null,"telegram_linked": boolean | null,"telegram_only": boolean | null,"waitlist_plan": string | null
                   }
                   Relationships: [
 
@@ -1023,6 +1035,11 @@ isOneToOne: false
           Functions: {
             begin_billing_checkout: { Args: { p_user: string; p_offer: string; p_email: string; p_version: string; p_expected_amount: number }; Returns: Json },
             apply_mercadopago_payment: { Args: { p_checkout: string; p_reference: string; p_status: string; p_amount: number; p_currency: string; p_paid_at: string; p_start: string; p_end: string }; Returns: number },
+            claim_auth_throttle: { Args: { p_kind: string; p_key: string; p_limit: number; p_window_seconds: number }; Returns: boolean },
+            auth_account_for_email: { Args: { p_email: string }; Returns: { user_id: string; email_only: boolean; confirmed: boolean }[] },
+            mark_email_only_account: { Args: { p_user: string }; Returns: boolean },
+            complete_email_only_account: { Args: { p_user: string; p_session: string; p_method: string }; Returns: boolean },
+            secure_email_only_account: { Args: { p_user: string }; Returns: boolean },
             "commercial_access_active":
 { Args: { "p_user": string }; Returns: boolean
                            },

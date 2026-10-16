@@ -3,6 +3,7 @@ import { NextRequest } from "next/server";
 const auth = vi.hoisted(() => ({ verifyOtp: vi.fn(), getUser: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ auth }) }));
 vi.mock("@/lib/signup", () => ({ afterSignIn: vi.fn() }));
+vi.mock("@/lib/account-proof", () => ({ afterRecoveryLink: async () => "/auth/reset-password", completeWithGoogle: vi.fn() }));
 import { GET, HEAD, POST } from "@/app/auth/confirm/route";
 import { GET as callback, HEAD as callbackHead } from "@/app/auth/callback/route";
 beforeEach(() => {

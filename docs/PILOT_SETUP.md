@@ -289,7 +289,7 @@ probás el camino de un usuario real:
 5. Esperá a que el worker encuentre una publicación nueva (minutos a horas):
    tiene que llegar por Telegram y por email. Tocá el link: en
    `/admin/notifications` la alerta figura como clickeada.
-6. Tocá «Dejar de recibir estos emails» al pie del email: el email se apaga en *Ajustes*.
+6. Tocá «Dejá de recibirlos» al pie de una alerta («Dejar de recibir estos emails» en los mails del plan): el email se apaga en *Ajustes*.
 7. En `/admin/sources`, las 5 fuentes tienen una corrida `ok` en las últimas 24 h.
 
 ---

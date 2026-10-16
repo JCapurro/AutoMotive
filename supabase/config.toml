@@ -270,7 +270,7 @@ subject = "Confirmá tu cuenta en Ese Auto"
 content_path = "./supabase/templates/confirmation.html"
 
 [auth.email.template.recovery]
-subject = "Recuperá tu contraseña de Ese Auto"
+subject = "Tu link para entrar a Ese Auto"
 content_path = "./supabase/templates/recovery.html"
 
 # Uncomment to customize notification email template

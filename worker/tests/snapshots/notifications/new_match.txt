@@ -25,7 +25,7 @@ Ver mis búsquedas: https://automotive.app/app
 🔎 Fiesta Titanium AMBA · 📍 Palermo, Capital Federal · 🏷 mercadolibre
 
 —
-Recibís este correo porque tenés búsquedas activas en Ese Auto.
+Recibís este email porque se creó una búsqueda en Ese Auto con esta dirección.
 === email html ===
 <!doctype html><html lang="es"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -50,5 +50,5 @@ Recibís este correo porque tenés búsquedas activas en Ese Auto.
 <div style="margin-top:22px;padding-top:12px;border-top:1px solid #d8dde6"><p style="margin:0;margin-top:8px;font-size:12px;line-height:20px;color:#4e5a73">🟢 Buena coincidencia · 74/100</p>
 <p style="margin:0;margin-top:8px;font-size:12px;line-height:20px;color:#4e5a73">Búsqueda: Fiesta Titanium AMBA · Palermo, Capital Federal · Fuente: mercadolibre</p></div>
 <p style="margin:20px 0 0;font-size:12px;line-height:20px"><a href="https://automotive.app/app" style="color:#4e5a73;text-decoration:underline">Ver mis búsquedas</a></p></td></tr></table><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;"><tr><td class="pad" bgcolor="#f1f3f7" style="padding:22px 28px;border-top:1px solid #d8dde6"><p style="margin:0;font-size:16px;line-height:23px;font-weight:bold;color:#14213d">Menos buscar. Más encontrar.</p>
-<p style="margin:0;margin-top:10px;font-size:11px;line-height:18px;color:#4e5a73">Recibís este correo porque tenés búsquedas activas en Ese Auto.</p></td></tr></table></td></tr></table></div><!--[if mso]></td></tr></table><![endif]--></td></tr></table>
+<p style="margin:0;margin-top:10px;font-size:11px;line-height:18px;color:#4e5a73">Recibís este email porque se creó una búsqueda en Ese Auto con esta dirección.</p></td></tr></table></td></tr></table></div><!--[if mso]></td></tr></table><![endif]--></td></tr></table>
 </body></html>
