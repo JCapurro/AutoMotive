@@ -20,6 +20,17 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), replace: 
 vi.mock("@/app/app/searches/actions", () => ({ startAssisted: vi.fn() }));
 vi.mock("@/components/app/search-form", () => ({ SearchForm: () => null }));
 vi.mock("@/lib/supabase/client", () => ({ createClient: () => ({}) }));
+// Radix portals don't render on the server: the dialog's content inline, only while open.
+vi.mock("@/components/ui/dialog", async () => {
+  const { createElement: h, Fragment } = await import("react");
+  const pass = ({ children }: { children?: React.ReactNode }) => h(Fragment, null, children);
+  return {
+    Dialog: ({ open, children }: { open: boolean; children?: React.ReactNode }) => (open ? h(Fragment, null, children) : null),
+    DialogContent: pass,
+    DialogTitle: pass,
+    DialogDescription: pass,
+  };
+});
 
 import { AssistedSearch } from "@/components/app/assisted-search";
 import type { SearchValues } from "@/lib/search-form";
@@ -34,4 +45,7 @@ it.each(["sending", "waiting"])("shows only one progress indicator while %s a pr
   expect(html).toContain("Interpretando tu búsqueda");
   expect(html.match(/animate-spin/g)).toHaveLength(1);
   expect(html.match(/role="status"/g)).toHaveLength(1);
+  // No second "suele tardar" message, and no shortcut to the form until it's slow.
+  expect(html).not.toContain("suele tardar");
+  expect(html).not.toContain("Completar el formulario a mano");
 });

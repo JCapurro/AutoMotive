@@ -12,6 +12,7 @@ import { SearchPromptInput } from "@/components/search-prompt-input";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import {
   ASSISTED_DEADLINE_MS,
   ASSISTED_MIN_CHARS,
@@ -56,6 +57,9 @@ type Phase =
 
 type JobRow = { status: string; output: unknown };
 
+/** How long the loader waits before offering to fill the form by hand. */
+const ASSISTED_SLOW_MS = 20_000;
+
 // Sección 8.4, paso 6: the structured form takes over.
 const FALLBACK_TITLE = {
   error: "No pude interpretarlo, completá los filtros",
@@ -95,6 +99,7 @@ export function AssistedSearch({
   const [text, setText] = useState(initialText);
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const [error, setError] = useState<string | null>(null);
+  const [slowJob, setSlowJob] = useState<number | null>(null);
   const [sending, startSending] = useTransition();
   const [supabase] = useState(createClient);
   const router = useRouter();
@@ -203,6 +208,13 @@ export function AssistedSearch({
       if (channel) void supabase.removeChannel(channel);
     };
   }, [waitingJob, supabase, base, limit, modelLessSearch]);
+
+  // The loader is all the user sees while it's quick; past ASSISTED_SLOW_MS it offers the form.
+  useEffect(() => {
+    if (waitingJob == null) return;
+    const timer = setTimeout(() => setSlowJob(waitingJob), ASSISTED_SLOW_MS);
+    return () => clearTimeout(timer);
+  }, [waitingJob]);
 
   function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -403,8 +415,7 @@ export function AssistedSearch({
     );
   }
 
-  const waiting = phase.kind === "waiting";
-  const busy = sending || waiting;
+  const busy = sending || phase.kind === "waiting";
   return (
     <form onSubmit={submit} className="max-w-2xl">
       <Card>
@@ -415,29 +426,38 @@ export function AssistedSearch({
               {error}
             </p>
           ) : null}
-          {busy ? (
-            <div role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
-              Interpretando tu búsqueda… suele tardar entre 5 y 20 segundos.
-            </div>
-          ) : null}
           <div className="flex flex-wrap items-center gap-2">
             <Button type="submit" disabled={busy || text.trim().length < ASSISTED_MIN_CHARS}>
-              {!busy ? <Sparkles aria-hidden /> : null}
+              <Sparkles aria-hidden />
               Interpretar
             </Button>
-            {waiting ? (
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => setPhase({ kind: "failed", jobId: phase.jobId, reason: "manual" })}
-              >
-                Completar el formulario a mano
-              </Button>
-            ) : null}
           </div>
         </CardContent>
       </Card>
+      <Dialog open={busy}>
+        <DialogContent
+          showCloseButton={false}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+          onInteractOutside={(e) => e.preventDefault()}
+          className="justify-items-center gap-3 py-8 text-center sm:max-w-xs"
+        >
+          <Loader2 className="size-8 animate-spin text-primary motion-reduce:animate-none" aria-hidden />
+          <div role="status" className="space-y-1">
+            <DialogTitle>Interpretando tu búsqueda…</DialogTitle>
+            <DialogDescription>Un momento, estamos armando los filtros.</DialogDescription>
+          </div>
+          {waitingJob != null && slowJob === waitingJob ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setPhase({ kind: "failed", jobId: waitingJob, reason: "manual" })}
+            >
+              Completar el formulario a mano
+            </Button>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </form>
   );
 }
