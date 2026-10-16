@@ -25,7 +25,7 @@ const HINTS: Record<string, string> = {
   digest_hour: "Hora del digest diario (ART).",
   price_drop_min_pct: "Baja mínima para alertar «Bajó de precio».",
   llm_limits: "Jobs del LLM por usuario y hora.",
-  email_only_signup: "Búsqueda gratis solo con email (docs/AUTENTICACION.md). enabled (false vuelve al registro con contraseña), per_ip_hour y per_day (cuentas nuevas), links_per_user_hour y links_per_ip_hour (links para entrar), lookups_per_ip_hour (búsquedas de cuenta) y alert_sessions_per_user_hour (sesiones por cuenta y hora que pueden iniciar los links firmados de los emails; sin la clave, 10; 0 las apaga).",
+  email_only_signup: "Búsqueda gratis solo con email (docs/AUTENTICACION.md). enabled (con false, el pop-up de la portada avisa que por ahora no se pueden crear búsquedas nuevas), per_ip_hour y per_day (cuentas nuevas), links_per_user_hour y links_per_ip_hour (links para entrar), lookups_per_ip_hour (búsquedas de cuenta) y alert_sessions_per_user_hour (sesiones por cuenta y hora que pueden iniciar los links firmados de los emails; sin la clave, 10; 0 las apaga).",
 };
 
 // sección 10, "Config": business rules, editable without a deploy.
