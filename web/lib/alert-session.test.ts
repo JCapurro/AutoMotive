@@ -154,6 +154,8 @@ describe("/r/<id>?to=detail with a signed link, signed out, of an email-only acc
     const response = await alert(signedDetail(), "POST");
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe(`${SITE}/app/listings/501?n=42`);
+    // The page that posted has s= in its URL: the detail must not get it as its referrer.
+    expect(response.headers.get("referrer-policy")).toBe("no-referrer");
     expect(m.claimThrottle).toHaveBeenCalledWith("alert_link_session", OWNER, 10, 3600);
     expect(m.generateLink).toHaveBeenCalledWith({ type: "magiclink", email: "persona@example.com" });
     expect(m.verifyOtp).toHaveBeenCalledWith({ type: "magiclink", token_hash: "hash" });
@@ -279,6 +281,7 @@ describe("/m/<id> (plan emails)", () => {
     const response = await plan(signed(), "POST");
     expect(response.status).toBe(303);
     expect(response.headers.get("location")).toBe(`${SITE}/app/pro?plan=pass_30`);
+    expect(response.headers.get("referrer-policy")).toBe("no-referrer");
     expect(m.verifyOtp).toHaveBeenCalledWith({ type: "magiclink", token_hash: "hash" });
     expect(m.track).toHaveBeenCalledWith(expect.anything(), OWNER, "alert_link_signin", { link: "m", id: 7 });
   });

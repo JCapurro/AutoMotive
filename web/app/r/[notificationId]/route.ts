@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 
-import { type AlertLink, alertLinkOwner, continuePage, signedAction, signInFromAlertLink } from "@/lib/alert-session";
+import { type AlertLink, alertLinkOwner, continuePage, signedAction, signInFromAlertLink, withoutReferrer } from "@/lib/alert-session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { type ClickTarget, destination, isPreview, parseClick } from "@/lib/tracking";
@@ -106,5 +106,5 @@ export async function POST(request: NextRequest, ctx: RouteContext<"/r/[notifica
   const owner = await alertLinkOwner(link);
   const signedIn = owner !== null && await signInFromAlertLink(owner, link);
   const to = !signedIn && await signedOutEmailOnly(click.notificationId) ? "listing" : "detail";
-  return redirect(request, to, row, click.notificationId, 303);
+  return withoutReferrer(redirect(request, to, row, click.notificationId, 303));
 }

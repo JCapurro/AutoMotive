@@ -147,6 +147,16 @@ export function continuePage(action: string): Response {
   });
 }
 
+/**
+ * The redirect that ends the POST of continuePage. That page's URL carries the
+ * signature, and the page it leads to would get it as document.referrer, which
+ * GA4, Meta and Clarity report: no referrer from here on.
+ */
+export function withoutReferrer<T extends Response>(response: T): T {
+  response.headers.set("Referrer-Policy", "no-referrer");
+  return response;
+}
+
 /** `path` plus the link's query, from parsed values only: the action of continuePage. */
 export function signedAction(path: string, query: Record<string, string | number | null | undefined>): string {
   const params = new URLSearchParams();

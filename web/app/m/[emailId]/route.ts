@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 
-import { type AlertLink, alertLinkOwner, continuePage, isAppPath, signedAction, signInFromAlertLink } from "@/lib/alert-session";
+import { type AlertLink, alertLinkOwner, continuePage, isAppPath, signedAction, signInFromAlertLink, withoutReferrer } from "@/lib/alert-session";
 import { lifecycleEmailId, lifecycleTarget } from "@/lib/lifecycle-click";
 import { requestOrigin } from "@/lib/origin";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -71,5 +71,5 @@ export async function POST(request: NextRequest, ctx: RouteContext<"/m/[emailId]
   const link: AlertLink = { scope: "m", id, signature: request.nextUrl.searchParams.get("s") };
   const owner = await alertLinkOwner(link);
   if (owner !== null) await signInFromAlertLink(owner, link);
-  return redirect(request, target, 303);
+  return withoutReferrer(redirect(request, target, 303));
 }
