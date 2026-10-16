@@ -44,10 +44,15 @@ export async function loadCatalog(supabase: SupabaseClient<Database>): Promise<C
     }
   }
   const collator = new Intl.Collator("es");
+  // numeric: "116i" before "120i".
+  const trimCollator = new Intl.Collator("es", { numeric: true });
   return [...makes.entries()]
     .sort(([a], [b]) => collator.compare(a, b))
     .map(([make, models]) => ({
       make,
-      models: [...models.values()].sort((a, b) => collator.compare(a.model, b.model)),
+      models: [...models.values()]
+        .sort((a, b) => collator.compare(a.model, b.model))
+        // Rows come back in no set order; the form lists trims as given.
+        .map((m) => ({ ...m, trims: m.trims.sort(trimCollator.compare) })),
     }));
 }
