@@ -117,13 +117,16 @@ class CollectorChecksTests(unittest.TestCase):
         """Target 445406 (incident f9a58b7f): each first-load scan stops at 200 dates."""
         loading = dict(source='mercadolibre', name='Mercado Libre', first_run_done=False,
                        created_at=NOW-timedelta(hours=5), latest_status='failed',
-                       latest_error=health.DATE_FETCH_LIMIT, statuses=['failed']*6)
+                       latest_error=health.DATE_FETCH_LIMIT, last_error=health.DATE_FETCH_LIMIT,
+                       statuses=['failed']*6)
         check = lambda **c: health.collector_checks([target(**{**loading, **c})], NOW,
                                                     previous={'collector:mercadolibre': 'falló'})['collector:mercadolibre']
         self.assertIsNone(check())
+        # The next scan running doesn't change that.
+        self.assertIsNone(check(latest_status='running', latest_error=None))
         # Past a day, after the first load, with another error: a failure again.
         for changes in (dict(created_at=NOW-timedelta(days=2)), dict(first_run_done=True),
-                        dict(latest_error='Traceback\nRuntimeError: login wall')):
+                        dict(last_error='Traceback\nRuntimeError: login wall')):
             with self.subTest(**{k: str(v) for k, v in changes.items()}):
                 self.assertIn('3 corridas', check(**changes))
         # A loading target that stops running still alerts.

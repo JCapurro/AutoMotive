@@ -57,7 +57,7 @@ with eligible as (
 select t.id, t.source, t.name, t.make, t.model, t.body_type, t.query, t.first_run_done, t.created_at, t.updated_at, t.next_run_at,
   t.crawl_interval_seconds, latest.started_at, latest.status as latest_status,
   latest.error as latest_error, coalesce(history.statuses, '{{}}') as statuses,
-  coalesce(history.found, '{{}}') as found,
+  coalesce(history.found, '{{}}') as found, history.errors[1] as last_error,
   exists(select 1 from collector_runs r where r.target_id=t.id and r.status='ok'
     and r.found>0 and r.started_at>now()-interval '7 days') as had_results
 from eligible t
@@ -67,8 +67,9 @@ left join lateral (
 ) latest on true
 left join lateral (
   select array_agg(status::text order by started_at desc, id desc) as statuses,
-    array_agg(found order by started_at desc, id desc) as found
-  from (select id, status, found, started_at from collector_runs
+    array_agg(found order by started_at desc, id desc) as found,
+    array_agg(error order by started_at desc, id desc) as errors
+  from (select id, status, found, error, started_at from collector_runs
     where target_id=t.id and status in ('ok','failed')
     order by started_at desc, id desc limit %(history)s) recent
 ) history on true
@@ -96,9 +97,10 @@ def first_load(row: dict, now: datetime) -> bool:
     """A new Mercado Libre target dating its first 30 days, 200 ads per scan
     (config.RECENT_ML_MAX_DATE_FETCHES): each scan ends incomplete, so failed,
     while it stores what it read (target 445406, incident f9a58b7f). Past
-    FIRST_LOAD_GRACE it alerts like any failure."""
-    return (row.get('first_run_done') is False and row['latest_status'] == 'failed'
-            and last_error_line(row['latest_error']) == DATE_FETCH_LIMIT
+    FIRST_LOAD_GRACE it alerts like any failure. The last finished run
+    decides: the next scan is often running."""
+    return (row.get('first_run_done') is False and row['statuses'][:1] == ['failed']
+            and last_error_line(row.get('last_error')) == DATE_FETCH_LIMIT
             and now - row['created_at'] < FIRST_LOAD_GRACE)
 
 
