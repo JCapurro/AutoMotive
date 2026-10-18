@@ -20,6 +20,7 @@ import httpx
 
 from aio import run
 from collectors._recency import POLICY_VERSION, SOURCES as RECENT_SOURCES
+from collectors.mercadolibre import DATE_FETCH_LIMIT
 import config
 import db
 from db.repos.targets import INTERVAL_SECONDS, PROFILE_WANTS_TARGET
@@ -30,6 +31,8 @@ from tools.watchdog import check_web, transitions, worker_problem
 
 STATE_FILE = config.ROOT / "logs" / "platform_health_state.json"
 ART = timezone(timedelta(hours=-3))
+# How long a new Mercado Libre target may take to date its first 30 days.
+FIRST_LOAD_GRACE = timedelta(days=1)
 
 RESEND_USAGE_URL = 'https://api.resend.com/usage'
 QUOTA_KEYS = {'daily': 'resend:hoy', 'monthly': 'resend:mes'}
@@ -51,7 +54,7 @@ with eligible as (
       and {PROFILE_WANTS_TARGET}
   )
 )
-select t.id, t.source, t.name, t.make, t.model, t.body_type, t.query, t.created_at, t.updated_at, t.next_run_at,
+select t.id, t.source, t.name, t.make, t.model, t.body_type, t.query, t.first_run_done, t.created_at, t.updated_at, t.next_run_at,
   t.crawl_interval_seconds, latest.started_at, latest.status as latest_status,
   latest.error as latest_error, coalesce(history.statuses, '{{}}') as statuses,
   coalesce(history.found, '{{}}') as found,
@@ -89,6 +92,16 @@ def safe_error(error: str | None) -> str:
                   r"\1=[redactado]", text)
 
 
+def first_load(row: dict, now: datetime) -> bool:
+    """A new Mercado Libre target dating its first 30 days, 200 ads per scan
+    (config.RECENT_ML_MAX_DATE_FETCHES): each scan ends incomplete, so failed,
+    while it stores what it read (target 445406, incident f9a58b7f). Past
+    FIRST_LOAD_GRACE it alerts like any failure."""
+    return (row.get('first_run_done') is False and row['latest_status'] == 'failed'
+            and last_error_line(row['latest_error']) == DATE_FETCH_LIMIT
+            and now - row['created_at'] < FIRST_LOAD_GRACE)
+
+
 def collector_checks(rows: list[dict], now: datetime, *, failures: int = 3,
                      timeout_minutes: int = 30, empty_runs: int = 3,
                      previous: dict[str, str | None] | None = None) -> dict[str, str | None]:
@@ -105,7 +118,9 @@ def collector_checks(rows: list[dict], now: datetime, *, failures: int = 3,
         target = (BODY_TYPE_LABELS.get(row['body_type'], row['body_type']) if row.get('body_type') else
                   " ".join(p for p in (row.get('make'), row.get('model')) if p) or f"target {row['id']}")
         reason = None
-        if len(statuses) >= failures and all(s == 'failed' for s in statuses[:failures]):
+        loading = first_load(row, now)
+        if (not loading and len(statuses) >= failures
+                and all(s == 'failed' for s in statuses[:failures])):
             reason = f"{failures} corridas fallidas consecutivas. {safe_error(row['latest_error'])}"
         elif row['latest_status'] == 'running':
             if now - row['started_at'] > timedelta(minutes=timeout_minutes):
@@ -126,7 +141,7 @@ def collector_checks(rows: list[dict], now: datetime, *, failures: int = 3,
             grace = timedelta(seconds=max(timeout_minutes * 60, row['crawl_interval_seconds'] * 2))
             if now - due > grace:
                 reason = "búsqueda vencida que dejó de ejecutarse"
-        if not reason and (previous or {}).get(key) and row['latest_status'] != 'ok':
+        if not reason and not loading and (previous or {}).get(key) and row['latest_status'] != 'ok':
             reason = "esperando una corrida exitosa para confirmar la recuperación"
         if reason:
             detail = f"{row['name']} · {target}: {reason}"

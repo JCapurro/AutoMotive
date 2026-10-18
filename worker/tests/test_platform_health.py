@@ -113,6 +113,22 @@ class CollectorChecksTests(unittest.TestCase):
                     row = target(source=source, query={'publication_policy': health.POLICY_VERSION}, **changes)
                     self.assertIn(reason, health.collector_checks([row], NOW)[f'collector:{source}'])
 
+    def test_a_new_mercadolibre_target_dating_its_first_load_is_not_a_failure(self):
+        """Target 445406 (incident f9a58b7f): each first-load scan stops at 200 dates."""
+        loading = dict(source='mercadolibre', name='Mercado Libre', first_run_done=False,
+                       created_at=NOW-timedelta(hours=5), latest_status='failed',
+                       latest_error=health.DATE_FETCH_LIMIT, statuses=['failed']*6)
+        check = lambda **c: health.collector_checks([target(**{**loading, **c})], NOW,
+                                                    previous={'collector:mercadolibre': 'falló'})['collector:mercadolibre']
+        self.assertIsNone(check())
+        # Past a day, after the first load, with another error: a failure again.
+        for changes in (dict(created_at=NOW-timedelta(days=2)), dict(first_run_done=True),
+                        dict(latest_error='Traceback\nRuntimeError: login wall')):
+            with self.subTest(**{k: str(v) for k, v in changes.items()}):
+                self.assertIn('3 corridas', check(**changes))
+        # A loading target that stops running still alerts.
+        self.assertIn('vencida', check(next_run_at=NOW-timedelta(hours=2)))
+
     def test_custom_threshold(self):
         self.assertIn('2 corridas', health.collector_checks([target(statuses=['failed']*2)], NOW, failures=2)['collector:kavak'])
 

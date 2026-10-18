@@ -83,6 +83,9 @@ TODAY_FILTER_SPAN = 25 * 3600
 # Dates read from ads, by id, for the worker's lifetime: an ad outside the
 # window is never stored, and would otherwise be read again on every scan.
 _dates: dict[str, int | None] = {}
+# A scan that ran out of date fetches: a long window (a first run) ends
+# incomplete until the ads it read cover it (tools/platform_health.py).
+DATE_FETCH_LIMIT = "mercadolibre: date fetch limit reached"
 
 # Mercado Libre's VEHICLE_BODY_TYPE values (category MLA1744, 15/10/2026),
 # most listed first. normalization/body_type.py maps each one to its code:
@@ -509,7 +512,7 @@ class MercadoLibreScraper(BaseScraper):
                     if listing.published_at is None and listing.listing_id in _dates:
                         listing.published_at = _dates[listing.listing_id]
                     elif listing.published_at is None and fetched >= config.RECENT_ML_MAX_DATE_FETCHES:
-                        results.complete, results.reason = False, "mercadolibre: date fetch limit reached"
+                        results.complete, results.reason = False, DATE_FETCH_LIMIT
                     elif listing.published_at is None:
                         fetched += 1
                         await asyncio.sleep(config.RECENT_ML_DETAIL_SECONDS)
