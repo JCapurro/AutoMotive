@@ -8,6 +8,10 @@ from typing import AsyncIterator
 from playwright.async_api import async_playwright, Browser, BrowserContext, Playwright
 
 
+USER_AGENT = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+              "(KHTML, like Gecko) Chrome/124.0 Safari/537.36")
+VIEWPORT = {"width": 1366, "height": 900}
+
 _pw: Playwright | None = None
 _browser: Browser | None = None
 _lock = asyncio.Lock()
@@ -37,11 +41,8 @@ async def browser_context(
     ctx = await b.new_context(
         storage_state=storage_state,
         locale=locale,
-        user_agent=user_agent or (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-            "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
-        ),
-        viewport={"width": 1366, "height": 900},
+        user_agent=user_agent or USER_AGENT,
+        viewport=VIEWPORT,
     )
     try:
         yield ctx

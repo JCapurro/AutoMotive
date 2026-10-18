@@ -574,21 +574,62 @@ class FacebookMarketplaceScraper(BaseScraper):
         return slim_html(page.html, keep="[role='main']")
 
 
-# ------ Interactive login: `python -m collectors.facebook` ------
-async def _login_and_save() -> None:
+# ------ Interactive login: `python -m collectors.facebook [--auto]` ------
+# Facebook revokes a session the first time it is used from an IP other than
+# the one that logged in (2026-10-17: a PC login died on its first VPS
+# request). So the VPS session is created on the VPS itself, through
+# ops/vps/fb-login.sh, with the same user agent and viewport as the worker.
+LOGIN_TIMEOUT_SECONDS = 900
+
+
+async def _session_ready(ctx, page) -> bool:
+    url = page.url
+    if "facebook.com" not in url or any(s in url for s in ("/login", "checkpoint", "two_step", "/recover")):
+        return False
+    return any(c.get("name") == "c_user" for c in await ctx.cookies("https://www.facebook.com"))
+
+
+def _save_state(state: dict) -> None:
+    import json, os
+    tmp = f"{FB_STORAGE_STATE}.tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(state, f)
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, FB_STORAGE_STATE)
+
+
+async def _login_and_save(*, auto: bool = False) -> None:
+    from ._browser import USER_AGENT, VIEWPORT
     async with async_playwright() as pw:
         browser = await pw.chromium.launch(headless=False)
-        ctx = await browser.new_context(locale="es-AR")
+        ctx = await browser.new_context(locale="es-AR", user_agent=USER_AGENT, viewport=VIEWPORT)
         page = await ctx.new_page()
         await page.goto("https://www.facebook.com/login")
-        print("Iniciá sesión en la ventana abierta. Cuando estés en la home, "
-              "volvé a esta consola y presioná Enter.")
-        await asyncio.get_event_loop().run_in_executor(None, input, "")
-        await ctx.storage_state(path=FB_STORAGE_STATE)
-        print(f"[facebook] sesión guardada en {FB_STORAGE_STATE}")
+        if auto:
+            print("Iniciá sesión en la ventana (y completá cualquier verificación). "
+                  "La sesión se guarda sola cuando entres a la home.", flush=True)
+            deadline = asyncio.get_running_loop().time() + LOGIN_TIMEOUT_SECONDS
+            while not await _session_ready(ctx, page):
+                if asyncio.get_running_loop().time() > deadline:
+                    raise SystemExit("[facebook] no se completó el login a tiempo; no se guardó nada")
+                await asyncio.sleep(2)
+            # A session Facebook is about to revoke still has c_user right after
+            # login; it only disappears on the next request. Prove it survives one.
+            await page.wait_for_timeout(5_000)
+            await page.goto("https://www.facebook.com/marketplace/", wait_until="domcontentloaded")
+            await page.wait_for_timeout(4_000)
+            if not await _session_ready(ctx, page):
+                raise SystemExit("[facebook] Facebook cerró la sesión al recargar; no se guardó nada")
+        else:
+            print("Iniciá sesión en la ventana abierta. Cuando estés en la home, "
+                  "volvé a esta consola y presioná Enter.")
+            await asyncio.get_running_loop().run_in_executor(None, input, "")
+        _save_state(await ctx.storage_state())
+        print(f"[facebook] sesión guardada en {FB_STORAGE_STATE}", flush=True)
         await ctx.close()
         await browser.close()
 
 
 if __name__ == "__main__":
-    asyncio.run(_login_and_save())
+    import sys
+    asyncio.run(_login_and_save(auto="--auto" in sys.argv[1:]))

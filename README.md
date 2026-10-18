@@ -182,6 +182,19 @@ Se abre Chromium → entrás a tu cuenta → volvés a la consola → Enter. Gen
 `fb_state.json`. Recomendación: usá una cuenta secundaria, FB es agresivo
 detectando automatización en cuentas con poco historial.
 
+**La sesión del worker en el VPS no se puede crear en la PC**: Facebook la
+revoca en su primer pedido desde otra IP. Se crea en el VPS mismo, viendo su
+navegador desde la PC con noVNC por un túnel SSH (detalle en
+[ops/vps/fb-login.sh](ops/vps/fb-login.sh)):
+
+```bash
+ssh -t -L 6080:127.0.0.1:6080 automotive-vps "sudo bash /opt/automotive/ops/vps/fb-login.sh"
+```
+
+Después abrí `http://localhost:6080/vnc.html?autoconnect=1&resize=scale`,
+iniciá sesión y esperá: se guarda sola al llegar a la home y el script se
+cierra. No hace falta reiniciar el worker.
+
 ### Probar un scraper sin levantar el bot
 
 ```powershell
