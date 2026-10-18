@@ -224,10 +224,11 @@ class FacebookPage:
 
 
 class FacebookWindowTests(unittest.IsolatedAsyncioTestCase):
-    async def search(self, page, **filters):
+    async def search(self, page, cookies=({"name": "c_user"},), **filters):
         @asynccontextmanager
         async def context(**kwargs):
-            yield MagicMock(new_page=AsyncMock(return_value=page))
+            yield MagicMock(new_page=AsyncMock(return_value=page),
+                            cookies=AsyncMock(return_value=list(cookies)))
 
         with patch.object(fb, "browser_context", context), \
                 patch.object(fb.Path, "exists", return_value=True), \
@@ -283,6 +284,14 @@ class FacebookWindowTests(unittest.IsolatedAsyncioTestCase):
                             body='No se encontraron publicaciones para "Hyundai i30"')
         with self.assertRaisesRegex(fb.CollectorBlocked, "session expired"):
             await self.search(page)
+        page.close.assert_awaited_once()
+
+    async def test_logged_out_public_marketplace_is_blocked_not_an_empty_success(self):
+        # Seen on the VPS since 2026-10-09: no redirect to /login, cards render,
+        # every date is unknown, and the run used to finish ok with found=0.
+        page = FacebookPage([[('1', None), ('2', None)]])
+        with self.assertRaisesRegex(fb.CollectorBlocked, "logged out"):
+            await self.search(page, cookies=({"name": "datr"},))
         page.close.assert_awaited_once()
 
     async def test_scroll_cap_and_expired_session_preserve_partial_results(self):

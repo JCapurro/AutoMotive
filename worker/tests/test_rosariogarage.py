@@ -257,6 +257,25 @@ class RosarioGarageSearchTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(CollectorBlocked):
             await collector.fetch_detail(DETAIL_URL)
 
+    async def test_removed_ad_redirected_home_is_gone_not_a_login_wall(self):
+        # Live behaviour since 2026-10-15: a removed itmId answers 302 to "/",
+        # whose header carries a password field.
+        home = '<form><input type="password"></form><h1>Rosario Garage</h1>'
+
+        def handler(request):
+            if request.url.path == "/":
+                return httpx.Response(200, text=home)
+            return httpx.Response(302, headers={"location": RosarioGarageScraper.BASE + "/"})
+
+        detail = await scraper(handler).fetch_detail(DETAIL_URL)
+        self.assertTrue(detail.gone)
+        self.assertIn("redirige al inicio", detail.gone_reason)
+
+    async def test_login_wall_on_the_product_url_is_still_blocked(self):
+        collector = scraper(lambda request: httpx.Response(200, text='<input type="password">'))
+        with self.assertRaises(CollectorBlocked):
+            await collector.fetch_detail(DETAIL_URL)
+
 
 if __name__ == "__main__":
     unittest.main()

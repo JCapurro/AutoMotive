@@ -271,6 +271,14 @@ def _own_images(main) -> list[str | None]:
     return out
 
 
+async def _require_session(ctx) -> None:
+    """Facebook no longer always redirects a dead session to /login: it serves
+    the public Marketplace with a login form, whose cards carry no publication
+    date. Only the session cookie proves the visit is logged in."""
+    if not any(c.get("name") == "c_user" for c in await ctx.cookies("https://www.facebook.com")):
+        raise CollectorBlocked("facebook: session expired (logged out, no c_user cookie)")
+
+
 def parse_detail(html: str, url: str, status: int = 200) -> ListingDetail:
     """An item page, read from the visible text of its main region: FB's
     class names are generated, so only text cues are stable."""
@@ -418,6 +426,7 @@ class FacebookMarketplaceScraper(BaseScraper):
                 await page.goto(url, timeout=45_000, wait_until="domcontentloaded")
                 if "/login" in page.url or "checkpoint" in page.url:
                     raise CollectorBlocked("facebook: session expired")
+                await _require_session(ctx)
                 # FB renders the feed asynchronously; settle then scroll
                 await page.wait_for_timeout(3_500)
                 for _ in range(3):
@@ -485,6 +494,7 @@ class FacebookMarketplaceScraper(BaseScraper):
                 response = await page.goto(self._build_url(filters), timeout=45_000, wait_until="domcontentloaded")
                 if response and response.status >= 400:
                     raise RuntimeError(f"facebook search HTTP {response.status}")
+                await _require_session(ctx)
                 await page.wait_for_timeout(3_500)
                 while True:
                     if "/login" in page.url or "checkpoint" in page.url:

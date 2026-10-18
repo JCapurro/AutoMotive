@@ -38,8 +38,11 @@ class GrupoRandazzoScraper(PublicCatalogScraper):
     PAGE_SIZE = 50
     MAX_PAGES = 50
     PAGE_DELAY = .2
-    MAX_SCAN_ATTEMPTS = 3
-    SCAN_RETRY_DELAY = 1
+    # The VTEX index answers from replicas whose totals drift by a few units
+    # for minutes (seen 2026-10-15..17: 201/202, 213/215, 218/220); three
+    # scans 1-2 s apart failed ~15% of runs. Wait longer between full scans.
+    MAX_SCAN_ATTEMPTS = 5
+    SCAN_RETRY_DELAY = 10
 
     @staticmethod
     def _data(html: str) -> tuple[dict, str | None]:

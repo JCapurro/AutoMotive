@@ -226,6 +226,11 @@ class RosarioGarageScraper(BaseScraper):
         async with async_client(timeout=self.TIMEOUT, headers=HEADERS, follow_redirects=True,
                                      transport=self.transport) as client:
             response = await self._get(client, url)
+        if (response.history and "itmId=" in url
+                and urlparse(str(response.url)).path in ("", "/") and not urlparse(str(response.url)).query):
+            # A removed ad answers 302 to the home page, whose header has a
+            # login form: keep the redirect so it reads as gone, not as a wall.
+            return Page(302, str(response.url), response.text)
         if response.status_code not in (404, 410):
             _check_page(response.text, str(response.url), response.status_code)
         return Page(response.status_code, str(response.url), response.text)
@@ -234,6 +239,8 @@ class RosarioGarageScraper(BaseScraper):
     def parse_detail(html: str, url: str, status: int = 200) -> ListingDetail:
         if status in (404, 410):
             return ListingDetail(url, gone=True, gone_reason=str(status))
+        if status == 302:
+            return ListingDetail(url, gone=True, gone_reason="aviso eliminado (redirige al inicio)")
         _check_page(html, url, status)
         doc = soup(html)
         article = doc.select_one(".box-main-product article")

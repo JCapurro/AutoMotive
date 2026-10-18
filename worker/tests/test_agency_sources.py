@@ -393,11 +393,13 @@ class AgencyTransportTests(unittest.IsolatedAsyncioTestCase):
                        headers={'resources': interval if offset else '0-1/3'})
             collector = Randazzo(transport=randazzo_api_transport(handler))
             collector.PAGE_SIZE = 2
+            collector.SCAN_RETRY_DELAY = 0
             with self.subTest(interval=interval), self.assertRaises(RuntimeError):
                 await collector.search({})
         collector = Randazzo(transport=randazzo_api_transport(lambda req, offset, end:
                     httpx.Response(206, json=first, headers={'resources': '0-1/3'})))
         collector.PAGE_SIZE = 2
+        collector.SCAN_RETRY_DELAY = 0
         collector.MAX_PAGES = 1
         with self.assertRaisesRegex(RuntimeError, 'limit'):
             await collector.search({})

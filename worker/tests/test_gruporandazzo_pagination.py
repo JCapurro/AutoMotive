@@ -63,7 +63,7 @@ def test_persistent_inventory_changes_exhaust_bounded_retries_without_partial_st
     collector.PAGE_DELAY = collector.SCAN_RETRY_DELAY = 0
     with pytest.raises(RuntimeError, match='inventory changed during pagination'):
         asyncio.run(collector.search({}))
-    assert offsets == [0, 2] * 3
+    assert offsets == [0, 2] * collector.MAX_SCAN_ATTEMPTS
 
 
 @pytest.mark.parametrize('failure', ['metadata', 'state', 'identity', 'http'])
