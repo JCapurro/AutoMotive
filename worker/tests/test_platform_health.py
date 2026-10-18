@@ -55,6 +55,15 @@ class CollectorChecksTests(unittest.TestCase):
         self.assertIsNone(self.check(found=[None]*3))
         self.assertIsNone(health.collector_checks([target(found=[0]*3)], NOW, empty_runs=0)['collector:kavak'])
 
+    def test_empty_narrow_search_is_not_a_break_while_the_source_reads_listings(self):
+        empty = target(found=[0]*3)
+        self.assertIsNone(health.collector_checks([empty, target(id=2)], NOW)['collector:kavak'])
+        # Every target empty, or the other one also empty/failing: still a possible break.
+        for other in (target(id=2, found=[0]*3),
+                      target(id=2, statuses=['failed', 'ok', 'ok'], latest_status='failed')):
+            with self.subTest(other=other['found']):
+                self.assertIn('posible rotura', health.collector_checks([empty, other], NOW)['collector:kavak'])
+
     def test_recent_publication_windows_can_legitimately_be_empty(self):
         for source in ('mercadolibre', 'facebook'):
             row = target(source=source, query={'publication_policy': POLICY_VERSION}, found=[0]*3)

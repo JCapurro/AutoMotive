@@ -93,6 +93,11 @@ def collector_checks(rows: list[dict], now: datetime, *, failures: int = 3,
                      timeout_minutes: int = 30, empty_runs: int = 3,
                      previous: dict[str, str | None] | None = None) -> dict[str, str | None]:
     checks: dict[str, str | None] = {}
+    # A parser break empties every search of the source. When another target
+    # of the same source just read listings, an empty one is a narrow search
+    # with nothing listed (v6 Gol Trend 2021, incident db7a233d), not a break.
+    reading = {row['source'] for row in rows
+               if row['statuses'][:1] == ['ok'] and (row['found'][:1] or [0])[0]}
     for row in rows:
         key = f"collector:{row['source']}"
         checks.setdefault(key, None)
@@ -111,6 +116,7 @@ def collector_checks(rows: list[dict], now: datetime, *, failures: int = 3,
         elif (empty_runs > 0
               and not (row['source'] in RECENT_SOURCES
                        and (row.get('query') or {}).get('publication_policy') == POLICY_VERSION)
+              and row['source'] not in reading
               and row['had_results'] and len(statuses) >= empty_runs
               and all(s == 'ok' for s in statuses[:empty_runs])
               and all(n == 0 for n in row['found'][:empty_runs])):
