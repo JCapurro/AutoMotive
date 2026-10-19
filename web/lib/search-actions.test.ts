@@ -5,10 +5,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({
   features: {} as Record<string, boolean>,
   catalog: null as { make: string; model: string; body_types: string[] } | null,
-  dbError: null as { message: string } | null,
+  dbError: null as { code?: string; message: string } | null,
   inserted: null as Record<string, unknown> | null,
   updated: null as Record<string, unknown> | null,
   active: [] as Record<string, unknown>[],
+  /** Answers for successive active-search lookups, before falling back to `active`. */
+  activeQueue: [] as Record<string, unknown>[][],
   rpc: [] as [string, Record<string, unknown> | undefined][],
   tables: [] as string[],
   track: vi.fn(),
@@ -34,7 +36,7 @@ vi.mock("@/lib/supabase/server", () => ({
       let activeList = false;
       const result = () => {
         // The user's active searches, checked for an identical one before inserting.
-        if (activeList) return { data: state.active };
+        if (activeList) return { data: state.activeQueue.shift() ?? state.active };
         if (table === "vehicle_catalog") return { data: state.catalog };
         if (table === "sources") return { data: [{ id: "mercadolibre" }, { id: "kavak" }] };
         if (table === "profiles") return { data: { default_channels: ["email"] } };
@@ -52,7 +54,7 @@ vi.mock("@/lib/supabase/server", () => ({
   }),
 }));
 
-import { previewSearch, saveSearch } from "@/app/app/searches/actions";
+import { previewSearch, saveSearch, setSearchEnabled } from "@/app/app/searches/actions";
 import { MODEL_LESS_UNAVAILABLE } from "@/lib/search-form";
 
 const STAY = { mode: "assisted" as const, jobId: null, edited: false, stay: true };
@@ -65,6 +67,7 @@ beforeEach(() => {
   state.dbError = null;
   state.inserted = null;
   state.active = [];
+  state.activeQueue = [];
   state.updated = null;
   state.rpc = [];
   state.tables = [];
@@ -115,6 +118,23 @@ describe("saveSearch", () => {
     state.active = [{ id: 5, filters: first.filters, origin_lat: null, origin_lon: null, radius_km: null }];
     expect(await saveSearch(null, CORSA, STAY)).toEqual({ savedId: 5 });
     expect(state.inserted).toBeNull();
+  });
+
+  it("opens the winner when an identical submit got in first (the database's unique index)", async () => {
+    state.catalog = { make: "Chevrolet", model: "Corsa", body_types: [] };
+    await saveSearch(null, CORSA, STAY);
+    const filters = state.inserted!.filters;
+    state.activeQueue = [[], [{ id: 7, filters, origin_lat: null, origin_lon: null, radius_km: null }]];
+    state.dbError = { code: "23505", message: 'duplicate key value violates unique constraint "search_profiles_active_unique_idx"' };
+    expect(await saveSearch(null, CORSA, STAY)).toEqual({ savedId: 7 });
+  });
+
+  it("explains an edit or a resume that would duplicate another active search", async () => {
+    state.catalog = { make: "Chevrolet", model: "Corsa", body_types: [] };
+    state.dbError = { code: "23505", message: 'duplicate key value violates unique constraint "search_profiles_active_unique_idx"' };
+    const duplicate = { error: expect.stringContaining("Ya tenés otra búsqueda activa igual") };
+    expect(await saveSearch(9, CORSA)).toEqual(duplicate);
+    expect(await setSearchEnabled(9, true)).toEqual(duplicate);
   });
 
   it.each([

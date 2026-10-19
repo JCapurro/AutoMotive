@@ -46,7 +46,9 @@ class CommercialCase(PostgresTestCase):
             return await cursor.fetchall() if cursor.description else []
 
     async def search(self, enabled=True):
-        return (await self.rows("INSERT INTO search_profiles(user_id,name,filters,enabled) VALUES (%s,'Fiesta','{\"make\":\"Ford\",\"model\":\"Fiesta\"}',%s) RETURNING id", self.user, enabled))[0]['id']
+        # A distinct radius each time: identical active searches are refused (search_profiles_active_unique_idx).
+        self.searches = getattr(self, "searches", 0) + 1
+        return (await self.rows("INSERT INTO search_profiles(user_id,name,filters,enabled,radius_km) VALUES (%s,'Fiesta','{\"make\":\"Ford\",\"model\":\"Fiesta\"}',%s,%s) RETURNING id", self.user, enabled, self.searches))[0]['id']
 
     async def access(self):
         return (await self.rows("SELECT plan_limits_for(%s) AS v", self.user))[0]['v']
@@ -67,10 +69,10 @@ class CommercialTests(CommercialCase):
         self.assertEqual(access['limits'], {'immediate_alerts': True})
         self.assertEqual((await self.rows("SELECT immediate_alert_cap(%s) AS n", self.admin))[0]['n'], 10)
         [agency] = await self.rows("SELECT (value->'pro'->>'max_profiles')::int AS n FROM app_config WHERE key='plan_limits'")
-        for _ in range(agency['n'] + 1):
-            result = await self.rows("INSERT INTO search_profiles(user_id,name,filters) "
-                                     "VALUES (%s,'Admin Fiesta','{\"make\":\"Ford\",\"model\":\"Fiesta\"}') "
-                                     "RETURNING id", self.admin, actor=self.admin)
+        for radius in range(1, agency['n'] + 2):
+            result = await self.rows("INSERT INTO search_profiles(user_id,name,filters,radius_km) "
+                                     "VALUES (%s,'Admin Fiesta','{\"make\":\"Ford\",\"model\":\"Fiesta\"}',%s) "
+                                     "RETURNING id", self.admin, radius, actor=self.admin)
         self.assertTrue((await self.rows("SELECT search_access_active(%s) AS active", result[0]['id']))[0]['active'])
         await self.rows("UPDATE profiles SET role='user' WHERE id=%s", self.admin)
         access = (await self.rows("SELECT my_plan_snapshot() AS v", actor=self.admin))[0]['v']

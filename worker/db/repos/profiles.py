@@ -130,11 +130,22 @@ async def insert_profiles(cx: AsyncConnection, user_uuid: str, name: str, filter
         row = await (await cx.execute(
             "INSERT INTO search_profiles (user_id, name, filters, preferences, origin_lat, "
             "  origin_lon, radius_km, enabled, bootstrapped_at) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, CASE WHEN %s THEN now() END) RETURNING id",
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, CASE WHEN %s THEN now() END) "
+            "ON CONFLICT DO NOTHING RETURNING id",
             (user_uuid, profile_name, Jsonb(values["filters"]), Jsonb(values["preferences"]),
              values["origin_lat"], values["origin_lon"], values["radius_km"], enabled,
              bootstrapped),
         )).fetchone()
+        if row is None:
+            # An identical active search already exists (search_profiles_active_unique_idx): reuse it.
+            row = await (await cx.execute(
+                "SELECT id FROM search_profiles WHERE user_id = %s AND enabled "
+                "  AND md5(filters::text) = md5(%s::jsonb::text) "
+                "  AND origin_lat IS NOT DISTINCT FROM %s AND origin_lon IS NOT DISTINCT FROM %s "
+                "  AND radius_km IS NOT DISTINCT FROM %s::real",
+                (user_uuid, Jsonb(values["filters"]), values["origin_lat"], values["origin_lon"],
+                 values["radius_km"]),
+            )).fetchone()
         ids.append(row["id"])
     return ids, skipped
 

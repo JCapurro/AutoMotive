@@ -129,13 +129,10 @@ export async function saveSearch(id: number | null, raw: SearchInput, origin?: S
   if (id == null) {
     const { data: profile } = await supabase.from("profiles").select("default_channels").single();
     // The same active search twice (two tabs, a resubmit) would alert twice: open the one that exists.
-    const { data: active } = await supabase.from("search_profiles").select("id, filters, origin_lat, origin_lon, radius_km")
-      .eq("user_id", user.id).eq("enabled", true);
-    const same = (active ?? []).find((p) => JSON.stringify(p.filters) === JSON.stringify(row.filters)
-      && p.origin_lat === (row.origin_lat ?? null) && p.origin_lon === (row.origin_lon ?? null) && p.radius_km === (row.radius_km ?? null));
-    if (same) {
-      if (origin?.stay) return { savedId: same.id };
-      redirect(`/app/searches/${same.id}`);
+    const same = await sameActiveSearch(supabase, user.id, row);
+    if (same != null) {
+      if (origin?.stay) return { savedId: same };
+      redirect(`/app/searches/${same}`);
     }
     const rawQuery = origin?.jobId != null ? await jobText(supabase, origin.jobId) : null;
     const { data, error } = await supabase
@@ -149,6 +146,12 @@ export async function saveSearch(id: number | null, raw: SearchInput, origin?: S
       .select("id")
       .single();
     if (error) {
+      // Lost the race to an identical submit (search_profiles_active_unique_idx): same outcome as finding it above.
+      const winner = isDuplicate(error) ? await sameActiveSearch(supabase, user.id, row) : null;
+      if (winner != null) {
+        if (origin?.stay) return { savedId: winner };
+        redirect(`/app/searches/${winner}`);
+      }
       if (error.message.includes("plan_access_expired")) return { error: "Tu acceso venció. Elegí Particular o Pro en Planes para volver a buscar." };
       if (error.message.includes("plan_limit_exceeded")) {
         return { error: "Llegaste al máximo de búsquedas de tu plan." };
@@ -184,12 +187,32 @@ export async function saveSearch(id: number | null, raw: SearchInput, origin?: S
     .from("search_profiles")
     .update({ ...row, ...(rematch ? { rematch_requested_at: new Date().toISOString() } : {}) })
     .eq("id", id);
+  if (error && isDuplicate(error)) return { error: DUPLICATE_ACTIVE };
   if (error) return modelLessError(error.message) ?? { error: "No pudimos guardar los cambios. Probá de nuevo." };
   await track(supabase, user.id, "search_profile_updated", { profile_id: id, filters_changed: rematch });
   redirect(`/app/searches/${id}`);
 }
 
 type Client = Awaited<ReturnType<typeof createClient>>;
+
+const DUPLICATE_ACTIVE = "Ya tenés otra búsqueda activa igual a esta. Pausá una de las dos o cambiá algún filtro.";
+
+/** The database refused a second identical active search (20261101120000_unique_active_search). */
+function isDuplicate(error: { code?: string; message: string }): boolean {
+  return error.code === "23505" && error.message.includes("search_profiles_active_unique_idx");
+}
+
+/** The user's active search with exactly these filters and place, if any. */
+async function sameActiveSearch(
+  supabase: Client, userId: string,
+  row: { filters: unknown; origin_lat?: number | null; origin_lon?: number | null; radius_km?: number | null },
+): Promise<number | null> {
+  const { data } = await supabase.from("search_profiles").select("id, filters, origin_lat, origin_lon, radius_km")
+    .eq("user_id", userId).eq("enabled", true);
+  const same = (data ?? []).find((p) => JSON.stringify(p.filters) === JSON.stringify(row.filters)
+    && p.origin_lat === (row.origin_lat ?? null) && p.origin_lon === (row.origin_lon ?? null) && p.radius_km === (row.radius_km ?? null));
+  return same?.id ?? null;
+}
 
 /**
  * search_created, once per request: the plan, the models the request named
@@ -304,6 +327,7 @@ export async function setSearchEnabled(id: number, enabled: boolean): Promise<Sa
   if (!error) {
     await track(supabase, user.id, enabled ? "search_profile_resumed" : "search_profile_paused", { profile_id: id });
   }
+  if (error && isDuplicate(error)) return { error: DUPLICATE_ACTIVE };
   if (error?.message.includes("plan_access_expired")) return { error: "Tu acceso venció. Elegí un plan para reanudar." };
   if (error?.message.includes("plan_limit_exceeded")) return { error: "Llegaste al máximo de búsquedas activas. Pausá otra o elegí un plan con más capacidad." };
   const modelLess = error ? modelLessError(error.message) : null;

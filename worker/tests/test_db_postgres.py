@@ -74,6 +74,15 @@ class AlertRepoTests(PostgresTestCase):
             users = await (await cx.execute("SELECT count(*) AS n FROM profiles")).fetchone()
         self.assertEqual(users["n"], 1)
 
+    async def test_the_same_alert_twice_reuses_the_active_profile(self):
+        # search_profiles_active_unique_idx: one active profile per filters and place.
+        alert = {"marcas": ["Ford"], "modelos": ["Ka"], "radio_km": 12.5}
+        first = await db.create_alert(user_id=TG_USER, chat_id=TG_USER, name="a", filters=alert)
+        again = await db.create_alert(user_id=TG_USER, chat_id=TG_USER, name="a", filters=alert)
+
+        self.assertEqual(again, first)
+        self.assertEqual(len(await db.list_alerts(user_id=TG_USER)), 1)
+
     async def test_pause_resume_delete_and_bootstrap(self):
         [aid] = await db.create_alert(user_id=TG_USER, chat_id=TG_USER, name="a",
                                       filters={"marcas": ["Ford"], "modelos": ["Ka"]})
