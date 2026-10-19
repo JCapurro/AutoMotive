@@ -81,11 +81,14 @@ export function alertCapsText(limits: PlanLimitsConfig): string {
   const threshold = limits.pro.thresholdAlerts ? ", o sin tope para las oportunidades que elegís" : "";
   return `Particular incluye hasta ${counted(pass, "aviso inmediato", "avisos inmediatos")} de nuevas coincidencias por día y Pro, hasta ${pro}${threshold}; los que pasan el tope van al resumen.`;
 }
-export const THRESHOLD_FEATURE = "Avisos inmediatos sin tope de las oportunidades que elegís";
+/** Pro: the daily cap still applies; only what reaches a search's threshold goes out past it. */
+export function thresholdFeature(caps: PlanCaps): string {
+  return `Hasta ${counted(caps.immediateAlertsPerDay, "aviso inmediato", "avisos inmediatos")} por día, sin tope para las oportunidades que superan tu umbral`;
+}
 export const MODEL_LESS_FEATURE = "Búsqueda por carrocería, sin modelo";
 /** A paid plan's card lines: what plan_limits says it includes (Pro: the threshold). */
 export function planFeatures(caps: PlanCaps): string[] {
-  return [searchesText(caps), resultsText(caps), caps.thresholdAlerts ? THRESHOLD_FEATURE : alertsText(caps),
+  return [searchesText(caps), resultsText(caps), caps.thresholdAlerts ? thresholdFeature(caps) : alertsText(caps),
     ...(caps.modelLessSearch ? [MODEL_LESS_FEATURE] : []), "Historial y favoritos"];
 }
 /**
@@ -219,7 +222,10 @@ export function founderNote(checkout: { amount: number; founder_number?: number 
   return `Precio fundador: ${planPrice(checkout.amount)} por mes, fijo hasta el ${until}.`;
 }
 export function accessDescription(access: PlanLimits): string {
-  if (access.state === "pilot") return "Piloto abierto: los límites comerciales todavía no están habilitados.";
+  if (access.state === "pilot") {
+    const trialEnd = access.trial_expires_at ? ` Tu prueba termina el ${accessDate(access.trial_expires_at)} (hora argentina).` : "";
+    return `Durante el piloto todavía no aplicamos los límites de los planes.${trialEnd}`;
+  }
   if (access.state === "available") return "Tu prueba de 3 días empieza al activar la primera búsqueda.";
   if (access.state === "expired") return "Tu acceso venció. Conservamos los resultados y favoritos; elegí un plan para volver a monitorear.";
   if (access.expires_at) return `${access.state === "trial" ? "Prueba gratis" : PLAN_NAMES[access.plan]} vigente hasta ${accessDate(access.expires_at)} (hora argentina).`;

@@ -27,7 +27,7 @@ export function SearchPromptInput({ value, onChange, disabled = false, showExamp
         <p id={`${id}-help`} className="text-sm leading-relaxed text-muted-foreground">
           {compact ? "Modelo, años, presupuesto, kilómetros y zona, como se lo contarías a alguien."
             : <>Escribilo como se lo contarías a alguien: modelo, versión, años, presupuesto, kilómetros, zona.
-              Si buscás varios, nombralos todos. Revisás los filtros antes de guardar.</>}
+              Si buscás varios, nombralos todos (cada modelo cuenta como una búsqueda). Revisás los datos antes de guardar.</>}
         </p>
       </div>
       {/* Fixed size: it doesn't grow while typing nor resize by hand; long text scrolls inside. */}
@@ -35,7 +35,7 @@ export function SearchPromptInput({ value, onChange, disabled = false, showExamp
         id={id}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        placeholder={ASSISTED_EXAMPLES[0]}
+        placeholder={`Ej.: ${ASSISTED_EXAMPLES[0]}`}
         maxLength={ASSISTED_MAX_CHARS}
         rows={3}
         disabled={disabled}

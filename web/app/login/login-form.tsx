@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useEffect } from "react";
+import { useActionState, useEffect, useRef } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,12 @@ import { Label } from "@/components/ui/label";
 import { pixel } from "@/lib/meta-pixel";
 import { analyticsEvent } from "@/lib/google-analytics";
 import { type AuthMode, type LoginState, authenticate, resendConfirmation, signInWithGoogle } from "./actions";
+
+/**
+ * "No tengo contraseña" / "Olvidé mi contraseña": the typed email follows to the
+ * link form. Held in memory across the client navigation, never in the URL.
+ */
+let carriedEmail = "";
 
 export function LoginForm({ next, linkError, googleError = false, mailbox = "", mode = "login", passwordUpdated = false, inApp = false }: {
   next: string; linkError: boolean; googleError?: boolean; mailbox?: string; mode?: AuthMode; passwordUpdated?: boolean;
@@ -19,6 +25,12 @@ export function LoginForm({ next, linkError, googleError = false, mailbox = "", 
   const [resent, resend, resending] = useActionState(resendConfirmation, { next } satisfies LoginState);
   const [google, googleSubmit, googlePending] = useActionState(signInWithGoogle, { next } satisfies LoginState);
   const href = (target: AuthMode) => `/login?mode=${target}&next=${encodeURIComponent(next)}`;
+  const emailRef = useRef<HTMLInputElement>(null);
+  const carryEmail = () => { carriedEmail = emailRef.current?.value.trim() ?? ""; };
+  useEffect(() => {
+    if (mode === "recover" && carriedEmail && emailRef.current && !emailRef.current.value) emailRef.current.value = carriedEmail;
+    carriedEmail = "";
+  }, [mode]);
   // A paid plan needs an account with a password; everything else starts with the free search and just an email.
   const paying = next.startsWith("/app/pro");
   // An email that already had a free search was counted when it was left on the landing.
@@ -39,9 +51,9 @@ export function LoginForm({ next, linkError, googleError = false, mailbox = "", 
       {mailbox ? <p className="text-sm" data-testid="local-mailbox">El email local está en <a className="underline" href={mailbox} target="_blank" rel="noreferrer">Mailpit</a>.</p> : null}
     </div> : <form action={submit} className="space-y-4">
       <input type="hidden" name="next" value={next} />
-      <div className="space-y-2"><Label htmlFor="email">Email</Label><Input id="email" name="email" type="email" autoComplete="email" required placeholder="vos@email.com" defaultValue={state.email} className="h-10" /></div>
+      <div className="space-y-2"><Label htmlFor="email">Email</Label><Input ref={emailRef} id="email" name="email" type="email" autoComplete="email" required placeholder="vos@email.com" defaultValue={state.email} className="h-10" /></div>
       {mode !== "recover" ? <div className="space-y-2"><Label htmlFor="password">Contraseña</Label><Input id="password" name="password" type="password" autoComplete={mode === "signup" ? "new-password" : "current-password"} required minLength={mode === "signup" ? 8 : undefined} className="h-10" />{mode === "signup" ? <p className="text-xs text-muted-foreground">Al menos 8 caracteres.</p> : null}
-        {mode === "login" ? <Link className="block pt-1 text-sm underline underline-offset-4" href={href("recover")}>No tengo contraseña: mandame un link para entrar</Link> : null}</div> : null}
+        {mode === "login" ? <Link className="block pt-1 text-sm underline underline-offset-4" href={href("recover")} onClick={carryEmail}>No tengo contraseña: mandame un link para entrar</Link> : null}</div> : null}
       {mode === "signup" ? <div className="space-y-2"><Label htmlFor="confirmPassword">Repetí la contraseña</Label><Input id="confirmPassword" name="confirmPassword" type="password" autoComplete="new-password" required minLength={8} className="h-10" /></div> : null}
       {state.error ? <p role="alert" className="text-sm text-destructive">{state.error}</p> : null}
       <Button className="h-10 w-full" disabled={pending || googlePending}>{pending ? "Procesando…" : mode === "signup" ? "Crear cuenta" : mode === "recover" ? "Mandame el link" : "Ingresar"}</Button>
@@ -66,7 +78,7 @@ export function LoginForm({ next, linkError, googleError = false, mailbox = "", 
         {google.error ? <p role="alert" className="text-sm text-destructive">{google.error}</p> : null}
       </form>
     </> : null}
-    <div className="flex flex-col gap-3 text-center text-sm">{mode === "login" ? <><Link className="underline" href={href("recover")}>Olvidé mi contraseña</Link>
+    <div className="flex flex-col gap-3 text-center text-sm">{mode === "login" ? <><Link className="underline" href={href("recover")} onClick={carryEmail}>Olvidé mi contraseña</Link>
       {paying ? null : <Link className="underline" href="/#crear-busqueda">¿Primera vez? Creá tu búsqueda gratis con tu email</Link>}
       <Link className="underline" href={href("signup")}>Crear cuenta</Link></> : <Link className="underline" href={href("login")}>Volver a ingresar</Link>}</div>
   </div>;

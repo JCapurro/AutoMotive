@@ -54,7 +54,7 @@ export function ProPlans({ offer, limits, current, placement, pilot = false, rec
               <span className="text-sm text-muted-foreground">{copy.pitch}</span>
               <span className="text-sm font-medium">{searchesText(limits[OFFER_TIER[p]])} · una cuenta</span>
               <span className="text-sm text-muted-foreground">
-                {p === "pro_monthly" ? automatic ? "Renovación mensual automática. Podés cancelar desde Ajustes." : "En este piloto: períodos de 30 días y renovación manual, sin débito automático." : "Sin renovación automática."}
+                {p === "pro_monthly" ? automatic ? "Renovación mensual automática. Podés cancelar desde Ajustes." : "En este piloto: períodos de 30 días con renovación manual. Si pagás con una suscripción de Mercado Pago, la cancelás ahí." : "Sin renovación automática."}
               </span>
               <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
                 {joined === p ? <><CheckCircle2 className="size-3.5" aria-hidden /> {pilot ? "Solicitud registrada" : "Estás en la lista"}</> : null}

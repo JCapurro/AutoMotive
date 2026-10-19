@@ -154,7 +154,7 @@ test("F5: si el LLM falla, el formulario estructurado vacío", async ({ page }, 
   // No recorded answer for this text: the replayed provider fails like the CLI would.
   await ask(page, "Un texto que no tiene respuesta grabada");
 
-  await expect(page.getByTestId("assisted-fallback")).toContainText("No pude interpretarlo, completá los filtros");
+  await expect(page.getByTestId("assisted-fallback")).toContainText("No pudimos leer tu descripción automáticamente");
   await expect(page.getByLabel("Marca")).toHaveValue("");
   await page.getByLabel("Marca").selectOption("Ford");
   await page.getByLabel("Modelo").selectOption("Ka");
@@ -182,7 +182,7 @@ test("F5: con el worker caído, el formulario sin encolar nada", async ({ page }
   await page.getByLabel("¿Qué auto buscás?").fill(TWO_VEHICLES);
   await page.getByRole("button", { name: "Interpretar" }).click();
 
-  await expect(page.getByTestId("assisted-fallback")).toContainText("El intérprete no está disponible ahora");
+  await expect(page.getByTestId("assisted-fallback")).toContainText("No pudimos leer tu descripción automáticamente");
   await expect(page.getByLabel("Marca")).toHaveValue("");
   const jobs = await query(
     `select j.id from public.llm_jobs j join public.profiles p on p.id = j.user_id where p.email = $1`,

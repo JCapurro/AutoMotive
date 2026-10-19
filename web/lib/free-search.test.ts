@@ -134,8 +134,14 @@ describe("the form", () => {
   });
 
   it("goes straight to the search when already signed in", async () => {
-    m.currentUser.mockResolvedValue({ id: "user", email: "user@example.com" });
+    m.currentUser.mockResolvedValue({ id: "user", email: "persona@example.com" });
     expect(await startFreeSearch(input)).toEqual({ status: "created", href, signedUp: false });
+    expect(m.createUser).not.toHaveBeenCalled();
+  });
+
+  it("says so when the tab is signed in with another email, instead of dropping the one typed", async () => {
+    m.currentUser.mockResolvedValue({ id: "user", email: "otra@example.com" });
+    expect(await startFreeSearch(input)).toMatchObject({ status: "error", field: "email", error: expect.stringContaining("otra@example.com") });
     expect(m.createUser).not.toHaveBeenCalled();
   });
 

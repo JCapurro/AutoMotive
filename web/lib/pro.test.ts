@@ -106,7 +106,7 @@ describe("planLimits", () => {
   });
   it("lists Pro's card lines from its features", () => {
     expect(planFeatures(DEFAULT_PLAN_LIMITS.pro)).toEqual(["Hasta 20 búsquedas activas", "Todos los resultados disponibles",
-      "Avisos inmediatos sin tope de las oportunidades que elegís", "Búsqueda por carrocería, sin modelo", "Historial y favoritos"]);
+      "Hasta 50 avisos inmediatos por día, sin tope para las oportunidades que superan tu umbral", "Búsqueda por carrocería, sin modelo", "Historial y favoritos"]);
     expect(planFeatures(DEFAULT_PLAN_LIMITS.pass)).toEqual(["Hasta 3 búsquedas activas", "Todos los resultados disponibles",
       "Hasta 10 avisos inmediatos por día y resumen diario", "Búsqueda por carrocería, sin modelo", "Historial y favoritos"]);
     expect(planFeatures({ ...DEFAULT_PLAN_LIMITS.pass, modelLessSearch: false })).not.toContain("Búsqueda por carrocería, sin modelo");

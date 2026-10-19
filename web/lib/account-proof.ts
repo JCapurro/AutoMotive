@@ -25,7 +25,9 @@ export async function afterRecoveryLink(supabase: SupabaseClient<Database>, next
   await supabase.auth.signOut({ scope: "others" });
   await secureFootholds(userId);
   if (sessionId) await recordProof(userId, sessionId, "email_link");
-  return `/app/cuenta?${new URLSearchParams({ next: destination })}`;
+  // "Sin contraseña": only paying (or asking for it) needs the password step; anyone else goes straight on.
+  const wantsPassword = destination.startsWith("/app/pro") || destination.startsWith("/app/cuenta");
+  return wantsPassword ? `/app/cuenta?${new URLSearchParams({ next: destination })}` : destination;
 }
 
 /**

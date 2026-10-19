@@ -24,7 +24,7 @@ export default async function ConfirmEmailPage({ searchParams }: PageProps<"/aut
     <Card className="w-full max-w-sm">
       <CardHeader>
         <CardTitle>{recovery ? "Entrá a Ese Auto" : "Confirmá tu email"}</CardTitle>
-        <CardDescription>{recovery ? "Tocá Continuar para entrar. Si tu cuenta tiene contraseña, vas a elegir una nueva." : "Confirmá tu email para completar el registro e ingresar a tu cuenta."}</CardDescription>
+        <CardDescription>{recovery ? "Tocá Continuar para entrar a tu cuenta." : "Confirmá tu email para completar el registro e ingresar a tu cuenta."}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <form action="/auth/confirm" method="post">

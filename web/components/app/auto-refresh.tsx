@@ -11,8 +11,30 @@ import { useEffect } from "react";
 export function AutoRefresh({ every = 3000 }: { every?: number }) {
   const router = useRouter();
   useEffect(() => {
-    const timer = setInterval(() => router.refresh(), every);
-    return () => clearInterval(timer);
+    // Each refresh re-renders the whole page: on a phone's data plan, a hidden
+    // tab doesn't poll, and the interval grows (up to 30 s) while nothing changes.
+    let delay = every;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const tick = () => {
+      timer = setTimeout(() => {
+        if (document.visibilityState === "visible") router.refresh();
+        delay = Math.min(delay * 1.5, 30_000);
+        tick();
+      }, delay);
+    };
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      clearTimeout(timer);
+      delay = every;
+      router.refresh();
+      tick();
+    };
+    tick();
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [router, every]);
   return null;
 }

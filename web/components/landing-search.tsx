@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useId, useRef, useState, useTransition } from "react";
+import { useEffect, useId, useRef, useState, useSyncExternalStore, useTransition } from "react";
 
 import { enterForFreeSearch, type FreeSearchResult, linkForFreeSearch, startFreeSearch } from "@/app/actions";
 import { SearchPromptInput } from "@/components/search-prompt-input";
@@ -17,6 +17,7 @@ import { pixel } from "@/lib/meta-pixel";
 import { searchStartHref } from "@/lib/search-intent";
 
 const OFFLINE = "No pudimos conectarnos. Revisá tu conexión y probá de nuevo.";
+const noop = () => () => {};
 
 /**
  * The landing's search. Signed in, it goes straight to the search. Signed
@@ -35,6 +36,8 @@ export function LandingSearch({ signedIn }: { signedIn: boolean }) {
   // An error keeps the pop-up on the step where it happened.
   const [step, setStep] = useState<"email" | "password" | "sent">("email");
   const [pending, start] = useTransition();
+  // Before hydration a tap would submit the bare form and reload the page, losing the text: the button waits for it.
+  const hydrated = useSyncExternalStore(noop, () => true, () => false);
   const router = useRouter();
   const promptErrorId = useId();
   const emailId = useId();
@@ -109,10 +112,10 @@ export function LandingSearch({ signedIn }: { signedIn: boolean }) {
           invalid={Boolean(promptError)} describedBy={promptError ? promptErrorId : undefined} />
         {promptError ? <p id={promptErrorId} role="alert" className="-mt-2 text-sm text-destructive">{promptError}</p> : null}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
-          <Button type="submit" disabled={pending} className="h-11 px-4.5 text-[15px]">
+          <Button type="submit" disabled={pending || !hydrated} className="h-11 px-4.5 text-[15px]">
             {pending && signedIn ? "Continuando…" : "Crear mi búsqueda"}
           </Button>
-          <Link href="/planes" className="py-2 text-[15px] font-medium underline underline-offset-4">Ver planes</Link>
+          <Link href="/planes" className="inline-flex min-h-11 items-center text-[15px] font-medium underline underline-offset-4">Ver planes</Link>
         </div>
         <p className="text-sm text-muted-foreground">
           {signedIn ? "Prueba gratis por 3 días. Sin tarjeta." : "Probá gratis 3 días. Sin tarjeta y sin contraseña: solo tu email."}
@@ -121,13 +124,13 @@ export function LandingSearch({ signedIn }: { signedIn: boolean }) {
 
       {signedIn ? null : <Dialog open={open} onOpenChange={(next) => { if (!pending) setOpen(next); }}>
         <DialogContent className="sm:max-w-md">
-          {step === "email" ? <form className="space-y-4" onSubmit={(event) => {
+          {step === "email" ? <form className="space-y-4" noValidate onSubmit={(event) => {
             event.preventDefault();
             if (!pending) run(() => startFreeSearch({ prompt: text, email, company }));
           }}>
             <DialogHeader>
               <DialogTitle>¿A qué email te avisamos?</DialogTitle>
-              <DialogDescription>Ahí te mandamos las alertas de esta búsqueda. Sin contraseña y sin confirmar nada.</DialogDescription>
+              <DialogDescription>Ahí te mandamos las alertas. Con este email creamos tu cuenta, sin contraseña y sin confirmar nada. Después revisás los datos del auto y activás la búsqueda.</DialogDescription>
             </DialogHeader>
             <div className="space-y-1.5">
               <Label htmlFor={emailId}>Tu email</Label>
@@ -165,9 +168,9 @@ export function LandingSearch({ signedIn }: { signedIn: boolean }) {
               </div>
             </div>
             {message ? <p role="alert" className="text-sm text-destructive">{message}</p> : null}
-            <Button type="submit" className="h-11 w-full text-[15px]" disabled={pending}>{pending ? "Creando tu búsqueda…" : "Crear mi búsqueda"}</Button>
+            <Button type="submit" className="h-11 w-full text-[15px]" disabled={pending}>{pending ? "Un momento…" : "Seguir"}</Button>
             <p className="text-xs text-muted-foreground">
-              Al crear tu búsqueda aceptás los <Link href="/terminos" className="underline">Términos de uso</Link> y
+              Al seguir aceptás los <Link href="/terminos" className="underline">Términos de uso</Link> y
               la <Link href="/privacidad" className="underline">Política de privacidad</Link>.
             </p>
           </form> : null}
@@ -201,7 +204,7 @@ export function LandingSearch({ signedIn }: { signedIn: boolean }) {
             <DialogHeader>
               <DialogTitle>{result.error ? "No pudimos mandarte el link" : "Revisá tu email"}</DialogTitle>
               <DialogDescription className="[overflow-wrap:anywhere]">
-                {result.error ?? `Te mandamos un link a ${result.email} para entrar${result.unconfirmed ? " y elegir tu contraseña" : ""}. Revisá también Spam: solo funciona el último link.`}
+                {result.error ?? `Ya tenés una cuenta con este email: te mandamos un link a ${result.email} para entrar${result.unconfirmed ? " y elegir tu contraseña" : ""}. Si no lo ves, revisá Spam; si pedís otro, usá el último.`}
               </DialogDescription>
             </DialogHeader>
             <div className="flex flex-col gap-2">

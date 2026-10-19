@@ -10,6 +10,8 @@ type PublicPlan = {
   id: string;
   name: string;
   price: string;
+  /** Paid plans: the price's currency, shown small next to it. */
+  currency?: string;
   period: string;
   pitch: string;
   features: string[];
@@ -34,7 +36,7 @@ export function PublicPlans({ cfg, signedIn }: { cfg: PricingConfig; signedIn: b
       period: "por 3 días · sin tarjeta",
       pitch: "Probá cómo buscamos y comparamos autos antes de elegir un plan.",
       features: [searchesText(trial, false), resultsText(trial), alertsText(trial), "Historial y favoritos"],
-      terms: "Las 72 horas empiezan al activar tu búsqueda. Sin contraseña: solo tu email. Una prueba por email, sin cobro automático.",
+      terms: "Las 72 horas empiezan al activar tu búsqueda. Sin contraseña: solo tu email. Una prueba por email, sin cobro automático. Al terminar te podemos escribir con opciones para seguir; te das de baja con un clic.",
       cta: "Probar gratis",
       href: start,
     },
@@ -46,6 +48,7 @@ export function PublicPlans({ cfg, signedIn }: { cfg: PricingConfig; signedIn: b
         id: plan,
         name: copy.name,
         price: planPrice(cfg.proOffer[plan].amount),
+        currency: "ARS",
         period: plan === "pass_30" ? `${copy.period} · pago único` : copy.period,
         pitch: plan === "pass_30"
           ? `Seguí hasta ${inWords(caps.maxProfiles)} opciones a la vez y recibí avisos para encontrar tu próximo auto.`
@@ -53,7 +56,8 @@ export function PublicPlans({ cfg, signedIn }: { cfg: PricingConfig; signedIn: b
         features: planFeatures(caps),
         terms: plan === "pass_30" ? "Sin renovación automática. Si todavía no lo encontraste, extendés 30 días con un clic."
           : cfg.automaticPayments ? "Renovación mensual automática. Cancelás desde Ajustes y conservás el período pagado."
-            : "Durante el piloto: períodos de 30 días y renovación manual, sin débito automático.",
+            : cfg.commercialPilot ? "Durante el piloto: períodos de 30 días con renovación manual. Si pagás con una suscripción de Mercado Pago, la cancelás ahí."
+              : "Durante el piloto: períodos de 30 días con renovación manual.",
         cta: cfg.automaticPayments ? `Contratar ${copy.name}`
           : cfg.commercialPilot ? `Solicitar ${copy.name}` : `Lista de espera: ${copy.name}`,
         href: signedIn ? destination : `/login?next=${encodeURIComponent(destination)}`,
@@ -68,7 +72,8 @@ export function PublicPlans({ cfg, signedIn }: { cfg: PricingConfig; signedIn: b
         {plans.map((plan) => (
           <article key={plan.id} className={`row-span-7 grid grid-rows-subgrid gap-y-0 rounded-lg border p-5 ${plan.id === "trial" ? "bg-muted/40" : ""}`}>
             <h3 className="text-xl font-bold">{plan.name}</h3>
-            <p data-plan-price className="mt-5 text-3xl font-bold">{plan.price}</p>
+            <p className="mt-5 text-3xl font-bold"><span data-plan-price>{plan.price}</span>
+              {plan.currency ? <span className="ml-1.5 text-sm font-medium text-muted-foreground">{plan.currency}</span> : null}</p>
             <p className="mt-1 text-sm text-muted-foreground">{plan.period}</p>
             <p className="mt-4 text-muted-foreground">{plan.pitch}</p>
             <Features items={plan.features} />
@@ -85,7 +90,10 @@ export function PublicPlans({ cfg, signedIn }: { cfg: PricingConfig; signedIn: b
       <div className="mt-8 max-w-3xl space-y-2 border-t pt-6 text-sm text-muted-foreground">
         <p className="text-base text-foreground">Una búsqueda es un modelo, con sus versiones, años, kilómetros, presupuesto y zona. Si querés seguir varios modelos, cada uno cuenta como una búsqueda.{modelLessText(cfg.planLimits) ? ` ${modelLessText(cfg.planLimits)}` : ""}</p>
         <p>Todos los planes incluyen comparación con autos similares, explicación del precio y señales para revisar antes de contactar al vendedor. Los avisos que pasan el tope del día van al resumen. Las bajas de precio de tus favoritos se avisan de inmediato mientras el acceso siga vigente. La frecuencia de revisión depende de cada portal.</p>
-        <p>Los precios pueden actualizarse. Si tu plan se renueva solo, te avisamos por mail 30 días antes.</p>
+        {/* Only Pro by Mercado Pago subscription renews by itself: automatic payments, or a pilot link. */}
+        <p>{cfg.automaticPayments || cfg.commercialPilot
+          ? "Los precios pueden actualizarse. Si tu plan se renueva solo, te avisamos por mail 30 días antes de un cambio de precio."
+          : "Los precios pueden actualizarse. Ningún plan se renueva ni se cobra solo."}</p>
         <p>{cfg.automaticPayments
           ? "Pagás en Mercado Pago. Activamos el acceso cuando se aprueba el pago."
           : cfg.commercialPilot

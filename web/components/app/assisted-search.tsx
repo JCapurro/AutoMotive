@@ -30,6 +30,7 @@ import {
 import type { Catalog } from "@/lib/catalog";
 import type { SearchValues } from "@/lib/search-form";
 import type { DetectedLocation } from "@/lib/search-location";
+import { roughDraft } from "@/lib/assisted-fallback";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
@@ -59,9 +60,9 @@ type JobRow = { status: string; output: unknown };
 
 // Sección 8.4, paso 6: the structured form takes over.
 const FALLBACK_TITLE = {
-  error: "No pude interpretarlo, completá los filtros",
-  empty: "No encontramos un vehículo en tu pedido, completá los filtros",
-  unavailable: "El intérprete no está disponible ahora, completá los filtros",
+  error: "No pudimos leer tu descripción automáticamente. Revisá y completá los datos del auto abajo.",
+  empty: "No encontramos una marca y modelo en tu descripción. Completá los datos del auto abajo.",
+  unavailable: "No pudimos leer tu descripción automáticamente. Revisá y completá los datos del auto abajo.",
 } as const;
 
 /**
@@ -372,14 +373,17 @@ export function AssistedSearch({
   }
 
   if (phase.kind === "failed") {
+    // What could be read from the text without the interpreter: the user corrects instead of starting over.
+    const rough = roughDraft(text, catalog);
     return (
       <div className="space-y-4">
-        <Alert variant="destructive" data-testid="assisted-fallback">
+        <Alert data-testid="assisted-fallback">
           <PenLine aria-hidden />
           <AlertTitle>
-            {FALLBACK_TITLE[phase.reason]}
+            {Object.keys(rough).length ? "Completamos lo que pudimos de tu descripción. Revisá los datos del auto abajo." : FALLBACK_TITLE[phase.reason]}
           </AlertTitle>
           <AlertDescription>
+            {text.trim() ? <p className="[overflow-wrap:anywhere]">Escribiste: «{text.trim()}»</p> : null}
             <button
               type="button"
               className="inline-flex items-center gap-1 underline underline-offset-3"
@@ -392,7 +396,7 @@ export function AssistedSearch({
         <SearchForm
           catalog={catalog}
           sources={sources}
-          initial={base}
+          initial={{ ...base, ...rough }}
           profileId={null}
           approximateLocation={approximateLocation}
           origin={{ mode: "assisted_fallback", jobId: phase.jobId, stay: false }}

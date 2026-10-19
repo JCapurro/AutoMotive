@@ -39,7 +39,7 @@ const modes = [
   { automaticPayments: true, commercialPilot: true },
 ];
 
-it.each(modes)("offers exactly the three paid plans from Adquirir plan in mode %j", async (mode) => {
+it.each(modes)("offers exactly the three paid plans from Planes in mode %j", async (mode) => {
   mocks.config.mockResolvedValue({ proOffer: DEFAULT_PRO_OFFER, planLimits: DEFAULT_PLAN_LIMITS, ...mode });
   const page = await ProPage({ searchParams: Promise.resolve({}), params: Promise.resolve({}) });
   const html = renderToStaticMarkup(page);
@@ -90,11 +90,11 @@ it("shows the plan cards with the limits and features the backend applies", () =
     "Hasta 3 búsquedas activas", "Hasta 10 avisos inmediatos por día y resumen diario",
     "Sin renovación automática. Si todavía no lo encontraste, extendés 30 días con un clic.",
     ">Pro<", "Para agencias y revendedores que necesitan llegar primero.",
-    "Hasta 20 búsquedas activas", "Avisos inmediatos sin tope de las oportunidades que elegís",
+    "Hasta 20 búsquedas activas", "Hasta 50 avisos inmediatos por día, sin tope para las oportunidades que superan tu umbral",
     "Renovación mensual automática. Cancelás desde Ajustes y conservás el período pagado.",
     "Una búsqueda es un modelo, con sus versiones, años, kilómetros, presupuesto y zona. Si querés seguir varios modelos, cada uno cuenta como una búsqueda.",
     "Los avisos que pasan el tope del día van al resumen.",
-    "Los precios pueden actualizarse. Si tu plan se renueva solo, te avisamos por mail 30 días antes.",
+    "Los precios pueden actualizarse. Si tu plan se renueva solo, te avisamos por mail 30 días antes de un cambio de precio.",
   ]) expect(html).toContain(copy);
   expect(html.match(/Todos los resultados disponibles/g)).toHaveLength(2);
   expect(html).not.toContain("Pricing");
@@ -104,7 +104,7 @@ it("shows the plan cards with the limits and features the backend applies", () =
   const plain = { ...DEFAULT_PLAN_LIMITS, pro: { ...DEFAULT_PLAN_LIMITS.pro, thresholdAlerts: false } };
   const without = renderToStaticMarkup(createElement(PublicPlans, { cfg: { proOffer: DEFAULT_PRO_OFFER, planLimits: plain, automaticPayments: true, commercialPilot: true }, signedIn: false }));
   expect(without).toContain("Hasta 50 avisos inmediatos por día y resumen diario");
-  expect(without).not.toContain("Avisos inmediatos sin tope de las oportunidades que elegís");
+  expect(without).not.toContain("sin tope para las oportunidades que superan tu umbral");
 });
 
 it("follows app_config.plan_limits instead of fixed numbers", () => {

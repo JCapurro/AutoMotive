@@ -30,6 +30,9 @@ export type FreeSearchResult =
 const Email = z.email().max(254);
 const FAILED = "No pudimos crear tu búsqueda. Probá de nuevo en unos minutos.";
 const UNAVAILABLE = "Ahora no podemos crear búsquedas nuevas. Probá de nuevo en unos minutos.";
+/** The per-IP brakes count an hour; a shared connection (a phone carrier, an office) can hit them. */
+const THROTTLED = "Hubo muchos intentos desde tu conexión en la última hora. Probá de nuevo más tarde o desde otra red (por ejemplo, Wi-Fi o datos del celular).";
+const BAD_EMAIL = "Ese email no parece válido. Revisalo (por ejemplo: nombre@gmail.com).";
 /** Password attempts from the landing's pop-up, per IP and hour. */
 const PASSWORD_TRIES_PER_HOUR = 10;
 
@@ -37,11 +40,12 @@ type Validated = { ok: true; email: string; href: string } | { ok: false; result
 
 function validate(input: { prompt?: string; email?: string }): Validated {
   const prompt = String(input?.prompt ?? "").trim();
-  if (prompt.length < ASSISTED_MIN_CHARS || prompt.length > ASSISTED_MAX_CHARS) {
-    return { ok: false, result: { status: "error", field: "prompt", error: "Contanos qué auto buscás." } };
+  if (prompt.length < ASSISTED_MIN_CHARS) return { ok: false, result: { status: "error", field: "prompt", error: "Contanos qué auto buscás." } };
+  if (prompt.length > ASSISTED_MAX_CHARS) {
+    return { ok: false, result: { status: "error", field: "prompt", error: `Usá menos de ${ASSISTED_MAX_CHARS} caracteres.` } };
   }
   const parsed = Email.safeParse(String(input?.email ?? "").trim().toLowerCase());
-  if (!parsed.success) return { ok: false, result: { status: "error", field: "email", error: "Revisá tu email." } };
+  if (!parsed.success) return { ok: false, result: { status: "error", field: "email", error: BAD_EMAIL } };
   return { ok: true, email: parsed.data, href: searchStartHref(true, prompt) };
 }
 
@@ -58,22 +62,25 @@ export async function startFreeSearch(input: FreeSearchInput): Promise<FreeSearc
   const valid = validate(input);
   if (!valid.ok) return valid.result;
   const { email, href } = valid;
-  if (await currentUser()) return { status: "created", href, signedUp: false };
+  const user = await currentUser();
+  // A tab left open before signing in elsewhere: never drop the email typed here without saying so.
+  if (user && user.email && user.email !== email) {
+    return { status: "error", field: "email", error: `Ya entraste como ${user.email}. Para usar otro email, salí de esa cuenta desde Ajustes.` };
+  }
+  if (user) return { status: "created", href, signedUp: false };
 
   const cfg = (await webConfig()).emailOnlySignup;
   if (!cfg.enabled) return { status: "unavailable", error: UNAVAILABLE };
 
   try {
     const ip = await clientIpKey();
-    if (!(await claimThrottle("free_search_lookup", ip, cfg.lookupsPerIpHour, HOUR))) return { status: "unavailable", error: UNAVAILABLE };
+    if (!(await claimThrottle("free_search_lookup", ip, cfg.lookupsPerIpHour, HOUR))) return { status: "unavailable", error: THROTTLED };
     const existing = await accountForEmail(email);
     if (existing) return await existingAccount(existing, email, href);
     // The health dashboard trusts this address: it never becomes an unproven account.
     if (email === HEALTH_OWNER_EMAIL) return { status: "existing_account", email };
-    if (!(await claimThrottle("free_search_signup_ip", ip, cfg.perIpHour, HOUR))
-      || !(await claimThrottle("free_search_signup_day", "global", cfg.perDay, DAY))) {
-      return { status: "unavailable", error: UNAVAILABLE };
-    }
+    if (!(await claimThrottle("free_search_signup_ip", ip, cfg.perIpHour, HOUR))) return { status: "unavailable", error: THROTTLED };
+    if (!(await claimThrottle("free_search_signup_day", "global", cfg.perDay, DAY))) return { status: "unavailable", error: UNAVAILABLE };
     return await createEmailOnlyAccount(email, href);
   } catch (error) {
     console.error("free search failed:", error instanceof Error ? error.message : error);

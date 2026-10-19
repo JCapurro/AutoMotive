@@ -32,6 +32,12 @@ describe("a used recovery link", () => {
     expect(m.rpc).toHaveBeenCalledWith("secure_email_only_account", { p_user: "user" });
   });
 
+  it("takes an email-only session that isn't paying straight to where it was going", async () => {
+    const search = `/auth/reset-password?${new URLSearchParams({ next: "/app/searches/new?prompt=fiesta" })}`;
+    expect(await afterRecoveryLink(client(), search)).toBe("/app/searches/new?prompt=fiesta");
+    expect(m.recordProof).toHaveBeenCalledWith("user", "session", "email_link");
+  });
+
   it("takes a full account to the new password form", async () => {
     m.profile = { email_only: false };
     expect(await afterRecoveryLink(client(), next)).toBe("/auth/reset-password?next=%2Fapp%2Fpro%3Fplan%3Dpass_30");

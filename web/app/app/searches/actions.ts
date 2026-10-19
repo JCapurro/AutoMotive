@@ -128,6 +128,15 @@ export async function saveSearch(id: number | null, raw: SearchInput, origin?: S
 
   if (id == null) {
     const { data: profile } = await supabase.from("profiles").select("default_channels").single();
+    // The same active search twice (two tabs, a resubmit) would alert twice: open the one that exists.
+    const { data: active } = await supabase.from("search_profiles").select("id, filters, origin_lat, origin_lon, radius_km")
+      .eq("user_id", user.id).eq("enabled", true);
+    const same = (active ?? []).find((p) => JSON.stringify(p.filters) === JSON.stringify(row.filters)
+      && p.origin_lat === (row.origin_lat ?? null) && p.origin_lon === (row.origin_lon ?? null) && p.radius_km === (row.radius_km ?? null));
+    if (same) {
+      if (origin?.stay) return { savedId: same.id };
+      redirect(`/app/searches/${same.id}`);
+    }
     const rawQuery = origin?.jobId != null ? await jobText(supabase, origin.jobId) : null;
     const { data, error } = await supabase
       .from("search_profiles")

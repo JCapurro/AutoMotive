@@ -8,6 +8,7 @@ const state = vi.hoisted(() => ({
   dbError: null as { message: string } | null,
   inserted: null as Record<string, unknown> | null,
   updated: null as Record<string, unknown> | null,
+  active: [] as Record<string, unknown>[],
   rpc: [] as [string, Record<string, unknown> | undefined][],
   tables: [] as string[],
   track: vi.fn(),
@@ -30,7 +31,10 @@ vi.mock("@/lib/supabase/server", () => ({
     },
     from: (table: string) => {
       state.tables.push(table);
+      let activeList = false;
       const result = () => {
+        // The user's active searches, checked for an identical one before inserting.
+        if (activeList) return { data: state.active };
         if (table === "vehicle_catalog") return { data: state.catalog };
         if (table === "sources") return { data: [{ id: "mercadolibre" }, { id: "kavak" }] };
         if (table === "profiles") return { data: { default_channels: ["email"] } };
@@ -38,6 +42,7 @@ vi.mock("@/lib/supabase/server", () => ({
       };
       const query: Record<string, unknown> = {};
       for (const method of ["select", "eq", "ilike", "is", "limit", "in", "order"]) query[method] = () => query;
+      query.eq = (column: string) => { if (table === "search_profiles" && column === "enabled") activeList = true; return query; };
       query.insert = (row: Record<string, unknown>) => { state.inserted = row; return query; };
       query.update = (row: Record<string, unknown>) => { state.updated = row; return query; };
       query.single = query.maybeSingle = async () => result();
@@ -59,6 +64,7 @@ beforeEach(() => {
   state.catalog = null;
   state.dbError = null;
   state.inserted = null;
+  state.active = [];
   state.updated = null;
   state.rpc = [];
   state.tables = [];
@@ -99,6 +105,16 @@ describe("saveSearch", () => {
     state.catalog = { make: "Chevrolet", model: "S10", body_types: ["pickup"] };
     await saveSearch(null, { ...CORSA, model: "s10", body_types: ["pickup"] }, STAY);
     expect(state.inserted?.filters).not.toHaveProperty("body_types");
+  });
+
+  it("opens the identical active search instead of creating a second one", async () => {
+    state.catalog = { make: "Chevrolet", model: "Corsa", body_types: [] };
+    await saveSearch(null, CORSA, STAY);
+    const first = state.inserted!;
+    state.inserted = null;
+    state.active = [{ id: 5, filters: first.filters, origin_lat: null, origin_lon: null, radius_km: null }];
+    expect(await saveSearch(null, CORSA, STAY)).toEqual({ savedId: 5 });
+    expect(state.inserted).toBeNull();
   });
 
   it.each([

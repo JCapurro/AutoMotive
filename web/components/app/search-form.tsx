@@ -36,6 +36,7 @@ import {
 } from "@/lib/search-form";
 import { cn } from "@/lib/utils";
 import { analyticsEvent } from "@/lib/google-analytics";
+import { AMBA_RADIUS_KM } from "@/lib/assisted-fallback";
 import { detectDeviceLocation, type DetectedLocation } from "@/lib/search-location";
 
 type Source = { id: string; name: string };
@@ -74,10 +75,40 @@ type Draft = {
   opportunity_threshold_pct: string;
 };
 
-/** "11.500" → 11500; "" → null. */
+/** "11.500" or "11500" → 11500; "" → null; anything else (signs, decimals, "1e9", letters) → NaN, rejected by checkNumbers. */
 function amount(text: string): number | null {
-  const digits = text.replace(/\D/g, "");
-  return digits ? Number(digits) : null;
+  const clean = text.trim().replace(/\s/g, "");
+  if (!clean) return null;
+  return /^(\d{1,3}(\.\d{3})+|\d+)$/.test(clean) ? Number(clean.replace(/\./g, "")) : NaN;
+}
+
+const WHOLE_NUMBER = "Escribí solo números enteros, sin comas ni decimales (por ejemplo: 11500).";
+
+/** The form's own checks, in Spanish and all at once, before the server sees the input. */
+function checkNumbers(input: SearchInput, d: Draft): Record<string, string> {
+  const fields: Record<string, string> = {};
+  const bad = (n: number | null | undefined) => n != null && !Number.isFinite(n);
+  for (const key of ["km_max", "km_target", "price_max", "price_target"] as const) {
+    if (bad(input[key])) fields[key] = WHOLE_NUMBER;
+  }
+  if (!fields.km_max && input.km_max != null && input.km_max > 2_000_000) fields.km_max = "Poné hasta 2.000.000 km.";
+  if (!fields.km_target && input.km_target != null && input.km_target > 2_000_000) fields.km_target = "Poné hasta 2.000.000 km.";
+  if (!fields.price_target && !fields.price_max && input.price_target != null && input.price_max != null && input.price_target > input.price_max) {
+    fields.price_target = "El precio ideal no puede ser mayor que el máximo.";
+  }
+  if (!fields.km_target && !fields.km_max && input.km_target != null && input.km_max != null && input.km_target > input.km_max) {
+    fields.km_target = "El kilometraje ideal no puede ser mayor que el máximo.";
+  }
+  if (input.year_min != null && input.year_max != null && input.year_min > input.year_max) {
+    fields.year_max = "El año «desde» no puede ser mayor que el «hasta».";
+  }
+  if (d.place) {
+    const radius = amount(d.radius);
+    if (radius == null || !Number.isFinite(radius)) fields.location = "Escribí el radio en kilómetros, sin decimales (por ejemplo: 30).";
+    else if (radius <= 0) fields.location = "El radio tiene que ser mayor a 0.";
+    else if (radius > 3000) fields.location = "Poné un radio de hasta 3.000 km.";
+  }
+  return fields;
 }
 
 /** "10" → 10; "7,5" → 7.5 (the schema refuses it: whole percents only); "" → null. */
@@ -142,8 +173,8 @@ function draftFrom(
 }
 
 function location(d: Draft): SearchInput["location"] {
-  const radius = Number(d.radius.replace(",", "."));
-  const radius_km = radius;
+  // Whole km, dots as thousands like every other number here ("3.000" is 3000 km, not 3).
+  const radius_km = amount(d.radius) ?? NaN;
   if (d.place === "current" && d.current) {
     const { label, lat, lon } = d.current;
     return { label, lat, lon, radius_km };
@@ -186,6 +217,8 @@ function toInput(d: Draft, offered: readonly string[]): SearchInput {
 }
 
 const THIS_YEAR = new Date().getFullYear();
+const AMBA = "amba";
+const isAmba = (d: Draft) => d.place === "city" && d.city === "caba" && d.radius === String(AMBA_RADIUS_KM);
 
 export function SearchForm({
   catalog,
@@ -236,6 +269,7 @@ export function SearchForm({
     JSON.stringify(toInput(draftFrom(initial, isNew, null, initialMode), offeredBy(initial.make, initial.model))));
   // Until the user picks a zone, the location filled in on mount isn't a correction.
   const placeTouched = useRef(false);
+  const formRef = useRef<HTMLFormElement>(null);
   const locationRequest = useRef(0);
   const [errors, setErrors] = useState<{ error?: string; fields?: Record<string, string> }>({});
   const [saving, startSaving] = useTransition();
@@ -278,12 +312,14 @@ export function SearchForm({
   const vehicleReady = byBody
     ? Boolean(input.body_types?.length) && !bodyNeedsPrice && !locked
     : Boolean(input.make && input.model);
+  // Junk in a number field (checkNumbers) isn't a failed count: the preview waits for it to be fixed.
+  const numbersOk = Object.keys(checkNumbers(input, d)).length === 0;
   const locationReady = !((d.place === "current" && !d.current) || (d.place === "city" && !d.city));
   const previewKey = JSON.stringify({ ...input, locationReady, name: "", notification_frequency: "", notify_min_level: "",
     opportunity_threshold_pct: null });
 
   useEffect(() => {
-    if (!vehicleReady || !locationReady) return;
+    if (!vehicleReady || !locationReady || !numbersOk) return;
     const timer = setTimeout(() => {
       startPreview(async () => {
         const data = await previewSearch(input);
@@ -322,16 +358,20 @@ export function SearchForm({
     setOtherVersion(false);
   }
 
-  function choosePlace(place: string) {
+  function choosePlace(choice: string) {
     placeTouched.current = true;
     locationRequest.current += 1;
     setLocating(false);
     setLocationNotice("");
     setErrors({});
+    // AMBA: the city and its suburbs, as a manual place (CABA's center and a wide radius).
+    const amba = choice === AMBA;
+    const place = amba ? "city" : choice;
     setDraft((prev) => ({
       ...prev,
       place,
-      radius: prev.radius || "30",
+      ...(amba ? { province: "02", city: "caba" } : {}),
+      radius: amba ? String(AMBA_RADIUS_KM) : prev.radius || "30",
     }));
     if (place === "current" && !d.current) void locate(true);
   }
@@ -356,7 +396,13 @@ export function SearchForm({
       timeout: "La ubicación del dispositivo está tardando. Conservamos la zona disponible; también podés elegir otra ciudad.",
       unavailable: "No pudimos leer la ubicación del dispositivo. Conservamos la zona disponible; también podés elegir otra ciudad.",
     };
-    setLocationNotice(d.current ? notices[result.reason] : "No pudimos detectar tu zona. Elegí Ubicación manual o usá la ubicación del dispositivo.");
+    if (!d.current && !requestPermission && !placeTouched.current) {
+      // Nothing detected on open: ask for the place instead of starting in an error.
+      setDraft((prev) => prev.place === "current" ? { ...prev, place: "city" } : prev);
+      setLocationNotice("Elegí dónde buscar: AMBA, una provincia y localidad, o todo el país.");
+      return;
+    }
+    setLocationNotice(d.current ? notices[result.reason] : "No pudimos detectar tu zona. Elegí AMBA, Ubicación manual o usá la ubicación del dispositivo.");
   }
 
   useEffect(() => {
@@ -385,15 +431,32 @@ export function SearchForm({
     }));
   }
 
+  /** Shows the errors and takes the user to the first one: a submit that seems to do nothing is the worst outcome. */
+  function showErrors(next: { error?: string; fields?: Record<string, string> }) {
+    setErrors(next);
+    window.requestAnimationFrame(() => {
+      const alert = formRef.current?.querySelector<HTMLElement>("[role=alert]");
+      if (!alert) return;
+      alert.scrollIntoView({ behavior: "smooth", block: "center" });
+      alert.parentElement?.querySelector<HTMLElement>("input, select, button")?.focus({ preventScroll: true });
+    });
+  }
+
   function submit(event: React.FormEvent) {
     event.preventDefault();
     setErrors({});
     if (locked) {
-      setErrors({ error: MODEL_LESS_UNAVAILABLE });
+      showErrors({ error: MODEL_LESS_UNAVAILABLE });
       return;
     }
-    if (!locationReady) {
-      setErrors({ fields: { location: "Elegí provincia y ciudad o permití el acceso a tu ubicación." } });
+    const fields = checkNumbers(input, d);
+    if (!byBody && !input.make) fields.make = "Elegí una marca.";
+    if (!byBody && input.make && !input.model) fields.model = "Elegí un modelo.";
+    if (byBody && !input.body_types?.length) fields.body_types = "Elegí al menos una carrocería.";
+    if (byBody && input.price_max == null && !fields.price_max) fields.price_max = "Poné un precio máximo para buscar por carrocería.";
+    if (!locationReady) fields.location = "Elegí dónde buscar: AMBA, una provincia y localidad, o todo el país.";
+    if (Object.keys(fields).length) {
+      showErrors({ fields });
       return;
     }
     locationRequest.current += 1;
@@ -412,7 +475,7 @@ export function SearchForm({
             }
           : undefined,
       );
-      if (result?.error) setErrors(result);
+      if (result?.error) showErrors(result);
       else if (result?.savedId != null) {
         analyticsEvent("search", { search_type: "structured" });
         analyticsEvent("search_created", { search_type: "structured" });
@@ -429,7 +492,7 @@ export function SearchForm({
     ) : null;
 
   return (
-    <form onSubmit={submit} className="grid gap-5 lg:grid-cols-[1fr_300px] lg:items-start">
+    <form ref={formRef} onSubmit={submit} noValidate className="grid gap-5 lg:grid-cols-[1fr_300px] lg:items-start">
       <div className="space-y-5">
         {notes?.length ? (
           <Alert data-testid="draft-notes">
@@ -661,14 +724,14 @@ export function SearchForm({
                 inputMode="numeric"
                 value={d.km_max}
                 onChange={(e) => set("km_max", e.target.value)}
-                onBlur={() => amount(d.km_max) != null && set("km_max", number(amount(d.km_max)))}
-                placeholder="150.000"
+                onBlur={() => Number.isFinite(amount(d.km_max)) && set("km_max", number(amount(d.km_max)!))}
+                placeholder="Sin límite (ej.: 150.000)"
               />
             </Field>
             <details className="space-y-2 text-sm" open={d.km_target ? true : undefined}>
               <summary className="cursor-pointer text-muted-foreground">Kilometraje ideal (opcional)</summary>
               <Field id={fid("km_target")} label="Kilometraje ideal" error={fieldError("km_target")}>
-                <Input id={fid("km_target")} inputMode="numeric" value={d.km_target} onChange={(e) => set("km_target", e.target.value)} placeholder="120.000" />
+                <Input id={fid("km_target")} inputMode="numeric" value={d.km_target} onChange={(e) => set("km_target", e.target.value)} placeholder="Ej.: 120.000" />
               </Field>
               <p className="text-xs text-muted-foreground">Prioriza publicaciones; no las descarta.</p>
             </details>
@@ -685,7 +748,7 @@ export function SearchForm({
           <CardHeader>
             <CardTitle>Precio</CardTitle>
             <CardDescription>
-              El precio se compara convirtiendo de moneda: un aviso en pesos cuenta contra un tope en dólares.
+              Comparamos en la misma moneda: una publicación en pesos se convierte a dólares si tu tope está en dólares.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
@@ -705,8 +768,8 @@ export function SearchForm({
                   inputMode="numeric"
                   value={d.price_max}
                   onChange={(e) => set("price_max", e.target.value)}
-                  onBlur={() => amount(d.price_max) != null && set("price_max", number(amount(d.price_max)))}
-                  placeholder={d.currency === "USD" ? "11.500" : "15.000.000"}
+                  onBlur={() => Number.isFinite(amount(d.price_max)) && set("price_max", number(amount(d.price_max)!))}
+                  placeholder={byBody ? (d.currency === "USD" ? "Ej.: 11.500" : "Ej.: 15.000.000") : d.currency === "USD" ? "Sin límite (ej.: 11.500)" : "Sin límite (ej.: 15.000.000)"}
                   required={byBody}
                 />
               </div>
@@ -719,7 +782,7 @@ export function SearchForm({
                   inputMode="numeric"
                   value={d.price_target}
                   onChange={(e) => set("price_target", e.target.value)}
-                  placeholder={d.currency === "USD" ? "10.500" : "14.000.000"}
+                  placeholder={d.currency === "USD" ? "Ej.: 10.500" : "Ej.: 14.000.000"}
                 />
               </Field>
               <p className="text-xs text-muted-foreground">Prioriza publicaciones; no las descarta.</p>
@@ -737,10 +800,11 @@ export function SearchForm({
               <legend className="text-sm font-medium">Buscar cerca de</legend>
               <Segmented
                 name={fid("place")}
-                value={d.place}
+                value={isAmba(d) ? AMBA : d.place}
                 onChange={choosePlace}
                 variant="chips"
                 options={[
+                  { value: AMBA, label: "AMBA (CABA y alrededores)" },
                   { value: "current", label: "Mi ubicación actual" },
                   { value: "city", label: "Ubicación manual" },
                   { value: "", label: "Todo el país" },
@@ -776,7 +840,7 @@ export function SearchForm({
               </>
             ) : null}
             {d.place ? (
-              <Field id={fid("radius")} label="Radio (km)" error={fieldError("location")}>
+              <Field id={fid("radius")} label="Radio (km)">
                 <Input id={fid("radius")} inputMode="numeric" value={d.radius} onChange={(e) => set("radius", e.target.value)} />
               </Field>
             ) : null}
@@ -896,9 +960,10 @@ export function SearchForm({
           preview={shownPreview}
           loading={previewing}
           failed={previewFailed}
-          ready={vehicleReady}
+          ready={vehicleReady && numbersOk}
           notReady={
-            locked
+            !numbersOk ? "Corregí los números marcados para contar las publicaciones."
+            : locked
               ? "Para contar las publicaciones, elegí un modelo."
               : byBody
                 ? input.body_types?.length
@@ -974,7 +1039,7 @@ function Segmented({
         <label
           key={o.value || "any"}
           className={cn(
-            "cursor-pointer px-3 py-1.5 text-sm has-focus-visible:ring-2 has-focus-visible:ring-ring",
+            "inline-flex min-h-11 cursor-pointer items-center px-3 py-1.5 text-sm md:min-h-0 has-focus-visible:ring-2 has-focus-visible:ring-ring",
             variant === "chips"
               ? "rounded-full border border-border text-muted-foreground hover:bg-muted"
               : "rounded-md text-muted-foreground",
@@ -1018,7 +1083,7 @@ function ChipToggles({
           <label
             key={o.value}
             className={cn(
-              "cursor-pointer rounded-full border border-border px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted has-focus-visible:ring-2 has-focus-visible:ring-ring has-disabled:cursor-not-allowed has-disabled:opacity-60",
+              "inline-flex min-h-11 cursor-pointer items-center rounded-full border border-border px-3 py-1.5 text-sm md:min-h-0 text-muted-foreground hover:bg-muted has-focus-visible:ring-2 has-focus-visible:ring-ring has-disabled:cursor-not-allowed has-disabled:opacity-60",
               on && "border-primary bg-primary font-medium text-primary-foreground hover:bg-primary",
             )}
           >
@@ -1093,7 +1158,7 @@ function PreviewCard({
               </p>
             )}
             <p className="text-[11px] text-muted-foreground">
-              Estimación con los filtros duros; al guardar calculamos el Opportunity Score de cada una.
+              Estimación con tus filtros; al guardar calculamos qué tan buena oportunidad es cada una.
             </p>
           </>
         )}

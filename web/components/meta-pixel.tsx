@@ -138,9 +138,9 @@ function ConsentBanner() {
         Uso de cookies
       </h2>
       <p className="mt-1 text-muted-foreground">
-        Utilizamos cookies propias y de terceros para el funcionamiento del sitio, analizar su uso y medir la
-        efectividad de nuestras campañas publicitarias. Podés aceptar todas las cookies o rechazar las que no son
-        necesarias. Para más información, consultá nuestra{" "}
+        Además de las cookies propias que hacen funcionar el sitio, ya están activas las de medición (Google
+        Analytics, Microsoft Clarity y Meta), para analizar el uso y medir nuestros anuncios. Con «Rechazar» las
+        desactivamos todas. Para más información, consultá nuestra{" "}
         <Link href="/privacidad#cookies" className="text-foreground underline underline-offset-2">
           Política de privacidad
         </Link>
@@ -151,7 +151,7 @@ function ConsentBanner() {
           Rechazar
         </Button>
         <Button size="sm" onClick={() => setConsent("granted")}>
-          Aceptar todas
+          Aceptar
         </Button>
       </div>
     </section>

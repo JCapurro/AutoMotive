@@ -70,11 +70,11 @@ export default async function SettingsPage() {
           </CardDescription>
         </CardHeader>
           <CardContent className="space-y-3">
-            {access ? <p className="text-sm">{PLAN_NAMES[access.plan]} · {access.active_searches ?? 0} búsquedas activas
+            {access ? <p className="text-sm">{PLAN_NAMES[access.plan]} · {access.active_searches ?? 0} {access.active_searches === 1 ? "búsqueda activa" : "búsquedas activas"}
               {access.enforced ? ` de ${access.limits.max_profiles ?? "sin límite"}` : ""}.</p> : null}
             {(subscriptions ?? []).map((checkout) => <BillingStatus key={checkout.id} checkout={checkout} />)}
             {access?.plan === "pro" && access.active && !subscriptions?.length ? <>
-              <p className="text-sm text-muted-foreground">Tu acceso en S Auto se registró manualmente por 30 días.
+              <p className="text-sm text-muted-foreground">Tu acceso en Ese Auto se registró manualmente por 30 días.
                 Podés avisar que no vas a renovar; el período pagado sigue vigente.</p>
               <p className="text-sm text-muted-foreground">Si contrataste con un enlace de suscripción de Mercado Pago, cancelalo también desde tu cuenta de Mercado Pago. Este aviso por sí solo no detiene sus cobros.</p>
               <RenewalButton declined={declined} />

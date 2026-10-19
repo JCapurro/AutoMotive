@@ -63,7 +63,7 @@ test("F4: búsqueda gratis con el email, backfill, alerta, guardar y guardados",
     // The email comes in a pop-up, never the login page.
     const dialog = page.getByRole("dialog", { name: "¿A qué email te avisamos?" });
     await dialog.getByLabel("Tu email").fill(email);
-    await dialog.getByRole("button", { name: "Crear mi búsqueda" }).click();
+    await dialog.getByRole("button", { name: "Seguir" }).click();
     await expect(page).toHaveURL(/\/app\/searches\/new/);
     await expect(page.getByText(`Te vamos a avisar a ${email}`)).toBeVisible();
     const [account] = await query<{ email_only: boolean; method: string }>(

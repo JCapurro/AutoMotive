@@ -59,7 +59,7 @@ export function AcquirePlanButton({ canAcquirePlan, className }: { canAcquirePla
   if (!canAcquirePlan) return null;
   return (
     <Button asChild variant="outline" className={cn("h-9 px-3.5", className)}>
-      <Link href="/app/pro">Adquirir plan</Link>
+      <Link href="/app/pro">Planes</Link>
     </Button>
   );
 }

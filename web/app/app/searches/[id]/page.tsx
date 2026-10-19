@@ -13,7 +13,7 @@ import { SortSelect } from "@/components/app/sort-select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth";
-import { includesImmediateAlerts, type PlanLimits, visibleResults } from "@/lib/pro";
+import { accessDate, includesImmediateAlerts, type PlanLimits, visibleResults } from "@/lib/pro";
 import { describeVehicle } from "@/lib/search";
 import { collectionPending } from "@/lib/search-collection";
 import { loadSearchCollection } from "@/lib/search-collection-server";
@@ -82,6 +82,7 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
   const pending = profile.enabled && needsPreparation;
   const retryCollection = profile.enabled && collectionSources?.some((source) => source.collectionState === "failed" || source.collectionState === "unknown");
   const count = (counts?.[0] ?? {}) as Record<string, number>;
+  const access = (planLimits ?? null) as PlanLimits | null;
   // §33: the free plan's visible results. Not enforced (the pilot): all of
   // them, and the database records plan_limit_hit. Enforced: capped.
   const limit = visibleResults(count.all_count ?? 0, (planLimits ?? null) as PlanLimits | null);
@@ -125,7 +126,10 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
       </header>
 
       {pending ? (
-        <SearchPreparation />
+        <SearchPreparation
+          email={user.email}
+          trialEnds={access?.state === "trial" && access.expires_at ? accessDate(access.expires_at) : null}
+        />
       ) : needsPreparation ? (
         <p role="status" className="rounded-lg border bg-muted p-5 text-sm">
           Reanudá la búsqueda para preparar {profile.bootstrapped_at ? "los resultados con tus nuevos filtros" : "tus primeros resultados"}.

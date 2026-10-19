@@ -10,9 +10,10 @@ import { BODY_TYPE_CODES, type BodyType, type Level, bodyTypeCodes, bodyTypesTex
 import { money, number } from "@/lib/format";
 import type { Filters, Preferences, SearchProfile } from "@/lib/types";
 
-const year = z.number().int().min(1950).max(2100).nullable().default(null);
-const positive = z.number().positive().max(1e12).nullable().default(null);
-const kilometers = z.number().int().min(0).max(2_000_000).nullable().default(null);
+const WHOLE = "Escribí solo números enteros, sin comas ni decimales.";
+const year = z.number("Elegí un año.").int("Elegí un año.").min(1950, "Elegí un año desde 1950.").max(2100, "Elegí un año válido.").nullable().default(null);
+const positive = z.number(WHOLE).positive("Escribí un monto mayor a 0.").max(1e12, "Ese monto es demasiado grande.").nullable().default(null);
+const kilometers = z.number(WHOLE).int(WHOLE).min(0, "Los kilómetros no pueden ser negativos.").max(2_000_000, "Poné hasta 2.000.000 km.").nullable().default(null);
 
 export const SearchInput = z
   .object({
@@ -37,7 +38,7 @@ export const SearchInput = z
         label: z.string().trim().min(1).max(80),
         lat: z.number().min(-90).max(90),
         lon: z.number().min(-180).max(180),
-        radius_km: z.number().positive("El radio tiene que ser mayor a 0.").max(3000),
+        radius_km: z.number("Escribí el radio en kilómetros (por ejemplo: 30).").positive("El radio tiene que ser mayor a 0.").max(3000, "Poné un radio de hasta 3.000 km."),
       })
       .nullable()
       .default(null),
