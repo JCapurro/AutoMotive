@@ -1038,6 +1038,8 @@ isOneToOne: false
             claim_auth_throttle: { Args: { p_kind: string; p_key: string; p_limit: number; p_window_seconds: number }; Returns: boolean },
             auth_account_for_email: { Args: { p_email: string }; Returns: { user_id: string; email_only: boolean; confirmed: boolean }[] },
             mark_email_only_account: { Args: { p_user: string }; Returns: boolean },
+            save_email_only_resume: { Args: { p_user: string; p_code_hash: string }; Returns: undefined },
+            claim_email_only_resume: { Args: { p_user: string; p_code_hash: string; p_window_seconds: number }; Returns: boolean },
             complete_email_only_account: { Args: { p_user: string; p_session: string; p_method: string }; Returns: boolean },
             secure_email_only_account: { Args: { p_user: string }; Returns: boolean },
             "commercial_access_active":

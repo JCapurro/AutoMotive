@@ -120,6 +120,44 @@ describe("an email that already exists", () => {
   });
 });
 
+describe("a reload during signup (email_only_resume)", () => {
+  const code = "A1b2C3d4E5f6G7h8I9j0K1l2";
+  const lite = { user_id: "lite", email_only: true, confirmed: true };
+
+  it("keeps the hash of the browser's code with the new account, never the code", async () => {
+    expect(await startFreeSearch({ ...input, resume: code })).toMatchObject({ status: "created", signedUp: true });
+    const [, args] = m.rpc.mock.calls.find(([name]) => name === "save_email_only_resume")!;
+    expect(args).toMatchObject({ p_user: "new-user", p_code_hash: expect.stringMatching(/^[0-9a-f]{64}$/) });
+    expect(JSON.stringify(args)).not.toContain(code);
+  });
+
+  it("gives the same browser its session back instead of a link", async () => {
+    m.accountForEmail.mockResolvedValue(lite);
+    m.generateLink.mockResolvedValue({ data: { properties: { hashed_token: "hash" }, user: { id: "lite" } }, error: null });
+    m.verifyOtp.mockResolvedValue({ data: { user: { id: "lite" } }, error: null });
+    expect(await startFreeSearch({ ...input, resume: code })).toEqual({ status: "created", href, signedUp: true });
+    expect(m.rpc).toHaveBeenCalledWith("claim_email_only_resume", expect.objectContaining({ p_user: "lite", p_window_seconds: 1800 }));
+    expect(m.sendEntryLink).not.toHaveBeenCalled();
+  });
+
+  it("sends the link when the code doesn't match, is missing or malformed", async () => {
+    m.accountForEmail.mockResolvedValue(lite);
+    m.rpc.mockResolvedValue({ data: false, error: null });
+    expect(await startFreeSearch({ ...input, resume: code })).toMatchObject({ status: "existing_email_only" });
+    m.rpc.mockClear();
+    expect(await startFreeSearch({ ...input, resume: "<not a code>" })).toMatchObject({ status: "existing_email_only" });
+    expect(await startFreeSearch(input)).toMatchObject({ status: "existing_email_only" });
+    expect(m.rpc).not.toHaveBeenCalledWith("claim_email_only_resume", expect.anything());
+    expect(m.verifyOtp).not.toHaveBeenCalled();
+  });
+
+  it("never resumes an account with a password", async () => {
+    m.accountForEmail.mockResolvedValue({ user_id: "full", email_only: false, confirmed: true });
+    expect(await startFreeSearch({ ...input, resume: code })).toEqual({ status: "existing_account", email: "persona@example.com" });
+    expect(m.rpc).not.toHaveBeenCalledWith("claim_email_only_resume", expect.anything());
+  });
+});
+
 describe("the form", () => {
   it("validates the prompt and the email first", async () => {
     expect(await startFreeSearch({ prompt: "  ", email: "a@b.co" })).toMatchObject({ status: "error", field: "prompt" });

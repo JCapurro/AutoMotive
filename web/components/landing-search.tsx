@@ -18,6 +18,32 @@ import { searchStartHref } from "@/lib/search-intent";
 
 const OFFLINE = "No pudimos conectarnos. Revisá tu conexión y probá de nuevo.";
 const noop = () => () => {};
+const RESUME_KEY = "ea_signup_code";
+
+/**
+ * This browser's signup code (startFreeSearch's `resume`): if a reload eats
+ * the answer, the retry from here gets the session instead of a link. Kept
+ * until a signup succeeds; without storage there is simply no resume.
+ */
+function signupCode(): string | undefined {
+  try {
+    let code = localStorage.getItem(RESUME_KEY);
+    if (!code) {
+      const bytes = crypto.getRandomValues(new Uint8Array(24));
+      code = btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+      localStorage.setItem(RESUME_KEY, code);
+    }
+    return code;
+  } catch {
+    return undefined;
+  }
+}
+
+function forgetSignupCode() {
+  try {
+    localStorage.removeItem(RESUME_KEY);
+  } catch {}
+}
 
 /**
  * The landing's search. Signed in, it goes straight to the search. Signed
@@ -73,6 +99,7 @@ export function LandingSearch({ signedIn }: { signedIn: boolean }) {
     else if (next.status === "existing_email_only") setStep("sent");
     setResult(next);
     if (next.status !== "created") return;
+    forgetSignupCode();
     if (next.signedUp) {
       pixel("Lead");
       analyticsEvent("sign_up", { method: "email_only" });
@@ -126,7 +153,7 @@ export function LandingSearch({ signedIn }: { signedIn: boolean }) {
         <DialogContent className="sm:max-w-md">
           {step === "email" ? <form className="space-y-4" noValidate onSubmit={(event) => {
             event.preventDefault();
-            if (!pending) run(() => startFreeSearch({ prompt: text, email, company }));
+            if (!pending) run(() => startFreeSearch({ prompt: text, email, company, resume: signupCode() }));
           }}>
             <DialogHeader>
               <DialogTitle>¿A qué email te avisamos?</DialogTitle>
