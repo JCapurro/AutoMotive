@@ -420,7 +420,7 @@ class FacebookMarketplaceScraper(BaseScraper):
         url = self._build_url(filters)
         out: list[Listing] = []
         seen: set[str] = set()
-        async with browser_context(storage_state=FB_STORAGE_STATE) as ctx:
+        async with browser_context(storage_state=FB_STORAGE_STATE, native=True) as ctx:
             page = await ctx.new_page()
             try:
                 await page.goto(url, timeout=45_000, wait_until="domcontentloaded")
@@ -488,7 +488,7 @@ class FacebookMarketplaceScraper(BaseScraper):
         seen: set[str] = set()
         known = filters.get("known_publication_dates") or {}
         stalls = scrolls = 0
-        async with browser_context(storage_state=FB_STORAGE_STATE) as ctx:
+        async with browser_context(storage_state=FB_STORAGE_STATE, native=True) as ctx:
             page = await ctx.new_page()
             try:
                 response = await page.goto(self._build_url(filters), timeout=45_000, wait_until="domcontentloaded")
@@ -565,7 +565,8 @@ class FacebookMarketplaceScraper(BaseScraper):
     async def fetch_detail_page(self, url: str) -> Page:
         if not Path(FB_STORAGE_STATE).exists():
             raise CollectorBlocked(f"facebook: no session at {FB_STORAGE_STATE}")
-        page = await fetch_rendered(url, storage_state=FB_STORAGE_STATE, settle_ms=3_500, expand=_EXPAND)
+        page = await fetch_rendered(url, storage_state=FB_STORAGE_STATE, settle_ms=3_500, expand=_EXPAND,
+                                    native=True)
         if "/login" in page.url or "checkpoint" in page.url:
             raise CollectorBlocked("facebook: session expired")
         return page
@@ -578,7 +579,8 @@ class FacebookMarketplaceScraper(BaseScraper):
 # Facebook revokes a session the first time it is used from an IP other than
 # the one that logged in (2026-10-17: a PC login died on its first VPS
 # request). So the VPS session is created on the VPS itself, through
-# ops/vps/fb-login.sh, with the same user agent and viewport as the worker.
+# ops/vps/fb-login.sh, with the same user agent and viewport the worker uses
+# for Facebook: the browser's own (native_user_agent), never a disguise.
 LOGIN_TIMEOUT_SECONDS = 900
 
 
@@ -599,10 +601,11 @@ def _save_state(state: dict) -> None:
 
 
 async def _login_and_save(*, auto: bool = False) -> None:
-    from ._browser import USER_AGENT, VIEWPORT
+    from ._browser import VIEWPORT, native_user_agent
     async with async_playwright() as pw:
         browser = await pw.chromium.launch(headless=False)
-        ctx = await browser.new_context(locale="es-AR", user_agent=USER_AGENT, viewport=VIEWPORT)
+        ctx = await browser.new_context(locale="es-AR", user_agent=native_user_agent(browser.version),
+                                        viewport=VIEWPORT)
         page = await ctx.new_page()
         await page.goto("https://www.facebook.com/login")
         if auto:

@@ -37,14 +37,15 @@ async def fetch_page(url: str, *, timeout: float = 25.0) -> Page:
 
 
 async def fetch_rendered(url: str, *, storage_state: str | None = None,
-                         settle_ms: int = 2_500, expand: Sequence[str] = ()) -> Page:
+                         settle_ms: int = 2_500, expand: Sequence[str] = (),
+                         native: bool = False) -> Page:
     """Load the page in the shared headless browser, for pages that render client-side.
 
     `expand`: texts of buttons that reveal the rest of the page ("Ver más"
     under a truncated description); the first visible one inside the main
     region is clicked before the page is captured.
     """
-    async with browser_context(storage_state=storage_state) as ctx:
+    async with browser_context(storage_state=storage_state, native=native) as ctx:
         page = await ctx.new_page()
         try:
             response = await page.goto(url, timeout=45_000, wait_until="domcontentloaded")

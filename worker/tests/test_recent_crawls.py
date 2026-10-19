@@ -315,6 +315,16 @@ class FacebookWindowTests(unittest.IsolatedAsyncioTestCase):
         detail.assert_awaited_once()
 
 
+class NativeUserAgentTests(unittest.TestCase):
+    def test_matches_the_real_browser_and_never_says_headless(self):
+        from collectors._browser import native_user_agent
+        ua = native_user_agent("128.0.6613.18", "linux")
+        self.assertEqual(ua, "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                             "(KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36")
+        self.assertIn("Windows NT 10.0", native_user_agent("128.0", "win32"))
+        self.assertNotIn("Headless", native_user_agent("128.0"))
+
+
 class PipelineCoverageTests(unittest.IsolatedAsyncioTestCase):
     async def test_handler_failure_keeps_the_coverage_checkpoint_for_retry(self):
         target = {"id": 1, "crawl_interval_seconds": 600}
