@@ -26,6 +26,29 @@ def native_user_agent(version: str, platform: str = sys.platform) -> str:
     return (f"Mozilla/5.0 ({token}) AppleWebKit/537.36 (KHTML, like Gecko) "
             f"Chrome/{major}.0.0.0 Safari/537.36")
 
+
+# Headless Chromium still lists a "HeadlessChrome" brand in its client hints
+# (sec-ch-ua, navigator.userAgentData) after the user agent is replaced.
+_HIDE_HEADLESS_BRAND = """(() => {
+  const data = navigator.userAgentData;
+  if (!data) return;
+  const proto = Object.getPrototypeOf(data);
+  const clean = list => (list || []).filter(b => !/Headless/i.test(b.brand));
+  const brands = clean(data.brands);
+  Object.defineProperty(proto, 'brands', {get: () => brands});
+  const high = proto.getHighEntropyValues;
+  proto.getHighEntropyValues = function (hints) {
+    return high.call(this, hints).then(v => Object.assign({}, v, {
+      brands: clean(v.brands), fullVersionList: clean(v.fullVersionList)}));
+  };
+})();"""
+
+
+async def _present_natively(ctx: BrowserContext, version: str) -> None:
+    major = version.split(".", 1)[0]
+    await ctx.set_extra_http_headers({"sec-ch-ua": f'"Chromium";v="{major}", "Not?A_Brand";v="99"'})
+    await ctx.add_init_script(_HIDE_HEADLESS_BRAND)
+
 _pw: Playwright | None = None
 _browser: Browser | None = None
 _lock = asyncio.Lock()
@@ -61,6 +84,8 @@ async def browser_context(
         viewport=VIEWPORT,
     )
     try:
+        if native and not user_agent:
+            await _present_natively(ctx, b.version)
         yield ctx
     finally:
         try:
