@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+import time
 import unicodedata
 import urllib.parse
 from pathlib import Path
@@ -279,6 +280,34 @@ async def _require_session(ctx) -> None:
         raise CollectorBlocked("facebook: session expired (logged out, no c_user cookie)")
 
 
+_CREATION_RE = re.compile(r'"creation_time":(\d{9,11}),"location_text"')
+_STORY_ID_RE = re.compile(r'"id":"(Uzpf[A-Za-z0-9+/=]+)"')
+
+
+def _own_creation_time(html: str, listing_id: str) -> int | None:
+    """The listing's own "creation_time" from the page's data, or None.
+
+    The page also carries the suggested ads' times, so a value counts only
+    when its object names this listing (its ID, or a story ID that decodes to
+    "...:VK:<id>"), and only when exactly one value does."""
+    import base64
+    found = set()
+    for match in _CREATION_RE.finditer(html):
+        before = html[max(0, match.start() - 3_000):match.start()]
+        stories = []
+        for story in _STORY_ID_RE.findall(before):
+            try:
+                stories.append(base64.b64decode(story).decode("ascii", "ignore"))
+            except ValueError:
+                continue
+        if f'"{listing_id}"' in before or any(s.endswith(f"VK:{listing_id}") for s in stories):
+            found.add(int(match.group(1)))
+    if len(found) != 1:
+        return None
+    value = found.pop()
+    return value if 1_000_000_000 < value <= int(time.time()) + 3_600 else None
+
+
 def parse_detail(html: str, url: str, status: int = 200) -> ListingDetail:
     """An item page, read from the visible text of its main region: FB's
     class names are generated, so only text cues are stable."""
@@ -312,15 +341,20 @@ def parse_detail(html: str, url: str, status: int = 200) -> ListingDetail:
         if price is not None:
             break
 
-    # "Publicado hace 2 días en Vicente López, BA"
+    # "Publicado hace 2 días en Vicente López, BA"; since 2026-10 often just
+    # "Listed in Rosario, SF", with the age only in the page's data.
     published_at = location = None
-    for ln, pl in zip(lines, plain):
+    for i, (ln, pl) in enumerate(zip(lines, plain)):
         if pl.startswith(("publicado ", "publicada ", "listed ")):
-            hm = re.match(r"(?:publicad[oa]|listed)\s+(.*?)(?:\s+(?:en|in)\s+(.+))?$", ln, re.IGNORECASE)
-            if hm:
+            if place := re.match(r"(?:publicad[oa]|listed)\s+(?:en|in)(?:\s+(.+))?$", ln, re.IGNORECASE):
+                # The empty age leaves "Listed  in" with the place on the next line.
+                location = place.group(1) or (lines[i + 1] if i + 1 < len(lines) else None)
+            elif hm := re.match(r"(?:publicad[oa]|listed)\s+(.*?)(?:\s+(?:en|in)\s+(.+))?$", ln, re.IGNORECASE):
                 published_at = parse_publication_date(hm.group(1))
                 location = hm.group(2)
             break
+    if published_at is None:
+        published_at = _own_creation_time(html, m.group(1))
 
     # "Acerca de este vehículo": "Conducido 112.000 kilómetros", "Transmisión manual",
     # "Tipo de combustible: Nafta".

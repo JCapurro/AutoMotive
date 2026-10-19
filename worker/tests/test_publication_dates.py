@@ -94,3 +94,27 @@ def test_facebook_card_reads_labeled_absolute_date():
         card = fixtures.facebook.parse_card("/marketplace/item/123/",
                                              "$10.000.000\nFord Fiesta 2017\nPublicado el 27/09/2026")
         assert card.published_at == PUBLISHED
+
+
+def _fb_item_page(listing_id: str, own: int | None, suggested: int = NOW - 86_400) -> str:
+    import base64
+    story = base64.b64encode(f"S:_I61584079436046:VK:{listing_id}".encode()).decode()
+    other = base64.b64encode(b"S:_I1:VK:999").decode()
+    own_data = (f'{{"id":"{story}","actors":[],"redacted_description":{{"text":"x"}},'
+                f'"creation_time":{own},"location_text":{{"text":"Rosario, SF"}}}}') if own else ""
+    return ('<html><body><div role="main"><h1>2012 Volkswagen Gol Trend</h1><span>$6,000,000</span>'
+            '<span>Listed  in</span><span>Rosario, SF</span><span>Seller\'s description</span><span>Gol trend 2012</span>'
+            '<span>Today\'s picks</span><span>$14,990,000</span><span>Listed 2 days ago in Acassuso</span></div>'
+            f'<script>{{"id":"{other}","redacted_description":{{"text":"y"}},'
+            f'"creation_time":{suggested},"location_text":{{"text":"Acassuso"}}}}{own_data}</script></body></html>')
+
+
+def test_facebook_detail_takes_its_own_creation_time_when_the_text_has_no_age():
+    from collectors import facebook as fb
+    url = "https://www.facebook.com/marketplace/item/1076102611970723/"
+    with patch("collectors.facebook.time.time", return_value=NOW):
+        detail = fb.parse_detail(_fb_item_page("1076102611970723", NOW - 3_600), url)
+        assert detail.listing.published_at == NOW - 3_600
+        assert detail.listing.ubicacion == "Rosario, SF"
+        # Only suggested ads carry a time: theirs is never borrowed.
+        assert fb.parse_detail(_fb_item_page("1076102611970723", None), url).listing.published_at is None
