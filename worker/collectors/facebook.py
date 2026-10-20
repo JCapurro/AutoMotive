@@ -43,7 +43,10 @@ _YEAR_RE = re.compile(r"\b(19[8-9]\d|20[0-3]\d)\b")
 log = logging.getLogger("collectors.facebook")
 
 
-# Common AR cities → FB Marketplace location slugs (best-effort)
+# Common AR cities → FB Marketplace location slugs. Each one checked on the VPS
+# (2026-10-20): an unknown slug ("santafe", "bahiablanca", "resistencia",
+# "posadas") silently redirects to /marketplace/category/ and searches around
+# the account's own location instead.
 CITY_SLUGS = {
     "buenos aires":     "buenosaires",
     "capital federal":  "buenosaires",
@@ -57,11 +60,11 @@ CITY_SLUGS = {
     "la plata":         "laplata",
     "mar del plata":    "mardelplata",
     "salta":            "salta",
-    "santa fe":         "santafe",
+    "santa fe":         "santa-fe",
+    "corrientes":       "corrientes",
+    "formosa":          "formosa",
     "neuquén":          "neuquen",
     "neuquen":          "neuquen",
-    "bahía blanca":     "bahiablanca",
-    "bahia blanca":     "bahiablanca",
 }
 
 
@@ -573,7 +576,7 @@ class FacebookMarketplaceScraper(BaseScraper):
                         body = _plain(await page.locator("body").inner_text())
                         if not seen and not any(s in body for s in (
                                 "no se encontraron resultados", "no se encontraron publicaciones",
-                                "no hay resultados", "no results found")):
+                                "no hay resultados", "no results found", "no listings found")):
                             raise CollectorBlocked("facebook: empty feed without a confirmed no-results message")
                         break
                     if scrolls >= config.RECENT_FB_MAX_SCROLLS:

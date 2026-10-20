@@ -270,6 +270,15 @@ class FacebookWindowTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(results.reason)
         self.assertEqual(results.unknown_dates, 0)
 
+    async def test_english_no_listings_message_is_successful_empty_search(self):
+        # The VPS account is in English (target 632735, 2026-10-20).
+        body = ('Marketplace\nSearch results\nDate listed: Last 30 days\n'
+                'No listings found for "Nissan Sentra" within 20 kilometers\n'
+                'Try a new search. Check spelling, change your filters, or try a less specific search term.')
+        results = await self.search(FacebookPage([[]], body=body), marca="Nissan", modelo="Sentra")
+        self.assertEqual(results, [])
+        self.assertTrue(results.complete)
+
     async def test_unconfirmed_empty_feed_is_still_blocked(self):
         for body in ("Marketplace", "Marketplace\nCargando...",
                      "Iniciar sesión\nCorreo electrónico\nContraseña"):
@@ -313,6 +322,15 @@ class FacebookWindowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([l.listing_id for l in results], ['1'])
         self.assertEqual(results.unknown_dates, 1)
         detail.assert_awaited_once()
+
+
+class FacebookCitySlugTests(unittest.TestCase):
+    def test_origin_picks_a_slug_facebook_knows(self):
+        # Formosa used to map to "santafe", which Facebook does not know: it
+        # searched around the account's own location (Acassuso) instead.
+        self.assertEqual(fb._city_slug_from_origin({"origin_lat": -26.18, "origin_lon": -58.17}), "formosa")
+        self.assertEqual(fb._city_slug("Santa Fe"), "santa-fe")
+        self.assertNotIn("santafe", fb.CITY_SLUGS.values())
 
 
 class NativeUserAgentTests(unittest.TestCase):
