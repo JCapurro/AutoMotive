@@ -270,6 +270,21 @@ class FacebookWindowTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(results.reason)
         self.assertEqual(results.unknown_dates, 0)
 
+    async def test_confirmed_no_listings_in_english_is_successful_empty_search(self):
+        # Visible text from the VPS on 2026-10-20, when Facebook served the
+        # search in English for Nissan Sentra 2025+ under 30.000 km.
+        body = ('Marketplace\nSearch results\nNotify me\nCreate new listing\nFilters\n'
+                'Sort by: Date listed: Newest first\nDate listed: Last 30 days\n'
+                'Categories\nVehicles\nBuy and sell groups\n'
+                'No listings found for "nissan sentra" within 20 kilometers\n'
+                'Try a new search. Check spelling, change your filters, or try a less '
+                'specific search term.\nBrowse Marketplace')
+        results = await self.search(FacebookPage([[]], body=body),
+                                    marca="Nissan", modelo="Sentra", anio_min=2025, km_max=30000)
+        self.assertEqual(results, [])
+        self.assertTrue(results.complete)
+        self.assertIsNone(results.reason)
+
     async def test_unconfirmed_empty_feed_is_still_blocked(self):
         for body in ("Marketplace", "Marketplace\nCargando...",
                      "Iniciar sesión\nCorreo electrónico\nContraseña"):

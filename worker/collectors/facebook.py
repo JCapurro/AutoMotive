@@ -573,7 +573,7 @@ class FacebookMarketplaceScraper(BaseScraper):
                         body = _plain(await page.locator("body").inner_text())
                         if not seen and not any(s in body for s in (
                                 "no se encontraron resultados", "no se encontraron publicaciones",
-                                "no hay resultados", "no results found")):
+                                "no hay resultados", "no results found", "no listings found")):
                             raise CollectorBlocked("facebook: empty feed without a confirmed no-results message")
                         break
                     if scrolls >= config.RECENT_FB_MAX_SCROLLS:
