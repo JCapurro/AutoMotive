@@ -58,6 +58,25 @@ WATCHLIST_TICK_SECONDS = int(os.getenv("WATCHLIST_TICK_SECONDS", "3600"))
 # When the source doesn't expose a date, only the seen set (matches) + bootstrap apply.
 RECOMMENDED_MAX_AGE_DAYS = int(os.getenv("RECOMMENDED_MAX_AGE_DAYS", "15"))
 
+
+def _switch(name: str, default: str) -> bool:
+    return os.getenv(name, default).strip().lower() not in {"0", "false", "no", "off", ""}
+
+
+# Which new listings of a source without publication dates are old stock, not
+# news (pipeline/news.py), one switch per rule to roll it back from the .env:
+# a read that brings half the stock again, a car back under another ID, and
+# an empty first run that doesn't finish the bootstrap (pipeline/crawl.py).
+NEWS_GUARD_STEP = _switch("NEWS_GUARD_STEP", "1")
+NEWS_GUARD_REAPPEARANCE = _switch("NEWS_GUARD_REAPPEARANCE", "1")
+NEWS_GUARD_EMPTY_FIRST = _switch("NEWS_GUARD_EMPTY_FIRST", "1")
+# An incomplete run of such a source, past its first, retries after the
+# source's interval instead of 15 minutes (crawl.retry_seconds).
+NEWS_PARTIAL_RETRY = _switch("NEWS_PARTIAL_RETRY", "1")
+# A reappearance also gets probable_repost_of (its chain's root), which takes
+# it out of comparables(): on only once comparables count the live copy (E3).
+NEWS_LINK_REPOST = _switch("NEWS_LINK_REPOST", "0")
+
 # Geocoding is used to turn listing location text into coordinates and then
 # enforce a user-origin radius in kilometers.
 GEOCODING_ENABLED = os.getenv("GEOCODING_ENABLED", "1").strip().lower() not in {

@@ -194,20 +194,21 @@ async def set_prefilter_rejected(target_id: int, external_ids: Iterable[str]) ->
 
 
 async def finish_target(target_id: int, *, ok: bool, retry_seconds: int,
-                        covered_until: datetime | None = None) -> None:
+                        covered_until: datetime | None = None, bootstrap: bool = True) -> None:
     """Schedule from completion; keep coverage at the successful scan's start.
     Failure retries without advancing bootstrap or the coverage checkpoint.
     A count-only target waits a day, or the source's interval if longer; a
-    target by body type, its own interval."""
+    target by body type, its own interval. `bootstrap=False`: a successful
+    run that doesn't finish the first one (an empty first read, pipeline/crawl.py)."""
     async with connection() as cx:
         if ok:
             await cx.execute(
-                "UPDATE crawl_targets t SET last_run_at = coalesce(%s::timestamptz, now()), first_run_done = true, "
-                "  claimed_by = NULL, claimed_until = NULL, "
+                "UPDATE crawl_targets t SET last_run_at = coalesce(%s::timestamptz, now()), "
+                "  first_run_done = t.first_run_done OR %s, claimed_by = NULL, claimed_until = NULL, "
                 "  next_run_at = now() + make_interval(secs => CASE WHEN t.query->>'count_only' = 'true' "
                 f"    THEN greatest(s.crawl_interval_seconds, %s) ELSE {INTERVAL_SECONDS} END) "
                 "  FROM sources s WHERE s.id = t.source AND t.id = %s",
-                (covered_until, COUNT_ONLY_INTERVAL_SECONDS, target_id))
+                (covered_until, bootstrap, COUNT_ONLY_INTERVAL_SECONDS, target_id))
         else:
             await cx.execute(
                 "UPDATE crawl_targets SET next_run_at = now() + make_interval(secs => %s), "
