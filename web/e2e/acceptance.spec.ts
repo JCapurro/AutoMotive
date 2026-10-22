@@ -82,7 +82,12 @@ test("F4: búsqueda gratis con el email, backfill, alerta, guardar y guardados",
     await expectNoHorizontalScroll(page);
     await panel.getByLabel("Marca").selectOption("Ford");
     await panel.getByLabel("Modelo").selectOption("Fiesta");
-    await panel.getByLabel(/^Versiones/).selectOption("Titanium");
+    // A catalog model lists its versions in a menu that stays open to pick several.
+    await panel.getByLabel(/^Versiones/).click();
+    await page.getByRole("menuitemcheckbox", { name: "Titanium", exact: true }).click();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("menu")).toHaveCount(0);
+    await expect(panel.getByRole("list", { name: "Versiones seleccionadas" })).toHaveText("Titanium");
     await panel.getByLabel("Año desde").selectOption("2016");
     await panel.getByLabel("Año hasta").selectOption("2018");
     await panel.getByLabel("Precio máximo").fill("11500");
