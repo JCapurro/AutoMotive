@@ -1154,9 +1154,15 @@ function PreviewCard({
               </ul>
             ) : (
               <p className="text-xs text-muted-foreground">
-                Hoy no hay publicaciones con estos filtros. Igual la monitoreamos y te avisamos cuando aparezca una.
+                Hoy no hay ninguna publicada. Es normal con autos buscados: duran poco. Nosotros seguimos mirando y te
+                escribimos cuando aparezca una.
               </p>
             )}
+            {preview.count > 0 ? (
+              <p className="text-xs text-muted-foreground">
+                Lo importante es lo que se publique a partir de ahora: eso te lo avisamos apenas aparece.
+              </p>
+            ) : null}
             <p className="text-[11px] text-muted-foreground">
               Estimación con tus filtros; al guardar calculamos qué tan buena oportunidad es cada una.
             </p>

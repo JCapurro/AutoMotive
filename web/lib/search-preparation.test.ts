@@ -95,9 +95,9 @@ describe("first search preparation", () => {
     const html = await resultsHtml();
     expect(html).toContain("Cargando…");
     expect(html).toContain('disabled=""');
-    expect(html).toContain("Estamos preparando tus resultados");
+    expect(html).toContain("Tu búsqueda ya está vigilando");
     expect(html).toContain("al menos 2 minutos");
-    expect(html).toContain("Los resultados se actualizan solos");
+    expect(html).toContain("esta página se actualiza sola");
     expect(html).not.toContain("Tiempo transcurrido");
     expect(html).not.toContain("No hay publicaciones");
     expect(html).not.toContain('data-testid="result-filters"');

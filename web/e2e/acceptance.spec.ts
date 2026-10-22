@@ -104,7 +104,7 @@ test("F4: búsqueda gratis con el email, backfill, alerta, guardar y guardados",
     await panel.getByRole("button", { name: "Crear búsqueda" }).click();
     await expect(page).toHaveURL(/\/app\/searches\/\d+$/);
     profileId = Number(page.url().split("/").pop());
-    await expect(page.getByRole("status")).toContainText("Estamos preparando tus resultados");
+    await expect(page.getByRole("status")).toContainText("Tu búsqueda ya está vigilando");
 
     const [profile] = await query<{
       filters: Record<string, unknown>;
