@@ -248,6 +248,29 @@ class FacebookWindowTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("daysSinceListed=30", page.url)
         self.assertIn("sortBy=creation_time_descend", page.url)
 
+    async def test_date_fetch_limit_ends_the_scan_and_the_retry_resumes(self):
+        # Cards in English show no age: a first run of a popular model read
+        # hundreds of item pages 30 s apart and never finished (2026-10-21).
+        def feed():
+            return FacebookPage([[(str(i), None) for i in range(1, 6)]])
+        reads = []
+
+        async def read_date(scraper, ctx, listing):
+            reads.append(listing.listing_id)
+            return NOW - DAY
+
+        with patch.object(fb.config, "RECENT_FB_MAX_DATE_FETCHES", 2), \
+                patch.object(fb.config, "RECENT_FB_DETAIL_SECONDS", 0), \
+                patch.object(fb.FacebookMarketplaceScraper, "_publication_date", read_date):
+            first = await self.search(feed())
+            # The retry finds the kept listings' dates among the stored ones.
+            second = await self.search(feed(), known_publication_dates={
+                l.listing_id: l.published_at for l in first})
+        self.assertEqual((first.complete, first.reason), (False, fb.DATE_FETCH_LIMIT))
+        self.assertEqual([l.listing_id for l in first], ["1", "2"])
+        self.assertEqual([l.listing_id for l in second], ["1", "2", "3", "4"])
+        self.assertEqual(reads, ["1", "2", "3", "4"])
+
     async def test_daily_filter_still_checks_dates_when_platform_returns_old_suggestions(self):
         page = FacebookPage([[('1', 12), ('2', 0), ('2', 0)]])
         results = await self.search(page, publication_days=1)

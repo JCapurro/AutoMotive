@@ -36,6 +36,9 @@ RECENT_ML_DETAIL_SECONDS = max(0, float(os.getenv("RECENT_ML_DETAIL_SECONDS", "8
 # Mercado Libre ads read for their date in one scan; past it the scan is incomplete and resumes later.
 RECENT_ML_MAX_DATE_FETCHES = max(1, int(os.getenv("RECENT_ML_MAX_DATE_FETCHES", "200")))
 RECENT_FB_DETAIL_SECONDS = max(0, float(os.getenv("RECENT_FB_DETAIL_SECONDS", "30")))
+# Facebook item pages read for their date in one scan (30 s apart, so ~15 min);
+# past it the scan is incomplete and the retry resumes from the dates already read.
+RECENT_FB_MAX_DATE_FETCHES = max(1, int(os.getenv("RECENT_FB_MAX_DATE_FETCHES", "30")))
 # Enrichment of matched listings (sección 5.5) and the watchlist refresher
 # (sección 5.6) wake up this often; each listing is checked at most daily.
 ENRICH_TICK_SECONDS = int(os.getenv("ENRICH_TICK_SECONDS", "300"))

@@ -20,6 +20,7 @@ import httpx
 
 from aio import run
 from collectors._recency import POLICY_VERSION, SOURCES as RECENT_SOURCES
+from collectors.facebook import DATE_FETCH_LIMIT as FB_DATE_FETCH_LIMIT
 from collectors.mercadolibre import DATE_FETCH_LIMIT
 import config
 import db
@@ -96,11 +97,12 @@ def safe_error(error: str | None) -> str:
 def first_load(row: dict, now: datetime) -> bool:
     """A new Mercado Libre target dating its first 30 days, 200 ads per scan
     (config.RECENT_ML_MAX_DATE_FETCHES): each scan ends incomplete, so failed,
-    while it stores what it read (target 445406, incident f9a58b7f). Past
+    while it stores what it read (target 445406, incident f9a58b7f). Facebook
+    does the same 30 item pages at a time (config.RECENT_FB_MAX_DATE_FETCHES). Past
     FIRST_LOAD_GRACE it alerts like any failure. The last finished run
     decides: the next scan is often running."""
     return (row.get('first_run_done') is False and row['statuses'][:1] == ['failed']
-            and last_error_line(row.get('last_error')) == DATE_FETCH_LIMIT
+            and last_error_line(row.get('last_error')) in (DATE_FETCH_LIMIT, FB_DATE_FETCH_LIMIT)
             and now - row['created_at'] < FIRST_LOAD_GRACE)
 
 
