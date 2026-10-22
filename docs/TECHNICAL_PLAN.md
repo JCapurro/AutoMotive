@@ -348,7 +348,7 @@ upsert (source, external_id):
 - `fingerprint = hash(make, model, year, round(km, -3), seller_name normalizado, location normalizada)`.
 - Cuando entra un listing nuevo: si existe otro con el mismo fingerprint en los últimos 60 días y su precio difiere menos de 10%, se completa `probable_repost_of`.
 - El match se genera igual, pero la alerta dice "re-publicado" y **no** cuenta como oportunidad nueva.
-- Se excluye de los comparables para no contar dos veces el mismo auto.
+- Se excluye de los comparables para no contar dos veces el mismo auto, mientras su original cuente (6.2).
 
 ### 5.5 Enrichment de la ficha
 
@@ -411,14 +411,25 @@ Todo este módulo es determinístico, puro y testeable. El LLM no participa.
 
 ### 6.2 Comparables y Price Intelligence (§19)
 
-Una función SQL `comparables(listing_id)` que usa `percentile_cont`:
+Una función SQL `comparables(listing_id)` que usa `percentile_cont` sobre el pool de `comparable_listings(listing_id)`:
 
 - misma marca y modelo;
 - año ±1;
 - km ±25%;
 - `last_seen_at` dentro de los últimos 30 días;
-- sin `price_partial`, sin `probable_repost_of` y sin el propio listing;
+- sin `price_partial` y sin el propio listing;
+- sin los avisos que una lectura completa posterior ya no vio (ver abajo);
+- un repost (`probable_repost_of`) cuenta solo si su original no cuenta, y nunca en el pool de su original;
+- los `gone` cuentan (decisión de Juan, 0f348a8), salvo que `gone_max_age_days` diga otra cosa;
 - todo en `price_usd`.
+
+**Avisos sin confirmar (comparables fase 1, migración 20261105120000):** `crawl_targets.last_run_at` solo avanza después de una corrida completa, y las fuentes sin fecha leen todo su stock dentro de la query del target en cada corrida. Por eso, si un target que cubre un aviso corrió más de `confirm_grace_hours` (36) después de que el aviso se vio por última vez, una lectura completa lo buscó y ya no lo vio: el aviso deja de contar.
+- Solo para las fuentes de `app_config.comparables.confirm_sources`: hoy autocity, carone, deruedas, gruporandazzo, mardelusados y rosariogarage. kavak (corta en 30 tarjetas), autocosmos (un 4xx da una corrida "ok" truncada) y usadossantafe (la carga del catálogo pierde un tercio del stock de vez en cuando) quedan afuera hasta que sus lecturas sean completas; Mercado Libre, Facebook y v6 también. Sin la clave, nada cambia.
+- Cubre el aviso un target de la misma fuente, sin carrocería, de inventario o de su marca y modelo, cuya query (± `year_band`) incluye su año y sus km. Un año o km desconocido no queda cubierto por una cota.
+- Si el crawler no corre, no se saca nada: sin una corrida posterior no hay evidencia.
+- `listing_unconfirmed(...)` devuelve los targets que lo prueban. `comparable_listings()` es el pool; `comparables()` lo inlinea y la web lo lee por `comparable_pool()` (security definer, para authenticated), así el score y la lista de autos parecidos de la ficha usan el mismo pool.
+- `gone_max_age_days` (sin setear): 0 saca los `gone`, N los deja N días desde que se vieron por última vez.
+- No da de baja nada: los fantasmas siguen en el feed (eso es F8, abajo). Rollback sin deploy: `value - 'confirm_sources'`.
 
 **Cascada de especificidad**: se usa el primer nivel que llega a `n ≥ app_config.comparables.min_n` (hoy 5):
 
@@ -916,6 +927,7 @@ F8 separa la captura de la demanda. Por fuente, se recorre el catálogo de usado
    - El matching pasa a hacerse **por aviso**: `process_batch` agrupa los ids por (make, model) del aviso y busca los perfiles de cada grupo (`alerts_for_model`), en vez de los perfiles del target.
    - El primer barrido de una fuente es silencioso (backfill), igual que el primer run de un target.
    - Baja por ausencia: un aviso activo que no aparece en 2 barridos completos seguidos de su fuente pasa a `gone`, con el evento `listing_gone` y la razón «no aparece en la fuente». Solo aplica a fuentes con barrido completo y solo si el barrido terminó sin errores.
+     - Nota (22/10/2026): para comparables ya se aplica sin dar de baja nada (6.2, `listing_unconfirmed()`). Esta baja visible queda como fase 3 de comparables: reusa ese predicado, no da de baja originales con un repost vivo y espera a que autocosmos, v6 y rosariogarage marquen sus lecturas truncadas como incompletas.
    - El enriquecimiento sigue según la demanda (matches y precios parciales). Barrer no implica pedir fichas.
 4. **Comparables:** con el mercado completo, revisar `min_n` y la ventana de `comparables` (hoy 30 días) y el nivel `model` frente a `trim`. Tiene que medirse, no suponerse: `admin_score_histogram` antes y después.
 5. **Backoffice y métricas:**
@@ -1047,7 +1059,7 @@ F8 separa la captura de la demanda. Por fuente, se recorre el catálogo de usado
 |---|---|---|
 | `score_weights` | `{price:35, match:25, km:15, trim:10, recency:10, completeness:5}` | — |
 | `level_thresholds` | `{high:85, good:70, match:50}` | `DEFAULT_DISCOUNT_PCT` (queda deprecado) |
-| `comparables` | `{min_n:5, year_tol:1, km_tol_pct:25, max_age_days:30}` | `OPPORTUNITY_MIN_COMPARABLES` |
+| `comparables` | `{min_n:5, year_tol:1, km_tol_pct:25, max_age_days:30, confirm_grace_hours:36, confirm_sources:[autocity, carone, deruedas, gruporandazzo, mardelusados, rosariogarage]}` (6.2) | `OPPORTUNITY_MIN_COMPARABLES` |
 | `recommended_max_age_days` | `15` | `RECOMMENDED_MAX_AGE_DAYS` |
 | `price_drop_min_pct` | `3` | — |
 | `alerts_max_per_user_day` | `10` | — |
