@@ -120,6 +120,21 @@ class CollectorTransportTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaisesRegex(CollectorBlocked, "login required"):
                 await ml.MercadoLibreScraper().fetch_detail_page("https://auto.mercadolibre.com.ar/MLA-1-x")
 
+    async def test_an_ad_saying_para_continuar_is_not_a_login_wall(self):
+        # MLA-3770582028 (22/10/2026): "lista para continuar en uso" in the description
+        # plus the header's "Ingresá" failed the Ford Ka scan as blocked.
+        url = "https://auto.mercadolibre.com.ar/MLA-3770582028-ford-ka-15-se-_JM"
+        html = (FIXTURES / "mercadolibre_detail_para_continuar.html").read_text(encoding="utf-8")
+        http = FakeHttp([(url, html, 200)])
+        with http.patch():
+            published = await ml.MercadoLibreScraper()._publication_date(ml.Listing(
+                source="mercadolibre", listing_id="MLA3770582028", titulo="Ford Ka 1.5 Se", url=url))
+        self.assertIsNotNone(published)
+
+        wall = (url, "<body>Ingresá. Hola! Para continuar, ingresá a tu cuenta.</body>", 200)
+        with FakeHttp([wall]).patch(), self.assertRaisesRegex(CollectorBlocked, "login required"):
+            await ml.MercadoLibreScraper().fetch_detail_page(url)
+
     async def test_gone_detail_survives_404_or_finished_text(self):
         url = "https://auto.mercadolibre.com.ar/MLA-1-x"
         for status, html in [(404, ""), (200, "<body>Publicación finalizada</body>")]:

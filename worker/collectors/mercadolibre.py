@@ -33,14 +33,18 @@ from ._http import Page, dedupe, fetch_page, json_ld_of_type, multiline_text, so
 
 log = logging.getLogger("collectors.mercadolibre")
 
+# The wall's own sentence ("Para continuar, ingresá a tu cuenta"): every
+# logged-out page has "Ingresá" in its header, and an ad's description can say
+# "para continuar" (MLA-3770582028, 22/10/2026), so the two words apart are no wall.
+_LOGIN_TEXT_RE = re.compile(r"para continuar,?\s+ingres[aá]")
+
 
 def _wall_reason(url: str, body_text: str = "") -> str | None:
     url_l = (url or "").lower()
     text_l = (body_text or "").lower()
     if "/captcha/" in url_l or ("por seguridad" in text_l and "complet" in text_l and "desaf" in text_l):
         return "security challenge"
-    if ("account-verification" in url_l or "/login" in url_l
-            or ("para continuar" in text_l and ("ingresa" in text_l or "ingresá" in text_l))):
+    if ("account-verification" in url_l or "/login" in url_l or _LOGIN_TEXT_RE.search(text_l)):
         return "login required"
     return None
 
