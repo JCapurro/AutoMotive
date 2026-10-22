@@ -68,3 +68,39 @@ class CrawlLeaseTests(IngestCase):
         self.assertEqual([(r['worker'], r['status']) for r in rows],
                          [(runs.worker_id(), 'running'), (f'{host}:999999999', 'failed'),
                           ('elsewhere:1', 'running'), (None, 'failed')])
+
+
+class OneLanePerSourceTests(IngestCase):
+    """Two workers never crawl the same source at once (one Facebook session)."""
+    SOURCES = ('mercadolibre',)
+
+    async def asyncSetUp(self):
+        await super().asyncSetUp()
+        await self.fiesta_alert()
+        await self.fiesta_alert(user=10002, modelos=['Focus'])
+        await self.tick()
+        async with db.connection() as cx:
+            await cx.execute("UPDATE crawl_targets SET next_run_at = NULL")
+        self.targets = [r['id'] for r in await self.rows(
+            "SELECT id FROM crawl_targets WHERE active AND source = 'mercadolibre' ORDER BY id")]
+
+    async def test_another_worker_waits_for_the_source(self):
+        self.assertEqual(len(self.targets), 2)
+        first = await targets.claim_next('mercadolibre', 'vps:1', 60)
+        self.assertIsNone(await targets.claim_next('mercadolibre', 'vps:2', 60))
+        await targets.finish_target(first['id'], ok=True, retry_seconds=0)
+        second = await targets.claim_next('mercadolibre', 'vps:2', 60)
+        self.assertNotEqual(second['id'], first['id'])
+
+    async def test_simultaneous_claims_give_the_source_to_one_worker(self):
+        import asyncio
+
+        got = await asyncio.gather(targets.claim_next('mercadolibre', 'vps:1', 60),
+                                   targets.claim_next('mercadolibre', 'vps:2', 60))
+        self.assertEqual(sum(1 for g in got if g is not None), 1)
+
+    async def test_an_expired_claim_does_not_hold_the_source(self):
+        await targets.claim_next('mercadolibre', 'vps:1', 60)
+        async with db.connection() as cx:
+            await cx.execute("UPDATE crawl_targets SET claimed_until = now() - interval '1 second'")
+        self.assertIsNotNone(await targets.claim_next('mercadolibre', 'vps:2', 60))

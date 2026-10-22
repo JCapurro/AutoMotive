@@ -21,7 +21,8 @@ Each source runs in its own lane (Lanes): the targets of one source run one
 after the other, with jitter, first runs first, and a source that is slow or
 hung never holds up the others. A lane claims each target before crawling it
 (targets.claim_next, a lease of LEASE_SECONDS), so crawl_targets is a queue
-that several workers can share and that heals itself when one dies. A
+that several workers can share and that heals itself when one dies; a source
+is crawled by one lane at a time across all of them. A
 collector search is cancelled after COLLECTOR_TIMEOUT_SECONDS; an ISOLATED
 collector (Facebook, Instagram) runs in a child process that is killed then
 (collectors/_isolated.py). The next run is scheduled after the source's
@@ -414,9 +415,8 @@ async def _run_source(targets: list[dict[str, Any]], on_batch: BatchHandler | No
 async def _drain(source: str, on_batch: BatchHandler | None, jitter_seconds: float,
                  stop: asyncio.Event | None, on_health: HealthHandler | None = None) -> int:
     """Claim and crawl `source`'s due targets one at a time, a first run
-    first, with jitter, until none is left. Returns how many it crawled. A
-    target whose crawl raised keeps its claim until the lease ends, then it
-    is due again."""
+    first, with jitter, until none is left or another worker is crawling the
+    source. Returns how many it crawled."""
     done = 0
     while (stop is None or not stop.is_set()) and not breaker.paused(source):
         target = await targets_repo.claim_next(source, runs.worker_id(), LEASE_SECONDS)
@@ -430,6 +430,11 @@ async def _drain(source: str, on_batch: BatchHandler | None, jitter_seconds: flo
             return done + 1
         except Exception:
             await runs.log_error("crawl", f"target:{target['id']}", traceback.format_exc())
+            # Free it: a held claim keeps the whole source waiting (claim_next).
+            try:
+                await targets_repo.finish_target(target["id"], ok=False, retry_seconds=retry_seconds(target))
+            except Exception:
+                log.exception("target=%s keeps its claim until the lease ends", target["id"])
         done += 1
     return done
 
@@ -454,7 +459,7 @@ class Lanes:
     source whose lane is still running is left alone until it ends, so a slow
     or hung source only delays itself, and new searches keep being crawled
     elsewhere. The claims (targets.claim_next) keep two lanes, of this worker
-    or another one, from ever crawling the same target."""
+    or another one, from ever crawling the same source at once."""
 
     def __init__(self) -> None:
         self._tasks: dict[str, asyncio.Task[int]] = {}

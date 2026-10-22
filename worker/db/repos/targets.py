@@ -120,12 +120,18 @@ async def due_targets() -> list[dict[str, Any]]:
 
 async def claim_next(source: str, worker: str, lease_seconds: int) -> dict[str, Any] | None:
     """Take `source`'s next due target for `worker` until now + lease_seconds,
-    a first run first; None when it has none. Another worker skips it (SKIP
-    LOCKED, then claimed_until) until finish_target or the lease ends."""
+    a first run first; None when it has none, or while another target of the
+    source is claimed: one crawl per source at a time across every worker
+    (one Facebook session, one rate limit). The source's advisory lock makes
+    the check and the claim one step, so two workers can't both pass it.
+    Another worker skips the target until finish_target or the lease ends."""
     async with connection() as cx:
+        await cx.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (f"crawl_source:{source}",))
         return await (await cx.execute(
             "WITH next AS (SELECT t.id FROM crawl_targets t JOIN sources s ON s.id = t.source "
             f"  WHERE t.source = %s AND {_DUE} "
+            "    AND NOT EXISTS (SELECT 1 FROM crawl_targets c WHERE c.source = t.source "
+            "                    AND c.claimed_until > now()) "
             "  ORDER BY t.first_run_done, t.next_run_at NULLS FIRST, t.id LIMIT 1 FOR UPDATE OF t SKIP LOCKED) "
             "UPDATE crawl_targets t SET claimed_by = %s, claimed_until = now() + make_interval(secs => %s) "
             "  FROM next, sources s WHERE t.id = next.id AND s.id = t.source "

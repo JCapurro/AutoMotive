@@ -327,3 +327,22 @@ class CrawlLoopLivenessTests(unittest.IsolatedAsyncioTestCase):
             with patch.object(scheduler, "_last_round", time.monotonic() - 10_000):
                 await main.beat_while_crawling(None)
             beat.assert_awaited_once()
+
+
+class DrainErrorTests(unittest.IsolatedAsyncioTestCase):
+    async def test_a_target_that_raised_frees_its_claim(self):
+        from unittest.mock import AsyncMock
+
+        queue = [_target(1, "kavak")]
+
+        async def claim_next(source, worker, lease_seconds):
+            return queue.pop(0) if queue else None
+
+        finish = AsyncMock()
+        with patch.object(crawl.targets_repo, "claim_next", claim_next), \
+                patch.object(crawl.targets_repo, "finish_target", finish), \
+                patch.object(crawl, "_run_one", AsyncMock(side_effect=RuntimeError("db"))), \
+                patch.object(crawl.runs, "log_error", AsyncMock()):
+            self.assertEqual(await crawl._drain("kavak", None, 0, None), 1)
+        finish.assert_awaited_once()
+        self.assertFalse(finish.await_args.kwargs["ok"])
