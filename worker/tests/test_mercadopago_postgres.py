@@ -20,6 +20,8 @@ class MercadoPagoTests(PostgresTestCase):
         await self.rows("UPDATE app_config SET value=jsonb_set(value,'{enforced}','true') WHERE key='plan_limits'")
         await self.rows("UPDATE app_config SET value='{\"enabled\":true}' WHERE key='commercial_pilot'")
         self.user = await self.account()
+        # The offer in force (pro_offer: 20261026120000_pro_price.sql moved Pro to its own version).
+        self.offer = (await self.rows("SELECT value FROM app_config WHERE key='pro_offer'"))[0]['value']
 
     async def asyncTearDown(self):
         await self.rows("UPDATE billing_checkouts SET status='cancelled'")
@@ -28,7 +30,8 @@ class MercadoPagoTests(PostgresTestCase):
         await super().asyncTearDown()
 
     async def checkout(self, offer='pass_30'):
-        return (await self.rows("SELECT begin_billing_checkout(%s,%s,'buyer@automotive.test','ars-launch-2026-10',%s) AS v", self.user, offer, 15000 if offer=='pass_30' else 75000))[0]['v']
+        return (await self.rows("SELECT begin_billing_checkout(%s,%s,'buyer@automotive.test',%s,%s) AS v", self.user, offer,
+                                self.offer['version'], self.offer[offer]['amount']))[0]['v']
 
     async def apply(self, checkout, ref='123', status='approved', amount=None, start="now()", end="now()+interval '30 days'"):
         return (await self.rows(f"SELECT apply_mercadopago_payment(%s,%s,%s,%s::numeric,'ARS',now(),{start},{end}) AS id", checkout['id'], ref, status, amount or checkout['amount']))[0]['id']
@@ -41,9 +44,10 @@ class MercadoPagoTests(PostgresTestCase):
         other = await self.account()
         self.assertEqual(await self.rows("SELECT * FROM billing_checkouts", actor=other), [])
         with self.assertRaisesRegex(Exception, 'permission denied'):
-            await self.rows("SELECT begin_billing_checkout(%s,'pass_30','buyer@automotive.test','ars-launch-2026-10',15000)", self.user, actor=self.user)
+            await self.rows("SELECT begin_billing_checkout(%s,'pass_30','buyer@automotive.test',%s,%s)", self.user,
+                            self.offer['version'], self.offer['pass_30']['amount'], actor=self.user)
         with self.assertRaisesRegex(Exception, 'offer_changed'):
-            await self.rows("SELECT begin_billing_checkout(%s,'pass_30','buyer@automotive.test','ars-launch-2026-10',1)", self.user)
+            await self.rows("SELECT begin_billing_checkout(%s,'pass_30','buyer@automotive.test',%s,1)", self.user, self.offer['version'])
         with self.assertRaisesRegex(Exception, 'permission denied'):
             await self.rows("UPDATE billing_checkouts SET status='paid' WHERE id=%s", checkout['id'], actor=self.user)
         with self.assertRaisesRegex(Exception, 'payment_mismatch'):
@@ -95,7 +99,8 @@ class MercadoPagoTests(PostgresTestCase):
     async def subscribe(self, ref, status='approved'):
         """A new account's Agencia subscription and its first Mercado Pago payment."""
         user = await self.account()
-        checkout = (await self.rows("SELECT begin_billing_checkout(%s,'pro_monthly',%s,'ars-launch-2026-10',75000) AS v", user, f"buyer{ref}@automotive.test"))[0]['v']
+        checkout = (await self.rows("SELECT begin_billing_checkout(%s,'pro_monthly',%s,%s,%s) AS v", user, f"buyer{ref}@automotive.test",
+                                    self.offer['version'], self.offer['pro_monthly']['amount']))[0]['v']
         await self.apply(checkout, ref=ref, status=status)
         return checkout
 
@@ -106,13 +111,15 @@ class MercadoPagoTests(PostgresTestCase):
         await self.rows("UPDATE app_config SET value=%s WHERE key='agency_founders'", Jsonb(value))
 
     async def test_the_first_agency_subscriptions_keep_their_price_for_six_months(self):
+        await self.founder_slots({"slots": 10, "months": 6})     # the launch's; 20261026120000 closed them
         first = await self.subscribe('901')
         row = await self.founder(first)
         self.assertEqual(row['founder_number'], 1)
         [paid] = await self.rows("SELECT paid_at + interval '6 months' AS until, amount FROM commercial_payments WHERE checkout_id=%s", first['id'])
         self.assertEqual(row['founder_price_until'], paid['until'])
         [event] = await self.rows("SELECT props FROM events WHERE name='agency_founder_marked' AND user_id=%s", row['user_id'])
-        self.assertEqual((event['props']['founder_number'], event['props']['amount']), (1, 75000))
+        self.assertEqual((event['props']['founder_number'], event['props']['amount']),
+                         (1, self.offer['pro_monthly']['amount']))
         # Later payments neither move the date nor take another slot.
         await self.apply(first, ref='902', start="now()-interval '30 days'", end="now()")
         self.assertEqual(await self.founder(first), row)

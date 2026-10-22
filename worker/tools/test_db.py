@@ -44,7 +44,9 @@ def script(public_tables: list[str]) -> str:
     return "\n".join([
         "set -euo pipefail",
         f'psql -U supabase_admin -d postgres -qc "drop database if exists {TEST_DB} with (force)"',
-        f'psql -U supabase_admin -d postgres -qc "create database {TEST_DB}"',
+        # Owned by postgres, the tests' user: schema public belongs to the
+        # database's owner, and a test re-runs a migration that creates tables.
+        f'psql -U supabase_admin -d postgres -qc "create database {TEST_DB} owner postgres"',
         "pg_dump -U supabase_admin -d postgres --no-publications --no-subscriptions "
         + " ".join(excluded) + f" | psql -U supabase_admin -d {TEST_DB} -q -v ON_ERROR_STOP=1 >/dev/null",
     ])
