@@ -47,7 +47,12 @@ async def sync_targets(specs: Iterable[Any]) -> None:
     wanted ones and deactivate the rest. Adopting a new publication policy resets
     bootstrap once and empties Facebook's date memory (its window goes back to
     30 days, collectors/_recency.py); ordinary query edits/reactivations keep
-    both. A count-only target that gets an active search is due at once."""
+    both. A count-only target that gets an active search is due at once.
+
+    Whatever else comes to reset first_run_done of a Facebook target must
+    empty prefilter_rejected in the same UPDATE: its date memory holds only
+    while the window's start never moves back, and a reset takes it back to
+    30 days."""
     specs = list(specs)
     async with connection() as cx:
         await cx.execute("CREATE TEMP TABLE wanted (source text, make text, model text, body_type text, "

@@ -100,9 +100,11 @@ de la anterior (`RECENT_FB_DETAIL_SECONDS`).
     `epoch`. Se vuelve a leer a los 30 minutos, a las 2 horas y a las 6 horas
     de `epoch`, y después de esos 3 intentos se saltea. Si alguna lectura lo
     fecha, entra si se publicó hasta 24 horas antes de `epoch` (la ventana en
-    la que se lo vio), aunque hoy quede antes del comienzo de la ventana. Esta
-    parte va detrás de `FB_DATE_MEMORY_UNKNOWN`, apagada hasta medir
-    `unknown_dates` en los logs.
+    la que se lo vio), aunque hoy quede antes del comienzo de la ventana. Un
+    aviso que quedó sin fecha durante un bootstrap y se fecha recién después,
+    con más de un día, no entra: en régimen se notificaría como nuevo. Esta
+    parte va detrás de `FB_DATE_MEMORY_UNKNOWN`, apagada: en las 48 horas al
+    22/10/2026 solo 15 fichas cargaron sin fecha en escaneos completos.
   - Una lectura que falló por excepción no se memoriza: se reintenta en el
     escaneo siguiente.
   - Un escaneo completo conserva solo los avisos que vio; uno incompleto
@@ -113,8 +115,9 @@ de la anterior (`RECENT_FB_DETAIL_SECONDS`).
   de bootstrap y los `count_only`, cada grupo por vencimiento. Un bootstrap
   largo ya no deja sin turno a los modelos en régimen.
 - **Logs.** Cada escaneo deja `facebook publication window: ... dates_read
-  skipped out_of_window unknown_dates ...`, y la línea `target=...` del worker
-  agrega `probe={...}`.
+  skipped out_of_window undated unknown_dates ...`, y la línea `target=...`
+  del worker agrega `probe={...}`. `undated` son las fichas que cargaron sin
+  fecha; `unknown_dates` suma además las tarjetas que el tope dejó sin leer.
 - **Sonda del feed (fase 2 pendiente).** Sin pedidos extra, el escaneo mira si
   los datos de la página de búsqueda (el JSON del HTML inicial y las
   respuestas `/api/graphql/` del scroll) traen un tiempo de creación por

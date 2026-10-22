@@ -756,7 +756,8 @@ class FacebookMarketplaceScraper(BaseScraper):
         remembering = "date_skips" in filters
         memory = {i: s for i, s in parse_date_skips(filters.get("date_skips")).items()
                   if s.epoch is None or config.FB_DATE_MEMORY_UNKNOWN}
-        stalls = scrolls = fetched = skipped = out_of_window = 0
+        # undated: pages read without a date (unknown_dates also counts the cards past the cap).
+        stalls = scrolls = fetched = skipped = out_of_window = undated = 0
         self._probe = probe = _FeedProbe()
         async with browser_context(storage_state=FB_STORAGE_STATE, native=True) as ctx:
             page = await ctx.new_page()
@@ -815,6 +816,7 @@ class FacebookMarketplaceScraper(BaseScraper):
                                 log.warning("Could not read publication date for %s: %s", ident, exc)
                         if listing.published_at is None:
                             results.unknown_dates += 1
+                            undated += read
                             if read and config.FB_DATE_MEMORY_UNKNOWN:
                                 memory[ident] = DateSkip.undated(remembered, window.until)
                             continue
@@ -856,8 +858,8 @@ class FacebookMarketplaceScraper(BaseScraper):
             results.date_skips = encode_date_skips(memory)
         results.probe = probe.report(known)
         log.info("facebook publication window: scrolls=%d kept=%d dates_read=%d skipped=%d out_of_window=%d "
-                 "unknown_dates=%d complete=%s reason=%s", scrolls, len(results), fetched, skipped,
-                 out_of_window, results.unknown_dates, results.complete, results.reason)
+                 "undated=%d unknown_dates=%d complete=%s reason=%s", scrolls, len(results), fetched, skipped,
+                 out_of_window, undated, results.unknown_dates, results.complete, results.reason)
         return results
 
     # 2: "Ver más" is expanded and the description stops before the page around it.

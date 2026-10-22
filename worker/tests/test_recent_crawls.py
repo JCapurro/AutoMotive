@@ -459,10 +459,13 @@ class FacebookWindowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(results.date_skips, [f"9@{NOW - 3600}#1"])          # as it was, read again next scan
 
     async def test_undated_ads_are_not_remembered_until_the_flag_is_on(self):
-        results, reads = await self.memory_scan(["8", "9"], {"8": None, "9": None},
-                                                date_skips=[f"9@{NOW - 600}#1", "7"])
-        self.assertEqual((reads, results.unknown_dates), (["8", "9"], 2))
-        self.assertEqual(results.date_skips, [])                              # "7" was not seen: forgotten
+        with self.assertLogs("collectors.facebook", "INFO") as logs:
+            results, reads = await self.memory_scan(["8", "9", "10"], {"8": None, "9": None},
+                                                    cap=2, date_skips=[f"9@{NOW - 600}#1", "7"])
+        self.assertEqual((reads, results.unknown_dates), (["8", "9"], 3))
+        # The page reads without a date, apart from the card the cap left unread (FB_DATE_MEMORY_UNKNOWN's measure).
+        self.assertIn("undated=2 unknown_dates=3", logs.output[-1])
+        self.assertEqual(results.date_skips, ["7"])           # no undated entry; a partial scan keeps the rest
         without, _ = await self.memory_scan(["8"], {"8": None})
         self.assertIsNone(without.date_skips)                                 # no memory asked: none kept
 
