@@ -19,8 +19,12 @@ nobody else searches gets a `count_only` target crawled once a day.
 
 Each source runs in its own lane (Lanes): the targets of one source run one
 after the other, with jitter, first runs first, and a source that is slow or
-hung never holds up the others; a collector search is cancelled after
-COLLECTOR_TIMEOUT_SECONDS. The next run is scheduled after the source's
+hung never holds up the others. A lane claims each target before crawling it
+(targets.claim_next, a lease of LEASE_SECONDS), so crawl_targets is a queue
+that several workers can share and that heals itself when one dies. A
+collector search is cancelled after COLLECTOR_TIMEOUT_SECONDS; an ISOLATED
+collector (Facebook, Instagram) runs in a child process that is killed then
+(collectors/_isolated.py). The next run is scheduled after the source's
 interval. For recent publications, last_run_at records the successful scan's
 start to preserve coverage.
 """
@@ -36,6 +40,7 @@ from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable
 
 from collectors import REGISTRY, Listing
+from collectors._isolated import call as isolated_call, isolated
 from collectors._loop import run_collector
 from config import COLLECTOR_TIMEOUT_SECONDS
 from collectors._recency import POLICY_VERSION, SOURCES as RECENT_SOURCES, target_window
@@ -52,6 +57,10 @@ from pipeline.ingest import IngestResult, ingest
 
 log = logging.getLogger("crawl")
 
+# How long a lane holds the target it claimed (targets.claim_next): its
+# search's timeout plus time for the batch. A worker that dies mid-run frees
+# it when this runs out.
+LEASE_SECONDS = COLLECTOR_TIMEOUT_SECONDS + 900
 # A failed target retries after its interval, but never later than this.
 FAILURE_RETRY_SECONDS = 900
 # A failed count-only target (2.5) waits longer: nobody waits for it, and a
@@ -280,7 +289,10 @@ async def run_target(target: dict[str, Any], on_health: HealthHandler | None = N
         filters = scraper_filters(target)
         if source in RECENT_SOURCES:
             filters["known_publication_dates"] = await targets_repo.publication_dates(target)
-        items = await run_collector(scraper.search(filters), timeout=COLLECTOR_TIMEOUT_SECONDS)
+        if isolated(scraper):
+            items = await run_collector(isolated_call(scraper, "search", filters, timeout=COLLECTOR_TIMEOUT_SECONDS))
+        else:
+            items = await run_collector(scraper.search(filters), timeout=COLLECTOR_TIMEOUT_SECONDS)
     except Exception as exc:
         log.warning("target=%s %s %s failed: %s", target["id"], source, _label(target), exc)
         health = await runs.finish_run(run_id, ok=False, error=traceback.format_exc())
@@ -354,78 +366,97 @@ async def _report(on_health: HealthHandler | None, health: SourceHealth | None) 
         log.exception("source health handler failed")
 
 
+async def _run_one(target: dict[str, Any], on_batch: BatchHandler | None,
+                   on_health: HealthHandler | None = None) -> None:
+    """Crawl one target, handle its batch and schedule its next run (which
+    also frees its claim)."""
+    run = await run_target(target, on_health)
+    if run is None:
+        return
+    if on_batch is not None:
+        try:
+            await on_batch(run)
+        except Exception:
+            await runs.log_error("notify", f"target:{target['id']}", traceback.format_exc())
+            await targets_repo.finish_target(target["id"], ok=False, retry_seconds=retry_seconds(target))
+            return
+    # Only now is the first run over: its batch was handled as backfill.
+    await targets_repo.finish_target(target["id"], ok=run.complete,
+                                    retry_seconds=0 if run.complete else retry_seconds(target),
+                                    covered_until=run.covered_until)
+
+
 async def _run_source(targets: list[dict[str, Any]], on_batch: BatchHandler | None,
                       jitter_seconds: float, stop: asyncio.Event | None,
                       on_health: HealthHandler | None = None) -> None:
+    """These targets one after the other, with jitter, without claiming them."""
     for i, target in enumerate(targets):
         if stop is not None and stop.is_set():
             return
         if i and jitter_seconds > 0:
             await asyncio.sleep(random.uniform(jitter_seconds / 2, jitter_seconds))
-        run = await run_target(target, on_health)
-        if run is None:
-            continue
-        if on_batch is not None:
-            try:
-                await on_batch(run)
-            except Exception:
-                await runs.log_error("notify", f"target:{target['id']}", traceback.format_exc())
-                await targets_repo.finish_target(target["id"], ok=False, retry_seconds=retry_seconds(target))
-                continue
-        # Only now is the first run over: its batch was handled as backfill.
-        await targets_repo.finish_target(target["id"], ok=run.complete,
-                                        retry_seconds=0 if run.complete else retry_seconds(target),
-                                        covered_until=run.covered_until)
+        await _run_one(target, on_batch, on_health)
 
 
-def _by_source(due: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
-    """Due targets per source with a collector, a target's first run first:
-    a new search shouldn't wait behind its source's routine runs."""
-    by_source: dict[str, list[dict[str, Any]]] = {}
-    for t in due:
-        if t["source"] in REGISTRY:
-            by_source.setdefault(t["source"], []).append(t)
-    return {s: sorted(ts, key=lambda t: bool(t["first_run_done"])) for s, ts in by_source.items()}
+async def _drain(source: str, on_batch: BatchHandler | None, jitter_seconds: float,
+                 stop: asyncio.Event | None, on_health: HealthHandler | None = None) -> int:
+    """Claim and crawl `source`'s due targets one at a time, a first run
+    first, with jitter, until none is left. Returns how many it crawled. A
+    target whose crawl raised keeps its claim until the lease ends, then it
+    is due again."""
+    done = 0
+    while stop is None or not stop.is_set():
+        target = await targets_repo.claim_next(source, runs.worker_id(), LEASE_SECONDS)
+        if target is None:
+            break
+        if done and jitter_seconds > 0:
+            await asyncio.sleep(random.uniform(jitter_seconds / 2, jitter_seconds))
+        try:
+            await _run_one(target, on_batch, on_health)
+        except Exception:
+            await runs.log_error("crawl", f"target:{target['id']}", traceback.format_exc())
+        done += 1
+    return done
+
+
+def _due_sources(due: list[dict[str, Any]]) -> list[str]:
+    """The sources with a collector among these due targets, in their order."""
+    return list(dict.fromkeys(t["source"] for t in due if t["source"] in REGISTRY))
 
 
 async def crawl_due(on_batch: BatchHandler | None = None, *, jitter_seconds: float = 5.0,
                     stop: asyncio.Event | None = None, on_health: HealthHandler | None = None) -> int:
-    """Run every due target and wait for all of them: sources in parallel,
+    """Crawl every due target and wait for all of them: sources in parallel,
     targets of a source in series (tests and tools; the worker uses Lanes).
-    Returns how many targets were due."""
-    due = await targets_repo.due_targets()
-    by_source = _by_source(due)
-    if by_source:
-        await asyncio.gather(*(_run_source(ts, on_batch, jitter_seconds, stop, on_health)
-                               for ts in by_source.values()))
-    return len(due)
+    Returns how many targets were crawled."""
+    sources = _due_sources(await targets_repo.due_targets())
+    done = await asyncio.gather(*(_drain(s, on_batch, jitter_seconds, stop, on_health) for s in sources))
+    return sum(done)
 
 
 class Lanes:
-    """One crawl task per source, started without waiting for it. A source
-    whose lane is still running is left alone until it ends, so a slow or hung
-    source only delays itself, and new searches keep being crawled elsewhere."""
+    """One crawl task per source (_drain), started without waiting for it. A
+    source whose lane is still running is left alone until it ends, so a slow
+    or hung source only delays itself, and new searches keep being crawled
+    elsewhere. The claims (targets.claim_next) keep two lanes, of this worker
+    or another one, from ever crawling the same target."""
 
     def __init__(self) -> None:
-        self._tasks: dict[str, asyncio.Task[None]] = {}
+        self._tasks: dict[str, asyncio.Task[int]] = {}
 
     def running(self) -> set[str]:
         return {s for s, t in self._tasks.items() if not t.done()}
 
     async def start_due(self, on_batch: BatchHandler | None = None, *, jitter_seconds: float = 5.0,
-                        stop: asyncio.Event | None = None, on_health: HealthHandler | None = None) -> int:
-        """Start a lane for every idle source with due targets. Returns how
-        many targets those lanes took."""
+                        stop: asyncio.Event | None = None, on_health: HealthHandler | None = None) -> list[str]:
+        """Start a lane for every idle source with due targets. Returns those sources."""
         busy = self.running()
-        started = 0
-        for source, targets in _by_source(await targets_repo.due_targets()).items():
-            if source in busy:
-                continue
-            task = asyncio.create_task(_run_source(targets, on_batch, jitter_seconds, stop, on_health),
+        started = [s for s in _due_sources(await targets_repo.due_targets()) if s not in busy]
+        for source in started:
+            task = asyncio.create_task(_drain(source, on_batch, jitter_seconds, stop, on_health),
                                        name=f"lane:{source}")
             task.add_done_callback(_lane_done)
             self._tasks[source] = task
-            started += len(targets)
         return started
 
     async def close(self) -> None:
@@ -437,7 +468,7 @@ class Lanes:
         self._tasks.clear()
 
 
-def _lane_done(task: asyncio.Task[None]) -> None:
+def _lane_done(task: asyncio.Task[int]) -> None:
     if not task.cancelled() and task.exception() is not None:
         log.error("%s failed", task.get_name(), exc_info=task.exception())
 

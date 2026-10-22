@@ -2,6 +2,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import signal
+import socket
 
 from telegram.ext import Application
 
@@ -19,7 +20,8 @@ from notifications.links import Links
 from notifications.ops import SourceAlerts
 from notifications.service import Notifier
 from notifications.lifecycle import run_lifecycle_emails
-from db.repos.runs import fail_orphan_runs
+from db.repos import targets as targets_repo
+from db.repos.runs import dead_workers, fail_orphan_runs
 from pipeline import heartbeat
 from pipeline.enrich import enrich_pass
 from pipeline.llm_jobs import llm_jobs_loop
@@ -126,10 +128,13 @@ async def amain() -> None:
     started_at = heartbeat.started_now()
     try:
         orphans = await fail_orphan_runs(started_at)
-        if orphans:
-            log.warning("%d collector runs left running by the previous worker marked failed", orphans)
+        host = socket.gethostname()
+        freed = await targets_repo.release_claims(dead_workers(await targets_repo.claim_holders(host), host))
+        if orphans or freed:
+            log.warning("previous worker on this host: %d runs left running marked failed, %d targets freed",
+                        orphans, freed)
     except Exception:
-        log.exception("could not close the previous worker's runs")
+        log.exception("could not clean up after the previous worker")
     tasks = [
         asyncio.create_task(_every("heartbeat", HEARTBEAT_SECONDS,
                                    lambda _stop: heartbeat.beat(started_at), stop)),

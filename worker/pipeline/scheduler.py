@@ -251,8 +251,8 @@ async def tick(notifier: Notifier, lanes: crawl.Lanes, stop: asyncio.Event | Non
     started = await lanes.start_due(batch_handler(notifier), jitter_seconds=CRAWL_JITTER_SECONDS, stop=stop,
                                     on_health=on_health)
     if started:
-        log.info("crawl tick: %d due targets started, lanes running: %s", started,
-                 ", ".join(sorted(lanes.running())) or "-")
+        log.info("crawl tick: lanes started: %s; running: %s", ", ".join(started),
+                 ", ".join(sorted(lanes.running())))
 
 
 async def run_loop(notifier: Notifier, stop_event: asyncio.Event,

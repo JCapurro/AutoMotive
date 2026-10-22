@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import logging
+import os
+import socket
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -13,11 +15,40 @@ log = logging.getLogger("runs")
 _MAX_ERROR = 4_000
 
 
+def worker_id() -> str:
+    """This process as "host:pid": who holds a crawl target's claim and ran a run."""
+    return f"{socket.gethostname()}:{os.getpid()}"
+
+
+def pid_alive(pid: int) -> bool:
+    """Whether a process with this pid runs on this host. On Windows (the old
+    PC worker) any other pid counts as gone: os.kill(pid, 0) sends Ctrl+C there."""
+    if os.name == "nt":
+        return pid == os.getpid()
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def dead_workers(workers: list[str], host: str) -> list[str]:
+    """The `workers` ("host:pid") of `host` whose process is gone."""
+    dead = []
+    for w in workers:
+        h, _, pid = w.rpartition(":")
+        if h == host and pid.isdigit() and not pid_alive(int(pid)):
+            dead.append(w)
+    return dead
+
+
 async def start_run(source: str, target_id: int | None) -> int:
     async with connection() as cx:
         row = await (await cx.execute(
-            "INSERT INTO collector_runs (source, target_id) VALUES (%s, %s) RETURNING id",
-            (source, target_id))).fetchone()
+            "INSERT INTO collector_runs (source, target_id, worker) VALUES (%s, %s, %s) RETURNING id",
+            (source, target_id, worker_id()))).fetchone()
     return row["id"]
 
 
@@ -64,14 +95,21 @@ async def finish_run(run_id: int, *, ok: bool, found: int | None = None, new: in
 
 
 async def fail_orphan_runs(started_before: datetime) -> int:
-    """Close the runs a previous worker left 'running' (it died or was
-    restarted mid-run): only the worker crawls, so at its start none of those
-    is alive. The source's failure streak is left alone. Returns how many."""
+    """Close the runs a dead worker of this host left 'running' (it died or
+    was restarted mid-run), and those from before runs had a worker. Another
+    host's runs are its own. The source's failure streak is left alone.
+    Returns how many."""
+    host = socket.gethostname()
     async with connection() as cx:
+        rows = await (await cx.execute(
+            "SELECT DISTINCT worker FROM collector_runs WHERE status = 'running' "
+            "  AND split_part(worker, ':', 1) = %s", (host,))).fetchall()
+        dead = dead_workers([r["worker"] for r in rows], host)
         cur = await cx.execute(
             "UPDATE collector_runs SET status = 'failed', finished_at = now(), "
-            "  error = 'worker restarted mid-run' WHERE status = 'running' AND started_at < %s",
-            (started_before,))
+            "  error = 'worker restarted mid-run' WHERE status = 'running' "
+            "  AND (worker = ANY(%s) OR (worker IS NULL AND started_at < %s))",
+            (dead, started_before))
         return cur.rowcount
 
 

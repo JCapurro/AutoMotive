@@ -100,6 +100,9 @@ class BaseScraper:
     # Body-type codes this collector can search without a make or model
     # (search() gets filters["carroceria"] and no "marca"/"modelo").
     BODY_TYPES: frozenset[str] = frozenset()
+    # search() and fetch_detail_page() run in a child process that is killed
+    # past its timeout (collectors/_isolated.py): the logged-in browser ones.
+    ISOLATED: bool = False
 
     async def search(self, filters: dict) -> list[Listing]:
         raise NotImplementedError

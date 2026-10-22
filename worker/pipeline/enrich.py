@@ -33,6 +33,7 @@ from typing import Any, Awaitable, Callable
 import config
 import db
 from collectors import REGISTRY, Listing, ListingDetail
+from collectors._isolated import call as isolated_call, isolated
 from collectors._loop import run_collector
 from db.repos import listings as repo
 from db.repos import raw_pages
@@ -116,7 +117,11 @@ async def refresh_listing(row: dict[str, Any], *, stage: str,
     """
     scraper = REGISTRY[row["source"]]()
     try:
-        page = await run_collector(scraper.fetch_detail_page(row["url"]), timeout=config.DETAIL_TIMEOUT_SECONDS)
+        if isolated(scraper):
+            page = await run_collector(isolated_call(scraper, "fetch_detail_page", row["url"],
+                                                     timeout=config.DETAIL_TIMEOUT_SECONDS))
+        else:
+            page = await run_collector(scraper.fetch_detail_page(row["url"]), timeout=config.DETAIL_TIMEOUT_SECONDS)
     except Exception:
         await log_error(stage, f"listing:{row['id']}", traceback.format_exc())
         await repo.mark_detail_checked([row["id"]])

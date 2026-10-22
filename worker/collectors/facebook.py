@@ -42,6 +42,14 @@ _KM_RE = re.compile(r"(\d[\d\.\,]*)\s*(mil\s+)?km", re.IGNORECASE)
 _YEAR_RE = re.compile(r"\b(19[8-9]\d|20[0-3]\d)\b")
 log = logging.getLogger("collectors.facebook")
 
+# Dates read from item pages, by id, for the worker's lifetime: a card shows no
+# age, so a first run reads every page, 30 s apart. Past
+# RECENT_FB_MAX_DATE_FETCHES the scan ends incomplete and the retry resumes
+# from here (Ford Ka and Toyota Yaris in Buenos Aires, 2026-10-21, ran for
+# over an hour each until a deploy restart threw the whole scan away).
+_dates: dict[str, int | None] = {}
+DATE_FETCH_LIMIT = "facebook: date fetch limit reached"
+
 
 # Common AR cities → FB Marketplace location slugs. Each one checked on the VPS
 # (2026-10-20): an unknown slug ("santafe", "bahiablanca", "resistencia",
@@ -413,6 +421,7 @@ def parse_detail(html: str, url: str, status: int = 200) -> ListingDetail:
 
 class FacebookMarketplaceScraper(BaseScraper):
     name = "facebook"
+    ISOLATED = True
 
     def _build_url(self, f: dict) -> str:
         slug = _city_slug(f.get("ubicacion")) if f.get("ubicacion") else _city_slug_from_origin(f)
@@ -524,7 +533,7 @@ class FacebookMarketplaceScraper(BaseScraper):
         results = SearchResults()
         seen: set[str] = set()
         known = filters.get("known_publication_dates") or {}
-        stalls = scrolls = 0
+        stalls = scrolls = fetched = 0
         async with browser_context(storage_state=FB_STORAGE_STATE, native=True) as ctx:
             page = await ctx.new_page()
             try:
@@ -557,11 +566,14 @@ class FacebookMarketplaceScraper(BaseScraper):
                         if not self.matches_filters(listing, filters):
                             continue
                         if listing.published_at is None:
-                            listing.published_at = known.get(listing.listing_id)
-                        if listing.published_at is None:
+                            listing.published_at = known.get(listing.listing_id, _dates.get(listing.listing_id))
+                        if listing.published_at is None and fetched >= config.RECENT_FB_MAX_DATE_FETCHES:
+                            results.complete, results.reason = False, DATE_FETCH_LIMIT
+                        elif listing.published_at is None:
+                            fetched += 1
                             await asyncio.sleep(config.RECENT_FB_DETAIL_SECONDS)
                             try:
-                                listing.published_at = await self._publication_date(ctx, listing)
+                                listing.published_at = _dates[listing.listing_id] =                                     await self._publication_date(ctx, listing)
                             except CollectorBlocked:
                                 raise
                             except Exception as exc:
@@ -571,6 +583,8 @@ class FacebookMarketplaceScraper(BaseScraper):
                             results.unknown_dates += 1
                         elif window.contains(listing):
                             results.append(listing)
+                    if results.reason == DATE_FETCH_LIMIT:
+                        break
                     stalls = stalls + 1 if len(seen) == before else 0
                     if stalls >= 3:
                         body = _plain(await page.locator("body").inner_text())

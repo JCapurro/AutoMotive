@@ -95,21 +95,63 @@ async def publication_dates(target: dict[str, Any]) -> dict[str, int]:
     return {r["external_id"]: int(r["published_at"].timestamp()) for r in rows}
 
 
+# A due target (t, joined to its source s): active, of an enabled source,
+# next_run_at come (or never ran), for a search with access (a count-only
+# target was derived this tick from the searches 2.5 counts), and not held by
+# a worker (claim_next).
+_DUE = (
+    " t.active AND s.enabled AND (t.next_run_at IS NULL OR t.next_run_at <= now()) "
+    " AND (t.claimed_until IS NULL OR t.claimed_until < now()) "
+    " AND (t.query->>'count_only' = 'true' "
+    "  OR EXISTS (SELECT 1 FROM search_profiles sp WHERE public.search_access_active(sp.id) "
+    f"   AND {PROFILE_WANTS_TARGET})) ")
+_TARGET_COLUMNS = ("t.id, t.source, t.make, t.model, t.body_type, t.query, t.first_run_done, "
+                   "t.prefilter_rejected, t.last_run_at, "
+                   f"{INTERVAL_SECONDS} AS crawl_interval_seconds")
+
+
 async def due_targets() -> list[dict[str, Any]]:
-    """Active targets of enabled sources whose next_run_at has come (or never ran),
-    for a search with access; a count-only target was derived this tick from
-    the searches 2.5 counts. crawl_interval_seconds is the target's cadence."""
+    """The due targets (_DUE). crawl_interval_seconds is the target's cadence."""
     async with connection() as cx:
         return await (await cx.execute(
-            "SELECT t.id, t.source, t.make, t.model, t.body_type, t.query, t.first_run_done, "
-            "      t.prefilter_rejected, "
-            f"      t.last_run_at, {INTERVAL_SECONDS} AS crawl_interval_seconds "
-            "  FROM crawl_targets t JOIN sources s ON s.id = t.source "
-            " WHERE t.active AND s.enabled AND (t.next_run_at IS NULL OR t.next_run_at <= now()) "
-            "   AND (t.query->>'count_only' = 'true' "
-            "    OR EXISTS (SELECT 1 FROM search_profiles sp WHERE public.search_access_active(sp.id) "
-            f"     AND {PROFILE_WANTS_TARGET})) "
-            " ORDER BY s.priority, t.next_run_at NULLS FIRST, t.id")).fetchall()
+            f"SELECT {_TARGET_COLUMNS} FROM crawl_targets t JOIN sources s ON s.id = t.source "
+            f" WHERE {_DUE} ORDER BY s.priority, t.next_run_at NULLS FIRST, t.id")).fetchall()
+
+
+async def claim_next(source: str, worker: str, lease_seconds: int) -> dict[str, Any] | None:
+    """Take `source`'s next due target for `worker` until now + lease_seconds,
+    a first run first; None when it has none. Another worker skips it (SKIP
+    LOCKED, then claimed_until) until finish_target or the lease ends."""
+    async with connection() as cx:
+        return await (await cx.execute(
+            "WITH next AS (SELECT t.id FROM crawl_targets t JOIN sources s ON s.id = t.source "
+            f"  WHERE t.source = %s AND {_DUE} "
+            "  ORDER BY t.first_run_done, t.next_run_at NULLS FIRST, t.id LIMIT 1 FOR UPDATE OF t SKIP LOCKED) "
+            "UPDATE crawl_targets t SET claimed_by = %s, claimed_until = now() + make_interval(secs => %s) "
+            "  FROM next, sources s WHERE t.id = next.id AND s.id = t.source "
+            f"RETURNING {_TARGET_COLUMNS}",
+            (source, worker, lease_seconds))).fetchone()
+
+
+async def claim_holders(host: str) -> list[str]:
+    """The workers ("host:pid") of `host` holding a claim, expired or not."""
+    async with connection() as cx:
+        rows = await (await cx.execute(
+            "SELECT DISTINCT claimed_by FROM crawl_targets WHERE split_part(claimed_by, ':', 1) = %s",
+            (host,))).fetchall()
+    return [r["claimed_by"] for r in rows]
+
+
+async def release_claims(workers: Iterable[str]) -> int:
+    """Free the targets those (dead) workers held. Returns how many."""
+    workers = sorted(set(workers))
+    if not workers:
+        return 0
+    async with connection() as cx:
+        cur = await cx.execute(
+            "UPDATE crawl_targets SET claimed_by = NULL, claimed_until = NULL WHERE claimed_by = ANY(%s)",
+            (workers,))
+        return cur.rowcount
 
 
 async def set_prefilter_rejected(target_id: int, external_ids: Iterable[str]) -> None:
@@ -129,11 +171,13 @@ async def finish_target(target_id: int, *, ok: bool, retry_seconds: int,
         if ok:
             await cx.execute(
                 "UPDATE crawl_targets t SET last_run_at = coalesce(%s::timestamptz, now()), first_run_done = true, "
+                "  claimed_by = NULL, claimed_until = NULL, "
                 "  next_run_at = now() + make_interval(secs => CASE WHEN t.query->>'count_only' = 'true' "
                 f"    THEN greatest(s.crawl_interval_seconds, %s) ELSE {INTERVAL_SECONDS} END) "
                 "  FROM sources s WHERE s.id = t.source AND t.id = %s",
                 (covered_until, COUNT_ONLY_INTERVAL_SECONDS, target_id))
         else:
             await cx.execute(
-                "UPDATE crawl_targets SET next_run_at = now() + make_interval(secs => %s) "
+                "UPDATE crawl_targets SET next_run_at = now() + make_interval(secs => %s), "
+                "  claimed_by = NULL, claimed_until = NULL "
                 " WHERE id = %s", (retry_seconds, target_id))

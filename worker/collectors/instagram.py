@@ -165,6 +165,7 @@ class InstagramIdentityError(RuntimeError):
 
 class InstagramScraper(BaseScraper):
     INVENTORY_TARGET = True
+    ISOLATED = True
     DETAIL_PARSER_VERSION = 1
     account = ""
     MAX_SCROLLS = 6

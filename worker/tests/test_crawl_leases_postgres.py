@@ -1,0 +1,70 @@
+"""crawl_targets as a queue: a claimed target is crawled by one worker at a
+time, and what a dead worker held comes back on its own (lease) or at the next
+start of a worker on its host."""
+from datetime import datetime, timedelta, timezone
+
+import pytest
+
+import db
+from db.repos import runs, targets
+from pgcase import requires_db
+from test_ingest_postgres import IngestCase
+
+pytestmark = [pytest.mark.db, requires_db]
+
+
+class CrawlLeaseTests(IngestCase):
+    SOURCES = ('mercadolibre',)
+
+    async def asyncSetUp(self):
+        await super().asyncSetUp()
+        await self.fiesta_alert()
+        await self.tick()                                   # creates the target and runs it once
+        async with db.connection() as cx:
+            await cx.execute("UPDATE crawl_targets SET next_run_at = NULL")
+        [self.target] = await self.rows("SELECT id FROM crawl_targets WHERE active")
+
+    async def test_a_claimed_target_goes_to_one_worker(self):
+        first = await targets.claim_next('mercadolibre', 'vps:1', 60)
+        self.assertEqual(first['id'], self.target['id'])
+        self.assertGreater(first['crawl_interval_seconds'], 0)
+        self.assertIsNone(await targets.claim_next('mercadolibre', 'vps:2', 60))
+        self.assertEqual(await targets.due_targets(), [])
+
+    async def test_finishing_frees_the_claim(self):
+        await targets.claim_next('mercadolibre', 'vps:1', 60)
+        await targets.finish_target(self.target['id'], ok=False, retry_seconds=0)
+        [row] = await self.rows("SELECT claimed_by, claimed_until FROM crawl_targets WHERE id = %s",
+                                self.target['id'])
+        self.assertEqual((row['claimed_by'], row['claimed_until']), (None, None))
+        self.assertIsNotNone(await targets.claim_next('mercadolibre', 'vps:2', 60))
+
+    async def test_an_expired_lease_is_due_again(self):
+        await targets.claim_next('mercadolibre', 'vps:1', 60)
+        async with db.connection() as cx:
+            await cx.execute("UPDATE crawl_targets SET claimed_until = now() - interval '1 second'")
+        again = await targets.claim_next('mercadolibre', 'vps:2', 60)
+        self.assertEqual(again['id'], self.target['id'])
+
+    async def test_a_dead_workers_claims_are_released(self):
+        await targets.claim_next('mercadolibre', 'vps:1', 3600)
+        self.assertEqual(await targets.claim_holders('vps'), ['vps:1'])
+        self.assertEqual(await targets.claim_holders('other'), [])
+        self.assertEqual(await targets.release_claims(['vps:1']), 1)
+        self.assertIsNotNone(await targets.claim_next('mercadolibre', 'vps:2', 60))
+
+    async def test_runs_record_their_worker_and_only_dead_ones_are_failed(self):
+        [run] = await self.rows("SELECT worker FROM collector_runs")
+        self.assertEqual(run['worker'], runs.worker_id())
+        host = runs.worker_id().rpartition(':')[0]
+        async with db.connection() as cx:
+            await cx.execute(
+                "INSERT INTO collector_runs (source, target_id, worker) VALUES "
+                "('mercadolibre', %(t)s, %(alive)s), ('mercadolibre', %(t)s, %(dead)s), "
+                "('mercadolibre', %(t)s, 'elsewhere:1'), ('mercadolibre', %(t)s, NULL)",
+                {'t': self.target['id'], 'alive': runs.worker_id(), 'dead': f'{host}:999999999'})
+        self.assertEqual(await runs.fail_orphan_runs(datetime.now(timezone.utc) + timedelta(seconds=5)), 2)
+        rows = await self.rows("SELECT worker, status FROM collector_runs WHERE status <> 'ok' ORDER BY id")
+        self.assertEqual([(r['worker'], r['status']) for r in rows],
+                         [(runs.worker_id(), 'running'), (f'{host}:999999999', 'failed'),
+                          ('elsewhere:1', 'running'), (None, 'failed')])
