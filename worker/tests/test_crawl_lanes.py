@@ -200,3 +200,130 @@ class IsolatedCollectorTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(isolated(REGISTRY["facebook"]()))
         self.assertFalse(isolated(REGISTRY["kavak"]()))
         self.assertFalse(isolated(MagicMock()))
+
+
+class SourceBreakerTests(unittest.IsolatedAsyncioTestCase):
+    """A source that blocks us is paused instead of failing target by target."""
+
+    async def asyncSetUp(self):
+        from pipeline import breaker
+
+        breaker.clear()
+        self.addCleanup(breaker.clear)
+        self.due = [_target(1, "facebook"), _target(2, "facebook"), _target(3, "kavak")]
+        self.ran: list[int] = []
+
+        async def due_targets():
+            return list(self.due)
+
+        async def claim_next(source, worker, lease_seconds):
+            mine = [t for t in self.due if t["source"] == source]
+            if not mine:
+                return None
+            self.due.remove(mine[0])
+            return mine[0]
+
+        async def run_one(target, on_batch, on_health=None):
+            self.ran.append(target["id"])
+            if target["source"] == "facebook":
+                breaker.pause("facebook", "facebook: session expired")
+                raise crawl.SourceBlocked("facebook")
+
+        for p in (patch.object(crawl.targets_repo, "due_targets", due_targets),
+                  patch.object(crawl.targets_repo, "claim_next", claim_next),
+                  patch.object(crawl, "_run_one", run_one),
+                  patch.dict(crawl.REGISTRY, {s: object for s in ("facebook", "kavak")}, clear=True)):
+            p.start()
+            self.addCleanup(p.stop)
+
+    async def test_a_blocked_source_stops_after_one_target_and_is_not_restarted(self):
+        lanes = crawl.Lanes()
+        self.addAsyncCleanup(lanes.close)
+        self.assertEqual(await lanes.start_due(jitter_seconds=0), ["facebook", "kavak"])
+        for _ in range(10):
+            await asyncio.sleep(0)
+        self.assertEqual(sorted(self.ran), [1, 3])           # target 2 never tried
+        self.assertEqual(await lanes.start_due(jitter_seconds=0), [])
+
+    async def test_the_pause_ends(self):
+        from pipeline import breaker
+
+        breaker.pause("facebook", "blocked", seconds=0.05)
+        self.assertTrue(breaker.paused("facebook"))
+        await asyncio.sleep(0.06)
+        self.assertFalse(breaker.paused("facebook"))
+
+    async def test_crawl_due_goes_on_with_the_other_sources(self):
+        self.assertEqual(await crawl.crawl_due(jitter_seconds=0), 2)
+        self.assertEqual(sorted(self.ran), [1, 3])
+
+
+class BlockedRunTargetTests(unittest.IsolatedAsyncioTestCase):
+    async def test_a_blocked_collector_is_recorded_then_pauses_its_source(self):
+        from unittest.mock import AsyncMock, MagicMock
+        from collectors.base import CollectorBlocked
+        from pipeline import breaker
+
+        breaker.clear()
+        self.addCleanup(breaker.clear)
+        scraper = MagicMock(search=AsyncMock(side_effect=CollectorBlocked("facebook: session expired")))
+        target = {"id": 1, "source": "facebook", "make": "Ford", "model": "Ka", "first_run_done": True,
+                  "crawl_interval_seconds": 3600}
+
+        async def on_collector(coroutine, timeout=None):
+            return await coroutine
+
+        with patch.dict(crawl.REGISTRY, {"facebook": lambda: scraper}), \
+                patch.object(crawl.runs, "start_run", AsyncMock(return_value=1)), \
+                patch.object(crawl.runs, "finish_run", AsyncMock()) as finish, \
+                patch.object(crawl.targets_repo, "publication_dates", AsyncMock(return_value={})), \
+                patch.object(crawl.targets_repo, "finish_target", AsyncMock()) as finish_target, \
+                patch.object(crawl, "run_collector", on_collector):
+            with self.assertRaises(crawl.SourceBlocked):
+                await crawl.run_target(target)
+        finish.assert_awaited_once()
+        finish_target.assert_awaited_once()
+        self.assertTrue(breaker.paused("facebook"))
+
+
+class EnrichBreakerTests(unittest.IsolatedAsyncioTestCase):
+    async def test_a_paused_source_is_skipped_and_its_pages_stay_unchecked(self):
+        from unittest.mock import AsyncMock
+        from pipeline import breaker, enrich
+
+        breaker.clear()
+        self.addCleanup(breaker.clear)
+        seen: list[int] = []
+
+        async def refresh(row):
+            seen.append(row["id"])
+            breaker.pause("facebook", "blocked")
+            return enrich.IngestResult()
+
+        rows = [{"id": i, "source": "facebook"} for i in (1, 2, 3)]
+        with patch.dict(enrich.REGISTRY, {"facebook": object}):
+            await enrich.drain(rows, refresh, intervals={"facebook": 0})
+        self.assertEqual(seen, [1])
+
+        mark = AsyncMock()
+        with patch.dict(enrich.REGISTRY, {"facebook": object}), \
+                patch.object(enrich.repo, "mark_detail_checked", mark):
+            await enrich.refresh_listing({"id": 9, "source": "facebook", "url": "u"}, stage="enrich")
+        mark.assert_not_awaited()
+
+
+class CrawlLoopLivenessTests(unittest.IsolatedAsyncioTestCase):
+    async def test_the_heartbeat_waits_for_a_stuck_loop(self):
+        import time
+        from unittest.mock import AsyncMock
+        import main
+        from pipeline import scheduler
+
+        beat = AsyncMock()
+        with patch.object(main.heartbeat, "beat", beat):
+            with patch.object(scheduler, "_last_round", time.monotonic()):
+                await main.beat_while_crawling(None)
+            beat.assert_awaited_once()
+            with patch.object(scheduler, "_last_round", time.monotonic() - 10_000):
+                await main.beat_while_crawling(None)
+            beat.assert_awaited_once()

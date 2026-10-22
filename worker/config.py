@@ -27,6 +27,12 @@ TICK_INTERVAL_SECONDS = int(os.getenv("TICK_INTERVAL_SECONDS", "15"))
 COLLECTOR_TIMEOUT_SECONDS = max(60, int(os.getenv("COLLECTOR_TIMEOUT_SECONDS", "2400")))
 # ... and one detail page (enrichment, watchlist).
 DETAIL_TIMEOUT_SECONDS = max(30, int(os.getenv("DETAIL_TIMEOUT_SECONDS", "180")))
+# A source that answers with a login wall or an expired session is left alone
+# this long before trying again (pipeline/breaker.py).
+SOURCE_BLOCKED_PAUSE_SECONDS = max(60, int(os.getenv("SOURCE_BLOCKED_PAUSE_SECONDS", "1800")))
+# The heartbeat stops when the crawl loop hasn't finished a tick for this long,
+# so the watchdog's stale-heartbeat alert also covers a stuck loop.
+CRAWL_LOOP_STALE_SECONDS = max(120, int(os.getenv("CRAWL_LOOP_STALE_SECONDS", "900")))
 # Pause between two targets of the same source (randomized in [x/2, x]).
 CRAWL_JITTER_SECONDS = float(os.getenv("CRAWL_JITTER_SECONDS", "8"))
 # Caps mark the scan incomplete rather than silently finishing a bootstrap.

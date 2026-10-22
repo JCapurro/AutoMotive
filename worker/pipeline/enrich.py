@@ -33,6 +33,7 @@ from typing import Any, Awaitable, Callable
 import config
 import db
 from collectors import REGISTRY, Listing, ListingDetail
+from collectors.base import CollectorBlocked
 from collectors._isolated import call as isolated_call, isolated
 from collectors._loop import run_collector
 from db.repos import listings as repo
@@ -43,6 +44,7 @@ from llm.provider import LLMProvider, build_provider
 from normalization.description_claims import input_hash
 from normalization.description_facts import VERSION, from_llm, parse as parse_facts, trim_page_noise
 from normalization.listing import Target
+from pipeline import breaker
 from pipeline.ingest import IngestResult, ListingEvent, ingest
 from pipeline.rematch import match_model_less
 from pipeline.rescore import rescore_listings
@@ -116,12 +118,18 @@ async def refresh_listing(row: dict[str, Any], *, stage: str,
     a fetch or a parse that fails is recorded in pipeline_errors and retried later.
     """
     scraper = REGISTRY[row["source"]]()
+    if breaker.paused(row["source"]):
+        return IngestResult()               # tried again, unmarked, after the pause
     try:
         if isolated(scraper):
             page = await run_collector(isolated_call(scraper, "fetch_detail_page", row["url"],
                                                      timeout=config.DETAIL_TIMEOUT_SECONDS))
         else:
             page = await run_collector(scraper.fetch_detail_page(row["url"]), timeout=config.DETAIL_TIMEOUT_SECONDS)
+    except CollectorBlocked as exc:
+        breaker.pause(row["source"], str(exc))
+        await log_error(stage, f"listing:{row['id']}", traceback.format_exc())
+        return IngestResult()
     except Exception:
         await log_error(stage, f"listing:{row['id']}", traceback.format_exc())
         await repo.mark_detail_checked([row["id"]])
@@ -193,7 +201,7 @@ async def drain(rows: list[dict[str, Any]], refresh: Refresher, *,
     async def one_source(source: str, queue: list[dict[str, Any]]) -> IngestResult:
         out = IngestResult()
         for i, row in enumerate(queue):
-            if stop is not None and stop.is_set():
+            if (stop is not None and stop.is_set()) or breaker.paused(source):
                 break
             if i and intervals.get(source, 0) > 0:
                 await asyncio.sleep(intervals[source])

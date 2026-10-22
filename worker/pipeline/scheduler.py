@@ -255,8 +255,20 @@ async def tick(notifier: Notifier, lanes: crawl.Lanes, stop: asyncio.Event | Non
                  ", ".join(sorted(lanes.running())))
 
 
+# When the loop last came round (time.monotonic()), for loop_stale.
+_last_round: float = time.monotonic()
+
+
+def loop_stale(max_age_seconds: float) -> bool:
+    """Whether the crawl loop hasn't come round for `max_age_seconds`: a tick
+    stuck in the database or in a bootstrap. The heartbeat stops then, so the
+    watchdog alerts (main.py)."""
+    return time.monotonic() - _last_round > max_age_seconds
+
+
 async def run_loop(notifier: Notifier, stop_event: asyncio.Event,
                    on_health: crawl.HealthHandler | None = None) -> None:
+    global _last_round
     lanes = crawl.Lanes()
     try:
         while not stop_event.is_set():
@@ -264,6 +276,7 @@ async def run_loop(notifier: Notifier, stop_event: asyncio.Event,
                 await tick(notifier, lanes, stop_event, on_health)
             except Exception:
                 log.error("scheduler tick failed: %s", traceback.format_exc())
+            _last_round = time.monotonic()
             try:
                 await asyncio.wait_for(stop_event.wait(), timeout=TICK_INTERVAL_SECONDS)
             except asyncio.TimeoutError:

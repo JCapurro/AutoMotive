@@ -40,6 +40,7 @@ from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable
 
 from collectors import REGISTRY, Listing
+from collectors.base import CollectorBlocked
 from collectors._isolated import call as isolated_call, isolated
 from collectors._loop import run_collector
 from config import COLLECTOR_TIMEOUT_SECONDS
@@ -52,6 +53,7 @@ from db.repos.runs import SourceHealth
 from intelligence.matching import filter_currency, malformed_vehicle, model_less, wanted_body_types
 from normalization.listing import Target
 from normalization.normalize import normalize_brand, normalize_text
+from pipeline import breaker
 from pipeline.ingest import IngestResult, ingest
 
 
@@ -105,6 +107,11 @@ class TargetRun:
     # Listings stored for the first time that this target's prefilter had
     # dropped before (prefilter_rejected): old stock, matched as backfill.
     backfill_ids: frozenset[int] = frozenset()
+
+
+class SourceBlocked(Exception):
+    """run_target: the source blocked us and is paused (pipeline/breaker.py);
+    its lane stops instead of trying its other targets."""
 
 
 BatchHandler = Callable[[TargetRun], Awaitable[None]]
@@ -298,6 +305,9 @@ async def run_target(target: dict[str, Any], on_health: HealthHandler | None = N
         health = await runs.finish_run(run_id, ok=False, error=traceback.format_exc())
         await targets_repo.finish_target(target["id"], ok=False, retry_seconds=retry)
         await _report(on_health, health)
+        if isinstance(exc, CollectorBlocked):
+            breaker.pause(source, str(exc))
+            raise SourceBlocked(source) from exc
         return None
     keep, rejected = prefilter(target), set()
     if keep is not None and source not in RECENT_SOURCES:
@@ -395,7 +405,10 @@ async def _run_source(targets: list[dict[str, Any]], on_batch: BatchHandler | No
             return
         if i and jitter_seconds > 0:
             await asyncio.sleep(random.uniform(jitter_seconds / 2, jitter_seconds))
-        await _run_one(target, on_batch, on_health)
+        try:
+            await _run_one(target, on_batch, on_health)
+        except SourceBlocked:
+            return
 
 
 async def _drain(source: str, on_batch: BatchHandler | None, jitter_seconds: float,
@@ -405,7 +418,7 @@ async def _drain(source: str, on_batch: BatchHandler | None, jitter_seconds: flo
     target whose crawl raised keeps its claim until the lease ends, then it
     is due again."""
     done = 0
-    while stop is None or not stop.is_set():
+    while (stop is None or not stop.is_set()) and not breaker.paused(source):
         target = await targets_repo.claim_next(source, runs.worker_id(), LEASE_SECONDS)
         if target is None:
             break
@@ -413,6 +426,8 @@ async def _drain(source: str, on_batch: BatchHandler | None, jitter_seconds: flo
             await asyncio.sleep(random.uniform(jitter_seconds / 2, jitter_seconds))
         try:
             await _run_one(target, on_batch, on_health)
+        except SourceBlocked:
+            return done + 1
         except Exception:
             await runs.log_error("crawl", f"target:{target['id']}", traceback.format_exc())
         done += 1
@@ -451,7 +466,8 @@ class Lanes:
                         stop: asyncio.Event | None = None, on_health: HealthHandler | None = None) -> list[str]:
         """Start a lane for every idle source with due targets. Returns those sources."""
         busy = self.running()
-        started = [s for s in _due_sources(await targets_repo.due_targets()) if s not in busy]
+        started = [s for s in _due_sources(await targets_repo.due_targets())
+                   if s not in busy and not breaker.paused(s)]
         for source in started:
             task = asyncio.create_task(_drain(source, on_batch, jitter_seconds, stop, on_health),
                                        name=f"lane:{source}")
