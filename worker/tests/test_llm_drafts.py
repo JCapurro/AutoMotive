@@ -55,7 +55,7 @@ def test_unknown_model_leaves_the_vehicle_for_the_user():
 
 
 def test_known_make_unknown_model_keeps_the_make():
-    out = norm(make="Ford", model="Mustang")
+    out = norm(make="Ford", model="Falcon")
     assert (out["values"]["make"], out["values"]["model"]) == ("Ford", "")
     assert not out["resolved"]
 

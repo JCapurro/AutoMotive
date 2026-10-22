@@ -93,12 +93,16 @@ def _best_by_name(text: str, candidates: list[CatalogModel], *,
     With `yearlike=False`, names such as Peugeot "2008" are skipped: without
     the brand in the text they are more likely the car's year."""
     hits: list[tuple[int, CatalogModel]] = []
+    years: list[tuple[int, CatalogModel]] = []
     for m in candidates:
         for name in m.names():
-            if not yearlike and _YEARLIKE.fullmatch(name):
+            is_year = _YEARLIKE.fullmatch(name) is not None
+            if not yearlike and is_year:
                 continue
             if _has_phrase(text, name):
-                hits.append((len(name), m))
+                (years if is_year else hits).append((len(name), m))
+    # "Peugeot 307 XS 2008": next to another model's name, "2008" is the year.
+    hits = hits or years
     if not hits:
         return []
     top = max(length for length, _ in hits)

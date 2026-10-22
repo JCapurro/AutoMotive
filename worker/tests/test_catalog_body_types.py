@@ -6,7 +6,9 @@ import pytest
 from normalization.body_type import CODES
 from seed_catalog import SEED, body_types_block, seed_catalog
 
-MIGRATION = SEED.parent / "migrations" / "20261030120100_catalog_body_types.sql"
+# The first list, and the models added later with their body types.
+MIGRATIONS = [SEED.parent / "migrations" / name for name in
+              ("20261030120100_catalog_body_types.sql", "20261102120000_catalog_all_models.sql")]
 
 
 def _by_model() -> dict[tuple[str, str], tuple[str, ...]]:
@@ -22,7 +24,7 @@ def test_every_seed_model_has_known_body_types():
 
 def test_seed_and_migration_carry_the_same_list():
     seed = body_types_block(SEED.read_text(encoding="utf-8"))
-    migration = body_types_block(MIGRATION.read_text(encoding="utf-8"))
+    migration = {k: v for path in MIGRATIONS for k, v in body_types_block(path.read_text(encoding="utf-8")).items()}
     assert seed == migration
     # No entry for a model the catalog doesn't have (a typo would update nothing).
     assert set(migration) == set(_by_model())
@@ -45,6 +47,9 @@ def test_seed_and_migration_carry_the_same_list():
     ("Fiat", "Palio", ("hatchback", "rural")),
     ("Volkswagen", "Suran", ("monovolumen",)),
     ("Mercedes-Benz", "Sprinter", ("utilitario",)),
+    ("Renault", "Oroch", ("pickup",)),
+    ("Fiat", "Titano", ("pickup",)),
+    ("BYD", "Dolphin Mini", ("hatchback",)),
 ])
 def test_known_models(make, model, expected):
     assert _by_model()[(make.lower(), model.lower())] == expected

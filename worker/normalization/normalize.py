@@ -20,6 +20,9 @@ _BRAND_ALIAS = {
     "peugeut":       "peugeot",
     "land-rover":    "land rover",
     "alfa":          "alfa romeo",
+    "great wall":    "gwm",
+    "ds automobiles": "ds",
+    "jac motors":    "jac",
 }
 
 

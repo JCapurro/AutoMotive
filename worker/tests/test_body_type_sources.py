@@ -159,7 +159,8 @@ class RandazzoTests(unittest.TestCase):
         # SUVs go under "Wagon (obsoleta)" and hatchbacks under "Sedan": the
         # title, the doors and the catalog decide.
         kardian, ka = self.items()[0], self.items()[5]
-        self.assertEqual(normalized(kardian), (None, "none"))
+        # The Kardian is only an SUV in the catalog (20261102120000_catalog_all_models).
+        self.assertEqual(normalized(kardian), ("suv", "catalog"))
         self.assertNotEqual(normalized(ka)[0], "sedan")
         self.assertIsNone(bt.from_source("Wagon (obsoleta)", "gruporandazzo"))
         self.assertIsNone(bt.from_source("Sedan C", "gruporandazzo"))
