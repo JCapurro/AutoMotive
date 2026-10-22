@@ -38,7 +38,7 @@ from db.repos.runs import bootstrapped_at, log_error
 from intelligence.engine import Evaluation
 from intelligence.matching import model_less
 from notifications.service import MatchCandidate, Notifier
-from pipeline import crawl, rematch
+from pipeline import crawl, news, rematch
 from pipeline.scoring import Scorer
 
 log = logging.getLogger("scheduler")
@@ -96,7 +96,10 @@ async def match_alert(staged: _Staged, scorer: Scorer, *, first_run: bool,
     target by body type reads only the last day, and this target's next
     runs only what was published since. `backfill_ids`: listings of the batch
     that are not news for this profile (a body type the crawl just filled in,
-    a listing the prefilter had dropped): stored as backfill, never notified."""
+    a listing the prefilter had dropped, old stock pipeline/news.py found):
+    stored as backfill, never notified. What news.py marked as old stock
+    stays backfill on every run that finds it, so a batch retried after a
+    failure (or a restart) doesn't notify it."""
     alert, evaluations, fresh, rows = staged.alert, staged.evaluations, staged.fresh, scorer.rows
 
     async def store(ids: list[int], *, backfill: bool) -> dict[int, int]:
@@ -124,7 +127,7 @@ async def match_alert(staged: _Staged, scorer: Scorer, *, first_run: bool,
                  "first target run" if first_run else "bootstrap", len(fresh))
         return []
 
-    quiet = set(backfill_ids) & set(fresh)
+    quiet = {*backfill_ids, *(lid for lid in fresh if news.muted(rows[lid]))} & set(fresh)
     if quiet:
         await store([lid for lid in fresh if lid in quiet], backfill=True)
         fresh = [lid for lid in fresh if lid not in quiet]
@@ -133,7 +136,7 @@ async def match_alert(staged: _Staged, scorer: Scorer, *, first_run: bool,
     # had (the same wizard alert split per model) isn't new to the user.
     candidates = [
         MatchCandidate(alert["id"], lid, match_ids.get(lid), evaluations[lid].row(),
-                       repost=bool(rows[lid].get("probable_repost_of")))
+                       repost=bool(rows[lid].get("probable_repost_of")) or news.republished(rows[lid]))
         for lid in fresh
         if _is_recent(rows[lid], max_age_days) and _key(rows[lid]) not in staged.matched_elsewhere
     ]
@@ -143,12 +146,14 @@ async def match_alert(staged: _Staged, scorer: Scorer, *, first_run: bool,
 
 
 async def count_after_expiry(target: dict, listing_ids: list[int], scorer: Scorer, *,
-                             first_run: bool, max_age_days: int) -> int:
+                             first_run: bool, max_age_days: int, exclude: Iterable[int] = ()) -> int:
     """Step 6: the listings first seen after a counted search's access ended,
     recent by the notification rule, that the search would have matched. A
     target's first run is backfill, not news, also on the next runs that find
-    it again: a portal enabled after the end loads its stock then. Returns how
-    many were counted."""
+    it again: a portal enabled after the end loads its stock then. Old stock
+    is never counted either: `exclude` (the batch's backfill_ids) and what
+    pipeline/news.py marked, also when a later run finds it again. Returns
+    how many were counted."""
     if first_run:
         return 0
     alerts = await db.counting_alerts_for_target(
@@ -157,14 +162,15 @@ async def count_after_expiry(target: dict, listing_ids: list[int], scorer: Score
     if not alerts:
         return 0
     history = await bootstrapped_at(target["id"]) if target.get("id") is not None else None
-    rows = scorer.rows
+    rows, exclude = scorer.rows, frozenset(exclude)
     counted = []
     for alert in alerts:
         for lid in listing_ids:
             row = rows.get(lid)
             seen = row.get("first_seen_at") if row else None
             if (seen is None or seen < alert["ended_at"] or (history is not None and seen <= history)
-                    or not _is_recent(row, max_age_days)):
+                    or not _is_recent(row, max_age_days) or lid in exclude
+                    or news.uncounted(row, target.get("id"))):
                 continue
             if (ev := scorer.evaluate(lid, alert["profile"])) is not None:
                 counted.append((alert["id"], lid, alert["ended_at"], ev.level))
@@ -217,7 +223,8 @@ async def process_batch(notifier: Notifier, target: dict, listing_ids: list[int]
         await log_error("notify", f"target:{target.get('id')}", traceback.format_exc())
     await notifier.deliver()
     try:
-        await count_after_expiry(target, listing_ids, scorer, first_run=first_run, max_age_days=max_age_days)
+        await count_after_expiry(target, listing_ids, scorer, first_run=first_run, max_age_days=max_age_days,
+                                 exclude=backfill_ids)
     except Exception:
         await log_error("count_after_expiry", f"target:{target.get('id')}", traceback.format_exc())
 

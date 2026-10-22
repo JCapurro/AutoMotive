@@ -123,6 +123,18 @@ async def bootstrapped_at(target_id: int) -> datetime | None:
     return row["at"] if row else None
 
 
+async def recent_ok_found(target_id: int, *, exclude_run: int | None = None, n: int = 3) -> int | None:
+    """The most one of the target's last `n` ok runs found, `exclude_run`
+    left out (pipeline/news.py, the step). None without an ok run."""
+    async with connection() as cx:
+        row = await (await cx.execute(
+            "SELECT max(found) AS found FROM (SELECT found FROM collector_runs "
+            "  WHERE target_id = %s AND status = 'ok' AND id IS DISTINCT FROM %s::bigint "
+            "  ORDER BY id DESC LIMIT %s) r",
+            (target_id, exclude_run, n))).fetchone()
+    return row["found"] if row else None
+
+
 async def log_error(stage: str, ref: str | None, error: str) -> None:
     """Record a pipeline error. Never raises: observability must not break the pipeline."""
     try:

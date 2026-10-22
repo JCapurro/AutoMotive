@@ -117,6 +117,80 @@ async def set_repost_of(cx: AsyncConnection, listing_id: int, original_id: int) 
                      (original_id, listing_id))
 
 
+async def new_rows(cx: AsyncConnection, ids: Iterable[int]) -> list[dict[str, Any]]:
+    """A run's new listings as pipeline/news.py reads them."""
+    ids = list(dict.fromkeys(ids))
+    if not ids:
+        return []
+    rows = await (await cx.execute(
+        "SELECT id, source, external_id, make, model, year, mileage_km, trim, transmission, seller_name, "
+        "       price, currency, price_usd, price_partial, images, published_at, probable_repost_of "
+        "  FROM listings WHERE id = ANY(%s) ORDER BY id", (ids,))).fetchall()
+    return [_pythonic(r) for r in rows]
+
+
+async def find_reappeared(cx: AsyncConnection, row: dict[str, Any], *, batch_external_ids: list[str],
+                          window_days: int, price_tol_pct: float, km_tol: int) -> dict[str, Any] | None:
+    """The old copy of a car that `row` publishes again under another ID
+    (pipeline/news.py): the same source, make, model and year, seller (km
+    within `km_tol`, or the same km without a seller), compatible version
+    and gearbox, a price within `price_tol_pct` (in USD across currencies),
+    seen in the last `window_days`, and missing from this read
+    (`batch_external_ids`, everything the collector returned). On top of it
+    the same plate on Grupo Randazzo, and the same first photo on Autocity
+    and Car One when both have one. A row without make, model, year, 1.000
+    km or a full price never reappears: too many cars look alike.
+    Returns {id, root, price, currency, price_usd}, root being the start of
+    its repost chain, or None."""
+    if (not (row.get("make") and row.get("model") and row.get("year")) or (row.get("mileage_km") or 0) < 1000
+            or row.get("price_partial") or not row.get("price")):
+        return None
+    images = row.get("images") or []
+    found = await (await cx.execute(
+        "SELECT o.id, coalesce(o.probable_repost_of, o.id) AS root, o.price, o.currency, o.price_usd "
+        "  FROM listings o "
+        " WHERE o.source = %(source)s AND o.id <> %(id)s AND NOT o.external_id = ANY(%(batch)s::text[]) "
+        "   AND lower(o.make) = lower(%(make)s) AND lower(o.model) = lower(%(model)s) AND o.year = %(year)s "
+        "   AND lower(o.seller_name) IS NOT DISTINCT FROM lower(%(seller)s::text) "
+        "   AND CASE WHEN o.seller_name IS NULL THEN o.mileage_km = %(km)s::int "
+        "            ELSE abs(o.mileage_km - %(km)s::int) <= %(km_tol)s END "
+        "   AND (o.trim IS NULL OR %(trim)s::text IS NULL OR lower(o.trim) = lower(%(trim)s::text)) "
+        "   AND (o.transmission IS NULL OR %(gearbox)s::text IS NULL "
+        "        OR lower(o.transmission) = lower(%(gearbox)s::text)) "
+        "   AND NOT o.price_partial "
+        "   AND o.last_seen_at >= now() - make_interval(days => %(window)s) "
+        "   AND CASE WHEN o.currency = %(currency)s::text "
+        "            THEN o.price > 0 AND abs(o.price - %(price)s::numeric) <= o.price * %(tol)s::numeric / 100 "
+        "            ELSE o.price_usd > 0 "
+        "                 AND abs(o.price_usd - %(price_usd)s::numeric) <= o.price_usd * %(tol)s::numeric / 100 END "
+        "   AND (o.source <> 'gruporandazzo' "
+        "        OR split_part(o.external_id, '_', 1) = split_part(%(external_id)s, '_', 1)) "
+        "   AND (o.source NOT IN ('autocity', 'carone') OR o.images->>0 IS NULL OR %(image)s::text IS NULL "
+        "        OR o.images->>0 = %(image)s::text) "
+        " ORDER BY o.last_seen_at DESC, o.id DESC LIMIT 1",
+        {"source": row["source"], "id": row["id"], "batch": list(batch_external_ids),
+         "make": row["make"], "model": row["model"], "year": row["year"], "seller": row.get("seller_name"),
+         "km": row["mileage_km"], "km_tol": km_tol, "trim": row.get("trim"), "gearbox": row.get("transmission"),
+         "window": window_days, "currency": row.get("currency"), "price": row["price"],
+         "price_usd": row.get("price_usd"), "tol": price_tol_pct, "external_id": row["external_id"],
+         "image": images[0] if images and isinstance(images[0], str) else None})).fetchone()
+    return _pythonic(found) if found else None
+
+
+async def mark_not_news(cx: AsyncConnection, marks: Iterable[tuple[int, dict[str, Any], int | None]]) -> None:
+    """pipeline/news.py's marks, (listing_id, attributes, repost_of): the
+    attributes (_not_news, _republished) join the listing's, and repost_of
+    becomes its probable_repost_of if it has none."""
+    marks = list(marks)
+    if not marks:
+        return
+    async with cx.cursor() as cur:
+        await cur.executemany(
+            "UPDATE listings SET attributes = attributes || %s, "
+            "  probable_repost_of = coalesce(probable_repost_of, %s::bigint) WHERE id = %s",
+            [(Jsonb(attrs), repost_of, lid) for lid, attrs, repost_of in marks])
+
+
 async def mark_gone(cx: AsyncConnection, listing_id: int) -> bool:
     """status = 'gone'. True if it was active (so the caller emits listing_gone once)."""
     cur = await cx.execute(
