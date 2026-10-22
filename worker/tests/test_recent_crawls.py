@@ -370,7 +370,7 @@ class PipelineCoverageTests(unittest.IsolatedAsyncioTestCase):
         target = {"id": 1, "source": "facebook", "make": "Ford", "model": "Fiesta",
                   "first_run_done": False, "crawl_interval_seconds": 3600}
 
-        async def on_collector(coroutine):
+        async def on_collector(coroutine, timeout=None):
             return await coroutine
 
         with patch.dict(crawl.REGISTRY, {"facebook": lambda: scraper}), \

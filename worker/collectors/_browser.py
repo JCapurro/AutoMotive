@@ -12,6 +12,7 @@ from playwright.async_api import async_playwright, Browser, BrowserContext, Play
 USER_AGENT = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
               "(KHTML, like Gecko) Chrome/124.0 Safari/537.36")
 VIEWPORT = {"width": 1366, "height": 900}
+CONTEXT_CLOSE_SECONDS = 10
 _PLATFORM_TOKENS = {"linux": "X11; Linux x86_64", "win32": "Windows NT 10.0; Win64; x64",
                     "darwin": "Macintosh; Intel Mac OS X 10_15_7"}
 
@@ -88,8 +89,10 @@ async def browser_context(
             await _present_natively(ctx, b.version)
         yield ctx
     finally:
+        # Bounded: this also runs when a timed-out run is cancelled
+        # (run_collector), and a wedged page must not hang the cancellation.
         try:
-            await ctx.close()
+            await asyncio.wait_for(ctx.close(), CONTEXT_CLOSE_SECONDS)
         except Exception:
             pass
 

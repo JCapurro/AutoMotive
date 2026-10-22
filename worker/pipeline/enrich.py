@@ -116,7 +116,7 @@ async def refresh_listing(row: dict[str, Any], *, stage: str,
     """
     scraper = REGISTRY[row["source"]]()
     try:
-        page = await run_collector(scraper.fetch_detail_page(row["url"]))
+        page = await run_collector(scraper.fetch_detail_page(row["url"]), timeout=config.DETAIL_TIMEOUT_SECONDS)
     except Exception:
         await log_error(stage, f"listing:{row['id']}", traceback.format_exc())
         await repo.mark_detail_checked([row["id"]])

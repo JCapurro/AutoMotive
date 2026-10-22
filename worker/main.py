@@ -19,6 +19,7 @@ from notifications.links import Links
 from notifications.ops import SourceAlerts
 from notifications.service import Notifier
 from notifications.lifecycle import run_lifecycle_emails
+from db.repos.runs import fail_orphan_runs
 from pipeline import heartbeat
 from pipeline.enrich import enrich_pass
 from pipeline.llm_jobs import llm_jobs_loop
@@ -123,6 +124,12 @@ async def amain() -> None:
         pass
 
     started_at = heartbeat.started_now()
+    try:
+        orphans = await fail_orphan_runs(started_at)
+        if orphans:
+            log.warning("%d collector runs left running by the previous worker marked failed", orphans)
+    except Exception:
+        log.exception("could not close the previous worker's runs")
     tasks = [
         asyncio.create_task(_every("heartbeat", HEARTBEAT_SECONDS,
                                    lambda _stop: heartbeat.beat(started_at), stop)),

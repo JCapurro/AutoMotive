@@ -4,7 +4,9 @@ Each tick:
   1. crawl_targets are re-derived from the enabled profiles, plus the searches
      2.5 counts after their access ended (pipeline/crawl.py);
   2. new or edited profiles are bootstrapped silently (pipeline/rematch.py);
-  3. due targets are crawled and ingested;
+  3. due targets are crawled and ingested, each source in its own lane
+     (crawl.Lanes) that the tick starts and doesn't wait for, so a hung
+     source never stops the loop nor the bootstrap of new searches;
   4. each target's batch is matched and scored against every enabled profile
      of that make/model, and against the searches without a model, only by
      body type (docs/CARROCERIA.md), whatever target brought it
@@ -239,23 +241,32 @@ async def _counting_profiles() -> list[dict]:
         return []
 
 
-async def tick(notifier: Notifier, stop: asyncio.Event | None = None,
+async def tick(notifier: Notifier, lanes: crawl.Lanes, stop: asyncio.Event | None = None,
                on_health: crawl.HealthHandler | None = None) -> None:
+    """Sync targets, bootstrap new searches and start the idle sources' lanes.
+    It never waits for a crawl: the next tick comes TICK_INTERVAL_SECONDS
+    later whatever a source is doing."""
     await crawl.sync_targets(await db.enabled_profiles(), await _counting_profiles())
     await rematch.run_pending()
-    due = await crawl.crawl_due(batch_handler(notifier), jitter_seconds=CRAWL_JITTER_SECONDS, stop=stop,
-                                on_health=on_health)
-    log.info("crawl tick: %d due targets", due)
+    started = await lanes.start_due(batch_handler(notifier), jitter_seconds=CRAWL_JITTER_SECONDS, stop=stop,
+                                    on_health=on_health)
+    if started:
+        log.info("crawl tick: %d due targets started, lanes running: %s", started,
+                 ", ".join(sorted(lanes.running())) or "-")
 
 
 async def run_loop(notifier: Notifier, stop_event: asyncio.Event,
                    on_health: crawl.HealthHandler | None = None) -> None:
-    while not stop_event.is_set():
-        try:
-            await tick(notifier, stop_event, on_health)
-        except Exception:
-            log.error("scheduler tick failed: %s", traceback.format_exc())
-        try:
-            await asyncio.wait_for(stop_event.wait(), timeout=TICK_INTERVAL_SECONDS)
-        except asyncio.TimeoutError:
-            pass
+    lanes = crawl.Lanes()
+    try:
+        while not stop_event.is_set():
+            try:
+                await tick(notifier, lanes, stop_event, on_health)
+            except Exception:
+                log.error("scheduler tick failed: %s", traceback.format_exc())
+            try:
+                await asyncio.wait_for(stop_event.wait(), timeout=TICK_INTERVAL_SECONDS)
+            except asyncio.TimeoutError:
+                pass
+    finally:
+        await lanes.close()

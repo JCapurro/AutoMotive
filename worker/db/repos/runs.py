@@ -63,6 +63,18 @@ async def finish_run(run_id: int, *, ok: bool, found: int | None = None, new: in
                         None if ok else error)
 
 
+async def fail_orphan_runs(started_before: datetime) -> int:
+    """Close the runs a previous worker left 'running' (it died or was
+    restarted mid-run): only the worker crawls, so at its start none of those
+    is alive. The source's failure streak is left alone. Returns how many."""
+    async with connection() as cx:
+        cur = await cx.execute(
+            "UPDATE collector_runs SET status = 'failed', finished_at = now(), "
+            "  error = 'worker restarted mid-run' WHERE status = 'running' AND started_at < %s",
+            (started_before,))
+        return cur.rowcount
+
+
 async def bootstrapped_at(target_id: int) -> datetime | None:
     """When the target's first successful run ended: what it had found by
     then is history, not news (2.5). None until it has one."""

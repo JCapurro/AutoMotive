@@ -17,9 +17,16 @@ ALLOWED_USER_IDS = {
     int(x) for x in os.getenv("ALLOWED_USER_IDS", "").split(",") if x.strip().isdigit()
 }
 
-# How often the crawl loop wakes up to look for due crawl targets. Each
+# How often the crawl loop wakes up to sync targets, bootstrap new searches and
+# start the idle sources' lanes on their due targets; it never waits for a
+# crawl, so this is how long a new search waits for its first one. Each
 # target's own cadence is sources.crawl_interval_seconds (sección 5.1).
-TICK_INTERVAL_SECONDS = int(os.getenv("TICK_INTERVAL_SECONDS", "300"))
+TICK_INTERVAL_SECONDS = int(os.getenv("TICK_INTERVAL_SECONDS", "15"))
+# One collector search may take this long before it is cancelled and the
+# target fails (Facebook reading dates one by one has taken 33 minutes).
+COLLECTOR_TIMEOUT_SECONDS = max(60, int(os.getenv("COLLECTOR_TIMEOUT_SECONDS", "2400")))
+# ... and one detail page (enrichment, watchlist).
+DETAIL_TIMEOUT_SECONDS = max(30, int(os.getenv("DETAIL_TIMEOUT_SECONDS", "180")))
 # Pause between two targets of the same source (randomized in [x/2, x]).
 CRAWL_JITTER_SECONDS = float(os.getenv("CRAWL_JITTER_SECONDS", "8"))
 # Caps mark the scan incomplete rather than silently finishing a bootstrap.
