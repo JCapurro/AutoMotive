@@ -45,8 +45,9 @@ async def enabled_sources() -> dict[str, dict[str, Any]]:
 async def sync_targets(specs: Iterable[Any]) -> None:
     """Make crawl_targets mirror `specs` (pipeline.crawl.TargetSpec): upsert the
     wanted ones and deactivate the rest. Adopting a new publication policy resets
-    bootstrap once; ordinary query edits/reactivations keep first_run_done. A
-    count-only target that gets an active search is due at once."""
+    bootstrap once and empties Facebook's date memory (its window goes back to
+    30 days, collectors/_recency.py); ordinary query edits/reactivations keep
+    both. A count-only target that gets an active search is due at once."""
     specs = list(specs)
     async with connection() as cx:
         await cx.execute("CREATE TEMP TABLE wanted (source text, make text, model text, body_type text, "
@@ -68,6 +69,9 @@ async def sync_targets(specs: Iterable[Any]) -> None:
             "     crawl_targets.query->'publication_policy' IS DISTINCT FROM excluded.query->'publication_policy') "
             "     OR (crawl_targets.query ? 'count_only' AND NOT excluded.query ? 'count_only') "
             "     THEN NULL ELSE crawl_targets.next_run_at END "
+            " , prefilter_rejected = CASE WHEN excluded.query ? 'publication_policy' AND "
+            "     crawl_targets.query->'publication_policy' IS DISTINCT FROM excluded.query->'publication_policy' "
+            "     THEN '{}' ELSE crawl_targets.prefilter_rejected END "
             " WHERE crawl_targets.query IS DISTINCT FROM excluded.query OR NOT crawl_targets.active")
         await cx.execute(
             "UPDATE crawl_targets t SET active = false WHERE active AND NOT EXISTS ("
@@ -79,7 +83,12 @@ async def sync_targets(specs: Iterable[Any]) -> None:
 async def publication_dates(target: dict[str, Any]) -> dict[str, int]:
     """Reuse stored publication dates, avoiding a detail request on every daily read.
     A target by body type reads at most the last 25 hours (collectors/_recency.py):
-    the dates of its body type seen in the last two days."""
+    the dates of its body type seen in the last two days.
+
+    A target by model gets its make's: a search by text also brings models
+    with a longer name (Gol → Gol Trend and Golf, Corolla → Corolla Cross),
+    and the external ID names the ad. Seen in the last 35 days, which covers
+    the widest window: an ad published within it was last seen after that."""
     async with connection() as cx:
         if target.get("body_type"):
             rows = await (await cx.execute(
@@ -89,9 +98,9 @@ async def publication_dates(target: dict[str, Any]) -> dict[str, int]:
             return {r["external_id"]: int(r["published_at"].timestamp()) for r in rows}
         rows = await (await cx.execute(
             "SELECT external_id, published_at FROM listings WHERE source = %s "
-            " AND lower(make) IS NOT DISTINCT FROM lower(%s) "
-            " AND (%s::text IS NULL OR lower(model) = lower(%s)) AND published_at IS NOT NULL",
-            (target["source"], target.get("make"), target.get("model"), target.get("model")))).fetchall()
+            " AND lower(make) IS NOT DISTINCT FROM lower(%s) AND published_at IS NOT NULL "
+            " AND last_seen_at >= now() - interval '35 days'",
+            (target["source"], target.get("make")))).fetchall()
     return {r["external_id"]: int(r["published_at"].timestamp()) for r in rows}
 
 
@@ -119,12 +128,19 @@ async def due_targets() -> list[dict[str, Any]]:
 
 
 async def claim_next(source: str, worker: str, lease_seconds: int) -> dict[str, Any] | None:
-    """Take `source`'s next due target for `worker` until now + lease_seconds,
-    a first run first; None when it has none, or while another target of the
-    source is claimed: one crawl per source at a time across every worker
-    (one Facebook session, one rate limit). The source's advisory lock makes
-    the check and the claim one step, so two workers can't both pass it.
-    Another worker skips the target until finish_target or the lease ends."""
+    """Take `source`'s next due target for `worker` until now + lease_seconds;
+    None when it has none, or while another target of the source is claimed:
+    one crawl per source at a time across every worker (one Facebook session,
+    one rate limit). The source's advisory lock makes the check and the claim
+    one step, so two workers can't both pass it. Another worker skips the
+    target until finish_target or the lease ends.
+
+    A target that never ran (or was reset, next_run_at NULL) goes first, then
+    the due targets that notify, then the first-run retries and the
+    count-only targets, each by when it was due: a long bootstrap scan never
+    waits behind them, and they never wait behind it more than one scan
+    (Sentra waited ~140 minutes behind Facebook bootstraps, 2026-10-22). A
+    first run that is retried stays one until it completes."""
     async with connection() as cx:
         await cx.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (f"crawl_source:{source}",))
         return await (await cx.execute(
@@ -132,7 +148,9 @@ async def claim_next(source: str, worker: str, lease_seconds: int) -> dict[str, 
             f"  WHERE t.source = %s AND {_DUE} "
             "    AND NOT EXISTS (SELECT 1 FROM crawl_targets c WHERE c.source = t.source "
             "                    AND c.claimed_until > now()) "
-            "  ORDER BY t.first_run_done, t.next_run_at NULLS FIRST, t.id LIMIT 1 FOR UPDATE OF t SKIP LOCKED) "
+            "  ORDER BY t.next_run_at IS NOT NULL, "
+            "    (t.first_run_done AND t.query->>'count_only' IS DISTINCT FROM 'true') DESC, "
+            "    t.next_run_at, t.id LIMIT 1 FOR UPDATE OF t SKIP LOCKED) "
             "UPDATE crawl_targets t SET claimed_by = %s, claimed_until = now() + make_interval(secs => %s) "
             "  FROM next, sources s WHERE t.id = next.id AND s.id = t.source "
             f"RETURNING {_TARGET_COLUMNS}",
@@ -161,7 +179,10 @@ async def release_claims(workers: Iterable[str]) -> int:
 
 
 async def set_prefilter_rejected(target_id: int, external_ids: Iterable[str]) -> None:
-    """What a target by body type's prefilter dropped (pipeline/crawl.py prefilter)."""
+    """What a target by body type's prefilter dropped (pipeline/crawl.py
+    prefilter) or, on a Facebook target by model, its date memory: the ads
+    dated out of the window ("id") or whose page had no date ("id@epoch#n"),
+    collectors/_recency.py."""
     async with connection() as cx:
         await cx.execute("UPDATE crawl_targets SET prefilter_rejected = %s WHERE id = %s",
                          (sorted(set(external_ids)), target_id))

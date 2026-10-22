@@ -311,6 +311,16 @@ class CrawlTargetTests(unittest.TestCase):
         self.assertEqual(retry_seconds({"crawl_interval_seconds": 300, "query": {}}), 300)
         self.assertEqual(retry_seconds({"crawl_interval_seconds": 1800, "query": {"count_only": True}}), 6 * 3600)
 
+    def test_a_facebook_scan_cut_at_its_page_cap_is_retried_in_three_minutes(self):
+        from collectors.facebook import DATE_FETCH_LIMIT
+
+        target = {"crawl_interval_seconds": 1800, "query": {"profile_ids": [1]}}
+        self.assertEqual(retry_seconds(target, reason=DATE_FETCH_LIMIT, partial=True), 180)
+        self.assertEqual(retry_seconds(target, reason="facebook: publication scan scroll limit reached",
+                                       partial=True), 900)
+        self.assertEqual(retry_seconds({"crawl_interval_seconds": 1800, "query": {"count_only": True}},
+                                       reason=DATE_FETCH_LIMIT), 6 * 3600)
+
     def test_profiles_without_a_vehicle_are_not_crawled(self):
         self.assertEqual(derive_targets([{"id": 1, "filters": {"year_min": 2015}}], self.SOURCES), [])
 

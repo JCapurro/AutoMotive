@@ -18,8 +18,11 @@ docs/MAILS_DE_PLAN.md): they ride the targets above as they are, and a model
 nobody else searches gets a `count_only` target crawled once a day.
 
 Each source runs in its own lane (Lanes): the targets of one source run one
-after the other, with jitter, first runs first, and a source that is slow or
-hung never holds up the others. A lane claims each target before crawling it
+after the other, with jitter, and a source that is slow or hung never holds up
+the others. A target that never ran goes first, then the due targets that
+notify, then the first-run retries and the count-only targets
+(targets.claim_next): a long bootstrap never makes them wait more than one
+of its scans. A lane claims each target before crawling it
 (targets.claim_next, a lease of LEASE_SECONDS), so crawl_targets is a queue
 that several workers can share and that heals itself when one dies; a source
 is crawled by one lane at a time across all of them. A
@@ -32,6 +35,7 @@ start to preserve coverage.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import math
 import random
@@ -42,6 +46,7 @@ from typing import Any, Awaitable, Callable
 
 from collectors import REGISTRY, Listing
 from collectors.base import CollectorBlocked
+from collectors.facebook import DATE_FETCH_LIMIT as FB_DATE_FETCH_LIMIT
 from collectors._isolated import call as isolated_call, isolated
 from collectors._loop import run_collector
 from config import COLLECTOR_TIMEOUT_SECONDS
@@ -69,6 +74,9 @@ FAILURE_RETRY_SECONDS = 900
 # A failed count-only target (2.5) waits longer: nobody waits for it, and a
 # source that is blocking requests shouldn't get extra ones.
 COUNT_ONLY_RETRY_SECONDS = 6 * 3600
+# A Facebook scan that stopped at its item-page cap (facebook.DATE_FETCH_LIMIT)
+# goes on soon: it kept what it read, and the due targets go before it anyway.
+DATE_FETCH_RETRY_SECONDS = 180
 
 # app_config.body_type_targets when the row is missing (the migration's value).
 DEFAULT_BODY_TYPE_TARGETS = {"sources": ["mercadolibre", "kavak"], "interval_seconds": 1800}
@@ -236,10 +244,15 @@ def derive_targets(profiles: list[dict[str, Any]], sources: list[str],
     return specs
 
 
-def retry_seconds(target: dict[str, Any]) -> int:
-    """When a failed or incomplete run of this target is tried again."""
+def retry_seconds(target: dict[str, Any], *, reason: str | None = None, partial: bool = False) -> int:
+    """When a failed or incomplete run of this target is tried again: a
+    count-only target in 6 hours, a Facebook scan cut by its item-page cap
+    (`reason`) in 180 s, any other one after its interval, 15 minutes at
+    most. `partial` (the run ended incomplete) doesn't change it yet."""
     if (target.get("query") or {}).get("count_only") is True:
         return COUNT_ONLY_RETRY_SECONDS
+    if reason == FB_DATE_FETCH_LIMIT:
+        return DATE_FETCH_RETRY_SECONDS
     return min(int(target.get("crawl_interval_seconds") or FAILURE_RETRY_SECONDS), FAILURE_RETRY_SECONDS)
 
 
@@ -270,7 +283,9 @@ def prefilter(target: dict[str, Any]) -> Callable[[dict[str, Any]], bool] | None
     On a source without publication dates (Kavak) a body type's whole stock
     is read on every run, so what the prefilter drops is remembered
     (crawl_targets.prefilter_rejected, run_target): a wider search, a price
-    cut or the quote can let it in later, and then it is not news."""
+    cut or the quote can let it in later, and then it is not news. A
+    Facebook target by model keeps its date memory in that column instead
+    (_date_memory); no target uses it both ways."""
     if not target.get("body_type"):
         return None
     q = target.get("query") or {}
@@ -297,6 +312,8 @@ async def run_target(target: dict[str, Any], on_health: HealthHandler | None = N
         filters = scraper_filters(target)
         if source in RECENT_SOURCES:
             filters["known_publication_dates"] = await targets_repo.publication_dates(target)
+        if _date_memory(target):
+            filters["date_skips"] = list(target.get("prefilter_rejected") or ())
         if isolated(scraper):
             items = await run_collector(isolated_call(scraper, "search", filters, timeout=COLLECTOR_TIMEOUT_SECONDS))
         else:
@@ -334,14 +351,36 @@ async def run_target(target: dict[str, Any], on_health: HealthHandler | None = N
     health = await runs.finish_run(run_id, ok=complete, found=result.found, new=result.new,
                                    updated=result.updated, error=error)
     await _report(on_health, health)
-    log.info("target=%s %s %s found=%d new=%d updated=%d events=%d", target["id"], source,
-             _label(target), result.found, result.new, result.updated, len(result.events))
+    probe = getattr(items, "probe", None)
+    log.info("target=%s %s %s found=%d new=%d updated=%d events=%d%s", target["id"], source,
+             _label(target), result.found, result.new, result.updated, len(result.events),
+             f" probe={json.dumps(probe, separators=(',', ':'))}" if probe else "")
     covered_until = (datetime.fromtimestamp(filters["publication_until"], timezone.utc)
                      if "publication_until" in filters else None)
+    if _date_memory(target):
+        await _remember_dates(target, getattr(items, "date_skips", None))
     backfill_ids = await _remember_rejected(target, result, rejected, complete=complete) \
         if keep is not None and source not in RECENT_SOURCES else frozenset()
     return TargetRun(target, items, result, first_run=not target["first_run_done"],
                      complete=complete, covered_until=covered_until, backfill_ids=backfill_ids)
+
+
+def _date_memory(target: dict[str, Any]) -> bool:
+    """Whether the target keeps Facebook's date memory (collectors/_recency.py)
+    in prefilter_rejected: a Facebook target by model. A target by body type
+    keeps what its prefilter dropped there."""
+    return target["source"] == "facebook" and not target.get("body_type")
+
+
+async def _remember_dates(target: dict[str, Any], date_skips: list[str] | None) -> None:
+    """Store the date memory the scan left (the collector merges it with the
+    previous one), unless it kept none or it didn't change."""
+    if date_skips is None or sorted(set(date_skips)) == sorted(set(target.get("prefilter_rejected") or ())):
+        return
+    try:
+        await targets_repo.set_prefilter_rejected(target["id"], date_skips)
+    except Exception:
+        await runs.log_error("crawl", f"target:{target['id']}", traceback.format_exc())
 
 
 async def _remember_rejected(target: dict[str, Any], result: IngestResult, rejected: set[str], *,
@@ -392,8 +431,8 @@ async def _run_one(target: dict[str, Any], on_batch: BatchHandler | None,
             await targets_repo.finish_target(target["id"], ok=False, retry_seconds=retry_seconds(target))
             return
     # Only now is the first run over: its batch was handled as backfill.
-    await targets_repo.finish_target(target["id"], ok=run.complete,
-                                    retry_seconds=0 if run.complete else retry_seconds(target),
+    retry = 0 if run.complete else retry_seconds(target, reason=getattr(run.items, "reason", None), partial=True)
+    await targets_repo.finish_target(target["id"], ok=run.complete, retry_seconds=retry,
                                     covered_until=run.covered_until)
 
 
@@ -414,8 +453,8 @@ async def _run_source(targets: list[dict[str, Any]], on_batch: BatchHandler | No
 
 async def _drain(source: str, on_batch: BatchHandler | None, jitter_seconds: float,
                  stop: asyncio.Event | None, on_health: HealthHandler | None = None) -> int:
-    """Claim and crawl `source`'s due targets one at a time, a first run
-    first, with jitter, until none is left or another worker is crawling the
+    """Claim and crawl `source`'s due targets one at a time, in claim_next's
+    order, with jitter, until none is left or another worker is crawling the
     source. Returns how many it crawled."""
     done = 0
     while (stop is None or not stop.is_set()) and not breaker.paused(source):

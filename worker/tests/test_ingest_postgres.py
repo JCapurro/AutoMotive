@@ -19,6 +19,7 @@ from psycopg.types.json import Jsonb
 import collectors
 import db
 from collectors._http import Page
+from collectors._recency import POLICY_VERSION
 from collectors.base import BaseScraper, Listing, ListingDetail
 from pgcase import TEST_FX_RATE, PostgresTestCase, requires_db
 from intelligence import comparables
@@ -373,6 +374,35 @@ class CrawlTargetsTests(IngestCase):
         [t] = await self.rows("SELECT first_run_done, next_run_at FROM crawl_targets")
         self.assertTrue(t["first_run_done"])
         self.assertIsNotNone(t["next_run_at"])
+
+    async def test_a_new_publication_policy_empties_the_date_memory(self):
+        """Facebook's date memory (collectors/_recency.py) holds while `since` can't move back."""
+        await self.fiesta_alert()
+        [spec] = await crawl.sync_targets(await db.enabled_profiles())
+        memory = ["1", "2@1700000000#1"]
+        async with db.connection() as cx:
+            await cx.execute("UPDATE crawl_targets SET first_run_done = true, prefilter_rejected = %s", (memory,))
+        await repo_targets.sync_targets([replace(spec, query={**spec.query, "year_min": 2015})])
+        [t] = await self.rows("SELECT first_run_done, prefilter_rejected FROM crawl_targets")
+        self.assertEqual((t["first_run_done"], t["prefilter_rejected"]), (True, memory))
+        await repo_targets.sync_targets([replace(spec, query={**spec.query, "year_min": 2015,
+                                                              "publication_policy": POLICY_VERSION + 1})])
+        [t] = await self.rows("SELECT first_run_done, prefilter_rejected FROM crawl_targets")
+        self.assertEqual((t["first_run_done"], t["prefilter_rejected"]), (False, []))
+
+    async def test_publication_dates_of_a_model_cover_its_longer_names_and_skip_stale_rows(self):
+        """A Facebook search for Corolla also brings Corolla Cross (by text): its dates count too."""
+        published = int(datetime.now(timezone.utc).timestamp()) - 3600
+        toyota = dict(source="facebook", marca="Toyota", published_at=published)
+        await ingest([card("1", titulo="Toyota Corolla XEI 2.0", modelo="Corolla", **toyota),
+                      card("2", titulo="Toyota Corolla Cross XEI", modelo="Corolla Cross", **toyota),
+                      card("3", source="facebook", published_at=published),          # a Ford Fiesta
+                      card("4", titulo="Toyota Corolla SEG", modelo="Corolla", **toyota)], geocode=None)
+        async with db.connection() as cx:
+            await cx.execute("UPDATE listings SET last_seen_at = now() - interval '40 days' WHERE external_id = '4'")
+        self.assertNotEqual((await self.listing("2"))["model"].lower(), "corolla")
+        dates = await repo_targets.publication_dates({"source": "facebook", "make": "Toyota", "model": "Corolla"})
+        self.assertEqual(dates, {"1": published, "2": published})
 
     async def test_failed_retry_preserves_successful_coverage_start(self):
         await self.fiesta_alert()

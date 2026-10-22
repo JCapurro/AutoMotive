@@ -104,3 +104,37 @@ class OneLanePerSourceTests(IngestCase):
         async with db.connection() as cx:
             await cx.execute("UPDATE crawl_targets SET claimed_until = now() - interval '1 second'")
         self.assertIsNotNone(await targets.claim_next('mercadolibre', 'vps:2', 60))
+
+
+class ClaimOrderTests(IngestCase):
+    """A long bootstrap never makes the due targets that notify wait (Sentra
+    waited ~140 minutes behind Facebook bootstraps, 2026-10-22)."""
+    SOURCES = ('mercadolibre',)
+
+    async def asyncSetUp(self):
+        await super().asyncSetUp()
+        for user, model in enumerate(('Fiesta', 'Focus', 'Ka', 'Mondeo'), start=20001):
+            await self.fiesta_alert(user=user, modelos=[model])
+        await self.tick()                                   # every target ran once
+        self.ids = {r['model']: r['id'] for r in await self.rows(
+            "SELECT id, model FROM crawl_targets WHERE active AND source = 'mercadolibre'")}
+
+    async def due(self, model, minutes_ago, *, first_run_done=True, count_only=False):
+        async with db.connection() as cx:
+            await cx.execute(
+                "UPDATE crawl_targets SET first_run_done = %s, "
+                "  next_run_at = now() - make_interval(mins => %s), "
+                "  query = CASE WHEN %s THEN query || '{\"count_only\": true}' ELSE query END WHERE id = %s",
+                (first_run_done, minutes_ago, count_only, self.ids[model]))
+
+    async def test_claim_order_puts_due_notifying_targets_before_bootstrap_retries(self):
+        await self.due('Fiesta', 10, first_run_done=False)  # a bootstrap retry
+        await self.due('Focus', 20, count_only=True)
+        await self.due('Ka', 1)                              # in regime
+        async with db.connection() as cx:                    # never ran (or reset)
+            await cx.execute("UPDATE crawl_targets SET next_run_at = NULL WHERE id = %s", (self.ids['Mondeo'],))
+        order = []
+        while (target := await targets.claim_next('mercadolibre', 'vps:1', 60)) is not None:
+            order.append(target['model'])
+            await targets.finish_target(target['id'], ok=True, retry_seconds=0)
+        self.assertEqual(order, ['Mondeo', 'Ka', 'Focus', 'Fiesta'])

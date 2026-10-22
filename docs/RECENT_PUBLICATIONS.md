@@ -34,6 +34,7 @@ y el bootstrap silencioso existentes.
 | Primera ejecución | Últimos 30 días, comprobados por fecha | `daysSinceListed=30`, comprobado por fecha |
 | Ejecución normal | «Publicados hoy»: una sola página, sin abrir fichas | `daysSinceListed=1` y últimas 24 horas comprobadas |
 | Interrupción o cambio de día | Ampliar hasta el inicio del último recorrido completo; hasta 25 horas alcanza «Publicados hoy» | Usar el bucket 1, 7 o 30 que cubra la recuperación |
+| Solo cuenta para el mail 2.5 (`count_only`) | «Publicados hoy», también en su primera ejecución | `daysSinceListed=1`, también en su primera ejecución |
 | Fecha desconocida | Excluir y contar en logs, salvo en «Publicados hoy» | Excluir y contar en logs |
 
 La recuperación agrega 10 minutos de solapamiento y tiene un máximo de 30 días.
@@ -74,6 +75,56 @@ se arma con el sufijo `_PublishedToday_YES`.
   publicación guardada, con una fecha ya leída por el proceso o con su ficha,
   hasta `RECENT_ML_MAX_DATE_FETCHES` fichas por ejecución.
 
+### Facebook: fichas, memoria de fechas y cola
+
+Las tarjetas de Facebook no muestran la edad del aviso (la cuenta del VPS está
+en inglés), así que cada aviso sin fecha conocida abre su ficha, 30 s después
+de la anterior (`RECENT_FB_DETAIL_SECONDS`).
+
+- **Tope por escaneo.** `RECENT_FB_MAX_DATE_FETCHES=12` fichas (~7 minutos).
+  Al llegarlo, el escaneo queda incompleto con lo que guardó y se reintenta a
+  los 180 s (`crawl.retry_seconds`). Un reinicio del worker tira a lo sumo ese
+  escaneo, y un target en régimen espera como mucho uno.
+- **Fechas conocidas por marca.** Antes de abrir una ficha se buscan las
+  fechas guardadas de la misma marca vistas en los últimos 35 días
+  (`targets.publication_dates`). Una búsqueda por texto trae modelos de nombre
+  más largo (Gol → Gol Trend y Golf, Corolla → Corolla Cross), y 35 días cubren
+  la ventana más ancha.
+- **Memoria de fechas por target**, en `crawl_targets.prefilter_rejected` (un
+  target de Facebook por modelo no usa esa columna para otra cosa,
+  ver CARROCERIA.md):
+  - `"id"`: la ficha fechó el aviso antes de la ventana. Mientras rige la
+    política, el comienzo de la ventana nunca retrocede (`target_window`), así
+    que ese aviso no entra nunca: su ficha no se vuelve a abrir.
+  - `"id@epoch#n"`: la ficha cargó sin fecha, `n` veces, la primera en
+    `epoch`. Se vuelve a leer a los 30 minutos, a las 2 horas y a las 6 horas
+    de `epoch`, y después de esos 3 intentos se saltea. Si alguna lectura lo
+    fecha, entra si se publicó hasta 24 horas antes de `epoch` (la ventana en
+    la que se lo vio), aunque hoy quede antes del comienzo de la ventana. Esta
+    parte va detrás de `FB_DATE_MEMORY_UNKNOWN`, apagada hasta medir
+    `unknown_dates` en los logs.
+  - Una lectura que falló por excepción no se memoriza: se reintenta en el
+    escaneo siguiente.
+  - Un escaneo completo conserva solo los avisos que vio; uno incompleto
+    conserva también los demás. Un cambio de `publication_policy` vacía la
+    memoria (`sync_targets`), porque la ventana vuelve a 30 días.
+- **Cola.** Dentro de cada fuente (`targets.claim_next`) va primero un target
+  que nunca corrió, después los vencidos en régimen y al final los reintentos
+  de bootstrap y los `count_only`, cada grupo por vencimiento. Un bootstrap
+  largo ya no deja sin turno a los modelos en régimen.
+- **Logs.** Cada escaneo deja `facebook publication window: ... dates_read
+  skipped out_of_window unknown_dates ...`, y la línea `target=...` del worker
+  agrega `probe={...}`.
+- **Sonda del feed (fase 2 pendiente).** Sin pedidos extra, el escaneo mira si
+  los datos de la página de búsqueda (el JSON del HTML inicial y las
+  respuestas `/api/graphql/` del scroll) traen un tiempo de creación por
+  aviso, y lo compara con el `creation_time` de las fichas que leyó en ese
+  mismo escaneo. Solo registra nombres de campo y conteos, nunca valores ni
+  volcados. Con cobertura y coincidencia de al menos 95 % sobre 100 o más
+  comparaciones, la fase 2 fecharía desde el feed. Si no, la alternativa es un
+  bootstrap sin fecha detrás de un flag apagado: cambia esta política y
+  necesita aprobación antes de implementarse.
+
 ## Activación y ritmo
 
 No requiere migración de esquema. `publication_policy=1` en la consulta del target
@@ -82,8 +133,9 @@ fuentes. Los IDs y matches ya guardados se conservan. Los cambios ordinarios de
 filtros y las reactivaciones posteriores no vuelven a reiniciarlo.
 
 Se mantienen los intervalos de `sources.crawl_interval_seconds`: en el seed,
-Mercado Libre cada 10 minutos y Facebook cada 60 minutos, sujetos al tick del
-worker y a la duración de los recorridos. «Del día» describe la ventana de
+Mercado Libre cada 10 minutos y Facebook cada 60 minutos; en producción
+(22/10/2026), las dos cada 30 minutos. Están sujetos al tick del worker y a la
+duración de los recorridos. «Del día» describe la ventana de
 publicación, no una ejecución única al día. La carga inicial puede tardar mucho
 si necesita abrir numerosas fichas; consultar logs y estado de la fuente.
 
@@ -94,6 +146,8 @@ si necesita abrir numerosas fichas; consultar logs y estado de la fuente.
 | `RECENT_ML_DETAIL_SECONDS` | 8 | Pausa antes de consultar una fecha en ficha |
 | `RECENT_ML_MAX_DATE_FETCHES` | 200 | Tope de fichas de Mercado Libre leídas por ejecución para conocer la fecha |
 | `RECENT_FB_DETAIL_SECONDS` | 30 | Pausa antes de consultar una fecha en ficha |
+| `RECENT_FB_MAX_DATE_FETCHES` | 12 | Tope de fichas de Facebook leídas por ejecución para conocer la fecha |
+| `FB_DATE_MEMORY_UNKNOWN` | 0 | 1 memoriza también las fichas que cargaron sin fecha (`"id@epoch#n"`) |
 
 Estas pausas regulan las lecturas de fecha durante el crawl; la cola de enrichment
 mantiene su configuración independiente. Si se alcanza un tope con resultados
@@ -104,7 +158,9 @@ ingeridos evitan abrir sus fichas nuevamente para conocer la fecha. En Mercado
 Libre, además, el worker recuerda mientras sigue corriendo la fecha leída de un
 aviso que quedó fuera de la ventana. Así no vuelve a pedir esa ficha en cada
 recorrido, y con el tope de fichas la ejecución siguiente sigue donde quedó la
-anterior. Un reinicio borra esa memoria.
+anterior. Un reinicio borra esa memoria. En Facebook la memoria se guarda en
+la base y sobrevive a los reinicios (ver «Facebook: fichas, memoria de fechas
+y cola»).
 
 ## Validación
 
