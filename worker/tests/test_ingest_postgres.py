@@ -20,7 +20,7 @@ import collectors
 import db
 from collectors._http import Page
 from collectors._recency import POLICY_VERSION
-from collectors.base import BaseScraper, Listing, ListingDetail
+from collectors.base import BaseScraper, Listing, ListingDetail, SearchResults
 from pgcase import TEST_FX_RATE, PostgresTestCase, requires_db
 from intelligence import comparables
 from intelligence.config import SCORING_VERSION
@@ -63,6 +63,8 @@ class FakeSource(BaseScraper):
         outcome = FakeSource.results.get(self.name, [])
         if isinstance(outcome, Exception):
             raise outcome
+        if isinstance(outcome, SearchResults):
+            return SearchResults([replace(l) for l in outcome], complete=outcome.complete, reason=outcome.reason)
         return [replace(l) for l in outcome]
 
     async def fetch_detail_page(self, url: str) -> Page:
@@ -505,6 +507,254 @@ class CrawlTargetsTests(IngestCase):
         await self.tick(on_health=alerts.on_health)
         [n] = await self.rows("SELECT count(*) AS n FROM listings")
         self.assertEqual(n["n"], 1)
+
+
+class NotNewsCase(IngestCase):
+    """pipeline/news.py on sources without publication dates: old stock read
+    as new is backfill for every search and never notified."""
+    SOURCES = ("mercadolibre", "kavak", "rosariogarage", "v6")
+
+    async def fiesta_alert(self, user: int = TG_USER, **filters) -> int:
+        """Notified on the web: search_profiles.channels defaults to email,
+        and the Telegram account has none."""
+        aid = await super().fiesta_alert(user, **filters)
+        async with db.connection() as cx:
+            await cx.execute("UPDATE search_profiles SET channels = '{web}' WHERE id = %s", (aid,))
+        return aid
+
+    @staticmethod
+    def comps(source: str, n: int = 6) -> list[Listing]:
+        """A market around USD 12.000, distinct km (not reposts of each other)."""
+        return [card(f"c{i}", source=source, precio=12_000.0 + i * 100, km=90_000 + i * 2_000) for i in range(n)]
+
+    @staticmethod
+    def deals(source: str, n: int, **kw) -> list[Listing]:
+        """Cars 25 % below it: opportunities, if they are news."""
+        return [card(f"d{i}", source=source, precio=9_000.0, km=91_000 + i * 2_000, **kw) for i in range(n)]
+
+    async def notified(self) -> set[str]:
+        return {r["external_id"] for r in await self.rows(
+            "SELECT l.external_id FROM notifications n JOIN listings l ON l.id = n.listing_id")}
+
+    async def live(self) -> set[str]:
+        """Listings with a live (non-backfill) match."""
+        return {r["external_id"] for r in await self.rows(
+            "SELECT l.external_id FROM matches m JOIN listings l ON l.id = m.listing_id WHERE NOT m.is_backfill")}
+
+    async def not_news(self, external_id: str) -> dict | None:
+        return (await self.listing(external_id))["attributes"].get("_not_news")
+
+
+class StepTests(NotNewsCase):
+    async def test_a_read_that_brings_half_the_stock_again_is_backfill_for_everyone(self):
+        # autocosmos Fox, 03/10: 2 → 16 after the search was widened.
+        await self.fiesta_alert(sources=["kavak"])
+        await self.fiesta_alert(user=1, sources=["kavak"])
+        FakeSource.results["kavak"] = self.comps("kavak")
+        await self.tick()
+        FakeSource.results["kavak"] = self.comps("kavak") + self.deals("kavak", 5)
+        await self.tick()
+
+        self.assertEqual(await self.notified(), set())
+        self.assertEqual(await self.live(), set())
+        [target] = await self.rows("SELECT id FROM crawl_targets")
+        [run] = await self.rows("SELECT id FROM collector_runs ORDER BY id DESC LIMIT 1")
+        self.assertEqual(await self.not_news("d0"), {"reason": "step", "run_id": run["id"],
+                                                     "target_id": target["id"], "prev_id": None})
+        self.assertEqual((await self.not_news("c0"))["reason"], "first_run")      # only for 2.5
+
+    async def test_a_normal_day_of_new_listings_is_news(self):
+        # rosariogarage Gol: 20 new of 181 is a normal day.
+        await self.fiesta_alert(sources=["kavak"])
+        FakeSource.results["kavak"] = self.comps("kavak", 12)
+        await self.tick()
+        FakeSource.results["kavak"] = self.comps("kavak", 12) + self.deals("kavak", 5)
+        await self.tick()
+        deals = {f"d{i}" for i in range(5)}
+        self.assertEqual(await self.notified(), deals)
+        self.assertEqual(await self.live(), deals)
+        self.assertIsNone(await self.not_news("d0"))
+
+    async def test_a_batch_that_fails_after_the_step_is_retried_without_notifying(self):
+        await self.fiesta_alert(sources=["kavak"])
+        FakeSource.results["kavak"] = self.comps("kavak")
+        await self.tick()
+        FakeSource.results["kavak"] = self.comps("kavak") + self.deals("kavak", 5)
+        with patch.object(scheduler, "process_batch", AsyncMock(side_effect=RuntimeError("notifier down"))):
+            await self.tick()
+        [err] = await self.rows("SELECT stage FROM pipeline_errors")
+        self.assertEqual(err["stage"], "notify")
+        await self.tick()                       # the retry: nothing is listing_new anymore
+
+        self.assertEqual(await self.notified(), set())
+        self.assertEqual(await self.live(), set())
+        self.assertEqual({r["external_id"] for r in await self.rows(
+            "SELECT l.external_id FROM matches m JOIN listings l ON l.id = m.listing_id WHERE m.is_backfill")},
+            {f"c{i}" for i in range(6)} | {f"d{i}" for i in range(5)})
+
+    async def test_a_recent_publication_inside_a_step_is_news(self):
+        # v6 dates its listings: a step doesn't silence what was just published.
+        await self.fiesta_alert(sources=["v6"])
+        FakeSource.results["v6"] = self.comps("v6")
+        await self.tick()
+        yesterday = int((datetime.now(timezone.utc) - timedelta(days=1)).timestamp())
+        FakeSource.results["v6"] = (self.comps("v6") + self.deals("v6", 4)
+                                    + [card("fresh", source="v6", precio=9_000.0, km=99_500, published_at=yesterday)])
+        await self.tick()
+        self.assertEqual(await self.notified(), {"fresh"})
+        self.assertEqual((await self.not_news("d0"))["reason"], "step")
+        self.assertIsNone(await self.not_news("fresh"))
+
+    async def test_an_empty_first_run_does_not_bootstrap(self):
+        # kavak Fox: its first run read 0 cars, the next one its whole stock.
+        await self.fiesta_alert(sources=["kavak"])
+        FakeSource.results["kavak"] = []
+        await self.tick()
+        [t] = await self.rows("SELECT id, first_run_done, next_run_at > now() AS later FROM crawl_targets")
+        self.assertEqual((t["first_run_done"], t["later"]), (False, True))
+
+        FakeSource.results["kavak"] = self.comps("kavak")
+        await self.tick()
+        [t] = await self.rows("SELECT id, first_run_done FROM crawl_targets")
+        self.assertTrue(t["first_run_done"])
+        self.assertEqual(await self.notified(), set())
+        self.assertEqual((await self.not_news("c0"))["reason"], "first_run")
+        self.assertEqual((await self.not_news("c0"))["target_id"], t["id"])
+
+        FakeSource.results["kavak"] = self.comps("kavak") + self.deals("kavak", 1)
+        await self.tick()
+        self.assertEqual(await self.notified(), {"d0"})
+
+
+class ReappearanceTests(NotNewsCase):
+    """rosariogarage republishes a car under another ID: 7 notifications in
+    23 days. The old copy has a location (it was enriched), the card doesn't,
+    so the fingerprint (sección 5.4) misses it."""
+
+    OLD = dict(source="rosariogarage", precio=9_000.0, km=88_000, vendedor_nombre="DOX Cars", ubicacion="Rosario")
+
+    async def republish(self, read: list[Listing]) -> None:
+        await self.fiesta_alert(sources=["rosariogarage"])
+        FakeSource.results["rosariogarage"] = self.comps("rosariogarage") + [card("A", **self.OLD)]
+        await self.tick()
+        FakeSource.results["rosariogarage"] = read
+
+    def copy(self, **kw) -> Listing:
+        return card("B", **{**self.OLD, "ubicacion": None, **kw})
+
+    async def test_a_card_republished_after_its_old_copy_vanished_is_backfill(self):
+        await self.republish(self.comps("rosariogarage") + [self.copy()])
+        await self.tick()
+        self.assertEqual(await self.notified(), set())
+        self.assertEqual(await self.live(), set())
+        a, b = await self.listing("A"), await self.listing("B")
+        self.assertEqual(((await self.not_news("B"))["reason"], (await self.not_news("B"))["prev_id"]),
+                         ("reappearance", a["id"]))
+        # Until comparables count the live copy (E3), the repost link waits for NEWS_LINK_REPOST.
+        self.assertIsNone(b["probable_repost_of"])
+
+    async def test_with_link_repost_it_points_to_its_root(self):
+        await self.republish(self.comps("rosariogarage") + [self.copy()])
+        with patch("config.NEWS_LINK_REPOST", True):
+            await self.tick()
+        self.assertEqual((await self.listing("B"))["probable_repost_of"], (await self.listing("A"))["id"])
+
+    async def test_twins_in_the_same_read_are_both_news(self):
+        # A dealer's two identical units: the old copy is still listed.
+        await self.republish(self.comps("rosariogarage") + [card("A", **self.OLD), self.copy()])
+        await self.tick()
+        self.assertEqual(await self.notified(), {"B"})
+        self.assertIsNone(await self.not_news("B"))
+
+    async def test_a_republish_3pct_cheaper_is_notified_as_republished(self):
+        await self.republish(self.comps("rosariogarage") + [self.copy(precio=8_700.0)])
+        await self.tick()
+        [n] = await self.rows("SELECT DISTINCT n.kind::text AS kind, n.payload->>'repost' AS repost "
+                              "  FROM notifications n JOIN listings l ON l.id = n.listing_id WHERE l.external_id = 'B'")
+        self.assertEqual((n["kind"], n["repost"]), ("new_match", "true"))
+        b = await self.listing("B")
+        self.assertIsNone(b["attributes"].get("_not_news"))
+        self.assertEqual(b["attributes"]["_republished"]["prev_id"], (await self.listing("A"))["id"])
+
+    async def test_an_incomplete_read_never_infers_a_vanished_copy(self):
+        await self.republish(SearchResults(self.comps("rosariogarage") + [self.copy()], complete=False,
+                                           reason="partial: page 2"))
+        await self.tick()
+        self.assertEqual(await self.notified(), {"B"})
+
+
+class FindReappearedTests(NotNewsCase):
+    """listings.find_reappeared: who counts as the same car."""
+    SOURCES = ("rosariogarage", "autocity", "gruporandazzo")
+
+    async def old_copy(self, new: Listing, *old: Listing, read: tuple[str, ...] = ()) -> str | None:
+        """The old copy find_reappeared picks for `new` among `old`, ingested
+        before it; `read` are the other IDs the same read brought."""
+        await ingest(list(old), geocode=None)
+        await ingest([new], geocode=None)
+        async with db.connection() as cx:
+            [row] = await repo_listings.new_rows(cx, [(await self.listing(new.listing_id))["id"]])
+            found = await repo_listings.find_reappeared(cx, row, batch_external_ids=[new.listing_id, *read],
+                                                        window_days=60, price_tol_pct=10, km_tol=100)
+        if found is None:
+            return None
+        [r] = await self.rows("SELECT external_id FROM listings WHERE id = %s", found["id"])
+        return r["external_id"]
+
+    @staticmethod
+    def car(listing_id: str, source: str = "rosariogarage", **kw) -> Listing:
+        return card(listing_id, source=source, **{"precio": 9_000.0, "km": 88_000, "vendedor_nombre": "DOX Cars",
+                                                  **kw})
+
+    async def test_the_same_seller_within_100_km(self):
+        self.assertEqual(await self.old_copy(self.car("new", km=88_100), self.car("old")), "old")
+
+    async def test_km_off_by_more_than_100_is_another_car(self):
+        self.assertIsNone(await self.old_copy(self.car("new", km=88_101), self.car("old")))
+
+    async def test_without_seller_only_the_exact_km_reappears(self):
+        self.assertIsNone(await self.old_copy(self.car("n1", km=88_050, vendedor_nombre=None),
+                                              self.car("o1", vendedor_nombre=None)))
+        self.assertEqual(await self.old_copy(self.car("n2", anio=2016, vendedor_nombre=None),
+                                             self.car("o2", anio=2016, vendedor_nombre=None)), "o2")
+
+    async def test_another_seller_gearbox_or_price_is_another_car(self):
+        # One year each, so the cars of one case can't be the old copy of another.
+        self.assertIsNone(await self.old_copy(self.car("n1", anio=2015, vendedor_nombre="Ivan"),
+                                              self.car("o1", anio=2015)))
+        self.assertIsNone(await self.old_copy(self.car("n2", anio=2016, transmision="Automática"),
+                                              self.car("o2", anio=2016, transmision="Manual")))
+        self.assertIsNone(await self.old_copy(self.car("n3", anio=2018, precio=10_000.0),
+                                              self.car("o3", anio=2018)))                          # +11 %
+        self.assertEqual(await self.old_copy(self.car("n4", anio=2019, transmision="Automática"),
+                                             self.car("o4", anio=2019)), "o4")                     # unknown gearbox
+
+    async def test_a_copy_still_in_the_read_is_not_an_old_one(self):
+        self.assertIsNone(await self.old_copy(self.car("new"), self.car("old"), read=("old",)))
+
+    async def test_a_copy_unseen_for_60_days_is_too_old(self):
+        await ingest([self.car("old")], geocode=None)
+        async with db.connection() as cx:
+            await cx.execute("UPDATE listings SET last_seen_at = now() - interval '61 days'")
+        self.assertIsNone(await self.old_copy(self.car("new")))
+
+    async def test_under_1000_km_never_reappears(self):
+        # Many 0 km cars look alike.
+        self.assertIsNone(await self.old_copy(self.car("new", km=500), self.car("old", km=500)))
+
+    async def test_another_photo_on_autocity_is_another_car(self):
+        # A dealer lists the same model, year and km twice: the photo tells the units apart.
+        photo = dict(source="autocity", vendedor_nombre="Autocity")
+        self.assertIsNone(await self.old_copy(self.car("n1", imagenes=["https://cdn.test/b.jpg"], **photo),
+                                              self.car("o1", imagenes=["https://cdn.test/a.jpg"], **photo)))
+        self.assertEqual(await self.old_copy(self.car("n2", imagenes=["https://cdn.test/c.jpg"], **photo),
+                                             self.car("o2", imagenes=["https://cdn.test/c.jpg"], **photo)), "o2")
+
+    async def test_another_plate_on_gruporandazzo_is_another_car(self):
+        plate = dict(source="gruporandazzo", vendedor_nombre="Grupo Randazzo")
+        self.assertIsNone(await self.old_copy(self.car("AB123CD_2", **plate), self.car("AB999ZZ_1", **plate)))
+        self.assertEqual(await self.old_copy(self.car("AC456EF_9", **plate), self.car("AC456EF_3", **plate)),
+                         "AC456EF_3")
 
 
 class TelegramAlertsTests(IngestCase):

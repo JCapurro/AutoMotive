@@ -349,6 +349,7 @@ upsert (source, external_id):
 - Cuando entra un listing nuevo: si existe otro con el mismo fingerprint en los últimos 60 días y su precio difiere menos de 10%, se completa `probable_repost_of`.
 - El match se genera igual, pero la alerta dice "re-publicado" y **no** cuenta como oportunidad nueva.
 - Se excluye de los comparables para no contar dos veces el mismo auto, mientras su original cuente (6.2).
+- **Reaparición en una fuente sin fecha** (`worker/pipeline/news.py`). El fingerprint falla cuando la tarjeta no trae la ubicación de la copia ya enriquecida (rosariogarage). Por eso un alta se compara también con las copias de la misma fuente que **no** vinieron en esta lectura completa: misma marca, modelo, año y vendedor, km ±100 (exacto si no hay vendedor), versión y caja compatibles, precio ±10 %, vista en los últimos 60 días, más la misma foto en autocity y carone y la misma patente en gruporandazzo. Si coincide, va a backfill y queda marcada en `attributes._not_news` (reason `reappearance`, `prev_id`). Una baja de 3 % o más (`price_drop_min_pct`) pasa igual, con la etiqueta "re-publicado" (`attributes._republished`). `probable_repost_of` se escribe recién con `NEWS_LINK_REPOST=1`, cuando los comparables cuenten la copia viva.
 
 ### 5.5 Enrichment de la ficha
 
@@ -375,6 +376,12 @@ La misma pasada revisa los listings con un match (nivel mayor que `low`) que el 
 - **Profile nuevo o editado:** la web marca `rematch_requested_at`. El worker corre el matching contra `listings` activos de los últimos 30 días y crea `matches` con `is_backfill = true`, que **no se notifican**. El usuario ve resultados en la web enseguida ("first value", §36).
 - **Target nuevo:** la primera corrida (`first_run_done = false`) no notifica. Los matches de esa corrida también quedan como backfill.
 - **Recencia:** se mantiene `RECOMMENDED_MAX_AGE_DAYS` cuando la fuente expone `published_at` (`_is_recent`).
+- **Fuentes sin fecha** (todas menos Mercado Libre y Facebook; `worker/pipeline/news.py`). Ahí "nuevo" es "un ID que nunca vimos", así que el stock viejo puede parecer novedad. Después del ingest, `news.classify` manda a backfill, para todas las búsquedas, las altas que no son noticia y las marca en `listings.attributes._not_news` {reason, run_id, target_id, prev_id}:
+  - **escalón** (`NEWS_GUARD_STEP`): 5 altas o más, y altas×2 ≥ el mayor `found` de las 3 corridas ok anteriores (no en targets de inventario);
+  - **reaparición** (`NEWS_GUARD_REAPPEARANCE`, sección 5.4), solo en lecturas completas;
+  - **primera corrida vacía** (`NEWS_GUARD_EMPTY_FIRST`): una primera corrida con found=0 no completa el bootstrap, así que la lectura siguiente sigue siendo primera.
+
+  Un alta con `published_at` reciente (v6) nunca se silencia. `match_alert` trata como backfill las marcadas aunque se reintente el lote (falla `on_batch` o se reinicia el worker), y el conteo 2.5 no las cuenta. Las altas de una primera corrida se marcan `first_run`, solo para 2.5, y se saltean únicamente para el target que las guardó. Si `classify` falla, queda en `pipeline_errors` ('news') y todo es noticia, como antes. Una corrida incompleta que no es primera reintenta con el intervalo de la fuente (`NEWS_PARTIAL_RETRY`). Cada flag se apaga con 0 en el `.env`.
 
 ---
 

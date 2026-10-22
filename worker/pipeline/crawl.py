@@ -30,7 +30,9 @@ collector search is cancelled after COLLECTOR_TIMEOUT_SECONDS; an ISOLATED
 collector (Facebook, Instagram) runs in a child process that is killed then
 (collectors/_isolated.py). The next run is scheduled after the source's
 interval. For recent publications, last_run_at records the successful scan's
-start to preserve coverage.
+start to preserve coverage. On a source without publication dates,
+pipeline/news.py tells which new listings are old stock (backfill), and a
+first run that read nothing doesn't finish the bootstrap.
 """
 from __future__ import annotations
 
@@ -49,6 +51,7 @@ from collectors.base import CollectorBlocked
 from collectors.facebook import DATE_FETCH_LIMIT as FB_DATE_FETCH_LIMIT
 from collectors._isolated import call as isolated_call, isolated
 from collectors._loop import run_collector
+import config
 from config import COLLECTOR_TIMEOUT_SECONDS
 from collectors._recency import POLICY_VERSION, SOURCES as RECENT_SOURCES, target_window
 from db.pool import connection
@@ -59,7 +62,7 @@ from db.repos.runs import SourceHealth
 from intelligence.matching import filter_currency, malformed_vehicle, model_less, wanted_body_types
 from normalization.listing import Target
 from normalization.normalize import normalize_brand, normalize_text
-from pipeline import breaker
+from pipeline import breaker, news
 from pipeline.ingest import IngestResult, ingest
 
 
@@ -113,8 +116,9 @@ class TargetRun:
     first_run: bool
     complete: bool = True
     covered_until: datetime | None = None
-    # Listings stored for the first time that this target's prefilter had
-    # dropped before (prefilter_rejected): old stock, matched as backfill.
+    # Listings stored for the first time that are old stock, matched as
+    # backfill: the ones pipeline/news.py says are not news, and the ones
+    # this target's prefilter had dropped before (prefilter_rejected).
     backfill_ids: frozenset[int] = frozenset()
 
 
@@ -248,12 +252,20 @@ def retry_seconds(target: dict[str, Any], *, reason: str | None = None, partial:
     """When a failed or incomplete run of this target is tried again: a
     count-only target in 6 hours, a Facebook scan cut by its item-page cap
     (`reason`) in 180 s, any other one after its interval, 15 minutes at
-    most. `partial` (the run ended incomplete) doesn't change it yet."""
+    most. `partial`: the run read part of the source (SearchResults.complete
+    is False). A partial read past the first one, on a source without
+    publication dates, waits for the whole interval (config.NEWS_PARTIAL_RETRY):
+    a source that cut the read short (a 503, a Retry-After) isn't hammered
+    every 15 minutes, and what it read is stored."""
+    interval = int(target.get("crawl_interval_seconds") or FAILURE_RETRY_SECONDS)
     if (target.get("query") or {}).get("count_only") is True:
         return COUNT_ONLY_RETRY_SECONDS
     if reason == FB_DATE_FETCH_LIMIT:
         return DATE_FETCH_RETRY_SECONDS
-    return min(int(target.get("crawl_interval_seconds") or FAILURE_RETRY_SECONDS), FAILURE_RETRY_SECONDS)
+    if (partial and config.NEWS_PARTIAL_RETRY and target.get("first_run_done")
+            and target.get("source") not in RECENT_SOURCES):
+        return interval
+    return min(interval, FAILURE_RETRY_SECONDS)
 
 
 def scraper_filters(target: dict[str, Any]) -> dict[str, Any]:
@@ -357,11 +369,14 @@ async def run_target(target: dict[str, Any], on_health: HealthHandler | None = N
              f" probe={json.dumps(probe, separators=(',', ':'))}" if probe else "")
     covered_until = (datetime.fromtimestamp(filters["publication_until"], timezone.utc)
                      if "publication_until" in filters else None)
+    first_run = not target["first_run_done"]
+    backfill_ids = await news.classify(target, items, result, run_id=run_id, first_run=first_run,
+                                       complete=complete)
     if _date_memory(target):
         await _remember_dates(target, getattr(items, "date_skips", None))
-    backfill_ids = await _remember_rejected(target, result, rejected, complete=complete) \
-        if keep is not None and source not in RECENT_SOURCES else frozenset()
-    return TargetRun(target, items, result, first_run=not target["first_run_done"],
+    if keep is not None and source not in RECENT_SOURCES:
+        backfill_ids |= await _remember_rejected(target, result, rejected, complete=complete)
+    return TargetRun(target, items, result, first_run=first_run,
                      complete=complete, covered_until=covered_until, backfill_ids=backfill_ids)
 
 
@@ -430,10 +445,14 @@ async def _run_one(target: dict[str, Any], on_batch: BatchHandler | None,
             await runs.log_error("notify", f"target:{target['id']}", traceback.format_exc())
             await targets_repo.finish_target(target["id"], ok=False, retry_seconds=retry_seconds(target))
             return
-    # Only now is the first run over: its batch was handled as backfill.
+    # Only now is the first run over: its batch was handled as backfill. A
+    # source without publication dates that read nothing isn't loaded yet:
+    # the stock its next read finds is that first run's (pipeline/news.py).
+    bootstrap = not (config.NEWS_GUARD_EMPTY_FIRST and run.first_run and run.result.found == 0
+                     and target.get("source") not in RECENT_SOURCES)
     retry = 0 if run.complete else retry_seconds(target, reason=getattr(run.items, "reason", None), partial=True)
     await targets_repo.finish_target(target["id"], ok=run.complete, retry_seconds=retry,
-                                    covered_until=run.covered_until)
+                                    covered_until=run.covered_until, bootstrap=bootstrap)
 
 
 async def _run_source(targets: list[dict[str, Any]], on_batch: BatchHandler | None,
