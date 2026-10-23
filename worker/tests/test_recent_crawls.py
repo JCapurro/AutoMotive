@@ -1,6 +1,7 @@
 """Publication windows and coverage, without live accounts or external requests."""
 from __future__ import annotations
 
+import asyncio
 from collections import Counter
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -248,12 +249,15 @@ class MercadoLibreWindowTests(unittest.IsolatedAsyncioTestCase):
 
 
 class FacebookPage:
-    """A virtualized feed: each scroll replaces, rather than appends, cards."""
-    def __init__(self, batches, *, expire_after=None, body="Marketplace"):
+    """A virtualized feed: each scroll replaces, rather than appends, cards.
+    `html` is the search page's first HTML; answers[n], the GraphQL answer
+    the scroll to batch n downloads."""
+    def __init__(self, batches, *, expire_after=None, body="Marketplace", html=None, answers=None):
         self.batches, self.index = batches, 0
         self.url = ""
         self.expire_after = expire_after
         self.body = body
+        self.html, self.answers = html, dict(answers or {})
         self.close = AsyncMock()
         self.wait_for_timeout = AsyncMock()
         self.mouse = MagicMock(wheel=AsyncMock(side_effect=self.scroll))
@@ -262,10 +266,17 @@ class FacebookPage:
 
     async def goto(self, url, **kwargs):
         self.url = url
-        return MagicMock(status=200)
+        response = MagicMock(status=200)
+        if self.html is not None:
+            response.text = AsyncMock(return_value=self.html)
+        return response
 
     async def scroll(self, *args):
         self.index = min(self.index + 1, len(self.batches) - 1)
+        if (answer := self.answers.pop(self.index, None)) is not None:
+            graphql = MagicMock(url="https://www.facebook.com/api/graphql/", text=AsyncMock(return_value=answer))
+            graphql.request.resource_type = "xhr"
+            self.on.call_args.args[1](graphql)                    # still being read when the cards render
         if self.expire_after is not None:
             self.expire_after -= 1
             if self.expire_after <= 0:
@@ -563,15 +574,128 @@ class FeedProbeTests(unittest.TestCase):
         for ident, text in (("1", "Ford Ka\nJust listed"), ("2", "Ford Ka"), ("3", "Ford Ka")):
             probe.card(ident, text)
         probe.page_times = {"1": NOW - 100 + 60, "2": NOW - 200 + 600}
-        probe.dated("1", NOW - 2 * 3600)
+        probe.dated("1", NOW - 2 * 3600, "page")
+        probe.dated("2", None, "page")
         with patch("collectors._recency.time.time", return_value=NOW):
             report = probe.report({"2": NOW - 200})
         self.assertEqual(report["compared"], {"own.creation_time": [1, 1], "edge.story_time": [1, 0]})
         self.assertEqual(report["vs_known"], {"own.creation_time": [1, 0]})
         self.assertEqual((report["cards"], report["ids_in_data"], report["just_listed"],
                           report["just_listed_max_age_h"]), (3, 3, 1, 2.0))
+        self.assertEqual((report["dated"], report["feed_vs_page"], report["feed_page_off_s"]),
+                         ({"page": 1, "none": 1}, [1, 1], {"2": -600}))
         self.assertNotIn(str(NOW)[:6], json.dumps(report))
         self.assertEqual(probe.texts, [])                                      # dropped after the report
+
+    def test_a_card_missing_from_the_data_waits_once_for_each_answer_being_read(self):
+        async def scenario():
+            probe = fb._FeedProbe()
+            probe.texts = self.texts()
+            stuck = asyncio.get_running_loop().create_future()                # an answer that never ends
+            probe.pending.add(stuck)
+            with patch.object(fb, "FEED_WAIT_SECONDS", 0.01), \
+                    patch.object(fb.asyncio, "wait", wraps=asyncio.wait) as wait, \
+                    patch("collectors._recency.time.time", return_value=NOW):
+                dates = [await probe.feed_date(i) for i in ("1", "9", "9", "2")]
+            stuck.cancel()
+            return dates, wait.call_count, probe.texts
+
+        dates, waits, texts = asyncio.run(scenario())
+        self.assertEqual(dates, [NOW - 100, None, None, NOW - 200])
+        self.assertEqual((waits, texts), (1, []))                              # indexed, not held
+
+
+FIXTURES = pathlib.Path(__file__).parent / "fixtures" / "html"
+
+
+class FacebookFeedDateTests(unittest.IsolatedAsyncioTestCase):
+    """Phase 2A: a card dated by the search page's own data opens no item page."""
+    search = FacebookWindowTests.search
+    HTML = (FIXTURES / "facebook_search_feed.html").read_text(encoding="utf-8")        # 1001, 1002 dated; 1003 not
+    GRAPHQL = (FIXTURES / "facebook_search_graphql.json").read_text(encoding="utf-8")  # 1004 dated; 1005 in 2011
+
+    async def scan(self, page, dates=None, **filters):
+        """`page` scanned, its item pages saying dates[id] (also as their
+        creation_time). Returns (results, ids read, the scan's log line)."""
+        reads = []
+
+        async def read_date(scraper, ctx, listing):
+            reads.append(listing.listing_id)
+            scraper._probe.page_times[listing.listing_id] = dates[listing.listing_id]
+            return dates[listing.listing_id]
+
+        with patch.object(fb.FacebookMarketplaceScraper, "_publication_date", read_date), \
+                patch.object(fb.config, "RECENT_FB_DETAIL_SECONDS", 0), \
+                self.assertLogs("collectors.facebook", "INFO") as logs:
+            results = await self.search(page, **filters)
+        return results, reads, logs.output[-1]
+
+    async def test_a_card_dated_by_the_feed_opens_no_item_page(self):
+        results, reads, line = await self.scan(FacebookPage([[("1001", None), ("1002", None)]], html=self.HTML))
+        self.assertEqual(reads, [])
+        self.assertEqual([(l.listing_id, l.published_at) for l in results],
+                         [("1001", 1_699_900_000), ("1002", 1_699_800_000)])
+        self.assertEqual((results.complete, results.unknown_dates), (True, 0))
+        self.assertEqual((results.probe["dated"], results.probe["vs_known"]), ({"feed": 2}, {}))
+        self.assertIn("dates_read=0 feed_dates=2 page_dates=0", line)
+
+    async def test_a_card_missing_from_the_feed_reads_its_item_page(self):
+        # 1004 comes in the scroll's answer, still being read when its card renders.
+        page = FacebookPage([[("1001", None), ("1003", None)], [("1004", None)]],
+                            html=self.HTML, answers={1: self.GRAPHQL})
+        results, reads, line = await self.scan(page, {"1003": NOW - DAY})
+        self.assertEqual(reads, ["1003"])
+        self.assertEqual({l.listing_id: l.published_at for l in results},
+                         {"1001": 1_699_900_000, "1003": NOW - DAY, "1004": 1_699_950_000})
+        self.assertEqual((results.probe["dated"], results.probe["graphql_bodies"]), ({"feed": 2, "page": 1}, 1))
+        self.assertIn("dates_read=1 feed_dates=2 page_dates=1", line)
+        self.assertIn("feed_page_disagree=0", line)
+
+    async def test_a_stored_date_still_comes_first(self):
+        results, reads, _ = await self.scan(FacebookPage([[("1001", None)]], html=self.HTML),
+                                            known_publication_dates={"1001": 1_699_900_060})
+        self.assertEqual(([l.published_at for l in results], reads), ([1_699_900_060], []))
+        self.assertEqual((results.probe["dated"], results.probe["vs_known"]),
+                         ({"known": 1}, {"own.creation_time": [1, 0]}))
+
+    async def test_an_implausible_feed_date_is_ignored(self):
+        # 1005 says 2011; 1006, ten minutes from now.
+        future = json.dumps({"data": {"node": {"listing": {"id": "1006", "creation_time": NOW + 600}}}})
+        page = FacebookPage([[("1001", None)], [("1005", None), ("1006", None)]],
+                            html=self.HTML, answers={1: f"{self.GRAPHQL.strip()}\n{future}"})
+        results, reads, line = await self.scan(page, {"1005": NOW - DAY, "1006": NOW - 2 * DAY})
+        self.assertEqual(reads, ["1005", "1006"])
+        self.assertEqual({l.listing_id: l.published_at for l in results},
+                         {"1001": 1_699_900_000, "1005": NOW - DAY, "1006": NOW - 2 * DAY})
+        self.assertEqual((results.probe["feed_implausible"], results.probe["feed_vs_page"]), (2, [0, 2]))
+        self.assertEqual(results.probe["feed_page_off_s"],
+                         {"1005": 1_300_000_000 - (NOW - DAY), "1006": 600 + 2 * DAY})
+        self.assertIn("feed_dates=1 page_dates=2", line)
+        self.assertIn("unknown_dates=0 feed_page_disagree=2", line)
+
+    async def test_feed_dates_off_reads_every_item_page_as_before(self):
+        page = FacebookPage([[("1001", None), ("1002", None)]], html=self.HTML)
+        with patch.object(fb.config, "FB_FEED_DATES", False):
+            results, reads, line = await self.scan(page, {"1001": 1_699_900_030, "1002": 1_699_800_600})
+        self.assertEqual(reads, ["1001", "1002"])
+        self.assertEqual([l.published_at for l in results], [1_699_900_030, 1_699_800_600])
+        # The probe still compares the feed with the pages it read.
+        self.assertEqual((results.probe["dated"], results.probe["feed_vs_page"], results.probe["feed_page_off_s"]),
+                         ({"page": 2}, [1, 1], {"1002": -600}))
+        self.assertIn("dates_read=2 feed_dates=0 page_dates=2", line)
+        self.assertIn("feed_page_disagree=1", line)
+
+    async def test_the_cap_and_the_date_memory_still_hold_for_the_cards_the_feed_misses(self):
+        with patch.object(fb.config, "RECENT_FB_MAX_DATE_FETCHES", 1):
+            results, reads, line = await self.scan(
+                FacebookPage([[("1001", None), ("1003", None), ("1007", None), ("1008", None)]], html=self.HTML),
+                {"1003": NOW - 40 * DAY}, date_skips=["1007"])
+        self.assertEqual(reads, ["1003"])                                    # 1007 remembered, 1008 past the cap
+        self.assertEqual(([l.listing_id for l in results], results.complete, results.reason),
+                         (["1001"], False, fb.DATE_FETCH_LIMIT))
+        self.assertEqual(sorted(results.date_skips), ["1003", "1007"])        # 1003 dated out of the window
+        self.assertEqual((results.unknown_dates, results.probe["dated"]), (1, {"feed": 1, "page": 1, "none": 1}))
+        self.assertIn("dates_read=1 feed_dates=1 page_dates=1 skipped=1 out_of_window=1", line)
 
 
 class FacebookCitySlugTests(unittest.TestCase):

@@ -45,8 +45,10 @@ _KM_RE = re.compile(r"(\d[\d\.\,]*)\s*(mil\s+)?km", re.IGNORECASE)
 _YEAR_RE = re.compile(r"\b(19[8-9]\d|20[0-3]\d)\b")
 log = logging.getLogger("collectors.facebook")
 
-# A card shows no age, so a first run reads every item page, 30 s apart. Past
-# RECENT_FB_MAX_DATE_FETCHES (12) the scan ends incomplete with what it kept;
+# A card shows no age. The search page's own data carries each listing's
+# creation_time (FB_FEED_DATES, _FeedProbe.feed_date); a card it doesn't date
+# reads its item page, 30 s apart. Past RECENT_FB_MAX_DATE_FETCHES (12) pages
+# the scan ends incomplete with what it kept;
 # the retry, 180 s later, finds those dates among the stored listings
 # (known_publication_dates) and the ads dated out of the window in the
 # target's date memory (crawl_targets.prefilter_rejected, collectors/_recency.py),
@@ -426,19 +428,30 @@ def parse_detail(html: str, url: str, status: int = 200) -> ListingDetail:
     ))
 
 
-# ---------- feed probe (passive) ----------
-# Whether the search page's own data carries each card's age, which would
-# date a card without opening its item page (phase 2 of
-# docs/RECENT_PUBLICATIONS.md). It reads what the page already downloads: the
-# JSON in the first HTML and the /api/graphql/ answers to the scrolls.
+# ---------- feed dates and probe ----------
+# The search page's own data carries each card's creation_time: the JSON in
+# the first HTML and the /api/graphql/ answers to the scrolls, which the page
+# downloads anyway. A card dated there needs no item page (FB_FEED_DATES,
+# phase 2A of docs/RECENT_PUBLICATIONS.md). The probe that found it keeps
+# counting, each scan, how the cards got their dates and whether the feed and
+# an item page disagree.
 
 _JSON_SCRIPT_RE = re.compile(r'<script type="application/json"[^>]*>(.*?)</script>', re.S)
-# What the probe keeps of the GraphQL answers, at most.
+# What the probe holds of the GraphQL answers not indexed yet, at most.
 PROBE_MAX_BYTES = 20_000_000
 # A feed time and an item page's creation_time agree within this.
 PROBE_AGREE_SECONDS = 120
 # The paths a report names, the most frequent first.
 PROBE_MAX_PATHS = 8
+# The feed time a card is dated by: the one on its own listing object, which
+# the probe found on every card (2026-10-22, 19 of 19, each within
+# PROBE_AGREE_SECONDS of the stored date).
+FEED_DATE_PATH = "own.creation_time"
+# A feed time before 2015-01-01 UTC, or after now, is no publication date.
+FEED_DATE_FLOOR = 1_420_070_400
+# How long a card missing from the data waits, once per answer, for the
+# answers still being read.
+FEED_WAIT_SECONDS = 3
 
 
 def _json_documents(text: str) -> Iterable[object]:
@@ -475,18 +488,21 @@ class FeedTimes(NamedTuple):
     documents: int                      # JSON documents read
 
 
-def _feed_times(texts: Iterable[str], card_ids: Iterable[str], *, now: int | None = None) -> FeedTimes:
-    """The times the page's data ties to each card: under the object whose
-    "id" is the card's ("own.<path>") or beside it in the object holding it
-    ("edge.<path>"). A card with two values for one path loses that path."""
-    ids = {str(i) for i in card_ids}
-    latest = (int(time.time()) if now is None else now) + 3_600
-    found: dict[str, dict[str, set[int]]] = {}
-    present: set[str] = set()
-    documents = 0
-    for text in texts:
+class _FeedIndex:
+    """The times the page's data ties to each listing ID, built one text at a
+    time as the scan reads them: under the object whose "id" is the listing's
+    ("own.<path>") or beside it in the object holding it ("edge.<path>"). An
+    ID with two values for one path loses that path."""
+
+    def __init__(self, *, now: int | None = None) -> None:
+        self.latest = (int(time.time()) if now is None else now) + 3_600
+        self.found: dict[str, dict[str, set[int]]] = {}
+        self.present: set[str] = set()          # listing IDs found as some object's "id"
+        self.documents = 0                      # JSON documents read
+
+    def add(self, text: str) -> None:
         for doc in _json_documents(text):
-            documents += 1
+            self.documents += 1
             stack: list[tuple[object, dict | None, str | None]] = [(doc, None, None)]
             while stack:
                 node, parent, key = stack.pop()
@@ -496,37 +512,54 @@ def _feed_times(texts: Iterable[str], card_ids: Iterable[str], *, now: int | Non
                 if not isinstance(node, dict):
                     continue
                 ident = node.get("id")
-                if isinstance(ident, (str, int)) and not isinstance(ident, bool) and str(ident) in ids:
-                    ident = str(ident)
-                    present.add(ident)
-                    slot = found.setdefault(ident, {})
-                    for path, value in _times(node, latest):
-                        slot.setdefault(f"own.{path}", set()).add(value)
-                    for k, v in (parent or {}).items():
-                        if k != key:
-                            for path, value in _times({k: v}, latest):
-                                slot.setdefault(f"edge.{path}", set()).add(value)
+                ident = str(ident) if isinstance(ident, (str, int)) and not isinstance(ident, bool) else ""
+                if ident.isascii() and ident.isdigit():          # /marketplace/item/<digits>
+                    self.present.add(ident)
+                    times = [(f"own.{path}", value) for path, value in _times(node, self.latest)]
+                    times += [(f"edge.{path}", value) for k, sibling in (parent or {}).items() if k != key
+                              for path, value in _times({k: sibling}, self.latest)]
+                    for path, value in times:
+                        self.found.setdefault(ident, {}).setdefault(path, set()).add(value)
                 stack.extend((v, node, k) for k, v in node.items() if isinstance(v, (dict, list)))
-    times = {i: {p: next(iter(v)) for p, v in by_path.items() if len(v) == 1} for i, by_path in found.items()}
-    times = {i: t for i, t in times.items() if t}
-    return FeedTimes(times, Counter(p for t in times.values() for p in t), present, documents)
+
+    def times(self, ident: str) -> dict[str, int]:
+        """The ID's paths that have a single value."""
+        return {p: next(iter(v)) for p, v in self.found.get(ident, {}).items() if len(v) == 1}
+
+    def lookup(self, card_ids: Iterable[str]) -> FeedTimes:
+        ids = {str(i) for i in card_ids}
+        times = {i: t for i in ids if (t := self.times(i))}
+        return FeedTimes(times, Counter(p for t in times.values() for p in t), self.present & ids, self.documents)
+
+
+def _feed_times(texts: Iterable[str], card_ids: Iterable[str], *, now: int | None = None) -> FeedTimes:
+    """The times the page's data (`texts`) ties to each card (_FeedIndex)."""
+    index = _FeedIndex(now=now)
+    for text in texts:
+        index.add(text)
+    return index.lookup(card_ids)
 
 
 class _FeedProbe:
-    """Collects, during one scan, what _feed_times needs and the dates the scan
-    found, and reports counters only: path names and counts, never a value.
-    It makes no request, never changes the scan's results, and keeps the
-    page's data (which carries session tokens) in memory only. Every step
-    swallows its own errors."""
+    """Collects, during one scan, the page's data (_FeedIndex) and how the scan
+    dated each card, and reports counters only: path names, counts and how far
+    a feed date is from its item page's, never a date. It makes no request,
+    changes the scan's results only through feed_date, and keeps the page's
+    data (which carries session tokens) in memory only. Every step swallows
+    its own errors."""
 
     def __init__(self) -> None:
-        self.texts: list[str] = []
+        self.texts: list[str] = []                 # read, not indexed yet
+        self.index = _FeedIndex()
         self.graphql = 0
-        self.size = 0
+        self.size = 0                              # what self.texts holds
         self.pending: set[asyncio.Future] = set()
+        self.waited: set[asyncio.Future] = set()
         self.cards: set[str] = set()
         self.just_listed: set[str] = set()
         self.dates: dict[str, int] = {}
+        self.origins: Counter = Counter()          # card, known, feed, page, or none: the dates of the cards
+        self.implausible = 0                       # feed dates left out by feed_date
         self.page_times: dict[str, int] = {}       # an item page's own creation_time, this scan
 
     def listen(self, page) -> None:
@@ -564,13 +597,41 @@ class _FeedProbe:
         if isinstance(text, str):
             self.texts.append(text)
 
+    def _index(self) -> None:
+        while self.texts:
+            text = self.texts.pop()
+            self.size = max(0, self.size - len(text))
+            self.index.add(text)
+
+    async def feed_date(self, ident: str) -> int | None:
+        """The card's FEED_DATE_PATH in the data read so far, unless it is
+        before FEED_DATE_FLOOR or in the future. A card not there yet waits
+        for the answers still being read, each answer once."""
+        try:
+            self._index()
+            value = self.index.times(ident).get(FEED_DATE_PATH)
+            if value is None and (waiting := self.pending - self.waited):
+                self.waited |= waiting
+                await asyncio.wait(waiting, timeout=FEED_WAIT_SECONDS)
+                self._index()
+                value = self.index.times(ident).get(FEED_DATE_PATH)
+        except Exception:
+            return None
+        if value is not None and not FEED_DATE_FLOOR <= value <= int(time.time()):
+            self.implausible += 1
+            return None
+        return value
+
     def card(self, ident: str, text: str) -> None:
         self.cards.add(ident)
         if any(cue in text.lower() for cue in _JUST_LISTED):
             self.just_listed.add(ident)
 
-    def dated(self, ident: str, published_at: int) -> None:
-        self.dates[ident] = published_at
+    def dated(self, ident: str, published_at: int | None, origin: str) -> None:
+        """A card the scan dated from `origin`, or couldn't (published_at None)."""
+        self.origins[origin if published_at is not None else "none"] += 1
+        if published_at is not None:
+            self.dates[ident] = published_at
 
     def item_page(self, ident: str, html: str) -> None:
         try:
@@ -595,10 +656,11 @@ class _FeedProbe:
 
     def report(self, known: dict[str, int]) -> dict | None:
         try:
-            feed = _feed_times(self.texts, self.cards)
+            self._index()
+            feed = self.index.lookup(self.cards)
             paths = [p for p, _ in feed.paths.most_common(PROBE_MAX_PATHS)]
 
-            def tally(reference: dict[str, int]) -> dict[str, list[int]]:
+            def tally(reference: dict[str, int], paths: list[str] = paths) -> dict[str, list[int]]:
                 out: dict[str, list[int]] = {}
                 for ident, by_path in feed.times.items():
                     if ident in reference:
@@ -608,15 +670,26 @@ class _FeedProbe:
                                 out.setdefault(path, [0, 0])[0 if agree else 1] += 1
                 return out
 
+            # A card has both when its page was read: the feed had no plausible
+            # date yet, or FB_FEED_DATES is off.
+            off = {i: t[FEED_DATE_PATH] - self.page_times[i] for i, t in sorted(feed.times.items())
+                   if i in self.page_times and FEED_DATE_PATH in t
+                   and abs(t[FEED_DATE_PATH] - self.page_times[i]) > PROBE_AGREE_SECONDS}
             now = int(time.time())
             ages = [now - self.dates[i] for i in self.just_listed if i in self.dates]
-            return {"cards": len(self.cards), "json_docs": feed.documents, "graphql_bodies": self.graphql,
-                    "ids_in_data": len(feed.present), "time_paths": dict(feed.paths.most_common(PROBE_MAX_PATHS)),
-                    # [agree, disagree] against the item pages read in this scan, and apart
-                    # (outside the phase-2 rule) against the stored dates.
-                    "compared": tally(self.page_times), "vs_known": tally(known),
-                    "just_listed": len(self.just_listed),
-                    "just_listed_max_age_h": round(max(ages) / 3600, 1) if ages else None}
+            report = {"cards": len(self.cards), "json_docs": feed.documents, "graphql_bodies": self.graphql,
+                      "ids_in_data": len(feed.present), "time_paths": dict(feed.paths.most_common(PROBE_MAX_PATHS)),
+                      # [agree, disagree] against the item pages read in this scan, and apart
+                      # against the stored dates.
+                      "compared": tally(self.page_times), "vs_known": tally(known),
+                      "dated": dict(self.origins), "feed_implausible": self.implausible,
+                      "feed_vs_page": tally(self.page_times, [FEED_DATE_PATH]).get(FEED_DATE_PATH, [0, 0]),
+                      "just_listed": len(self.just_listed),
+                      "just_listed_max_age_h": round(max(ages) / 3600, 1) if ages else None}
+            if off:
+                # Seconds from the item page's date to the feed's, the first few cards.
+                report["feed_page_off_s"] = dict(list(off.items())[:5])
+            return report
         except Exception:
             return None
         finally:
@@ -745,8 +818,9 @@ class FacebookMarketplaceScraper(BaseScraper):
             await page.close()
 
     async def _search_recent(self, filters: dict, window: PublicationWindow) -> SearchResults:
-        """The cards of the window, each dated by the card, a stored listing
-        or its item page, up to RECENT_FB_MAX_DATE_FETCHES pages a scan.
+        """The cards of the window, each dated by the card, a stored listing,
+        the search page's own data (FB_FEED_DATES) or its item page, up to
+        RECENT_FB_MAX_DATE_FETCHES pages a scan.
 
         With filters["date_skips"] (the target's date memory) a page already
         read is skipped as collectors/_recency.py says, and results.date_skips
@@ -798,8 +872,14 @@ class FacebookMarketplaceScraper(BaseScraper):
                         ident = listing.listing_id
                         probe.card(ident, f"{label}\n{text}")
                         remembered = memory.get(ident)
-                        if listing.published_at is None:
-                            listing.published_at = known.get(ident)
+                        if listing.published_at is not None:
+                            origin = "card"
+                        elif (stored := known.get(ident)) is not None:
+                            listing.published_at, origin = stored, "known"
+                        elif config.FB_FEED_DATES and (fed := await probe.feed_date(ident)) is not None:
+                            listing.published_at, origin = fed, "feed"
+                        else:
+                            origin = "page"
                         if listing.published_at is None and remembered and remembered.skips(window.until):
                             skipped += 1
                             continue
@@ -817,13 +897,13 @@ class FacebookMarketplaceScraper(BaseScraper):
                             except Exception as exc:
                                 results.complete, results.reason = False, f"facebook date fetch failed: {type(exc).__name__}"
                                 log.warning("Could not read publication date for %s: %s", ident, exc)
+                        probe.dated(ident, listing.published_at, origin)
                         if listing.published_at is None:
                             results.unknown_dates += 1
                             undated += read
                             if read and config.FB_DATE_MEMORY_UNKNOWN:
                                 memory[ident] = DateSkip.undated(remembered, window.until)
                             continue
-                        probe.dated(ident, listing.published_at)
                         if window.admits(listing, remembered):
                             memory.pop(ident, None)
                             results.append(listing)
@@ -860,9 +940,13 @@ class FacebookMarketplaceScraper(BaseScraper):
                 memory = {i: s for i, s in memory.items() if i in seen}
             results.date_skips = encode_date_skips(memory)
         results.probe = probe.report(known)
-        log.info("facebook publication window: scrolls=%d kept=%d dates_read=%d skipped=%d out_of_window=%d "
-                 "undated=%d unknown_dates=%d complete=%s reason=%s", scrolls, len(results), fetched, skipped,
-                 out_of_window, undated, results.unknown_dates, results.complete, results.reason)
+        # How the cards were dated: feed_dates from the search page's data,
+        # page_dates from an item page, unknown_dates not at all.
+        log.info("facebook publication window: scrolls=%d kept=%d dates_read=%d feed_dates=%d page_dates=%d "
+                 "skipped=%d out_of_window=%d undated=%d unknown_dates=%d feed_page_disagree=%d "
+                 "complete=%s reason=%s", scrolls, len(results), fetched, probe.origins["feed"],
+                 probe.origins["page"], skipped, out_of_window, undated, results.unknown_dates,
+                 (results.probe or {}).get("feed_vs_page", [0, 0])[1], results.complete, results.reason)
         return results
 
     # 2: "Ver más" is expanded and the description stops before the page around it.

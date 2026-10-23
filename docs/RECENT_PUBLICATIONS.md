@@ -83,8 +83,25 @@ se arma con el sufijo `_PublishedToday_YES`.
 ### Facebook: fichas, memoria de fechas y cola
 
 Las tarjetas de Facebook no muestran la edad del aviso (la cuenta del VPS está
-en inglés), así que cada aviso sin fecha conocida abre su ficha, 30 s después
-de la anterior (`RECENT_FB_DETAIL_SECONDS`).
+en inglés). Cada tarjeta se fecha, en este orden, con la fecha de la tarjeta,
+con la fecha guardada del aviso, con los datos de la propia página de búsqueda
+(fase 2A, abajo) y, si nada de eso la fecha, con su ficha, 30 s después de la
+anterior (`RECENT_FB_DETAIL_SECONDS`). El tope y la memoria de fechas valen
+solo para las fichas.
+
+- **Fechas desde el feed (fase 2A, `FB_FEED_DATES=1`).** La página de búsqueda
+  ya descarga los datos de cada tarjeta: el JSON del HTML inicial y las
+  respuestas `/api/graphql/` del scroll. El objeto del aviso (el que tiene su
+  `id`) trae `creation_time`, el mismo dato que la ficha usa cuando su texto no
+  dice la edad. Se usa si es único para ese aviso en el escaneo, no está en el
+  futuro y no es anterior a 2015; si no, se abre la ficha como antes. Una
+  tarjeta que todavía no está en los datos espera, a lo sumo 3 s y una sola vez
+  por respuesta, a las respuestas que se están leyendo. Las fechas del feed no
+  se guardan en la memoria de fechas: el escaneo siguiente las vuelve a leer
+  gratis. La política no cambia: mismas ventanas, mismo backfill.
+  Evidencia: en los escaneos de prod del 22/10/2026 la sonda encontró
+  `own.creation_time` en 19 de 19 tarjetas, y las 19 coincidían (±120 s) con la
+  fecha guardada. Rollback: `FB_FEED_DATES=0` en el `.env` del VPS y reinicio.
 
 - **Tope por escaneo.** `RECENT_FB_MAX_DATE_FETCHES=12` fichas (~7 minutos).
   Al llegarlo, el escaneo queda incompleto con lo que guardó y se reintenta a
@@ -120,18 +137,22 @@ de la anterior (`RECENT_FB_DETAIL_SECONDS`).
   de bootstrap y los `count_only`, cada grupo por vencimiento. Un bootstrap
   largo ya no deja sin turno a los modelos en régimen.
 - **Logs.** Cada escaneo deja `facebook publication window: ... dates_read
-  skipped out_of_window undated unknown_dates ...`, y la línea `target=...`
-  del worker agrega `probe={...}`. `undated` son las fichas que cargaron sin
-  fecha; `unknown_dates` suma además las tarjetas que el tope dejó sin leer.
-- **Sonda del feed (fase 2 pendiente).** Sin pedidos extra, el escaneo mira si
-  los datos de la página de búsqueda (el JSON del HTML inicial y las
-  respuestas `/api/graphql/` del scroll) traen un tiempo de creación por
-  aviso, y lo compara con el `creation_time` de las fichas que leyó en ese
-  mismo escaneo. Solo registra nombres de campo y conteos, nunca valores ni
-  volcados. Con cobertura y coincidencia de al menos 95 % sobre 100 o más
-  comparaciones, la fase 2 fecharía desde el feed. Si no, la alternativa es un
-  bootstrap sin fecha detrás de un flag apagado: cambia esta política y
-  necesita aprobación antes de implementarse.
+  feed_dates page_dates skipped out_of_window undated unknown_dates
+  feed_page_disagree ...`, y la línea `target=...` del worker agrega
+  `probe={...}`. `dates_read` son las fichas abiertas; `feed_dates` y
+  `page_dates`, las tarjetas fechadas por el feed y por su ficha; `undated`,
+  las fichas que cargaron sin fecha; `unknown_dates` suma además las tarjetas
+  que el tope dejó sin leer (las que no se fecharon).
+- **Sonda del feed.** Sin pedidos extra, cuenta en `probe=` lo que trae la
+  página de búsqueda: `cards`, `ids_in_data`, `time_paths` (nombres de campo
+  con conteos), `dated` (cuántas tarjetas se fecharon por `card`, `known`,
+  `feed`, `page` o `none`), `feed_implausible`, y `[coinciden, difieren]`
+  (±120 s) del `creation_time` del feed contra las fichas leídas en ese escaneo
+  (`compared`, y `feed_vs_page` para el campo que fecha) y contra las fechas
+  guardadas (`vs_known`). Cuando difieren, `feed_page_off_s` da los segundos
+  de diferencia de las primeras 5 tarjetas. Nunca registra una fecha ni vuelca
+  la página. Con `FB_FEED_DATES=1` una tarjeta tiene las dos fechas solo si el
+  feed no la fechó a tiempo; con `FB_FEED_DATES=0` se comparan todas.
 
 ## Activación y ritmo
 
@@ -156,6 +177,7 @@ si necesita abrir numerosas fichas; consultar logs y estado de la fuente.
 | `RECENT_FB_DETAIL_SECONDS` | 30 | Pausa antes de consultar una fecha en ficha |
 | `RECENT_FB_MAX_DATE_FETCHES` | 12 | Tope de fichas de Facebook leídas por ejecución para conocer la fecha |
 | `FB_DATE_MEMORY_UNKNOWN` | 0 | 1 memoriza también las fichas que cargaron sin fecha (`"id@epoch#n"`) |
+| `FB_FEED_DATES` | 1 | Fecha las tarjetas de Facebook con el `creation_time` de los datos de la búsqueda antes de abrir la ficha; 0 abre la ficha como antes |
 
 Estas pausas regulan las lecturas de fecha durante el crawl; la cola de enrichment
 mantiene su configuración independiente. Si se alcanza un tope con resultados

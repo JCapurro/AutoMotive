@@ -56,6 +56,9 @@ FB_DATE_MEMORY_UNKNOWN = os.getenv("FB_DATE_MEMORY_UNKNOWN", "0").strip().lower(
 # read from app_config.comparables.year_tol: a scoring edit must not
 # multiply what is crawled.
 REFERENCE_YEAR_BAND = min(1, max(0, int(os.getenv("REFERENCE_YEAR_BAND", "1"))))
+# A Facebook card is dated from the search page's own data (its listing's
+# creation_time) before opening its item page; 0 reads every page as before.
+FB_FEED_DATES = os.getenv("FB_FEED_DATES", "1").strip().lower() in {"1", "true", "yes", "on"}
 # Enrichment of matched listings (sección 5.5) and the watchlist refresher
 # (sección 5.6) wake up this often; each listing is checked at most daily.
 ENRICH_TICK_SECONDS = int(os.getenv("ENRICH_TICK_SECONDS", "300"))
