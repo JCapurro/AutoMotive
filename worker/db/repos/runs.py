@@ -13,6 +13,8 @@ from db.pool import connection
 log = logging.getLogger("runs")
 
 _MAX_ERROR = 4_000
+# The error of a run a dead or restarted worker left 'running' (fail_orphan_runs).
+ORPHAN_ERROR = "worker restarted mid-run"
 
 
 def worker_id() -> str:
@@ -107,9 +109,9 @@ async def fail_orphan_runs(started_before: datetime) -> int:
         dead = dead_workers([r["worker"] for r in rows], host)
         cur = await cx.execute(
             "UPDATE collector_runs SET status = 'failed', finished_at = now(), "
-            "  error = 'worker restarted mid-run' WHERE status = 'running' "
+            "  error = %s WHERE status = 'running' "
             "  AND (worker = ANY(%s) OR (worker IS NULL AND started_at < %s))",
-            (dead, started_before))
+            (ORPHAN_ERROR, dead, started_before))
         return cur.rowcount
 
 
@@ -124,15 +126,32 @@ async def bootstrapped_at(target_id: int) -> datetime | None:
 
 
 async def recent_ok_found(target_id: int, *, exclude_run: int | None = None, n: int = 3) -> int | None:
-    """The most one of the target's last `n` ok runs found, `exclude_run`
-    left out (pipeline/news.py, the step). None without an ok run."""
+    """The most one of the target's last `n` ok runs that read something
+    found, `exclude_run` left out (pipeline/news.py, the step). An empty ok
+    run is a source that answered nothing (a block it took for "0 results"),
+    not the target's stock. None without such a run."""
     async with connection() as cx:
         row = await (await cx.execute(
             "SELECT max(found) AS found FROM (SELECT found FROM collector_runs "
-            "  WHERE target_id = %s AND status = 'ok' AND id IS DISTINCT FROM %s::bigint "
+            "  WHERE target_id = %s AND status = 'ok' AND found > 0 AND id IS DISTINCT FROM %s::bigint "
             "  ORDER BY id DESC LIMIT %s) r",
             (target_id, exclude_run, n))).fetchone()
     return row["found"] if row else None
+
+
+async def empty_ok_streak(target_id: int, *, exclude_run: int | None = None) -> int:
+    """How many ok runs in a row the target read nothing on, since the last
+    one that read something, `exclude_run` left out (an empty first read,
+    pipeline/crawl.py)."""
+    async with connection() as cx:
+        row = await (await cx.execute(
+            "SELECT count(*) AS n FROM collector_runs "
+            " WHERE target_id = %(t)s AND status = 'ok' AND found = 0 AND id IS DISTINCT FROM %(run)s::bigint "
+            "   AND id > coalesce((SELECT max(id) FROM collector_runs "
+            "                       WHERE target_id = %(t)s AND status = 'ok' AND found > 0 "
+            "                         AND id IS DISTINCT FROM %(run)s::bigint), 0)",
+            {"t": target_id, "run": exclude_run})).fetchone()
+    return int(row["n"])
 
 
 async def log_error(stage: str, ref: str | None, error: str) -> None:
