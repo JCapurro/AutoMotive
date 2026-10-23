@@ -6,14 +6,19 @@ and are left alone. On every other source a listing is "new" when its
 external_id was never stored, so old stock looks new when:
   - a read brings at once half the stock again (a collector deploy, a wider
     search, a read cut short before): the step;
+  - a target's search was widened, and the read brings the stock its
+    previous complete read left out by year or km (crawl_targets.query._read,
+    read_envelope): the envelope;
   - the same car comes back under another ID after its old copy left the
     source: the reappearance, only on the sources whose reads are trusted
     whole. A republication at least price_drop_min_pct cheaper is still
     news, labelled "re-publicado" (_republished);
   - a target of UNDATED_SOURCES read nothing on its first run: crawl._run_one
     holds its bootstrap for EMPTY_FIRST_RUNS empty reads at most, so what it
-    reads right after is that first run's backfill.
-classify stores the first two as backfill for every search (seen on the web,
+    reads right after is that first run's backfill. A target of theirs that
+    is reactivated, or whose collector raises COVERAGE_VERSION, starts its
+    bootstrap over (targets.sync_targets).
+classify stores the first three as backfill for every search (seen on the web,
 never notified) and marks them in listings.attributes._not_news {reason,
 run_id, target_id, prev_id}: scheduler.match_alert keeps them backfill on a
 retry or for another target, and count_after_expiry (2.5) never counts them.
@@ -45,7 +50,7 @@ log = logging.getLogger("news")
 
 FIRST_RUN, STEP, REAPPEARANCE, ENVELOPE, BAND = "first_run", "step", "reappearance", "envelope", "band"
 # Old stock: backfill for every search on every run, never counted in 2.5.
-# 'envelope' (crawl_targets.query._read) and 'band' (query.year_band) come later.
+# 'band' (query.year_band) comes later.
 MUTED = frozenset({STEP, REAPPEARANCE, ENVELOPE, BAND})
 
 # The sources without publication dates (an external_id never stored is all
@@ -92,6 +97,22 @@ def outside_envelope(row: dict[str, Any], envelope: dict[str, Any] | None) -> bo
         if envelope.get("year_max") is not None and year > envelope["year_max"]:
             return True
     return km is not None and envelope.get("km_max") is not None and km > envelope["km_max"]
+
+
+def read_envelope(target: dict[str, Any], filters: dict[str, Any]) -> dict[str, Any] | None:
+    """What a read of `target` with these collector filters
+    (crawl.scraper_filters) covers: their year and km bounds, which a
+    complete read keeps in crawl_targets.query._read for its next run's
+    envelope (targets.finish_target). None for a target the envelope doesn't
+    watch: of a source that reads by publication date (Mercado Libre,
+    Facebook), by body type (its prefilter remembers what it dropped,
+    prefilter_rejected) or a whole inventory (no bounds)."""
+    if (target["source"] in RECENT_SOURCES or target.get("body_type")
+            or (target.get("query") or {}).get("inventory") is True):
+        return None
+    bounds = {"year_min": filters.get("anio_min"), "year_max": filters.get("anio_max"),
+              "km_max": filters.get("km_max")}
+    return {k: v for k, v in bounds.items() if v is not None}
 
 
 def _mark(row: dict[str, Any] | None) -> dict[str, Any]:
@@ -181,6 +202,9 @@ async def _classify(target: dict[str, Any], items: Iterable[Any], result: Ingest
     reappearance = config.NEWS_GUARD_REAPPEARANCE and complete and target["source"] in trusted
     inventory = (target.get("query") or {}).get("inventory") is True
     step = config.NEWS_GUARD_STEP and not inventory and is_step(len(new), await _step_base(target, run_id))
+    # The year and km the target's last complete read covered (the claimed
+    # query's, from before any widening): outside them is stock it left out.
+    envelope = (target.get("query") or {}).get("_read") if config.NEWS_GUARD_ENVELOPE else None
     batch = sorted({str(item.listing_id) for item in items})
     marks: list[tuple[int, dict[str, Any], int | None]] = []
     reasons: Counter[str] = Counter()
@@ -191,6 +215,10 @@ async def _classify(target: dict[str, Any], items: Iterable[Any], result: Ingest
             if step:
                 marks.append((row["id"], mark(STEP), None))
                 reasons[STEP] += 1
+                continue
+            if isinstance(envelope, dict) and outside_envelope(row, envelope):
+                marks.append((row["id"], mark(ENVELOPE), None))
+                reasons[ENVELOPE] += 1
                 continue
             if not reappearance:
                 continue

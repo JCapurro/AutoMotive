@@ -60,6 +60,22 @@ class OutsideEnvelopeTests(unittest.TestCase):
         self.assertFalse(news.outside_envelope({"year": 1990, "mileage_km": 900_000}, None))
 
 
+class ReadEnvelopeTests(unittest.TestCase):
+    def test_a_target_by_model_keeps_the_year_and_km_sent_to_its_collector(self):
+        target = dict(TARGET, query={"year_min": 2015, "km_max": 100_000, "profile_ids": [1]})
+        self.assertEqual(news.read_envelope(target, crawl.scraper_filters(target)),
+                         {"year_min": 2015, "km_max": 100_000})
+        unbounded = dict(TARGET, query={"profile_ids": [1]})
+        self.assertEqual(news.read_envelope(unbounded, crawl.scraper_filters(unbounded)), {})
+
+    def test_sources_by_publication_date_body_types_and_inventories_keep_none(self):
+        filters = {"anio_min": 2015, "km_max": 100_000}
+        for target in (dict(TARGET, source="mercadolibre"), dict(TARGET, source="facebook"),
+                       dict(TARGET, source="kavak", make=None, model=None, body_type="suv"),
+                       dict(TARGET, source="autocity", make=None, model=None, query={"inventory": True})):
+            self.assertIsNone(news.read_envelope(target, filters), target)
+
+
 class MarkTests(unittest.TestCase):
     def marked(self, reason: str, target_id: int = 7) -> dict:
         return {"attributes": {"_not_news": {"reason": reason, "run_id": 1, "target_id": target_id, "prev_id": None}}}
@@ -94,7 +110,8 @@ class ClassifyTests(unittest.IsolatedAsyncioTestCase):
         async def get_config(key, default=None):
             return {"recommended_max_age_days": 15, "comparables": {"confirm_sources": list(trusted)}}.get(key, default)
 
-        flags = {"NEWS_GUARD_STEP": True, "NEWS_GUARD_REAPPEARANCE": True, "NEWS_LINK_REPOST": False, **switches}
+        flags = {"NEWS_GUARD_STEP": True, "NEWS_GUARD_REAPPEARANCE": True, "NEWS_GUARD_ENVELOPE": True,
+                 "NEWS_LINK_REPOST": False, **switches}
         self.found = AsyncMock(side_effect=lambda cx, r, **kw: (reappeared or {}).get(r["id"]))
         self.marks = AsyncMock()
         self.recent = AsyncMock(return_value=prev_found)
@@ -213,6 +230,59 @@ class ClassifyTests(unittest.IsolatedAsyncioTestCase):
         self.found.assert_not_awaited()
         self.assertEqual(await self.classify(result(8), [row(8)], reappeared={8: old}, trusted=()), frozenset())
 
+    async def test_a_widened_search_brings_what_the_last_read_left_out_as_envelope(self):
+        # kavak Fiesta 05/10: read with year >= 2015 and km <= 100.000, then a
+        # search widened it to 2014 and 150.000 km.
+        target = dict(TARGET, query={"year_min": 2014, "km_max": 150_000, "profile_ids": [1, 2],
+                                     "_read": {"year_min": 2015, "km_max": 100_000}})
+        rows = [row(1, year=2014, mileage_km=60_000), row(2, year=2016, mileage_km=139_000),
+                row(3, year=2017, mileage_km=80_000), row(4, year=None, mileage_km=None)]
+        muted = await self.classify(result(1, 2, 3, 4), rows, target=target, prev_found=40)
+        self.assertEqual(muted, frozenset({1, 2}))
+        self.assertEqual(self.marked(), {lid: {"_not_news": {"reason": "envelope", "run_id": 40, "target_id": 7,
+                                                             "prev_id": None}} for lid in (1, 2)})
+        self.assertEqual(self.found.await_count, 2)            # 3 and 4 still go through the reappearance
+
+    async def test_a_recent_publication_outside_the_last_read_is_news(self):
+        target = dict(TARGET, query={"year_min": 2014, "_read": {"year_min": 2015}})
+        rows = [row(1, year=2014, published_at=NOW - timedelta(days=1)),
+                row(2, year=2014, published_at=NOW - timedelta(days=40))]
+        self.assertEqual(await self.classify(result(1, 2), rows, target=target), frozenset({2}))
+
+    async def test_without_a_last_read_or_with_the_switch_off_nothing_is_envelope(self):
+        rows = [row(1, year=2010, mileage_km=300_000)]
+        for query in ({"year_min": 2014}, {"year_min": 2014, "_read": {}}, {"year_min": 2014, "_read": [2015]}):
+            self.assertEqual(await self.classify(result(1), rows, target=dict(TARGET, query=query)), frozenset(),
+                             query)
+            self.log_error.assert_not_awaited()
+        target = dict(TARGET, query={"year_min": 2014, "_read": {"year_min": 2015}})
+        self.assertEqual(await self.classify(result(1), rows, target=target, NEWS_GUARD_ENVELOPE=False),
+                         frozenset())
+
+    async def test_a_first_run_ignores_the_last_read(self):
+        # A target that starts over (a reactivation, a coverage bump) marks it all 'first_run'.
+        target = dict(TARGET, query={"year_min": 2014, "_read": {"year_min": 2015}})
+        muted = await self.classify(result(1), [row(1, year=2014)], target=target, first_run=True)
+        self.assertEqual(muted, frozenset())
+        self.assertEqual(self.marked()[1]["_not_news"]["reason"], "first_run")
+
+    async def test_run_target_keeps_what_a_complete_read_sent(self):
+        class Kavak:
+            complete = True
+
+            async def search(self, filters):
+                filters["anio_min"] = 1990             # what the collector does with the dict doesn't count
+                return SearchResults([item("n1")], complete=self.complete)
+
+        target = dict(TARGET, source="kavak", query={"year_min": 2015, "km_max": 100_000,
+                                                     "_read": {"year_min": 2016}},
+                      body_type=None, prefilter_rejected=[], last_run_at=None)
+        for complete, read in ((True, {"year_min": 2015, "km_max": 100_000}), (False, None)):
+            Kavak.complete = complete
+            with self.patched([], trusted=()), self.kavak(Kavak, IngestResult(found=1)):
+                run = await crawl.run_target(target)
+            self.assertEqual(run.read_envelope, read, complete)
+
     async def test_the_listings_the_prefilter_readmits_neither_step_nor_get_marked(self):
         # A wider kavak SUV search lets 12 dropped cars in, next to 2 new ones: not a step.
         rows = [row(i) for i in range(1, 15)]
@@ -310,10 +380,10 @@ class RunOneTests(unittest.IsolatedAsyncioTestCase):
     """crawl._run_one: the empty first read and the retry of a partial one."""
 
     async def run_one(self, target: dict, *, found: int = 0, first_run: bool = True, complete: bool = True,
-                      reason: str | None = None, empty_runs: int = 0) -> AsyncMock:
+                      reason: str | None = None, empty_runs: int = 0, read: dict | None = None) -> AsyncMock:
         items = SearchResults([], complete=complete, reason=reason)
         batch = crawl.TargetRun(target, items, IngestResult(found=found), first_run=first_run, complete=complete,
-                                empty_runs=empty_runs)
+                                empty_runs=empty_runs, read_envelope=read)
         with patch.object(crawl, "run_target", AsyncMock(return_value=batch)), \
                 patch.object(crawl.targets_repo, "finish_target", AsyncMock()) as finish:
             await crawl._run_source([target], None, 0, None)
@@ -321,7 +391,8 @@ class RunOneTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_an_empty_first_read_does_not_finish_the_bootstrap(self):
         finish = await self.run_one(dict(TARGET, source="kavak", first_run_done=False))
-        finish.assert_awaited_once_with(7, ok=True, retry_seconds=0, covered_until=None, bootstrap=False)
+        finish.assert_awaited_once_with(7, ok=True, retry_seconds=0, covered_until=None, bootstrap=False,
+                                       read=None)
         finish = await self.run_one(dict(TARGET, source="kavak", first_run_done=False), found=4)
         self.assertTrue(finish.call_args.kwargs["bootstrap"])
 
@@ -349,6 +420,10 @@ class RunOneTests(unittest.IsolatedAsyncioTestCase):
     async def test_an_incomplete_first_run_retries_soon(self):
         finish = await self.run_one(dict(TARGET, first_run_done=False), found=3, complete=False)
         self.assertEqual(finish.call_args.kwargs["retry_seconds"], 900)
+
+    async def test_a_complete_read_leaves_what_it_covered_in_the_query(self):
+        finish = await self.run_one(TARGET, found=3, first_run=False, read={"year_min": 2015})
+        self.assertEqual((finish.call_args.kwargs["ok"], finish.call_args.kwargs["read"]), (True, {"year_min": 2015}))
 
     def test_retry_seconds(self):
         self.assertEqual(crawl.retry_seconds(TARGET), 900)                                 # a failure

@@ -107,6 +107,11 @@ class BaseScraper:
     # Body-type codes this collector can search without a make or model
     # (search() gets filters["carroceria"] and no "marca"/"modelo").
     BODY_TYPES: frozenset[str] = frozenset()
+    # Declare or raise it when search() comes to read more of the source than
+    # before (pages it didn't follow, a cap lifted): its targets carry it in
+    # query.coverage, and a new value starts their bootstrap over once, so the
+    # stock the wider read finds is backfill, not news (targets.sync_targets).
+    COVERAGE_VERSION: int | None = None
     # search() and fetch_detail_page() run in a child process that is killed
     # past its timeout (collectors/_isolated.py): the logged-in browser ones.
     ISOLATED: bool = False

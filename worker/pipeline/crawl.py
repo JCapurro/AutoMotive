@@ -32,7 +32,9 @@ collector (Facebook, Instagram) runs in a child process that is killed then
 interval. For recent publications, last_run_at records the successful scan's
 start to preserve coverage. On a source without publication dates,
 pipeline/news.py tells which new listings are old stock (backfill), and a
-first run that read nothing holds the bootstrap for a couple of runs.
+first run that read nothing holds the bootstrap for a couple of runs. There
+a complete read of a target by model keeps the year and km it read in
+query._read, for its next run to tell what a widened search brings.
 """
 from __future__ import annotations
 
@@ -123,6 +125,9 @@ class TargetRun:
     # backfill: the ones pipeline/news.py says are not news, and the ones
     # this target's prefilter had dropped before (prefilter_rejected).
     backfill_ids: frozenset[int] = frozenset()
+    # What this read covered, when it was complete (news.read_envelope):
+    # finish_target keeps it in query._read.
+    read_envelope: dict[str, Any] | None = None
 
 
 class SourceBlocked(Exception):
@@ -197,6 +202,13 @@ def _usd_cap(f: dict[str, Any], fx_rate: float | None) -> int | None:
     return math.ceil(cap / fx_rate) if currency == "ARS" and fx_rate else None
 
 
+def _coverage(source: str) -> dict[str, Any]:
+    """The collector's COVERAGE_VERSION, if it declares one: a new value
+    starts the bootstrap of its targets over (targets.sync_targets)."""
+    version = getattr(REGISTRY.get(source), "COVERAGE_VERSION", None)
+    return {"coverage": version} if version is not None else {}
+
+
 def _spec(key: _Key, members: list[dict[str, Any]], names: _Names, *,
           count_only: bool = False, body: BodyTypeTargets | None = None) -> TargetSpec:
     # A count-only target lists its searches apart: profile_ids are the active
@@ -205,7 +217,7 @@ def _spec(key: _Key, members: list[dict[str, Any]], names: _Names, *,
     ids = ({"count_only": True, "count_profile_ids": members_ids} if count_only
            else {"profile_ids": members_ids})
     if getattr(REGISTRY.get(key[0]), "INVENTORY_TARGET", False):
-        return TargetSpec(key[0], None, None, {"inventory": True, **ids})
+        return TargetSpec(key[0], None, None, {"inventory": True, **_coverage(key[0]), **ids})
     filters = [m.get("filters") or {} for m in members]
     query: dict[str, Any] = {
         "year_min": _widest([f.get("year_min") for f in filters], min),
@@ -219,6 +231,7 @@ def _spec(key: _Key, members: list[dict[str, Any]], names: _Names, *,
         query["interval_seconds"] = body.interval_seconds
     if key[0] in RECENT_SOURCES:
         query["publication_policy"] = POLICY_VERSION
+    query.update(_coverage(key[0]))
     # Facebook searches around a city: the oldest profile with a location picks it.
     located = next((m for m in sorted(members, key=lambda m: m["id"])
                     if m.get("origin_lat") is not None), None)
@@ -325,6 +338,8 @@ async def run_target(target: dict[str, Any], on_health: HealthHandler | None = N
     try:
         scraper = REGISTRY[source]()
         filters = scraper_filters(target)
+        # Before the search: what is sent, whatever the collector does with the dict.
+        read = news.read_envelope(target, filters)
         if source in RECENT_SOURCES:
             filters["known_publication_dates"] = await targets_repo.publication_dates(target)
         if _date_memory(target):
@@ -385,7 +400,8 @@ async def run_target(target: dict[str, Any], on_health: HealthHandler | None = N
     empty_runs = (await runs.empty_ok_streak(target["id"], exclude_run=run_id)
                   if first_run and config.NEWS_GUARD_EMPTY_FIRST and source in news.UNDATED_SOURCES else 0)
     return TargetRun(target, items, result, first_run=first_run, complete=complete,
-                     covered_until=covered_until, empty_runs=empty_runs, backfill_ids=backfill_ids)
+                     covered_until=covered_until, empty_runs=empty_runs, backfill_ids=backfill_ids,
+                     read_envelope=read if complete else None)
 
 
 def _date_memory(target: dict[str, Any]) -> bool:
@@ -469,7 +485,7 @@ async def _run_one(target: dict[str, Any], on_batch: BatchHandler | None,
                      and target.get("source") in news.UNDATED_SOURCES and run.empty_runs < news.EMPTY_FIRST_RUNS)
     retry = 0 if run.complete else retry_seconds(target, reason=getattr(run.items, "reason", None), partial=True)
     await targets_repo.finish_target(target["id"], ok=run.complete, retry_seconds=retry,
-                                    covered_until=run.covered_until, bootstrap=bootstrap)
+                                    covered_until=run.covered_until, bootstrap=bootstrap, read=run.read_envelope)
 
 
 async def _run_source(targets: list[dict[str, Any]], on_batch: BatchHandler | None,
@@ -591,5 +607,5 @@ async def sync_targets(profiles: list[dict[str, Any]],
                        counting: list[dict[str, Any]] = ()) -> list[TargetSpec]:
     sources = [s for s in await targets_repo.enabled_sources() if s in REGISTRY]
     specs = derive_targets(profiles, sources, counting, body_types=await body_type_targets(profiles))
-    await targets_repo.sync_targets(specs)
+    await targets_repo.sync_targets(specs, undated=news.UNDATED_SOURCES)
     return specs

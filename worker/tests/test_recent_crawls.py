@@ -593,7 +593,8 @@ class PipelineCoverageTests(unittest.IsolatedAsyncioTestCase):
                 patch.object(crawl.targets_repo, "finish_target", AsyncMock()) as finish:
             await crawl._run_source([target], handler, 0, None)
         handler.assert_awaited_once_with(batch)
-        finish.assert_awaited_once_with(1, ok=True, retry_seconds=0, covered_until=stamp, bootstrap=True)
+        finish.assert_awaited_once_with(1, ok=True, retry_seconds=0, covered_until=stamp, bootstrap=True,
+                                       read=None)
 
     async def test_partial_batch_is_ingested_but_not_reported_successful(self):
         items = SearchResults([listing()], complete=False, reason="scroll cap")

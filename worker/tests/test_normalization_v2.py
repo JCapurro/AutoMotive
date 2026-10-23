@@ -3,8 +3,10 @@ from __future__ import annotations
 
 import unittest
 from datetime import datetime, timezone
+from unittest.mock import patch
 
-from collectors.base import Listing
+from collectors import REGISTRY
+from collectors.base import BaseScraper, Listing
 from normalization import transmission as tx
 from normalization.fx import FxQuote
 from normalization.listing import Target, fingerprint, normalize_listing, price_usd
@@ -320,6 +322,19 @@ class CrawlTargetTests(unittest.TestCase):
                                        partial=True), 900)
         self.assertEqual(retry_seconds({"crawl_interval_seconds": 1800, "query": {"count_only": True}},
                                        reason=DATE_FETCH_LIMIT), 6 * 3600)
+
+    def test_a_collector_that_declares_its_coverage_puts_it_in_its_targets(self):
+        class Kavak(BaseScraper):
+            COVERAGE_VERSION = 2
+
+        class Autocity(BaseScraper):
+            INVENTORY_TARGET = True
+            COVERAGE_VERSION = 3
+
+        with patch.dict(REGISTRY, {"kavak": Kavak, "autocity": Autocity}):
+            specs = derive_targets([self._profile(1)], self.SOURCES + ["autocity"])
+        self.assertEqual({s.source: s.query.get("coverage") for s in specs},
+                         {"autocity": 3, "kavak": 2, "mercadolibre": None})
 
     def test_profiles_without_a_vehicle_are_not_crawled(self):
         self.assertEqual(derive_targets([{"id": 1, "filters": {"year_min": 2015}}], self.SOURCES), [])

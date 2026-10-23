@@ -65,11 +65,13 @@ def _switch(name: str, default: str) -> bool:
 
 # Which new listings of a source without publication dates are old stock, not
 # news (pipeline/news.py), one switch per rule to roll it back from the .env:
-# a read that brings half the stock again, a car back under another ID, and
-# an empty first run that doesn't finish the bootstrap (pipeline/crawl.py).
+# a read that brings half the stock again, a car back under another ID, an
+# empty first run that doesn't finish the bootstrap (pipeline/crawl.py), and
+# a car outside the year/km a target read before (crawl_targets.query._read).
 NEWS_GUARD_STEP = _switch("NEWS_GUARD_STEP", "1")
 NEWS_GUARD_REAPPEARANCE = _switch("NEWS_GUARD_REAPPEARANCE", "1")
 NEWS_GUARD_EMPTY_FIRST = _switch("NEWS_GUARD_EMPTY_FIRST", "1")
+NEWS_GUARD_ENVELOPE = _switch("NEWS_GUARD_ENVELOPE", "1")
 # An incomplete run of such a source, past its first, retries after the
 # source's interval instead of 15 minutes (crawl.retry_seconds).
 NEWS_PARTIAL_RETRY = _switch("NEWS_PARTIAL_RETRY", "1")
