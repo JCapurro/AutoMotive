@@ -407,16 +407,18 @@ async def _remember_dates(target: dict[str, Any], date_skips: list[str] | None) 
 
 
 def _readmitted(target: dict[str, Any], result: IngestResult) -> frozenset[int]:
-    """The new listings this target's prefilter had dropped on an earlier
-    run (prefilter_rejected): old stock a wider search or a price cut let in."""
+    """The listings of this read that this target's prefilter had dropped on
+    an earlier run (prefilter_rejected): old stock a wider search or a price
+    cut let in. Stored now, or by a run cut before it updated
+    prefilter_rejected (pipeline/news.py catches that run up)."""
     before = set(target.get("prefilter_rejected") or ())
-    return frozenset(e.listing_id for e in result.events if e.kind == "listing_new" and e.external_id in before)
+    return frozenset(lid for (_, external_id), lid in result.ids.items() if external_id in before)
 
 
 async def _remember_rejected(target: dict[str, Any], result: IngestResult, rejected: set[str], *,
                              complete: bool) -> frozenset[int]:
-    """The new listings the prefilter had dropped on an earlier run (see
-    prefilter), and the ones it dropped now for the next run: all of them
+    """The listings of this read the prefilter had dropped on an earlier run
+    (_readmitted), and the ones it dropped now for the next run: all of them
     after a complete run, added to the last ones after a partial one."""
     before = set(target.get("prefilter_rejected") or ())
     backfill = _readmitted(target, result)

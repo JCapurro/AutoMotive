@@ -123,13 +123,25 @@ def _dated_news(row: dict[str, Any], max_age_days: int) -> bool:
     return row.get("published_at") is not None and _is_recent(row, max_age_days)
 
 
+async def _step_base(target: dict[str, Any], run_id: int) -> int | None:
+    """What a step is measured against: the most one of the target's last
+    ok runs that read something found. A target whose ok runs all read
+    nothing (an empty first read's hold ended) never loaded: 0, so its
+    whole stock showing up is a step and its first few cars are news."""
+    base = await runs.recent_ok_found(target["id"], exclude_run=run_id, n=STEP_RUNS)
+    if base is None and await runs.empty_ok_streak(target["id"], exclude_run=run_id) > 0:
+        return 0
+    return base
+
+
 async def classify(target: dict[str, Any], items: Iterable[Any], result: IngestResult, *, run_id: int,
                    first_run: bool, complete: bool, readmitted: Iterable[int] = ()) -> frozenset[int]:
     """The ids of this run's new listings that are not news (see the module
     docstring), marked in listings.attributes. `items` is everything the
     collector returned, before normalization and the prefilter; `readmitted`,
-    the new listings its prefilter had dropped before (crawl._readmitted):
-    backfill already, so they neither make a step nor get a mark. Fails
+    the listings of the read its prefilter had dropped before
+    (crawl._readmitted): backfill already, so they neither make a step nor
+    get a mark. Fails
     open: the error goes to pipeline_errors ('news') and every listing is news."""
     if target["source"] in RECENT_SOURCES:
         return frozenset()
@@ -168,8 +180,7 @@ async def _classify(target: dict[str, Any], items: Iterable[Any], result: Ingest
     trusted = (await get_config("comparables", {}) or {}).get("confirm_sources") or ()
     reappearance = config.NEWS_GUARD_REAPPEARANCE and complete and target["source"] in trusted
     inventory = (target.get("query") or {}).get("inventory") is True
-    step = config.NEWS_GUARD_STEP and not inventory and is_step(
-        len(new), await runs.recent_ok_found(target["id"], exclude_run=run_id, n=STEP_RUNS))
+    step = config.NEWS_GUARD_STEP and not inventory and is_step(len(new), await _step_base(target, run_id))
     batch = sorted({str(item.listing_id) for item in items})
     marks: list[tuple[int, dict[str, Any], int | None]] = []
     reasons: Counter[str] = Counter()

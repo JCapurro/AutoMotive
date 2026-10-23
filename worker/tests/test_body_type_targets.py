@@ -225,6 +225,7 @@ class RunTargetTests(unittest.IsolatedAsyncioTestCase):
             result = IngestResult()
             result.events = [ListingEvent("listing_new", 31, "kavak", "old-1"),
                              ListingEvent("listing_new", 32, "kavak", "new")]
+            result.ids = {("kavak", "old-1"): 31, ("kavak", "new"): 32}
             return result
 
         run = await self.run_target(self.TARGET, ingest)
@@ -242,6 +243,7 @@ class RunTargetTests(unittest.IsolatedAsyncioTestCase):
             result = IngestResult()
             result.events = [ListingEvent("listing_new", 31, "kavak", "old-1"),
                              ListingEvent("listing_new", 33, "kavak", "step")]
+            result.ids = {("kavak", "old-1"): 31, ("kavak", "step"): 33}
             return result
 
         run = await self.run_target(self.TARGET, ingest, not_news=frozenset({33}))

@@ -84,7 +84,7 @@ class MarkTests(unittest.TestCase):
 class ClassifyTests(unittest.IsolatedAsyncioTestCase):
     @contextmanager
     def patched(self, rows: list[dict] | Exception, *, prev_found=None, reappeared=None, left=(),
-                trusted=("autocosmos",), **switches):
+                trusted=("autocosmos",), empty_streak=0, **switches):
         """news.py over mocks: `rows` its new rows, `left` what an earlier run
         left unclassified, `trusted` app_config.comparables.confirm_sources."""
         @asynccontextmanager
@@ -98,6 +98,7 @@ class ClassifyTests(unittest.IsolatedAsyncioTestCase):
         self.found = AsyncMock(side_effect=lambda cx, r, **kw: (reappeared or {}).get(r["id"]))
         self.marks = AsyncMock()
         self.recent = AsyncMock(return_value=prev_found)
+        self.streak = AsyncMock(return_value=empty_streak)
         self.log_error = AsyncMock()
         self.unclassified = AsyncMock(return_value=list(left))
         if isinstance(rows, Exception):
@@ -109,6 +110,7 @@ class ClassifyTests(unittest.IsolatedAsyncioTestCase):
                 patch.object(news, "get_config", get_config), \
                 patch.object(news.IngestConfig, "load", AsyncMock(return_value=IngestConfig())), \
                 patch.object(news.runs, "recent_ok_found", self.recent), \
+                patch.object(news.runs, "empty_ok_streak", self.streak), \
                 patch.object(news.runs, "log_error", self.log_error), \
                 patch.object(news.listings, "unclassified", self.unclassified), \
                 patch.object(news.listings, "new_rows", self.new_rows), \
@@ -122,6 +124,16 @@ class ClassifyTests(unittest.IsolatedAsyncioTestCase):
             return await news.classify(target, list(items), res, run_id=40, first_run=first_run, complete=complete,
                                        readmitted=readmitted)
 
+    @contextmanager
+    def kavak(self, scraper: type, res: IngestResult):
+        """crawl.run_target on `scraper` as kavak, its ingest giving `res`."""
+        with patch.dict(REGISTRY, {"kavak": scraper}, clear=True), \
+                patch.object(crawl.runs, "start_run", AsyncMock(return_value=1)), \
+                patch.object(crawl.runs, "finish_run", AsyncMock(return_value=None)), \
+                patch.object(crawl.targets_repo, "set_prefilter_rejected", AsyncMock()), \
+                patch.object(crawl, "ingest", AsyncMock(return_value=res)):
+            yield
+
     def marked(self) -> dict[int, dict]:
         return {lid: attrs for call in self.marks.await_args_list for lid, attrs, _ in call.args[1]}
 
@@ -133,6 +145,17 @@ class ClassifyTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.marked()[1], {"_not_news": {"reason": "step", "run_id": 40, "target_id": 7,
                                                           "prev_id": None}})
         self.found.assert_not_awaited()
+
+    async def test_a_target_that_never_loaded_measures_steps_against_0(self):
+        # Its hold ended after empty reads (autocosmos answering 403 as "0 results"):
+        # its whole stock showing up is a step, a few cars are news.
+        ids = range(1, 13)
+        self.assertEqual(await self.classify(result(*ids), [row(i) for i in ids], empty_streak=3), frozenset(ids))
+        self.streak.assert_awaited_once_with(7, exclude_run=40)
+        self.assertEqual(await self.classify(result(1, 2, 3, 4), [row(i) for i in range(1, 5)], empty_streak=3),
+                         frozenset())
+        # Without any ok run there is nothing to measure against.
+        self.assertEqual(await self.classify(result(*ids), [row(i) for i in ids]), frozenset())
 
     async def test_a_recent_publication_date_is_always_news(self):
         # v6 dates its listings: a real one inside a step goes through.
@@ -211,13 +234,39 @@ class ClassifyTests(unittest.IsolatedAsyncioTestCase):
         res = IngestResult(found=14, new=14)
         res.events = ([ListingEvent("listing_new", 100 + i, "kavak", f"r{i}") for i in range(12)]
                       + [ListingEvent("listing_new", 201, "kavak", "n1"), ListingEvent("listing_new", 202, "kavak", "n2")])
+        res.ids = {("kavak", e.external_id): e.listing_id for e in res.events}
         rows = [row(lid, source="kavak") for lid in (*range(100, 112), 201, 202)]
-        with self.patched(rows, prev_found=20, trusted=()),                 patch.dict(REGISTRY, {"kavak": Kavak}, clear=True),                 patch.object(crawl.runs, "start_run", AsyncMock(return_value=1)),                 patch.object(crawl.runs, "finish_run", AsyncMock(return_value=None)),                 patch.object(crawl.targets_repo, "set_prefilter_rejected", AsyncMock()),                 patch.object(crawl, "ingest", AsyncMock(return_value=res)):
+        with self.patched(rows, prev_found=20, trusted=()), self.kavak(Kavak, res):
             run = await crawl.run_target(target)
         # 14 new on 20 would be a step; the 12 readmitted are backfill already.
         self.assertEqual(run.backfill_ids, frozenset(range(100, 112)))
         self.assertEqual(self.new_rows.await_args.args[1], [201, 202])
         self.assertEqual(self.marked(), {})
+
+    async def test_what_a_cut_run_readmitted_stays_out_of_the_next_run_s_step(self):
+        # Run N readmitted r0..r11 and stored n1, n2, then a restart cut it before
+        # prefilter_rejected was updated; run N+1 stores n3: three new cars, no step.
+        class Kavak:
+            BODY_TYPES = frozenset({"suv"})
+
+            async def search(self, filters):
+                return [item(f"r{i}") for i in range(12)] + [item("n1"), item("n2"), item("n3")]
+
+        target = {"id": 9, "source": "kavak", "make": None, "model": None, "body_type": "suv",
+                  "query": {"year_min": 2015}, "first_run_done": True, "last_run_at": NOW - timedelta(hours=1),
+                  "prefilter_rejected": [f"r{i}" for i in range(12)]}
+        res = IngestResult(found=15, new=1, updated=14)
+        res.events = [ListingEvent("listing_new", 203, "kavak", "n3")]
+        res.ids = {**{("kavak", f"r{i}"): 100 + i for i in range(12)},
+                   ("kavak", "n1"): 201, ("kavak", "n2"): 202, ("kavak", "n3"): 203}
+        rows = [row(lid, source="kavak") for lid in (*range(100, 112), 201, 202, 203)]
+        with self.patched(rows, prev_found=20, trusted=(), left=[*range(100, 112), 201, 202]), \
+                self.kavak(Kavak, res):
+            run = await crawl.run_target(target)
+        self.assertEqual(self.new_rows.await_args.args[1], [203, 201, 202])
+        self.assertEqual(self.marked(), {})
+        # Old stock for every search of this batch too.
+        self.assertEqual(run.backfill_ids, frozenset(range(100, 112)))
 
     async def test_what_a_cut_run_left_unclassified_joins_this_run(self):
         # A restart between an ingest and its marks: the next run classifies them.

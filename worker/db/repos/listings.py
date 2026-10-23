@@ -11,7 +11,6 @@ from psycopg import AsyncConnection
 from psycopg.types.json import Jsonb
 
 from db.pool import connection
-from db.repos.runs import ORPHAN_ERROR
 
 
 Key = tuple[str, str]
@@ -132,20 +131,21 @@ async def new_rows(cx: AsyncConnection, ids: Iterable[int]) -> list[dict[str, An
 
 async def unclassified(cx: AsyncConnection, ids: Iterable[int], *, target_id: int, run_id: int) -> list[int]:
     """Of these listings, the ones pipeline/news.py never looked at: first
-    seen after the target's last run that got to its end (`run_id`, the
-    current one, left out) and without a mark. Only a run cut between its
-    ingest and classify (a restart; fail_orphan_runs closes it later) leaves
-    them so: a run that classified ends right after, also when it fails."""
+    seen after the end of the target's last run that got to classify
+    (`run_id`, the current one, left out) and without a mark. Only a run
+    cut between its ingest and classify (a restart) leaves them so. A run
+    that got to classify records how many it stored (collector_runs.new);
+    one that failed in the collector or the ingest, or that a restart cut
+    (fail_orphan_runs), doesn't, and leaves the window open."""
     ids = list(dict.fromkeys(ids))
     if not ids:
         return []
     rows = await (await cx.execute(
         "SELECT id FROM listings WHERE id = ANY(%(ids)s) "
         "   AND first_seen_at > (SELECT max(r.finished_at) FROM collector_runs r "
-        "                         WHERE r.target_id = %(target)s AND r.id <> %(run)s "
-        "                           AND r.error IS DISTINCT FROM %(orphan)s) "
+        "                         WHERE r.target_id = %(target)s AND r.id <> %(run)s AND r.new IS NOT NULL) "
         "   AND NOT (attributes ? '_not_news' OR attributes ? '_republished') ORDER BY id",
-        {"ids": ids, "target": target_id, "run": run_id, "orphan": ORPHAN_ERROR})).fetchall()
+        {"ids": ids, "target": target_id, "run": run_id})).fetchall()
     return [r["id"] for r in rows]
 
 
@@ -158,8 +158,8 @@ async def find_reappeared(cx: AsyncConnection, row: dict[str, Any], *, batch_ext
                           unsellered_hours: int) -> dict[str, Any] | None:
     """The old copy of a car that `row` publishes again under another ID
     (pipeline/news.py): the same source, make, model and year, seller (km
-    within `km_tol`), compatible version (one starts the other: XLS and XLS
-    Pack) and gearbox, a price within `price_tol_pct` (in USD across
+    within `km_tol`), compatible version (the same, or one is the other
+    plus more words: XLS and XLS Pack, never LT and LTZ) and gearbox, a price within `price_tol_pct` (in USD across
     currencies), seen in the last `window_days`, and missing from this read
     (`batch_external_ids`, everything the collector returned). Without a
     seller, the same km, and seen at most `unsellered_hours` before `row`
@@ -184,9 +184,9 @@ async def find_reappeared(cx: AsyncConnection, row: dict[str, Any], *, batch_ext
         "                                        - make_interval(hours => %(hours)s) "
         f"                     OR {_TITLE.format('o.title')} = {_TITLE.format('%(title)s::text')}) "
         "            ELSE abs(o.mileage_km - %(km)s::int) <= %(km_tol)s END "
-        "   AND (o.trim IS NULL OR %(trim)s::text IS NULL "
-        "        OR starts_with(lower(o.trim), lower(%(trim)s::text)) "
-        "        OR starts_with(lower(%(trim)s::text), lower(o.trim))) "
+        "   AND (o.trim IS NULL OR %(trim)s::text IS NULL OR lower(o.trim) = lower(%(trim)s::text) "
+        "        OR starts_with(lower(o.trim), lower(%(trim)s::text) || ' ') "
+        "        OR starts_with(lower(%(trim)s::text), lower(o.trim) || ' ')) "
         "   AND (o.transmission IS NULL OR %(gearbox)s::text IS NULL "
         "        OR lower(o.transmission) = lower(%(gearbox)s::text)) "
         "   AND NOT o.price_partial "
