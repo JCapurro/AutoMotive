@@ -85,6 +85,7 @@ class FakeDb(Fake):
         self.attach_ok = True
         self.failing = [7]
         self.running = [0]
+        self.claims = [0]
         self.runs = []
         self.targets = [{'id': 7, 'make': 'Ford', 'model': 'Fiesta', 'query': {}},
                         {'id': 9, 'make': 'Fiat', 'model': 'Cronos', 'query': {}}]
@@ -145,6 +146,10 @@ class FakeDb(Fake):
     def running_runs(self, source):
         self.call('running_runs', source)
         return self.running.pop(0) if len(self.running) > 1 else self.running[0]
+
+    def held_claims(self, sources):
+        self.call('held_claims', list(sources))
+        return self.claims.pop(0) if len(self.claims) > 1 else self.claims[0]
 
     def kick(self, source, target_ids):
         self.call('kick', source, list(target_ids))
@@ -1080,6 +1085,24 @@ def test_a_failing_target_in_the_middle_of_a_run_is_the_one_verified(world):
     assert in_order(world.names(), ['vps.deploy', 'db.running_runs', 'db.failing_targets', 'vps.restart'])
     assert world.args('db.kick') == [('kavak', [17])]
     assert world.state().attempts[0].outcome == 'rolled_back' and world.kinds() == ['rollback']
+
+
+def test_the_restart_waits_for_facebook_and_mercadolibre_targets_being_crawled(world):
+    """A kavak fix restarts the whole worker: a Facebook scan reading dates would lose what it read."""
+    world.db.claims = [1, 1, 0]
+    world.db.add()
+    world.tick()
+    before = world.names()[:world.names().index('vps.restart')]
+    assert before.count('db.held_claims') == 3 and before.count('clock.sleep') == 2
+    assert world.args('db.held_claims')[0] == (['facebook', 'mercadolibre'],)
+
+
+def test_the_wait_for_claims_has_the_same_cap(world):
+    world.db.claims = [1]                        # a claim that never ends
+    world.db.add()
+    world.tick()
+    before = world.names()[:world.names().index('vps.restart')]
+    assert before.count('clock.sleep') * bot.IDLE_POLL_S == world.settings.wait_idle_s
 
 
 # --------------------------------------------------------------------------------------

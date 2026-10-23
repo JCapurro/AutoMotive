@@ -11,8 +11,17 @@ from collectors._loop import CollectorTimeout, run_collector
 from pipeline import crawl
 
 
-def _target(id: int, source: str, first_run_done: bool = True) -> dict:
-    return {"id": id, "source": source, "first_run_done": first_run_done}
+def _target(id: int, source: str, first_run_done: bool = True, next_run_at: int | None = None,
+            count_only: bool = False) -> dict:
+    return {"id": id, "source": source, "first_run_done": first_run_done, "next_run_at": next_run_at,
+            "query": {"count_only": True} if count_only else {}}
+
+
+def _claim_order(t: dict) -> tuple:
+    """targets.claim_next's ORDER BY: never ran, due targets that notify, then
+    first-run retries and count-only targets, each by next_run_at."""
+    notifies = t["first_run_done"] and t["query"].get("count_only") is not True
+    return (t["next_run_at"] is not None, not notifies, t["next_run_at"] or 0, t["id"])
 
 
 class RunCollectorTimeoutTests(unittest.IsolatedAsyncioTestCase):
@@ -60,7 +69,7 @@ class LanesTests(unittest.IsolatedAsyncioTestCase):
             return unclaimed()
 
         async def claim_next(source, worker, lease_seconds):
-            mine = sorted((t for t in unclaimed() if t["source"] == source), key=lambda t: t["first_run_done"])
+            mine = sorted((t for t in unclaimed() if t["source"] == source), key=_claim_order)
             if not mine:
                 return None
             self.claimed.add(mine[0]["id"])
@@ -105,12 +114,15 @@ class LanesTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.ran, [2, 3, 1, 4])
         self.assertEqual(self.lanes.running(), set())
 
-    async def test_first_runs_go_first_within_a_source(self):
+    async def test_due_targets_that_notify_go_before_retries_and_count_only(self):
+        """Sentra waited ~140 minutes behind Facebook bootstraps (2026-10-22)."""
         self.hung = set()
-        self.due = [_target(1, "kavak"), _target(2, "kavak", first_run_done=False), _target(3, "kavak")]
+        self.due = [_target(1, "kavak", next_run_at=5), _target(2, "kavak", first_run_done=False),
+                    _target(3, "kavak", first_run_done=False, next_run_at=1),       # a bootstrap retry
+                    _target(4, "kavak", next_run_at=2, count_only=True), _target(5, "kavak", next_run_at=7)]
         await self.lanes.start_due(jitter_seconds=0)
         await self.settle()
-        self.assertEqual(self.ran, [2, 1, 3])
+        self.assertEqual(self.ran, [2, 1, 5, 3, 4])
 
     async def test_a_claimed_target_is_not_crawled_twice(self):
         self.due = [_target(1, "facebook")]
@@ -157,10 +169,12 @@ class IsolatedCollectorTests(unittest.IsolatedAsyncioTestCase):
     async def test_results_come_back_with_their_attributes(self):
         from isolated_fakes import Echo
 
-        items = await run_collector(isolated_call(Echo(), "search", {"q": "Ford Ka"}, timeout=60))
+        items = await run_collector(isolated_call(Echo(), "search", {"q": "Ford Ka", "date_skips": ["7"]},
+                                                  timeout=60))
         self.assertEqual([i.titulo for i in items], ["Ford Ka"])
         self.assertFalse(items.complete)
         self.assertEqual(items.reason, "scroll cap")
+        self.assertEqual((items.date_skips, items.probe), (["7"], {"cards": 1}))   # the date memory too
 
     async def test_the_collectors_exception_is_raised_here(self):
         from collectors.base import CollectorBlocked

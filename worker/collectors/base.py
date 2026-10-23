@@ -63,14 +63,21 @@ class CollectorBlocked(RuntimeError):
 
 
 class SearchResults(list[Listing]):
-    """Keep usable results from a partial crawl without advancing its checkpoint."""
+    """Keep usable results from a partial crawl without advancing its checkpoint.
+
+    `date_skips`: the target's date memory after this scan (collectors/_recency.py,
+    Facebook), None when the collector keeps none. `probe`: counters about the
+    search page's own data, only logged (facebook.py, _FeedProbe)."""
 
     def __init__(self, items=(), *, complete: bool = True, reason: str | None = None,
-                 unknown_dates: int = 0):
+                 unknown_dates: int = 0, date_skips: list[str] | None = None,
+                 probe: dict | None = None):
         super().__init__(items)
         self.complete = complete
         self.reason = reason
         self.unknown_dates = unknown_dates
+        self.date_skips = date_skips
+        self.probe = probe
 
 
 @dataclass

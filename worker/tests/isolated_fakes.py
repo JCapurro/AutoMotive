@@ -13,7 +13,8 @@ class Echo(BaseScraper):
 
     async def search(self, filters: dict):
         return SearchResults([Listing(source="facebook", listing_id="1", titulo=filters["q"], url="https://x/1")],
-                             complete=False, reason="scroll cap")
+                             complete=False, reason="scroll cap", date_skips=filters.get("date_skips"),
+                             probe={"cards": 1})
 
 
 class Blocked(BaseScraper):

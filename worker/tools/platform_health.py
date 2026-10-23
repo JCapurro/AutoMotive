@@ -32,7 +32,8 @@ from tools.watchdog import check_web, transitions, worker_problem
 
 STATE_FILE = config.ROOT / "logs" / "platform_health_state.json"
 ART = timezone(timedelta(hours=-3))
-# How long a new Mercado Libre target may take to date its first 30 days.
+# How long a new Mercado Libre target may take to date its first 30 days, and
+# a Facebook target may go without a complete scan while it stops at its cap.
 FIRST_LOAD_GRACE = timedelta(days=1)
 
 RESEND_USAGE_URL = 'https://api.resend.com/usage'
@@ -55,7 +56,7 @@ with eligible as (
       and {PROFILE_WANTS_TARGET}
   )
 )
-select t.id, t.source, t.name, t.make, t.model, t.body_type, t.query, t.first_run_done, t.created_at, t.updated_at, t.next_run_at,
+select t.id, t.source, t.name, t.make, t.model, t.body_type, t.query, t.first_run_done, t.last_run_at, t.created_at, t.updated_at, t.next_run_at,
   t.crawl_interval_seconds, latest.started_at, latest.status as latest_status,
   latest.error as latest_error, coalesce(history.statuses, '{{}}') as statuses,
   coalesce(history.found, '{{}}') as found, history.errors[1] as last_error,
@@ -98,11 +99,19 @@ def first_load(row: dict, now: datetime) -> bool:
     """A new Mercado Libre target dating its first 30 days, 200 ads per scan
     (config.RECENT_ML_MAX_DATE_FETCHES): each scan ends incomplete, so failed,
     while it stores what it read (target 445406, incident f9a58b7f). Facebook
-    does the same 30 item pages at a time (config.RECENT_FB_MAX_DATE_FETCHES). Past
-    FIRST_LOAD_GRACE it alerts like any failure. The last finished run
-    decides: the next scan is often running."""
-    return (row.get('first_run_done') is False and row['statuses'][:1] == ['failed']
-            and last_error_line(row.get('last_error')) in (DATE_FETCH_LIMIT, FB_DATE_FETCH_LIMIT)
+    does the same 12 item pages at a time (config.RECENT_FB_MAX_DATE_FETCHES),
+    and not only on a first load: a count-only target, one back from a gap or
+    one reset by a new policy stop at the cap too. With the date memory each
+    of those scans reads new pages (collectors/_recency.py), so it isn't a
+    loop: a Facebook target is loading while its last complete scan (or its
+    creation) is less than FIRST_LOAD_GRACE old. Past it, it alerts like any
+    failure. The last finished run decides: the next scan is often running."""
+    if row['statuses'][:1] != ['failed']:
+        return False
+    error = last_error_line(row.get('last_error'))
+    if row['source'] == 'facebook' and error == FB_DATE_FETCH_LIMIT:
+        return now - (row.get('last_run_at') or row['created_at']) < FIRST_LOAD_GRACE
+    return (row.get('first_run_done') is False and error in (DATE_FETCH_LIMIT, FB_DATE_FETCH_LIMIT)
             and now - row['created_at'] < FIRST_LOAD_GRACE)
 
 

@@ -132,6 +132,28 @@ class CollectorChecksTests(unittest.TestCase):
         # A loading target that stops running still alerts.
         self.assertIn('vencida', check(next_run_at=NOW-timedelta(hours=2)))
 
+    def test_a_facebook_target_stopping_at_its_page_cap_is_loading_while_it_completed_a_scan_today(self):
+        """12 item pages a scan: a count-only target, one back from a gap or one reset by a new policy
+        stops at the cap too, not only a new one. With the date memory each scan reads new pages."""
+        capped = dict(source='facebook', name='Facebook', first_run_done=True, latest_status='failed',
+                      latest_error=health.FB_DATE_FETCH_LIMIT, last_error=health.FB_DATE_FETCH_LIMIT,
+                      statuses=['failed']*3, created_at=NOW-timedelta(days=30),
+                      last_run_at=NOW-timedelta(hours=2))
+        check = lambda **c: health.collector_checks([target(**{**capped, **c})], NOW,
+                                                    previous={'collector:facebook': 'falló'})['collector:facebook']
+        self.assertIsNone(check())
+        self.assertIsNone(check(first_run_done=False, last_run_at=None, created_at=NOW-timedelta(hours=5)))
+        # A day without a complete scan, or another error: a failure again.
+        for changes in (dict(last_run_at=NOW-timedelta(days=2)),
+                        dict(first_run_done=False, last_run_at=None),
+                        dict(last_error='Traceback\nRuntimeError: facebook search HTTP 500')):
+            with self.subTest(**{k: str(v) for k, v in changes.items()}):
+                self.assertIn('3 corridas', check(**changes))
+        # Mercado Libre's cap is still forgiven only on a new target's first load.
+        ml = dict(capped, source='mercadolibre', name='Mercado Libre', latest_error=health.DATE_FETCH_LIMIT,
+                  last_error=health.DATE_FETCH_LIMIT)
+        self.assertIn('3 corridas', health.collector_checks([target(**ml)], NOW)['collector:mercadolibre'])
+
     def test_custom_threshold(self):
         self.assertIn('2 corridas', health.collector_checks([target(statuses=['failed']*2)], NOW, failures=2)['collector:kavak'])
 

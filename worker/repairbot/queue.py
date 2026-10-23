@@ -75,6 +75,14 @@ async def running_runs(cx, source: str) -> int:
     return row['running']
 
 
+async def held_claims(cx, sources: list[str]) -> int:
+    """Targets of those sources claimed right now (tools/wait_idle.py): a crawl
+    in progress, even between the runs collector_runs records."""
+    from tools.wait_idle import held_claims as held
+
+    return len(await held(cx, sources))
+
+
 async def kick(cx, source: str, target_ids: list[int]) -> list[int]:
     """Make active targets of the source due now. Returns the ids actually updated."""
     ids = _ids(target_ids)

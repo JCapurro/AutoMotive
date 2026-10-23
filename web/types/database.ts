@@ -1045,6 +1045,14 @@ isOneToOne: false
             "commercial_access_active":
 { Args: { "p_user": string }; Returns: boolean
                            },
+"comparable_pool":
+{ Args: { "p_km_tol_pct"?: number,"p_listing_id": number,"p_max_age_days"?: number,"p_year_tol"?: number }; Returns: Database["public"]["Tables"]["listings"]["Row"][]
+                          SetofOptions: {
+        from: "*"
+        to: "listings"
+        isOneToOne: false
+        isSetofReturn: true
+      } },
 "comparables":
 { Args: { "p_km_tol_pct"?: number,"p_listing_id": number,"p_max_age_days"?: number,"p_min_n"?: number,"p_year_tol"?: number }; Returns: Json
                            },

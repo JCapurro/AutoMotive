@@ -1,16 +1,19 @@
 """Publication windows and coverage, without live accounts or external requests."""
 from __future__ import annotations
 
+from collections import Counter
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+import json
 import pathlib
 import unittest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 from urllib.parse import parse_qs, urlparse
 
 from collectors import facebook as fb, mercadolibre as ml
 from collectors.base import Listing, SearchResults
-from collectors._recency import DAY, PublicationWindow, target_window
+from collectors._recency import (DATE_MEMORY_CAP, DAY, DateSkip, PublicationWindow, encode_date_skips,
+                                 parse_date_skips, target_window)
 from pipeline import crawl
 from pipeline.ingest import IngestResult
 from test_mercadolibre_transport import FakeHttp
@@ -77,6 +80,44 @@ class WindowTests(unittest.TestCase):
                 {"marca": "Ford", "modelo": "Fiesta", "publication_days": days})).query)
             self.assertEqual(params["daysSinceListed"], [str(days)])
             self.assertEqual(params["sortBy"], ["creation_time_descend"])
+
+    def test_a_count_only_target_reads_the_last_day_bucket_on_any_run(self):
+        """As Mercado Libre's "Publicados hoy" (2.5): Corolla 445400 read 30 days a day."""
+        def bucket(**filters):
+            url = fb.FacebookMarketplaceScraper()._build_url(
+                {"marca": "Toyota", "modelo": "Corolla", "publication_until": NOW, **filters})
+            return parse_qs(urlparse(url).query)["daysSinceListed"]
+
+        gap = {"publication_days": 2, "published_since": NOW - 2 * DAY}
+        self.assertEqual(bucket(count_only=True, **gap), ["1"])
+        self.assertEqual(bucket(count_only=True, publication_days=30), ["1"])      # its first run
+        self.assertEqual(bucket(**gap), ["7"])
+
+
+class DateMemoryTests(unittest.TestCase):
+    """Facebook's date memory as prefilter_rejected stores it."""
+
+    def test_entries_round_trip_and_malformed_ones_are_forgotten(self):
+        memory = parse_date_skips(["11", f"12@{NOW}#2", f"13@{NOW}", "14@x#1", "@5", ""])
+        self.assertEqual(memory, {"11": DateSkip(), "12": DateSkip(NOW, 2), "13": DateSkip(NOW, 1)})
+        self.assertEqual(encode_date_skips(memory), ["11", f"12@{NOW}#2", f"13@{NOW}#1"])
+
+    def test_an_undated_page_is_read_again_at_30_minutes_2_hours_and_6_hours_then_skipped(self):
+        self.assertTrue(DateSkip().skips(NOW + 400 * DAY))                 # dated out of the window
+        for reads, after in ((1, 1800), (2, 7200), (3, 21600)):
+            entry = DateSkip(NOW, reads)
+            self.assertTrue(entry.skips(NOW + after - 1), reads)
+            self.assertFalse(entry.skips(NOW + after), reads)
+        self.assertTrue(DateSkip(NOW, 4).skips(NOW + 20 * DAY))             # 3 attempts: skipped
+        self.assertEqual(DateSkip.undated(None, NOW), DateSkip(NOW, 1))
+        self.assertEqual(DateSkip.undated(DateSkip(NOW, 2), NOW + 7200), DateSkip(NOW, 3))
+
+    def test_the_memory_keeps_the_newest_ids(self):
+        memory = {str(i): DateSkip() for i in range(DATE_MEMORY_CAP + 5)}
+        kept = encode_date_skips(memory)
+        self.assertEqual(len(kept), DATE_MEMORY_CAP)
+        self.assertNotIn("4", kept)
+        self.assertIn(str(DATE_MEMORY_CAP + 4), kept)
 
 
 class MercadoLibreWindowTests(unittest.IsolatedAsyncioTestCase):
@@ -197,6 +238,8 @@ class FacebookPage:
         self.close = AsyncMock()
         self.wait_for_timeout = AsyncMock()
         self.mouse = MagicMock(wheel=AsyncMock(side_effect=self.scroll))
+        self.on = MagicMock()
+        self.remove_listener = MagicMock()
 
     async def goto(self, url, **kwargs):
         self.url = url
@@ -336,6 +379,130 @@ class FacebookWindowTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("session expired", results.reason)
         self.assertEqual([l.listing_id for l in results], ['1'])
 
+    async def memory_scan(self, feed, dates, *, cap=30, until=NOW, **filters):
+        """One scan of `feed` (ids without a card date) whose item pages say
+        dates[id] (an exception is raised). Returns (results, ids read)."""
+        reads = []
+
+        async def read_date(scraper, ctx, listing):
+            reads.append(listing.listing_id)
+            outcome = dates[listing.listing_id]
+            if isinstance(outcome, Exception):
+                raise outcome
+            return outcome
+
+        page = FacebookPage([[(i, None) for i in feed]])
+        with patch.object(fb.config, "RECENT_FB_MAX_DATE_FETCHES", cap), \
+                patch.object(fb.config, "RECENT_FB_DETAIL_SECONDS", 0), \
+                patch.object(fb.FacebookMarketplaceScraper, "_publication_date", read_date):
+            results = await self.search(page, publication_until=until, **filters)
+        return results, reads
+
+    async def test_dates_read_out_of_window_are_never_read_again(self):
+        """Corolla 445400 (2026-10-22): two scans read 30 pages each and kept nothing new."""
+        feed = [str(i) for i in range(1, 41)]
+        dates = {i: NOW - DAY if int(i) <= 3 else NOW - 40 * DAY for i in feed}
+        first, reads = await self.memory_scan(feed, dates, date_skips=[])
+        self.assertEqual((len(reads), first.complete, first.reason), (30, False, fb.DATE_FETCH_LIMIT))
+        self.assertEqual([l.listing_id for l in first], ["1", "2", "3"])
+        self.assertEqual(sorted(first.date_skips, key=int), [str(i) for i in range(4, 31)])
+        known = {l.listing_id: l.published_at for l in first}
+        second, reads = await self.memory_scan(feed, dates, date_skips=first.date_skips,
+                                               known_publication_dates=known)
+        self.assertEqual((reads, second.complete), ([str(i) for i in range(31, 41)], True))
+        self.assertEqual(sorted(second.date_skips, key=int), [str(i) for i in range(4, 41)])
+        third, reads = await self.memory_scan(feed, dates, date_skips=second.date_skips,
+                                              known_publication_dates=known)
+        self.assertEqual((reads, third.complete, third.date_skips), ([], True, second.date_skips))
+        # A complete scan forgets the ads it no longer sees; a partial one keeps them.
+        fourth, _ = await self.memory_scan(feed[:20], dates, date_skips=second.date_skips,
+                                           known_publication_dates=known)
+        self.assertEqual(sorted(fourth.date_skips, key=int), [str(i) for i in range(4, 21)])
+
+    async def test_an_undated_ad_is_read_again_and_gets_in_once_dated_yesterday(self):
+        """In regime the window starts a day back: the 6-hour retry finds an ad
+        published 20 hours before it was first seen, before today's `since`."""
+        regime = lambda at: {"publication_days": 1, "published_since": at - DAY}
+        undated = {"9": None}
+        with patch.object(fb.config, "FB_DATE_MEMORY_UNKNOWN", True):
+            first, reads = await self.memory_scan(["9"], undated, date_skips=[], **regime(NOW))
+            self.assertEqual((reads, first.unknown_dates, first.date_skips), (["9"], 1, [f"9@{NOW}#1"]))
+            memory = first.date_skips
+            for at, read in ((NOW + 600, False), (NOW + 1800, True), (NOW + 3600, False), (NOW + 7200, True)):
+                later, reads = await self.memory_scan(["9"], undated, until=at, date_skips=memory, **regime(at))
+                self.assertEqual(reads, ["9"] if read else [], at - NOW)
+                memory = later.date_skips
+            self.assertEqual(memory, [f"9@{NOW}#3"])
+            at = NOW + 6 * 3600
+            last, reads = await self.memory_scan(["9"], {"9": NOW - 20 * 3600}, until=at, date_skips=memory,
+                                                 **regime(at))
+        self.assertEqual((reads, [l.listing_id for l in last], last.date_skips), (["9"], ["9"], []))
+        # Without the memory, the same read leaves it out: it is before `since`.
+        plain, _ = await self.memory_scan(["9"], {"9": NOW - 20 * 3600}, until=at, **regime(at))
+        self.assertEqual(list(plain), [])
+
+    async def test_an_ad_still_undated_after_three_retries_is_skipped(self):
+        with patch.object(fb.config, "FB_DATE_MEMORY_UNKNOWN", True):
+            results, reads = await self.memory_scan(["9"], {"9": None}, until=NOW + 20 * 3600,
+                                                    date_skips=[f"9@{NOW}#3"])
+            self.assertEqual((reads, results.date_skips), (["9"], [f"9@{NOW}#4"]))
+            results, reads = await self.memory_scan(["9"], {"9": None}, until=NOW + 23 * 3600,
+                                                    date_skips=results.date_skips)
+        self.assertEqual((reads, results.date_skips, results.complete), ([], [f"9@{NOW}#4"], True))
+
+    async def test_a_read_that_raised_is_never_remembered(self):
+        with patch.object(fb.config, "FB_DATE_MEMORY_UNKNOWN", True):
+            results, reads = await self.memory_scan(["8", "9"], {"8": RuntimeError("timeout"), "9": RuntimeError("x")},
+                                                    date_skips=[f"9@{NOW - 3600}#1"])
+        self.assertEqual(reads, ["8", "9"])
+        self.assertEqual((results.complete, results.reason), (False, "facebook date fetch failed: RuntimeError"))
+        self.assertEqual(results.date_skips, [f"9@{NOW - 3600}#1"])          # as it was, read again next scan
+
+    async def test_undated_ads_are_not_remembered_until_the_flag_is_on(self):
+        with self.assertLogs("collectors.facebook", "INFO") as logs:
+            results, reads = await self.memory_scan(["8", "9", "10"], {"8": None, "9": None},
+                                                    cap=2, date_skips=[f"9@{NOW - 600}#1", "7"])
+        self.assertEqual((reads, results.unknown_dates), (["8", "9"], 3))
+        # The page reads without a date, apart from the card the cap left unread (FB_DATE_MEMORY_UNKNOWN's measure).
+        self.assertIn("undated=2 unknown_dates=3", logs.output[-1])
+        self.assertEqual(results.date_skips, ["7"])           # no undated entry; a partial scan keeps the rest
+        without, _ = await self.memory_scan(["8"], {"8": None})
+        self.assertIsNone(without.date_skips)                                 # no memory asked: none kept
+
+    async def test_the_probe_never_changes_the_results(self):
+        batches = [[("1", 2), ("2", None)], [("3", 1)]]
+        dates = AsyncMock(return_value=NOW - DAY)
+        with patch.object(fb.FacebookMarketplaceScraper, "_publication_date", dates), \
+                patch.object(fb.config, "RECENT_FB_DETAIL_SECONDS", 0):
+            plain = await self.search(FacebookPage(batches))
+            page = FacebookPage(batches)
+            broken = MagicMock(status=200, text=AsyncMock(side_effect=RuntimeError("body gone")))
+            goto = page.goto
+
+            async def goto_and_answer(url, **kwargs):
+                await goto(url, **kwargs)
+                handler = page.on.call_args.args[1]
+                odd = MagicMock()
+                type(odd).url = PropertyMock(side_effect=RuntimeError("no url"))
+                handler(odd)                                                   # raises inside: swallowed
+                graphql = MagicMock(url="https://www.facebook.com/api/graphql/",
+                                    text=AsyncMock(side_effect=RuntimeError("evicted")))
+                graphql.request.resource_type = "xhr"
+                handler(graphql)
+                return broken
+
+            def closing():
+                page.remove_listener.assert_called_once_with("response", page.on.call_args.args[1])
+            page.goto = goto_and_answer
+            page.close = AsyncMock(side_effect=closing)
+            probed = await self.search(page)
+        self.assertEqual([l.listing_id for l in probed], [l.listing_id for l in plain])
+        self.assertEqual((probed.complete, probed.reason, probed.unknown_dates),
+                         (plain.complete, plain.reason, plain.unknown_dates))
+        self.assertEqual(page.on.call_args.args[0], "response")
+        self.assertEqual((probed.probe["cards"], probed.probe["graphql_bodies"], probed.probe["json_docs"]),
+                         (3, 0, 0))
+
     async def test_unknown_date_is_not_promoted_to_today_and_cached_date_avoids_fetch(self):
         detail = AsyncMock(return_value=None)
         with patch.object(fb.FacebookMarketplaceScraper, "_publication_date", detail), \
@@ -345,6 +512,47 @@ class FacebookWindowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([l.listing_id for l in results], ['1'])
         self.assertEqual(results.unknown_dates, 1)
         detail.assert_awaited_once()
+
+
+class FeedProbeTests(unittest.TestCase):
+    """The passive probe: does the feed's own data date the cards (phase 2)?"""
+    FEED = {"data": {"marketplace_search": {"feed_units": {"edges": [
+        {"node": {"story_time": NOW - 50, "listing": {"id": "1", "creation_time": NOW - 100,
+                                                      "seller": {"id": "u1", "join_time": NOW - 9 * DAY}}}},
+        {"node": {"listing": {"id": "2", "creation_time": NOW - 200, "is_live": True}}},
+        {"node": {"listing": {"id": "77", "creation_time": NOW - 300}}},          # a suggestion
+    ]}}}}
+
+    def texts(self):
+        graphql = "for (;;);" + json.dumps(self.FEED) + "\n" + json.dumps({"data": {"id": "3", "creation_time": NOW - 20}})
+        html = ('<html><script type="application/json" data-sjs>'
+                f'{json.dumps({"require": [{"id": "3", "creation_time": NOW - 10}]})}</script></html>')
+        return [html, graphql]
+
+    def test_feed_times_are_tied_to_their_own_listing(self):
+        feed = fb._feed_times(self.texts(), ["1", "2", "3"], now=NOW)
+        # The seller's own time isn't the ad's, the suggestion isn't a card, and
+        # card 3 has two values for one path: it keeps none.
+        self.assertEqual(feed.times, {"1": {"own.creation_time": NOW - 100, "edge.story_time": NOW - 50},
+                                      "2": {"own.creation_time": NOW - 200}})
+        self.assertEqual(feed.paths, Counter({"own.creation_time": 2, "edge.story_time": 1}))
+        self.assertEqual((feed.present, feed.documents), ({"1", "2", "3"}, 3))
+
+    def test_the_report_has_counts_and_path_names_never_a_value(self):
+        probe = fb._FeedProbe()
+        probe.texts = self.texts()
+        for ident, text in (("1", "Ford Ka\nJust listed"), ("2", "Ford Ka"), ("3", "Ford Ka")):
+            probe.card(ident, text)
+        probe.page_times = {"1": NOW - 100 + 60, "2": NOW - 200 + 600}
+        probe.dated("1", NOW - 2 * 3600)
+        with patch("collectors._recency.time.time", return_value=NOW):
+            report = probe.report({"2": NOW - 200})
+        self.assertEqual(report["compared"], {"own.creation_time": [1, 1], "edge.story_time": [1, 0]})
+        self.assertEqual(report["vs_known"], {"own.creation_time": [1, 0]})
+        self.assertEqual((report["cards"], report["ids_in_data"], report["just_listed"],
+                          report["just_listed_max_age_h"]), (3, 3, 1, 2.0))
+        self.assertNotIn(str(NOW)[:6], json.dumps(report))
+        self.assertEqual(probe.texts, [])                                      # dropped after the report
 
 
 class FacebookCitySlugTests(unittest.TestCase):
@@ -409,6 +617,52 @@ class PipelineCoverageTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(finish.call_args.kwargs["ok"])
         self.assertEqual(finish.call_args.kwargs["error"], "scroll cap")
         self.assertEqual(scraper.search.call_args.args[0]["publication_days"], 30)
+
+    async def run_facebook(self, target, items):
+        scraper = MagicMock(search=AsyncMock(return_value=items))
+
+        async def on_collector(coroutine, timeout=None):
+            return await coroutine
+
+        with patch.dict(crawl.REGISTRY, {target["source"]: lambda: scraper}), \
+                patch.object(crawl.runs, "start_run", AsyncMock(return_value=1)), \
+                patch.object(crawl.runs, "finish_run", AsyncMock()), \
+                patch.object(crawl.targets_repo, "publication_dates", AsyncMock(return_value={})), \
+                patch.object(crawl.targets_repo, "set_prefilter_rejected", AsyncMock()) as remember, \
+                patch.object(crawl, "run_collector", on_collector), \
+                patch.object(crawl, "ingest", AsyncMock(return_value=IngestResult(found=len(items)))):
+            await crawl.run_target(target)
+        return scraper.search.call_args.args[0], remember
+
+    async def test_a_facebook_target_by_model_keeps_its_date_memory(self):
+        target = {"id": 4, "source": "facebook", "make": "Toyota", "model": "Corolla", "first_run_done": True,
+                  "last_run_at": None, "crawl_interval_seconds": 1800, "prefilter_rejected": ["5"]}
+        filters, remember = await self.run_facebook(target, SearchResults([listing()], date_skips=["1", "5"]))
+        self.assertEqual(filters["date_skips"], ["5"])
+        remember.assert_awaited_once_with(4, ["1", "5"])
+        # Nothing new: no write. A collector that keeps no memory: no write either.
+        for items in (SearchResults(date_skips=["5"]), SearchResults(complete=False, reason="cap")):
+            _, remember = await self.run_facebook(target, items)
+            remember.assert_not_awaited()
+
+    async def test_only_facebook_targets_by_model_get_a_date_memory(self):
+        for changes in ({"source": "facebook", "make": None, "model": None, "body_type": "suv"},
+                        {"source": "kavak"}):
+            target = {"id": 4, "source": "facebook", "make": "Toyota", "model": "Corolla", "first_run_done": True,
+                      "last_run_at": None, "crawl_interval_seconds": 1800, "prefilter_rejected": ["5"], **changes}
+            with self.subTest(**changes):
+                filters, remember = await self.run_facebook(target, SearchResults(date_skips=["1"]))
+                self.assertNotIn("date_skips", filters)
+                remember.assert_not_awaited()
+
+    async def test_a_facebook_scan_cut_at_its_page_cap_goes_on_in_three_minutes(self):
+        target = {"id": 1, "crawl_interval_seconds": 1800, "query": {}}
+        items = SearchResults(complete=False, reason=fb.DATE_FETCH_LIMIT)
+        batch = crawl.TargetRun(target, items, IngestResult(), first_run=True, complete=False)
+        with patch.object(crawl, "run_target", AsyncMock(return_value=batch)), \
+                patch.object(crawl.targets_repo, "finish_target", AsyncMock()) as finish:
+            await crawl._run_source([target], None, 0, None)
+        self.assertEqual(finish.call_args.kwargs["retry_seconds"], 180)
 
     async def test_partial_target_does_not_advance_first_run_or_last_success(self):
         target = {"id": 1, "crawl_interval_seconds": 3600}

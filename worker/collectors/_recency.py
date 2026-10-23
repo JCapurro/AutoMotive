@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import time
+from typing import Iterable
 
 from .base import Listing
 
@@ -14,6 +15,72 @@ POLICY_VERSION = 1
 # The widest window of a target by body type: what Mercado Libre's "Publicados
 # hoy" (the last 24 hours) covers with a run's overlap (TODAY_FILTER_SPAN).
 BODY_TYPE_SPAN = 25 * 3600
+
+# Facebook's date memory: the item pages a target by model already read for
+# their date, kept in crawl_targets.prefilter_rejected (pipeline/crawl.py
+# run_target). An item page is what a scan spends (RECENT_FB_DETAIL_SECONDS
+# apart, RECENT_FB_MAX_DATE_FETCHES per scan), and without it every scan read
+# the same pages again (Corolla, 2026-10-22: 30 pages and nothing new).
+# - "id": dated before the window. `since` never moves back while the
+#   publication policy holds (target_window), so it never gets in: its page is
+#   not read again. sync_targets empties the memory with a new policy.
+# - "id@epoch#n": its page loaded without a date, n times, the first at epoch.
+#   Read again DATE_RETRY_SECONDS after epoch, all within the day the window
+#   then covered, and skipped after the last. Once dated it gets in if
+#   published within that day, even before today's `since`.
+DATE_RETRY_SECONDS = (30 * 60, 2 * 3600, 6 * 3600)
+# The memory a target keeps at most; past it the oldest IDs go (and are read once more).
+DATE_MEMORY_CAP = 3000
+
+
+@dataclass(frozen=True)
+class DateSkip:
+    """One remembered item page: dated out of the window (epoch None) or read
+    `reads` times without a date, the first at `epoch`."""
+    epoch: int | None = None
+    reads: int = 0
+
+    def skips(self, now: int) -> bool:
+        """Whether a scan at `now` leaves the page unread."""
+        if self.epoch is None or self.reads > len(DATE_RETRY_SECONDS):
+            return True
+        return now < self.epoch + DATE_RETRY_SECONDS[max(1, self.reads) - 1]
+
+    @staticmethod
+    def undated(previous: "DateSkip | None", now: int) -> "DateSkip":
+        """The entry after a read without a date at `now`."""
+        if previous is None or previous.epoch is None:
+            return DateSkip(now, 1)
+        return DateSkip(previous.epoch, previous.reads + 1)
+
+
+def parse_date_skips(entries: Iterable[str] | None) -> dict[str, DateSkip]:
+    """prefilter_rejected as a date memory. A malformed entry is forgotten:
+    its page is read again."""
+    out: dict[str, DateSkip] = {}
+    for entry in entries or ():
+        ident, sep, rest = str(entry).partition("@")
+        if not ident:
+            continue
+        if not sep:
+            out[ident] = DateSkip()
+            continue
+        stamp, _, reads = rest.partition("#")
+        try:
+            out[ident] = DateSkip(int(stamp), max(1, int(reads or 1)))
+        except ValueError:
+            continue
+    return out
+
+
+def encode_date_skips(memory: dict[str, DateSkip]) -> list[str]:
+    """The memory as prefilter_rejected, the newest DATE_MEMORY_CAP IDs."""
+    def newest(ident: str) -> tuple[int, str]:
+        return len(ident), ident             # numeric IDs, by length first
+
+    kept = sorted(memory, key=newest)[-DATE_MEMORY_CAP:]
+    return sorted(i if memory[i].epoch is None else f"{i}@{memory[i].epoch}#{memory[i].reads}"
+                  for i in kept)
 
 
 @dataclass(frozen=True)
@@ -37,6 +104,14 @@ class PublicationWindow:
     def contains(self, item: Listing) -> bool:
         return (item.published_at is not None
                 and self.since <= item.published_at <= max(self.until, int(time.time())))
+
+    def admits(self, item: Listing, remembered: DateSkip | None = None) -> bool:
+        """contains, or, for an ad whose page had no date at `remembered.epoch`,
+        published within the day before it: the window it was seen in."""
+        if self.contains(item):
+            return True
+        return (remembered is not None and remembered.epoch is not None and item.published_at is not None
+                and remembered.epoch - DAY <= item.published_at <= max(self.until, int(time.time())))
 
     @property
     def facebook_days(self) -> int:
