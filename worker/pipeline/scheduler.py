@@ -188,7 +188,9 @@ async def process_batch(notifier: Notifier, target: dict, listing_ids: list[int]
     against the target's profiles, then notify, and count for the searches
     with ended access. tools/simulate_alert.py runs it for a single listing.
 
-    `backfill_ids` are old stock for every profile (TargetRun.backfill_ids).
+    `backfill_ids` are old stock for every profile (TargetRun.backfill_ids),
+    and so is what only the target's reference year band brought, told here
+    from the scored rows so that it never depends on classify (news.band_ids).
     `body_type_filled`, listings stored before whose body type this batch
     filled in or corrected, are old news for the searches without a model:
     their batches couldn't match them, and a body-type backfill
@@ -198,6 +200,8 @@ async def process_batch(notifier: Notifier, target: dict, listing_ids: list[int]
     scorer = await Scorer.create()
     await scorer.prepare(listing_ids)
     max_age_days = int(await db.get_config("recommended_max_age_days", RECOMMENDED_MAX_AGE_DAYS))
+    backfill_ids |= news.band_ids(target, (scorer.rows[lid] for lid in listing_ids if lid in scorer.rows),
+                                  max_age_days=max_age_days)
     staged: list[_Staged] = []
     for alert in await db.alerts_for_target(target["source"], target.get("make"), target.get("model"),
                                             telegram_only=False,

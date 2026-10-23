@@ -12,9 +12,12 @@ DAY = 86_400
 ARGENTINA = timezone(timedelta(hours=-3))
 SOURCES = frozenset({"mercadolibre", "facebook"})
 POLICY_VERSION = 1
-# The widest window of a target by body type: what Mercado Libre's "Publicados
-# hoy" (the last 24 hours) covers with a run's overlap (TODAY_FILTER_SPAN).
-BODY_TYPE_SPAN = 25 * 3600
+# What Mercado Libre's "Publicados hoy" covers with a run's overlap: the last 24
+# hours, plus an hour for the window's 10-minute overlap and scheduling delays
+# (mercadolibre.py). A window up to it is read through that filter (one_request_read).
+TODAY_SPAN = 25 * 3600
+# The widest window of a target by body type: what "Publicados hoy" covers.
+BODY_TYPE_SPAN = TODAY_SPAN
 
 # Facebook's date memory: the item pages a target by model already read for
 # their date, kept in crawl_targets.prefilter_rejected (pipeline/crawl.py
@@ -118,6 +121,22 @@ class PublicationWindow:
         # Facebook only offers these buckets. Exact dates are checked locally too.
         span = self.until - self.since
         return next((d for d in (1, 7, 30) if span <= d * DAY), 30)
+
+
+def one_request_read(source: str, filters: dict, window: PublicationWindow | None = None) -> bool:
+    """Whether this read of `source` goes through Mercado Libre's "Publicados
+    hoy": a window up to TODAY_SPAN, today's, or a count-only target's (2.5).
+    One request for the day's cards, dated by the filter, while a longer
+    window (a first run, a gap) dates every card, one ad page each
+    (mercadolibre._search_recent). pipeline/crawl.py reads the reference year
+    band only then, so the two never disagree. `window`: the one already
+    parsed from `filters`."""
+    if source != "mercadolibre":
+        return False
+    window = window or PublicationWindow.from_filters(filters)
+    if window is None:
+        return False
+    return window.today_only or filters.get("count_only") is True or window.until - window.since <= TODAY_SPAN
 
 
 def target_window(target: dict, *, now: int | None = None) -> dict:

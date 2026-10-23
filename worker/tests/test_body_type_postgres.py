@@ -168,17 +168,18 @@ class BatchProfilesTests(BodyTypeCase):
             eco("no-price", precio=None, moneda=None),
             eco("expensive", precio=45_000.0),
             eco("old", anio=2010),
+            eco("edge", anio=2014),                                     # the reference band's year
             eco("worn", km=200_000),
         ]
         await self.tick()
 
-        self.assertEqual(FakeSource.searches, [("kavak", {"carroceria": "suv", "anio_min": 2015,
+        self.assertEqual(FakeSource.searches, [("kavak", {"carroceria": "suv", "anio_min": 2014,
                                                           "km_max": 120_000})])
         stored = await self.rows("SELECT external_id, body_type FROM listings ORDER BY external_id")
         self.assertEqual([(r["external_id"], r["body_type"]) for r in stored],
-                         [("ars", "suv"), ("no-price", "suv"), ("ok", "suv")])
+                         [("ars", "suv"), ("edge", "suv"), ("no-price", "suv"), ("ok", "suv")])
         [run] = await self.rows("SELECT status, found, new FROM collector_runs")
-        self.assertEqual(tuple(run.values()), ("ok", 6, 3))             # the dropped ones were found
+        self.assertEqual(tuple(run.values()), ("ok", 7, 4))             # the dropped ones were found
         matched = dict(await self.matched(suv))
         self.assertTrue(matched["ok"] and matched["ars"])                # a first run is backfill
         self.assertNotIn("expensive", matched)
@@ -256,6 +257,57 @@ class ForeignBatchTests(BodyTypeCase):
         self.assertEqual(self.candidates, ["brand-new"])
         # Searches with a model don't care: their batches matched it without the body type.
         self.assertEqual(await self.matched(fiesta), [])
+
+    def ka(self, listing_id: str, year: int, **kw) -> object:
+        base = dict(titulo=f"Ford Ka 1.5 SE {listing_id}", marca="Ford", modelo="Ka", anio=year,
+                    carroceria="Hatchback")
+        base.update(kw)
+        return card(listing_id, source="kavak", **base)
+
+    async def band_read(self, *, classify_fails: bool = False) -> int:
+        """A Ka search from 2010 on Kavak, which reads 2009 too (the reference
+        band), next to a bootstrapped search for any hatchback. The second
+        read brings a new Ka 2009 and a new Ka 2011."""
+        ka = await self.fiesta_alert(marcas=["Ford"], modelos=["Ka"], anio_min=2010, sources=["kavak"])
+        hatch = await self.body_alert(body=("hatchback",), sources=["kavak"])
+        async with db.connection() as cx:
+            await cx.execute("UPDATE search_profiles SET channels = '{web}' WHERE id = ANY(%s)", ([ka, hatch],))
+        market = [self.ka(f"c{i}", 2011 + i % 2, precio=12_000.0 + i * 100, km=90_000 + i * 2_000)
+                  for i in range(6)]
+        FakeSource.results["kavak"] = market
+        await self.tick()                                               # the target's first run
+        [t] = await self.rows("SELECT query FROM crawl_targets WHERE active")
+        self.assertEqual((t["query"]["year_min"], t["query"].get("year_band")), (2010, 1))
+        self.assertEqual(FakeSource.searches[0][1]["anio_min"], 2009)
+        FakeSource.results["kavak"] = market + [self.ka("old", 2009, precio=9_000.0, km=95_000),
+                                                self.ka("new", 2011, precio=9_000.0, km=95_500)]
+        if classify_fails:
+            with patch("pipeline.news._classify", AsyncMock(side_effect=RuntimeError("db"))):
+                await self.tick()
+        else:
+            await self.tick()
+        return hatch
+
+    async def notified(self) -> set[str]:
+        return {r["external_id"] for r in await self.rows(
+            "SELECT l.external_id FROM notifications n JOIN listings l ON l.id = n.listing_id")}
+
+    async def test_band_rows_of_a_full_stock_source_are_backfill_for_a_search_without_a_model(self):
+        hatch = await self.band_read()
+        matched = dict(await self.matched(hatch))
+        self.assertEqual((matched["old"], matched["new"]), (True, False))
+        self.assertEqual(await self.notified(), {"new"})
+        self.assertEqual((await self.listing("old"))["attributes"]["_not_news"]["reason"], "band")
+        self.assertNotIn("_not_news", (await self.listing("new"))["attributes"])
+
+    async def test_a_band_row_stays_backfill_when_classify_fails(self):
+        hatch = await self.band_read(classify_fails=True)
+        [err] = await self.rows("SELECT stage FROM pipeline_errors")
+        self.assertEqual(err["stage"], "news")
+        matched = dict(await self.matched(hatch))
+        self.assertEqual((matched["old"], matched["new"]), (True, False))
+        self.assertEqual(await self.notified(), {"new"})
+        self.assertNotIn("_not_news", (await self.listing("old"))["attributes"])
 
     async def test_a_crawl_that_fills_a_body_type_lists_it(self):
         await ingest([card("1")], geocode=None)                         # a Fiesta, body type unknown

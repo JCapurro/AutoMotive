@@ -76,6 +76,52 @@ class ReadEnvelopeTests(unittest.TestCase):
             self.assertIsNone(news.read_envelope(target, filters), target)
 
 
+class BandTests(unittest.TestCase):
+    """The reference year band (pipeline/crawl.py): Ka 2010 reads 2009 too."""
+    QUERY = {"year_min": 2010, "year_max": 2020, "year_band": 1, "profile_ids": [1]}
+    KAVAK = {"id": 7, "source": "kavak", "make": "Ford", "model": "Ka", "query": QUERY}
+
+    def test_a_year_past_the_searches_own_is_the_band_s(self):
+        self.assertTrue(news.is_band({"year": 2009}, self.QUERY))
+        self.assertTrue(news.is_band({"year": 2021}, self.QUERY))
+        for year in (2010, 2015, 2020, None):
+            self.assertFalse(news.is_band({"year": year}, self.QUERY), year)
+
+    def test_without_a_band_or_a_bound_nothing_is(self):
+        self.assertFalse(news.is_band({"year": 2009}, {"year_min": 2010}))
+        self.assertFalse(news.is_band({"year": 2009}, None))
+        self.assertFalse(news.is_band({"year": 2030}, {"year_min": 2010, "year_band": 1}))   # no year_max
+        self.assertTrue(news.is_band({"year": 2009}, {"year_min": "2010", "year_band": 1}))
+
+    def test_band_ids_are_the_band_s_rows_of_a_source_without_a_window(self):
+        rows = [row(1, year=2009), row(2, year=2010), row(3, year=None), row(4, year=2021)]
+        with patch.object(news.config, "NEWS_GUARD_BAND", True):
+            self.assertEqual(news.band_ids(self.KAVAK, rows, max_age_days=15), frozenset({1, 4}))
+            # Mercado Libre reads the band only in "Publicados hoy": real news.
+            self.assertEqual(news.band_ids(dict(self.KAVAK, source="mercadolibre"), rows, max_age_days=15),
+                             frozenset())
+            self.assertEqual(news.band_ids(dict(self.KAVAK, query={"year_min": 2010}), rows, max_age_days=15),
+                             frozenset())
+            # v6 dates its listings: one published yesterday is news, band or not.
+            dated = [row(1, year=2009, published_at=NOW - timedelta(days=1)),
+                     row(2, year=2009, published_at=NOW - timedelta(days=40))]
+            self.assertEqual(news.band_ids(dict(self.KAVAK, source="v6"), dated, max_age_days=15), frozenset({2}))
+        with patch.object(news.config, "NEWS_GUARD_BAND", False):
+            self.assertEqual(news.band_ids(self.KAVAK, rows, max_age_days=15), frozenset())
+
+    def test_the_read_envelope_includes_the_band(self):
+        # What the collector is sent: a widening by the band's year is no envelope.
+        self.assertEqual(news.read_envelope(self.KAVAK, crawl.scraper_filters(self.KAVAK)),
+                         {"year_min": 2009, "year_max": 2021})
+
+    def test_the_core_share_of_a_read_leaves_the_band_out(self):
+        items = [Listing("kavak", str(i), "Ford Ka", "https://example.test", anio=year)
+                 for i, year in enumerate((2009, 2009, 2012, 2015, None))]
+        self.assertEqual(news._core_share(items, self.QUERY), 0.6)
+        self.assertEqual(news._core_share(items, {"year_min": 2010}), 1.0)
+        self.assertEqual(news._core_share([], self.QUERY), 1.0)
+
+
 class MarkTests(unittest.TestCase):
     def marked(self, reason: str, target_id: int = 7) -> dict:
         return {"attributes": {"_not_news": {"reason": reason, "run_id": 1, "target_id": target_id, "prev_id": None}}}
@@ -111,7 +157,7 @@ class ClassifyTests(unittest.IsolatedAsyncioTestCase):
             return {"recommended_max_age_days": 15, "comparables": {"confirm_sources": list(trusted)}}.get(key, default)
 
         flags = {"NEWS_GUARD_STEP": True, "NEWS_GUARD_REAPPEARANCE": True, "NEWS_GUARD_ENVELOPE": True,
-                 "NEWS_LINK_REPOST": False, **switches}
+                 "NEWS_GUARD_BAND": True, "NEWS_LINK_REPOST": False, **switches}
         self.found = AsyncMock(side_effect=lambda cx, r, **kw: (reappeared or {}).get(r["id"]))
         self.marks = AsyncMock()
         self.recent = AsyncMock(return_value=prev_found)
@@ -374,6 +420,41 @@ class ClassifyTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.log_error.await_args.args[:2], ("news", "target:7"))
         self.assertIn("RuntimeError: db", self.log_error.await_args.args[2])
         self.marks.assert_not_awaited()
+
+    BANDED = dict(TARGET, query={"year_min": 2010, "year_band": 1, "profile_ids": [1]})
+
+    async def test_the_band_s_new_listings_are_old_stock_and_make_no_step(self):
+        # The band's first read brings Fox 2009 at once: 5 of them, next to 2 real ones.
+        rows = [row(i, year=2009) for i in range(1, 6)] + [row(6, year=2012), row(7, year=2011)]
+        muted = await self.classify(result(*range(1, 8)), rows, target=self.BANDED, prev_found=10)
+        self.assertEqual(muted, frozenset(range(1, 6)))
+        self.assertEqual({lid: m["_not_news"]["reason"] for lid, m in self.marked().items()},
+                         {i: "band" for i in range(1, 6)})
+        self.new_rows.assert_awaited_once()
+        # Switched off they are news, and they make the step they are.
+        self.assertEqual(await self.classify(result(*range(1, 8)), rows, target=self.BANDED, prev_found=10,
+                                             NEWS_GUARD_BAND=False), frozenset(range(1, 8)))
+
+    async def test_a_step_is_measured_against_the_core_of_the_reads_before(self):
+        # Eight new cars of the searches' years on a read that is a fifth band:
+        # the last reads' 20 were 16 inside, and eight is half of that.
+        items = ([Listing("autocosmos", f"n{i}", "Volkswagen Fox", "https://example.test", anio=2012)
+                  for i in range(1, 9)]
+                 + [Listing("autocosmos", f"b{i}", "Volkswagen Fox", "https://example.test", anio=2009)
+                    for i in range(2)])
+        rows = [row(i, year=2012) for i in range(1, 9)]
+        muted = await self.classify(result(*range(1, 9)), rows, target=self.BANDED, items=items, prev_found=20)
+        self.assertEqual(muted, frozenset(range(1, 9)))
+        self.assertEqual(await self.classify(result(*range(1, 9)), rows, target=self.BANDED, items=items,
+                                             prev_found=20, NEWS_GUARD_BAND=False), frozenset())
+
+    async def test_a_first_run_marks_the_band_for_every_target(self):
+        muted = await self.classify(result(1, 2), [row(1, year=2009), row(2, year=2015)], target=self.BANDED,
+                                    first_run=True)
+        self.assertEqual(muted, frozenset({1}))
+        self.assertEqual({lid: m["_not_news"]["reason"] for lid, m in self.marked().items()},
+                         {1: "band", 2: "first_run"})
+        self.recent.assert_not_awaited()
 
 
 class RunOneTests(unittest.IsolatedAsyncioTestCase):

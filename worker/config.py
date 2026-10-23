@@ -50,6 +50,12 @@ RECENT_FB_MAX_DATE_FETCHES = max(1, int(os.getenv("RECENT_FB_MAX_DATE_FETCHES", 
 # Facebook's date memory also keeps the item pages that loaded without a date
 # ("id@epoch#n", collectors/_recency.py): off until unknown_dates is measured.
 FB_DATE_MEMORY_UNKNOWN = os.getenv("FB_DATE_MEMORY_UNKNOWN", "0").strip().lower() in {"1", "true", "yes", "on"}
+# The years a target reads past its searches' year bounds (crawl_targets.query.year_band),
+# so that comparables(), year ± comparables.year_tol, sees both sides of an
+# edge year (pipeline/crawl.py). 0 turns it off; 1 at most, for the cost. Not
+# read from app_config.comparables.year_tol: a scoring edit must not
+# multiply what is crawled.
+REFERENCE_YEAR_BAND = min(1, max(0, int(os.getenv("REFERENCE_YEAR_BAND", "1"))))
 # Enrichment of matched listings (sección 5.5) and the watchlist refresher
 # (sección 5.6) wake up this often; each listing is checked at most daily.
 ENRICH_TICK_SECONDS = int(os.getenv("ENRICH_TICK_SECONDS", "300"))
@@ -72,6 +78,8 @@ NEWS_GUARD_STEP = _switch("NEWS_GUARD_STEP", "1")
 NEWS_GUARD_REAPPEARANCE = _switch("NEWS_GUARD_REAPPEARANCE", "1")
 NEWS_GUARD_EMPTY_FIRST = _switch("NEWS_GUARD_EMPTY_FIRST", "1")
 NEWS_GUARD_ENVELOPE = _switch("NEWS_GUARD_ENVELOPE", "1")
+# ... and the years only REFERENCE_YEAR_BAND reads: stock for comparables(), never news.
+NEWS_GUARD_BAND = _switch("NEWS_GUARD_BAND", "1")
 # An incomplete run of such a source, past its first, retries after the
 # source's interval instead of 15 minutes (crawl.retry_seconds).
 NEWS_PARTIAL_RETRY = _switch("NEWS_PARTIAL_RETRY", "1")

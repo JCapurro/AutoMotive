@@ -70,6 +70,12 @@ class BodyTypeTargetTests(unittest.TestCase):
         self.assertEqual(kavak.query, {"year_min": 2012, "km_max": 120_000, "price_usd_max": 25_000,
                                        "interval_seconds": 1800, "profile_ids": [1, 2]})
 
+    def test_a_target_by_body_type_reads_the_reference_band(self):
+        with patch.dict(REGISTRY, {"kavak": type("Kavak", (FAKES["kavak"],), {"YEAR_BAND": True})}):
+            [kavak] = derive_targets([suv(1, year_min=2016, sources=["kavak"])], SOURCES, body_types=BODY,
+                                     year_band=1)
+        self.assertEqual((kavak.query["year_min"], kavak.query["year_band"]), (2016, 1))
+
     def test_mercado_libre_keeps_its_publication_policy(self):
         [spec] = self.derive([suv(1, sources=["mercadolibre"])])
         self.assertEqual(spec.query["publication_policy"], crawl.POLICY_VERSION)
@@ -129,6 +135,12 @@ class ScraperFilterTests(unittest.TestCase):
         self.assertNotIn("marca", f)
         self.assertNotIn("modelo", f)
 
+    def test_a_body_type_always_reads_the_reference_band(self):
+        banded = dict(self.TARGET, query=dict(self.TARGET["query"], year_band=1))
+        with patch("collectors._recency.time.time", return_value=NOW):
+            for source in ("kavak", "mercadolibre"):
+                self.assertEqual(scraper_filters(dict(banded, source=source))["anio_min"], 2014, source)
+
 
 class BodyTypeWindowTests(unittest.TestCase):
     def window(self, source="mercadolibre", **target):
@@ -173,6 +185,12 @@ class PrefilterTests(unittest.TestCase):
         self.assertTrue(keep(dict(ok, price_usd=20_900)))               # inside the margin
         self.assertTrue(keep(dict(ok, price_usd=60_000, price_partial=True)))   # a down payment says nothing
         self.assertTrue(keep({"year": None, "mileage_km": None, "price_usd": None}))
+
+    def test_the_reference_band_keeps_a_year_below_the_lowest(self):
+        keep = prefilter(dict(self.TARGET, query=dict(self.TARGET["query"], year_band=1)))
+        ok = {"year": 2018, "mileage_km": 50_000, "price_usd": 18_000}
+        self.assertTrue(keep(dict(ok, year=2014)))
+        self.assertFalse(keep(dict(ok, year=2013)))
 
     def test_an_unbounded_query_keeps_everything(self):
         keep = prefilter({"body_type": "suv", "query": {}})
