@@ -50,6 +50,9 @@ RECENT_FB_MAX_DATE_FETCHES = max(1, int(os.getenv("RECENT_FB_MAX_DATE_FETCHES", 
 # Facebook's date memory also keeps the item pages that loaded without a date
 # ("id@epoch#n", collectors/_recency.py): off until unknown_dates is measured.
 FB_DATE_MEMORY_UNKNOWN = os.getenv("FB_DATE_MEMORY_UNKNOWN", "0").strip().lower() in {"1", "true", "yes", "on"}
+# A Facebook card is dated from the search page's own data (its listing's
+# creation_time) before opening its item page; 0 reads every page as before.
+FB_FEED_DATES = os.getenv("FB_FEED_DATES", "1").strip().lower() in {"1", "true", "yes", "on"}
 # Enrichment of matched listings (sección 5.5) and the watchlist refresher
 # (sección 5.6) wake up this often; each listing is checked at most daily.
 ENRICH_TICK_SECONDS = int(os.getenv("ENRICH_TICK_SECONDS", "300"))
