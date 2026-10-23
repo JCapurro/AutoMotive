@@ -7,9 +7,11 @@ path — runs for real. Run with
 """
 from __future__ import annotations
 
+import asyncio
 import unittest
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
+from typing import Awaitable, Callable
 from uuid import uuid4
 from unittest.mock import AsyncMock, patch
 
@@ -52,14 +54,21 @@ def card(listing_id: str, source: str = "mercadolibre", **kw) -> Listing:
 
 class FakeSource(BaseScraper):
     """Stands in for a collector: returns `results[name]`, serves `details[url]`
-    (an exception there fails the fetch; one in `parse_errors[url]`, the parse)."""
+    (an exception there fails the fetch; one in `parse_errors[url]`, the parse).
+    `during[name]` is awaited inside the next search of `name`, once, on the
+    test's loop (`loop`): on Windows a search runs on the collectors' loop
+    (collectors/_loop.py), where the pool can't be used."""
     results: dict[str, list[Listing]] = {}
     details: dict[str, ListingDetail | Exception] = {}
     parse_errors: dict[str, Exception] = {}
     searches: list[tuple[str, dict]] = []
+    during: dict[str, Callable[[], Awaitable[None]]] = {}
+    loop: asyncio.AbstractEventLoop | None = None
 
     async def search(self, filters: dict) -> list[Listing]:
         FakeSource.searches.append((self.name, filters))
+        if (hook := FakeSource.during.pop(self.name, None)) is not None:
+            await asyncio.wrap_future(asyncio.run_coroutine_threadsafe(hook(), FakeSource.loop))
         outcome = FakeSource.results.get(self.name, [])
         if isinstance(outcome, Exception):
             raise outcome
@@ -101,7 +110,8 @@ class IngestCase(PostgresTestCase):
     async def asyncSetUp(self) -> None:
         await super().asyncSetUp()
         FakeSource.results, FakeSource.details, FakeSource.searches = {}, {}, []
-        FakeSource.parse_errors = {}
+        FakeSource.parse_errors, FakeSource.during = {}, {}
+        FakeSource.loop = asyncio.get_running_loop()
         for p in (patch.dict(collectors.REGISTRY, {s: fake(s) for s in self.SOURCES}, clear=True),
                   patch("normalization.geo.GEOCODING_ENABLED", False)):
             p.start()
@@ -509,6 +519,83 @@ class CrawlTargetsTests(IngestCase):
         self.assertEqual(n["n"], 1)
 
 
+class TargetResetTests(IngestCase):
+    """targets.sync_targets: what a change of spec does to a target's
+    bootstrap, its last read (query._read) and Facebook's date memory."""
+    READ = {"year_min": 2015, "km_max": 100_000}
+
+    @staticmethod
+    def spec(source: str = "kavak", **query) -> crawl.TargetSpec:
+        if source in ("mercadolibre", "facebook"):
+            query.setdefault("publication_policy", POLICY_VERSION)
+        return crawl.TargetSpec(source, "Ford", "Fiesta", {"profile_ids": [1], **query})
+
+    async def sync(self, *specs: crawl.TargetSpec) -> None:
+        await repo_targets.sync_targets(specs, undated=news.UNDATED_SOURCES)
+
+    async def target(self, source: str = "kavak") -> dict:
+        [t] = await self.rows("SELECT id, query, active, first_run_done, prefilter_rejected, updated_at "
+                              "  FROM crawl_targets WHERE source = %s", source)
+        return t
+
+    async def read_through(self, source: str = "kavak") -> None:
+        """A complete run: it finishes the bootstrap and leaves what it read."""
+        await repo_targets.finish_target((await self.target(source))["id"], ok=True, retry_seconds=0,
+                                         read=self.READ)
+
+    async def test_the_last_read_stays_and_a_spec_without_it_rewrites_nothing(self):
+        await self.sync(self.spec(year_min=2015, km_max=100_000))
+        await self.read_through()
+        before = await self.target()
+        await self.sync(self.spec(year_min=2015, km_max=100_000))
+        after = await self.target()
+        self.assertEqual((after["updated_at"], after["query"]["_read"]), (before["updated_at"], self.READ))
+        # A wider search keeps the bootstrap and the read: the envelope tells what it brings.
+        await self.sync(self.spec(year_min=2010, km_max=150_000))
+        t = await self.target()
+        self.assertEqual(t["query"], {"profile_ids": [1], "year_min": 2010, "km_max": 150_000, "_read": self.READ})
+        self.assertTrue(t["first_run_done"])
+
+    async def test_a_reactivated_undated_target_starts_over_without_its_read(self):
+        # kavak has no publication dates: what it finds after a pause was listed
+        # while nobody read it. v6 dates its listings and Mercado Libre reads by
+        # date: their bootstrap holds.
+        specs = [self.spec("kavak"), self.spec("v6"), self.spec("mercadolibre")]
+        await self.sync(*specs)
+        for spec in specs:
+            await self.read_through(spec.source)
+        await self.sync()
+        self.assertEqual([t["active"] for t in await self.rows("SELECT active FROM crawl_targets")], [False] * 3)
+        await self.sync(*specs)
+        for source, done in (("kavak", False), ("v6", True), ("mercadolibre", True)):
+            t = await self.target(source)
+            self.assertEqual((t["active"], t["first_run_done"], "_read" in t["query"]), (True, done, False), source)
+
+    async def test_a_coverage_bump_resets_the_bootstrap_once_and_keeps_the_read(self):
+        await self.sync(self.spec())
+        await self.read_through()
+        for coverage, done in ((2, False), (2, True), (3, False)):
+            await self.sync(self.spec(coverage=coverage))
+            t = await self.target()
+            self.assertEqual((t["first_run_done"], t["query"].get("_read")), (done, self.READ), coverage)
+            await self.read_through()
+        # A collector that stops declaring it changes nothing either.
+        await self.sync(self.spec())
+        self.assertTrue((await self.target())["first_run_done"])
+
+    async def test_a_coverage_bump_empties_facebook_s_date_memory(self):
+        # Its window goes back to 30 days; what a body type's prefilter dropped still holds.
+        memory = ["1", "2@1700000000#1"]
+        suv = crawl.TargetSpec("kavak", None, None, {"year_min": 2015, "profile_ids": [2]}, body_type="suv")
+        await self.sync(self.spec("facebook"), suv)
+        async with db.connection() as cx:
+            await cx.execute("UPDATE crawl_targets SET first_run_done = true, prefilter_rejected = %s", (memory,))
+        await self.sync(self.spec("facebook", coverage=2), replace(suv, query={**suv.query, "coverage": 2}))
+        fb, kavak = await self.target("facebook"), await self.target("kavak")
+        self.assertEqual((fb["first_run_done"], fb["prefilter_rejected"]), (False, []))
+        self.assertEqual((kavak["first_run_done"], kavak["prefilter_rejected"]), (False, memory))
+
+
 class NotNewsCase(IngestCase):
     """pipeline/news.py on sources without publication dates: old stock read
     as new is backfill for every search and never notified."""
@@ -755,6 +842,139 @@ class StepTests(NotNewsCase):
         self.assertEqual(await self.notified(), set())
         self.assertEqual(await self.live(), set())
         self.assertEqual((await self.not_news("d0"))["reason"], "step")
+
+
+class EnvelopeTests(NotNewsCase):
+    """A target whose search was widened: the stock its last complete read
+    left out (crawl_targets.query._read) is backfill for every search."""
+    READ = {"year_min": 2015, "km_max": 100_000}
+    WIDE = {"year_min": 2014, "km_max": 150_000}
+
+    @staticmethod
+    def widened(source: str = "kavak") -> list[Listing]:
+        """New cars 25 % below the market: one inside the last read, two it
+        left out (2014, 120.000 km)."""
+        return [card("in", source=source, precio=9_000.0, km=80_000),
+                card("old", source=source, precio=9_000.0, anio=2014, km=95_000),
+                card("far", source=source, precio=9_000.0, km=120_000)]
+
+    async def read(self) -> dict | None:
+        [t] = await self.rows("SELECT query FROM crawl_targets WHERE active")
+        return t["query"].get("_read")
+
+    async def matched(self, aid: int) -> dict[str, bool]:
+        """external_id -> is_backfill of a search's matches."""
+        return {r["external_id"]: r["is_backfill"] for r in await self.rows(
+            "SELECT l.external_id, m.is_backfill FROM matches m JOIN listings l ON l.id = m.listing_id "
+            " WHERE m.search_profile_id = %s", aid)}
+
+    async def widen(self, aid: int) -> None:
+        await self.execute("UPDATE search_profiles SET filters = filters || %s WHERE id = %s", Jsonb(self.WIDE), aid)
+
+    async def test_a_widened_target_brings_its_new_stock_as_backfill_and_keeps_news_inside(self):
+        # kavak Fiesta 05/10: year >= 2015 and km <= 100.000, then a search for 2014 and 150.000 km.
+        first = await self.fiesta_alert(sources=["kavak"], anio_min=2015, km_max=100_000)
+        FakeSource.results["kavak"] = self.comps("kavak")
+        await self.tick()
+        self.assertEqual(await self.read(), self.READ)
+        wide = await self.fiesta_alert(user=1, sources=["kavak"], anio_min=2014, km_max=150_000)
+        FakeSource.results["kavak"] = self.comps("kavak") + self.widened()
+        await self.tick()
+
+        self.assertEqual(await self.notified(), {"in"})
+        self.assertEqual(await self.live(), {"in"})
+        self.assertEqual({k: v for k, v in (await self.matched(wide)).items() if k in {"in", "old", "far"}},
+                         {"in": False, "old": True, "far": True})
+        self.assertFalse((await self.matched(first))["in"])
+        [run] = await self.rows("SELECT id, target_id FROM collector_runs ORDER BY id DESC LIMIT 1")
+        self.assertEqual(await self.not_news("old"), {"reason": "envelope", "run_id": run["id"],
+                                                      "target_id": run["target_id"], "prev_id": None})
+        self.assertEqual((await self.not_news("far"))["reason"], "envelope")
+        self.assertIsNone(await self.not_news("in"))
+        self.assertEqual(await self.read(), self.WIDE)
+
+    async def test_a_model_less_search_gets_the_widening_as_backfill_too(self):
+        def eco(listing_id: str, **kw) -> Listing:
+            return card(listing_id, source="rosariogarage", titulo=f"Ford EcoSport 1.6 Freestyle {listing_id}",
+                        marca="Ford", modelo="EcoSport", **kw)
+
+        await self.fiesta_alert(modelos=["EcoSport"], sources=["rosariogarage"], anio_min=2015, km_max=100_000)
+        [suv] = await db.create_alert(user_id=2, chat_id=2, name="suv", filters={
+            "carroceria": ["suv"], "precio_max": 20_000, "moneda": "USD", "sources": ["rosariogarage"]})
+        FakeSource.results["rosariogarage"] = [eco(f"c{i}", precio=12_000.0 + i * 100, km=90_000 + i * 2_000)
+                                               for i in range(6)]
+        await self.tick()
+        await self.fiesta_alert(user=1, modelos=["EcoSport"], sources=["rosariogarage"], anio_min=2014,
+                                km_max=150_000)
+        FakeSource.results["rosariogarage"] += [eco("in", precio=9_000.0, km=80_000),
+                                                eco("old", precio=9_000.0, anio=2014, km=95_000),
+                                                eco("far", precio=9_000.0, km=120_000)]
+        await self.tick()
+
+        self.assertEqual({k: v for k, v in (await self.matched(suv)).items() if k in {"in", "old", "far"}},
+                         {"in": False, "old": True, "far": True})
+        self.assertEqual(await self.live(), {"in"})
+
+    async def test_the_envelope_is_the_claimed_query_not_the_current_one(self):
+        aid = await self.fiesta_alert(sources=["kavak"], anio_min=2015, km_max=100_000)
+        FakeSource.results["kavak"] = self.comps("kavak")
+        await self.tick()
+
+        async def widen() -> None:
+            # The search is edited and the targets synced while kavak is being read.
+            await self.widen(aid)
+            await crawl.sync_targets(await db.enabled_profiles(), await db.counting_profiles())
+        FakeSource.during["kavak"] = widen
+        await self.tick()
+        [t] = await self.rows("SELECT query FROM crawl_targets")
+        self.assertEqual((t["query"]["year_min"], t["query"]["km_max"], t["query"]["_read"]),
+                         (2014, 150_000, self.READ))
+
+        FakeSource.results["kavak"] = self.comps("kavak") + self.widened()
+        await self.tick()
+        self.assertEqual(await self.live(), {"in"})
+        self.assertEqual({(await self.not_news(e))["reason"] for e in ("old", "far")}, {"envelope"})
+
+    async def test_an_incomplete_read_keeps_the_previous_envelope(self):
+        aid = await self.fiesta_alert(sources=["kavak"], anio_min=2015, km_max=100_000)
+        FakeSource.results["kavak"] = self.comps("kavak")
+        await self.tick()
+        await self.widen(aid)
+        inside, old, far = self.widened()
+        FakeSource.results["kavak"] = SearchResults(self.comps("kavak") + [old], complete=False,
+                                                    reason="partial: page 2")
+        await self.tick()
+        self.assertEqual(await self.read(), self.READ)
+        FakeSource.results["kavak"] = self.comps("kavak") + [inside, old, far]
+        await self.tick()
+        self.assertEqual(await self.read(), self.WIDE)
+        # A 2014 car listed now is inside what the target reads: news.
+        FakeSource.results["kavak"] = self.comps("kavak") + [inside, old, far, card(
+            "fresh", source="kavak", precio=9_000.0, anio=2014, km=70_000)]
+        await self.tick()
+
+        self.assertEqual(await self.live(), {"in", "fresh"})
+        self.assertEqual({(await self.not_news(e))["reason"] for e in ("old", "far")}, {"envelope"})
+
+
+class CoverageTests(NotNewsCase):
+    async def test_a_collector_that_reads_more_reloads_its_targets_in_silence(self):
+        # E6: kavak reads every page of a model (COVERAGE_VERSION 2). The 4 cars
+        # it finds now are no step, and they were listed before.
+        await self.fiesta_alert(sources=["kavak"])
+        FakeSource.results["kavak"] = self.comps("kavak", 12)
+        await self.tick()
+        with patch.object(collectors.REGISTRY["kavak"], "COVERAGE_VERSION", 2):
+            FakeSource.results["kavak"] = self.comps("kavak", 12) + self.deals("kavak", 4)
+            await self.tick()
+            self.assertEqual(await self.notified(), set())
+            self.assertEqual(await self.live(), set())
+            self.assertEqual((await self.not_news("d0"))["reason"], "first_run")
+            FakeSource.results["kavak"] = self.comps("kavak", 12) + self.deals("kavak", 5)
+            await self.tick()
+        self.assertEqual(await self.notified(), {"d4"})
+        [t] = await self.rows("SELECT query, first_run_done FROM crawl_targets")
+        self.assertEqual((t["query"]["coverage"], t["first_run_done"]), (2, True))
 
 
 class ReappearanceTests(NotNewsCase):
