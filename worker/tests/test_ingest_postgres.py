@@ -11,6 +11,7 @@ import asyncio
 import unittest
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from typing import Awaitable, Callable
 from uuid import uuid4
 from unittest.mock import AsyncMock, patch
@@ -297,7 +298,7 @@ class CountAfterExpiryCrawlTests(IngestCase):
         async with db.connection() as cx:
             await cx.execute(sql, params)
 
-    async def web_search(self) -> tuple[str, int]:
+    async def web_search(self, filters: dict | None = None) -> tuple[str, int]:
         """A web account whose first search starts its 72 h trial (the plan triggers run)."""
         [user] = await self.rows(
             "INSERT INTO auth.users (instance_id, id, aud, role, email, created_at, updated_at) "
@@ -305,7 +306,7 @@ class CountAfterExpiryCrawlTests(IngestCase):
             "        'authenticated', %s, now(), now()) RETURNING id::text AS id", f"{uuid4()}@automotive.test")
         [search] = await self.rows(
             "INSERT INTO search_profiles (user_id, name, filters) VALUES (%s, 'Ford Fiesta', %s) RETURNING id",
-            user["id"], Jsonb({"make": "Ford", "model": "Fiesta", "sources": ["mercadolibre"]}))
+            user["id"], Jsonb(filters or {"make": "Ford", "model": "Fiesta", "sources": ["mercadolibre"]}))
         return user["id"], search["id"]
 
     async def end_trial(self, user: str) -> None:
@@ -361,6 +362,50 @@ class CountAfterExpiryCrawlTests(IngestCase):
         self.assertEqual((target["query"].get("profile_ids"), target["query"].get("count_only")), ([other], None))
         self.assertIsNone(target["next_run_at"])               # due now, at the source's cadence
 
+    @staticmethod
+    def ka(listing_id: str, year: int) -> Listing:
+        return card(listing_id, source="kavak", titulo=f"Ford Ka 1.5 SE {listing_id}", marca="Ford", modelo="Ka",
+                    anio=year)
+
+    async def band_read(self, *, classify_fails: bool = False) -> int:
+        """A counted Ka search from 2005 rides an active one from 2010 on Kavak,
+        which reads 2009 too (the reference band). The second read brings a
+        new Ka 2009, which only the band read, and a new Ka 2011."""
+        user, counted = await self.web_search({"make": "Ford", "model": "Ka", "year_min": 2005, "sources": ["kavak"]})
+        await self.end_trial(user)
+        _, active = await self.web_search({"make": "Ford", "model": "Ka", "year_min": 2010, "sources": ["kavak"]})
+        FakeSource.results["kavak"] = [self.ka("A", 2012)]
+        await self.tick()                                       # the target's first run: history
+        [target] = await self.rows("SELECT query FROM crawl_targets WHERE active")
+        self.assertEqual({k: target["query"].get(k) for k in ("year_min", "year_band", "profile_ids")},
+                         {"year_min": 2010, "year_band": 1, "profile_ids": [active]})
+        FakeSource.results["kavak"] = [self.ka("A", 2012), self.ka("old", 2009), self.ka("new", 2011)]
+        if classify_fails:
+            with patch.object(news, "_classify", AsyncMock(side_effect=RuntimeError("db"))):
+                await self.tick()
+        else:
+            await self.tick()
+        return counted
+
+    async def counted(self, search: int) -> list[str]:
+        return [r["external_id"] for r in await self.rows(
+            "SELECT l.external_id FROM expired_search_matches e JOIN listings l ON l.id = e.listing_id "
+            " WHERE e.search_profile_id = %s ORDER BY l.external_id", search)]
+
+    async def test_a_band_row_is_not_counted_after_expiry(self):
+        counted = await self.band_read()
+        self.assertEqual(await self.counted(counted), ["new"])
+        self.assertEqual((await self.listing("old"))["attributes"]["_not_news"]["reason"], "band")
+
+    async def test_a_band_row_is_not_counted_when_classify_fails_nor_on_the_next_runs(self):
+        counted = await self.band_read(classify_fails=True)
+        [err] = await self.rows("SELECT stage FROM pipeline_errors")
+        self.assertEqual(err["stage"], "news")
+        self.assertNotIn("_not_news", (await self.listing("old"))["attributes"])
+        self.assertEqual(await self.counted(counted), ["new"])
+        await self.tick()                                       # unmarked, and still the band's
+        self.assertEqual(await self.counted(counted), ["new"])
+
     async def test_turning_the_kind_off_stops_the_extra_crawl(self):
         user, _ = await self.web_search()
         await self.end_trial(user)
@@ -401,6 +446,28 @@ class CrawlTargetsTests(IngestCase):
                                                               "publication_policy": POLICY_VERSION + 1})])
         [t] = await self.rows("SELECT first_run_done, prefilter_rejected FROM crawl_targets")
         self.assertEqual((t["first_run_done"], t["prefilter_rejected"]), (False, []))
+
+    async def test_adding_the_band_keeps_the_bootstrap(self):
+        """REFERENCE_YEAR_BAND is no new publication policy: targets keep their bootstrap and schedule."""
+        await self.fiesta_alert(anio_min=2010, sources=["mercadolibre", "kavak"])
+        with patch.object(crawl.config, "REFERENCE_YEAR_BAND", 0):
+            await crawl.sync_targets(await db.enabled_profiles())
+        await self.execute("UPDATE crawl_targets SET first_run_done = true, next_run_at = now() + interval '7 minutes', "
+                           "  prefilter_rejected = '{x}'")
+        before = {t["source"]: t for t in await self.rows("SELECT * FROM crawl_targets")}
+        self.assertNotIn("year_band", before["kavak"]["query"])
+
+        with patch.object(crawl.config, "REFERENCE_YEAR_BAND", 1):
+            await crawl.sync_targets(await db.enabled_profiles())
+        for t in await self.rows("SELECT * FROM crawl_targets"):
+            self.assertEqual((t["query"]["year_min"], t["query"]["year_band"]), (2010, 1), t["source"])
+            self.assertEqual({k: v for k, v in t["query"].items() if k != "year_band"}, before[t["source"]]["query"])
+            self.assertEqual((t["first_run_done"], t["next_run_at"], t["prefilter_rejected"]),
+                             (True, before[t["source"]]["next_run_at"], ["x"]), t["source"])
+
+    async def execute(self, sql: str, *params) -> None:
+        async with db.connection() as cx:
+            await cx.execute(sql, params)
 
     async def test_publication_dates_of_a_model_cover_its_longer_names_and_skip_stale_rows(self):
         """A Facebook search for Corolla also brings Corolla Cross (by text): its dates count too."""
@@ -594,6 +661,61 @@ class TargetResetTests(IngestCase):
         fb, kavak = await self.target("facebook"), await self.target("kavak")
         self.assertEqual((fb["first_run_done"], fb["prefilter_rejected"]), (False, []))
         self.assertEqual((kavak["first_run_done"], kavak["prefilter_rejected"]), (False, memory))
+
+    async def test_every_change_of_spec_through_the_one_update(self):
+        """Plan 2.5: the UPDATE that E2 (date memory), E4 (_read, coverage,
+        reactivation) and E5 (year_band) share, one change after the other."""
+        async def state(source: str) -> dict:
+            [t] = await self.rows("SELECT query, active, first_run_done, next_run_at, prefilter_rejected, "
+                                  "  updated_at FROM crawl_targets WHERE source = %s", source)
+            return t
+
+        kavak, ml = self.spec(year_min=2015, km_max=100_000), self.spec("mercadolibre", year_min=2015, km_max=100_000)
+        await self.sync(kavak, ml)
+        for source in ("kavak", "mercadolibre"):
+            await self.read_through(source)
+        async with db.connection() as cx:
+            await cx.execute("UPDATE crawl_targets SET prefilter_rejected = '{x}'")
+
+        # Only _read tells the target from its spec: the row is not rewritten.
+        before = {s: await state(s) for s in ("kavak", "mercadolibre")}
+        await self.sync(kavak, ml)
+        for source, t in before.items():
+            self.assertEqual((await state(source))["updated_at"], t["updated_at"], source)
+
+        # A new year_band keeps the bootstrap, the schedule, the date memory and the read.
+        kavak, ml = (replace(s, query={**s.query, "year_band": 1}) for s in (kavak, ml))
+        await self.sync(kavak, ml)
+        for source, t in before.items():
+            after = await state(source)
+            self.assertEqual(after["query"], {**t["query"], "year_band": 1}, source)
+            self.assertEqual((after["first_run_done"], after["next_run_at"], after["prefilter_rejected"]),
+                             (True, t["next_run_at"], ["x"]), source)
+
+        # A new publication policy, with a read there: Mercado Libre starts over
+        # once and empties its date memory; the read stays, Kavak is untouched.
+        ml = replace(ml, query={**ml.query, "publication_policy": POLICY_VERSION + 1})
+        await self.sync(kavak, ml)
+        t = await state("mercadolibre")
+        self.assertEqual((t["first_run_done"], t["next_run_at"], t["prefilter_rejected"], t["query"]["_read"]),
+                         (False, None, [], self.READ))
+        self.assertTrue((await state("kavak"))["first_run_done"])
+
+        # A coverage bump: Kavak starts over once and keeps its read and its memory.
+        kavak = replace(kavak, query={**kavak.query, "coverage": 2})
+        await self.sync(kavak, ml)
+        t = await state("kavak")
+        self.assertEqual((t["first_run_done"], t["query"]["_read"], t["prefilter_rejected"]), (False, self.READ, ["x"]))
+
+        # A reactivation drops the read; only the undated source starts over.
+        for source in ("kavak", "mercadolibre"):
+            await self.read_through(source)
+        await self.sync()
+        await self.sync(kavak, ml)
+        for source, done in (("kavak", False), ("mercadolibre", True)):
+            t = await state(source)
+            self.assertEqual((t["active"], t["first_run_done"], "_read" in t["query"], t["query"].get("year_band")),
+                             (True, done, False, 1), source)
 
 
 class NotNewsCase(IngestCase):
@@ -850,6 +972,14 @@ class EnvelopeTests(NotNewsCase):
     READ = {"year_min": 2015, "km_max": 100_000}
     WIDE = {"year_min": 2014, "km_max": 150_000}
 
+    async def asyncSetUp(self) -> None:
+        await super().asyncSetUp()
+        # The envelope alone, over the searches' exact years: the reference
+        # band (REFERENCE_YEAR_BAND) has its own tests at the end.
+        p = patch.object(crawl.config, "REFERENCE_YEAR_BAND", 0)
+        p.start()
+        self.addCleanup(p.stop)
+
     @staticmethod
     def widened(source: str = "kavak") -> list[Listing]:
         """New cars 25 % below the market: one inside the last read, two it
@@ -955,6 +1085,41 @@ class EnvelopeTests(NotNewsCase):
 
         self.assertEqual(await self.live(), {"in", "fresh"})
         self.assertEqual({(await self.not_news(e))["reason"] for e in ("old", "far")}, {"envelope"})
+
+    async def test_the_read_includes_the_band_and_a_band_row_is_marked_once(self):
+        # Searches from 2015 read 2014 too: a 2014 car listed later is news.
+        # Widened to 2013, the target reads 2012: 2013 is the envelope's,
+        # 2012 the band's, never both.
+        with patch.object(crawl.config, "REFERENCE_YEAR_BAND", 1):
+            aid = await self.fiesta_alert(sources=["kavak"], anio_min=2015, km_max=100_000)
+            FakeSource.results["kavak"] = self.comps("kavak")
+            await self.tick()
+            self.assertEqual(await self.read(), {"year_min": 2014, "km_max": 100_000})
+            await self.execute("UPDATE search_profiles SET filters = filters || %s WHERE id = %s",
+                               Jsonb({"year_min": 2013}), aid)
+            FakeSource.results["kavak"] = self.comps("kavak") + [
+                card(f"y{year}", source="kavak", precio=9_000.0, anio=year, km=95_000 + year)
+                for year in (2014, 2013, 2012)]
+            await self.tick()
+        self.assertEqual(await self.read(), {"year_min": 2012, "km_max": 100_000})
+        self.assertIsNone(await self.not_news("y2014"))
+        self.assertEqual({e: (await self.not_news(e))["reason"] for e in ("y2013", "y2012")},
+                         {"y2013": "envelope", "y2012": "band"})
+        self.assertEqual(await self.live(), {"y2014"})
+
+    async def test_the_band_s_first_read_marks_its_rows_band_not_envelope(self):
+        # The deploy: the last read had the searches' exact years.
+        await self.fiesta_alert(sources=["kavak"], anio_min=2015, km_max=100_000)
+        FakeSource.results["kavak"] = self.comps("kavak")
+        await self.tick()
+        self.assertEqual(await self.read(), self.READ)
+        with patch.object(crawl.config, "REFERENCE_YEAR_BAND", 1):
+            FakeSource.results["kavak"] = self.comps("kavak") + [
+                card("y2014", source="kavak", precio=9_000.0, anio=2014, km=95_000)]
+            await self.tick()
+        self.assertEqual((await self.not_news("y2014"))["reason"], "band")
+        self.assertEqual(await self.read(), {"year_min": 2014, "km_max": 100_000})
+        self.assertEqual(await self.live(), set())
 
 
 class CoverageTests(NotNewsCase):
@@ -1347,6 +1512,46 @@ class EnrichmentTests(IngestCase):
         self.assertEqual(row["title"], "Ford Fiesta 1.6 Titanium")
         self.assertEqual(len(row["images"]), 3)
         self.assertEqual(result.events[0].changes, ("price",))
+
+
+class EnrichmentBandTests(IngestCase):
+    """The reference year band's rows (pipeline/crawl.py) are read for their
+    version and transmission, which comparables() wants, without the LLM."""
+    SOURCES = ("mercadolibre", "deruedas", "facebook")
+
+    async def asyncSetUp(self) -> None:
+        await super().asyncSetUp()
+        collectors.REGISTRY["facebook"].YEAR_BAND = False                # as the real one
+
+    @staticmethod
+    def ka(listing_id: str, year: int, source: str = "deruedas", **kw) -> Listing:
+        return card(listing_id, source=source, titulo=f"Ford Ka 1.5 SE {listing_id}", marca="Ford", modelo="Ka",
+                    anio=year, **kw)
+
+    async def test_the_queue_takes_band_rows_without_a_transmission_and_reads_them_without_the_llm(self):
+        aid = await self.fiesta_alert(marcas=["Ford"], modelos=["Ka"], anio_min=2010, sources=["deruedas", "facebook"])
+        await crawl.sync_targets(await db.enabled_profiles())
+        queries = {t["source"]: t["query"] for t in await self.rows("SELECT source, query FROM crawl_targets")}
+        self.assertEqual((queries["deruedas"].get("year_band"), queries["facebook"].get("year_band")), (1, None))
+        await ingest([self.ka("band", 2009), self.ka("geared", 2009, transmision="Manual"), self.ka("older", 2008),
+                      self.ka("fb", 2009, source="facebook"), self.ka("matched", 2012)], geocode=None)
+        await db.mark_seen(aid, [self.ka("matched", 2012).to_dict()])
+
+        queue = await repo_listings.enrichment_queue(per_source=20, max_age_days=30)
+        self.assertEqual([(r["external_id"], r["band"]) for r in queue], [("matched", False), ("band", True)])
+
+        for listing_id, year in (("matched", 2012), ("band", 2009)):
+            url = f"https://example.test/deruedas/{listing_id}"
+            FakeSource.details[url] = ListingDetail(url, listing=self.ka(
+                listing_id, year, version="1.5 SE", transmision="Manual", descripcion="Único dueño."))
+        llm = SimpleNamespace(refine=AsyncMock())
+        with patch.object(enrich.DescriptionLLM, "create", AsyncMock(return_value=llm)):
+            await enrich.enrich_pass()
+        self.assertEqual([c.args[0] for c in llm.refine.await_args_list], [(await self.listing("matched"))["id"]])
+        band = await self.listing("band")
+        self.assertEqual(band["transmission"], "manual")
+        self.assertIsNotNone(band["enriched_at"])
+        self.assertEqual(await self.rows("SELECT id FROM description_llm_runs"), [])
 
 
 class DescriptionFactsTests(IngestCase):

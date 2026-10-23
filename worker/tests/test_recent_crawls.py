@@ -13,7 +13,7 @@ from urllib.parse import parse_qs, urlparse
 from collectors import facebook as fb, mercadolibre as ml
 from collectors.base import Listing, SearchResults
 from collectors._recency import (DATE_MEMORY_CAP, DAY, DateSkip, PublicationWindow, encode_date_skips,
-                                 parse_date_skips, target_window)
+                                 one_request_read, parse_date_skips, target_window)
 from pipeline import crawl
 from pipeline.ingest import IngestResult
 from test_mercadolibre_transport import FakeHttp
@@ -69,6 +69,25 @@ class WindowTests(unittest.TestCase):
             self.assertFalse(w.contains(listing(published=NOW - DAY - 1)))
             self.assertFalse(w.contains(listing(published=NOW + 1)))
             self.assertTrue(w.contains(listing(published=NOW - DAY)))
+
+    def test_one_request_read_is_mercado_libre_s_former_today_rule(self):
+        """What _search_recent read through "Publicados hoy" before it asked one_request_read."""
+        def former(filters: dict) -> bool:
+            window = PublicationWindow.from_filters(filters)
+            return (window.today_only or filters.get("count_only") is True
+                    or window.until - window.since <= 25 * 3600)
+
+        base = {"marca": "Ford", "modelo": "Fiesta", "publication_until": NOW}
+        cases = [dict(base, publication_days=1, published_today_only=True),
+                 dict(base, publication_days=30, count_only=True),
+                 dict(base, publication_days=2, published_since=NOW - 25 * 3600),
+                 dict(base, publication_days=2, published_since=NOW - 25 * 3600 - 1),
+                 dict(base, publication_days=30)]
+        self.assertEqual([one_request_read("mercadolibre", f) for f in cases], [True, True, True, False, False])
+        self.assertEqual([one_request_read("mercadolibre", f) for f in cases], [former(f) for f in cases])
+        self.assertFalse(one_request_read("facebook", cases[0]))
+        self.assertFalse(one_request_read("mercadolibre", {"marca": "Ford"}))       # no window: a legacy read
+        self.assertEqual(ml.TODAY_FILTER_SPAN, 25 * 3600)
 
     def test_other_sources_and_explicit_legacy_cli_are_unchanged(self):
         self.assertEqual(target_window({"source": "kavak"}, now=NOW), {})

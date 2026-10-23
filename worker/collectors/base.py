@@ -112,6 +112,9 @@ class BaseScraper:
     # query.coverage, and a new value starts their bootstrap over once, so the
     # stock the wider read finds is backfill, not news (targets.sync_targets).
     COVERAGE_VERSION: int | None = None
+    # Reads config.REFERENCE_YEAR_BAND past its searches' years (pipeline/crawl.py);
+    # off where each extra card costs a detail page.
+    YEAR_BAND: bool = True
     # search() and fetch_detail_page() run in a child process that is killed
     # past its timeout (collectors/_isolated.py): the logged-in browser ones.
     ISOLATED: bool = False

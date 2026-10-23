@@ -60,11 +60,16 @@ se arma con el sufijo `_PublishedToday_YES`.
   15/10/2026 a las 00:19: el filtro seguía listando 19 de los 26 Toyota Etios
   que había mostrado a las 18:54 del día anterior, 13 de 16 Suran y 10 de 13
   Golf.
-- **Cuándo se usa.** Cuando la ventana dura hasta 25 horas (`TODAY_FILTER_SPAN`)
+- **Cuándo se usa.** Cuando la ventana dura hasta 25 horas (`_recency.TODAY_SPAN`)
   y en los objetivos que solo cuentan para el mail 2.5 (`count_only`). Así
   cubre también la ejecución que cruza la medianoche. La hora extra absorbe el
   solapamiento y las demoras del scheduler. Una interrupción de entre 24 y 25
   horas puede perder lo publicado en ese margen.
+- **Banda de años de referencia** (TECHNICAL_PLAN.md 5.1). Solo estas lecturas
+  de una pasada (`_recency.one_request_read`, la misma regla que decide
+  «Publicados hoy») leen un año más de cada lado de las búsquedas, para los
+  comparables. La primera ejecución y la recuperación usan los años exactos de
+  las búsquedas: fechan cada aviso abriendo su ficha. Facebook nunca lee la banda.
 - **Sin abrir fichas.** Sus resultados se guardan sin abrir cada ficha, porque
   la ficha pública solo dice «hace 1 día», sin fecha exacta, y el filtro ya
   garantiza que el aviso es reciente. Si no hay fecha guardada, la primera

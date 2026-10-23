@@ -17,15 +17,22 @@ external_id was never stored, so old stock looks new when:
     holds its bootstrap for EMPTY_FIRST_RUNS empty reads at most, so what it
     reads right after is that first run's backfill. A target of theirs that
     is reactivated, or whose collector raises COVERAGE_VERSION, starts its
-    bootstrap over (targets.sync_targets).
-classify stores the first three as backfill for every search (seen on the web,
-never notified) and marks them in listings.attributes._not_news {reason,
-run_id, target_id, prev_id}: scheduler.match_alert keeps them backfill on a
-retry or for another target, and count_after_expiry (2.5) never counts them.
-A first run's new listings are marked 'first_run', only for 2.5: the target's
-next runs find them again after its bootstrap. A listing with a recent
-publication date (v6) is always news. Each rule has its switch in config
-(NEWS_GUARD_*); a failure leaves every listing news, as before.
+    bootstrap over (targets.sync_targets);
+  - the target read past its searches' years (query.year_band, the
+    reference band of pipeline/crawl.py): the band, which none of the
+    target's searches matches and which only feeds comparables(). It
+    doesn't make a step either; the envelope (query._read) includes it.
+classify stores the step, the envelope, the reappearance and the band as
+backfill for every search (seen on the web, never notified) and marks them
+in listings.attributes._not_news {reason, run_id, target_id, prev_id}:
+scheduler.match_alert keeps them backfill on a retry or for another target,
+and count_after_expiry (2.5) never counts them. A first run's new listings
+are marked 'first_run', only for 2.5: the target's next runs find them again
+after its bootstrap. A listing with a recent publication date (v6) is always
+news. Each rule has its switch in config (NEWS_GUARD_*); a failure leaves
+every listing news, as before, except the band's: band_ids tells them from
+the stored rows alone, and scheduler.process_batch asks it on every batch,
+whatever classify did (it fails closed).
 
 crawl.run_target calls classify right after the ingest, and a run cut
 between the two (a restart) is caught up on the target's next run: the
@@ -50,7 +57,6 @@ log = logging.getLogger("news")
 
 FIRST_RUN, STEP, REAPPEARANCE, ENVELOPE, BAND = "first_run", "step", "reappearance", "envelope", "band"
 # Old stock: backfill for every search on every run, never counted in 2.5.
-# 'band' (query.year_band) comes later.
 MUTED = frozenset({STEP, REAPPEARANCE, ENVELOPE, BAND})
 
 # The sources without publication dates (an external_id never stored is all
@@ -115,6 +121,44 @@ def read_envelope(target: dict[str, Any], filters: dict[str, Any]) -> dict[str, 
     return {k: v for k, v in bounds.items() if v is not None}
 
 
+def is_band(row: dict[str, Any], query: dict[str, Any] | None) -> bool:
+    """Whether a listing is one only the reference year band brought
+    (crawl_targets.query.year_band, pipeline/crawl.py): its year past the
+    target's year_min/year_max, which are its searches' own. No search of
+    the target matches it (matching keeps the exact years): it feeds
+    comparables(). An unknown year is inside, as matching lets it in."""
+    q = query or {}
+    year = row.get("year")
+    if not q.get("year_band") or year is None:
+        return False
+    return ((q.get("year_min") is not None and year < int(q["year_min"]))
+            or (q.get("year_max") is not None and year > int(q["year_max"])))
+
+
+def band_ids(target: dict[str, Any], rows: Iterable[dict[str, Any]], *, max_age_days: int) -> frozenset[int]:
+    """Of these stored rows of `target`'s read, the ones only its reference
+    band brought (is_band) that are not news: old stock on a source without
+    a publication window. Mercado Libre reads the band only in "Publicados
+    hoy", so its band rows are news, and a recent publication date (v6) is
+    always news. From the rows alone: scheduler.process_batch asks it on
+    every batch, so a classify that failed, a retry or a restart never makes
+    them news nor counts them in 2.5 (NEWS_GUARD_BAND)."""
+    query = target.get("query") or {}
+    if not config.NEWS_GUARD_BAND or target.get("source") in RECENT_SOURCES or not query.get("year_band"):
+        return frozenset()
+    return frozenset(r["id"] for r in rows if is_band(r, query) and not _dated_news(r, max_age_days))
+
+
+def _core_share(items: Iterable[Any], query: dict[str, Any] | None) -> float:
+    """The share of a read inside its searches' own years. The band adds its
+    stock to every banded read's `found`, the step's base: measured against
+    that core, a step needs the same new listings as before the band."""
+    years = [getattr(item, "anio", None) for item in items]
+    if not years:
+        return 1.0
+    return sum(1 for year in years if not is_band({"year": year}, query)) / len(years)
+
+
 def _mark(row: dict[str, Any] | None) -> dict[str, Any]:
     mark = ((row or {}).get("attributes") or {}).get("_not_news")
     return mark if isinstance(mark, dict) else {}
@@ -144,15 +188,16 @@ def _dated_news(row: dict[str, Any], max_age_days: int) -> bool:
     return row.get("published_at") is not None and _is_recent(row, max_age_days)
 
 
-async def _step_base(target: dict[str, Any], run_id: int) -> int | None:
+async def _step_base(target: dict[str, Any], run_id: int, share: float = 1.0) -> int | None:
     """What a step is measured against: the most one of the target's last
-    ok runs that read something found. A target whose ok runs all read
-    nothing (an empty first read's hold ended) never loaded: 0, so its
-    whole stock showing up is a step and its first few cars are news."""
+    ok runs that read something found, its core `share` of it (_core_share).
+    A target whose ok runs all read nothing (an empty first read's hold
+    ended) never loaded: 0, so its whole stock showing up is a step and its
+    first few cars are news."""
     base = await runs.recent_ok_found(target["id"], exclude_run=run_id, n=STEP_RUNS)
     if base is None and await runs.empty_ok_streak(target["id"], exclude_run=run_id) > 0:
         return 0
-    return base
+    return base if base is None or share >= 1 else round(base * share)
 
 
 async def classify(target: dict[str, Any], items: Iterable[Any], result: IngestResult, *, run_id: int,
@@ -163,7 +208,8 @@ async def classify(target: dict[str, Any], items: Iterable[Any], result: IngestR
     the listings of the read its prefilter had dropped before
     (crawl._readmitted): backfill already, so they neither make a step nor
     get a mark. Fails
-    open: the error goes to pipeline_errors ('news') and every listing is news."""
+    open: the error goes to pipeline_errors ('news') and every listing is news,
+    but the band's, which scheduler.process_batch tells apart (band_ids)."""
     if target["source"] in RECENT_SOURCES:
         return frozenset()
     try:
@@ -188,28 +234,45 @@ async def _classify(target: dict[str, Any], items: Iterable[Any], result: Ingest
     new = [lid for lid in new if lid not in readmitted]
     if not new:
         return frozenset()
-    if first_run:
-        # Backfill already (scheduler.match_alert); marked for 2.5 only.
-        async with connection() as cx:
-            await listings.mark_not_news(cx, [(lid, mark(FIRST_RUN), None) for lid in new])
-        return frozenset()
+    query = target.get("query") or {}
     max_age_days = int(await get_config("recommended_max_age_days", config.RECOMMENDED_MAX_AGE_DAYS))
+    banded = config.NEWS_GUARD_BAND and bool(query.get("year_band"))
+    rows: list[dict[str, Any]] | None = None
+    band: frozenset[int] = frozenset()
+    if banded:
+        async with connection() as cx:
+            rows = await listings.new_rows(cx, new)
+        band = band_ids(target, rows, max_age_days=max_age_days)
+    if first_run:
+        # Backfill already (scheduler.match_alert); marked for 2.5 only, but
+        # the band for every target.
+        async with connection() as cx:
+            await listings.mark_not_news(cx, [(lid, mark(BAND if lid in band else FIRST_RUN), None)
+                                              for lid in new])
+        return band
     settings = await IngestConfig.load()
     # Only a complete read of a source whose reads are trusted whole tells the
     # old copy is gone: the list comparables() confirms with. Kavak,
     # autocosmos and usadossantafe cut their reads short without saying so.
     trusted = (await get_config("comparables", {}) or {}).get("confirm_sources") or ()
     reappearance = config.NEWS_GUARD_REAPPEARANCE and complete and target["source"] in trusted
-    inventory = (target.get("query") or {}).get("inventory") is True
-    step = config.NEWS_GUARD_STEP and not inventory and is_step(len(new), await _step_base(target, run_id))
+    inventory = query.get("inventory") is True
+    share = _core_share(items, query) if banded else 1.0
+    step = config.NEWS_GUARD_STEP and not inventory and is_step(len(new) - len(band),
+                                                                await _step_base(target, run_id, share))
     # The year and km the target's last complete read covered (the claimed
-    # query's, from before any widening): outside them is stock it left out.
-    envelope = (target.get("query") or {}).get("_read") if config.NEWS_GUARD_ENVELOPE else None
+    # query's, from before any widening, the band included): outside them
+    # is stock it left out.
+    envelope = query.get("_read") if config.NEWS_GUARD_ENVELOPE else None
     batch = sorted({str(item.listing_id) for item in items})
     marks: list[tuple[int, dict[str, Any], int | None]] = []
     reasons: Counter[str] = Counter()
     async with connection() as cx:
-        for row in await listings.new_rows(cx, new):
+        for row in rows if rows is not None else await listings.new_rows(cx, new):
+            if row["id"] in band:
+                marks.append((row["id"], mark(BAND), None))
+                reasons[BAND] += 1
+                continue
             if _dated_news(row, max_age_days):
                 continue
             if step:

@@ -5,8 +5,11 @@ image; fetch_detail() does. It is only worth its cost (and the sources'
 patience) for listings that matched at least one profile and were never
 enriched, and for those whose published price looks like a down payment:
 only their description can give the total that would let them match (the
-next crawl of their target matches them). Each source has its own queue,
-rate-limited by sources.detail_interval_seconds; sources drain in parallel.
+next crawl of their target matches them). The rows of a target's reference
+year band (pipeline/crawl.py) that lack a transmission are read too, without
+the LLM: comparables() wants their version and transmission. Each source has
+its own queue, rate-limited by sources.detail_interval_seconds; sources drain
+in parallel.
 
 Each detail page is kept in raw_pages before it's parsed (tools/reprocess.py
 re-reads them). The description's facts (normalization/description_facts.py)
@@ -224,8 +227,10 @@ async def enrich_pass(stop: asyncio.Event | None = None) -> IngestResult:
                                        max_age_days=int(cfg.get("max_age_days", 30)))
     intervals = await source_intervals()
     rows = [r for r in rows if r["source"] in intervals]     # disabled sources wait
-    llm = await DescriptionLLM.create() if rows else None
-    result = await drain(rows, lambda r: refresh_listing(r, stage="enrich", llm=llm),
+    llm = await DescriptionLLM.create() if any(not r.get("band") for r in rows) else None
+    # The reference band's rows want their version and transmission only:
+    # never the LLM's cost nor its daily budget (db/repos/listings.py).
+    result = await drain(rows, lambda r: refresh_listing(r, stage="enrich", llm=None if r.get("band") else llm),
                          intervals=intervals, stop=stop)
     if rows:
         log.info("enrichment: %d listings, %d updated, %d events",

@@ -5,6 +5,14 @@ grouped by (source, make, model) with the widest query: lowest year_min,
 highest year_max, highest km_max (or none) and **no price filter** (prices
 are compared after currency conversion). Scraping cost depends on how many
 models are searched, not on how many users search them.
+A target also reads config.REFERENCE_YEAR_BAND years past those bounds
+(query.year_band), so that comparables() (year ± 1) sees both sides of an
+edge year: always on the sources that read their whole stock, on Mercado
+Libre only in its one-request "Publicados hoy" reads (_run_band), never on
+Facebook (BaseScraper.YEAR_BAND), count-only or inventory targets. Those
+rows feed the price reference and nothing else: searches keep their exact
+years, and on a source without publication dates they are old stock
+(pipeline/news.py, is_band).
 Small catalogs/feeds opt into INVENTORY_TARGET: one unfiltered source target,
 without make/model hints, shared by every eligible profile that selects it.
 A search without a model, only by body type (docs/CARROCERIA.md), gets one
@@ -12,7 +20,7 @@ target per (source, body type) on the sources app_config.body_type_targets
 names whose collector can search that body type (BODY_TYPES). Those targets
 run every body_type_targets.interval_seconds, and before ingesting they drop
 what none of their searches could want: above the highest price cap in USD,
-below the lowest year, above the highest km.
+below the lowest year (less the reference band), above the highest km.
 The searches whose access ended in the last 3 weeks are only counted (2.5,
 docs/MAILS_DE_PLAN.md): they ride the targets above as they are, and a model
 nobody else searches gets a `count_only` target crawled once a day.
@@ -55,7 +63,7 @@ from collectors._isolated import call as isolated_call, isolated
 from collectors._loop import run_collector
 import config
 from config import COLLECTOR_TIMEOUT_SECONDS
-from collectors._recency import POLICY_VERSION, SOURCES as RECENT_SOURCES, target_window
+from collectors._recency import POLICY_VERSION, SOURCES as RECENT_SOURCES, one_request_read, target_window
 from db.pool import connection
 from db.repos import runs, targets as targets_repo
 from db.repos.config import get_config
@@ -122,8 +130,9 @@ class TargetRun:
     # ok runs in a row before it read nothing and held the bootstrap.
     empty_runs: int = 0
     # Listings stored for the first time that are old stock, matched as
-    # backfill: the ones pipeline/news.py says are not news, and the ones
-    # this target's prefilter had dropped before (prefilter_rejected).
+    # backfill: the ones pipeline/news.py says are not news (the reference
+    # year band's among them), and the ones this target's prefilter had
+    # dropped before (prefilter_rejected).
     backfill_ids: frozenset[int] = frozenset()
     # What this read covered, when it was complete (news.read_envelope):
     # finish_target keeps it in query._read.
@@ -210,9 +219,10 @@ def _coverage(source: str) -> dict[str, Any]:
 
 
 def _spec(key: _Key, members: list[dict[str, Any]], names: _Names, *,
-          count_only: bool = False, body: BodyTypeTargets | None = None) -> TargetSpec:
+          count_only: bool = False, body: BodyTypeTargets | None = None, year_band: int = 0) -> TargetSpec:
     # A count-only target lists its searches apart: profile_ids are the active
-    # members (the web reads them).
+    # members (the web reads them). year_min/year_max stay the searches' own;
+    # year_band says how far past them the target reads (scraper_filters).
     members_ids = sorted(m["id"] for m in members)
     ids = ({"count_only": True, "count_profile_ids": members_ids} if count_only
            else {"profile_ids": members_ids})
@@ -224,6 +234,9 @@ def _spec(key: _Key, members: list[dict[str, Any]], names: _Names, *,
         "year_max": _widest([f.get("year_max") for f in filters], max),
         "km_max": _widest([f.get("km_max") for f in filters], max),
     }
+    if (year_band and not count_only and getattr(REGISTRY.get(key[0]), "YEAR_BAND", False)
+            and (query["year_min"] is not None or query["year_max"] is not None)):
+        query["year_band"] = year_band
     if key[3]:
         # By body type: what ingest keeps (prefilter) and its own cadence.
         body = body or BodyTypeTargets()
@@ -245,7 +258,7 @@ def _spec(key: _Key, members: list[dict[str, Any]], names: _Names, *,
 
 def derive_targets(profiles: list[dict[str, Any]], sources: list[str],
                    counting: list[dict[str, Any]] = (), *,
-                   body_types: BodyTypeTargets | None = None) -> list[TargetSpec]:
+                   body_types: BodyTypeTargets | None = None, year_band: int = 0) -> list[TargetSpec]:
     """Group profiles by vehicle, by body type, or once per inventory source without filters.
 
     `sources` are the enabled sources with a collector; a profile that names
@@ -255,9 +268,13 @@ def derive_targets(profiles: list[dict[str, Any]], sources: list[str],
     never change a target of the active profiles (its query, its cadence or
     the city Facebook searches around) and only add the vehicles none of
     those cover, as count-only targets; never a body type.
+    `year_band` (config.REFERENCE_YEAR_BAND) goes on the active targets with
+    a year bound whose collector reads it (BaseScraper.YEAR_BAND), never on
+    a count-only one.
     """
     groups, names = _group(profiles, sources, body_types)
-    specs = [_spec(key, members, names[key], body=body_types) for key, members in sorted(groups.items())]
+    specs = [_spec(key, members, names[key], body=body_types, year_band=year_band)
+             for key, members in sorted(groups.items())]
     counted, counted_names = _group(list(counting), sources)
     specs += [_spec(key, members, counted_names[key], count_only=True)
               for key, members in sorted(counted.items()) if key not in groups]
@@ -284,8 +301,21 @@ def retry_seconds(target: dict[str, Any], *, reason: str | None = None, partial:
     return min(interval, FAILURE_RETRY_SECONDS)
 
 
+def _run_band(target: dict[str, Any], f: dict[str, Any]) -> int:
+    """How many years past its query's bounds this run reads (query.year_band):
+    all of them on a source that reads its whole stock; on Mercado Libre
+    only when the run goes through "Publicados hoy" (_recency.one_request_read,
+    `f` being its filters), never in a first run or after a gap, which date
+    every card one ad page at a time; never on Facebook."""
+    band = int((target.get("query") or {}).get("year_band") or 0)
+    if not band or target.get("source") not in RECENT_SOURCES:
+        return band
+    return band if one_request_read(target["source"], f) else 0
+
+
 def scraper_filters(target: dict[str, Any]) -> dict[str, Any]:
-    """A target's query in the collectors' filter vocabulary."""
+    """A target's query in the collectors' filter vocabulary, its years
+    widened by the run's reference band (_run_band)."""
     q = target.get("query") or {}
     f: dict[str, Any] = {"marca": target.get("make"), "modelo": target.get("model"),
                          # A target by body type has no marca/modelo (BaseScraper.BODY_TYPES).
@@ -296,6 +326,11 @@ def scraper_filters(target: dict[str, Any]) -> dict[str, Any]:
                          # Only searches with ended access want it (2.5): a collector may read less.
                          "count_only": True if q.get("count_only") is True else None}
     f.update(target_window(target))
+    if band := _run_band(target, f):
+        if f["anio_min"] is not None:
+            f["anio_min"] = int(f["anio_min"]) - band
+        if f["anio_max"] is not None:
+            f["anio_max"] = int(f["anio_max"]) + band
     return {k: v for k, v in f.items() if v is not None}
 
 
@@ -304,9 +339,11 @@ def prefilter(target: dict[str, Any]) -> Callable[[dict[str, Any]], bool] | None
     of its searches could want (docs/CARROCERIA.md), so the database grows
     with what is searched and not with every SUV in the country. A row goes
     when its USD price is above the highest cap (price_usd_max, plus
-    PRICE_CEILING_MARGIN), its year below the lowest year_min or its km above
-    the highest km_max. Unknown values and partial prices pass. None (keep
-    everything) for any other target.
+    PRICE_CEILING_MARGIN), its year below the lowest year_min less the
+    reference band (query.year_band: a body type's read is "Publicados hoy"
+    on Mercado Libre and the whole stock on Kavak, so it always reads the
+    band) or its km above the highest km_max. Unknown values and partial
+    prices pass. None (keep everything) for any other target.
 
     On a source without publication dates (Kavak) a body type's whole stock
     is read on every run, so what the prefilter drops is remembered
@@ -318,6 +355,8 @@ def prefilter(target: dict[str, Any]) -> Callable[[dict[str, Any]], bool] | None
         return None
     q = target.get("query") or {}
     year_min, km_max, usd_max = q.get("year_min"), q.get("km_max"), q.get("price_usd_max")
+    if year_min is not None:
+        year_min = int(year_min) - int(q.get("year_band") or 0)
     ceiling = usd_max * (1 + PRICE_CEILING_MARGIN) if usd_max is not None else None
 
     def keep(row: dict[str, Any]) -> bool:
@@ -606,6 +645,7 @@ async def body_type_targets(profiles: list[dict[str, Any]]) -> BodyTypeTargets:
 async def sync_targets(profiles: list[dict[str, Any]],
                        counting: list[dict[str, Any]] = ()) -> list[TargetSpec]:
     sources = [s for s in await targets_repo.enabled_sources() if s in REGISTRY]
-    specs = derive_targets(profiles, sources, counting, body_types=await body_type_targets(profiles))
+    specs = derive_targets(profiles, sources, counting, body_types=await body_type_targets(profiles),
+                           year_band=config.REFERENCE_YEAR_BAND)
     await targets_repo.sync_targets(specs, undated=news.UNDATED_SOURCES)
     return specs

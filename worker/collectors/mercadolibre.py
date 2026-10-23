@@ -26,6 +26,7 @@ from bs4 import BeautifulSoup
 import config
 from normalization import body_type
 from .base import BaseScraper, CollectorBlocked, Listing, ListingDetail, SearchResults
+from . import _recency
 from ._recency import PublicationWindow
 from ._dates import publication_date
 from ._http import Page, dedupe, fetch_page, json_ld_of_type, multiline_text, soup, text_of, to_int
@@ -82,7 +83,7 @@ PAGE_SIZE = 48
 # 15/10/2026 it still listed most ads it had at 18:54 the day before. The hour
 # on top absorbs the window's 10-minute overlap and scheduling delays; a gap of
 # 24 to 25 hours can miss what was published in that margin.
-TODAY_FILTER_SPAN = 25 * 3600
+TODAY_FILTER_SPAN = _recency.TODAY_SPAN
 
 # Dates read from ads, by id, for the worker's lifetime: an ad outside the
 # window is never stored, and would otherwise be read again on every scan.
@@ -471,7 +472,8 @@ class MercadoLibreScraper(BaseScraper):
         """Every result of the window, kept if published inside it.
 
         A window of up to TODAY_FILTER_SPAN, or a count-only target (2.5), is
-        read through "Publicados hoy": one request, and its results are kept
+        read through "Publicados hoy" (_recency.one_request_read, which
+        pipeline/crawl.py also asks): one request, and its results are kept
         as they come, since Mercado Libre's own filter vouches for them while
         an ad's page only says "hace 1 día" (the public pages carry no exact
         date). Without a stored date, detection time stands in, which the
@@ -483,8 +485,7 @@ class MercadoLibreScraper(BaseScraper):
         results = SearchResults()
         seen: set[str] = set()
         known = filters.get("known_publication_dates") or {}
-        today = (window.today_only or filters.get("count_only") is True
-                 or window.until - window.since <= TODAY_FILTER_SPAN)
+        today = _recency.one_request_read(self.name, filters, window)
         fetched = 0
         pages = 0
         try:

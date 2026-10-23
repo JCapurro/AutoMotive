@@ -367,16 +367,34 @@ async def recent_active_by_body(body_types: list[str], *, days: int, sources: li
 _DETAIL_RETRY = "6 hours"
 
 
+# A listing only a target's reference year band brought (pipeline/crawl.py,
+# crawl_targets.query.year_band): its year one past the searches' own, on
+# the target's source. Facebook targets never read the band.
+_BAND_ROW = (
+    "EXISTS (SELECT 1 FROM crawl_targets t "
+    "         WHERE t.active AND t.body_type IS NULL AND t.source = l.source AND t.query ? 'year_band' "
+    "           AND lower(t.make) = lower(l.make) AND lower(t.model) = lower(l.model) "
+    "           AND ((l.year < (t.query->>'year_min')::numeric "
+    "                 AND l.year >= (t.query->>'year_min')::numeric - (t.query->>'year_band')::numeric) "
+    "             OR (l.year > (t.query->>'year_max')::numeric "
+    "                 AND l.year <= (t.query->>'year_max')::numeric + (t.query->>'year_band')::numeric)))")
+
+
 async def enrichment_queue(*, per_source: int, max_age_days: int) -> list[dict]:
     """Listings to read the detail page of (sección 5.5), per source newest
     first: the ones with a live (non-backfill) match, then backfill matches,
     then listings without a match whose published price looks partial (an
     anticipo or a cuota): only their description can give the total that
-    would let them match."""
+    would let them match, and the reference band's (_BAND_ROW) without a
+    transmission, which comparables() needs at its finer levels. `band` is
+    true for those last ones when nothing else queued them: pipeline/enrich.py
+    reads them without the LLM, since only the version and the transmission
+    are wanted, and they never take its daily budget."""
     async with connection() as cx:
         return await (await cx.execute(
             "SELECT * FROM ("
             "  SELECT l.id, l.source, l.external_id, l.url, l.make, l.model, "
+            "         count(m.listing_id) = 0 AND NOT l.price_partial AS band, "
             "         row_number() OVER (PARTITION BY l.source "
             "           ORDER BY coalesce(bool_or(NOT m.is_backfill), false) DESC, "
             "                    count(m.listing_id) > 0 DESC, l.first_seen_at DESC) AS n "
@@ -385,7 +403,8 @@ async def enrichment_queue(*, per_source: int, max_age_days: int) -> list[dict]:
             "     AND l.last_seen_at >= now() - make_interval(days => %s) "
             f"    AND (l.detail_checked_at IS NULL OR l.detail_checked_at < now() - interval '{_DETAIL_RETRY}') "
             "   GROUP BY l.id "
-            "  HAVING count(m.listing_id) > 0 OR l.price_partial) q "
+            "  HAVING count(m.listing_id) > 0 OR l.price_partial "
+            f"     OR (l.transmission IS NULL AND l.year IS NOT NULL AND {_BAND_ROW})) q "
             "WHERE n <= %s ORDER BY source, n",
             (max_age_days, per_source))).fetchall()
 

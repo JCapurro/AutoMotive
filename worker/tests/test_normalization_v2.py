@@ -339,6 +339,52 @@ class CrawlTargetTests(unittest.TestCase):
     def test_profiles_without_a_vehicle_are_not_crawled(self):
         self.assertEqual(derive_targets([{"id": 1, "filters": {"year_min": 2015}}], self.SOURCES), [])
 
+    def test_banded_targets_keep_the_searches_years(self):
+        sources = ["mercadolibre", "deruedas", "kavak", "facebook", "mardelusados"]
+        specs = {s.source: s.query for s in derive_targets(
+            [self._profile(1, make="Ford", model="Ka", year_min=2010, km_max=150_000)], sources, year_band=1)}
+        for source in ("mercadolibre", "deruedas", "kavak"):
+            self.assertEqual({k: v for k, v in specs[source].items() if k != "publication_policy"},
+                             {"year_min": 2010, "km_max": 150_000, "year_band": 1, "profile_ids": [1]}, source)
+        self.assertEqual(specs["facebook"], {"year_min": 2010, "km_max": 150_000, "publication_policy": 1,
+                                             "profile_ids": [1]})
+        self.assertEqual(specs["mardelusados"], {"inventory": True, "profile_ids": [1]})
+
+    def test_no_band_without_year_bounds_or_for_count_only(self):
+        specs = derive_targets([self._profile(1, km_max=100_000)], self.SOURCES,
+                               [self._profile(8, make="Toyota", model="Corolla", year_min=2015)], year_band=1)
+        self.assertEqual([s.query for s in specs if s.make == "Ford"],
+                         [{"km_max": 100_000, "profile_ids": [1]},
+                          {"km_max": 100_000, "publication_policy": 1, "profile_ids": [1]}])
+        self.assertEqual([s.query for s in specs if s.make == "Toyota"],
+                         [{"year_min": 2015, "count_only": True, "count_profile_ids": [8]},
+                          {"year_min": 2015, "publication_policy": 1, "count_only": True, "count_profile_ids": [8]}])
+
+    def test_the_default_derivation_has_no_band(self):
+        profiles = [self._profile(1, year_min=2014, year_max=2018)]
+        self.assertEqual([s.query for s in derive_targets(profiles, self.SOURCES)],
+                         [s.query for s in derive_targets(profiles, self.SOURCES, year_band=0)])
+        self.assertNotIn("year_band", derive_targets(profiles, self.SOURCES)[0].query)
+
+    def test_scraper_filters_read_the_band_only_where_it_is_cheap(self):
+        now = int(datetime(2026, 10, 22, 18, 0, tzinfo=timezone.utc).timestamp())       # 15:00 in Argentina
+        query = {"year_min": 2010, "year_max": 2020, "year_band": 1, "publication_policy": 1}
+
+        def years(source: str, **target) -> tuple:
+            with patch("collectors._recency.time.time", return_value=now):
+                f = scraper_filters({"source": source, "make": "Ford", "model": "Ka", "query": query, **target})
+            return f.get("anio_min"), f.get("anio_max")
+
+        def ago(seconds: int) -> datetime:
+            return datetime.fromtimestamp(now - seconds, timezone.utc)
+
+        self.assertEqual(years("kavak"), (2009, 2021))
+        self.assertEqual(years("mercadolibre", first_run_done=False), (2010, 2020))            # the bootstrap
+        self.assertEqual(years("mercadolibre", first_run_done=True, last_run_at=ago(1200)), (2009, 2021))
+        self.assertEqual(years("mercadolibre", first_run_done=True, last_run_at=ago(3 * 86_400)), (2010, 2020))
+        self.assertEqual(years("facebook", first_run_done=True, last_run_at=ago(1200)), (2010, 2020))
+        self.assertEqual(years("kavak", query={"year_min": 2010}), (2010, None))
+
     def test_scraper_filters_carry_no_price(self):
         f = scraper_filters({"make": "Ford", "model": "Fiesta",
                              "query": {"year_min": 2014, "km_max": 150_000, "origin_lat": -34.6,

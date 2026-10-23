@@ -27,7 +27,8 @@ COLLECTOR_FILES = {
     'autocity': 'autocity', 'carone': 'carone', 'gruporandazzo': 'gruporandazzo',
     'deruedas': 'deruedas',
 }
-PUBLIC_QUERY_KEYS = {'inventory', 'year_min', 'year_max', 'km_max', 'publication_policy', 'interval_seconds'}
+PUBLIC_QUERY_KEYS = {'inventory', 'year_min', 'year_max', 'year_band', 'km_max', 'publication_policy',
+                     'interval_seconds'}
 
 _SECRET_NAME = re.compile(r'TOKEN|SECRET|PASSWORD|API_KEY|DATABASE_URL')
 _SENSITIVE = re.compile(

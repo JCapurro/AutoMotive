@@ -169,11 +169,11 @@ class RepairContextTests(unittest.TestCase):
         incident = dict(id=uuid4(), source='autocosmos', problem='tres fallos', status='open',
                         claim_token=uuid4(), lease_owner='claude-repair-bot', note='privada')
         rows = ({'checked_at': datetime.now(timezone.utc), 'checks': {'collector:autocosmos': 'falló'}},
-                [dict(id=1, make='Ford', model='Fiesta', query={'year_min': 2014, 'profile_ids': ['private-user']})],
+                [dict(id=1, make='Ford', model='Fiesta', query={'year_min': 2014, 'year_band': 1, 'profile_ids': ['private-user']})],
                 [dict(id=40, target_id=1, status='failed', error='HTTP 503', found=None)])
         context = repairs.build_context(incident, *rows)
         self.assertEqual(set(context), {'incident', 'problem', 'health', 'targets', 'runs'})
-        self.assertEqual(context['targets'][0]['query'], {'year_min': 2014})
+        self.assertEqual(context['targets'][0]['query'], {'year_min': 2014, 'year_band': 1})
         self.assertEqual(context['runs'][0]['error'], 'HTTP 503')
         encoded = repairs.json_text(context)
         for private in ('claim_token', 'lease_owner', 'privada', 'private-user'):

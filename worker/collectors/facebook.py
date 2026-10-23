@@ -626,6 +626,9 @@ class _FeedProbe:
 class FacebookMarketplaceScraper(BaseScraper):
     name = "facebook"
     ISOLATED = True
+    # Every card without a stored date costs a 30 s item page within the scan's
+    # cap (RECENT_FB_MAX_DATE_FETCHES): it reads exactly its searches' years.
+    YEAR_BAND = False
 
     def _build_url(self, f: dict) -> str:
         slug = _city_slug(f.get("ubicacion")) if f.get("ubicacion") else _city_slug_from_origin(f)
