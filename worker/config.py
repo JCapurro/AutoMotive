@@ -80,6 +80,9 @@ NEWS_GUARD_EMPTY_FIRST = _switch("NEWS_GUARD_EMPTY_FIRST", "1")
 NEWS_GUARD_ENVELOPE = _switch("NEWS_GUARD_ENVELOPE", "1")
 # ... and the years only REFERENCE_YEAR_BAND reads: stock for comparables(), never news.
 NEWS_GUARD_BAND = _switch("NEWS_GUARD_BAND", "1")
+# A target of such a source back after a day inactive starts its bootstrap
+# over (targets.sync_targets): what it finds was listed while nobody read it.
+NEWS_GUARD_REACTIVATION = _switch("NEWS_GUARD_REACTIVATION", "1")
 # An incomplete run of such a source, past its first, retries after the
 # source's interval instead of 15 minutes (crawl.retry_seconds).
 NEWS_PARTIAL_RETRY = _switch("NEWS_PARTIAL_RETRY", "1")

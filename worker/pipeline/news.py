@@ -8,16 +8,18 @@ external_id was never stored, so old stock looks new when:
     search, a read cut short before): the step;
   - a target's search was widened, and the read brings the stock its
     previous complete read left out by year or km (crawl_targets.query._read,
-    read_envelope): the envelope;
+    read_envelope): the envelope. Not what a target reading the source's
+    whole stock of its body type (or all of it) covers and never stored:
+    that is new to the source;
   - the same car comes back under another ID after its old copy left the
     source: the reappearance, only on the sources whose reads are trusted
     whole. A republication at least price_drop_min_pct cheaper is still
     news, labelled "re-publicado" (_republished);
   - a target of UNDATED_SOURCES read nothing on its first run: crawl._run_one
     holds its bootstrap for EMPTY_FIRST_RUNS empty reads at most, so what it
-    reads right after is that first run's backfill. A target of theirs that
-    is reactivated, or whose collector raises COVERAGE_VERSION, starts its
-    bootstrap over (targets.sync_targets);
+    reads right after is that first run's backfill. A target of theirs back
+    after a day inactive (NEWS_GUARD_REACTIVATION), or whose collector raises
+    COVERAGE_VERSION, starts its bootstrap over (targets.sync_targets);
   - the target read past its searches' years (query.year_band, the
     reference band of pipeline/crawl.py): the band, which none of the
     target's searches matches and which only feeds comparables(). It
@@ -49,7 +51,7 @@ from typing import Any, Iterable
 import config
 from collectors._recency import SOURCES as RECENT_SOURCES
 from db.pool import connection
-from db.repos import listings, runs
+from db.repos import listings, runs, targets
 from db.repos.config import get_config
 from pipeline.ingest import IngestConfig, IngestResult, price_drop_pct
 
@@ -159,6 +161,24 @@ def _core_share(items: Iterable[Any], query: dict[str, Any] | None) -> float:
     return sum(1 for year in years if not is_band({"year": year}, query)) / len(years)
 
 
+def _covered(row: dict[str, Any], wide: Iterable[dict[str, Any]]) -> bool:
+    """Whether one of these targets (targets.whole_stock_targets) reads `row`
+    on every run: the whole source, or its body type within what the
+    target's prefilter keeps, not dropped by it before (prefilter_rejected).
+    It would have stored the row if it were old stock (kavak 'suv' and a
+    Ford EcoSport target widened to 2012)."""
+    from pipeline.crawl import prefilter     # crawl imports this module
+    for t in wide:
+        if t.get("body_type") is None:
+            return True
+        if row.get("body_type") != t["body_type"] or row.get("external_id") in (t.get("prefilter_rejected") or ()):
+            continue
+        keep = prefilter(t)
+        if keep is None or keep(row):
+            return True
+    return False
+
+
 def _mark(row: dict[str, Any] | None) -> dict[str, Any]:
     mark = ((row or {}).get("attributes") or {}).get("_not_news")
     return mark if isinstance(mark, dict) else {}
@@ -264,6 +284,7 @@ async def _classify(target: dict[str, Any], items: Iterable[Any], result: Ingest
     # query's, from before any widening, the band included): outside them
     # is stock it left out.
     envelope = query.get("_read") if config.NEWS_GUARD_ENVELOPE else None
+    wide = await targets.whole_stock_targets(target["source"]) if isinstance(envelope, dict) else []
     batch = sorted({str(item.listing_id) for item in items})
     marks: list[tuple[int, dict[str, Any], int | None]] = []
     reasons: Counter[str] = Counter()
@@ -279,7 +300,7 @@ async def _classify(target: dict[str, Any], items: Iterable[Any], result: Ingest
                 marks.append((row["id"], mark(STEP), None))
                 reasons[STEP] += 1
                 continue
-            if isinstance(envelope, dict) and outside_envelope(row, envelope):
+            if isinstance(envelope, dict) and outside_envelope(row, envelope) and not _covered(row, wide):
                 marks.append((row["id"], mark(ENVELOPE), None))
                 reasons[ENVELOPE] += 1
                 continue

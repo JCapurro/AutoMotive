@@ -6,11 +6,11 @@ from __future__ import annotations
 import unittest
 from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime, timedelta, timezone
-from unittest.mock import ANY, AsyncMock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, patch
 
 from collectors import REGISTRY
 from collectors.base import Listing, SearchResults
-from pipeline import crawl, news
+from pipeline import crawl, news, scheduler
 from pipeline.ingest import IngestConfig, IngestResult, ListingEvent
 
 NOW = datetime.now(timezone.utc)
@@ -146,9 +146,10 @@ class MarkTests(unittest.TestCase):
 class ClassifyTests(unittest.IsolatedAsyncioTestCase):
     @contextmanager
     def patched(self, rows: list[dict] | Exception, *, prev_found=None, reappeared=None, left=(),
-                trusted=("autocosmos",), empty_streak=0, **switches):
+                trusted=("autocosmos",), empty_streak=0, wide=(), **switches):
         """news.py over mocks: `rows` its new rows, `left` what an earlier run
-        left unclassified, `trusted` app_config.comparables.confirm_sources."""
+        left unclassified, `trusted` app_config.comparables.confirm_sources,
+        `wide` the source's targets that read a whole body type or inventory."""
         @asynccontextmanager
         async def connection():
             yield object()
@@ -164,6 +165,7 @@ class ClassifyTests(unittest.IsolatedAsyncioTestCase):
         self.streak = AsyncMock(return_value=empty_streak)
         self.log_error = AsyncMock()
         self.unclassified = AsyncMock(return_value=list(left))
+        self.wide = AsyncMock(return_value=list(wide))
         if isinstance(rows, Exception):
             self.new_rows = AsyncMock(side_effect=rows)
         else:
@@ -178,7 +180,8 @@ class ClassifyTests(unittest.IsolatedAsyncioTestCase):
                 patch.object(news.listings, "unclassified", self.unclassified), \
                 patch.object(news.listings, "new_rows", self.new_rows), \
                 patch.object(news.listings, "find_reappeared", self.found), \
-                patch.object(news.listings, "mark_not_news", self.marks):
+                patch.object(news.listings, "mark_not_news", self.marks), \
+                patch.object(news.targets, "whole_stock_targets", self.wide):
             yield
 
     async def classify(self, res: IngestResult, rows: list[dict] | Exception, *, target=TARGET, items=(),
@@ -288,6 +291,26 @@ class ClassifyTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.marked(), {lid: {"_not_news": {"reason": "envelope", "run_id": 40, "target_id": 7,
                                                              "prev_id": None}} for lid in (1, 2)})
         self.assertEqual(self.found.await_count, 2)            # 3 and 4 still go through the reappearance
+
+    async def test_what_a_target_reading_its_whole_body_type_covers_is_news(self):
+        # kavak 'suv' reads every SUV on each run: an EcoSport 2013 it covers and
+        # never stored is new to kavak, though the EcoSport target read 2016 on.
+        suv = {"id": 3, "source": "kavak", "body_type": "suv", "query": {"price_usd_max": 15_000, "year_min": 2010},
+               "prefilter_rejected": ["n4"]}
+        target = dict(TARGET, source="kavak", query={"year_min": 2012, "_read": {"year_min": 2016}})
+        rows = [row(1, year=2013, body_type="suv", price_usd=9_000.0),     # covered
+                row(2, year=2013, body_type="sedan", price_usd=9_000.0),   # another body type
+                row(3, year=2013, body_type="suv", price_usd=20_000.0),    # above its searches' cap
+                row(4, year=2013, body_type="suv", price_usd=9_000.0),     # its prefilter dropped it before
+                row(5, year=2008, body_type="suv", price_usd=9_000.0)]     # below its searches' years
+        muted = await self.classify(result(1, 2, 3, 4, 5), rows, target=target, wide=[suv], trusted=())
+        self.assertEqual(muted, frozenset({2, 3, 4, 5}))
+        self.wide.assert_awaited_once_with("kavak")
+        # A target of the whole source covers everything.
+        inventory = {"id": 4, "source": "kavak", "body_type": None, "query": {"inventory": True},
+                     "prefilter_rejected": []}
+        self.assertEqual(await self.classify(result(2), rows, target=target, wide=[inventory], trusted=()),
+                         frozenset())
 
     async def test_a_recent_publication_outside_the_last_read_is_news(self):
         target = dict(TARGET, query={"year_min": 2014, "_read": {"year_min": 2015}})
@@ -455,6 +478,38 @@ class ClassifyTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual({lid: m["_not_news"]["reason"] for lid, m in self.marked().items()},
                          {1: "band", 2: "first_run"})
         self.recent.assert_not_awaited()
+
+
+class SyncTargetsTests(unittest.IsolatedAsyncioTestCase):
+    """crawl.sync_targets and scheduler.tick: what targets.sync_targets is told."""
+
+    async def sync(self, counting=(), **switches) -> AsyncMock:
+        with patch.object(crawl.targets_repo, "enabled_sources", AsyncMock(return_value={})), \
+                patch.object(crawl, "body_type_targets", AsyncMock(return_value=crawl.BodyTypeTargets())), \
+                patch.object(crawl.targets_repo, "sync_targets", AsyncMock()) as sync, \
+                patch.multiple(crawl.config, **{"NEWS_GUARD_REACTIVATION": True, **switches}):
+            await crawl.sync_targets([], counting)
+        return sync
+
+    async def test_the_reactivation_reset_has_its_switch(self):
+        self.assertEqual(set((await self.sync()).call_args.kwargs["undated"]), news.UNDATED_SOURCES)
+        self.assertEqual(tuple((await self.sync(NEWS_GUARD_REACTIVATION=False)).call_args.kwargs["undated"]), ())
+
+    async def test_count_only_targets_stay_when_the_counted_searches_cant_be_read(self):
+        self.assertFalse((await self.sync([])).call_args.kwargs["keep_count_only"])
+        self.assertTrue((await self.sync(None)).call_args.kwargs["keep_count_only"])
+
+    async def test_a_tick_that_cant_read_the_counted_searches_says_so(self):
+        # A timeout in count_after_expiry_searches() would deactivate every
+        # count-only target for a tick.
+        with patch.object(scheduler.db, "enabled_profiles", AsyncMock(return_value=[])), \
+                patch.object(scheduler.db, "counting_profiles", AsyncMock(side_effect=RuntimeError("timeout"))), \
+                patch.object(scheduler, "log_error", AsyncMock()) as log_error, \
+                patch.object(scheduler.crawl, "sync_targets", AsyncMock()) as sync, \
+                patch.object(scheduler.rematch, "run_pending", AsyncMock()):
+            await scheduler.tick(MagicMock(), MagicMock(start_due=AsyncMock(return_value=[])))
+        sync.assert_awaited_once_with([], None)
+        self.assertEqual(log_error.await_args.args[:2], ("count_after_expiry", "counting_profiles"))
 
 
 class RunOneTests(unittest.IsolatedAsyncioTestCase):

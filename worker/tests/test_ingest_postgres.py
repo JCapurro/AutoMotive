@@ -136,10 +136,11 @@ class IngestCase(PostgresTestCase):
         [aid] = await db.create_alert(user_id=user, chat_id=user, name="Ford Fiesta", filters=f)
         return aid
 
-    async def tick(self, bot=None, on_health=None) -> int:
-        """One crawl-loop tick with every target due, no jitter."""
+    async def tick(self, bot=None, on_health=None, *, due: str = "true") -> int:
+        """One crawl-loop tick with every target due (or the ones the SQL
+        condition `due` names), no jitter."""
         async with db.connection() as cx:
-            await cx.execute("UPDATE crawl_targets SET next_run_at = NULL")
+            await cx.execute(f"UPDATE crawl_targets SET next_run_at = NULL WHERE {due}")
         await crawl.sync_targets(await db.enabled_profiles(), await db.counting_profiles())
         await rematch.run_pending()
         notifier = Notifier({"telegram": TelegramChannel(bot or _FakeBot(), Links()),
@@ -597,8 +598,13 @@ class TargetResetTests(IngestCase):
             query.setdefault("publication_policy", POLICY_VERSION)
         return crawl.TargetSpec(source, "Ford", "Fiesta", {"profile_ids": [1], **query})
 
-    async def sync(self, *specs: crawl.TargetSpec) -> None:
-        await repo_targets.sync_targets(specs, undated=news.UNDATED_SOURCES)
+    async def sync(self, *specs: crawl.TargetSpec, keep_count_only: bool = False) -> None:
+        await repo_targets.sync_targets(specs, undated=news.UNDATED_SOURCES, keep_count_only=keep_count_only)
+
+    async def back_after_a_day(self, *specs: crawl.TargetSpec) -> None:
+        """The specs come back to targets deactivated over REACTIVATION_IDLE_SECONDS ago."""
+        with patch.object(repo_targets, "REACTIVATION_IDLE_SECONDS", 0):
+            await self.sync(*specs)
 
     async def target(self, source: str = "kavak") -> dict:
         [t] = await self.rows("SELECT id, query, active, first_run_done, prefilter_rejected, updated_at "
@@ -624,19 +630,39 @@ class TargetResetTests(IngestCase):
         self.assertTrue(t["first_run_done"])
 
     async def test_a_reactivated_undated_target_starts_over_without_its_read(self):
-        # kavak has no publication dates: what it finds after a pause was listed
-        # while nobody read it. v6 dates its listings and Mercado Libre reads by
-        # date: their bootstrap holds.
+        # kavak has no publication dates: what it finds after a day without
+        # searches was listed while nobody read it. v6 dates its listings and
+        # Mercado Libre reads by date: their bootstrap holds.
         specs = [self.spec("kavak"), self.spec("v6"), self.spec("mercadolibre")]
         await self.sync(*specs)
         for spec in specs:
             await self.read_through(spec.source)
         await self.sync()
         self.assertEqual([t["active"] for t in await self.rows("SELECT active FROM crawl_targets")], [False] * 3)
-        await self.sync(*specs)
+        await self.back_after_a_day(*specs)
         for source, done in (("kavak", False), ("v6", True), ("mercadolibre", True)):
             t = await self.target(source)
             self.assertEqual((t["active"], t["first_run_done"], "_read" in t["query"]), (True, done, False), source)
+
+    async def test_a_pause_of_a_moment_keeps_the_bootstrap_and_the_read(self):
+        # A search paused and resumed, or a tick without the counted searches.
+        await self.sync(self.spec())
+        await self.read_through()
+        await self.sync()
+        self.assertFalse((await self.target())["active"])
+        await self.sync(self.spec())
+        t = await self.target()
+        self.assertEqual((t["active"], t["first_run_done"], t["query"].get("_read")), (True, True, self.READ))
+
+    async def test_count_only_targets_stay_when_the_counted_searches_cant_be_read(self):
+        counted = crawl.TargetSpec("kavak", "Toyota", "Corolla", {"count_only": True, "count_profile_ids": [7]})
+        await self.sync(self.spec(), counted)
+        await self.sync(self.spec(), keep_count_only=True)
+        targets = {(r["model"], r["active"]) for r in await self.rows("SELECT model, active FROM crawl_targets")}
+        self.assertEqual(targets, {("Fiesta", True), ("Corolla", True)})
+        await self.sync(self.spec())
+        targets = {(r["model"], r["active"]) for r in await self.rows("SELECT model, active FROM crawl_targets")}
+        self.assertEqual(targets, {("Fiesta", True), ("Corolla", False)})
 
     async def test_a_coverage_bump_resets_the_bootstrap_once_and_keeps_the_read(self):
         await self.sync(self.spec())
@@ -707,11 +733,18 @@ class TargetResetTests(IngestCase):
         t = await state("kavak")
         self.assertEqual((t["first_run_done"], t["query"]["_read"], t["prefilter_rejected"]), (False, self.READ, ["x"]))
 
-        # A reactivation drops the read; only the undated source starts over.
+        # A pause of a moment changes nothing.
         for source in ("kavak", "mercadolibre"):
             await self.read_through(source)
         await self.sync()
         await self.sync(kavak, ml)
+        for source in ("kavak", "mercadolibre"):
+            t = await state(source)
+            self.assertEqual((t["active"], t["first_run_done"], t["query"]["_read"]), (True, True, self.READ), source)
+
+        # A reactivation after a day drops the read; only the undated source starts over.
+        await self.sync()
+        await self.back_after_a_day(kavak, ml)
         for source, done in (("kavak", False), ("mercadolibre", True)):
             t = await state(source)
             self.assertEqual((t["active"], t["first_run_done"], "_read" in t["query"], t["query"].get("year_band")),
@@ -1045,6 +1078,32 @@ class EnvelopeTests(NotNewsCase):
                          {"in": False, "old": True, "far": True})
         self.assertEqual(await self.live(), {"in"})
 
+    async def test_what_a_body_type_target_reads_whole_is_news_to_every_search(self):
+        # kavak 'suv' reads every SUV on each run. A Ford EcoSport target
+        # widened to 2012 sees a new EcoSport 2013 before it: new to kavak, not
+        # stock the widening brings.
+        def eco(listing_id: str, **kw) -> Listing:
+            return card(listing_id, source="kavak", titulo=f"Ford EcoSport 1.6 Freestyle {listing_id}",
+                        marca="Ford", modelo="EcoSport", **kw)
+
+        collectors.REGISTRY["kavak"].BODY_TYPES = frozenset({"suv"})
+        await self.fiesta_alert(modelos=["EcoSport"], sources=["kavak"], anio_min=2016)
+        [suv] = await db.create_alert(user_id=2, chat_id=2, name="suv", filters={
+            "carroceria": ["suv"], "precio_max": 20_000, "moneda": "USD", "sources": ["kavak"]})
+        await self.execute("UPDATE search_profiles SET channels = '{web}' WHERE id = %s", suv)
+        FakeSource.results["kavak"] = [eco(f"c{i}", precio=18_000.0 + i * 100, km=60_000 + i * 2_000)
+                                       for i in range(6)]
+        await self.tick()
+        self.assertEqual({r["body_type"] for r in await self.rows("SELECT body_type FROM crawl_targets")},
+                         {None, "suv"})
+        wide = await self.fiesta_alert(user=1, modelos=["EcoSport"], sources=["kavak"], anio_min=2012)
+        FakeSource.results["kavak"] += [eco("x", precio=12_000.0, anio=2013, km=80_000)]
+        await self.tick(due="body_type IS NULL")       # the SUV target read before x was listed
+
+        self.assertEqual((await self.listing("x"))["body_type"], "suv")
+        self.assertIsNone(await self.not_news("x"))
+        self.assertEqual(((await self.matched(suv)).get("x"), (await self.matched(wide)).get("x")), (False, False))
+
     async def test_the_envelope_is_the_claimed_query_not_the_current_one(self):
         aid = await self.fiesta_alert(sources=["kavak"], anio_min=2015, km_max=100_000)
         FakeSource.results["kavak"] = self.comps("kavak")
@@ -1123,6 +1182,24 @@ class EnvelopeTests(NotNewsCase):
 
 
 class CoverageTests(NotNewsCase):
+    async def test_a_target_back_after_a_day_starts_over_and_still_tells_its_price_drops(self):
+        aid = await self.fiesta_alert(sources=["kavak"])
+        FakeSource.results["kavak"] = self.comps("kavak")
+        await self.tick()
+        await db.set_alert_active(aid, False)
+        await crawl.sync_targets(await db.enabled_profiles(), await db.counting_profiles())
+        await db.set_alert_active(aid, True)
+        FakeSource.results["kavak"] = ([card("c0", source="kavak", precio=11_000.0, km=90_000)]
+                                       + self.comps("kavak")[1:] + self.deals("kavak", 1))
+        with patch.object(repo_targets, "REACTIVATION_IDLE_SECONDS", 0):
+            await self.tick()
+
+        self.assertEqual((await self.not_news("d0"))["reason"], "first_run")
+        self.assertEqual(await self.live(), set())
+        self.assertEqual({(r["external_id"], r["kind"]) for r in await self.rows(
+            "SELECT l.external_id, n.kind::text AS kind FROM notifications n JOIN listings l ON l.id = n.listing_id")},
+            {("c0", "price_drop")})
+
     async def test_a_collector_that_reads_more_reloads_its_targets_in_silence(self):
         # E6: kavak reads every page of a model (COVERAGE_VERSION 2). The 4 cars
         # it finds now are no step, and they were listed before.

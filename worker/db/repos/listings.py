@@ -124,7 +124,8 @@ async def new_rows(cx: AsyncConnection, ids: Iterable[int]) -> list[dict[str, An
         return []
     rows = await (await cx.execute(
         "SELECT id, source, external_id, title, make, model, year, mileage_km, trim, transmission, seller_name, "
-        "       price, currency, price_usd, price_partial, images, published_at, first_seen_at, probable_repost_of "
+        "       body_type, price, currency, price_usd, price_partial, images, published_at, first_seen_at, "
+        "       probable_repost_of "
         "  FROM listings WHERE id = ANY(%s) ORDER BY id", (ids,))).fetchall()
     return [_pythonic(r) for r in rows]
 
