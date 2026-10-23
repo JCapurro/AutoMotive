@@ -73,8 +73,9 @@ NEWS_GUARD_EMPTY_FIRST = _switch("NEWS_GUARD_EMPTY_FIRST", "1")
 # An incomplete run of such a source, past its first, retries after the
 # source's interval instead of 15 minutes (crawl.retry_seconds).
 NEWS_PARTIAL_RETRY = _switch("NEWS_PARTIAL_RETRY", "1")
-# A reappearance also gets probable_repost_of (its chain's root), which takes
-# it out of comparables(): on only once comparables count the live copy (E3).
+# A reappearance also gets probable_repost_of (the copy right before it),
+# which takes it out of comparables() while that copy counts: on only once
+# comparables count the live copy (E3).
 NEWS_LINK_REPOST = _switch("NEWS_LINK_REPOST", "0")
 
 # Geocoding is used to turn listing location text into coordinates and then

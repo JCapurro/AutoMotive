@@ -662,6 +662,19 @@ class StepTests(NotNewsCase):
         await self.tick()
         self.assertEqual(await self.notified(), {"d0"})
 
+    async def test_a_target_that_never_loaded_gets_its_stock_as_a_step(self):
+        # autocosmos Sentra answered three 403s as "0 results": the hold ended,
+        # and the next read brings its whole stock.
+        await self.market()
+        await self.fiesta_alert(sources=["kavak"])
+        FakeSource.results["kavak"] = []
+        for _ in range(3):
+            await self.tick()
+        FakeSource.results["kavak"] = self.deals("kavak", 5)
+        await self.tick()
+        self.assertEqual(await self.notified(), set())
+        self.assertEqual((await self.not_news("d0"))["reason"], "step")
+
     async def test_a_dated_source_finishes_its_bootstrap_on_an_empty_read(self):
         # v6 Yaris read 0; its first car, published yesterday, is news.
         await self.market()
@@ -710,6 +723,25 @@ class StepTests(NotNewsCase):
         FakeSource.results["kavak"] = self.comps("kavak") + self.deals("kavak", 6)
         await self.tick()
         self.assertEqual(await self.notified(), {f"d{i}" for i in range(6)})
+
+    async def test_a_cut_run_is_caught_up_past_a_run_that_failed_in_its_collector(self):
+        # A restart cuts the step's run; after it, kavak times out once; then it reads fine.
+        await self.fiesta_alert(sources=["kavak"])
+        FakeSource.results["kavak"] = self.comps("kavak")
+        await self.tick()
+        FakeSource.results["kavak"] = self.comps("kavak") + self.deals("kavak", 5)
+        with patch.object(crawl.news, "classify", AsyncMock(side_effect=RuntimeError("worker restarted"))):
+            await self.tick()
+        # What fail_orphan_runs does to it on the next start.
+        await self.execute("UPDATE collector_runs SET status = 'failed', finished_at = now(), error = %s "
+                           " WHERE status = 'running'", repo_runs.ORPHAN_ERROR)
+        FakeSource.results["kavak"] = RuntimeError("page.goto: Timeout 30000ms exceeded")
+        await self.tick()
+        FakeSource.results["kavak"] = self.comps("kavak") + self.deals("kavak", 5)
+        await self.tick()
+        self.assertEqual(await self.notified(), set())
+        self.assertEqual(await self.live(), set())
+        self.assertEqual((await self.not_news("d0"))["reason"], "step")
 
     async def test_a_run_cut_between_its_ingest_and_its_marks_is_caught_up_next_run(self):
         await self.fiesta_alert(sources=["kavak"])
@@ -875,6 +907,15 @@ class FindReappearedTests(NotNewsCase):
         self.assertEqual(await self.find("new"), "old")
         await self.execute("UPDATE listings SET trim = 'GLI' WHERE external_id = 'old'")
         self.assertIsNone(await self.find("new"))
+
+    async def test_a_version_that_only_starts_with_the_other_s_letters_is_another_car(self):
+        # Chevrolet LT and LTZ, Ford SEL and S: another version, another car.
+        for i, (old, new) in enumerate((("LT", "LTZ"), ("SEL", "S"))):
+            with self.subTest(old=old, new=new):
+                await ingest([self.car(f"o{i}", anio=2015 + i), self.car(f"n{i}", anio=2015 + i)], geocode=None)
+                await self.execute("UPDATE listings SET trim = %s WHERE external_id = %s", old, f"o{i}")
+                await self.execute("UPDATE listings SET trim = %s WHERE external_id = %s", new, f"n{i}")
+                self.assertIsNone(await self.find(f"n{i}"))
 
     async def test_without_seller_an_old_copy_seen_days_ago_needs_the_same_title(self):
         # Private sellers round their km: two Fiestas of 88.000 km are often two cars.
