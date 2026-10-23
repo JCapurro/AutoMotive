@@ -643,9 +643,12 @@ async def body_type_targets(profiles: list[dict[str, Any]]) -> BodyTypeTargets:
 
 
 async def sync_targets(profiles: list[dict[str, Any]],
-                       counting: list[dict[str, Any]] = ()) -> list[TargetSpec]:
+                       counting: list[dict[str, Any]] | None = ()) -> list[TargetSpec]:
+    """`counting` None: the counted searches couldn't be read, so the
+    count-only targets stay as they are (targets.sync_targets keep_count_only)."""
     sources = [s for s in await targets_repo.enabled_sources() if s in REGISTRY]
-    specs = derive_targets(profiles, sources, counting, body_types=await body_type_targets(profiles),
+    specs = derive_targets(profiles, sources, counting or (), body_types=await body_type_targets(profiles),
                            year_band=config.REFERENCE_YEAR_BAND)
-    await targets_repo.sync_targets(specs, undated=news.UNDATED_SOURCES)
+    await targets_repo.sync_targets(specs, undated=news.UNDATED_SOURCES if config.NEWS_GUARD_REACTIVATION else (),
+                                    keep_count_only=counting is None)
     return specs

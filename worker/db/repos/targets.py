@@ -48,9 +48,15 @@ _CHANGED = ("(excluded.query ? '{0}' AND "
             " crawl_targets.query->'{0}' IS DISTINCT FROM excluded.query->'{0}')")
 _POLICY_CHANGED = _CHANGED.format("publication_policy")
 _COVERAGE_CHANGED = _CHANGED.format("coverage")
+# A target inactive this long comes back as from scratch (sync_targets). Its
+# deactivation is its last update; a shorter pause changes nothing.
+REACTIVATION_IDLE_SECONDS = 86_400
+_IDLE = ("(NOT crawl_targets.active "
+         " AND crawl_targets.updated_at < now() - make_interval(secs => %(idle)s))")
 
 
-async def sync_targets(specs: Iterable[Any], *, undated: Iterable[str] = ()) -> None:
+async def sync_targets(specs: Iterable[Any], *, undated: Iterable[str] = (),
+                       keep_count_only: bool = False) -> None:
     """Make crawl_targets mirror `specs` (pipeline.crawl.TargetSpec): upsert the
     wanted ones and deactivate the rest. One UPDATE decides what a change of
     spec does to a target:
@@ -59,14 +65,17 @@ async def sync_targets(specs: Iterable[Any], *, undated: Iterable[str] = ()) -> 
       - a new coverage (the collector's COVERAGE_VERSION: it reads more of the
         source now) resets bootstrap once too, and empties the date memory of
         a target that reads by publication date;
-      - a target of an `undated` source (pipeline/news.py UNDATED_SOURCES)
-        that is reactivated starts its bootstrap over: the stock it finds was
-        listed while nobody read it;
+      - a target back after REACTIVATION_IDLE_SECONDS inactive forgets its
+        last read, and on an `undated` source (pipeline/news.py
+        UNDATED_SOURCES) starts its bootstrap over: the stock it finds was
+        listed while nobody read it. A shorter pause (a search paused for a
+        moment, a tick without the counted searches) changes nothing;
       - any other edit (a wider or narrower query, query.year_band) keeps both.
     query._read, what the target's last complete read covered (finish_target),
-    stays while the target is active and goes with a reactivation; a target
-    whose spec only lacks it isn't rewritten. A count-only target that gets an
-    active search is due at once.
+    stays but for that reactivation; a target whose spec only lacks it isn't
+    rewritten. A count-only target that gets an active search is due at once.
+    `keep_count_only`: the counted searches couldn't be read (scheduler.tick),
+    so the count-only targets missing from `specs` stay active.
 
     Whatever else comes to reset first_run_done of a Facebook target must
     empty prefilter_rejected in the same UPDATE: its date memory holds only
@@ -86,11 +95,11 @@ async def sync_targets(specs: Iterable[Any], *, undated: Iterable[str] = ()) -> 
             "INSERT INTO crawl_targets (source, make, model, body_type, query, active) "
             "SELECT source, make, model, body_type, query, true FROM wanted "
             "ON CONFLICT (source, make, model, body_type) DO UPDATE SET "
-            "   query = CASE WHEN crawl_targets.active AND crawl_targets.query ? '_read' "
+            f"   query = CASE WHEN crawl_targets.query ? '_read' AND NOT {_IDLE} "
             "     THEN excluded.query || jsonb_build_object('_read', crawl_targets.query->'_read') "
             "     ELSE excluded.query END, active = true "
             f" , first_run_done = CASE WHEN {_POLICY_CHANGED} OR {_COVERAGE_CHANGED} "
-            "     OR (NOT crawl_targets.active AND excluded.source = ANY(%s)) "
+            f"     OR ({_IDLE} AND excluded.source = ANY(%(undated)s)) "
             "     THEN false ELSE crawl_targets.first_run_done END "
             f" , next_run_at = CASE WHEN {_POLICY_CHANGED} "
             "     OR (crawl_targets.query ? 'count_only' AND NOT excluded.query ? 'count_only') "
@@ -99,12 +108,25 @@ async def sync_targets(specs: Iterable[Any], *, undated: Iterable[str] = ()) -> 
             f"     OR ({_COVERAGE_CHANGED} AND excluded.query ? 'publication_policy') "
             "     THEN '{}' ELSE crawl_targets.prefilter_rejected END "
             " WHERE (crawl_targets.query - '_read') IS DISTINCT FROM excluded.query OR NOT crawl_targets.active",
-            (sorted(set(undated)),))
+            {"idle": REACTIVATION_IDLE_SECONDS, "undated": sorted(set(undated))})
         await cx.execute(
-            "UPDATE crawl_targets t SET active = false WHERE active AND NOT EXISTS ("
+            "UPDATE crawl_targets t SET active = false WHERE active "
+            "   AND NOT (%s AND t.query ? 'count_only') AND NOT EXISTS ("
             "  SELECT 1 FROM wanted w WHERE w.source = t.source "
             "     AND w.make IS NOT DISTINCT FROM t.make AND w.model IS NOT DISTINCT FROM t.model "
-            "     AND w.body_type IS NOT DISTINCT FROM t.body_type)")
+            "     AND w.body_type IS NOT DISTINCT FROM t.body_type)", (keep_count_only,))
+
+
+async def whole_stock_targets(source: str) -> list[dict[str, Any]]:
+    """The active, bootstrapped targets of `source` that read a whole body
+    type (docs/CARROCERIA.md) or the whole source (inventory): what they
+    cover and haven't stored yet is new to the source (pipeline/news.py)."""
+    async with connection() as cx:
+        return await (await cx.execute(
+            "SELECT id, source, body_type, query, prefilter_rejected FROM crawl_targets "
+            " WHERE source = %s AND active AND first_run_done AND last_run_at IS NOT NULL "
+            "   AND (body_type IS NOT NULL OR query->>'inventory' = 'true') ORDER BY id",
+            (source,))).fetchall()
 
 
 async def publication_dates(target: dict[str, Any]) -> dict[str, int]:

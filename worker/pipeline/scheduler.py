@@ -224,7 +224,10 @@ async def process_batch(notifier: Notifier, target: dict, listing_ids: list[int]
     # Matches are stored and re-scored: price drops carry the new score.
     try:
         await notifier.on_matches(candidates, scorer.rows)
-        if not first_run:
+        # A first run silences new listings. One of a target that ran before
+        # (back after a day inactive, a new coverage or publication policy)
+        # still tells the price drops of what it had read.
+        if not first_run or target.get("last_run_at") is not None:
             await notifier.on_listing_events(events)
     except Exception:
         await log_error("notify", f"target:{target.get('id')}", traceback.format_exc())
@@ -247,13 +250,14 @@ def batch_handler(notifier: Notifier) -> crawl.BatchHandler:
     return handle
 
 
-async def _counting_profiles() -> list[dict]:
-    """The searches 2.5 counts; if reading them fails, active searches still crawl."""
+async def _counting_profiles() -> list[dict] | None:
+    """The searches 2.5 counts. None if reading them fails: active searches
+    still crawl, and the count-only targets stay as they are (crawl.sync_targets)."""
     try:
         return await db.counting_profiles()
     except Exception:
         await log_error("count_after_expiry", "counting_profiles", traceback.format_exc())
-        return []
+        return None
 
 
 async def tick(notifier: Notifier, lanes: crawl.Lanes, stop: asyncio.Event | None = None,
