@@ -73,11 +73,19 @@ class CountAfterExpiryTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_listings_marked_not_news_are_never_counted(self):
         rows = {lid: _row(lid, hours_ago=3, not_news={"reason": reason, "target_id": 6})
-                for lid, reason in enumerate(("step", "reappearance", "envelope", "band"), 1)}
+                for lid, reason in enumerate(("step", "reappearance", "envelope"), 1)}
         rows[5] = _row(5, hours_ago=3)
         n, _, _, store = await self.count(rows, bootstrapped_hours_ago=200)
         self.assertEqual(n, 1)
         store.assert_awaited_once_with([(7, 5, ENDED, "good")])
+
+    async def test_a_band_s_first_read_is_only_its_own_target_s(self):
+        # Another target's band (a body type next to this model) is news here.
+        rows = {1: _row(1, hours_ago=3, not_news={"reason": "band", "target_id": 5}),
+                2: _row(2, hours_ago=3, not_news={"reason": "band", "target_id": 6})}
+        n, _, _, store = await self.count(rows, bootstrapped_hours_ago=200)
+        self.assertEqual(n, 1)
+        store.assert_awaited_once_with([(7, 2, ENDED, "good")])
 
     async def test_backfill_ids_are_excluded(self):
         rows = {1: _row(1, hours_ago=3), 2: _row(2, hours_ago=3)}

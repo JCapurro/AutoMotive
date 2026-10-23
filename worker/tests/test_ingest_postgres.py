@@ -394,9 +394,11 @@ class CountAfterExpiryCrawlTests(IngestCase):
             " WHERE e.search_profile_id = %s ORDER BY l.external_id", search)]
 
     async def test_a_band_row_is_not_counted_after_expiry(self):
+        # The target read 2009 from its first run: a 2009 listed later carries
+        # no mark, and this target still never counts its band.
         counted = await self.band_read()
         self.assertEqual(await self.counted(counted), ["new"])
-        self.assertEqual((await self.listing("old"))["attributes"]["_not_news"]["reason"], "band")
+        self.assertNotIn("_not_news", (await self.listing("old"))["attributes"])
 
     async def test_a_band_row_is_not_counted_when_classify_fails_nor_on_the_next_runs(self):
         counted = await self.band_read(classify_fails=True)

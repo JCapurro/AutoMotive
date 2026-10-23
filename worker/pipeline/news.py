@@ -20,20 +20,23 @@ external_id was never stored, so old stock looks new when:
     reads right after is that first run's backfill. A target of theirs back
     after a day inactive (NEWS_GUARD_REACTIVATION), or whose collector raises
     COVERAGE_VERSION, starts its bootstrap over (targets.sync_targets);
-  - the target read past its searches' years (query.year_band, the
-    reference band of pipeline/crawl.py): the band, which none of the
-    target's searches matches and which only feeds comparables(). It
-    doesn't make a step either; the envelope (query._read) includes it.
-classify stores the step, the envelope, the reappearance and the band as
-backfill for every search (seen on the web, never notified) and marks them
-in listings.attributes._not_news {reason, run_id, target_id, prev_id}:
+  - the target read past its searches' years for the first time
+    (query.year_band, the reference band of pipeline/crawl.py): the band's
+    stock its last complete read didn't cover (query._read), but what a
+    target reading the whole stock covers, as for the envelope (old_band).
+classify stores the step, the envelope and the reappearance as backfill for
+every search (seen on the web, never notified) and marks them in
+listings.attributes._not_news {reason, run_id, target_id, prev_id}:
 scheduler.match_alert keeps them backfill on a retry or for another target,
 and count_after_expiry (2.5) never counts them. A first run's new listings
-are marked 'first_run', only for 2.5: the target's next runs find them again
-after its bootstrap. A listing with a recent publication date (v6) is always
-news. Each rule has its switch in config (NEWS_GUARD_*); a failure leaves
-every listing news, as before, except the band's: band_ids tells them from
-the stored rows alone, and scheduler.process_batch asks it on every batch,
+are marked 'first_run', and the band's first read 'band', both only for the
+target that stored them: its searches never get them as news, 2.5 doesn't
+count them for it, and another target that wants them (a body type, a
+sibling model, a search whose years include them) still gets them as any
+listing. A listing with a recent publication date (v6) is always news. Each
+rule has its switch in config (NEWS_GUARD_*); a failure leaves every
+listing news, as before, except the band's: band_ids tells it from the
+stored rows alone, and scheduler.process_batch asks it on every batch,
 whatever classify did (it fails closed).
 
 crawl.run_target calls classify right after the ingest, and a run cut
@@ -59,7 +62,9 @@ log = logging.getLogger("news")
 
 FIRST_RUN, STEP, REAPPEARANCE, ENVELOPE, BAND = "first_run", "step", "reappearance", "envelope", "band"
 # Old stock: backfill for every search on every run, never counted in 2.5.
-MUTED = frozenset({STEP, REAPPEARANCE, ENVELOPE, BAND})
+MUTED = frozenset({STEP, REAPPEARANCE, ENVELOPE})
+# Old stock only for the target that stored it (uncounted).
+OWN = frozenset({FIRST_RUN, BAND})
 
 # The sources without publication dates (an external_id never stored is all
 # "new" means there). v6, mardelusados, usadossantafe and the Instagram
@@ -128,7 +133,8 @@ def is_band(row: dict[str, Any], query: dict[str, Any] | None) -> bool:
     (crawl_targets.query.year_band, pipeline/crawl.py): its year past the
     target's year_min/year_max, which are its searches' own. No search of
     the target matches it (matching keeps the exact years): it feeds
-    comparables(). An unknown year is inside, as matching lets it in."""
+    comparables(). An unknown year is inside, as matching lets it in. Only
+    the year: on deruedas a Stepway target reads Sandero cards too."""
     q = query or {}
     year = row.get("year")
     if not q.get("year_band") or year is None:
@@ -139,22 +145,55 @@ def is_band(row: dict[str, Any], query: dict[str, Any] | None) -> bool:
 
 def band_ids(target: dict[str, Any], rows: Iterable[dict[str, Any]], *, max_age_days: int) -> frozenset[int]:
     """Of these stored rows of `target`'s read, the ones only its reference
-    band brought (is_band) that are not news: old stock on a source without
-    a publication window. Mercado Libre reads the band only in "Publicados
-    hoy", so its band rows are news, and a recent publication date (v6) is
-    always news. From the rows alone: scheduler.process_batch asks it on
-    every batch, so a classify that failed, a retry or a restart never makes
-    them news nor counts them in 2.5 (NEWS_GUARD_BAND)."""
+    band brought (is_band), on a source without a publication window:
+    Mercado Libre reads the band only in "Publicados hoy", so its band rows
+    are news, and a recent publication date (v6) is always news. From the
+    rows alone, so scheduler.process_batch asks it on every batch: the
+    target's own searches never get them as news (they can't match them)
+    and 2.5 never counts them for it, whatever classify did. For any other
+    search (one without a model) they are news like any listing, but for
+    the band's first read (old_band). NEWS_GUARD_BAND."""
     query = target.get("query") or {}
     if not config.NEWS_GUARD_BAND or target.get("source") in RECENT_SOURCES or not query.get("year_band"):
         return frozenset()
     return frozenset(r["id"] for r in rows if is_band(r, query) and not _dated_news(r, max_age_days))
 
 
+def first_band_read(target: dict[str, Any], rows: Iterable[dict[str, Any]]) -> frozenset[int]:
+    """Of these band rows (band_ids), the ones the target's last complete
+    read didn't cover (query._read, read_envelope): read for the first time
+    because the band was just turned on or a search moved its edge, they
+    were listed while nobody here read those years. Old stock for every
+    search of the batch. A target without a last read (one by body type,
+    whose prefilter remembers what it dropped, or none complete yet) never
+    covered them."""
+    read = (target.get("query") or {}).get("_read")
+
+    def covered(row: dict[str, Any]) -> bool:
+        year = row.get("year")
+        if not isinstance(read, dict) or year is None:
+            return isinstance(read, dict)
+        return not ((read.get("year_min") is not None and year < read["year_min"])
+                    or (read.get("year_max") is not None and year > read["year_max"]))
+    return frozenset(r["id"] for r in rows if not covered(r))
+
+
+def _band_read_before(query: dict[str, Any]) -> bool:
+    """Whether the target's last complete read (query._read) already went
+    past its searches' years by the band: then its `found` has the band in it."""
+    read, band = query.get("_read"), int(query.get("year_band") or 0)
+    if not isinstance(read, dict) or not band:
+        return False
+    low, high = query.get("year_min"), query.get("year_max")
+    return ((low is not None and (read.get("year_min") is None or read["year_min"] <= int(low) - band))
+            or (high is not None and (read.get("year_max") is None or read["year_max"] >= int(high) + band)))
+
+
 def _core_share(items: Iterable[Any], query: dict[str, Any] | None) -> float:
-    """The share of a read inside its searches' own years. The band adds its
-    stock to every banded read's `found`, the step's base: measured against
-    that core, a step needs the same new listings as before the band."""
+    """The share of a read inside its searches' own years. Once the band is
+    read, it adds its stock to every read's `found`, the step's base:
+    measured against that core, a step needs the same new listings as
+    before the band (_classify scales the base only then)."""
     years = [getattr(item, "anio", None) for item in items]
     if not years:
         return 1.0
@@ -179,6 +218,20 @@ def _covered(row: dict[str, Any], wide: Iterable[dict[str, Any]]) -> bool:
     return False
 
 
+async def old_band(target: dict[str, Any], rows: Iterable[dict[str, Any]]) -> frozenset[int]:
+    """Of these band rows (band_ids), the band's first read (first_band_read)
+    that no target reading the source's whole stock covers (_covered): old
+    stock for every search of the batch. What such a target covers and never
+    stored is new to the source, as for the envelope. Reads the database only
+    when there is a first read."""
+    rows = list(rows)
+    unread = first_band_read(target, rows)
+    if not unread:
+        return frozenset()
+    wide = await targets.whole_stock_targets(target["source"])
+    return frozenset(r["id"] for r in rows if r["id"] in unread and not _covered(r, wide))
+
+
 def _mark(row: dict[str, Any] | None) -> dict[str, Any]:
     mark = ((row or {}).get("attributes") or {}).get("_not_news")
     return mark if isinstance(mark, dict) else {}
@@ -191,10 +244,12 @@ def muted(row: dict[str, Any] | None) -> bool:
 
 def uncounted(row: dict[str, Any] | None, target_id: int | None) -> bool:
     """Not counted in 2.5 by this target: old stock, or a listing it stored
-    on its own first run. Another target's first run still counts: that
-    target only found first what is new (test_count_after_expiry.py)."""
+    on its own first run or its band's first read. Another target's first
+    run still counts: that target only found first what is new
+    (test_count_after_expiry.py), and another target's band is its own
+    business (a body type next to a model on Kavak)."""
     mark = _mark(row)
-    return mark.get("reason") in MUTED or (mark.get("reason") == FIRST_RUN and mark.get("target_id") == target_id)
+    return mark.get("reason") in MUTED or (mark.get("reason") in OWN and mark.get("target_id") == target_id)
 
 
 def republished(row: dict[str, Any] | None) -> bool:
@@ -254,6 +309,11 @@ async def _classify(target: dict[str, Any], items: Iterable[Any], result: Ingest
     new = [lid for lid in new if lid not in readmitted]
     if not new:
         return frozenset()
+    if first_run:
+        # Backfill already (scheduler.match_alert); marked for 2.5 only.
+        async with connection() as cx:
+            await listings.mark_not_news(cx, [(lid, mark(FIRST_RUN), None) for lid in new])
+        return frozenset()
     query = target.get("query") or {}
     max_age_days = int(await get_config("recommended_max_age_days", config.RECOMMENDED_MAX_AGE_DAYS))
     banded = config.NEWS_GUARD_BAND and bool(query.get("year_band"))
@@ -263,13 +323,9 @@ async def _classify(target: dict[str, Any], items: Iterable[Any], result: Ingest
         async with connection() as cx:
             rows = await listings.new_rows(cx, new)
         band = band_ids(target, rows, max_age_days=max_age_days)
-    if first_run:
-        # Backfill already (scheduler.match_alert); marked for 2.5 only, but
-        # the band for every target.
-        async with connection() as cx:
-            await listings.mark_not_news(cx, [(lid, mark(BAND if lid in band else FIRST_RUN), None)
-                                              for lid in new])
-        return band
+    # The band's first read is old stock, for this target only: what another
+    # target wants of it (a body type, a sibling model) is still news there.
+    unread = await old_band(target, [r for r in rows or () if r["id"] in band])
     settings = await IngestConfig.load()
     # Only a complete read of a source whose reads are trusted whole tells the
     # old copy is gone: the list comparables() confirms with. Kavak,
@@ -277,7 +333,10 @@ async def _classify(target: dict[str, Any], items: Iterable[Any], result: Ingest
     trusted = (await get_config("comparables", {}) or {}).get("confirm_sources") or ()
     reappearance = config.NEWS_GUARD_REAPPEARANCE and complete and target["source"] in trusted
     inventory = query.get("inventory") is True
-    share = _core_share(items, query) if banded else 1.0
+    # The band's new listings never make a step, and once a read had the band
+    # its `found` is measured on its core (right after it is turned on, the
+    # last reads' `found` is all core already).
+    share = _core_share(items, query) if banded and _band_read_before(query) else 1.0
     step = config.NEWS_GUARD_STEP and not inventory and is_step(len(new) - len(band),
                                                                 await _step_base(target, run_id, share))
     # The year and km the target's last complete read covered (the claimed
@@ -290,7 +349,7 @@ async def _classify(target: dict[str, Any], items: Iterable[Any], result: Ingest
     reasons: Counter[str] = Counter()
     async with connection() as cx:
         for row in rows if rows is not None else await listings.new_rows(cx, new):
-            if row["id"] in band:
+            if row["id"] in unread:
                 marks.append((row["id"], mark(BAND), None))
                 reasons[BAND] += 1
                 continue

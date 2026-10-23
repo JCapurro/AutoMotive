@@ -10,9 +10,10 @@ A target also reads config.REFERENCE_YEAR_BAND years past those bounds
 edge year: always on the sources that read their whole stock, on Mercado
 Libre only in its one-request "Publicados hoy" reads (_run_band), never on
 Facebook (BaseScraper.YEAR_BAND), count-only or inventory targets. Those
-rows feed the price reference and nothing else: searches keep their exact
-years, and on a source without publication dates they are old stock
-(pipeline/news.py, is_band).
+rows feed the price reference: the target's searches keep their exact years,
+and on a source without publication dates they are never news to them nor
+counted in 2.5 for them; read for the first time, they are old stock
+(pipeline/news.py, band_ids and old_band).
 Small catalogs/feeds opt into INVENTORY_TARGET: one unfiltered source target,
 without make/model hints, shared by every eligible profile that selects it.
 A search without a model, only by body type (docs/CARROCERIA.md), gets one
@@ -131,8 +132,8 @@ class TargetRun:
     empty_runs: int = 0
     # Listings stored for the first time that are old stock, matched as
     # backfill: the ones pipeline/news.py says are not news (the reference
-    # year band's among them), and the ones this target's prefilter had
-    # dropped before (prefilter_rejected).
+    # year band's first read among them), and the ones this target's
+    # prefilter had dropped before (prefilter_rejected).
     backfill_ids: frozenset[int] = frozenset()
     # What this read covered, when it was complete (news.read_envelope):
     # finish_target keeps it in query._read.

@@ -188,9 +188,13 @@ async def process_batch(notifier: Notifier, target: dict, listing_ids: list[int]
     against the target's profiles, then notify, and count for the searches
     with ended access. tools/simulate_alert.py runs it for a single listing.
 
-    `backfill_ids` are old stock for every profile (TargetRun.backfill_ids),
-    and so is what only the target's reference year band brought, told here
-    from the scored rows so that it never depends on classify (news.band_ids).
+    `backfill_ids` are old stock for every profile (TargetRun.backfill_ids).
+    What only the target's reference year band brought (news.band_ids, told
+    from the scored rows on every batch, whatever classify did) is backfill
+    for the target's own searches (query.profile_ids), which can't match it,
+    and never counted for its searches with ended access; for any other
+    search it is news, unless it is the band's first read (news.old_band):
+    old stock for every profile then.
     `body_type_filled`, listings stored before whose body type this batch
     filled in or corrected, are old news for the searches without a model:
     their batches couldn't match them, and a body-type backfill
@@ -200,8 +204,10 @@ async def process_batch(notifier: Notifier, target: dict, listing_ids: list[int]
     scorer = await Scorer.create()
     await scorer.prepare(listing_ids)
     max_age_days = int(await db.get_config("recommended_max_age_days", RECOMMENDED_MAX_AGE_DAYS))
-    backfill_ids |= news.band_ids(target, (scorer.rows[lid] for lid in listing_ids if lid in scorer.rows),
-                                  max_age_days=max_age_days)
+    rows = [scorer.rows[lid] for lid in listing_ids if lid in scorer.rows]
+    band = news.band_ids(target, rows, max_age_days=max_age_days)
+    backfill_ids |= await news.old_band(target, [r for r in rows if r["id"] in band])
+    members = frozenset((target.get("query") or {}).get("profile_ids") or ())
     staged: list[_Staged] = []
     for alert in await db.alerts_for_target(target["source"], target.get("make"), target.get("model"),
                                             telegram_only=False,
@@ -218,7 +224,8 @@ async def process_batch(notifier: Notifier, target: dict, listing_ids: list[int]
             candidates += await match_alert(
                 s, scorer, first_run=first_run, max_age_days=max_age_days,
                 foreign_first_run=without_model and not body_target, held_first_run=held_first_run,
-                backfill_ids=backfill_ids | body_type_filled if without_model else backfill_ids)
+                backfill_ids=(backfill_ids | body_type_filled if without_model else backfill_ids)
+                | (band if s.alert["id"] in members else frozenset()))
         except Exception:
             await log_error("match", f"profile:{s.alert['id']}", traceback.format_exc())
     # Matches are stored and re-scored: price drops carry the new score.
@@ -234,7 +241,7 @@ async def process_batch(notifier: Notifier, target: dict, listing_ids: list[int]
     await notifier.deliver()
     try:
         await count_after_expiry(target, listing_ids, scorer, first_run=first_run, max_age_days=max_age_days,
-                                 exclude=backfill_ids)
+                                 exclude=backfill_ids | band)
     except Exception:
         await log_error("count_after_expiry", f"target:{target.get('id')}", traceback.format_exc())
 
