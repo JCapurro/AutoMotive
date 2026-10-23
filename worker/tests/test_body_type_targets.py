@@ -233,7 +233,9 @@ class RunTargetTests(unittest.IsolatedAsyncioTestCase):
         # Old stock the prefilter let in later is backfill; the next run remembers what it dropped now.
         self.assertEqual(run.backfill_ids, frozenset({31}))
         self.remember.assert_awaited_once_with(9, {"old-2"})
-        self.assertEqual(self.classify.await_args.kwargs, {"run_id": 1, "first_run": False, "complete": True})
+        # The dropped one let in now is no step and gets no mark (pipeline/news.py).
+        self.assertEqual(self.classify.await_args.kwargs, {"run_id": 1, "first_run": False, "complete": True,
+                                                           "readmitted": frozenset({31})})
 
     async def test_news_ids_join_the_prefilter_backfill(self):
         async def ingest(items, *, target, keep):

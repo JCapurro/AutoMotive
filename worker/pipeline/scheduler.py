@@ -81,7 +81,7 @@ async def _stage(alert: dict, listing_ids: list[int], scorer: Scorer) -> _Staged
 
 
 async def match_alert(staged: _Staged, scorer: Scorer, *, first_run: bool,
-                      max_age_days: int, foreign_first_run: bool = False,
+                      max_age_days: int, foreign_first_run: bool = False, held_first_run: bool = False,
                       backfill_ids: Iterable[int] = ()) -> list[MatchCandidate]:
     """Store one profile's matches for a batch. Returns the new matches the
     notification engine should consider.
@@ -94,7 +94,10 @@ async def match_alert(staged: _Staged, scorer: Scorer, *, first_run: bool,
     one without a publication date (it can't be told from old stock), is
     backfill. Muting the recent ones would lose them for good: the search's
     target by body type reads only the last day, and this target's next
-    runs only what was published since. `backfill_ids`: listings of the batch
+    runs only what was published since. `held_first_run`: a first run that
+    follows an empty one (crawl._run_one held the bootstrap): the searches
+    already waited a run, so it goes the same way for every profile.
+    `backfill_ids`: listings of the batch
     that are not news for this profile (a body type the crawl just filled in,
     a listing the prefilter had dropped, old stock pipeline/news.py found):
     stored as backfill, never notified. What news.py marked as old stock
@@ -111,12 +114,12 @@ async def match_alert(staged: _Staged, scorer: Scorer, *, first_run: bool,
     # upsert_scored keeps their is_backfill.
     await store([lid for lid in evaluations if lid not in fresh], backfill=True)
 
-    if first_run and foreign_first_run and alert.get("bootstrapped"):
+    if first_run and (foreign_first_run or held_first_run) and alert.get("bootstrapped"):
         dated = {lid for lid in fresh
                  if rows[lid].get("published_at") is not None and _is_recent(rows[lid], max_age_days)}
         backfill_ids = {*backfill_ids, *(lid for lid in fresh if lid not in dated)}
-        log.info("profile=%s another target's first run: %d recent publications, %d backfill",
-                 alert["id"], len(dated), len(fresh) - len(dated))
+        log.info("profile=%s %s first run: %d recent publications, %d backfill", alert["id"],
+                 "another target's" if foreign_first_run else "a held", len(dated), len(fresh) - len(dated))
     # A target's first run, or an alert not bootstrapped yet: everything is
     # backfill, nothing is notified (sección 5.7).
     elif first_run or not alert.get("bootstrapped"):
@@ -180,7 +183,7 @@ async def count_after_expiry(target: dict, listing_ids: list[int], scorer: Score
 
 async def process_batch(notifier: Notifier, target: dict, listing_ids: list[int], *,
                         first_run: bool, events: list = (), backfill_ids: Iterable[int] = (),
-                        body_type_filled: Iterable[int] = ()) -> None:
+                        body_type_filled: Iterable[int] = (), held_first_run: bool = False) -> None:
     """Steps 4–6 for one batch of a target's listings: match and score them
     against the target's profiles, then notify, and count for the searches
     with ended access. tools/simulate_alert.py runs it for a single listing.
@@ -210,7 +213,7 @@ async def process_batch(notifier: Notifier, target: dict, listing_ids: list[int]
         try:
             candidates += await match_alert(
                 s, scorer, first_run=first_run, max_age_days=max_age_days,
-                foreign_first_run=without_model and not body_target,
+                foreign_first_run=without_model and not body_target, held_first_run=held_first_run,
                 backfill_ids=backfill_ids | body_type_filled if without_model else backfill_ids)
         except Exception:
             await log_error("match", f"profile:{s.alert['id']}", traceback.format_exc())
@@ -235,7 +238,8 @@ def batch_handler(notifier: Notifier) -> crawl.BatchHandler:
         if listing_ids:
             await process_batch(notifier, run.target, listing_ids, first_run=run.first_run,
                                 events=run.result.events, backfill_ids=run.backfill_ids,
-                                body_type_filled=run.result.body_type_filled)
+                                body_type_filled=run.result.body_type_filled,
+                                held_first_run=run.first_run and run.empty_runs > 0)
     return handle
 
 

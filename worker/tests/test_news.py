@@ -4,10 +4,11 @@ test_ingest_postgres.py (StepTests, ReappearanceTests)."""
 from __future__ import annotations
 
 import unittest
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, patch
+from unittest.mock import ANY, AsyncMock, patch
 
+from collectors import REGISTRY
 from collectors.base import Listing, SearchResults
 from pipeline import crawl, news
 from pipeline.ingest import IngestConfig, IngestResult, ListingEvent
@@ -81,28 +82,45 @@ class MarkTests(unittest.TestCase):
 
 
 class ClassifyTests(unittest.IsolatedAsyncioTestCase):
-    async def classify(self, res: IngestResult, rows: list[dict] | Exception, *, target=TARGET, items=(),
-                       first_run=False, complete=True, prev_found=None, reappeared=None, **switches):
+    @contextmanager
+    def patched(self, rows: list[dict] | Exception, *, prev_found=None, reappeared=None, left=(),
+                trusted=("autocosmos",), **switches):
+        """news.py over mocks: `rows` its new rows, `left` what an earlier run
+        left unclassified, `trusted` app_config.comparables.confirm_sources."""
         @asynccontextmanager
         async def connection():
             yield object()
+
+        async def get_config(key, default=None):
+            return {"recommended_max_age_days": 15, "comparables": {"confirm_sources": list(trusted)}}.get(key, default)
 
         flags = {"NEWS_GUARD_STEP": True, "NEWS_GUARD_REAPPEARANCE": True, "NEWS_LINK_REPOST": False, **switches}
         self.found = AsyncMock(side_effect=lambda cx, r, **kw: (reappeared or {}).get(r["id"]))
         self.marks = AsyncMock()
         self.recent = AsyncMock(return_value=prev_found)
         self.log_error = AsyncMock()
-        new_rows = AsyncMock(side_effect=rows) if isinstance(rows, Exception) else AsyncMock(return_value=rows)
+        self.unclassified = AsyncMock(return_value=list(left))
+        if isinstance(rows, Exception):
+            self.new_rows = AsyncMock(side_effect=rows)
+        else:
+            self.new_rows = AsyncMock(side_effect=lambda cx, ids: [r for r in rows if r["id"] in set(ids)])
         with patch.object(news, "connection", connection), \
                 patch.multiple(news.config, **flags), \
-                patch.object(news, "get_config", AsyncMock(return_value=15)), \
+                patch.object(news, "get_config", get_config), \
                 patch.object(news.IngestConfig, "load", AsyncMock(return_value=IngestConfig())), \
                 patch.object(news.runs, "recent_ok_found", self.recent), \
                 patch.object(news.runs, "log_error", self.log_error), \
-                patch.object(news.listings, "new_rows", new_rows), \
+                patch.object(news.listings, "unclassified", self.unclassified), \
+                patch.object(news.listings, "new_rows", self.new_rows), \
                 patch.object(news.listings, "find_reappeared", self.found), \
                 patch.object(news.listings, "mark_not_news", self.marks):
-            return await news.classify(target, list(items), res, run_id=40, first_run=first_run, complete=complete)
+            yield
+
+    async def classify(self, res: IngestResult, rows: list[dict] | Exception, *, target=TARGET, items=(),
+                       first_run=False, complete=True, readmitted=(), **patched):
+        with self.patched(rows, **patched):
+            return await news.classify(target, list(items), res, run_id=40, first_run=first_run, complete=complete,
+                                       readmitted=readmitted)
 
     def marked(self) -> dict[int, dict]:
         return {lid: attrs for call in self.marks.await_args_list for lid, attrs, _ in call.args[1]}
@@ -132,34 +150,90 @@ class ClassifyTests(unittest.IsolatedAsyncioTestCase):
                                              prev_found=2, NEWS_GUARD_STEP=False), frozenset())
 
     async def test_a_reappearance_is_backfill_with_its_old_copy(self):
-        old = {"id": 3, "root": 2, "price": 10_100.0, "currency": "USD", "price_usd": 10_100.0}
+        old = {"id": 3, "price": 10_100.0, "currency": "USD", "price_usd": 10_100.0}
         muted = await self.classify(result(8, 9), [row(8), row(9)], items=[item("n8"), item("n9"), item("o5")],
                                     prev_found=40, reappeared={8: old})
         self.assertEqual(muted, frozenset({8}))
         self.assertEqual(self.found.await_args.kwargs, {"batch_external_ids": ["n8", "n9", "o5"],
-                                                        "window_days": 60, "price_tol_pct": 10.0, "km_tol": 100})
+                                                        "window_days": 60, "price_tol_pct": 10.0, "km_tol": 100,
+                                                        "unsellered_hours": 72})
         self.assertEqual(self.marked()[8]["_not_news"]["prev_id"], 3)
         # Without E3, probable_repost_of stays as ingest left it.
         self.assertIsNone(self.marks.await_args.args[1][0][2])
 
-    async def test_with_link_repost_the_reappearance_points_to_its_root(self):
-        old = {"id": 3, "root": 2, "price": 10_000.0, "currency": "USD", "price_usd": 10_000.0}
+    async def test_with_link_repost_the_reappearance_points_to_the_copy_before(self):
+        # Not the chain's first copy: comparables() would count every later one
+        # once that first copy stops counting.
+        old = {"id": 3, "price": 10_000.0, "currency": "USD", "price_usd": 10_000.0}
         await self.classify(result(8), [row(8)], reappeared={8: old}, NEWS_LINK_REPOST=True)
-        self.assertEqual(self.marks.await_args.args[1][0][2], 2)
+        self.assertEqual(self.marks.await_args.args[1][0][2], 3)
 
     async def test_a_republication_3_pct_cheaper_is_news_labelled_republished(self):
-        old = {"id": 3, "root": 3, "price": 10_400.0, "currency": "USD", "price_usd": 10_400.0}
+        old = {"id": 3, "price": 10_400.0, "currency": "USD", "price_usd": 10_400.0}
         muted = await self.classify(result(8), [row(8)], reappeared={8: old})
         self.assertEqual(muted, frozenset())
         self.assertEqual(self.marked()[8], {"_republished": {"run_id": 40, "target_id": 7, "prev_id": 3,
                                                              "drop_pct": 3.85}})
 
     async def test_an_incomplete_read_never_infers_a_vanished_copy(self):
-        old = {"id": 3, "root": 3, "price": 10_000.0, "currency": "USD", "price_usd": 10_000.0}
+        old = {"id": 3, "price": 10_000.0, "currency": "USD", "price_usd": 10_000.0}
         self.assertEqual(await self.classify(result(8), [row(8)], reappeared={8: old}, complete=False), frozenset())
         self.found.assert_not_awaited()
         self.assertEqual(await self.classify(result(8), [row(8)], reappeared={8: old},
                                              NEWS_GUARD_REAPPEARANCE=False), frozenset())
+
+    async def test_a_source_whose_reads_are_cut_short_never_infers_a_vanished_copy(self):
+        # kavak, autocosmos, usadossantafe: not in app_config.comparables.confirm_sources.
+        old = {"id": 3, "price": 10_000.0, "currency": "USD", "price_usd": 10_000.0}
+        self.assertEqual(await self.classify(result(8), [row(8)], reappeared={8: old}, trusted=("rosariogarage",)),
+                         frozenset())
+        self.found.assert_not_awaited()
+        self.assertEqual(await self.classify(result(8), [row(8)], reappeared={8: old}, trusted=()), frozenset())
+
+    async def test_the_listings_the_prefilter_readmits_neither_step_nor_get_marked(self):
+        # A wider kavak SUV search lets 12 dropped cars in, next to 2 new ones: not a step.
+        rows = [row(i) for i in range(1, 15)]
+        muted = await self.classify(result(*range(1, 15)), rows, readmitted=range(1, 13), prev_found=20)
+        self.assertEqual(muted, frozenset())
+        self.assertEqual(self.new_rows.await_args.args[1], [13, 14])
+        self.marks.assert_awaited_once_with(ANY, [])
+
+    async def test_run_target_leaves_the_prefilter_s_readmissions_out_of_the_step(self):
+        class Kavak:
+            BODY_TYPES = frozenset({"suv"})
+
+            async def search(self, filters):
+                return [item(f"r{i}") for i in range(12)] + [item("n1"), item("n2")]
+
+        target = {"id": 9, "source": "kavak", "make": None, "model": None, "body_type": "suv",
+                  "query": {"year_min": 2015}, "first_run_done": True, "last_run_at": None,
+                  "prefilter_rejected": [f"r{i}" for i in range(12)]}
+        res = IngestResult(found=14, new=14)
+        res.events = ([ListingEvent("listing_new", 100 + i, "kavak", f"r{i}") for i in range(12)]
+                      + [ListingEvent("listing_new", 201, "kavak", "n1"), ListingEvent("listing_new", 202, "kavak", "n2")])
+        rows = [row(lid, source="kavak") for lid in (*range(100, 112), 201, 202)]
+        with self.patched(rows, prev_found=20, trusted=()),                 patch.dict(REGISTRY, {"kavak": Kavak}, clear=True),                 patch.object(crawl.runs, "start_run", AsyncMock(return_value=1)),                 patch.object(crawl.runs, "finish_run", AsyncMock(return_value=None)),                 patch.object(crawl.targets_repo, "set_prefilter_rejected", AsyncMock()),                 patch.object(crawl, "ingest", AsyncMock(return_value=res)):
+            run = await crawl.run_target(target)
+        # 14 new on 20 would be a step; the 12 readmitted are backfill already.
+        self.assertEqual(run.backfill_ids, frozenset(range(100, 112)))
+        self.assertEqual(self.new_rows.await_args.args[1], [201, 202])
+        self.assertEqual(self.marked(), {})
+
+    async def test_what_a_cut_run_left_unclassified_joins_this_run(self):
+        # A restart between an ingest and its marks: the next run classifies them.
+        res = result(9, updated=tuple(range(1, 6)))
+        res.ids = {("autocosmos", f"x{i}"): i for i in (*range(1, 6), 9)}
+        muted = await self.classify(res, [row(i) for i in (1, 2, 3, 4, 5, 9)], left=[1, 2, 3, 4], prev_found=8)
+        self.assertEqual(muted, frozenset({1, 2, 3, 4, 9}))          # 5 new: a step on 8
+        self.assertEqual(sorted(self.unclassified.await_args.args[1]), [1, 2, 3, 4, 5, 9])
+        self.assertEqual(self.unclassified.await_args.kwargs, {"target_id": 7, "run_id": 40})
+
+    async def test_a_run_with_nothing_new_or_left_reads_no_rows(self):
+        res = result(updated=(1, 2))
+        res.ids = {("autocosmos", "u1"): 1, ("autocosmos", "u2"): 2}
+        self.assertEqual(await self.classify(res, [row(1), row(2)]), frozenset())
+        self.unclassified.assert_awaited_once()
+        self.new_rows.assert_not_awaited()
 
     async def test_a_first_run_is_marked_for_2_5_and_left_to_the_bootstrap(self):
         muted = await self.classify(result(1, 2), [], first_run=True, prev_found=0)
@@ -187,9 +261,10 @@ class RunOneTests(unittest.IsolatedAsyncioTestCase):
     """crawl._run_one: the empty first read and the retry of a partial one."""
 
     async def run_one(self, target: dict, *, found: int = 0, first_run: bool = True, complete: bool = True,
-                      reason: str | None = None) -> AsyncMock:
+                      reason: str | None = None, empty_runs: int = 0) -> AsyncMock:
         items = SearchResults([], complete=complete, reason=reason)
-        batch = crawl.TargetRun(target, items, IngestResult(found=found), first_run=first_run, complete=complete)
+        batch = crawl.TargetRun(target, items, IngestResult(found=found), first_run=first_run, complete=complete,
+                                empty_runs=empty_runs)
         with patch.object(crawl, "run_target", AsyncMock(return_value=batch)), \
                 patch.object(crawl.targets_repo, "finish_target", AsyncMock()) as finish:
             await crawl._run_source([target], None, 0, None)
@@ -201,9 +276,16 @@ class RunOneTests(unittest.IsolatedAsyncioTestCase):
         finish = await self.run_one(dict(TARGET, source="kavak", first_run_done=False), found=4)
         self.assertTrue(finish.call_args.kwargs["bootstrap"])
 
+    async def test_the_third_empty_read_in_a_row_finishes_the_bootstrap(self):
+        # A narrow search with nothing listed: its first car is news.
+        for empty_runs, bootstrap in ((1, False), (2, True), (5, True)):
+            finish = await self.run_one(dict(TARGET, source="kavak", first_run_done=False), empty_runs=empty_runs)
+            self.assertEqual(finish.call_args.kwargs["bootstrap"], bootstrap, empty_runs)
+
     async def test_a_dated_source_or_the_switch_off_bootstraps_on_an_empty_read(self):
-        finish = await self.run_one(dict(TARGET, source="mercadolibre", first_run_done=False))
-        self.assertTrue(finish.call_args.kwargs["bootstrap"])
+        for source in ("mercadolibre", "v6", "mardelusados", "usadossantafe", "onlycarsusados"):
+            finish = await self.run_one(dict(TARGET, source=source, first_run_done=False))
+            self.assertTrue(finish.call_args.kwargs["bootstrap"], source)
         with patch.object(crawl.config, "NEWS_GUARD_EMPTY_FIRST", False):
             finish = await self.run_one(dict(TARGET, source="kavak", first_run_done=False))
         self.assertTrue(finish.call_args.kwargs["bootstrap"])

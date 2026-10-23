@@ -11,6 +11,7 @@ from psycopg import AsyncConnection
 from psycopg.types.json import Jsonb
 
 from db.pool import connection
+from db.repos.runs import ORPHAN_ERROR
 
 
 Key = tuple[str, str]
@@ -123,38 +124,69 @@ async def new_rows(cx: AsyncConnection, ids: Iterable[int]) -> list[dict[str, An
     if not ids:
         return []
     rows = await (await cx.execute(
-        "SELECT id, source, external_id, make, model, year, mileage_km, trim, transmission, seller_name, "
-        "       price, currency, price_usd, price_partial, images, published_at, probable_repost_of "
+        "SELECT id, source, external_id, title, make, model, year, mileage_km, trim, transmission, seller_name, "
+        "       price, currency, price_usd, price_partial, images, published_at, first_seen_at, probable_repost_of "
         "  FROM listings WHERE id = ANY(%s) ORDER BY id", (ids,))).fetchall()
     return [_pythonic(r) for r in rows]
 
 
+async def unclassified(cx: AsyncConnection, ids: Iterable[int], *, target_id: int, run_id: int) -> list[int]:
+    """Of these listings, the ones pipeline/news.py never looked at: first
+    seen after the target's last run that got to its end (`run_id`, the
+    current one, left out) and without a mark. Only a run cut between its
+    ingest and classify (a restart; fail_orphan_runs closes it later) leaves
+    them so: a run that classified ends right after, also when it fails."""
+    ids = list(dict.fromkeys(ids))
+    if not ids:
+        return []
+    rows = await (await cx.execute(
+        "SELECT id FROM listings WHERE id = ANY(%(ids)s) "
+        "   AND first_seen_at > (SELECT max(r.finished_at) FROM collector_runs r "
+        "                         WHERE r.target_id = %(target)s AND r.id <> %(run)s "
+        "                           AND r.error IS DISTINCT FROM %(orphan)s) "
+        "   AND NOT (attributes ? '_not_news' OR attributes ? '_republished') ORDER BY id",
+        {"ids": ids, "target": target_id, "run": run_id, "orphan": ORPHAN_ERROR})).fetchall()
+    return [r["id"] for r in rows]
+
+
+# A title compared without case or repeated spaces.
+_TITLE = "lower(regexp_replace(btrim({}), '\\s+', ' ', 'g'))"
+
+
 async def find_reappeared(cx: AsyncConnection, row: dict[str, Any], *, batch_external_ids: list[str],
-                          window_days: int, price_tol_pct: float, km_tol: int) -> dict[str, Any] | None:
+                          window_days: int, price_tol_pct: float, km_tol: int,
+                          unsellered_hours: int) -> dict[str, Any] | None:
     """The old copy of a car that `row` publishes again under another ID
     (pipeline/news.py): the same source, make, model and year, seller (km
-    within `km_tol`, or the same km without a seller), compatible version
-    and gearbox, a price within `price_tol_pct` (in USD across currencies),
-    seen in the last `window_days`, and missing from this read
-    (`batch_external_ids`, everything the collector returned). On top of it
+    within `km_tol`), compatible version (one starts the other: XLS and XLS
+    Pack) and gearbox, a price within `price_tol_pct` (in USD across
+    currencies), seen in the last `window_days`, and missing from this read
+    (`batch_external_ids`, everything the collector returned). Without a
+    seller, the same km, and seen at most `unsellered_hours` before `row`
+    or under the same title: private sellers round their km. On top of it
     the same plate on Grupo Randazzo, and the same first photo on Autocity
     and Car One when both have one. A row without make, model, year, 1.000
     km or a full price never reappears: too many cars look alike.
-    Returns {id, root, price, currency, price_usd}, root being the start of
-    its repost chain, or None."""
+    Returns {id, price, currency, price_usd}, or None."""
     if (not (row.get("make") and row.get("model") and row.get("year")) or (row.get("mileage_km") or 0) < 1000
             or row.get("price_partial") or not row.get("price")):
         return None
     images = row.get("images") or []
     found = await (await cx.execute(
-        "SELECT o.id, coalesce(o.probable_repost_of, o.id) AS root, o.price, o.currency, o.price_usd "
+        "SELECT o.id, o.price, o.currency, o.price_usd "
         "  FROM listings o "
         " WHERE o.source = %(source)s AND o.id <> %(id)s AND NOT o.external_id = ANY(%(batch)s::text[]) "
         "   AND lower(o.make) = lower(%(make)s) AND lower(o.model) = lower(%(model)s) AND o.year = %(year)s "
         "   AND lower(o.seller_name) IS NOT DISTINCT FROM lower(%(seller)s::text) "
-        "   AND CASE WHEN o.seller_name IS NULL THEN o.mileage_km = %(km)s::int "
+        "   AND CASE WHEN o.seller_name IS NULL "
+        "            THEN o.mileage_km = %(km)s::int "
+        "                 AND (o.last_seen_at >= coalesce(%(seen)s::timestamptz, now()) "
+        "                                        - make_interval(hours => %(hours)s) "
+        f"                     OR {_TITLE.format('o.title')} = {_TITLE.format('%(title)s::text')}) "
         "            ELSE abs(o.mileage_km - %(km)s::int) <= %(km_tol)s END "
-        "   AND (o.trim IS NULL OR %(trim)s::text IS NULL OR lower(o.trim) = lower(%(trim)s::text)) "
+        "   AND (o.trim IS NULL OR %(trim)s::text IS NULL "
+        "        OR starts_with(lower(o.trim), lower(%(trim)s::text)) "
+        "        OR starts_with(lower(%(trim)s::text), lower(o.trim))) "
         "   AND (o.transmission IS NULL OR %(gearbox)s::text IS NULL "
         "        OR lower(o.transmission) = lower(%(gearbox)s::text)) "
         "   AND NOT o.price_partial "
@@ -171,6 +203,7 @@ async def find_reappeared(cx: AsyncConnection, row: dict[str, Any], *, batch_ext
         {"source": row["source"], "id": row["id"], "batch": list(batch_external_ids),
          "make": row["make"], "model": row["model"], "year": row["year"], "seller": row.get("seller_name"),
          "km": row["mileage_km"], "km_tol": km_tol, "trim": row.get("trim"), "gearbox": row.get("transmission"),
+         "seen": row.get("first_seen_at"), "hours": unsellered_hours, "title": row.get("title"),
          "window": window_days, "currency": row.get("currency"), "price": row["price"],
          "price_usd": row.get("price_usd"), "tol": price_tol_pct, "external_id": row["external_id"],
          "image": images[0] if images and isinstance(images[0], str) else None})).fetchone()

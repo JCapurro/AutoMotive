@@ -32,7 +32,7 @@ collector (Facebook, Instagram) runs in a child process that is killed then
 interval. For recent publications, last_run_at records the successful scan's
 start to preserve coverage. On a source without publication dates,
 pipeline/news.py tells which new listings are old stock (backfill), and a
-first run that read nothing doesn't finish the bootstrap.
+first run that read nothing holds the bootstrap for a couple of runs.
 """
 from __future__ import annotations
 
@@ -116,6 +116,9 @@ class TargetRun:
     first_run: bool
     complete: bool = True
     covered_until: datetime | None = None
+    # A first run of a source without dates (news.UNDATED_SOURCES): how many
+    # ok runs in a row before it read nothing and held the bootstrap.
+    empty_runs: int = 0
     # Listings stored for the first time that are old stock, matched as
     # backfill: the ones pipeline/news.py says are not news, and the ones
     # this target's prefilter had dropped before (prefilter_rejected).
@@ -359,6 +362,12 @@ async def run_target(target: dict[str, Any], on_health: HealthHandler | None = N
         await _report(on_health, health)
         return None
     complete = getattr(items, "complete", True)
+    first_run = not target["first_run_done"]
+    remembers = keep is not None and source not in RECENT_SOURCES
+    # Right after the ingest, so that little can stop the run before the marks.
+    backfill_ids = await news.classify(target, items, result, run_id=run_id, first_run=first_run,
+                                       complete=complete,
+                                       readmitted=_readmitted(target, result) if remembers else ())
     error = getattr(items, "reason", None) if not complete else None
     health = await runs.finish_run(run_id, ok=complete, found=result.found, new=result.new,
                                    updated=result.updated, error=error)
@@ -369,15 +378,14 @@ async def run_target(target: dict[str, Any], on_health: HealthHandler | None = N
              f" probe={json.dumps(probe, separators=(',', ':'))}" if probe else "")
     covered_until = (datetime.fromtimestamp(filters["publication_until"], timezone.utc)
                      if "publication_until" in filters else None)
-    first_run = not target["first_run_done"]
-    backfill_ids = await news.classify(target, items, result, run_id=run_id, first_run=first_run,
-                                       complete=complete)
     if _date_memory(target):
         await _remember_dates(target, getattr(items, "date_skips", None))
-    if keep is not None and source not in RECENT_SOURCES:
+    if remembers:
         backfill_ids |= await _remember_rejected(target, result, rejected, complete=complete)
-    return TargetRun(target, items, result, first_run=first_run,
-                     complete=complete, covered_until=covered_until, backfill_ids=backfill_ids)
+    empty_runs = (await runs.empty_ok_streak(target["id"], exclude_run=run_id)
+                  if first_run and config.NEWS_GUARD_EMPTY_FIRST and source in news.UNDATED_SOURCES else 0)
+    return TargetRun(target, items, result, first_run=first_run, complete=complete,
+                     covered_until=covered_until, empty_runs=empty_runs, backfill_ids=backfill_ids)
 
 
 def _date_memory(target: dict[str, Any]) -> bool:
@@ -398,14 +406,20 @@ async def _remember_dates(target: dict[str, Any], date_skips: list[str] | None) 
         await runs.log_error("crawl", f"target:{target['id']}", traceback.format_exc())
 
 
+def _readmitted(target: dict[str, Any], result: IngestResult) -> frozenset[int]:
+    """The new listings this target's prefilter had dropped on an earlier
+    run (prefilter_rejected): old stock a wider search or a price cut let in."""
+    before = set(target.get("prefilter_rejected") or ())
+    return frozenset(e.listing_id for e in result.events if e.kind == "listing_new" and e.external_id in before)
+
+
 async def _remember_rejected(target: dict[str, Any], result: IngestResult, rejected: set[str], *,
                              complete: bool) -> frozenset[int]:
     """The new listings the prefilter had dropped on an earlier run (see
     prefilter), and the ones it dropped now for the next run: all of them
     after a complete run, added to the last ones after a partial one."""
     before = set(target.get("prefilter_rejected") or ())
-    backfill = frozenset(e.listing_id for e in result.events
-                         if e.kind == "listing_new" and e.external_id in before)
+    backfill = _readmitted(target, result)
     try:
         await targets_repo.set_prefilter_rejected(target["id"], rejected if complete else rejected | before)
     except Exception:
@@ -446,10 +460,11 @@ async def _run_one(target: dict[str, Any], on_batch: BatchHandler | None,
             await targets_repo.finish_target(target["id"], ok=False, retry_seconds=retry_seconds(target))
             return
     # Only now is the first run over: its batch was handled as backfill. A
-    # source without publication dates that read nothing isn't loaded yet:
-    # the stock its next read finds is that first run's (pipeline/news.py).
+    # source without publication dates that read nothing may not be loaded
+    # yet: the stock its next read finds is that first run's, for
+    # news.EMPTY_FIRST_RUNS empty reads in a row at most.
     bootstrap = not (config.NEWS_GUARD_EMPTY_FIRST and run.first_run and run.result.found == 0
-                     and target.get("source") not in RECENT_SOURCES)
+                     and target.get("source") in news.UNDATED_SOURCES and run.empty_runs < news.EMPTY_FIRST_RUNS)
     retry = 0 if run.complete else retry_seconds(target, reason=getattr(run.items, "reason", None), partial=True)
     await targets_repo.finish_target(target["id"], ok=run.complete, retry_seconds=retry,
                                     covered_until=run.covered_until, bootstrap=bootstrap)

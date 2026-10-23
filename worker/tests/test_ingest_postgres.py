@@ -30,10 +30,10 @@ from notifications.links import Links
 from notifications.ops import SourceAlerts
 from notifications.service import Notifier
 from db.repos import listings as repo_listings, raw_pages
-from db.repos import targets as repo_targets
+from db.repos import runs as repo_runs, targets as repo_targets
 from db.repos import config as app_config
 from llm.schemas import ListingFacts
-from pipeline import crawl, enrich, rematch, retention, scheduler, watchlist
+from pipeline import crawl, enrich, news, rematch, retention, scheduler, watchlist
 from pipeline.ingest import ingest
 from tools import reprocess
 
@@ -513,6 +513,30 @@ class NotNewsCase(IngestCase):
     """pipeline/news.py on sources without publication dates: old stock read
     as new is backfill for every search and never notified."""
     SOURCES = ("mercadolibre", "kavak", "rosariogarage", "v6")
+    # app_config.comparables.confirm_sources, whatever the test database has:
+    # the sources whose reads are trusted whole (the reappearance needs it).
+    TRUSTED = ["autocity", "carone", "deruedas", "gruporandazzo", "mardelusados", "rosariogarage"]
+
+    async def asyncSetUp(self) -> None:
+        await super().asyncSetUp()
+        [self.comparables_config] = await self.rows("SELECT value FROM app_config WHERE key = 'comparables'")
+        await self.execute("UPDATE app_config SET value = value || %s WHERE key = 'comparables'",
+                           Jsonb({"confirm_sources": self.TRUSTED}))
+        app_config.clear_config_cache()
+
+    async def asyncTearDown(self) -> None:
+        await self.execute("UPDATE app_config SET value = %s WHERE key = 'comparables'",
+                           Jsonb(self.comparables_config["value"]))
+        app_config.clear_config_cache()
+        await super().asyncTearDown()
+
+    async def execute(self, sql: str, *params) -> None:
+        async with db.connection() as cx:
+            await cx.execute(sql, params)
+
+    async def market(self) -> None:
+        """The comparables a first car alone needs, from a source no target reads."""
+        await ingest(self.comps("mercadolibre"), geocode=None)
 
     async def fiesta_alert(self, user: int = TG_USER, **filters) -> int:
         """Notified on the web: search_profiles.channels defaults to email,
@@ -625,6 +649,81 @@ class StepTests(NotNewsCase):
         await self.tick()
         self.assertEqual(await self.notified(), {"d0"})
 
+    async def test_the_third_empty_read_ends_the_hold_and_the_first_car_is_news(self):
+        # kavak Sentra read 0 for days: when a car shows up, it is new.
+        await self.market()
+        await self.fiesta_alert(sources=["kavak"])
+        FakeSource.results["kavak"] = []
+        for done in (False, False, True):
+            await self.tick()
+            [t] = await self.rows("SELECT first_run_done FROM crawl_targets")
+            self.assertEqual(t["first_run_done"], done)
+        FakeSource.results["kavak"] = self.deals("kavak", 1)
+        await self.tick()
+        self.assertEqual(await self.notified(), {"d0"})
+
+    async def test_a_dated_source_finishes_its_bootstrap_on_an_empty_read(self):
+        # v6 Yaris read 0; its first car, published yesterday, is news.
+        await self.market()
+        await self.fiesta_alert(sources=["v6"])
+        FakeSource.results["v6"] = []
+        await self.tick()
+        [t] = await self.rows("SELECT first_run_done FROM crawl_targets")
+        self.assertTrue(t["first_run_done"])
+        yesterday = int((datetime.now(timezone.utc) - timedelta(days=1)).timestamp())
+        FakeSource.results["v6"] = [card("fresh", source="v6", precio=9_000.0, km=99_500, published_at=yesterday)]
+        await self.tick()
+        self.assertEqual(await self.notified(), {"fresh"})
+
+    async def test_a_held_first_run_lets_a_recent_publication_through(self):
+        # The searches already waited a run: a car dated yesterday is news, old stock isn't.
+        await self.market()
+        await self.fiesta_alert(sources=["kavak"])
+        FakeSource.results["kavak"] = []
+        await self.tick()
+        yesterday = int((datetime.now(timezone.utc) - timedelta(days=1)).timestamp())
+        FakeSource.results["kavak"] = self.deals("kavak", 2) + [
+            card("fresh", source="kavak", precio=9_000.0, km=99_500, published_at=yesterday)]
+        await self.tick()
+        self.assertEqual(await self.notified(), {"fresh"})
+        self.assertEqual(await self.live(), {"fresh"})
+
+    async def test_reads_that_found_nothing_are_not_the_step_s_base(self):
+        # autocosmos took three blocks for "0 results": the next read's 6 new cars are news.
+        await self.fiesta_alert(sources=["kavak"])
+        FakeSource.results["kavak"] = self.comps("kavak")
+        await self.tick()
+        [t] = await self.rows("SELECT id FROM crawl_targets")
+        for found in (60, 0, 0, 0):
+            await repo_runs.finish_run(await repo_runs.start_run("kavak", t["id"]), ok=True, found=found)
+        self.assertEqual(await repo_runs.recent_ok_found(t["id"]), 60)
+        self.assertFalse(news.is_step(6, await repo_runs.recent_ok_found(t["id"])))
+
+    async def test_what_a_failed_batch_already_classified_is_not_counted_again(self):
+        # Three new cars, then the notifier fails; the next run brings three more: no step of six.
+        await self.fiesta_alert(sources=["kavak"])
+        FakeSource.results["kavak"] = self.comps("kavak")
+        await self.tick()
+        FakeSource.results["kavak"] = self.comps("kavak") + self.deals("kavak", 3)
+        with patch.object(scheduler, "process_batch", AsyncMock(side_effect=RuntimeError("notifier down"))):
+            await self.tick()
+        FakeSource.results["kavak"] = self.comps("kavak") + self.deals("kavak", 6)
+        await self.tick()
+        self.assertEqual(await self.notified(), {f"d{i}" for i in range(6)})
+
+    async def test_a_run_cut_between_its_ingest_and_its_marks_is_caught_up_next_run(self):
+        await self.fiesta_alert(sources=["kavak"])
+        FakeSource.results["kavak"] = self.comps("kavak")
+        await self.tick()
+        FakeSource.results["kavak"] = self.comps("kavak") + self.deals("kavak", 5)
+        with patch.object(crawl.news, "classify", AsyncMock(side_effect=RuntimeError("worker restarted"))):
+            await self.tick()                   # stored, then cut: no marks, no batch
+        self.assertIsNone(await self.not_news("d0"))
+        await self.tick()
+        self.assertEqual(await self.notified(), set())
+        self.assertEqual(await self.live(), set())
+        self.assertEqual((await self.not_news("d0"))["reason"], "step")
+
 
 class ReappearanceTests(NotNewsCase):
     """rosariogarage republishes a car under another ID: 7 notifications in
@@ -653,11 +752,47 @@ class ReappearanceTests(NotNewsCase):
         # Until comparables count the live copy (E3), the repost link waits for NEWS_LINK_REPOST.
         self.assertIsNone(b["probable_repost_of"])
 
-    async def test_with_link_repost_it_points_to_its_root(self):
+    async def test_with_link_repost_it_points_to_the_copy_before(self):
         await self.republish(self.comps("rosariogarage") + [self.copy()])
         with patch("config.NEWS_LINK_REPOST", True):
             await self.tick()
         self.assertEqual((await self.listing("B"))["probable_repost_of"], (await self.listing("A"))["id"])
+
+    async def test_with_link_repost_a_chain_of_copies_counts_once_in_comparables(self):
+        # rosariogarage ML Automotores republishes its Fiesta every day.
+        [pool] = await self.rows("SELECT to_regproc('public.comparable_listings') IS NOT NULL AS ok")
+        if not pool["ok"]:
+            self.skipTest("the test database predates 20261105120000_comparables_confirmed_pool.sql")
+        await self.fiesta_alert(sources=["rosariogarage"])
+        with patch("config.NEWS_LINK_REPOST", True):
+            # Another place each: no fingerprint ties them (sección 5.4).
+            for copy_id, place in (("R", "Rosario"), ("O", "Funes"), ("N", None)):
+                FakeSource.results["rosariogarage"] = self.comps("rosariogarage") + [
+                    card(copy_id, **{**self.OLD, "ubicacion": place})]
+                await self.tick()
+        r, o, n = [await self.listing(x) for x in "RON"]
+        self.assertEqual((o["probable_repost_of"], n["probable_repost_of"]), (r["id"], o["id"]))
+        # R left days ago: the target's later complete reads no longer confirm it.
+        await self.execute("UPDATE listings SET first_seen_at = now() - interval '4 days', "
+                           "  last_seen_at = now() - interval '3 days' WHERE external_id = 'R'")
+        c0 = (await self.listing("c0"))["id"]
+        counted = {row["external_id"] for row in await self.rows(
+            "SELECT external_id FROM public.comparable_listings(%s)", c0)}
+        self.assertEqual(counted & {"R", "O", "N"}, {"O"})
+        async with db.connection() as cx:
+            ref = await comparables.fetch(cx, c0, {"min_n": 1})
+        self.assertEqual(ref.n, 6)                                    # c1-c5 and the car, once
+
+    async def test_a_source_whose_reads_are_cut_short_never_infers_a_vanished_copy(self):
+        # kavak stops at 30 cards: the other unit may be past the cut, still for sale.
+        twin = dict(source="kavak", precio=9_000.0, km=88_000, vendedor_nombre="Kavak", ubicacion="CABA")
+        await self.fiesta_alert(sources=["kavak"])
+        FakeSource.results["kavak"] = self.comps("kavak") + [card("A", **twin)]
+        await self.tick()
+        FakeSource.results["kavak"] = self.comps("kavak") + [card("B", **{**twin, "ubicacion": None})]
+        await self.tick()
+        self.assertEqual(await self.notified(), {"B"})
+        self.assertIsNone(await self.not_news("B"))
 
     async def test_twins_in_the_same_read_are_both_news(self):
         # A dealer's two identical units: the old copy is still listed.
@@ -692,10 +827,14 @@ class FindReappearedTests(NotNewsCase):
         before it; `read` are the other IDs the same read brought."""
         await ingest(list(old), geocode=None)
         await ingest([new], geocode=None)
+        return await self.find(new.listing_id, *read)
+
+    async def find(self, external_id: str, *read: str) -> str | None:
         async with db.connection() as cx:
-            [row] = await repo_listings.new_rows(cx, [(await self.listing(new.listing_id))["id"]])
-            found = await repo_listings.find_reappeared(cx, row, batch_external_ids=[new.listing_id, *read],
-                                                        window_days=60, price_tol_pct=10, km_tol=100)
+            [row] = await repo_listings.new_rows(cx, [(await self.listing(external_id))["id"]])
+            found = await repo_listings.find_reappeared(cx, row, batch_external_ids=[external_id, *read],
+                                                        window_days=60, price_tol_pct=10, km_tol=100,
+                                                        unsellered_hours=72)
         if found is None:
             return None
         [r] = await self.rows("SELECT external_id FROM listings WHERE id = %s", found["id"])
@@ -728,6 +867,32 @@ class FindReappearedTests(NotNewsCase):
                                               self.car("o3", anio=2018)))                          # +11 %
         self.assertEqual(await self.old_copy(self.car("n4", anio=2019, transmision="Automática"),
                                              self.car("o4", anio=2019)), "o4")                     # unknown gearbox
+
+    async def test_a_version_that_starts_the_other_is_compatible(self):
+        # rosariogarage AUTODESCO's Etios: 'XLS' on the old copy, 'XLS Pack' on the new one.
+        await ingest([self.car("old"), self.car("new")], geocode=None)
+        await self.execute("UPDATE listings SET trim = CASE external_id WHEN 'old' THEN 'XLS' ELSE 'XLS Pack' END")
+        self.assertEqual(await self.find("new"), "old")
+        await self.execute("UPDATE listings SET trim = 'GLI' WHERE external_id = 'old'")
+        self.assertIsNone(await self.find("new"))
+
+    async def test_without_seller_an_old_copy_seen_days_ago_needs_the_same_title(self):
+        # Private sellers round their km: two Fiestas of 88.000 km are often two cars.
+        await ingest([self.car("old", vendedor_nombre=None, titulo="Ford Fiesta Titanium dueño directo")],
+                     geocode=None)
+        await self.execute("UPDATE listings SET last_seen_at = now() - interval '4 days'")
+        await ingest([self.car("other", vendedor_nombre=None, titulo="Ford Fiesta Titanium escucho ofertas")],
+                     geocode=None)
+        self.assertIsNone(await self.find("other"))
+        await ingest([self.car("again", vendedor_nombre=None, titulo="Ford  Fiesta Titanium Dueño directo")],
+                     geocode=None)
+        self.assertEqual(await self.find("again", "other"), "old")
+
+    async def test_without_seller_a_copy_seen_within_72_hours_reappears(self):
+        await ingest([self.car("old", vendedor_nombre=None, titulo="Ford Fiesta Titanium impecable")], geocode=None)
+        await self.execute("UPDATE listings SET last_seen_at = now() - interval '60 hours'")
+        await ingest([self.car("new", vendedor_nombre=None)], geocode=None)
+        self.assertEqual(await self.find("new"), "old")
 
     async def test_a_copy_still_in_the_read_is_not_an_old_one(self):
         self.assertIsNone(await self.old_copy(self.car("new"), self.car("old"), read=("old",)))
