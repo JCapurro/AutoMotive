@@ -121,21 +121,44 @@ class BandTests(unittest.TestCase):
         self.assertEqual(news._core_share(items, {"year_min": 2010}), 1.0)
         self.assertEqual(news._core_share([], self.QUERY), 1.0)
 
+    def test_the_band_s_first_read_is_what_the_last_read_did_not_cover(self):
+        rows = [row(1, year=2009), row(2, year=2021)]
+        before = dict(self.KAVAK, query=dict(self.QUERY, _read={"year_min": 2010, "year_max": 2020}))
+        self.assertEqual(news.first_band_read(before, rows), frozenset({1, 2}))
+        read = dict(self.KAVAK, query=dict(self.QUERY, _read={"year_min": 2009, "year_max": 2021}))
+        self.assertEqual(news.first_band_read(read, rows), frozenset())
+        # A search moved its year_min down a year: its new band year is unread.
+        self.assertEqual(news.first_band_read(read, [row(3, year=2008)]), frozenset({3}))
+        # deruedas drops a top bound past this year: the read had no ceiling.
+        open_top = dict(self.KAVAK, query=dict(self.QUERY, _read={"year_min": 2009}))
+        self.assertEqual(news.first_band_read(open_top, rows), frozenset())
+        # Without a last read (a body type, or none complete yet) nothing was covered.
+        self.assertEqual(news.first_band_read(self.KAVAK, rows), frozenset({1, 2}))
+
+    def test_the_step_base_is_scaled_only_once_a_read_had_the_band(self):
+        self.assertFalse(news._band_read_before(dict(self.QUERY, _read={"year_min": 2010, "year_max": 2020})))
+        self.assertTrue(news._band_read_before(dict(self.QUERY, _read={"year_min": 2009, "year_max": 2021})))
+        self.assertTrue(news._band_read_before(dict(self.QUERY, _read={"year_min": 2009})))
+        self.assertFalse(news._band_read_before(self.QUERY))
+        self.assertFalse(news._band_read_before({"year_min": 2010, "_read": {"year_min": 2009}}))
+
 
 class MarkTests(unittest.TestCase):
     def marked(self, reason: str, target_id: int = 7) -> dict:
         return {"attributes": {"_not_news": {"reason": reason, "run_id": 1, "target_id": target_id, "prev_id": None}}}
 
     def test_old_stock_is_muted_and_never_counted(self):
-        for reason in ("step", "reappearance", "envelope", "band"):
+        for reason in ("step", "reappearance", "envelope"):
             self.assertTrue(news.muted(self.marked(reason)), reason)
             self.assertTrue(news.uncounted(self.marked(reason, target_id=9), 7), reason)
 
-    def test_a_first_run_mark_is_backfill_only_for_its_own_target_in_2_5(self):
-        mark = self.marked("first_run")
-        self.assertFalse(news.muted(mark))
-        self.assertTrue(news.uncounted(mark, 7))
-        self.assertFalse(news.uncounted(mark, 9))
+    def test_a_first_run_or_band_mark_is_only_its_own_target_s(self):
+        # Another target that wants it (a body type next to a model on Kavak) still gets it.
+        for reason in ("first_run", "band"):
+            mark = self.marked(reason)
+            self.assertFalse(news.muted(mark), reason)
+            self.assertTrue(news.uncounted(mark, 7), reason)
+            self.assertFalse(news.uncounted(mark, 9), reason)
 
     def test_rows_without_a_mark(self):
         for r in (None, {}, {"attributes": None}, {"attributes": {"_not_news": "x"}}):
@@ -444,21 +467,38 @@ class ClassifyTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("RuntimeError: db", self.log_error.await_args.args[2])
         self.marks.assert_not_awaited()
 
-    BANDED = dict(TARGET, query={"year_min": 2010, "year_band": 1, "profile_ids": [1]})
+    BANDED = {"year_min": 2010, "year_band": 1, "profile_ids": [1]}
+    # The band's first read: the last read had the searches' exact years.
+    BEFORE = dict(TARGET, query=dict(BANDED, _read={"year_min": 2010}))
+    # A later read: the last one already had the band.
+    AFTER = dict(TARGET, query=dict(BANDED, _read={"year_min": 2009}))
 
-    async def test_the_band_s_new_listings_are_old_stock_and_make_no_step(self):
-        # The band's first read brings Fox 2009 at once: 5 of them, next to 2 real ones.
+    async def test_the_band_s_first_read_is_old_stock_for_its_target_and_makes_no_step(self):
+        # Turned on, the band brings Fox 2009 at once: 5 of them, next to 2 real ones.
         rows = [row(i, year=2009) for i in range(1, 6)] + [row(6, year=2012), row(7, year=2011)]
-        muted = await self.classify(result(*range(1, 8)), rows, target=self.BANDED, prev_found=10)
+        muted = await self.classify(result(*range(1, 8)), rows, target=self.BEFORE, prev_found=10)
         self.assertEqual(muted, frozenset(range(1, 6)))
         self.assertEqual({lid: m["_not_news"]["reason"] for lid, m in self.marked().items()},
                          {i: "band" for i in range(1, 6)})
         self.new_rows.assert_awaited_once()
+        # Read again later, a new 2009 is a car just listed: no mark, and still no step.
+        self.assertEqual(await self.classify(result(*range(1, 8)), rows, target=self.AFTER, prev_found=10),
+                         frozenset())
+        self.assertEqual(self.marked(), {})
         # Switched off they are news, and they make the step they are.
-        self.assertEqual(await self.classify(result(*range(1, 8)), rows, target=self.BANDED, prev_found=10,
+        self.assertEqual(await self.classify(result(*range(1, 8)), rows, target=self.BEFORE, prev_found=10,
                                              NEWS_GUARD_BAND=False), frozenset(range(1, 8)))
 
-    async def test_a_step_is_measured_against_the_core_of_the_reads_before(self):
+    async def test_the_band_s_first_read_that_a_whole_stock_target_covers_is_news(self):
+        # A bootstrapped target reading every SUV from 2005 would have stored an old Fox 2009 SUV.
+        suv = {"id": 3, "source": "autocosmos", "body_type": "suv", "query": {"year_min": 2005},
+               "prefilter_rejected": []}
+        rows = [row(1, year=2009, body_type="suv"), row(2, year=2009, body_type="hatchback")]
+        muted = await self.classify(result(1, 2), rows, target=self.BEFORE, wide=[suv], prev_found=40)
+        self.assertEqual(muted, frozenset({2}))
+        self.assertEqual({lid: m["_not_news"]["reason"] for lid, m in self.marked().items()}, {2: "band"})
+
+    async def test_a_step_is_measured_against_the_core_once_a_read_had_the_band(self):
         # Eight new cars of the searches' years on a read that is a fifth band:
         # the last reads' 20 were 16 inside, and eight is half of that.
         items = ([Listing("autocosmos", f"n{i}", "Volkswagen Fox", "https://example.test", anio=2012)
@@ -466,17 +506,20 @@ class ClassifyTests(unittest.IsolatedAsyncioTestCase):
                  + [Listing("autocosmos", f"b{i}", "Volkswagen Fox", "https://example.test", anio=2009)
                     for i in range(2)])
         rows = [row(i, year=2012) for i in range(1, 9)]
-        muted = await self.classify(result(*range(1, 9)), rows, target=self.BANDED, items=items, prev_found=20)
+        muted = await self.classify(result(*range(1, 9)), rows, target=self.AFTER, items=items, prev_found=20)
         self.assertEqual(muted, frozenset(range(1, 9)))
-        self.assertEqual(await self.classify(result(*range(1, 9)), rows, target=self.BANDED, items=items,
+        # Right after it is turned on the last reads' 20 were all core: no step.
+        self.assertEqual(await self.classify(result(*range(1, 9)), rows, target=self.BEFORE, items=items,
+                                             prev_found=20), frozenset())
+        self.assertEqual(await self.classify(result(*range(1, 9)), rows, target=self.AFTER, items=items,
                                              prev_found=20, NEWS_GUARD_BAND=False), frozenset())
 
-    async def test_a_first_run_marks_the_band_for_every_target(self):
-        muted = await self.classify(result(1, 2), [row(1, year=2009), row(2, year=2015)], target=self.BANDED,
+    async def test_a_first_run_marks_everything_first_run(self):
+        muted = await self.classify(result(1, 2), [row(1, year=2009), row(2, year=2015)], target=self.BEFORE,
                                     first_run=True)
-        self.assertEqual(muted, frozenset({1}))
+        self.assertEqual(muted, frozenset())
         self.assertEqual({lid: m["_not_news"]["reason"] for lid, m in self.marked().items()},
-                         {1: "band", 2: "first_run"})
+                         {1: "first_run", 2: "first_run"})
         self.recent.assert_not_awaited()
 
 
