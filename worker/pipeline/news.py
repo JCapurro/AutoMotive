@@ -8,8 +8,9 @@ external_id was never stored, so old stock looks new when:
     search, a read cut short before): the step;
   - a target's search was widened, and the read brings the stock its
     previous complete read left out by year or km (crawl_targets.query._read,
-    read_envelope): the envelope. Not what a target reading the source's
-    whole stock of its body type (or all of it) covers and never stored:
+    read_envelope): the envelope. Not what another target would have stored
+    if it were old stock (a whole body type or source within what its last
+    read covered, a sibling model within its searches' years: _covered):
     that is new to the source;
   - the same car comes back under another ID after its old copy left the
     source: the reappearance, only on the sources whose reads are trusted
@@ -22,8 +23,8 @@ external_id was never stored, so old stock looks new when:
     COVERAGE_VERSION, starts its bootstrap over (targets.sync_targets);
   - the target read past its searches' years for the first time
     (query.year_band, the reference band of pipeline/crawl.py): the band's
-    stock its last complete read didn't cover (query._read), but what a
-    target reading the whole stock covers, as for the envelope (old_band).
+    stock its last complete read didn't cover (query._read), but what
+    another target covers, as for the envelope (old_band).
 classify stores the step, the envelope and the reappearance as backfill for
 every search (seen on the web, never notified) and marks them in
 listings.attributes._not_news {reason, run_id, target_id, prev_id}:
@@ -112,20 +113,41 @@ def outside_envelope(row: dict[str, Any], envelope: dict[str, Any] | None) -> bo
     return km is not None and envelope.get("km_max") is not None and km > envelope["km_max"]
 
 
+def _bounds(filters: dict[str, Any]) -> dict[str, Any]:
+    bounds = {"year_min": filters.get("anio_min"), "year_max": filters.get("anio_max"),
+              "km_max": filters.get("km_max")}
+    return {k: v for k, v in bounds.items() if v is not None}
+
+
+def _reads_whole(target: dict[str, Any]) -> bool:
+    """A target by body type or a whole inventory: it reads a whole stock."""
+    return bool(target.get("body_type")) or (target.get("query") or {}).get("inventory") is True
+
+
 def read_envelope(target: dict[str, Any], filters: dict[str, Any]) -> dict[str, Any] | None:
     """What a read of `target` with these collector filters
     (crawl.scraper_filters) covers: their year and km bounds, which a
     complete read keeps in crawl_targets.query._read for its next run's
     envelope (targets.finish_target). None for a target the envelope doesn't
     watch: of a source that reads by publication date (Mercado Libre,
-    Facebook), by body type (its prefilter remembers what it dropped,
-    prefilter_rejected) or a whole inventory (no bounds)."""
-    if (target["source"] in RECENT_SOURCES or target.get("body_type")
-            or (target.get("query") or {}).get("inventory") is True):
+    Facebook), or one reading a whole stock (read_covers)."""
+    if target["source"] in RECENT_SOURCES or _reads_whole(target):
         return None
-    bounds = {"year_min": filters.get("anio_min"), "year_max": filters.get("anio_max"),
-              "km_max": filters.get("km_max")}
-    return {k: v for k, v in bounds.items() if v is not None}
+    return _bounds(filters)
+
+
+def read_covers(target: dict[str, Any], filters: dict[str, Any]) -> dict[str, Any] | None:
+    """What a read of a target reading a whole stock (a body type, an
+    inventory) covers with these collector filters: their year and km
+    bounds, the band included ({} for an inventory). A complete read keeps
+    them in query._covers (targets.finish_target), for another target's
+    rows (_covered), not as its own envelope: its collector drops what is
+    past them before the prefilter (kavak's year_max), so prefilter_rejected
+    never remembers that. None for any other target, or one of a source
+    that reads by publication date."""
+    if target["source"] in RECENT_SOURCES or not _reads_whole(target):
+        return None
+    return _bounds(filters)
 
 
 def is_band(row: dict[str, Any], query: dict[str, Any] | None) -> bool:
@@ -200,36 +222,59 @@ def _core_share(items: Iterable[Any], query: dict[str, Any] | None) -> float:
     return sum(1 for year in years if not is_band({"year": year}, query)) / len(years)
 
 
-def _covered(row: dict[str, Any], wide: Iterable[dict[str, Any]]) -> bool:
-    """Whether one of these targets (targets.whole_stock_targets) reads `row`
-    on every run: the whole source, or its body type within what the
-    target's prefilter keeps, not dropped by it before (prefilter_rejected).
-    It would have stored the row if it were old stock (kavak 'suv' and a
-    Ford EcoSport target widened to 2012)."""
-    from pipeline.crawl import prefilter     # crawl imports this module
-    for t in wide:
-        if t.get("body_type") is None:
-            return True
-        if row.get("body_type") != t["body_type"] or row.get("external_id") in (t.get("prefilter_rejected") or ()):
+def _covered(row: dict[str, Any], others: Iterable[dict[str, Any]]) -> bool:
+    """Whether one of these other targets of the source
+    (targets.covering_targets) would have stored `row` had it been listed
+    before its last complete read: then it is new to the source.
+      - One reading the whole source, or the row's body type, within the
+        year and km that read sent its collector (query._covers, the band
+        included) and not dropped by its prefilter then (prefilter_rejected):
+        kavak 'suv' and a Ford EcoSport target widened to 2012. Its
+        prefilter keeps or remembers all the rest, whatever its query is now.
+      - One by model, the row's make and model, within its searches' own
+        years and km and what its last read covered (_read, when it has one):
+        deruedas 'Sandero 2019-2022' and a Sandero 2021 the band of
+        'Stepway 2018-2020' stores first.
+    Without a last read kept (a target by body type not read since), none."""
+    for t in others:
+        q = t.get("query") or {}
+        if not _reads_whole(t):
+            if _sibling(row, t):
+                return True
             continue
-        keep = prefilter(t)
-        if keep is None or keep(row):
+        covers = q.get("_covers")
+        if not isinstance(covers, dict) or outside_envelope(row, covers):
+            continue
+        if t.get("body_type") is None or (row.get("body_type") == t["body_type"] and row.get("external_id")
+                                          not in (t.get("prefilter_rejected") or ())):
             return True
     return False
 
 
+def _sibling(row: dict[str, Any], target: dict[str, Any]) -> bool:
+    """Whether a target by model reads `row` in its searches' own years (not
+    its band): the same make and model, and within its _read too once it has
+    one, so a search widened since doesn't vouch for years it never read."""
+    q = target.get("query") or {}
+    if (not row.get("model") or str(row.get("make") or "").lower() != str(target.get("make") or "").lower()
+            or row["model"].lower() != str(target.get("model") or "").lower()):
+        return False
+    core = {k: int(q[k]) for k in ("year_min", "year_max", "km_max") if q.get(k) is not None}
+    read = q.get("_read")
+    return not outside_envelope(row, core) and not (isinstance(read, dict) and outside_envelope(row, read))
+
+
 async def old_band(target: dict[str, Any], rows: Iterable[dict[str, Any]]) -> frozenset[int]:
     """Of these band rows (band_ids), the band's first read (first_band_read)
-    that no target reading the source's whole stock covers (_covered): old
-    stock for every search of the batch. What such a target covers and never
-    stored is new to the source, as for the envelope. Reads the database only
-    when there is a first read."""
+    that no other target covers (_covered): old stock for every search of the
+    batch. What another target covers and never stored is new to the source,
+    as for the envelope. Reads the database only when there is a first read."""
     rows = list(rows)
     unread = first_band_read(target, rows)
     if not unread:
         return frozenset()
-    wide = await targets.whole_stock_targets(target["source"])
-    return frozenset(r["id"] for r in rows if r["id"] in unread and not _covered(r, wide))
+    others = await targets.covering_targets(target["source"], exclude=target.get("id"))
+    return frozenset(r["id"] for r in rows if r["id"] in unread and not _covered(r, others))
 
 
 def _mark(row: dict[str, Any] | None) -> dict[str, Any]:
@@ -343,7 +388,7 @@ async def _classify(target: dict[str, Any], items: Iterable[Any], result: Ingest
     # query's, from before any widening, the band included): outside them
     # is stock it left out.
     envelope = query.get("_read") if config.NEWS_GUARD_ENVELOPE else None
-    wide = await targets.whole_stock_targets(target["source"]) if isinstance(envelope, dict) else []
+    wide = await targets.covering_targets(target["source"], exclude=target["id"]) if isinstance(envelope, dict) else []
     batch = sorted({str(item.listing_id) for item in items})
     marks: list[tuple[int, dict[str, Any], int | None]] = []
     reasons: Counter[str] = Counter()

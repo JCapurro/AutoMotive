@@ -631,6 +631,28 @@ class TargetResetTests(IngestCase):
         self.assertEqual(t["query"], {"profile_ids": [1], "year_min": 2010, "km_max": 150_000, "_read": self.READ})
         self.assertTrue(t["first_run_done"])
 
+    async def test_what_a_whole_stock_target_covered_stays_like_the_last_read(self):
+        # query._covers (news.read_covers), {} for an inventory: kept across
+        # edits, not a reason to rewrite, forgotten after a day inactive.
+        suv = crawl.TargetSpec("kavak", None, None, {"year_max": 2014, "profile_ids": [2]}, body_type="suv")
+        inventory = crawl.TargetSpec("autocity", None, None, {"inventory": True, "profile_ids": [2]})
+        await self.sync(suv, inventory)
+        for source, covers in (("kavak", {"year_max": 2014}), ("autocity", {})):
+            await repo_targets.finish_target((await self.target(source))["id"], ok=True, retry_seconds=0,
+                                             covers=covers)
+        before = {s: await self.target(s) for s in ("kavak", "autocity")}
+        await self.sync(suv, inventory)
+        for source, t in before.items():
+            self.assertEqual((await self.target(source))["updated_at"], t["updated_at"], source)
+        wider = replace(suv, query={**suv.query, "year_max": 2022})
+        await self.sync(wider, inventory)
+        self.assertEqual((await self.target())["query"], {**wider.query, "_covers": {"year_max": 2014}})
+        self.assertEqual((await self.target("autocity"))["query"]["_covers"], {})
+        await self.sync()
+        await self.back_after_a_day(wider, inventory)
+        for source in ("kavak", "autocity"):
+            self.assertNotIn("_covers", (await self.target(source))["query"], source)
+
     async def test_a_reactivated_undated_target_starts_over_without_its_read(self):
         # kavak has no publication dates: what it finds after a day without
         # searches was listed while nobody read it. v6 dates its listings and
@@ -1106,6 +1128,34 @@ class EnvelopeTests(NotNewsCase):
         self.assertIsNone(await self.not_news("x"))
         self.assertEqual(((await self.matched(suv)).get("x"), (await self.matched(wide)).get("x")), (False, False))
 
+    async def test_a_body_type_target_covers_only_what_its_last_read_sent_its_collector(self):
+        # kavak 'suv' up to 2014 sends its collector anio_max 2014, which drops
+        # an EcoSport 2020 before the prefilter: never stored, never remembered.
+        # Widened to 2022, the EcoSport target reads it: old stock, also once
+        # the SUV search wants 2022 too, until the SUV target reads that.
+        def eco(listing_id: str, **kw) -> Listing:
+            return card(listing_id, source="kavak", titulo=f"Ford EcoSport 1.6 Freestyle {listing_id}",
+                        marca="Ford", modelo="EcoSport", **kw)
+
+        collectors.REGISTRY["kavak"].BODY_TYPES = frozenset({"suv"})
+        ecosport = await self.fiesta_alert(modelos=["EcoSport"], sources=["kavak"], anio_min=2016, anio_max=2018)
+        [suv] = await db.create_alert(user_id=2, chat_id=2, name="suv", filters={
+            "carroceria": ["suv"], "anio_max": 2014, "precio_max": 20_000, "moneda": "USD", "sources": ["kavak"]})
+        await self.execute("UPDATE search_profiles SET channels = '{web}' WHERE id = %s", suv)
+        FakeSource.results["kavak"] = [eco(f"c{i}", precio=18_000.0 + i * 100, km=60_000 + i * 2_000)
+                                       for i in range(6)]
+        await self.tick()
+        self.assertEqual({r["body_type"]: r["query"].get("_covers") for r in await self.rows(
+            "SELECT body_type, query FROM crawl_targets")}, {None: None, "suv": {"year_max": 2014}})
+        await self.execute("UPDATE search_profiles SET filters = filters || %s WHERE id = ANY(%s)",
+                           Jsonb({"year_max": 2022}), [ecosport, suv])
+        FakeSource.results["kavak"] += [eco("x", precio=12_000.0, anio=2020, km=80_000)]
+        await self.tick(due="body_type IS NULL")
+
+        self.assertEqual((await self.not_news("x"))["reason"], "envelope")
+        self.assertEqual(((await self.matched(suv)).get("x"), (await self.matched(ecosport)).get("x")), (True, True))
+        self.assertNotIn("x", await self.notified())
+
     async def test_the_envelope_is_the_claimed_query_not_the_current_one(self):
         aid = await self.fiesta_alert(sources=["kavak"], anio_min=2015, km_max=100_000)
         FakeSource.results["kavak"] = self.comps("kavak")
@@ -1201,6 +1251,30 @@ class CoverageTests(NotNewsCase):
         self.assertEqual({(r["external_id"], r["kind"]) for r in await self.rows(
             "SELECT l.external_id, n.kind::text AS kind FROM notifications n JOIN listings l ON l.id = n.listing_id")},
             {("c0", "price_drop")})
+
+    async def test_a_search_created_during_the_pause_gets_no_price_drop_from_before_it(self):
+        # It never saw the old price: its match is this first run's backfill.
+        aid = await self.fiesta_alert(sources=["kavak"])
+        FakeSource.results["kavak"] = self.comps("kavak")
+        await self.tick()
+        await db.set_alert_active(aid, False)
+        await crawl.sync_targets(await db.enabled_profiles(), await db.counting_profiles())
+        await db.set_alert_active(aid, True)
+        late = await self.fiesta_alert(user=1, sources=["kavak"])
+        [access] = await self.rows("SELECT public.commercial_access_active(user_id) AS ok FROM search_profiles "
+                                   " WHERE id = %s", late)
+        self.assertTrue(access["ok"])                   # else it would get nothing anyway
+        FakeSource.results["kavak"] = ([card("c0", source="kavak", precio=11_000.0, km=90_000)]
+                                       + self.comps("kavak")[1:])
+        with patch.object(repo_targets, "REACTIVATION_IDLE_SECONDS", 0):
+            await self.tick()
+
+        self.assertEqual({(r["profile_id"], r["external_id"], r["kind"]) for r in await self.rows(
+            "SELECT n.profile_id, l.external_id, n.kind::text AS kind FROM notifications n "
+            "  JOIN listings l ON l.id = n.listing_id")}, {(aid, "c0", "price_drop")})
+        [m] = await self.rows("SELECT m.is_backfill FROM matches m JOIN listings l ON l.id = m.listing_id "
+                              " WHERE m.search_profile_id = %s AND l.external_id = 'c0'", late)
+        self.assertTrue(m["is_backfill"])
 
     async def test_a_collector_that_reads_more_reloads_its_targets_in_silence(self):
         # E6: kavak reads every page of a model (COVERAGE_VERSION 2). The 4 cars
