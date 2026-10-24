@@ -373,7 +373,7 @@ Que un aviso no aparezca en el listado **no prueba** que se haya ido: solo se le
 
 1. recorre los listings con `saved = true` o con estado `interested`, `contacted` o `visit_scheduled`;
 2. llama a `fetch_detail`;
-3. si la publicación dio 404, está pausada o vendida, marca `status = 'gone'` y emite `listing_gone`;
+3. si la publicación dio 404, está pausada o vendida, marca `status = 'gone'` y emite `listing_gone` (un aviso vendido de autocosmos sigue respondiendo 200 con el auto: `parse_detail` lo reconoce por la marca `m-vendido` o el texto «Este auto ya fue vendido» dentro del aviso);
 4. si no, compara contra el último snapshot, con la misma lógica de la sección 5.3.
 
 Además, cuando la publicación lleva X días publicada (`app_config.watchlist_stale_days`), emite un evento informativo.

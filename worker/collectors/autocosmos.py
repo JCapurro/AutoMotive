@@ -87,7 +87,7 @@ def _price(container, block: str) -> tuple[float | None, str | None, str | None]
 
 
 class AutoCosmosScraper(BaseScraper):
-    DETAIL_PARSER_VERSION = 3
+    DETAIL_PARSER_VERSION = 4  # 4: a sold ad is gone ('vendido')
     name = "autocosmos"
     BASE = "https://www.autocosmos.com.ar"
     MAX_PAGES = 20             # 960 cards: a safety cap, no model comes close today
@@ -207,6 +207,12 @@ class AutoCosmosScraper(BaseScraper):
         car = doc.select_one("article[itemscope][itemtype*='Car']")
         if car is None or car.select_one(".car-specifics__name") is None:
             return ListingDetail(url, gone=True, gone_reason="sin vehículo en la página")
+        # A sold ad still answers 200 with the car: a "vendido" photo and
+        # "Este auto ya fue vendido" where the contact form was (Fiat Pulse
+        # 7b0c5ed1…, 24/10). Only in the ad, never in a related card.
+        if car.select_one(".m-vendido") is not None or "ya fue vendido" in (
+                text_of(car.select_one(".car-specifics__no-form")) or "").lower():
+            return ListingDetail(url, gone=True, gone_reason="vendido")
 
         def meta(prop: str) -> str | None:
             el = car.select_one(f"meta[itemprop='{prop}']")
