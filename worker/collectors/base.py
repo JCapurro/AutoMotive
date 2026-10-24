@@ -62,6 +62,12 @@ class CollectorBlocked(RuntimeError):
     session. The run fails (collector_runs) instead of looking like "0 results"."""
 
 
+# How a run that read only part of the source is recorded in collector_runs.error:
+# "partial: <the collector's reason>". Not a failure of the collector, so
+# tools/platform_health.py alerts only past PARTIAL_RUNS of them in a row.
+PARTIAL_PREFIX = "partial: "
+
+
 class SearchResults(list[Listing]):
     """Keep usable results from a partial crawl without advancing its checkpoint.
 

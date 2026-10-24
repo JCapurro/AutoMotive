@@ -61,7 +61,7 @@ from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable
 
 from collectors import REGISTRY, Listing
-from collectors.base import CollectorBlocked
+from collectors.base import PARTIAL_PREFIX, CollectorBlocked
 from collectors.facebook import DATE_FETCH_LIMIT as FB_DATE_FETCH_LIMIT
 from collectors._isolated import call as isolated_call, isolated
 from collectors._loop import run_collector
@@ -432,7 +432,7 @@ async def run_target(target: dict[str, Any], on_health: HealthHandler | None = N
     # Right after the ingest, so that little can stop the run before the marks.
     backfill_ids = await news.classify(target, items, result, run_id=run_id, first_run=first_run,
                                        complete=complete, readmitted=readmitted)
-    error = getattr(items, "reason", None) if not complete else None
+    error = PARTIAL_PREFIX + (getattr(items, "reason", None) or "sin detalle") if not complete else None
     health = await runs.finish_run(run_id, ok=complete, found=result.found, new=result.new,
                                    updated=result.updated, error=error)
     await _report(on_health, health)

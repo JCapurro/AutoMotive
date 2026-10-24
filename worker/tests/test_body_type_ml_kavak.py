@@ -290,7 +290,7 @@ class KavakBodyTypeSearchTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("repeated", found.reason)
 
     async def test_the_page_limit_makes_the_run_incomplete(self):
-        with patch.object(kv.KavakScraper, "MAX_BODY_TYPE_PAGES", 1):
+        with patch.object(kv.KavakScraper, "MAX_PAGES", 1):
             found, http = await self.search([kv_page()])
         self.assertEqual(len(http.asked), 1)
         self.assertEqual(len(found), 3)
@@ -339,13 +339,75 @@ class KavakBodyTypeSearchTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(found.complete)
         self.assertIn("OSError", found.reason)
 
-    async def test_a_model_search_still_uses_the_browser(self):
+    async def test_a_model_with_a_body_type_still_reads_its_own_listing(self):
         self.assertIsNone(kv._searched_body_type({"marca": "Ford", "modelo": "Ka", "carroceria": "sedan"}))
-        with patch.object(kv.KavakScraper, "_search_body_type", AsyncMock()) as by_body, \
-                patch.object(kv, "browser_context", side_effect=RuntimeError("browser")):
-            with self.assertRaisesRegex(RuntimeError, "browser"):
-                await kv.KavakScraper().search({"marca": "Ford", "modelo": "Ka", "carroceria": "sedan"})
-        by_body.assert_not_called()
+        page = html("kavak_model_sandero_p0.html").replace("37 Resultados", "3 Resultados")             .replace('\\"pages\\":2', '\\"pages\\":1')
+        found, http = await self.search([page], {"marca": "Ford", "modelo": "Ka", "carroceria": "sedan"})
+        self.assertEqual(http.asked, ["https://www.kavak.com/ar/usados/ford-ka"])
+
+
+class KavakModelSearchTests(unittest.IsolatedAsyncioTestCase):
+    """Lives pages of www.kavak.com/ar/usados/renault-sandero captured on 24/10/2026:
+    37 cars in 2 pages of 30, the reserved ones (no price) last."""
+
+    async def search(self, outcomes, filters=None):
+        http = FakeHttp(outcomes)
+        with patch.object(kv, "fetch_page", http), patch.object(kv, "_page_pause", AsyncMock()):
+            found = await kv.KavakScraper().search(
+                {"marca": "Renault", "modelo": "Sandero"} if filters is None else filters)
+        return found, http
+
+    async def test_reads_every_page_of_the_model_with_plain_gets(self):
+        found, http = await self.search([html("kavak_model_sandero_p0.html"), html("kavak_model_sandero_p1.html")])
+        self.assertEqual(http.asked, ["https://www.kavak.com/ar/usados/renault-sandero",
+                                      "https://www.kavak.com/ar/usados/renault-sandero?page=1"])
+        self.assertTrue(found.complete, found.reason)
+        self.assertEqual([c.listing_id for c in found],
+                         ["557305", "554522", "553483", "550663", "557311", "554179"])
+        self.assertEqual([c.precio is not None for c in found], [True] * 3 + [False] * 3)
+        self.assertEqual({(c.marca, c.modelo.split()[0]) for c in found}, {("Renault", "Sandero")})
+
+    async def test_state_of_the_model_page(self):
+        state = kv.list_state(html("kavak_model_sandero_p0.html"))
+        self.assertEqual((state.body_types, state.pages, state.total), (frozenset(), 2, 37))
+
+    async def test_a_single_page_model_asks_once_and_no_stock_is_an_empty_complete_read(self):
+        one = html("kavak_model_sandero_p0.html").replace('\\"pages\\":2', '\\"pages\\":1')
+        found, http = await self.search([one])
+        self.assertEqual(len(http.asked), 1)
+        self.assertTrue(found.complete)
+        empty = '<script>self.__next_f.push([1,"{\\"resultsQuantity\\":\\"0 Resultados\\"}"])</script>'
+        found, _ = await self.search([empty])
+        self.assertEqual((list(found), found.complete), ([], True))
+
+    async def test_a_make_alone_and_the_whole_catalog(self):
+        _, http = await self.search([html("kavak_model_sandero_p0.html").replace('\\"pages\\":2', '\\"pages\\":1')],
+                                    {"marca": "Land Rover"})
+        self.assertEqual(http.asked, ["https://www.kavak.com/ar/usados/land-rover"])
+        _, http = await self.search([html("kavak_model_sandero_p0.html").replace('\\"pages\\":2', '\\"pages\\":1')], {})
+        self.assertEqual(http.asked, ["https://www.kavak.com/ar/usados"])
+
+    async def test_a_later_page_that_fails_keeps_the_cards_as_a_partial_read(self):
+        found, _ = await self.search([html("kavak_model_sandero_p0.html"), OSError("connection reset")])
+        self.assertEqual(len(found), 3)
+        self.assertFalse(found.complete)
+        self.assertIn("OSError", found.reason)
+
+    async def test_the_page_limit_is_a_partial_read(self):
+        with patch.object(kv.KavakScraper, "MAX_PAGES", 1):
+            found, http = await self.search([html("kavak_model_sandero_p0.html")])
+        self.assertEqual(len(http.asked), 1)
+        self.assertFalse(found.complete)
+        self.assertIn("first 1 pages of /ar/usados/renault-sandero, of 2", found.reason)
+
+    async def test_the_first_page_failing_fails_the_run(self):
+        with self.assertRaises(CollectorBlocked):
+            await self.search([(429, "")])
+        with self.assertRaises(OSError):
+            await self.search([OSError("connection reset")])
+
+    async def test_it_declares_the_wider_read(self):
+        self.assertEqual(kv.KavakScraper.COVERAGE_VERSION, 2)
 
 
 if __name__ == "__main__":

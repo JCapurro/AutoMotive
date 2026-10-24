@@ -268,6 +268,12 @@ class MergeTests(unittest.TestCase):
 class CrawlTargetTests(unittest.TestCase):
     SOURCES = ["mercadolibre", "kavak"]
 
+    def setUp(self):
+        # kavak declares COVERAGE_VERSION: these tests are about the other query keys.
+        patcher = patch.object(REGISTRY["kavak"], "COVERAGE_VERSION", None)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def _profile(self, pid: int, **filters) -> dict:
         f = {"make": "Ford", "model": "Fiesta"}
         f.update(filters)

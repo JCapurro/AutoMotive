@@ -759,7 +759,7 @@ class PipelineCoverageTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result.first_run)
         ingest.assert_awaited_once()
         self.assertFalse(finish.call_args.kwargs["ok"])
-        self.assertEqual(finish.call_args.kwargs["error"], "scroll cap")
+        self.assertEqual(finish.call_args.kwargs["error"], "partial: scroll cap")
         self.assertEqual(scraper.search.call_args.args[0]["publication_days"], 30)
 
     async def run_facebook(self, target, items):

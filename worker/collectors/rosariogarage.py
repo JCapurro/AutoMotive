@@ -16,7 +16,7 @@ import httpx
 from http_clients import async_client
 
 from ._http import HEADERS, Page, dedupe, multiline_text, soup, text_of, to_int
-from .base import BaseScraper, CollectorBlocked, Listing, ListingDetail
+from .base import BaseScraper, CollectorBlocked, Listing, ListingDetail, SearchResults
 
 log = logging.getLogger("collectors.rosariogarage")
 
@@ -170,8 +170,12 @@ class RosarioGarageScraper(BaseScraper):
             ))
         return list(out.values())
 
-    async def search(self, filters: dict) -> list[Listing]:
+    async def search(self, filters: dict) -> SearchResults:
+        """Every page of each category. A category that still has a next page
+        at MAX_PAGES makes the read partial (SearchResults.complete False), never
+        one taken for the whole stock."""
         out: dict[str, Listing] = {}
+        capped: list[str] = []
         seen: set[str] = set()
         async with async_client(timeout=self.TIMEOUT, headers=HEADERS, follow_redirects=True,
                                      transport=self.transport) as client:
@@ -219,8 +223,12 @@ class RosarioGarageScraper(BaseScraper):
                     if page_number + 1 == self.MAX_PAGES:
                         log.warning("rosariogarage: %s reached the %d-page cap with more results",
                                     category, self.MAX_PAGES)
+                        capped.append(category)
                     offset = next_offset
-        return list(out.values())
+        if capped:
+            return SearchResults(out.values(), complete=False,
+                                 reason=f"rosariogarage: {', '.join(capped)} llegó al tope de {self.MAX_PAGES} páginas")
+        return SearchResults(out.values())
 
     async def fetch_detail_page(self, url: str) -> Page:
         async with async_client(timeout=self.TIMEOUT, headers=HEADERS, follow_redirects=True,

@@ -39,6 +39,9 @@ corridas que duran más de 30 minutos y búsquedas vencidas por más de dos cade
 últimos siete días generan un aviso de posible rotura del parser; se puede
 desactivar con `PLATFORM_HEALTH_EMPTY_RUNS=0`. Las fuentes deshabilitadas y los
 targets sin búsquedas activas con acceso vigente no generan falsas alarmas.
+Una corrida que leyó solo una parte de la fuente (el error empieza con `partial:`:
+una página que falló, el tope de páginas) no es una falla del collector: avisa con 6
+seguidas (`PARTIAL_RUNS`), no con 3. Si entre las últimas hay una falla real, vale el umbral de siempre.
 También controla la base, el heartbeat del worker y la web.
 
 ## Cuota de emails (Resend)
