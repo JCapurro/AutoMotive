@@ -129,13 +129,38 @@ class AutoCosmosSearchTests(unittest.IsolatedAsyncioTestCase):
                 await s.search(FILTERS)
         sleep.assert_not_awaited()
 
-    async def test_a_later_page_down_keeps_what_was_read(self):
+    async def test_a_later_page_down_keeps_what_was_read_as_a_partial_read(self):
         site = Site({1: page(range(1, 3), more=True)},
                     fail={2: [httpx.ConnectError("down")] * 3})
 
         found = await scraper(site).search(FILTERS)
 
         self.assertEqual(len(found), 2)
+        self.assertEqual((found.complete, found.reason), (False, "autocosmos: página 2 falló (ConnectError)"))
+
+    async def test_a_later_page_answering_anything_but_200_makes_the_read_partial(self):
+        for status in (403, 429, 404, 503):
+            site = Site({1: page(range(1, 3), more=True)}, fail={2: [status] * 3})
+
+            found = await scraper(site).search(FILTERS)
+
+            self.assertEqual((len(found), found.complete), (2, False), status)
+            self.assertEqual(found.reason, f"autocosmos: página 2 respondió {status}")
+
+    async def test_the_end_of_the_list_is_a_complete_read(self):
+        same = page(range(1, 49), more=True)
+        for pages in ({1: page(range(1, 3), more=False)}, {1: same, 2: same}):
+            found = await scraper(Site(pages)).search(FILTERS)
+            self.assertTrue(found.complete)
+
+    async def test_a_first_page_turned_away_fails_the_run_and_a_404_is_no_stock(self):
+        # autocosmos Sentra answered 403 three times, taken for "0 results".
+        for status in (403, 429):
+            with self.assertRaises(httpx.HTTPStatusError):
+                await scraper(Site({}, fail={1: [status]})).search(FILTERS)
+        for status in (404, 410):
+            found = await scraper(Site({}, fail={1: [status]})).search(FILTERS)
+            self.assertEqual((list(found), found.complete), ([], True))
 
 
 if __name__ == "__main__":

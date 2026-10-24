@@ -13,7 +13,10 @@ The site has no newest-first order (only relevance, price, cuota and
 anticipo), so a new ad can land on any page: search() walks every page of
 the model (48 cards each, `?pidx=N`, `<link rel="next">` while there are
 more). The site is slow and answers 503 now and then, so each page is
-retried before the run gives up.
+retried before the run gives up. A later page that still fails keeps the
+cards read, as a partial read (SearchResults.complete False): never the
+target's last complete read (query._read) nor a step's base
+(pipeline/news.py), and tried again (crawl.retry_seconds).
 """
 from __future__ import annotations
 import asyncio
@@ -27,7 +30,7 @@ import httpx
 from http_clients import async_client
 from bs4 import BeautifulSoup
 
-from .base import BaseScraper, Listing, ListingDetail
+from .base import BaseScraper, Listing, ListingDetail, SearchResults
 from ._dates import publication_date
 from ._http import HEADERS, Page, dedupe, fetch_page, multiline_text, soup, text_of, to_int
 
@@ -290,7 +293,12 @@ class AutoCosmosScraper(BaseScraper):
                         url, r.status_code, pause, attempt + 1, self.RETRIES)
         raise AssertionError("unreachable")
 
-    async def search(self, filters: dict) -> list[Listing]:
+    async def search(self, filters: dict) -> SearchResults:
+        """Every page while there is a next one with new cards. The first
+        page fails the run unless it answers 404 or 410, a model without
+        stock (a 403 or 429 is the site turning the read away, not 0
+        results); a later one that fails or answers anything but 200 makes
+        the read partial."""
         out: list[Listing] = []
         seen: set[str] = set()
         async with async_client(
@@ -303,18 +311,21 @@ class AutoCosmosScraper(BaseScraper):
                 url = self._build_url(filters, page=p)
                 try:
                     r = await self._get(cx, url)
-                except httpx.HTTPError:
+                except httpx.HTTPError as e:
                     if p == 1:
                         raise
                     log.warning("autocosmos: %s failed, keeping the %d cards read", url, len(seen))
-                    break
+                    return SearchResults(out, complete=False,
+                                         reason=f"autocosmos: página {p} falló ({type(e).__name__})")
                 if r.status_code != 200:
-                    if p == 1 and r.status_code >= 500:
-                        r.raise_for_status()
-                    if p > 1:
-                        log.warning("autocosmos: %s answered %d, keeping the %d cards read",
-                                    url, r.status_code, len(seen))
-                    break
+                    if p == 1:
+                        if r.status_code not in (404, 410):
+                            r.raise_for_status()
+                        break
+                    log.warning("autocosmos: %s answered %d, keeping the %d cards read",
+                                url, r.status_code, len(seen))
+                    return SearchResults(out, complete=False,
+                                         reason=f"autocosmos: página {p} respondió {r.status_code}")
                 listings = [l for l in self.parse_search(r.text) if l.listing_id not in seen]
                 if not listings:
                     break
@@ -325,7 +336,7 @@ class AutoCosmosScraper(BaseScraper):
                         out.append(listing)
                 if not _NEXT_PAGE_RE.search(r.text):
                     break
-        return out
+        return SearchResults(out)
 
     async def fetch_detail_page(self, url: str) -> Page:
         page = await fetch_page(url)

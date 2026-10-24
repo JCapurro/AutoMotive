@@ -130,8 +130,9 @@ solo para las fichas.
   - Una lectura que falló por excepción no se memoriza: se reintenta en el
     escaneo siguiente.
   - Un escaneo completo conserva solo los avisos que vio; uno incompleto
-    conserva también los demás. Un cambio de `publication_policy` vacía la
-    memoria (`sync_targets`), porque la ventana vuelve a 30 días.
+    conserva también los demás. Un cambio de `publication_policy`, o de la
+    cobertura del colector (`COVERAGE_VERSION`, `query.coverage`), vacía la
+    memoria (`targets.sync_targets`), porque la ventana vuelve a 30 días.
 - **Cola.** Dentro de cada fuente (`targets.claim_next`) va primero un target
   que nunca corrió, después los vencidos en régimen y al final los reintentos
   de bootstrap y los `count_only`, cada grupo por vencimiento. Un bootstrap
