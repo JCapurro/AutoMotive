@@ -699,8 +699,10 @@ class _FeedProbe:
 class FacebookMarketplaceScraper(BaseScraper):
     name = "facebook"
     ISOLATED = True
-    # Every card without a stored date costs a 30 s item page within the scan's
-    # cap (RECENT_FB_MAX_DATE_FETCHES): it reads exactly its searches' years.
+    # A card without a stored date that the search page's data doesn't date
+    # either costs a 30 s item page within the scan's cap
+    # (RECENT_FB_MAX_DATE_FETCHES), and every one of them with FB_FEED_DATES
+    # off: it reads exactly its searches' years.
     YEAR_BAND = False
 
     def _build_url(self, f: dict) -> str:

@@ -481,8 +481,16 @@ class ClassifyTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual({lid: m["_not_news"]["reason"] for lid, m in self.marked().items()},
                          {i: "band" for i in range(1, 6)})
         self.new_rows.assert_awaited_once()
-        # Read again later, a new 2009 is a car just listed: no mark, and still no step.
+        # Read again later, five 2009s next to two real ones are old stock back
+        # at once (a search without a model would get them): a step of the
+        # band's rows alone, the two of the searches' years still news.
         self.assertEqual(await self.classify(result(*range(1, 8)), rows, target=self.AFTER, prev_found=10),
+                         frozenset(range(1, 6)))
+        self.assertEqual({lid: m["_not_news"]["reason"] for lid, m in self.marked().items()},
+                         {i: "step" for i in range(1, 6)})
+        self.recent.assert_awaited_once()
+        # A new 2009 is a car just listed: no mark.
+        self.assertEqual(await self.classify(result(1, 6, 7), rows, target=self.AFTER, prev_found=10),
                          frozenset())
         self.assertEqual(self.marked(), {})
         # Switched off they are news, and they make the step they are.
@@ -513,6 +521,45 @@ class ClassifyTests(unittest.IsolatedAsyncioTestCase):
                                              prev_found=20), frozenset())
         self.assertEqual(await self.classify(result(*range(1, 9)), rows, target=self.AFTER, items=items,
                                              prev_found=20, NEWS_GUARD_BAND=False), frozenset())
+
+    async def test_the_band_read_before_back_at_once_is_a_step_of_its_own(self):
+        # autocosmos Fox: a read cut short, then the whole one brings 4 old
+        # Fox of the searches' years and 12 of the band's, which the last
+        # complete read covered. 4 make no step of the target's own news,
+        # but the 16 are one against the 2 of the last reads.
+        rows = [row(i, year=2012) for i in range(1, 5)] + [row(i, year=2009) for i in range(5, 17)]
+        muted = await self.classify(result(*range(1, 17)), rows, target=self.AFTER, prev_found=2)
+        self.assertEqual(muted, frozenset(range(5, 17)))
+        self.assertEqual({m["_not_news"]["reason"] for m in self.marked().values()}, {"step"})
+        # Measured against the whole `found`, band included: 6 new cars on a
+        # read half band are a step of its core's 10, not of the 20 it found.
+        items = [Listing("autocosmos", f"i{i}", "Volkswagen Fox", "https://example.test", anio=2012 - 3 * (i % 2))
+                 for i in range(10)]
+        rows = [row(1, year=2012), row(2, year=2012)] + [row(i, year=2009) for i in range(3, 7)]
+        self.assertEqual(await self.classify(result(*range(1, 7)), rows, target=self.AFTER, items=items,
+                                             prev_found=20), frozenset())
+        # A target that never loaded (an empty first read's hold ended, its
+        # empty reads leaving the band in _read): 3 of its years and 10 of the band's.
+        rows = [row(i, year=2012) for i in range(1, 4)] + [row(i, year=2009) for i in range(4, 14)]
+        self.assertEqual(await self.classify(result(*range(1, 14)), rows, target=self.AFTER, empty_streak=3),
+                         frozenset(range(4, 14)))
+        # The band's first read is no part of it: 'band' already, and
+        # measured against a base that never had it.
+        self.assertEqual(await self.classify(result(*range(1, 14)), rows, target=self.BEFORE, empty_streak=3),
+                         frozenset(range(4, 14)))
+        self.assertEqual({m["_not_news"]["reason"] for m in self.marked().values()}, {"band"})
+        # Nor a first read that a target reading the whole stock covers, which
+        # stays news: a search moved its year_min down to 2010, the top
+        # band year (2015) read before.
+        suv = {"id": 3, "source": "autocosmos", "body_type": "suv", "query": {"year_min": 2005},
+               "prefilter_rejected": []}
+        moved = dict(TARGET, query={"year_min": 2010, "year_max": 2014, "year_band": 1, "profile_ids": [1],
+                                    "_read": {"year_min": 2010, "year_max": 2015}})
+        rows = ([row(1, year=2012), row(2, year=2012), row(3, year=2015)]
+                + [row(i, year=2009, body_type="suv") for i in range(4, 9)])
+        self.assertEqual(await self.classify(result(*range(1, 9)), rows, target=moved, wide=[suv], prev_found=6),
+                         frozenset())
+        self.assertEqual(self.marked(), {})
 
     async def test_a_first_run_marks_everything_first_run(self):
         muted = await self.classify(result(1, 2), [row(1, year=2009), row(2, year=2015)], target=self.BEFORE,

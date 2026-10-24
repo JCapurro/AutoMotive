@@ -1182,6 +1182,26 @@ class EnvelopeTests(NotNewsCase):
         self.assertEqual(await self.read(), {"year_min": 2014, "km_max": 100_000})
         self.assertEqual(await self.live(), set())
 
+    async def test_a_cut_first_band_read_leaves_the_band_unread(self):
+        # autocosmos EcoSport at the deploy: the band's first read loses its
+        # page 2 (a partial read, collectors/autocosmos.py). It covered no
+        # band year, so the 2014s that page had are still the band's first
+        # read on the next run, not cars just listed.
+        await self.fiesta_alert(sources=["kavak"], anio_min=2015, km_max=100_000)
+        FakeSource.results["kavak"] = self.comps("kavak")
+        await self.tick()
+        band = [card(f"y{i}", source="kavak", precio=9_000.0, anio=2014, km=95_000 + i) for i in range(3)]
+        with patch.object(crawl.config, "REFERENCE_YEAR_BAND", 1):
+            FakeSource.results["kavak"] = SearchResults(self.comps("kavak") + band[:1], complete=False,
+                                                        reason="autocosmos: página 2 respondió 403")
+            await self.tick()
+            self.assertEqual(await self.read(), self.READ)
+            FakeSource.results["kavak"] = self.comps("kavak") + band
+            await self.tick()
+        self.assertEqual({(await self.not_news(f"y{i}"))["reason"] for i in range(3)}, {"band"})
+        self.assertEqual(await self.read(), {"year_min": 2014, "km_max": 100_000})
+        self.assertEqual(await self.live(), set())
+
 
 class CoverageTests(NotNewsCase):
     async def test_a_target_back_after_a_day_starts_over_and_still_tells_its_price_drops(self):

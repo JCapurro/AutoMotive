@@ -263,16 +263,15 @@ def _dated_news(row: dict[str, Any], max_age_days: int) -> bool:
     return row.get("published_at") is not None and _is_recent(row, max_age_days)
 
 
-async def _step_base(target: dict[str, Any], run_id: int, share: float = 1.0) -> int | None:
+async def _step_base(target: dict[str, Any], run_id: int) -> int | None:
     """What a step is measured against: the most one of the target's last
-    ok runs that read something found, its core `share` of it (_core_share).
-    A target whose ok runs all read nothing (an empty first read's hold
-    ended) never loaded: 0, so its whole stock showing up is a step and its
-    first few cars are news."""
+    ok runs that read something found. A target whose ok runs all read
+    nothing (an empty first read's hold ended) never loaded: 0, so its whole
+    stock showing up is a step and its first few cars are news."""
     base = await runs.recent_ok_found(target["id"], exclude_run=run_id, n=STEP_RUNS)
     if base is None and await runs.empty_ok_streak(target["id"], exclude_run=run_id) > 0:
         return 0
-    return base if base is None or share >= 1 else round(base * share)
+    return base
 
 
 async def classify(target: dict[str, Any], items: Iterable[Any], result: IngestResult, *, run_id: int,
@@ -328,17 +327,29 @@ async def _classify(target: dict[str, Any], items: Iterable[Any], result: Ingest
     unread = await old_band(target, [r for r in rows or () if r["id"] in band])
     settings = await IngestConfig.load()
     # Only a complete read of a source whose reads are trusted whole tells the
-    # old copy is gone: the list comparables() confirms with. Kavak,
-    # autocosmos and usadossantafe cut their reads short without saying so.
+    # old copy is gone: the list comparables() confirms with. Kavak and
+    # usadossantafe cut their reads short without saying so (autocosmos did
+    # until its failed pages made a read partial).
     trusted = (await get_config("comparables", {}) or {}).get("confirm_sources") or ()
     reappearance = config.NEWS_GUARD_REAPPEARANCE and complete and target["source"] in trusted
     inventory = query.get("inventory") is True
-    # The band's new listings never make a step, and once a read had the band
-    # its `found` is measured on its core (right after it is turned on, the
-    # last reads' `found` is all core already).
-    share = _core_share(items, query) if banded and _band_read_before(query) else 1.0
-    step = config.NEWS_GUARD_STEP and not inventory and is_step(len(new) - len(band),
-                                                                await _step_base(target, run_id, share))
+    # The step of the target's own news leaves the band's new listings out,
+    # and once a read had the band its `found` is measured on its core
+    # (right after it is turned on, the last reads' `found` is all core
+    # already). The band read before is news to a search without a model,
+    # so then everything but the band's first read, against the whole
+    # `found`, is a step of the band's rows alone: old stock back at once on
+    # a narrow search, or on a target that never loaded.
+    step = band_step = False
+    first: frozenset[int] = frozenset()
+    if config.NEWS_GUARD_STEP and not inventory:
+        base = await _step_base(target, run_id)
+        again = banded and _band_read_before(query)
+        core = round(base * _core_share(items, query)) if again and base else base
+        step = is_step(len(new) - len(band), core)
+        if again:
+            first = first_band_read(target, [r for r in rows or () if r["id"] in band])
+            band_step = is_step(len(new) - len(first), base)
     # The year and km the target's last complete read covered (the claimed
     # query's, from before any widening, the band included): outside them
     # is stock it left out.
@@ -355,7 +366,7 @@ async def _classify(target: dict[str, Any], items: Iterable[Any], result: Ingest
                 continue
             if _dated_news(row, max_age_days):
                 continue
-            if step:
+            if step or (band_step and row["id"] in band and row["id"] not in first):
                 marks.append((row["id"], mark(STEP), None))
                 reasons[STEP] += 1
                 continue
