@@ -53,6 +53,11 @@ _COVERAGE_CHANGED = _CHANGED.format("coverage")
 REACTIVATION_IDLE_SECONDS = 86_400
 _IDLE = ("(NOT crawl_targets.active "
          " AND crawl_targets.updated_at < now() - make_interval(secs => %(idle)s))")
+# What a target's last complete read covered (finish_target): query._read of
+# a target by model, query._covers of one reading a whole stock.
+_LAST_READ_KEYS = "ARRAY['_read', '_covers']"
+_LAST_READ = ("jsonb_strip_nulls(jsonb_build_object('_read', crawl_targets.query->'_read', "
+              "                                     '_covers', crawl_targets.query->'_covers'))")
 
 
 async def sync_targets(specs: Iterable[Any], *, undated: Iterable[str] = (),
@@ -71,9 +76,10 @@ async def sync_targets(specs: Iterable[Any], *, undated: Iterable[str] = (),
         listed while nobody read it. A shorter pause (a search paused for a
         moment, a tick without the counted searches) changes nothing;
       - any other edit (a wider or narrower query, query.year_band) keeps both.
-    query._read, what the target's last complete read covered (finish_target),
-    stays but for that reactivation; a target whose spec only lacks it isn't
-    rewritten. A count-only target that gets an active search is due at once.
+    query._read and query._covers, what the target's last complete read
+    covered (finish_target), stay but for that reactivation; a target whose
+    spec only lacks them isn't rewritten. A count-only target that gets an
+    active search is due at once.
     `keep_count_only`: the counted searches couldn't be read (scheduler.tick),
     so the count-only targets missing from `specs` stay active.
 
@@ -95,8 +101,7 @@ async def sync_targets(specs: Iterable[Any], *, undated: Iterable[str] = (),
             "INSERT INTO crawl_targets (source, make, model, body_type, query, active) "
             "SELECT source, make, model, body_type, query, true FROM wanted "
             "ON CONFLICT (source, make, model, body_type) DO UPDATE SET "
-            f"   query = CASE WHEN crawl_targets.query ? '_read' AND NOT {_IDLE} "
-            "     THEN excluded.query || jsonb_build_object('_read', crawl_targets.query->'_read') "
+            f"   query = CASE WHEN NOT {_IDLE} THEN excluded.query || {_LAST_READ} "
             "     ELSE excluded.query END, active = true "
             f" , first_run_done = CASE WHEN {_POLICY_CHANGED} OR {_COVERAGE_CHANGED} "
             f"     OR ({_IDLE} AND excluded.source = ANY(%(undated)s)) "
@@ -107,7 +112,8 @@ async def sync_targets(specs: Iterable[Any], *, undated: Iterable[str] = (),
             f" , prefilter_rejected = CASE WHEN {_POLICY_CHANGED} "
             f"     OR ({_COVERAGE_CHANGED} AND excluded.query ? 'publication_policy') "
             "     THEN '{}' ELSE crawl_targets.prefilter_rejected END "
-            " WHERE (crawl_targets.query - '_read') IS DISTINCT FROM excluded.query OR NOT crawl_targets.active",
+            f" WHERE (crawl_targets.query - {_LAST_READ_KEYS}) IS DISTINCT FROM excluded.query "
+            "    OR NOT crawl_targets.active",
             {"idle": REACTIVATION_IDLE_SECONDS, "undated": sorted(set(undated))})
         await cx.execute(
             "UPDATE crawl_targets t SET active = false WHERE active "
@@ -117,16 +123,18 @@ async def sync_targets(specs: Iterable[Any], *, undated: Iterable[str] = (),
             "     AND w.body_type IS NOT DISTINCT FROM t.body_type)", (keep_count_only,))
 
 
-async def whole_stock_targets(source: str) -> list[dict[str, Any]]:
-    """The active, bootstrapped targets of `source` that read a whole body
-    type (docs/CARROCERIA.md) or the whole source (inventory): what they
-    cover and haven't stored yet is new to the source (pipeline/news.py)."""
+async def covering_targets(source: str, *, exclude: int | None = None) -> list[dict[str, Any]]:
+    """The active, bootstrapped targets of `source` but `exclude`: what one
+    of them covers and hasn't stored yet is new to the source
+    (pipeline/news.py _covered). A target by model, by body type
+    (docs/CARROCERIA.md) or of the whole source (inventory); not a
+    count-only one, whose collector may read less."""
     async with connection() as cx:
         return await (await cx.execute(
-            "SELECT id, source, body_type, query, prefilter_rejected FROM crawl_targets "
-            " WHERE source = %s AND active AND first_run_done AND last_run_at IS NOT NULL "
-            "   AND (body_type IS NOT NULL OR query->>'inventory' = 'true') ORDER BY id",
-            (source,))).fetchall()
+            "SELECT id, source, make, model, body_type, query, prefilter_rejected FROM crawl_targets "
+            " WHERE source = %s AND id IS DISTINCT FROM %s AND active AND first_run_done "
+            "   AND last_run_at IS NOT NULL AND query->>'count_only' IS DISTINCT FROM 'true' ORDER BY id",
+            (source, exclude))).fetchall()
 
 
 async def publication_dates(target: dict[str, Any]) -> dict[str, int]:
@@ -239,7 +247,7 @@ async def set_prefilter_rejected(target_id: int, external_ids: Iterable[str]) ->
 
 async def finish_target(target_id: int, *, ok: bool, retry_seconds: int,
                         covered_until: datetime | None = None, bootstrap: bool = True,
-                        read: dict[str, Any] | None = None) -> None:
+                        read: dict[str, Any] | None = None, covers: dict[str, Any] | None = None) -> None:
     """Schedule from completion; keep coverage at the successful scan's start.
     Failure retries without advancing bootstrap or the coverage checkpoint.
     A count-only target waits a day, or the source's interval if longer; a
@@ -247,18 +255,20 @@ async def finish_target(target_id: int, *, ok: bool, retry_seconds: int,
     run that doesn't finish the first one (an empty first read, pipeline/crawl.py).
     `read`: what that complete read covered (news.read_envelope), kept in
     query._read on the query the target has now: a search that widened it
-    during the run is still outside it on the next one."""
+    during the run is still outside it on the next one. `covers`, the same
+    of a target reading a whole stock (news.read_covers), in query._covers."""
     async with connection() as cx:
         if ok:
             await cx.execute(
                 "UPDATE crawl_targets t SET last_run_at = coalesce(%s::timestamptz, now()), "
                 "  first_run_done = t.first_run_done OR %s, claimed_by = NULL, claimed_until = NULL, "
-                "  query = coalesce(jsonb_set(t.query, '{_read}', %s::jsonb), t.query), "
+                "  query = t.query || jsonb_strip_nulls(jsonb_build_object('_read', %s::jsonb, "
+                "                                                          '_covers', %s::jsonb)), "
                 "  next_run_at = now() + make_interval(secs => CASE WHEN t.query->>'count_only' = 'true' "
                 f"    THEN greatest(s.crawl_interval_seconds, %s) ELSE {INTERVAL_SECONDS} END) "
                 "  FROM sources s WHERE s.id = t.source AND t.id = %s",
                 (covered_until, bootstrap, Jsonb(read) if read is not None else None,
-                 COUNT_ONLY_INTERVAL_SECONDS, target_id))
+                 Jsonb(covers) if covers is not None else None, COUNT_ONLY_INTERVAL_SECONDS, target_id))
         else:
             await cx.execute(
                 "UPDATE crawl_targets SET next_run_at = now() + make_interval(secs => %s), "
