@@ -194,7 +194,8 @@ async def process_batch(notifier: Notifier, target: dict, listing_ids: list[int]
     for the target's own searches (query.profile_ids), which can't match it,
     and never counted for its searches with ended access; for any other
     search it is news, unless it is the band's first read (news.old_band):
-    old stock for every profile then.
+    old stock for every profile then, as when the band read before comes
+    back at once (news.classify marks those rows 'step').
     `body_type_filled`, listings stored before whose body type this batch
     filled in or corrected, are old news for the searches without a model:
     their batches couldn't match them, and a body-type backfill
@@ -233,10 +234,11 @@ async def process_batch(notifier: Notifier, target: dict, listing_ids: list[int]
         await notifier.on_matches(candidates, scorer.rows)
         # A first run silences new listings. One of a target that ran before
         # (back after a day inactive, a new coverage or publication policy)
-        # still tells the price drops of what it had read, to whom had it
-        # then: not to a match newer than its last run (this batch's
-        # backfill, a search created during the pause), against a price
-        # from before it.
+        # still tells the price drops of what was stored, to whom had it:
+        # a news match (told at the stored price, whenever it was made) and
+        # a backfill match older than its last run, not a newer one (this
+        # batch's backfill, a search created during the pause) against a
+        # price from before it.
         if not first_run:
             await notifier.on_listing_events(events)
         elif target.get("last_run_at") is not None:

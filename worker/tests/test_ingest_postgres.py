@@ -1156,6 +1156,53 @@ class EnvelopeTests(NotNewsCase):
         self.assertEqual(((await self.matched(suv)).get("x"), (await self.matched(ecosport)).get("x")), (True, True))
         self.assertNotIn("x", await self.notified())
 
+    async def test_what_a_body_type_target_dropped_stays_paired_with_the_read_that_covered_it(self):
+        # kavak 'suv' from 2009 drops an EcoSport 2009 by its price. Narrowed to
+        # 2012, its next read misses that car and its batch fails: neither
+        # _covers nor prefilter_rejected moves. Widened to 2008, the EcoSport
+        # target reads the car: old stock, not new to kavak.
+        def eco(listing_id: str, **kw) -> Listing:
+            return card(listing_id, source="kavak", titulo=f"Ford EcoSport 1.6 Freestyle {listing_id}",
+                        marca="Ford", modelo="EcoSport", **kw)
+
+        async def suv_target() -> dict:
+            [t] = await self.rows("SELECT query, prefilter_rejected FROM crawl_targets WHERE body_type = 'suv'")
+            return {"_covers": t["query"].get("_covers"), "rejected": t["prefilter_rejected"]}
+
+        collectors.REGISTRY["kavak"].BODY_TYPES = frozenset({"suv"})
+        [suv] = await db.create_alert(user_id=2, chat_id=2, name="suv", filters={
+            "carroceria": ["suv"], "anio_min": 2009, "precio_max": 20_000, "moneda": "USD", "sources": ["kavak"]})
+        await self.execute("UPDATE search_profiles SET channels = '{web}' WHERE id = %s", suv)
+        comps = [eco(f"c{i}", precio=18_000.0 + i * 100, km=60_000 + i * 2_000) for i in range(6)]
+        dropped = eco("r", precio=30_000.0, anio=2009, km=80_000)
+        FakeSource.results["kavak"] = comps + [dropped]
+        await self.tick()
+        self.assertEqual(await suv_target(), {"_covers": {"year_min": 2009}, "rejected": ["r"]})
+
+        ecosport = await self.fiesta_alert(modelos=["EcoSport"], sources=["kavak"], anio_min=2014)
+        await self.execute("UPDATE search_profiles SET filters = filters || %s WHERE id = %s",
+                           Jsonb({"year_min": 2012}), suv)
+        FakeSource.results["kavak"] = comps
+        process_batch = scheduler.process_batch
+
+        async def failing(notifier, target, *args, **kwargs):
+            if target.get("body_type"):
+                raise RuntimeError("match failed")
+            return await process_batch(notifier, target, *args, **kwargs)
+        with patch.object(scheduler, "process_batch", failing):
+            await self.tick()
+        self.assertEqual(await suv_target(), {"_covers": {"year_min": 2009}, "rejected": ["r"]})
+
+        await self.execute("UPDATE search_profiles SET filters = filters || %s WHERE id = %s",
+                           Jsonb({"year_min": 2008}), ecosport)
+        FakeSource.results["kavak"] = comps + [dropped]
+        await self.tick(due="body_type IS NULL")
+
+        self.assertEqual((await self.not_news("r"))["reason"], "envelope")
+        self.assertEqual((await self.matched(ecosport)).get("r"), True)
+        self.assertNotIn("r", await self.live())
+        self.assertNotIn("r", await self.notified())
+
     async def test_the_envelope_is_the_claimed_query_not_the_current_one(self):
         aid = await self.fiesta_alert(sources=["kavak"], anio_min=2015, km_max=100_000)
         FakeSource.results["kavak"] = self.comps("kavak")
@@ -1295,6 +1342,30 @@ class CoverageTests(NotNewsCase):
         [m] = await self.rows("SELECT m.is_backfill FROM matches m JOIN listings l ON l.id = m.listing_id "
                               " WHERE m.search_profile_id = %s AND l.external_id = 'c0'", late)
         self.assertTrue(m["is_backfill"])
+
+    async def test_a_new_publication_policy_still_tells_the_price_drop_of_the_last_run_s_news(self):
+        # Mercado Libre's last_run_at is its last scan's start: the car that run
+        # told as new was matched after it, at the price that drops now.
+        aid = await self.fiesta_alert()
+        FakeSource.results["mercadolibre"] = self.comps("mercadolibre")
+        await self.tick()
+        FakeSource.results["mercadolibre"] = self.comps("mercadolibre") + self.deals("mercadolibre", 1)
+        await self.tick()
+        [m] = await self.rows("SELECT m.is_backfill, m.generated_at > t.last_run_at AS after "
+                              "  FROM matches m JOIN listings l ON l.id = m.listing_id, crawl_targets t "
+                              " WHERE m.search_profile_id = %s AND l.external_id = 'd0'", aid)
+        self.assertEqual((m["is_backfill"], m["after"]), (False, True))
+        FakeSource.results["mercadolibre"] = (self.comps("mercadolibre")
+                                              + [card("d0", precio=8_000.0, km=91_000)])
+        with patch.object(crawl, "POLICY_VERSION", POLICY_VERSION + 1):
+            await self.tick()
+
+        [t] = await self.rows("SELECT query FROM crawl_targets")
+        self.assertEqual(t["query"]["publication_policy"], POLICY_VERSION + 1)
+        sent = {(r["profile_id"], r["external_id"], r["kind"]) for r in await self.rows(
+            "SELECT n.profile_id, l.external_id, n.kind::text AS kind FROM notifications n "
+            "  JOIN listings l ON l.id = n.listing_id")}
+        self.assertIn((aid, "d0", "price_drop"), sent)
 
     async def test_a_collector_that_reads_more_reloads_its_targets_in_silence(self):
         # E6: kavak reads every page of a model (COVERAGE_VERSION 2). The 4 cars

@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock, patch
 
 from collectors import REGISTRY
 from collectors._recency import BODY_TYPE_SPAN, DAY, PublicationWindow, target_window
+from collectors.base import SearchResults
 from db.legacy_filters import to_legacy, to_profile
 from pipeline import crawl, ingest as ingest_module
 from pipeline.crawl import BodyTypeTargets, TargetSpec, derive_targets, prefilter, scraper_filters
@@ -217,14 +218,15 @@ class RunTargetTests(unittest.IsolatedAsyncioTestCase):
     TARGET = dict(ScraperFilterTests.TARGET, id=9, first_run_done=True, last_run_at=None,
                   prefilter_rejected=["old-1", "gone"])
 
-    async def run_target(self, target: dict, ingest, *, not_news: frozenset[int] = frozenset()):
+    async def run_target(self, target: dict, ingest, *, not_news: frozenset[int] = frozenset(),
+                         complete: bool = True):
         class Kavak:
             BODY_TYPES = frozenset({"suv"})
             searched: list[dict] = []
 
             async def search(self, filters):
                 Kavak.searched.append(filters)
-                return []
+                return SearchResults([], complete=complete, reason=None if complete else "partial: page 2")
 
         self.searched = Kavak.searched
         with patch.dict(REGISTRY, {"kavak": Kavak}, clear=True), \
@@ -249,12 +251,23 @@ class RunTargetTests(unittest.IsolatedAsyncioTestCase):
         run = await self.run_target(self.TARGET, ingest)
         self.assertEqual(self.searched, [{"carroceria": "suv", "anio_min": 2015, "km_max": 100_000}])
         self.assertEqual(self.ingested.await_args.kwargs["target"], Target(None, None, "suv"))
-        # Old stock the prefilter let in later is backfill; the next run remembers what it dropped now.
+        # Old stock the prefilter let in later is backfill; the next run remembers what it dropped now,
+        # which finish_target writes with what the read covered (crawl._run_one).
         self.assertEqual(run.backfill_ids, frozenset({31}))
-        self.remember.assert_awaited_once_with(9, {"old-2"})
+        self.assertEqual((run.rejected, run.read_covers), (frozenset({"old-2"}), {"year_min": 2015, "km_max": 100_000}))
+        self.remember.assert_not_awaited()
         # The dropped one let in now is no step and gets no mark (pipeline/news.py).
         self.assertEqual(self.classify.await_args.kwargs, {"run_id": 1, "first_run": False, "complete": True,
                                                            "readmitted": frozenset({31})})
+
+    async def test_a_partial_read_adds_what_it_dropped_to_the_last_ones(self):
+        async def ingest(items, *, target, keep):
+            self.assertFalse(keep({"external_id": "old-2", "year": 2010}))
+            return IngestResult()
+
+        run = await self.run_target(self.TARGET, ingest, complete=False)
+        self.assertEqual((run.rejected, run.read_covers), (frozenset({"old-1", "gone", "old-2"}), None))
+        self.remember.assert_not_awaited()
 
     async def test_news_ids_join_the_prefilter_backfill(self):
         async def ingest(items, *, target, keep):
@@ -277,6 +290,7 @@ class RunTargetTests(unittest.IsolatedAsyncioTestCase):
                   "prefilter_rejected": []}
         run = await self.run_target(target, ingest, not_news=frozenset({40}))
         self.assertEqual(run.backfill_ids, frozenset({40}))
+        self.assertIsNone(run.rejected)
         self.remember.assert_not_awaited()
 
 

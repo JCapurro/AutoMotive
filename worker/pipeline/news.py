@@ -228,14 +228,17 @@ def _covered(row: dict[str, Any], others: Iterable[dict[str, Any]]) -> bool:
     before its last complete read: then it is new to the source.
       - One reading the whole source, or the row's body type, within the
         year and km that read sent its collector (query._covers, the band
-        included) and not dropped by its prefilter then (prefilter_rejected):
-        kavak 'suv' and a Ford EcoSport target widened to 2012. Its
+        included) and not dropped by its prefilter then (prefilter_rejected,
+        which finish_target writes with _covers): kavak 'suv' and a Ford
+        EcoSport target widened to 2012. Its
         prefilter keeps or remembers all the rest, whatever its query is now.
       - One by model, the row's make and model, within its searches' own
-        years and km and what its last read covered (_read, when it has one):
-        deruedas 'Sandero 2019-2022' and a Sandero 2021 the band of
-        'Stepway 2018-2020' stores first.
-    Without a last read kept (a target by body type not read since), none."""
+        years and km and what its last read covered (_read): deruedas
+        'Sandero 2019-2022' and a Sandero 2021 the band of 'Stepway
+        2018-2020' stores first.
+    Without a last read kept (_covers, _read), none: its current query may
+    have widened since. One that failed since still covers what it read:
+    what it never stored was listed after."""
     for t in others:
         q = t.get("query") or {}
         if not _reads_whole(t):
@@ -253,15 +256,16 @@ def _covered(row: dict[str, Any], others: Iterable[dict[str, Any]]) -> bool:
 
 def _sibling(row: dict[str, Any], target: dict[str, Any]) -> bool:
     """Whether a target by model reads `row` in its searches' own years (not
-    its band): the same make and model, and within its _read too once it has
-    one, so a search widened since doesn't vouch for years it never read."""
+    its band) and its last complete read covered it (_read): the same make
+    and model, within both, so a search widened since doesn't vouch for
+    years it never read."""
     q = target.get("query") or {}
     if (not row.get("model") or str(row.get("make") or "").lower() != str(target.get("make") or "").lower()
             or row["model"].lower() != str(target.get("model") or "").lower()):
         return False
     core = {k: int(q[k]) for k in ("year_min", "year_max", "km_max") if q.get(k) is not None}
     read = q.get("_read")
-    return not outside_envelope(row, core) and not (isinstance(read, dict) and outside_envelope(row, read))
+    return isinstance(read, dict) and not outside_envelope(row, core) and not outside_envelope(row, read)
 
 
 async def old_band(target: dict[str, Any], rows: Iterable[dict[str, Any]]) -> frozenset[int]:
