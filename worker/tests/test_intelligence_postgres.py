@@ -6,12 +6,15 @@ Run with
 """
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
 import pytest
 from psycopg.types.json import Jsonb
 
 import db
 from db.repos import config as app_config
 from db.repos import matches as matches_repo
+from db.repos import targets as targets_repo
 from intelligence import comparables
 from intelligence.config import SCORING_VERSION
 from pgcase import TEST_FX_RATE, PostgresTestCase, requires_db
@@ -153,16 +156,25 @@ class ComparablesConfirmationTests(IntelligenceCase):
 
     async def target(self, source: str, make: str | None = None, model: str | None = None, *,
                      query: dict | None = None, last_run_hours_ago: float = 0,
-                     body_type: str | None = None) -> None:
+                     body_type: str | None = None, full_read_hours_ago: float | None = None) -> int:
         """A crawl target whose last complete run was that long ago; without
-        make and model, an inventory target (pipeline/crawl.py)."""
+        make and model, an inventory target (pipeline/crawl.py). Its last read
+        of its whole stock (last_full_read_at) is that run, as on a source
+        without publication dates, unless `full_read_hours_ago` says when
+        (None on Mercado Libre and Facebook: never)."""
         if query is None:
             query = {"inventory": True} if make is None else {}
+        if full_read_hours_ago is None and source not in ("mercadolibre", "facebook"):
+            full_read_hours_ago = last_run_hours_ago
         async with db.connection() as cx:
-            await cx.execute(
-                "INSERT INTO crawl_targets (source, make, model, body_type, query, last_run_at, first_run_done) "
-                "VALUES (%s, %s, %s, %s, %s, now() - make_interval(secs => %s), true)",
-                (source, make, model, body_type, Jsonb(query), last_run_hours_ago * 3600))
+            row = await (await cx.execute(
+                "INSERT INTO crawl_targets (source, make, model, body_type, query, last_run_at, last_full_read_at, "
+                "                           first_run_done) "
+                "VALUES (%s, %s, %s, %s, %s, now() - make_interval(secs => %s), "
+                "        now() - make_interval(secs => %s), true) RETURNING id",
+                (source, make, model, body_type, Jsonb(query), last_run_hours_ago * 3600,
+                 None if full_read_hours_ago is None else full_read_hours_ago * 3600))).fetchone()
+        return row["id"]
 
     async def pool(self, listing_id: int) -> set[int]:
         """public.comparable_pool(): what the web lists."""
@@ -174,7 +186,8 @@ class ComparablesConfirmationTests(IntelligenceCase):
         async with db.connection() as cx:
             row = await (await cx.execute(
                 "SELECT EXISTS (SELECT 1 FROM listings l, app_config c, listing_unconfirmed("
-                "  l.source, l.make, l.model, l.year, l.mileage_km, l.last_seen_at, c.value->'confirm_sources', "
+                "  l.source, l.make, l.model, l.year, l.mileage_km, greatest(l.last_seen_at, l.last_full_seen_at), "
+                "  c.value->'confirm_sources', "
                 "  make_interval(hours => (c.value->>'confirm_grace_hours')::int)) "
                 " WHERE l.id = %s AND c.key = 'comparables') AS u", (listing_id,))).fetchone()
         return row["u"]
@@ -300,6 +313,101 @@ class ComparablesConfirmationTests(IntelligenceCase):
         self.assertEqual(ref.level_used, "model")
         self.assertEqual(ref.n, len(pool))
         self.assertEqual(len(pool), 6)
+
+
+
+class ComparablesFullReadTests(ComparablesConfirmationTests):
+    """Comparables fase 2 (migration 20261106120000): Mercado Libre's evidence
+    is a read of the target's whole stock (crawl.full_read), not its runs."""
+
+    async def asyncSetUp(self) -> None:
+        await super().asyncSetUp()
+        await self.config("jsonb_set(value, '{confirm_sources}', value->'confirm_sources' || %s)",
+                          Jsonb(["mercadolibre"]))
+
+    async def full_seen(self, listing_id: int, days_ago: float) -> None:
+        async with db.connection() as cx:
+            await cx.execute("UPDATE listings SET last_full_seen_at = now() - make_interval(secs => %s) "
+                             " WHERE id = %s", (days_ago * 86400, listing_id))
+
+    async def crawl_rows(self) -> dict[int, dict]:
+        async with db.connection() as cx:
+            rows = await (await cx.execute(
+                "SELECT id, last_run_at, last_full_read_at, "
+                "       extract(epoch FROM now() - last_full_read_at) / 3600 AS full_age_h "
+                "  FROM crawl_targets")).fetchall()
+        return {r["id"]: r for r in rows}
+
+    async def test_a_full_read_that_no_longer_sees_a_car_drops_it(self):
+        target = await self.listing(year=2016)
+        sold = await self.listing(last_seen_days_ago=10)
+        listed = await self.listing(last_seen_days_ago=10)
+        new = await self.listing(last_seen_days_ago=1)                          # inside the grace
+        await self.full_seen(listed, 0.01)
+        await self.target("mercadolibre", "Ford", "Fiesta", query={"year_min": 2015}, full_read_hours_ago=0)
+        self.assertEqual(await self.pool(target), {listed, new})
+        self.assertTrue(await self.unconfirmed(sold))
+
+    async def test_a_window_run_is_no_evidence(self):
+        target = await self.listing(year=2016)
+        old = await self.listing(last_seen_days_ago=10)
+        await self.target("mercadolibre", "Ford", "Fiesta")                     # ran now, never read it all
+        self.assertEqual(await self.pool(target), {old})
+        self.assertFalse(await self.unconfirmed(old))
+
+    async def test_a_car_seen_by_a_full_read_still_ages_out_with_its_last_seen(self):
+        # last_full_seen_at vouches for the car, it doesn't keep it in the pool:
+        # max_age_days still counts from the run that stored it.
+        target = await self.listing(year=2016)
+        old = await self.listing(last_seen_days_ago=31)
+        await self.full_seen(old, 0.01)
+        await self.target("mercadolibre", "Ford", "Fiesta", full_read_hours_ago=0)
+        self.assertEqual(await self.pool(target), set())
+
+    async def test_a_full_read_inside_the_grace_after_the_car_proves_nothing(self):
+        target = await self.listing(year=2016)
+        old = await self.listing(last_seen_days_ago=3)
+        await self.full_seen(old, 2)                                            # seen by a full read 2 days ago
+        await self.target("mercadolibre", "Ford", "Fiesta", full_read_hours_ago=24)
+        self.assertEqual(await self.pool(target), {old})
+
+    async def test_finish_target_moves_last_full_read_at_only_on_a_full_read(self):
+        never = await self.target("autocity")
+        async with db.connection() as cx:
+            await cx.execute("UPDATE crawl_targets SET last_full_read_at = NULL WHERE id = %s", (never,))
+        window = await self.target("mercadolibre", "Ford", "Fiesta", last_run_hours_ago=5, full_read_hours_ago=50)
+        held = await self.target("deruedas", "Ford", "Fiesta", last_run_hours_ago=5)
+        await targets_repo.finish_target(never, ok=True, retry_seconds=0, full_read=True)
+        await targets_repo.finish_target(window, ok=True, retry_seconds=0)
+        await targets_repo.finish_target(held, ok=True, retry_seconds=0, bootstrap=False, full_read=True)
+        rows = await self.crawl_rows()
+        self.assertEqual(rows[never]["last_full_read_at"], rows[never]["last_run_at"])
+        self.assertGreater(rows[window]["last_run_at"], rows[window]["last_full_read_at"])
+        self.assertAlmostEqual(float(rows[window]["full_age_h"]), 50, delta=0.1)  # only a full read moves it
+        self.assertAlmostEqual(float(rows[held]["full_age_h"]), 5, delta=0.1)     # a held empty read moves neither
+
+    async def test_record_full_read_vouches_for_what_it_saw_and_dates_a_complete_read(self):
+        seen = await self.listing(external_id="seen", last_seen_days_ago=5)
+        unseen = await self.listing(external_id="unseen", last_seen_days_ago=5)
+        other = await self.listing(source="autocity", external_id="seen", last_seen_days_ago=5)
+        tid = await self.target("mercadolibre", "Ford", "Fiesta")
+        target = {"id": tid, "source": "mercadolibre"}
+        started = datetime.now(timezone.utc) - timedelta(minutes=5)
+
+        self.assertEqual(await targets_repo.record_full_read(target, started, ["seen", "gone-now"],
+                                                             complete=False), 1)
+        self.assertIsNone((await self.crawl_rows())[tid]["last_full_read_at"])  # an incomplete read proves nothing
+        self.assertFalse(await self.unconfirmed(unseen))
+        await targets_repo.record_full_read(target, started, ["seen"], complete=True)
+        self.assertEqual((await self.crawl_rows())[tid]["last_full_read_at"], started)
+        async with db.connection() as cx:
+            got = {r["id"]: r["last_full_seen_at"] for r in await (await cx.execute(
+                "SELECT id, last_full_seen_at FROM listings WHERE id = ANY(%s)",
+                ([seen, unseen, other],))).fetchall()}
+        self.assertIsNotNone(got[seen])
+        self.assertEqual((got[unseen], got[other]), (None, None))
+        self.assertFalse(await self.unconfirmed(seen))
+        self.assertTrue(await self.unconfirmed(unseen))
 
 
 class ScoredMatchesTests(IntelligenceCase):

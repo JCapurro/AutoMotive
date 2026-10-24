@@ -10,10 +10,14 @@ A challenge or a login wall is never solved: the run fails as blocked.
 A target by body type (docs/CARROCERIA.md) reads "Publicados hoy" of the
 code's VEHICLE_BODY_TYPE values, and labels the cards with the code only
 when the page shows the filter applied.
+
+A target's whole stock is also read every couple of days (full_read,
+comparables fase 2), only for the ids of what is still listed.
 """
 from __future__ import annotations
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import date
 import json
 import logging
 import random
@@ -410,6 +414,39 @@ async def _get(url: str, what: str, *, allow_404: bool = False) -> Page:
     return page
 
 
+# ---------- whole stock ----------
+
+# Pages Mercado Libre serves of one search: 42 of 48 results, 2,016 (15/10/2026).
+MAX_PAGE_COUNT = 42
+# A search read a year at a time without a year_min starts with every year
+# before this many, in one search.
+OPEN_YEARS = 15
+
+
+@dataclass
+class FullRead:
+    """MercadoLibreScraper.full_read: the ids it saw, and whether they are
+    every ad the search lists."""
+    ids: set[str] = field(default_factory=set)
+    complete: bool = True
+    reason: str | None = None
+    pages: int = 0
+
+
+def _year_buckets(filters: dict) -> list[dict]:
+    """A search too big to read whole, a year at a time: each year of its
+    range, and without a year_min, every year before the last OPEN_YEARS in
+    one search."""
+    hi = int(filters.get("anio_max") or date.today().year + 1)
+    out: list[dict] = []
+    if filters.get("anio_min") is not None:
+        lo = int(filters["anio_min"])
+    else:
+        lo = hi - OPEN_YEARS + 1
+        out.append({**filters, "anio_min": 1900, "anio_max": lo - 1})
+    return out + [{**filters, "anio_min": y, "anio_max": y} for y in range(lo, hi + 1)]
+
+
 # ---------- scraper ----------
 
 class BodyTypeNotApplied(RuntimeError):
@@ -613,6 +650,67 @@ class MercadoLibreScraper(BaseScraper):
         log.info("mercadolibre body type %s: ids=%s pages=%d kept=%d complete=%s reason=%s",
                  code, ",".join(ids), pages, len(results), results.complete, results.reason)
         return results
+
+    async def full_read(self, filters: dict) -> FullRead:
+        """The ids of every ad the target's search lists (comparables fase 2:
+        a sold car stops counting once a read like this no longer sees it).
+        Mercado Libre serves 42 pages at most: a search with more is read a
+        year at a time (_year_buckets). Nothing is dated, kept or stored here.
+
+        Complete only when every page of every search was read: a page count
+        on the first page, every page but the last one full, no page repeated.
+        A wall raises (the source pauses); any other failure keeps what was
+        seen and ends incomplete."""
+        out = FullRead()
+        base = {k: filters[k] for k in ("marca", "modelo", "anio_min", "anio_max", "km_max")
+                if filters.get(k) is not None}
+        try:
+            if not await self._read_whole(base, out):
+                for bucket in _year_buckets(base):
+                    if not await self._read_whole(bucket, out):
+                        out.complete = False
+                        out.reason = (f"mercadolibre: {bucket['anio_min']}-{bucket['anio_max']} has more "
+                                      f"results than its {MAX_PAGE_COUNT} pages show")
+                        break
+        except CollectorBlocked:
+            raise
+        except Exception as exc:
+            out.complete, out.reason = False, f"mercadolibre: {type(exc).__name__}: {exc}"
+        log.info("mercadolibre full read: pages=%d ids=%d complete=%s reason=%s",
+                 out.pages, len(out.ids), out.complete, out.reason)
+        return out
+
+    async def _read_whole(self, filters: dict, out: FullRead) -> bool:
+        """Every page of one search, its ids into `out`. False, after its
+        first page, when Mercado Libre doesn't serve them all."""
+        ids: set[str] = set()
+        page, last = 1, None
+        while True:
+            if out.pages:
+                await _page_pause()
+            html = (await _get(_build_url(filters, page), "full read")).html
+            out.pages += 1
+            cards = _results(html)
+            if page == 1:
+                last = search_state(html).page_count
+                if last is not None and last >= MAX_PAGE_COUNT:
+                    out.ids |= {c.listing_id for c in cards}
+                    return False
+                if last is None and len(cards) >= PAGE_SIZE:
+                    out.complete, out.reason = False, "mercadolibre: a full first page without a page count"
+            fresh = {c.listing_id for c in cards} - ids
+            if cards and not fresh:
+                out.complete, out.reason = False, "mercadolibre: pagination repeated a page"
+                break
+            ids |= fresh
+            out.ids |= fresh
+            if len(cards) < PAGE_SIZE or last is None or page >= last:
+                break
+            page += 1
+        if out.complete and last and len(ids) <= (last - 1) * PAGE_SIZE:
+            out.complete = False
+            out.reason = f"mercadolibre: {len(ids)} ads in {last} pages"
+        return True
 
     parse_detail = staticmethod(parse_detail)
 

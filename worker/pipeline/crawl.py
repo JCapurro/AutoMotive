@@ -55,6 +55,7 @@ import json
 import logging
 import math
 import random
+import time
 import traceback
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -94,6 +95,9 @@ COUNT_ONLY_RETRY_SECONDS = 6 * 3600
 # A Facebook scan that stopped at its item-page cap (facebook.DATE_FETCH_LIMIT)
 # goes on soon: it kept what it read, and the due targets go before it anyway.
 DATE_FETCH_RETRY_SECONDS = 180
+# A read of a target's whole stock (full_read) gives up after this long. It
+# runs inside the target's claim, in the lease's margin past the search.
+FULL_READ_TIMEOUT_SECONDS = 900
 
 # app_config.body_type_targets when the row is missing (the migration's value).
 DEFAULT_BODY_TYPE_TARGETS = {"sources": ["mercadolibre", "kavak"], "interval_seconds": 1800}
@@ -519,10 +523,74 @@ async def _run_one(target: dict[str, Any], on_batch: BatchHandler | None,
     # news.EMPTY_FIRST_RUNS empty reads in a row at most.
     bootstrap = not (config.NEWS_GUARD_EMPTY_FIRST and run.first_run and run.result.found == 0
                      and target.get("source") in news.UNDATED_SOURCES and run.empty_runs < news.EMPTY_FIRST_RUNS)
+    blocked = await full_read(target)
     retry = 0 if run.complete else retry_seconds(target, reason=getattr(run.items, "reason", None), partial=True)
     await targets_repo.finish_target(target["id"], ok=run.complete, retry_seconds=retry,
                                     covered_until=run.covered_until, bootstrap=bootstrap, read=run.read_envelope,
-                                    covers=run.read_covers, rejected=run.rejected)
+                                    covers=run.read_covers, rejected=run.rejected,
+                                    full_read=target.get("source") not in RECENT_SOURCES)
+    if blocked:
+        raise SourceBlocked(target["source"])
+
+
+# When each source last started a full read, in this process (FULL_READ_SPACING_SECONDS).
+_full_reads: dict[str, float] = {}
+
+
+def full_read_due(target: dict[str, Any]) -> bool:
+    """Whether this run of the target also reads its whole stock (comparables
+    fase 2): a target by model or inventory of a collector that can
+    (`full_read`, Mercado Libre), whose last such read is FULL_READ_HOURS old
+    or never happened, when no other target of the source started one in the
+    last FULL_READ_SPACING_SECONDS."""
+    source = target.get("source")
+    if not config.FULL_READ or target.get("body_type") or not hasattr(REGISTRY.get(source), "full_read"):
+        return False
+    last = target.get("last_full_read_at")
+    if last is not None and (datetime.now(timezone.utc) - last).total_seconds() < config.FULL_READ_HOURS * 3600:
+        return False
+    started = _full_reads.get(source)
+    return started is None or time.monotonic() - started >= config.FULL_READ_SPACING_SECONDS
+
+
+def full_read_filters(target: dict[str, Any]) -> dict[str, Any]:
+    """What a full read searches: what listing_unconfirmed takes the target to
+    cover, its query's years widened by year_band, and its km."""
+    q = target.get("query") or {}
+    band = int(q.get("year_band") or 0)
+    f = {"marca": target.get("make"), "modelo": target.get("model"),
+         "anio_min": int(q["year_min"]) - band if q.get("year_min") is not None else None,
+         "anio_max": int(q["year_max"]) + band if q.get("year_max") is not None else None,
+         "km_max": q.get("km_max")}
+    return {k: v for k, v in f.items() if v is not None}
+
+
+async def full_read(target: dict[str, Any]) -> bool:
+    """Read the target's whole stock if it is due (full_read_due): the
+    listings it sees get last_full_seen_at, and a complete read sets the
+    target's last_full_read_at to its start, the evidence that drops from the
+    comparables what it no longer saw (migration 20261106120000). Never fails
+    the run. Returns True if the source blocked it (and is paused)."""
+    if not full_read_due(target):
+        return False
+    source = target["source"]
+    _full_reads[source] = time.monotonic()
+    started = datetime.now(timezone.utc)
+    try:
+        read = await run_collector(REGISTRY[source]().full_read(full_read_filters(target)),
+                                   timeout=FULL_READ_TIMEOUT_SECONDS)
+        seen = await targets_repo.record_full_read(target, started, read.ids, complete=read.complete)
+    except CollectorBlocked as exc:
+        log.warning("target=%s %s %s full read blocked: %s", target["id"], source, _label(target), exc)
+        breaker.pause(source, str(exc))
+        return True
+    except Exception:
+        await runs.log_error("full_read", f"target:{target['id']}", traceback.format_exc())
+        return False
+    log.info("target=%s %s %s full read: listed=%d stored=%d pages=%d complete=%s%s", target["id"], source,
+             _label(target), len(read.ids), seen, read.pages, read.complete,
+             f" reason={read.reason}" if read.reason else "")
+    return False
 
 
 async def _run_source(targets: list[dict[str, Any]], on_batch: BatchHandler | None,

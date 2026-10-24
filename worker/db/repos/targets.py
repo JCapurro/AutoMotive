@@ -172,7 +172,7 @@ _DUE = (
     "  OR EXISTS (SELECT 1 FROM search_profiles sp WHERE public.search_access_active(sp.id) "
     f"   AND {PROFILE_WANTS_TARGET})) ")
 _TARGET_COLUMNS = ("t.id, t.source, t.make, t.model, t.body_type, t.query, t.first_run_done, "
-                   "t.prefilter_rejected, t.last_run_at, "
+                   "t.prefilter_rejected, t.last_run_at, t.last_full_read_at, "
                    f"{INTERVAL_SECONDS} AS crawl_interval_seconds")
 
 
@@ -245,10 +245,26 @@ async def set_prefilter_rejected(target_id: int, external_ids: Iterable[str]) ->
                          (sorted(set(external_ids)), target_id))
 
 
+async def record_full_read(target: dict[str, Any], started: datetime, seen: Iterable[str], *,
+                           complete: bool) -> int:
+    """A read of a Mercado Libre target's whole stock (comparables fase 2):
+    the listings of the source it saw get last_full_seen_at, and, if it saw
+    them all, the target gets last_full_read_at at its start. Returns how many
+    stored listings it saw."""
+    ids = sorted(set(seen))
+    async with connection() as cx:
+        cur = await cx.execute("UPDATE listings SET last_full_seen_at = now() "
+                               " WHERE source = %s AND external_id = ANY(%s)", (target["source"], ids))
+        if complete:
+            await cx.execute("UPDATE crawl_targets SET last_full_read_at = %s WHERE id = %s",
+                             (started, target["id"]))
+        return cur.rowcount
+
+
 async def finish_target(target_id: int, *, ok: bool, retry_seconds: int,
                         covered_until: datetime | None = None, bootstrap: bool = True,
                         read: dict[str, Any] | None = None, covers: dict[str, Any] | None = None,
-                        rejected: Iterable[str] | None = None) -> None:
+                        rejected: Iterable[str] | None = None, full_read: bool = False) -> None:
     """Schedule from completion; keep coverage at the successful scan's start.
     Failure retries without advancing bootstrap or the coverage checkpoint.
     A count-only target waits a day, or the source's interval if longer; a
@@ -265,13 +281,18 @@ async def finish_target(target_id: int, *, ok: bool, retry_seconds: int,
     `rejected`: what its prefilter dropped (crawl.TargetRun.rejected), in
     prefilter_rejected by the same UPDATE as `covers`, or by the retry's
     after a partial read (ok=False), which only adds to it: it never lacks
-    what the read behind query._covers dropped."""
+    what the read behind query._covers dropped.
+    `full_read`: the run read the target's whole stock (a source without
+    publication dates), so last_full_read_at, the comparables' evidence
+    (comparables fase 2), moves with last_run_at."""
     remembered = sorted(set(rejected)) if rejected is not None else None
     async with connection() as cx:
         if ok:
             await cx.execute(
                 "UPDATE crawl_targets t SET last_run_at = CASE WHEN %(bootstrap)s OR t.last_run_at IS NULL "
                 "    THEN coalesce(%(covered)s::timestamptz, now()) ELSE t.last_run_at END, "
+                "  last_full_read_at = CASE WHEN %(full)s AND (%(bootstrap)s OR t.last_run_at IS NULL) "
+                "    THEN coalesce(%(covered)s::timestamptz, now()) ELSE t.last_full_read_at END, "
                 "  first_run_done = t.first_run_done OR %(bootstrap)s, claimed_by = NULL, claimed_until = NULL, "
                 "  query = t.query || jsonb_strip_nulls(jsonb_build_object('_read', %(read)s::jsonb, "
                 "                                                          '_covers', %(covers)s::jsonb)), "
@@ -279,7 +300,7 @@ async def finish_target(target_id: int, *, ok: bool, retry_seconds: int,
                 "  next_run_at = now() + make_interval(secs => CASE WHEN t.query->>'count_only' = 'true' "
                 f"    THEN greatest(s.crawl_interval_seconds, %(count_only)s) ELSE {INTERVAL_SECONDS} END) "
                 "  FROM sources s WHERE s.id = t.source AND t.id = %(id)s",
-                {"covered": covered_until, "bootstrap": bootstrap,
+                {"covered": covered_until, "bootstrap": bootstrap, "full": full_read,
                  "read": Jsonb(read) if read is not None else None,
                  "covers": Jsonb(covers) if covers is not None else None, "rejected": remembered,
                  "count_only": COUNT_ONLY_INTERVAL_SECONDS, "id": target_id})

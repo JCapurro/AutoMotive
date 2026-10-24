@@ -700,7 +700,7 @@ class RunOneTests(unittest.IsolatedAsyncioTestCase):
     async def test_an_empty_first_read_does_not_finish_the_bootstrap(self):
         finish = await self.run_one(dict(TARGET, source="kavak", first_run_done=False))
         finish.assert_awaited_once_with(7, ok=True, retry_seconds=0, covered_until=None, bootstrap=False,
-                                       read=None, covers=None, rejected=None)
+                                       read=None, covers=None, rejected=None, full_read=True)
         finish = await self.run_one(dict(TARGET, source="kavak", first_run_done=False), found=4)
         self.assertTrue(finish.call_args.kwargs["bootstrap"])
 

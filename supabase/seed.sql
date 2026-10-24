@@ -30,7 +30,7 @@ insert into public.app_config (key, value) values
   ('score_weights',                 '{"price": 35, "match": 25, "km": 15, "trim": 10, "recency": 10, "completeness": 5}'),
   ('level_thresholds',              '{"high": 85, "good": 70, "match": 50}'),
   ('comparables',                   '{"min_n": 5, "year_tol": 1, "km_tol_pct": 25, "max_age_days": 30, "confirm_grace_hours": 36,
-                                      "confirm_sources": ["autocity", "carone", "deruedas", "gruporandazzo", "mardelusados", "rosariogarage"]}'),
+                                      "confirm_sources": ["autocity", "carone", "deruedas", "gruporandazzo", "mardelusados", "rosariogarage", "mercadolibre"]}'),
   ('recommended_max_age_days',      '15'),
   ('price_drop_min_pct',            '3'),
   ('alerts_max_per_user_day',       '10'),

@@ -94,6 +94,14 @@ NEWS_PARTIAL_RETRY = _switch("NEWS_PARTIAL_RETRY", "1")
 # comparables count the live copy (E3).
 NEWS_LINK_REPOST = _switch("NEWS_LINK_REPOST", "0")
 
+# Comparables fase 2: a Mercado Libre target reads its whole stock this often
+# (crawl.full_read), so a sold car stops counting as a comparable
+# (crawl_targets.last_full_read_at). One such read per source this far apart
+# at most: the first ones after a deploy don't all land together.
+FULL_READ = _switch("FULL_READ", "1")
+FULL_READ_HOURS = max(1.0, float(os.getenv("FULL_READ_HOURS", "48")))
+FULL_READ_SPACING_SECONDS = max(0, int(os.getenv("FULL_READ_SPACING_SECONDS", "1800")))
+
 # Geocoding is used to turn listing location text into coordinates and then
 # enforce a user-origin radius in kilometers.
 GEOCODING_ENABLED = os.getenv("GEOCODING_ENABLED", "1").strip().lower() not in {
