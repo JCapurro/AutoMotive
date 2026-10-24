@@ -141,6 +141,11 @@ class TargetRun:
     # news.read_covers): finish_target keeps it in query._read or _covers.
     read_envelope: dict[str, Any] | None = None
     read_covers: dict[str, Any] | None = None
+    # What the prefilter dropped, for prefilter_rejected: this read's after a
+    # complete read, added to the last ones after a partial one. None: the
+    # target remembers nothing. finish_target writes it with read_covers, so
+    # the pair always comes from one read (news._covered).
+    rejected: frozenset[str] | None = None
 
 
 class SourceBlocked(Exception):
@@ -351,7 +356,7 @@ def prefilter(target: dict[str, Any]) -> Callable[[dict[str, Any]], bool] | None
 
     On a source without publication dates (Kavak) a body type's whole stock
     is read on every run, so what the prefilter drops is remembered
-    (crawl_targets.prefilter_rejected, run_target): a wider search, a price
+    (crawl_targets.prefilter_rejected, TargetRun.rejected): a wider search, a price
     cut or the quote can let it in later, and then it is not news. A
     Facebook target by model keeps its date memory in that column instead
     (_date_memory); no target uses it both ways."""
@@ -422,10 +427,10 @@ async def run_target(target: dict[str, Any], on_health: HealthHandler | None = N
     complete = getattr(items, "complete", True)
     first_run = not target["first_run_done"]
     remembers = keep is not None and source not in RECENT_SOURCES
+    readmitted = _readmitted(target, result) if remembers else frozenset()
     # Right after the ingest, so that little can stop the run before the marks.
     backfill_ids = await news.classify(target, items, result, run_id=run_id, first_run=first_run,
-                                       complete=complete,
-                                       readmitted=_readmitted(target, result) if remembers else ())
+                                       complete=complete, readmitted=readmitted)
     error = getattr(items, "reason", None) if not complete else None
     health = await runs.finish_run(run_id, ok=complete, found=result.found, new=result.new,
                                    updated=result.updated, error=error)
@@ -438,13 +443,17 @@ async def run_target(target: dict[str, Any], on_health: HealthHandler | None = N
                      if "publication_until" in filters else None)
     if _date_memory(target):
         await _remember_dates(target, getattr(items, "date_skips", None))
-    if remembers:
-        backfill_ids |= await _remember_rejected(target, result, rejected, complete=complete)
+    if readmitted:
+        log.info("target=%s %s: %d listings the prefilter had dropped are backfill",
+                 target["id"], _label(target), len(readmitted))
+    if remembers and not complete:
+        rejected |= set(target.get("prefilter_rejected") or ())
     empty_runs = (await runs.empty_ok_streak(target["id"], exclude_run=run_id)
                   if first_run and config.NEWS_GUARD_EMPTY_FIRST and source in news.UNDATED_SOURCES else 0)
     return TargetRun(target, items, result, first_run=first_run, complete=complete,
-                     covered_until=covered_until, empty_runs=empty_runs, backfill_ids=backfill_ids,
-                     read_envelope=read if complete else None, read_covers=covers if complete else None)
+                     covered_until=covered_until, empty_runs=empty_runs, backfill_ids=backfill_ids | readmitted,
+                     read_envelope=read if complete else None, read_covers=covers if complete else None,
+                     rejected=frozenset(rejected) if remembers else None)
 
 
 def _date_memory(target: dict[str, Any]) -> bool:
@@ -468,27 +477,10 @@ async def _remember_dates(target: dict[str, Any], date_skips: list[str] | None) 
 def _readmitted(target: dict[str, Any], result: IngestResult) -> frozenset[int]:
     """The listings of this read that this target's prefilter had dropped on
     an earlier run (prefilter_rejected): old stock a wider search or a price
-    cut let in. Stored now, or by a run cut before it updated
+    cut let in. Stored now, or by a run cut before its finish_target updated
     prefilter_rejected (pipeline/news.py catches that run up)."""
     before = set(target.get("prefilter_rejected") or ())
     return frozenset(lid for (_, external_id), lid in result.ids.items() if external_id in before)
-
-
-async def _remember_rejected(target: dict[str, Any], result: IngestResult, rejected: set[str], *,
-                             complete: bool) -> frozenset[int]:
-    """The listings of this read the prefilter had dropped on an earlier run
-    (_readmitted), and the ones it dropped now for the next run: all of them
-    after a complete run, added to the last ones after a partial one."""
-    before = set(target.get("prefilter_rejected") or ())
-    backfill = _readmitted(target, result)
-    try:
-        await targets_repo.set_prefilter_rejected(target["id"], rejected if complete else rejected | before)
-    except Exception:
-        await runs.log_error("crawl", f"target:{target['id']}", traceback.format_exc())
-    if backfill:
-        log.info("target=%s %s: %d listings the prefilter had dropped are backfill",
-                 target["id"], _label(target), len(backfill))
-    return backfill
 
 
 def _label(target: dict[str, Any]) -> str:
@@ -529,7 +521,7 @@ async def _run_one(target: dict[str, Any], on_batch: BatchHandler | None,
     retry = 0 if run.complete else retry_seconds(target, reason=getattr(run.items, "reason", None), partial=True)
     await targets_repo.finish_target(target["id"], ok=run.complete, retry_seconds=retry,
                                     covered_until=run.covered_until, bootstrap=bootstrap, read=run.read_envelope,
-                                    covers=run.read_covers)
+                                    covers=run.read_covers, rejected=run.rejected)
 
 
 async def _run_source(targets: list[dict[str, Any]], on_batch: BatchHandler | None,

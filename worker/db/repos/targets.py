@@ -247,7 +247,8 @@ async def set_prefilter_rejected(target_id: int, external_ids: Iterable[str]) ->
 
 async def finish_target(target_id: int, *, ok: bool, retry_seconds: int,
                         covered_until: datetime | None = None, bootstrap: bool = True,
-                        read: dict[str, Any] | None = None, covers: dict[str, Any] | None = None) -> None:
+                        read: dict[str, Any] | None = None, covers: dict[str, Any] | None = None,
+                        rejected: Iterable[str] | None = None) -> None:
     """Schedule from completion; keep coverage at the successful scan's start.
     Failure retries without advancing bootstrap or the coverage checkpoint.
     A count-only target waits a day, or the source's interval if longer; a
@@ -256,7 +257,11 @@ async def finish_target(target_id: int, *, ok: bool, retry_seconds: int,
     `read`: what that complete read covered (news.read_envelope), kept in
     query._read on the query the target has now: a search that widened it
     during the run is still outside it on the next one. `covers`, the same
-    of a target reading a whole stock (news.read_covers), in query._covers."""
+    of a target reading a whole stock (news.read_covers), in query._covers.
+    `rejected`: what its prefilter dropped (crawl.TargetRun.rejected), in
+    prefilter_rejected by the same UPDATE, also after a partial read
+    (ok=False): the two never come from different reads."""
+    remembered = sorted(set(rejected)) if rejected is not None else None
     async with connection() as cx:
         if ok:
             await cx.execute(
@@ -264,13 +269,16 @@ async def finish_target(target_id: int, *, ok: bool, retry_seconds: int,
                 "  first_run_done = t.first_run_done OR %s, claimed_by = NULL, claimed_until = NULL, "
                 "  query = t.query || jsonb_strip_nulls(jsonb_build_object('_read', %s::jsonb, "
                 "                                                          '_covers', %s::jsonb)), "
+                "  prefilter_rejected = coalesce(%s::text[], t.prefilter_rejected), "
                 "  next_run_at = now() + make_interval(secs => CASE WHEN t.query->>'count_only' = 'true' "
                 f"    THEN greatest(s.crawl_interval_seconds, %s) ELSE {INTERVAL_SECONDS} END) "
                 "  FROM sources s WHERE s.id = t.source AND t.id = %s",
                 (covered_until, bootstrap, Jsonb(read) if read is not None else None,
-                 Jsonb(covers) if covers is not None else None, COUNT_ONLY_INTERVAL_SECONDS, target_id))
+                 Jsonb(covers) if covers is not None else None, remembered, COUNT_ONLY_INTERVAL_SECONDS,
+                 target_id))
         else:
             await cx.execute(
                 "UPDATE crawl_targets SET next_run_at = now() + make_interval(secs => %s), "
-                "  claimed_by = NULL, claimed_until = NULL "
-                " WHERE id = %s", (retry_seconds, target_id))
+                "  claimed_by = NULL, claimed_until = NULL, "
+                "  prefilter_rejected = coalesce(%s::text[], prefilter_rejected) "
+                " WHERE id = %s", (retry_seconds, remembered, target_id))

@@ -170,9 +170,12 @@ class Notifier:
                                 matched_before: datetime | None = None) -> list[int]:
         """price_drop and listing_gone (pipeline/ingest.ListingEvent) → notifications.
         Run after re-scoring, so a price_drop carries the new score.
-        `matched_before`: only matches generated before it count (the first
-        run of a target that ran before, pipeline/scheduler.process_batch);
-        saved and followed listings always do."""
+        `matched_before`: a backfill match counts only if generated before it
+        (the first run of a target that ran before,
+        pipeline/scheduler.process_batch); news matches and saved listings
+        always do. A price_drop reaches a saved listing or a match of level
+        match or better (engine.classify); following one only counts for
+        listing_gone."""
         wanted = [e for e in listing_events if e.kind in (PRICE_DROP, LISTING_GONE)]
         if not wanted:
             return []
