@@ -43,7 +43,9 @@ start to preserve coverage. On a source without publication dates,
 pipeline/news.py tells which new listings are old stock (backfill), and a
 first run that read nothing holds the bootstrap for a couple of runs. There
 a complete read of a target by model keeps the year and km it read in
-query._read, for its next run to tell what a widened search brings.
+query._read, for its next run to tell what a widened search brings, and one
+of a target reading a whole stock in query._covers, for the others to tell
+what is new to the source.
 """
 from __future__ import annotations
 
@@ -135,9 +137,10 @@ class TargetRun:
     # year band's first read among them), and the ones this target's
     # prefilter had dropped before (prefilter_rejected).
     backfill_ids: frozenset[int] = frozenset()
-    # What this read covered, when it was complete (news.read_envelope):
-    # finish_target keeps it in query._read.
+    # What this read covered, when it was complete (news.read_envelope,
+    # news.read_covers): finish_target keeps it in query._read or _covers.
     read_envelope: dict[str, Any] | None = None
+    read_covers: dict[str, Any] | None = None
 
 
 class SourceBlocked(Exception):
@@ -379,7 +382,7 @@ async def run_target(target: dict[str, Any], on_health: HealthHandler | None = N
         scraper = REGISTRY[source]()
         filters = scraper_filters(target)
         # Before the search: what is sent, whatever the collector does with the dict.
-        read = news.read_envelope(target, filters)
+        read, covers = news.read_envelope(target, filters), news.read_covers(target, filters)
         if source in RECENT_SOURCES:
             filters["known_publication_dates"] = await targets_repo.publication_dates(target)
         if _date_memory(target):
@@ -441,7 +444,7 @@ async def run_target(target: dict[str, Any], on_health: HealthHandler | None = N
                   if first_run and config.NEWS_GUARD_EMPTY_FIRST and source in news.UNDATED_SOURCES else 0)
     return TargetRun(target, items, result, first_run=first_run, complete=complete,
                      covered_until=covered_until, empty_runs=empty_runs, backfill_ids=backfill_ids,
-                     read_envelope=read if complete else None)
+                     read_envelope=read if complete else None, read_covers=covers if complete else None)
 
 
 def _date_memory(target: dict[str, Any]) -> bool:
@@ -525,7 +528,8 @@ async def _run_one(target: dict[str, Any], on_batch: BatchHandler | None,
                      and target.get("source") in news.UNDATED_SOURCES and run.empty_runs < news.EMPTY_FIRST_RUNS)
     retry = 0 if run.complete else retry_seconds(target, reason=getattr(run.items, "reason", None), partial=True)
     await targets_repo.finish_target(target["id"], ok=run.complete, retry_seconds=retry,
-                                    covered_until=run.covered_until, bootstrap=bootstrap, read=run.read_envelope)
+                                    covered_until=run.covered_until, bootstrap=bootstrap, read=run.read_envelope,
+                                    covers=run.read_covers)
 
 
 async def _run_source(targets: list[dict[str, Any]], on_batch: BatchHandler | None,

@@ -233,9 +233,14 @@ async def process_batch(notifier: Notifier, target: dict, listing_ids: list[int]
         await notifier.on_matches(candidates, scorer.rows)
         # A first run silences new listings. One of a target that ran before
         # (back after a day inactive, a new coverage or publication policy)
-        # still tells the price drops of what it had read.
-        if not first_run or target.get("last_run_at") is not None:
+        # still tells the price drops of what it had read, to whom had it
+        # then: not to a match newer than its last run (this batch's
+        # backfill, a search created during the pause), against a price
+        # from before it.
+        if not first_run:
             await notifier.on_listing_events(events)
+        elif target.get("last_run_at") is not None:
+            await notifier.on_listing_events(events, matched_before=target["last_run_at"])
     except Exception:
         await log_error("notify", f"target:{target.get('id')}", traceback.format_exc())
     await notifier.deliver()

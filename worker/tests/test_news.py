@@ -75,6 +75,17 @@ class ReadEnvelopeTests(unittest.TestCase):
                        dict(TARGET, source="autocity", make=None, model=None, query={"inventory": True})):
             self.assertIsNone(news.read_envelope(target, filters), target)
 
+    def test_a_target_reading_a_whole_stock_keeps_what_its_collector_was_sent_apart(self):
+        # kavak 'suv' 2010-2014 reads 2009-2015 with the band: its collector drops
+        # a 2016 card before the prefilter, which never remembers it.
+        suv = dict(TARGET, source="kavak", make=None, model=None, body_type="suv",
+                   query={"year_min": 2010, "year_max": 2014, "year_band": 1, "price_usd_max": 20_000})
+        self.assertEqual(news.read_covers(suv, crawl.scraper_filters(suv)), {"year_min": 2009, "year_max": 2015})
+        inventory = dict(TARGET, source="autocity", make=None, model=None, query={"inventory": True})
+        self.assertEqual(news.read_covers(inventory, crawl.scraper_filters(inventory)), {})
+        for target in (TARGET, dict(suv, source="mercadolibre")):
+            self.assertIsNone(news.read_covers(target, {"anio_min": 2009, "anio_max": 2015}), target)
+
 
 class BandTests(unittest.TestCase):
     """The reference year band (pipeline/crawl.py): Ka 2010 reads 2009 too."""
@@ -172,7 +183,7 @@ class ClassifyTests(unittest.IsolatedAsyncioTestCase):
                 trusted=("autocosmos",), empty_streak=0, wide=(), **switches):
         """news.py over mocks: `rows` its new rows, `left` what an earlier run
         left unclassified, `trusted` app_config.comparables.confirm_sources,
-        `wide` the source's targets that read a whole body type or inventory."""
+        `wide` the source's other bootstrapped targets (targets.covering_targets)."""
         @asynccontextmanager
         async def connection():
             yield object()
@@ -204,7 +215,7 @@ class ClassifyTests(unittest.IsolatedAsyncioTestCase):
                 patch.object(news.listings, "new_rows", self.new_rows), \
                 patch.object(news.listings, "find_reappeared", self.found), \
                 patch.object(news.listings, "mark_not_news", self.marks), \
-                patch.object(news.targets, "whole_stock_targets", self.wide):
+                patch.object(news.targets, "covering_targets", self.wide):
             yield
 
     async def classify(self, res: IngestResult, rows: list[dict] | Exception, *, target=TARGET, items=(),
@@ -318,21 +329,58 @@ class ClassifyTests(unittest.IsolatedAsyncioTestCase):
     async def test_what_a_target_reading_its_whole_body_type_covers_is_news(self):
         # kavak 'suv' reads every SUV on each run: an EcoSport 2013 it covers and
         # never stored is new to kavak, though the EcoSport target read 2016 on.
-        suv = {"id": 3, "source": "kavak", "body_type": "suv", "query": {"price_usd_max": 15_000, "year_min": 2010},
+        # What it covers is what its last read sent the collector, which drops
+        # the rest before its prefilter: 2010-2015, though its searches want 2005-2022 now.
+        suv = {"id": 3, "source": "kavak", "make": None, "model": None, "body_type": "suv",
+               "query": {"price_usd_max": 15_000, "year_min": 2005, "year_max": 2022,
+                         "_covers": {"year_min": 2010, "year_max": 2015}},
                "prefilter_rejected": ["n4"]}
-        target = dict(TARGET, source="kavak", query={"year_min": 2012, "_read": {"year_min": 2016}})
+        target = dict(TARGET, source="kavak", query={"year_min": 2008, "year_max": 2022,
+                                                     "_read": {"year_min": 2016, "year_max": 2018}})
         rows = [row(1, year=2013, body_type="suv", price_usd=9_000.0),     # covered
                 row(2, year=2013, body_type="sedan", price_usd=9_000.0),   # another body type
-                row(3, year=2013, body_type="suv", price_usd=20_000.0),    # above its searches' cap
+                row(3, year=2013, body_type="suv", price_usd=20_000.0),    # above its cap, not dropped: listed since
                 row(4, year=2013, body_type="suv", price_usd=9_000.0),     # its prefilter dropped it before
-                row(5, year=2008, body_type="suv", price_usd=9_000.0)]     # below its searches' years
-        muted = await self.classify(result(1, 2, 3, 4, 5), rows, target=target, wide=[suv], trusted=())
-        self.assertEqual(muted, frozenset({2, 3, 4, 5}))
-        self.wide.assert_awaited_once_with("kavak")
+                row(5, year=2008, body_type="suv", price_usd=9_000.0),     # below what it read
+                row(6, year=2020, body_type="suv", price_usd=9_000.0)]     # past what it read (kavak's year_max)
+        muted = await self.classify(result(1, 2, 3, 4, 5, 6), rows, target=target, wide=[suv], trusted=())
+        self.assertEqual(muted, frozenset({2, 4, 5, 6}))
+        self.wide.assert_awaited_once_with("kavak", exclude=7)
+        # Not read since it keeps what it covered: it vouches for nothing.
+        unread = dict(suv, query={k: v for k, v in suv["query"].items() if k != "_covers"})
+        self.assertEqual(await self.classify(result(1), rows, target=target, wide=[unread], trusted=()),
+                         frozenset({1}))
         # A target of the whole source covers everything.
-        inventory = {"id": 4, "source": "kavak", "body_type": None, "query": {"inventory": True},
-                     "prefilter_rejected": []}
-        self.assertEqual(await self.classify(result(2), rows, target=target, wide=[inventory], trusted=()),
+        inventory = {"id": 4, "source": "kavak", "make": None, "model": None, "body_type": None,
+                     "query": {"inventory": True, "_covers": {}}, "prefilter_rejected": []}
+        self.assertEqual(await self.classify(result(2, 6), rows, target=target, wide=[inventory], trusted=()),
+                         frozenset())
+
+    async def test_a_sibling_model_target_covers_what_it_reads_in_its_searches_years(self):
+        # deruedas walks Sandero cards for a Stepway: 'Stepway 2018-2020'
+        # widened to 2022 stores a Sandero 2022 before 'Sandero 2019-2022' reads it.
+        sandero = {"id": 5, "source": "deruedas", "make": "Renault", "model": "Sandero", "body_type": None,
+                   "query": {"year_min": 2019, "year_max": 2022, "km_max": 100_000,
+                             "_read": {"year_min": 2019, "year_max": 2022}}, "prefilter_rejected": []}
+        target = dict(TARGET, source="deruedas", make="Renault", model="Stepway",
+                      query={"year_min": 2018, "year_max": 2022, "_read": {"year_min": 2018, "year_max": 2020}})
+
+        def renault(lid: int, model: str, year: int, **kw) -> dict:
+            return row(lid, source="deruedas", make="Renault", model=model, year=year, **kw)
+        rows = [renault(1, "Sandero", 2022, mileage_km=10_000),             # the Sandero target reads it
+                renault(2, "SANDERO", 2022),
+                renault(3, "Sandero", 2022, mileage_km=150_000),            # past its km
+                renault(4, "Logan", 2022),                                  # another model
+                renault(5, "Stepway", 2022)]                                # the target's own
+        muted = await self.classify(result(1, 2, 3, 4, 5), rows, target=target, wide=[sandero], trusted=())
+        self.assertEqual(muted, frozenset({3, 4, 5}))
+        # Its search just widened to 2022: it never read that year.
+        widened = dict(sandero, query=dict(sandero["query"], _read={"year_min": 2019, "year_max": 2021}))
+        self.assertEqual(await self.classify(result(1), rows, target=target, wide=[widened], trusted=()),
+                         frozenset({1}))
+        # The deploy: no last read yet, its searches' years tell.
+        bare = dict(sandero, query={"year_min": 2019, "year_max": 2022})
+        self.assertEqual(await self.classify(result(1, 3), rows, target=target, wide=[bare], trusted=()),
                          frozenset())
 
     async def test_a_recent_publication_outside_the_last_read_is_news(self):
@@ -373,7 +421,14 @@ class ClassifyTests(unittest.IsolatedAsyncioTestCase):
             Kavak.complete = complete
             with self.patched([], trusted=()), self.kavak(Kavak, IngestResult(found=1)):
                 run = await crawl.run_target(target)
-            self.assertEqual(run.read_envelope, read, complete)
+            self.assertEqual((run.read_envelope, run.read_covers), (read, None), complete)
+        # A target by body type keeps it apart, for the others (news._covered).
+        suv = dict(target, make=None, model=None, body_type="suv", query={"year_min": 2010, "year_max": 2014})
+        for complete, covers in ((True, {"year_min": 2010, "year_max": 2014}), (False, None)):
+            Kavak.complete = complete
+            with self.patched([], trusted=()), self.kavak(Kavak, IngestResult(found=1)):
+                run = await crawl.run_target(suv)
+            self.assertEqual((run.read_envelope, run.read_covers), (None, covers), complete)
 
     async def test_the_listings_the_prefilter_readmits_neither_step_nor_get_marked(self):
         # A wider kavak SUV search lets 12 dropped cars in, next to 2 new ones: not a step.
@@ -491,8 +546,8 @@ class ClassifyTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_the_band_s_first_read_that_a_whole_stock_target_covers_is_news(self):
         # A bootstrapped target reading every SUV from 2005 would have stored an old Fox 2009 SUV.
-        suv = {"id": 3, "source": "autocosmos", "body_type": "suv", "query": {"year_min": 2005},
-               "prefilter_rejected": []}
+        suv = {"id": 3, "source": "autocosmos", "body_type": "suv",
+               "query": {"year_min": 2005, "_covers": {"year_min": 2005}}, "prefilter_rejected": []}
         rows = [row(1, year=2009, body_type="suv"), row(2, year=2009, body_type="hatchback")]
         muted = await self.classify(result(1, 2), rows, target=self.BEFORE, wide=[suv], prev_found=40)
         self.assertEqual(muted, frozenset({2}))
@@ -555,14 +610,39 @@ class SyncTargetsTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(log_error.await_args.args[:2], ("count_after_expiry", "counting_profiles"))
 
 
+class ListingEventsTests(unittest.IsolatedAsyncioTestCase):
+    """scheduler.process_batch: whom a batch's price drops reach."""
+
+    async def events_of(self, *, first_run: bool, last_run_at: datetime | None) -> AsyncMock:
+        notifier = MagicMock(on_matches=AsyncMock(), on_listing_events=AsyncMock(), deliver=AsyncMock())
+        scorer = MagicMock(rows={}, prepare=AsyncMock())
+        with patch.object(scheduler.Scorer, "create", AsyncMock(return_value=scorer)), \
+                patch.object(scheduler.db, "get_config", AsyncMock(return_value=15)), \
+                patch.object(scheduler.db, "alerts_for_target", AsyncMock(return_value=[])), \
+                patch.object(scheduler, "count_after_expiry", AsyncMock()):
+            await scheduler.process_batch(notifier, dict(TARGET, last_run_at=last_run_at), [1], first_run=first_run,
+                                          events=["drop"])
+        return notifier.on_listing_events
+
+    async def test_a_reset_first_run_tells_its_price_drops_only_to_the_matches_before_it(self):
+        # kavak Fiesta back after two months: a search created during the
+        # pause, or matched by this very batch, never had the old price.
+        before = NOW - timedelta(days=60)
+        (await self.events_of(first_run=True, last_run_at=before)).assert_awaited_once_with(
+            ["drop"], matched_before=before)
+        (await self.events_of(first_run=False, last_run_at=before)).assert_awaited_once_with(["drop"])
+        (await self.events_of(first_run=True, last_run_at=None)).assert_not_awaited()
+
+
 class RunOneTests(unittest.IsolatedAsyncioTestCase):
     """crawl._run_one: the empty first read and the retry of a partial one."""
 
     async def run_one(self, target: dict, *, found: int = 0, first_run: bool = True, complete: bool = True,
-                      reason: str | None = None, empty_runs: int = 0, read: dict | None = None) -> AsyncMock:
+                      reason: str | None = None, empty_runs: int = 0, read: dict | None = None,
+                      covers: dict | None = None) -> AsyncMock:
         items = SearchResults([], complete=complete, reason=reason)
         batch = crawl.TargetRun(target, items, IngestResult(found=found), first_run=first_run, complete=complete,
-                                empty_runs=empty_runs, read_envelope=read)
+                                empty_runs=empty_runs, read_envelope=read, read_covers=covers)
         with patch.object(crawl, "run_target", AsyncMock(return_value=batch)), \
                 patch.object(crawl.targets_repo, "finish_target", AsyncMock()) as finish:
             await crawl._run_source([target], None, 0, None)
@@ -571,7 +651,7 @@ class RunOneTests(unittest.IsolatedAsyncioTestCase):
     async def test_an_empty_first_read_does_not_finish_the_bootstrap(self):
         finish = await self.run_one(dict(TARGET, source="kavak", first_run_done=False))
         finish.assert_awaited_once_with(7, ok=True, retry_seconds=0, covered_until=None, bootstrap=False,
-                                       read=None)
+                                       read=None, covers=None)
         finish = await self.run_one(dict(TARGET, source="kavak", first_run_done=False), found=4)
         self.assertTrue(finish.call_args.kwargs["bootstrap"])
 
@@ -603,6 +683,8 @@ class RunOneTests(unittest.IsolatedAsyncioTestCase):
     async def test_a_complete_read_leaves_what_it_covered_in_the_query(self):
         finish = await self.run_one(TARGET, found=3, first_run=False, read={"year_min": 2015})
         self.assertEqual((finish.call_args.kwargs["ok"], finish.call_args.kwargs["read"]), (True, {"year_min": 2015}))
+        finish = await self.run_one(TARGET, found=3, first_run=False, covers={})
+        self.assertEqual((finish.call_args.kwargs["read"], finish.call_args.kwargs["covers"]), (None, {}))
 
     def test_retry_seconds(self):
         self.assertEqual(crawl.retry_seconds(TARGET), 900)                                 # a failure
