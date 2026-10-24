@@ -41,7 +41,8 @@ collector (Facebook, Instagram) runs in a child process that is killed then
 interval. For recent publications, last_run_at records the successful scan's
 start to preserve coverage. On a source without publication dates,
 pipeline/news.py tells which new listings are old stock (backfill), and a
-first run that read nothing holds the bootstrap for a couple of runs. There
+first run that read nothing holds the bootstrap for a couple of runs, without
+moving the last_run_at of a target that ran before. There
 a complete read of a target by model keeps the year and km it read in
 query._read, for its next run to tell what a widened search brings, and one
 of a target reading a whole stock in query._covers, for the others to tell
@@ -144,7 +145,7 @@ class TargetRun:
     # What the prefilter dropped, for prefilter_rejected: this read's after a
     # complete read, added to the last ones after a partial one. None: the
     # target remembers nothing. finish_target writes it with read_covers, so
-    # the pair always comes from one read (news._covered).
+    # it never lacks what the read behind _covers dropped (news._covered).
     rejected: frozenset[str] | None = None
 
 

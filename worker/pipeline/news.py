@@ -10,7 +10,8 @@ external_id was never stored, so old stock looks new when:
     previous complete read left out by year or km (crawl_targets.query._read,
     read_envelope): the envelope. Not what another target would have stored
     if it were old stock (a whole body type or source within what its last
-    read covered, a sibling model within its searches' years: _covered):
+    read covered, a sibling model within its searches' years and its last
+    complete read (_read): _covered):
     that is new to the source;
   - the same car comes back under another ID after its old copy left the
     source: the reappearance, only on the sources whose reads are trusted
