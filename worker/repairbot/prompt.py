@@ -125,7 +125,12 @@ Eso es `needs_human`.
 5. Si un probe responde `"supported": false`, esa fuente no se reproduce en el VPS: diagnosticá
    con el journal, las corridas y la reproducción local; la verificación es la corrida real
    después del deploy.
-6. Tenés tope de tiempo y de turnos: andá a lo concreto.
+6. Una corrida cuyo error empieza con `partial:` es una lectura parcial, y es esperada: el
+   collector se quedó con lo que leyó y avisó que no llegó al final (una página que falló, el
+   tope de páginas). No es una rotura ni un motivo para tocar el código, salvo que el incidente
+   sea justamente que cada corrida queda parcial (6 seguidas) y la causa esté en el collector.
+   Si la causa es del sitio (bloqueo, caída), es `external` o `needs_human`, como siempre.
+7. Tenés tope de tiempo y de turnos: andá a lo concreto.
 
 # Resultado
 

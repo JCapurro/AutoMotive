@@ -1419,6 +1419,30 @@ class CoverageTests(NotNewsCase):
         [t] = await self.rows("SELECT query, first_run_done FROM crawl_targets")
         self.assertEqual((t["query"]["coverage"], t["first_run_done"]), (2, True))
 
+    async def test_kavak_paginated_past_its_30_cards_tells_none_of_the_5_it_now_reads(self):
+        # E6: a bootstrapped kavak target had read the first 30 cards of its
+        # model; with COVERAGE_VERSION 2 it reads 35. The 5 cheap ones were
+        # always there, past the first page: 0 notifications, no live match.
+        await self.fiesta_alert(sources=["kavak"])
+        FakeSource.results["kavak"] = self.comps("kavak", 30)
+        await self.tick()
+        [before] = await self.rows("SELECT first_run_done FROM crawl_targets")
+        self.assertTrue(before["first_run_done"])
+        with patch.object(collectors.REGISTRY["kavak"], "COVERAGE_VERSION", 2):
+            FakeSource.results["kavak"] = self.comps("kavak", 30) + self.deals("kavak", 5)
+            await self.tick()
+            self.assertEqual(await self.notified(), set())
+            self.assertEqual(await self.live(), set())
+            self.assertEqual({r["external_id"] for r in await self.rows(
+                "SELECT l.external_id FROM matches m JOIN listings l ON l.id = m.listing_id "
+                " WHERE m.is_backfill")} & {f"d{i}" for i in range(5)}, {f"d{i}" for i in range(5)})
+            [t] = await self.rows("SELECT query, first_run_done FROM crawl_targets")
+            self.assertEqual((t["query"]["coverage"], t["first_run_done"]), (2, True))
+            # A car that is new past that read is still news.
+            FakeSource.results["kavak"] = self.comps("kavak", 30) + self.deals("kavak", 6)
+            await self.tick()
+        self.assertEqual(await self.notified(), {"d5"})
+
 
 class ReappearanceTests(NotNewsCase):
     """rosariogarage republishes a car under another ID: 7 notifications in

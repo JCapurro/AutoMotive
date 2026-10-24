@@ -202,6 +202,35 @@ class RosarioGarageSearchTests(unittest.IsolatedAsyncioTestCase):
             await scraper(site).search(FILTERS)
         self.assertEqual(len(site.asked), 2)
 
+    async def test_the_page_cap_with_more_results_is_a_partial_read(self):
+        site = Site({("107", 0): results([1], [0, 95, 190]), ("107", 95): results([2], [0, 95, 190]),
+                     ("107", 190): results([3])})
+        collector = scraper(site)
+        collector.MAX_PAGES = 2
+        items = await collector.search(FILTERS)
+        self.assertEqual([item.listing_id for item in items], ["1", "2"])
+        self.assertFalse(items.complete)
+        self.assertIn("Autos llegó al tope de 2 páginas", items.reason)
+        self.assertEqual([q["o"] for q in site.asked], [["0"], ["95"]])
+
+    async def test_a_last_page_inside_the_cap_is_a_complete_read(self):
+        site = Site({("107", 0): results([1], [0, 95]), ("107", 95): results([2])})
+        collector = scraper(site)
+        collector.MAX_PAGES = 2
+        items = await collector.search(FILTERS)
+        self.assertEqual(len(items), 2)
+        self.assertTrue(items.complete, items.reason)
+
+    async def test_a_capped_category_names_only_itself(self):
+        site = Site({("107", 0): results([1], [0, 95]), ("109", 0): results([2]), ("108", 0): results([3])})
+        collector = scraper(site, RosarioGarageScraper.CATEGORIES)
+        collector.MAX_PAGES = 1
+        items = await collector.search(FILTERS)
+        self.assertEqual([item.listing_id for item in items], ["1", "2", "3"])
+        self.assertFalse(items.complete)
+        self.assertIn("Autos llegó", items.reason)
+        self.assertNotIn("Camionetas", items.reason)
+
     async def test_retry_server_failures_and_network_failures(self):
         site = Site({("107", 0): results([1])},
                     {("107", 0): [503, httpx.ReadTimeout("slow")]})

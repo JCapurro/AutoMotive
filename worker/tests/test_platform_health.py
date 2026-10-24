@@ -154,6 +154,41 @@ class CollectorChecksTests(unittest.TestCase):
                   last_error=health.DATE_FETCH_LIMIT)
         self.assertIn('3 corridas', health.collector_checks([target(**ml)], NOW)['collector:mercadolibre'])
 
+    def test_partial_reads_alert_only_past_six_in_a_row(self):
+        """A collector that keeps what it read (SearchResults.complete False) records a failed
+        run marked "partial: ": it's no break, so it takes 6 in a row to alert."""
+        partial = 'partial: kavak: read the first 40 pages of /ar/usados, of 47'
+        check = lambda n, errors=None, **c: health.collector_checks(
+            [target(statuses=['failed']*n + ['ok']*(6-n), latest_status='failed', latest_error=partial,
+                    errors=errors or [partial]*n + [None]*(6-n), **c)], NOW)['collector:kavak']
+        for n in (1, 3, 5):
+            with self.subTest(n=n):
+                self.assertIsNone(check(n))
+        alert = check(6)
+        self.assertIn('6 lecturas parciales seguidas', alert)
+        self.assertIn('read the first 40 pages', alert)
+        # A real failure among them is a failure at 3, as before.
+        self.assertIn('3 corridas fallidas', check(3, [partial, 'RuntimeError: HTTP 500', partial]))
+        # A run that read it all in between starts the count over.
+        self.assertIsNone(health.collector_checks([target(
+            statuses=['failed']*3 + ['ok'] + ['failed']*2, errors=[partial]*3 + [None] + [partial]*2,
+            latest_status='failed')], NOW)['collector:kavak'])
+        # Rows from before the mark carry no list of errors: a failure, as always.
+        self.assertIn('3 corridas', self.check(statuses=['failed']*3, latest_status='failed'))
+
+    def test_a_date_fetch_cap_marked_partial_is_still_the_first_load_grace_and_then_a_failure(self):
+        for source, limit in (('mercadolibre', health.DATE_FETCH_LIMIT), ('facebook', health.FB_DATE_FETCH_LIMIT)):
+            marked = 'partial: ' + limit
+            row = dict(source=source, name=source, first_run_done=False, created_at=NOW-timedelta(hours=5),
+                       last_run_at=NOW-timedelta(hours=2), latest_status='failed', latest_error=marked,
+                       last_error=marked, statuses=['failed']*3, errors=[marked]*3)
+            check = lambda **c: health.collector_checks([target(**{**row, **c})], NOW,
+                                                        previous={f'collector:{source}': 'falló'})[f'collector:{source}']
+            with self.subTest(source=source):
+                self.assertIsNone(check())
+                self.assertIn('3 corridas', check(created_at=NOW-timedelta(days=2), first_run_done=True,
+                                                  last_run_at=NOW-timedelta(days=2)))
+
     def test_custom_threshold(self):
         self.assertIn('2 corridas', health.collector_checks([target(statuses=['failed']*2)], NOW, failures=2)['collector:kavak'])
 
