@@ -16,7 +16,10 @@ more). The site is slow and answers 503 now and then, so each page is
 retried before the run gives up. A later page that still fails keeps the
 cards read, as a partial read (SearchResults.complete False): never the
 target's last complete read (query._read) nor a step's base
-(pipeline/news.py), and tried again (crawl.retry_seconds).
+(pipeline/news.py), and tried again (crawl.retry_seconds). A first page
+answering 401, 403 or 429 pauses the source (CollectorBlocked,
+pipeline/breaker.py). The MAX_PAGES cap and a page without new cards still
+end a read taken as complete.
 """
 from __future__ import annotations
 import asyncio
@@ -30,7 +33,7 @@ import httpx
 from http_clients import async_client
 from bs4 import BeautifulSoup
 
-from .base import BaseScraper, Listing, ListingDetail, SearchResults
+from .base import BaseScraper, CollectorBlocked, Listing, ListingDetail, SearchResults
 from ._dates import publication_date
 from ._http import HEADERS, Page, dedupe, fetch_page, multiline_text, soup, text_of, to_int
 
@@ -295,10 +298,10 @@ class AutoCosmosScraper(BaseScraper):
 
     async def search(self, filters: dict) -> SearchResults:
         """Every page while there is a next one with new cards. The first
-        page fails the run unless it answers 404 or 410, a model without
-        stock (a 403 or 429 is the site turning the read away, not 0
-        results); a later one that fails or answers anything but 200 makes
-        the read partial."""
+        page fails the run unless it answers 200, or 404 or 410 (a model
+        without stock); a 401, 403 or 429 is the site turning us away, not
+        0 results, and pauses the source. A later one that fails or answers
+        anything but 200 makes the read partial."""
         out: list[Listing] = []
         seen: set[str] = set()
         async with async_client(
@@ -319,6 +322,8 @@ class AutoCosmosScraper(BaseScraper):
                                          reason=f"autocosmos: página {p} falló ({type(e).__name__})")
                 if r.status_code != 200:
                     if p == 1:
+                        if r.status_code in (401, 403, 429):
+                            raise CollectorBlocked(f"autocosmos: HTTP {r.status_code}")
                         if r.status_code not in (404, 410):
                             r.raise_for_status()
                         break
@@ -336,6 +341,9 @@ class AutoCosmosScraper(BaseScraper):
                         out.append(listing)
                 if not _NEXT_PAGE_RE.search(r.text):
                     break
+            else:
+                log.warning("autocosmos: %s stops at %d pages with more to read, keeping the %d cards read",
+                            self._build_url(filters), self.MAX_PAGES, len(seen))
         return SearchResults(out)
 
     async def fetch_detail_page(self, url: str) -> Page:
