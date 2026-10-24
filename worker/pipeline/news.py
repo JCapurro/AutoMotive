@@ -174,7 +174,8 @@ def band_ids(target: dict[str, Any], rows: Iterable[dict[str, Any]], *, max_age_
     target's own searches never get them as news (they can't match them)
     and 2.5 never counts them for it, whatever classify did. For any other
     search (one without a model) they are news like any listing, but for
-    the band's first read (old_band). NEWS_GUARD_BAND."""
+    the band's first read (old_band), or when the band read before comes
+    back at once (the band's step, _classify). NEWS_GUARD_BAND."""
     query = target.get("query") or {}
     if not config.NEWS_GUARD_BAND or target.get("source") in RECENT_SOURCES or not query.get("year_band"):
         return frozenset()
@@ -185,10 +186,10 @@ def first_band_read(target: dict[str, Any], rows: Iterable[dict[str, Any]]) -> f
     """Of these band rows (band_ids), the ones the target's last complete
     read didn't cover (query._read, read_envelope): read for the first time
     because the band was just turned on or a search moved its edge, they
-    were listed while nobody here read those years. Old stock for every
-    search of the batch. A target without a last read (one by body type,
-    whose prefilter remembers what it dropped, or none complete yet) never
-    covered them."""
+    were listed while nobody here read those years. Old stock, unless
+    another target covers it (old_band). A target without a last read (one
+    by body type, whose prefilter remembers what it dropped, or none
+    complete yet) never covered them."""
     read = (target.get("query") or {}).get("_read")
 
     def covered(row: dict[str, Any]) -> bool:
@@ -373,8 +374,9 @@ async def _classify(target: dict[str, Any], items: Iterable[Any], result: Ingest
     settings = await IngestConfig.load()
     # Only a complete read of a source whose reads are trusted whole tells the
     # old copy is gone: the list comparables() confirms with. Kavak and
-    # usadossantafe cut their reads short without saying so (autocosmos did
-    # until its failed pages made a read partial).
+    # usadossantafe cut their reads short without saying so. Autocosmos, off
+    # the list too, makes a read with a failed page partial, but still takes
+    # its 20-page cap and a page without new cards for the whole read.
     trusted = (await get_config("comparables", {}) or {}).get("confirm_sources") or ()
     reappearance = config.NEWS_GUARD_REAPPEARANCE and complete and target["source"] in trusted
     inventory = query.get("inventory") is True

@@ -3,12 +3,14 @@ from __future__ import annotations
 
 import unittest
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, patch
+from unittest.mock import ANY, AsyncMock, patch
 from urllib.parse import parse_qs, urlparse
 
 import httpx
 
 from collectors.autocosmos import AutoCosmosScraper
+from collectors.base import CollectorBlocked
+from pipeline import breaker, crawl
 
 FILTERS = {"marca": "Ford", "modelo": "Fiesta"}
 
@@ -153,14 +155,56 @@ class AutoCosmosSearchTests(unittest.IsolatedAsyncioTestCase):
             found = await scraper(Site(pages)).search(FILTERS)
             self.assertTrue(found.complete)
 
-    async def test_a_first_page_turned_away_fails_the_run_and_a_404_is_no_stock(self):
-        # autocosmos Sentra answered 403 three times, taken for "0 results".
-        for status in (403, 429):
-            with self.assertRaises(httpx.HTTPStatusError):
+    async def test_a_first_page_turned_away_blocks_the_source_and_a_404_is_no_stock(self):
+        # A 401, 403 or 429 is the site turning us away, not "0 results".
+        for status in (401, 403, 429):
+            with self.assertRaises(CollectorBlocked):
                 await scraper(Site({}, fail={1: [status]})).search(FILTERS)
+        # Any other answer but 200 fails the run.
+        with self.assertRaises(httpx.HTTPStatusError):
+            await scraper(Site({}, fail={1: [400]})).search(FILTERS)
         for status in (404, 410):
             found = await scraper(Site({}, fail={1: [status]})).search(FILTERS)
             self.assertEqual((list(found), found.complete), ([], True))
+
+    async def test_the_page_cap_ends_a_read_taken_as_complete_and_says_so(self):
+        s = scraper(Site({1: page(range(1, 3), more=True), 2: page(range(3, 5), more=True)}))
+        s.MAX_PAGES = 2
+
+        with self.assertLogs("collectors.autocosmos", "WARNING") as logs:
+            found = await s.search(FILTERS)
+
+        self.assertEqual((len(found), found.complete), (4, True))
+        self.assertIn("stops at 2 pages", logs.output[0])
+
+
+class BlockedCrawlTests(unittest.IsolatedAsyncioTestCase):
+    async def test_a_429_on_the_first_page_pauses_autocosmos_before_its_next_target(self):
+        breaker.clear()
+        self.addCleanup(breaker.clear)
+        site = Site({}, fail={1: [429]})
+        due = [{"id": i, "source": "autocosmos", "make": "Ford", "model": "Fiesta", "query": {},
+                "first_run_done": True, "crawl_interval_seconds": 1800} for i in (1, 2)]
+
+        async def claim_next(source, worker, lease_seconds):
+            return due.pop(0) if due else None
+
+        async def on_collector(coroutine, timeout=None):
+            return await coroutine
+
+        with patch.dict(crawl.REGISTRY, {"autocosmos": lambda: scraper(site)}), \
+                patch.object(crawl.targets_repo, "claim_next", claim_next), \
+                patch.object(crawl.runs, "start_run", AsyncMock(return_value=1)), \
+                patch.object(crawl.runs, "finish_run", AsyncMock(return_value=None)) as finish_run, \
+                patch.object(crawl.targets_repo, "finish_target", AsyncMock()) as finish_target, \
+                patch.object(crawl, "run_collector", on_collector):
+            self.assertEqual(await crawl._drain("autocosmos", None, 0, None), 1)
+
+        self.assertTrue(breaker.paused("autocosmos"))
+        self.assertEqual([t["id"] for t in due], [2])        # never claimed
+        self.assertFalse(finish_run.await_args.kwargs["ok"])
+        finish_target.assert_awaited_once_with(1, ok=False, retry_seconds=ANY)
+        self.assertEqual(site.asked, [1])
 
 
 if __name__ == "__main__":
