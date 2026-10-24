@@ -255,8 +255,9 @@ async def finish_target(target_id: int, *, ok: bool, retry_seconds: int,
     target by body type, its own interval. `bootstrap=False`: a successful
     run that doesn't finish the first one (an empty first read, pipeline/crawl.py).
     It keeps last_run_at, if the target has one: the held run's price drops
-    are cut at its last read that found something (scheduler.process_batch),
-    which a search created since never saw.
+    are cut where the last run that moved it left it, before the empty read
+    (scheduler.process_batch), which a search created since never saw. A new
+    target's first empty read sets it.
     `read`: what that complete read covered (news.read_envelope), kept in
     query._read on the query the target has now: a search that widened it
     during the run is still outside it on the next one. `covers`, the same

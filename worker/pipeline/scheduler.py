@@ -237,8 +237,9 @@ async def process_batch(notifier: Notifier, target: dict, listing_ids: list[int]
         # still tells the price drops of what was stored, to whom had it:
         # a news match (matched by a batch that read the listing, so at the
         # stored price or an earlier one, whenever it was made) and a
-        # backfill match older than its last run (its last read that found
-        # something, if an empty one held this run), not a newer one (this
+        # backfill match older than its last_run_at (if an empty read held
+        # this run, where the run before that read left it: the empty read
+        # doesn't move it, targets.finish_target), not a newer one (this
         # batch's backfill, a search created during the pause) against a
         # price from before it.
         if not first_run:
