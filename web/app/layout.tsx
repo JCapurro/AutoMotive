@@ -30,6 +30,8 @@ export const metadata: Metadata = {
     description: DESCRIPTION,
   },
   twitter: { card: "summary_large_image" },
+  // Meta Business Manager domain verification for eseauto.com.ar.
+  verification: { other: { "facebook-domain-verification": "o6fjll7a6bnjjqdd8zf6ed2xmblcqa" } },
 };
 
 export const viewport: Viewport = {
