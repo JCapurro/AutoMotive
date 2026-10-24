@@ -8,9 +8,10 @@ from urllib.parse import parse_qs, urlparse
 
 import httpx
 
+from collectors._http import Page
 from collectors.autocosmos import AutoCosmosScraper
 from collectors.base import CollectorBlocked
-from pipeline import breaker, crawl
+from pipeline import breaker, crawl, enrich
 
 FILTERS = {"marca": "Ford", "modelo": "Fiesta"}
 
@@ -160,9 +161,10 @@ class AutoCosmosSearchTests(unittest.IsolatedAsyncioTestCase):
         for status in (401, 403, 429):
             with self.assertRaises(CollectorBlocked):
                 await scraper(Site({}, fail={1: [status]})).search(FILTERS)
-        # Any other answer but 200 fails the run.
-        with self.assertRaises(httpx.HTTPStatusError):
-            await scraper(Site({}, fail={1: [400]})).search(FILTERS)
+        # Any other answer but 200 fails the run, another 2xx too.
+        for status in (400, 202, 204):
+            with self.assertRaises(httpx.HTTPStatusError):
+                await scraper(Site({}, fail={1: [status]})).search(FILTERS)
         for status in (404, 410):
             found = await scraper(Site({}, fail={1: [status]})).search(FILTERS)
             self.assertEqual((list(found), found.complete), ([], True))
@@ -176,6 +178,59 @@ class AutoCosmosSearchTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual((len(found), found.complete), (4, True))
         self.assertIn("stops at 2 pages", logs.output[0])
+
+
+class DetailPageTests(unittest.IsolatedAsyncioTestCase):
+    """An ad's page that turns us away is no ad gone (enrich, watchlist)."""
+    ROW = {"id": 9, "source": "autocosmos", "url": f"https://www.autocosmos.com.ar/auto/usado/ford/fiesta/s/{1:032x}",
+           "status": "active"}
+
+    def setUp(self):
+        breaker.clear()
+        self.addCleanup(breaker.clear)
+
+    def page(self, status: int):
+        return patch("collectors.autocosmos.fetch_page",
+                     AsyncMock(return_value=Page(status, self.ROW["url"], "<html>Too Many Requests</html>")))
+
+    async def test_only_200_404_and_410_reach_the_parser(self):
+        for status, error in ((401, CollectorBlocked), (403, CollectorBlocked), (429, CollectorBlocked),
+                              (400, RuntimeError), (202, RuntimeError), (503, RuntimeError)):
+            with self.page(status), self.assertRaises(error, msg=status):
+                await AutoCosmosScraper().fetch_detail_page(self.ROW["url"])
+        for status in (200, 404, 410):
+            with self.page(status):
+                self.assertEqual((await AutoCosmosScraper().fetch_detail_page(self.ROW["url"])).status, status)
+
+    async def refresh(self, status: int):
+        async def on_collector(coroutine, timeout=None):
+            return await coroutine
+
+        self.checked, self.ingested, self.saved = AsyncMock(), AsyncMock(), AsyncMock()
+        with self.page(status), \
+                patch.object(enrich, "run_collector", on_collector), \
+                patch.object(enrich, "log_error", AsyncMock()), \
+                patch.object(enrich.repo, "mark_detail_checked", self.checked), \
+                patch.object(enrich.raw_pages, "save", self.saved), \
+                patch.object(enrich, "ingest_detail", self.ingested):
+            return await enrich.refresh_listing(dict(self.ROW), stage="watchlist")
+
+    async def test_a_429_pauses_the_source_and_leaves_the_ad_alone(self):
+        result = await self.refresh(429)
+
+        self.assertEqual(result.events, [])
+        self.ingested.assert_not_awaited()       # never parsed into a listing_gone
+        self.saved.assert_not_awaited()
+        self.checked.assert_not_awaited()        # tried again after the pause
+        self.assertTrue(breaker.paused("autocosmos"))
+
+    async def test_an_unexpected_4xx_is_retried_not_taken_for_gone(self):
+        result = await self.refresh(400)
+
+        self.assertEqual(result.events, [])
+        self.ingested.assert_not_awaited()
+        self.checked.assert_awaited_once_with([9])
+        self.assertFalse(breaker.paused("autocosmos"))
 
 
 class BlockedCrawlTests(unittest.IsolatedAsyncioTestCase):
