@@ -606,8 +606,8 @@ class ClassifyTests(unittest.IsolatedAsyncioTestCase):
         # Nor a first read that a target reading the whole stock covers, which
         # stays news: a search moved its year_min down to 2010, the top
         # band year (2015) read before.
-        suv = {"id": 3, "source": "autocosmos", "body_type": "suv", "query": {"year_min": 2005},
-               "prefilter_rejected": []}
+        suv = {"id": 3, "source": "autocosmos", "body_type": "suv",
+               "query": {"year_min": 2005, "_covers": {"year_min": 2005}}, "prefilter_rejected": []}
         moved = dict(TARGET, query={"year_min": 2010, "year_max": 2014, "year_band": 1, "profile_ids": [1],
                                     "_read": {"year_min": 2010, "year_max": 2015}})
         rows = ([row(1, year=2012), row(2, year=2012), row(3, year=2015)]
