@@ -1343,7 +1343,7 @@ class CoverageTests(NotNewsCase):
             await self.tick()
 
         self.assertEqual({(r["profile_id"], r["external_id"], r["kind"]) for r in await self.rows(
-            "SELECT n.profile_id, l.external_id, n.kind::text AS kind FROM notifications n "
+            "SELECT n.search_profile_id AS profile_id, l.external_id, n.kind::text AS kind FROM notifications n "
             "  JOIN listings l ON l.id = n.listing_id")}, {(aid, "c0", "price_drop")})
         [m] = await self.rows("SELECT m.is_backfill FROM matches m JOIN listings l ON l.id = m.listing_id "
                               " WHERE m.search_profile_id = %s AND l.external_id = 'c0'", late)
@@ -1371,7 +1371,7 @@ class CoverageTests(NotNewsCase):
         await self.tick()
 
         self.assertEqual({(r["profile_id"], r["external_id"], r["kind"]) for r in await self.rows(
-            "SELECT n.profile_id, l.external_id, n.kind::text AS kind FROM notifications n "
+            "SELECT n.search_profile_id AS profile_id, l.external_id, n.kind::text AS kind FROM notifications n "
             "  JOIN listings l ON l.id = n.listing_id")}, {(aid, "c0", "price_drop")})
         [m] = await self.rows("SELECT m.is_backfill FROM matches m JOIN listings l ON l.id = m.listing_id "
                               " WHERE m.search_profile_id = %s AND l.external_id = 'c0'", late)
@@ -1397,7 +1397,7 @@ class CoverageTests(NotNewsCase):
         [t] = await self.rows("SELECT query FROM crawl_targets")
         self.assertEqual(t["query"]["publication_policy"], POLICY_VERSION + 1)
         sent = {(r["profile_id"], r["external_id"], r["kind"]) for r in await self.rows(
-            "SELECT n.profile_id, l.external_id, n.kind::text AS kind FROM notifications n "
+            "SELECT n.search_profile_id AS profile_id, l.external_id, n.kind::text AS kind FROM notifications n "
             "  JOIN listings l ON l.id = n.listing_id")}
         self.assertIn((aid, "d0", "price_drop"), sent)
 
