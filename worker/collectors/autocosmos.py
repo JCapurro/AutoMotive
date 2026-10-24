@@ -17,8 +17,8 @@ retried before the run gives up. A later page that still fails keeps the
 cards read, as a partial read (SearchResults.complete False): never the
 target's last complete read (query._read) nor a step's base
 (pipeline/news.py), and tried again (crawl.retry_seconds). A first page
-answering 401, 403 or 429 pauses the source (CollectorBlocked,
-pipeline/breaker.py). The MAX_PAGES cap and a page without new cards still
+or an ad's page answering 401, 403 or 429 pauses the source
+(CollectorBlocked, pipeline/breaker.py). The MAX_PAGES cap and a page without new cards still
 end a read taken as complete.
 """
 from __future__ import annotations
@@ -319,7 +319,9 @@ class AutoCosmosScraper(BaseScraper):
                         if r.status_code in (401, 403, 429):
                             raise CollectorBlocked(f"autocosmos: HTTP {r.status_code}")
                         if r.status_code not in (404, 410):
-                            r.raise_for_status()
+                            # Another 2xx too: a challenge page is no "0 results".
+                            raise httpx.HTTPStatusError(f"autocosmos: HTTP {r.status_code} for {url}",
+                                                        request=r.request, response=r)
                         break
                     log.warning("autocosmos: %s answered %d, keeping the %d cards read",
                                 url, r.status_code, len(seen))
@@ -341,7 +343,14 @@ class AutoCosmosScraper(BaseScraper):
         return SearchResults(out)
 
     async def fetch_detail_page(self, url: str) -> Page:
+        """Only a 404, a 410 or a page without the car proves the ad over
+        (parse_detail): a 401, 403 or 429 pauses the source, and any other
+        answer but 200 is retried later, never taken for a listing gone."""
         page = await fetch_page(url)
         if page.status >= 500:
             raise RuntimeError(f"autocosmos {page.status} for {url}")
+        if page.status in (401, 403, 429):
+            raise CollectorBlocked(f"autocosmos: HTTP {page.status} for {url}")
+        if page.status not in (200, 404, 410):
+            raise RuntimeError(f"autocosmos: HTTP {page.status} for {url}")
         return page
