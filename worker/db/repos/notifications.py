@@ -56,7 +56,10 @@ async def listing_audiences(listing_ids: Iterable[int], *,
     """Everyone a listing event concerns (price_drop, listing_gone): users with
     an enabled profile that matched it (their best match: highest level, then
     score) and users who saved or follow it. One row per (user, listing).
-    `matched_before`: only the matches generated before it."""
+    `matched_before`: of the backfill matches, only those generated before it
+    (not a first run's own, nor a rematch's for a search created since); a
+    news match always counts: it was told as new at the stored price or an
+    earlier one."""
     ids = list(dict.fromkeys(listing_ids))
     if not ids:
         return []
@@ -70,7 +73,7 @@ async def listing_audiences(listing_ids: Iterable[int], *,
             "         sp.notify_min_level::text AS min_level, sp.channels, " + _THRESHOLD +
             "    FROM matches m JOIN search_profiles sp ON sp.id = m.search_profile_id "
             "   WHERE m.listing_id = ANY(%(ids)s) AND public.search_access_active(sp.id) "
-            "     AND (%(before)s::timestamptz IS NULL OR m.generated_at < %(before)s) "
+            "     AND (%(before)s::timestamptz IS NULL OR m.generated_at < %(before)s OR NOT m.is_backfill) "
             "   ORDER BY sp.user_id, m.listing_id, m.level, m.score DESC "
             "), ix AS ( "
             "  SELECT user_id, listing_id, saved, status::text AS status "

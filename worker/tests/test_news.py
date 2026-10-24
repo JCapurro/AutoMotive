@@ -378,10 +378,10 @@ class ClassifyTests(unittest.IsolatedAsyncioTestCase):
         widened = dict(sandero, query=dict(sandero["query"], _read={"year_min": 2019, "year_max": 2021}))
         self.assertEqual(await self.classify(result(1), rows, target=target, wide=[widened], trusted=()),
                          frozenset({1}))
-        # The deploy: no last read yet, its searches' years tell.
+        # No last read kept: its searches may have widened since, so it vouches for nothing.
         bare = dict(sandero, query={"year_min": 2019, "year_max": 2022})
         self.assertEqual(await self.classify(result(1, 3), rows, target=target, wide=[bare], trusted=()),
-                         frozenset())
+                         frozenset({1, 3}))
 
     async def test_a_recent_publication_outside_the_last_read_is_news(self):
         target = dict(TARGET, query={"year_min": 2014, "_read": {"year_min": 2015}})
@@ -686,19 +686,21 @@ class RunOneTests(unittest.IsolatedAsyncioTestCase):
 
     async def run_one(self, target: dict, *, found: int = 0, first_run: bool = True, complete: bool = True,
                       reason: str | None = None, empty_runs: int = 0, read: dict | None = None,
-                      covers: dict | None = None) -> AsyncMock:
+                      covers: dict | None = None, rejected: frozenset[str] | None = None,
+                      on_batch: AsyncMock | None = None) -> AsyncMock:
         items = SearchResults([], complete=complete, reason=reason)
         batch = crawl.TargetRun(target, items, IngestResult(found=found), first_run=first_run, complete=complete,
-                                empty_runs=empty_runs, read_envelope=read, read_covers=covers)
+                                empty_runs=empty_runs, read_envelope=read, read_covers=covers, rejected=rejected)
         with patch.object(crawl, "run_target", AsyncMock(return_value=batch)), \
+                patch.object(crawl.runs, "log_error", AsyncMock()), \
                 patch.object(crawl.targets_repo, "finish_target", AsyncMock()) as finish:
-            await crawl._run_source([target], None, 0, None)
+            await crawl._run_source([target], on_batch, 0, None)
         return finish
 
     async def test_an_empty_first_read_does_not_finish_the_bootstrap(self):
         finish = await self.run_one(dict(TARGET, source="kavak", first_run_done=False))
         finish.assert_awaited_once_with(7, ok=True, retry_seconds=0, covered_until=None, bootstrap=False,
-                                       read=None, covers=None)
+                                       read=None, covers=None, rejected=None)
         finish = await self.run_one(dict(TARGET, source="kavak", first_run_done=False), found=4)
         self.assertTrue(finish.call_args.kwargs["bootstrap"])
 
@@ -732,6 +734,23 @@ class RunOneTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((finish.call_args.kwargs["ok"], finish.call_args.kwargs["read"]), (True, {"year_min": 2015}))
         finish = await self.run_one(TARGET, found=3, first_run=False, covers={})
         self.assertEqual((finish.call_args.kwargs["read"], finish.call_args.kwargs["covers"]), (None, {}))
+
+    async def test_what_the_prefilter_dropped_is_written_with_what_the_read_covered(self):
+        # One UPDATE, so news._covered never pairs a _covers with another read's drops.
+        suv = dict(TARGET, source="kavak", make=None, model=None, body_type="suv")
+        kept = ("ok", "covers", "rejected")
+        finish = await self.run_one(suv, found=3, first_run=False, covers={"year_min": 2009},
+                                    rejected=frozenset({"r"}))
+        self.assertEqual({k: finish.call_args.kwargs[k] for k in kept},
+                         {"ok": True, "covers": {"year_min": 2009}, "rejected": frozenset({"r"})})
+        # A partial read keeps no _covers, but what it dropped joins the last ones (run_target).
+        finish = await self.run_one(suv, found=3, first_run=False, complete=False, rejected=frozenset({"r"}))
+        self.assertEqual({k: finish.call_args.kwargs[k] for k in kept},
+                         {"ok": False, "covers": None, "rejected": frozenset({"r"})})
+        # Its batch failed: neither.
+        finish = await self.run_one(suv, found=3, first_run=False, covers={"year_min": 2012},
+                                    rejected=frozenset(), on_batch=AsyncMock(side_effect=RuntimeError("boom")))
+        finish.assert_awaited_once_with(7, ok=False, retry_seconds=900)
 
     def test_retry_seconds(self):
         self.assertEqual(crawl.retry_seconds(TARGET), 900)                                 # a failure

@@ -409,11 +409,12 @@ class BandOfAnotherTargetTests(BodyTypeCase):
             await self.crawl_only("model", "Sandero")
         self.assertEqual(dict(await self.matched(sandero))["sa21"], False)
 
-    async def test_a_car_a_sibling_model_reads_in_its_searches_years_is_news_without_a_model(self):
-        # The deploy: no target kept a last read yet. Turned on, the band of
-        # 'Stepway 2018-2020' brings first a Sandero 2021, which the Sandero
-        # target reads in its searches' years (new to deruedas), and a Sandero
-        # 2017 no target read before (old stock).
+    async def sibling_band_read(self, *, sandero_read: bool = True) -> tuple[int, int, dict[str, bool]]:
+        """'Stepway 2018-2020', 'Sandero 2019-2022' and any hatchback on
+        deruedas, past their first runs; then the Stepway's band is turned on
+        and brings first a Sandero 2021 and a Sandero 2017. The Sandero's
+        search and the hatchback's matches, and the Stepway target's id.
+        `sandero_read=False`: the Sandero target kept no last read."""
         stepway = await self.fiesta_alert(marcas=["Renault"], modelos=["Stepway"], anio_min=2018, anio_max=2020,
                                           sources=["deruedas"])
         sandero = await self.fiesta_alert(marcas=["Renault"], modelos=["Sandero"], anio_min=2019, anio_max=2022,
@@ -423,19 +424,38 @@ class BandOfAnotherTargetTests(BodyTypeCase):
         FakeSource.results["deruedas"] = [self.renault("st19", "Stepway", 2019), self.renault("sa20", "Sandero", 2020)]
         with patch.object(crawl.config, "REFERENCE_YEAR_BAND", 0):
             await self.tick()
-        async with db.connection() as cx:
-            await cx.execute("UPDATE crawl_targets SET query = query - '_read'")
+        [s] = await self.rows("SELECT query FROM crawl_targets WHERE model = 'Sandero'")
+        self.assertEqual({k: s["query"]["_read"].get(k) for k in ("year_min", "year_max")},
+                         {"year_min": 2019, "year_max": 2022})
+        if not sandero_read:
+            async with db.connection() as cx:
+                await cx.execute("UPDATE crawl_targets SET query = query - '_read' WHERE model = 'Sandero'")
         FakeSource.results["deruedas"] += [self.renault("sa21", "Sandero", 2021),
                                            self.renault("sa17", "Sandero", 2017)]
         with patch.object(crawl.config, "REFERENCE_YEAR_BAND", 1):
             await self.sync()
             await self.crawl_only("model", "Stepway")
         [t] = await self.rows("SELECT id FROM crawl_targets WHERE model = 'Stepway'")
-        self.assertNotIn("_not_news", (await self.listing("sa21"))["attributes"])
-        mark = (await self.listing("sa17"))["attributes"]["_not_news"]
+        mark = (await self.listing("sa17"))["attributes"]["_not_news"]     # no target read 2017: old stock
         self.assertEqual((mark["reason"], mark["target_id"]), ("band", t["id"]))
-        matched = dict(await self.matched(hatch))
-        self.assertEqual((matched["sa21"], matched["sa17"]), (False, True))
+        return sandero, t["id"], dict(await self.matched(hatch))
+
+    async def test_a_car_a_sibling_model_reads_in_its_searches_years_is_news_without_a_model(self):
+        # The Sandero target's last read covered 2021: what it never stored was listed after.
+        sandero, _, hatch = await self.sibling_band_read()
+        self.assertNotIn("_not_news", (await self.listing("sa21"))["attributes"])
+        self.assertEqual((hatch["sa21"], hatch["sa17"]), (False, True))
+        with patch.object(crawl.config, "REFERENCE_YEAR_BAND", 1):
+            await self.crawl_only("model", "Sandero")
+        self.assertEqual(dict(await self.matched(sandero))["sa21"], False)
+
+    async def test_a_sibling_model_without_a_last_read_vouches_for_nothing(self):
+        # Its searches may have widened to 2021 after its last read: the Stepway's band read
+        # it first, old stock for the hatchbacks, still news for the Sandero's own search.
+        sandero, stepway, hatch = await self.sibling_band_read(sandero_read=False)
+        mark = (await self.listing("sa21"))["attributes"]["_not_news"]
+        self.assertEqual((mark["reason"], mark["target_id"]), ("band", stepway))
+        self.assertEqual((hatch["sa21"], hatch["sa17"]), (True, True))
         with patch.object(crawl.config, "REFERENCE_YEAR_BAND", 1):
             await self.crawl_only("model", "Sandero")
         self.assertEqual(dict(await self.matched(sandero))["sa21"], False)
