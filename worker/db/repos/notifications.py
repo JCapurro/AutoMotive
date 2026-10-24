@@ -58,8 +58,8 @@ async def listing_audiences(listing_ids: Iterable[int], *,
     score) and users who saved or follow it. One row per (user, listing).
     `matched_before`: of the backfill matches, only those generated before it
     (not a first run's own, nor a rematch's for a search created since); a
-    news match always counts: it was told as new at the stored price or an
-    earlier one."""
+    news match always counts: a batch that read the listing matched it as
+    news, so at the stored price or an earlier one."""
     ids = list(dict.fromkeys(listing_ids))
     if not ids:
         return []

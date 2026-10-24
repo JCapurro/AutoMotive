@@ -920,10 +920,16 @@ class StepTests(NotNewsCase):
         await self.market()
         await self.fiesta_alert(sources=["kavak"])
         FakeSource.results["kavak"] = []
+        stamps = []
         for done in (False, False, True):
             await self.tick()
-            [t] = await self.rows("SELECT first_run_done FROM crawl_targets")
+            [t] = await self.rows("SELECT first_run_done, last_run_at FROM crawl_targets")
             self.assertEqual(t["first_run_done"], done)
+            stamps.append(t["last_run_at"])
+        # A new target's first empty read sets its last_run_at, the next held one keeps it.
+        self.assertIsNotNone(stamps[0])
+        self.assertEqual(stamps[1], stamps[0])
+        self.assertGreater(stamps[2], stamps[1])
         FakeSource.results["kavak"] = self.deals("kavak", 1)
         await self.tick()
         self.assertEqual(await self.notified(), {"d0"})
@@ -1335,6 +1341,34 @@ class CoverageTests(NotNewsCase):
                                        + self.comps("kavak")[1:])
         with patch.object(repo_targets, "REACTIVATION_IDLE_SECONDS", 0):
             await self.tick()
+
+        self.assertEqual({(r["profile_id"], r["external_id"], r["kind"]) for r in await self.rows(
+            "SELECT n.profile_id, l.external_id, n.kind::text AS kind FROM notifications n "
+            "  JOIN listings l ON l.id = n.listing_id")}, {(aid, "c0", "price_drop")})
+        [m] = await self.rows("SELECT m.is_backfill FROM matches m JOIN listings l ON l.id = m.listing_id "
+                              " WHERE m.search_profile_id = %s AND l.external_id = 'c0'", late)
+        self.assertTrue(m["is_backfill"])
+
+    async def test_an_empty_read_after_the_pause_keeps_the_cut_of_its_price_drops(self):
+        # Back after a day, kavak reads nothing once: the held run that follows
+        # still cuts at the last read that found something, before the search
+        # created during the pause.
+        aid = await self.fiesta_alert(sources=["kavak"])
+        FakeSource.results["kavak"] = self.comps("kavak")
+        await self.tick()
+        [before] = await self.rows("SELECT last_run_at FROM crawl_targets")
+        await db.set_alert_active(aid, False)
+        await crawl.sync_targets(await db.enabled_profiles(), await db.counting_profiles())
+        await db.set_alert_active(aid, True)
+        late = await self.fiesta_alert(user=1, sources=["kavak"])
+        FakeSource.results["kavak"] = []
+        with patch.object(repo_targets, "REACTIVATION_IDLE_SECONDS", 0):
+            await self.tick()
+        [t] = await self.rows("SELECT first_run_done, last_run_at FROM crawl_targets")
+        self.assertEqual((t["first_run_done"], t["last_run_at"]), (False, before["last_run_at"]))
+        FakeSource.results["kavak"] = ([card("c0", source="kavak", precio=11_000.0, km=90_000)]
+                                       + self.comps("kavak")[1:])
+        await self.tick()
 
         self.assertEqual({(r["profile_id"], r["external_id"], r["kind"]) for r in await self.rows(
             "SELECT n.profile_id, l.external_id, n.kind::text AS kind FROM notifications n "
