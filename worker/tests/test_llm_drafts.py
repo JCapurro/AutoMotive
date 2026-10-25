@@ -6,7 +6,7 @@ import datetime as dt
 from llm.schemas import SearchDraft, SearchDrafts, json_schema
 from intelligence.matching import match
 from normalization.body_type import CODES as BODY_TYPES
-from normalization.drafts import MAX_VEHICLES, normalize_draft, normalize_drafts
+from normalization.drafts import MAX_VEHICLES, Market, normalize_draft, normalize_drafts
 from normalization.vehicle import CatalogModel
 from seed_catalog import seed_catalog
 
@@ -280,3 +280,109 @@ def test_every_generic_body_word_has_a_code():
     from normalization.drafts import _BODY_WORDS
 
     assert {w: body_type.from_source(w) for w in _BODY_WORDS if body_type.from_source(w) is None} == {}
+
+
+# Timing drive (docs/DISTRIBUCION.md), against the seed catalog's list.
+CHAIN_MARKET = Market({
+    ("Toyota", "Etios"): {2014: (3, 8276.0), 2018: (174, 11567.0)},
+    ("Honda", "Fit"): {2011: (2, 8300.0)},
+    ("Toyota", "Yaris"): {2019: (72, 14712.0), 2024: (142, 18141.0)},
+    ("Honda", "Civic"): {2017: (1, 19088.0)},
+    ("Toyota", "Corolla Cross"): {2023: (300, 24000.0)},
+}, usd_ars=1500.0)
+
+
+def drafts_of(*ds, market=None) -> list[dict]:
+    return normalize_drafts(seed_catalog(), list(ds), today=TODAY, market=market)["drafts"]
+
+
+def models_of(out: list[dict]) -> list[tuple[str, str]]:
+    return [(d["values"]["make"], d["values"]["model"]) for d in out]
+
+
+def test_the_production_case_cadenero_as_model_keeps_the_hatchback():
+    # What the provider answered before `timing`: «cadenero» in the model.
+    out = drafts_of(draft(model="usado cadenero", body_types=["hatchback"], price_max=9000, currency="USD"),
+                    market=CHAIN_MARKET)
+    # Etios and Fit have a year whose typical price fits USD 9.000 (Argo, Kwid and Yaris have no
+    # listings here); the Etios is far more listed.
+    assert models_of(out) == [("Toyota", "Etios"), ("Honda", "Fit")]
+    assert all(d["resolved"] for d in out)
+    assert out[0]["values"]["body_types"] == ["hatchback"]  # the Etios also comes as a sedan
+    assert out[1]["values"]["body_types"] == []  # the Fit only comes as a hatchback
+    assert all(d["values"]["price_max"] == 9000 for d in out)
+    assert out[0]["notes"][0].startswith("Elegimos modelos Hatchback con distribución a cadena que suelen "
+                                         "publicarse dentro de tu precio máximo, los más publicados primero")
+    assert not any("No encontramos" in n for d in out for n in d["notes"])
+
+
+def test_timing_field_expands_to_chain_models_compatible_with_body_and_years():
+    out = drafts_of(draft(timing="chain", body_types=["hatchback"], year_min=2019))
+    # Without market data: the catalog's chain hatchbacks still made in 2019, by name.
+    assert models_of(out) == [("Fiat", "Argo"), ("Honda", "Fit"), ("Renault", "Kwid"), ("Toyota", "Etios"),
+                              ("Toyota", "Yaris")]
+    assert all(d["values"]["year_min"] == 2019 for d in out)
+    assert "los más publicados" not in out[0]["notes"][0]
+    assert ("Toyota", "Etios") not in models_of(drafts_of(draft(timing="chain", body_types=["hatchback"],
+                                                                year_min=2024)))
+
+
+def test_timing_expansion_is_capped_and_ranked_by_listings():
+    out = drafts_of(draft(timing="chain"), market=CHAIN_MARKET)
+    assert len(out) == MAX_VEHICLES
+    assert models_of(out)[:4] == [("Toyota", "Corolla Cross"), ("Toyota", "Yaris"), ("Toyota", "Etios"),
+                                  ("Honda", "Fit")]
+
+
+def test_timing_expansion_with_a_make_and_a_top_in_pesos():
+    out = drafts_of(draft(make="Toyota", timing="chain", price_max=13_000_000, currency="ARS"), market=CHAIN_MARKET)
+    # ARS 13.000.000 / 1500 = USD 8.667: only the Etios of 2014 fits.
+    assert models_of(out) == [("Toyota", "Etios")]
+
+
+def test_when_no_chain_model_fits_the_price_they_come_anyway_with_a_note():
+    out = drafts_of(draft(timing="chain", body_types=["sedan"], price_max=5000, currency="USD"), market=CHAIN_MARKET)
+    assert out and all(any("por encima de tu precio máximo" in n for n in d["notes"]) for d in out)
+    assert "dentro de tu precio" not in out[0]["notes"][0]
+
+
+def test_without_a_compatible_chain_model_the_body_type_search_stays():
+    out = drafts_of(draft(model="cadenero", body_types=["utilitario"], price_max=9000, currency="USD"))
+    assert len(out) == 1 and not out[0]["resolved"]
+    assert (out[0]["values"]["model"], out[0]["values"]["body_types"]) == ("", ["utilitario"])
+    assert any("No tenemos en el catálogo modelos Utilitario con distribución a cadena" in n
+               for n in out[0]["notes"])
+
+
+def test_a_belt_model_asked_with_chain_keeps_the_model_and_says_so():
+    out = drafts_of(draft(model="Gol con cadena"))
+    assert models_of(out) == [("Volkswagen", "Gol")]
+    assert "El Gol usa correa de distribución." in out[0]["notes"]
+    out = drafts_of(draft(make="Toyota", model="Etios", timing="belt"))
+    assert "El Etios usa cadena de distribución." in out[0]["notes"]
+    out = drafts_of(draft(make="Toyota", model="Etios", timing="chain"))
+    assert not any("distribución" in n for n in out[0]["notes"])
+    out = drafts_of(draft(make="Ford", model="Ranger", timing="chain"))
+    assert any("No sabemos si el Ranger" in n for n in out[0]["notes"])
+
+
+def test_timing_words_never_stay_in_the_vehicle_fields():
+    for model in ("cadenero", "Cadenera", "sin correa", "distribución a cadena", "con cadena"):
+        cleaned = drafts_of(draft(model=model, body_types=["hatchback"]))
+        assert all(d["resolved"] for d in cleaned), model
+    out = norm(model="Etios", trims=["cadenero", "XLS"])
+    assert out["values"]["trims"] == ["XLS"]
+
+
+def test_a_trait_word_as_the_model_does_not_take_the_body_type():
+    out = norm(model="gasolero", body_types=["suv"], price_max=20000, currency="USD")
+    assert (out["values"]["model"], out["values"]["body_types"]) == ("", ["suv"])
+    assert not any("No encontramos" in n for n in out["notes"])
+    # A vehicle the catalog doesn't know still does not become any sedán.
+    assert norm(make="Tesla", model="Model 3", body_types=["sedan"])["values"]["body_types"] == []
+
+
+def test_the_schema_offers_timing_and_old_recordings_stay_valid():
+    item = json_schema(SearchDrafts)["properties"]["vehicles"]["items"]
+    assert "timing" in item["required"]
+    assert SearchDraft(**EMPTY).timing is None

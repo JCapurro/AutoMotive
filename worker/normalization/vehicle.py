@@ -30,6 +30,9 @@ class CatalogModel:
     # vehicle_catalog.body_types: the model's possible body types, most
     # common first; a single one is certain (normalization/body_type.py).
     body_types: tuple[str, ...] = ()
+    # vehicle_catalog.timing_belt of the model row: True belt, False chain,
+    # None unknown or it depends on the engine (docs/DISTRIBUCION.md).
+    timing_belt: bool | None = None
 
     def names(self) -> list[str]:
         return [normalize_text(self.model), *(normalize_text(a) for a in self.aliases)]

@@ -45,8 +45,9 @@ async def _parse_search(provider: LLMProvider, job: dict[str, Any]) -> dict[str,
         raise BadInput("falta el texto")
     async with db.connection() as cx:
         models = await catalog_repo.load_models(cx)
+        market = await catalog_repo.load_market(cx)
     drafts = await provider.parse_search(text, models)
-    return normalize_drafts(models, drafts)
+    return normalize_drafts(models, drafts, market=market)
 
 
 _HANDLERS = {"parse_search": _parse_search}

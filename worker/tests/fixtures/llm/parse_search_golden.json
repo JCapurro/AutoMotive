@@ -216,5 +216,49 @@
       {"resolved": false, "make": "", "model": "", "body_types": [], "transmission": "automatic",
        "price_max": 10000, "currency": "USD"}
     ]
+  },
+  {
+    "id": "cadenero-hatchback",
+    "text": "Busco usado cadenero hatchback hasta 9000 dólares",
+    "llm_timing": "chain",
+    "llm_body_types": ["hatchback"],
+    "drafts": [
+      {"make": "Fiat", "model": "Argo", "body_types": [], "price_max": 9000, "currency": "USD",
+       "notes_contain": "distribución a cadena"},
+      {"make": "Honda", "model": "Fit", "body_types": [], "price_max": 9000, "currency": "USD",
+       "notes_contain": "distribución a cadena"},
+      {"make": "Renault", "model": "Kwid", "body_types": [], "price_max": 9000, "currency": "USD",
+       "notes_contain": "distribución a cadena"},
+      {"make": "Toyota", "model": "Etios", "body_types": ["hatchback"], "price_max": 9000, "currency": "USD",
+       "notes_contain": "distribución a cadena"},
+      {"make": "Toyota", "model": "Yaris", "body_types": ["hatchback"], "price_max": 9000, "currency": "USD",
+       "notes_contain": "distribución a cadena"}
+    ]
+  },
+  {
+    "id": "gol-con-cadena",
+    "text": "Gol con cadena",
+    "llm_timing": "chain",
+    "drafts": [
+      {"make": "Volkswagen", "model": "Gol", "trim": "", "notes_contain": "El Gol usa correa de distribución"}
+    ]
+  },
+  {
+    "id": "sin-correa",
+    "text": "algo sin correa hasta 10 mil",
+    "llm_timing": "chain",
+    "llm_body_types": [],
+    "drafts": [
+      {"make": "Fiat", "model": "Argo", "price_max": 10000, "currency": "USD",
+       "notes_contain": "distribución a cadena"},
+      {"make": "Fiat", "model": "Cronos", "price_max": 10000, "currency": "USD",
+       "notes_contain": "distribución a cadena"},
+      {"make": "Fiat", "model": "Pulse", "price_max": 10000, "currency": "USD",
+       "notes_contain": "distribución a cadena"},
+      {"make": "Ford", "model": "Territory", "price_max": 10000, "currency": "USD",
+       "notes_contain": "distribución a cadena"},
+      {"make": "Honda", "model": "City", "price_max": 10000, "currency": "USD",
+       "notes_contain": "distribución a cadena"}
+    ]
   }
 ]
