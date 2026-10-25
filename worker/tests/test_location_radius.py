@@ -69,6 +69,7 @@ class LocationLookupTests(unittest.TestCase):
 
         self.assertEqual(_lookup_known_location("Capital Federal"), caba)
         self.assertEqual(_lookup_known_location("CABA"), caba)
+        self.assertEqual(_lookup_known_location("Ciudad de Buenos Aires, CF"), caba)
 
     def test_specific_city_beats_province_fallback(self):
         # "Munro - Bs.As." normalizes to "munro buenos aires"; both keys
@@ -83,7 +84,8 @@ class LocationLookupTests(unittest.TestCase):
         # These are the cities that previously fell to Nominatim and got
         # 429-rate-limited.
         for name in ("ituzaingo", "castelar", "adrogue", "bernal",
-                     "munro", "bella vista", "rafaela"):
+                     "munro", "bella vista", "rafaela",
+                     "Ingeniero Maschwitz, Buenos Aires (A.M.B.A.)"):
             self.assertIsNotNone(_lookup_known_location(name),
                                  f"{name!r} should resolve locally")
 
