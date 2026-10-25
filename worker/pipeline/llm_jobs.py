@@ -46,8 +46,9 @@ async def _parse_search(provider: LLMProvider, job: dict[str, Any]) -> dict[str,
         raise BadInput("falta el texto")
     async with db.connection() as cx:
         models = await catalog_repo.load_models(cx)
+        market = await catalog_repo.load_market(cx)
     drafts = await provider.parse_search(text, models)
-    output = normalize_drafts(models, drafts)
+    output = normalize_drafts(models, drafts, market=market)
     if misses := catalog_misses(models, drafts):
         # Bookkeeping for /admin: a failure here never fails the user's job.
         try:

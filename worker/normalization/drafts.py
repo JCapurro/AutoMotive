@@ -20,12 +20,22 @@ and only when it lists two or more: that is the choice the form offers. A
 draft without make or model but with body types is a search without a model
 ("cualquier SUV"), which the plan may not allow: the web decides with
 my_plan_feature('model_less_search').
+
+Timing drive (docs/DISTRIBUCION.md): «cadenero», «sin correa» arrive as
+`timing` (and are taken out of the vehicle fields if a provider leaves them
+there). With a model, a note says when the catalog knows it the other way.
+Without one, the draft becomes one search per catalog model with that drive
+(vehicle_catalog.timing_belt), compatible with the body types and years
+asked, the most listed first and, given a top price, those whose typical
+price fits it (`Market`, db/repos/catalog.load_market); up to MAX_VEHICLES,
+and the web lets the user pick which to activate.
 """
 from __future__ import annotations
 
 import datetime as dt
 import re
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass, field
 from typing import Any
 
 from llm.schemas import MAX_VEHICLES, SearchDraft
@@ -56,6 +66,36 @@ _BODY_WORDS = frozenset(normalize_text(w) for w in (
 # pick-up, and an "auto familiar" is about its use.
 _NO_BODY_WORDS = frozenset({"camioneta", "camionetas", "familiar"})
 _BODY_SPLIT = re.compile(r"\s*(?:,|/|\bo\b|\by\b)\s*")
+
+# Timing-drive words (normalize_text), longest first so "distribucion a
+# cadena" goes before "a cadena". The prompt sends them as `timing`.
+_TIMING_WORDS = {
+    **dict.fromkeys(("distribucion a cadena", "distribucion por cadena", "distribucion de cadena",
+                     "cadena de distribucion", "sin correa de distribucion", "sin correa",
+                     "con cadena", "a cadena", "por cadena", "de cadena",
+                     "cadeneros", "cadeneras", "cadenero", "cadenera"), "chain"),
+    **dict.fromkeys(("distribucion a correa", "distribucion por correa", "correa de distribucion",
+                     "con correa", "a correa", "por correa"), "belt"),
+}
+_TIMING_RE = re.compile(r"(?<![\w-])(?:" + "|".join(sorted(map(re.escape, _TIMING_WORDS), key=len, reverse=True))
+                        + r")(?![\w-])")
+# Words about the car, not a model ("busco usado cadenero"): a field holding
+# only these (and timing words) is cleared, so it neither fails the catalog
+# match nor takes the body types with it.
+_TRAIT_WORDS = frozenset({"usado", "usada", "usados", "auto", "autos", "full", "economico", "economica",
+                          "barato", "barata", "gasolero", "gasolera", "naftero", "naftera", "nafta",
+                          "diesel", "gnc", "automatico", "automatica", "manual", "turbo", "4x4",
+                          "chico", "chica", "grande", "nuevo", "nueva"})
+_TIMING_LABEL = {"chain": "cadena", "belt": "correa"}
+
+
+@dataclass(frozen=True)
+class Market:
+    """Active listings seen lately, per catalog (make, model) and year: how
+    many and the price in USD a quarter of them are below (the model's
+    typical entry price that year). `usd_ars` converts a top in pesos."""
+    years: Mapping[tuple[str, str], Mapping[int, tuple[int, float | None]]] = field(default_factory=dict)
+    usd_ars: float | None = None
 
 
 def _money(v: float | None) -> str:
@@ -100,6 +140,35 @@ def _without_body_words(d: SearchDraft) -> SearchDraft:
     if not update:
         return d
     return d.model_copy(update={**update, "body_types": [*d.body_types, *found]})
+
+
+def _without_traits(d: SearchDraft) -> SearchDraft:
+    """Timing words out of the vehicle fields and into `timing`; a field left
+    with only trait words ("usado cadenero") is cleared."""
+    timing = d.timing
+    update: dict[str, Any] = {}
+
+    def clean(text: str | None) -> str | None:
+        nonlocal timing
+        norm = normalize_text(text)
+        found = _TIMING_RE.findall(norm)
+        if found:
+            timing = timing or _TIMING_WORDS[found[0]]
+            norm = re.sub(r"\s+", " ", _TIMING_RE.sub(" ", norm)).strip()
+        if norm and not all(w in _TRAIT_WORDS for w in norm.split()):
+            return text if not found else norm
+        return None
+
+    for name in ("make", "model", "trim"):
+        value = getattr(d, name)
+        if value and (cleaned := clean(value)) != value:
+            update[name] = cleaned
+    trims = [c for t in d.trims if (c := clean(t))]
+    if trims != list(d.trims):
+        update["trims"] = trims
+    if timing != d.timing:
+        update["timing"] = timing
+    return d.model_copy(update=update) if update else d
 
 
 def _vehicle(models: Sequence[CatalogModel], d: SearchDraft,
@@ -169,6 +238,18 @@ def _body_types(entry: CatalogModel | None, make: str, d: SearchDraft, notes: li
     return _ordered(c for c in wanted if c in possible)
 
 
+def _timing_note(entry: CatalogModel | None, timing: str | None) -> str | None:
+    """What the catalog says when the model has the other drive (or doesn't know)."""
+    if entry is None or timing is None:
+        return None
+    if entry.timing_belt is None:
+        return (f"No sabemos si el {entry.model} usa cadena o correa de distribución (puede depender "
+                "del motor): consultalo con el vendedor.")
+    if entry.timing_belt != (timing == "belt"):
+        return f"El {entry.model} usa {_TIMING_LABEL['belt' if entry.timing_belt else 'chain']} de distribución."
+    return None
+
+
 def _year(value: int | None, label: str, this_year: int, notes: list[str]) -> int | None:
     if value is None:
         return None
@@ -200,8 +281,10 @@ def normalize_draft(models: Sequence[CatalogModel], d: SearchDraft,
                     today: dt.date | None = None) -> dict[str, Any]:
     this_year = (today or dt.date.today()).year
     notes: list[str] = []
-    d = _without_body_words(d)
+    d = _without_traits(_without_body_words(d))
     entry, make, model = _vehicle(models, d, notes)
+    if note := _timing_note(entry, d.timing):
+        notes.append(note)
     body_types = _body_types(entry, make, d, notes)
     trim = _trim(entry, d, notes)
     trims: list[str] = []
@@ -269,6 +352,71 @@ def normalize_draft(models: Sequence[CatalogModel], d: SearchDraft,
     return {"values": values, "resolved": entry is not None, "notes": list(dict.fromkeys(notes))}
 
 
+def _usd(price: float | None, currency: str | None, market: Market) -> float | None:
+    if not price or price <= 0:
+        return None
+    if (currency or ("USD" if price < USD_BELOW else "ARS")) == "USD":
+        return price
+    return price / market.usd_ars if market.usd_ars else None
+
+
+def _timing_models(models: Sequence[CatalogModel], d: SearchDraft, market: Market,
+                   this_year: int) -> tuple[list[CatalogModel], bool]:
+    """Catalog models with the drive `d` asks for that fit its make, body
+    types and years, best first; and whether their typical price fits the top
+    (False only when the market says none does: then they come anyway)."""
+    belt = d.timing == "belt"
+    brand = normalize_brand(d.make) if (d.make or "").strip() else ""
+    said = {c for c in d.body_types if c in BODY_TYPE_LABELS}
+    lo, hi = _year(d.year_min, "", this_year, []), _year(d.year_max, "", this_year, [])
+    if lo is not None and hi is not None and lo > hi:
+        lo, hi = hi, lo
+    lo, hi = lo or MIN_YEAR, hi or this_year + 1
+    found = [m for m in models
+             if m.timing_belt is belt
+             and (not brand or normalize_brand(m.make) == brand)
+             and (not said or said & set(m.body_types))
+             and not (m.year_to and lo > m.year_to) and not (m.year_from and hi < m.year_from)]
+    cap = _usd(d.price_max, d.currency, market)
+
+    def stats(m: CatalogModel) -> tuple[int, bool]:
+        seen = [(n, p25) for y, (n, p25) in market.years.get((m.make, m.model), {}).items() if lo <= y <= hi]
+        return sum(n for n, _ in seen), cap is None or any(p25 is not None and p25 <= cap for _, p25 in seen)
+
+    ranked = sorted(found, key=lambda m: (-stats(m)[0], m.make, m.model))
+    if not market.years:
+        return ranked, True
+    fitting = [m for m in ranked if stats(m)[1]]
+    return (fitting, True) if fitting else (ranked, cap is None)
+
+
+def _expand_timing(models: Sequence[CatalogModel], d: SearchDraft, market: Market,
+                   today: dt.date | None) -> list[dict[str, Any]]:
+    """A draft that asks for a drive without naming a model, as one draft per
+    catalog model with it; or the draft as it is, with a note, if there is none."""
+    this_year = (today or dt.date.today()).year
+    label = _TIMING_LABEL[d.timing or "chain"]
+    body = f" {_labels(_ordered(d.body_types))}" if _ordered(d.body_types) else ""
+    found, fits = _timing_models(models, d, market, this_year)
+    if not found:
+        draft = normalize_draft(models, d, today)
+        draft["notes"].append(f"No tenemos en el catálogo modelos{body} con distribución a {label} para esos años: "
+                              + ("te dejamos la búsqueda por carrocería." if body else "elegí el modelo en el formulario."))
+        return [draft]
+    price = (" que suelen publicarse dentro de tu precio máximo" if fits and d.price_max and market.years else "")
+    most = ", los más publicados primero" if market.years else ""
+    note = (f"Elegimos modelos{body} con distribución a {label}{price}{most}: activá los que te interesen. "
+            "La distribución depende del motor; confirmala con el vendedor.")
+    out = []
+    for m in found[:MAX_VEHICLES]:
+        draft = normalize_draft(models, d.model_copy(update={"make": m.make, "model": m.model}), today)
+        draft["notes"].insert(0, note)
+        if not fits:
+            draft["notes"].append(f"El {m.model} suele publicarse por encima de tu precio máximo.")
+        out.append(draft)
+    return out
+
+
 def catalog_misses(models: Sequence[CatalogModel], drafts: Sequence[SearchDraft]) -> list[tuple[str, str | None]]:
     """What the drafts asked for that the catalog doesn't have, for the
     catalog_misses table: (normalized "make model" as said, catalog make or
@@ -276,7 +424,7 @@ def catalog_misses(models: Sequence[CatalogModel], drafts: Sequence[SearchDraft]
     catalog doesn't know; a known make without a model ("un Chery") doesn't."""
     out: dict[str, str | None] = {}
     for d in drafts:
-        d = _without_body_words(d)
+        d = _without_traits(_without_body_words(d))
         entry, make, _ = _vehicle(models, d, [])
         said_make, said_model = normalize_text(d.make), normalize_text(d.model)
         if said_make and said_model.startswith(said_make + " "):
@@ -299,14 +447,24 @@ def _group_key(draft: dict[str, Any]) -> tuple | None:
     return None
 
 
+def _normalized(models: Sequence[CatalogModel], drafts: Sequence[SearchDraft], market: Market,
+                today: dt.date | None) -> Iterable[dict[str, Any]]:
+    for d in drafts:
+        cleaned = _without_traits(_without_body_words(d))
+        if cleaned.timing and not (cleaned.model or "").strip():
+            yield from _expand_timing(models, cleaned, market, today)
+        else:
+            yield normalize_draft(models, d, today)
+
+
 def normalize_drafts(models: Sequence[CatalogModel], drafts: Sequence[SearchDraft],
-                     today: dt.date | None = None) -> dict[str, Any]:
+                     today: dt.date | None = None, market: Market | None = None) -> dict[str, Any]:
     """One search per resolved model, with all its requested versions, and one
-    per set of body types without a model."""
+    per set of body types without a model. A drive without a model is
+    several models (see the module docstring)."""
     out: list[dict[str, Any]] = []
     seen: dict[tuple, dict[str, Any]] = {}
-    for d in drafts:
-        draft = normalize_draft(models, d, today)
+    for draft in _normalized(models, drafts, market or Market(), today):
         v = draft["values"]
         key = _group_key(draft)
         if key is not None and key in seen:
