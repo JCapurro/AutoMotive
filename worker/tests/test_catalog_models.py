@@ -19,6 +19,8 @@ from seed_catalog import seed_catalog
     ("Peugeot 2008 Allure 2020", "Peugeot", "2008"),
     ("Byd Dolphin Mini GL 2025", "BYD", "Dolphin Mini"),
     ("Chery Tiggo 4 Pro Luxury", "Chery", "Tiggo 4"),
+    ("Chery Arrizo 8 Luxury PHEV 2026", "Chery", "Arrizo 8"),
+    ("Chery Arrizo5 1.5 Confort 2019", "Chery", "Arrizo 5"),
     ("Gwm Haval H6 HEV 2023", "Haval", "H6"),
     ("Nissan Xtrail 2.5 Exclusive", "Nissan", "X-Trail"),
     ("Toyota Rav4 Hybrid 2022", "Toyota", "RAV4"),

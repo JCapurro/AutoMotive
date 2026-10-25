@@ -6,7 +6,7 @@ import datetime as dt
 from llm.schemas import SearchDraft, SearchDrafts, json_schema
 from intelligence.matching import match
 from normalization.body_type import CODES as BODY_TYPES
-from normalization.drafts import MAX_VEHICLES, normalize_draft, normalize_drafts
+from normalization.drafts import MAX_VEHICLES, catalog_misses, normalize_draft, normalize_drafts
 from normalization.vehicle import CatalogModel
 from seed_catalog import seed_catalog
 
@@ -58,6 +58,20 @@ def test_known_make_unknown_model_keeps_the_make():
     out = norm(make="Ford", model="Falcon")
     assert (out["values"]["make"], out["values"]["model"]) == ("Ford", "")
     assert not out["resolved"]
+
+
+def test_the_arrizo_resolves_with_its_versions():
+    out = norm(make="CHERY", model="ARRIZO 8", trim="Luxury")
+    assert out["resolved"]
+    assert (out["values"]["make"], out["values"]["model"], out["values"]["trim"]) == ("Chery", "Arrizo 8", "Luxury")
+
+
+def test_catalog_misses_are_what_did_not_resolve():
+    drafts = [draft(make="Chery", model="Omoda 5"), draft(make="Tesla", model="Model 3"),
+              draft(make="Ford", model="Fiesta"), draft(make="Chevrolet"), draft(make="Lada"),
+              draft(make="Chery", model="Chery Omoda 5"), draft(model="SUV"), draft(make="Chery", model="Omoda 5")]
+    assert catalog_misses(seed_catalog(), drafts) == [
+        ("chery omoda 5", "Chery"), ("tesla model 3", None), ("lada", None)]
 
 
 def test_make_only():

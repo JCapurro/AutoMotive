@@ -149,6 +149,19 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"catalog_misses": {
+                  Row: {
+                    "count": number,"first_seen_at": string,"last_llm_job_id": number | null,"last_seen_at": string,"make": string | null,"said": string
+                  }
+                  Insert: {
+                    "count"?: number,"first_seen_at"?: string,"last_llm_job_id"?: number | null,"last_seen_at"?: string,"make"?: string | null,"said": string
+                  }
+                  Update: {
+                    "count"?: number,"first_seen_at"?: string,"last_llm_job_id"?: number | null,"last_seen_at"?: string,"make"?: string | null,"said"?: string
+                  }
+                  Relationships: [
+
+                  ]
                 },"crawl_targets": {
                   Row: {
                     "active": boolean,"body_type": string | null,"created_at": string,"first_run_done": boolean,"id": number,"last_full_read_at": string | null,"last_run_at": string | null,"make": string | null,"model": string | null,"next_run_at": string | null,"prefilter_rejected": string[],"query": NonNullable<Json>,"source": string,"updated_at": string
