@@ -638,10 +638,19 @@ claude -p \
 2. La web inserta `llm_jobs(kind='parse_search', input={text})` con RLS.
 3. El worker toma el job (`FOR UPDATE SKIP LOCKED`) y ejecuta el provider.
 4. Después **normaliza los drafts contra `vehicle_catalog`**, que es un paso determinístico, y escribe `output`.
-5. La web recibe el resultado por Realtime (o polling cada 2 s como fallback). Muestra **uno o más formularios pre-completados y editables**, uno por vehículo, y el usuario confirma o corrige antes de guardar (§12).
+5. La web recibe el resultado por Realtime (o polling cada 2 s como fallback). Muestra **uno o más formularios pre-completados y editables**, uno por vehículo, y el usuario confirma o corrige antes de guardar (§12). Arriba, el aviso «Falta un paso: guardá para activar las alertas»; en el celular, el botón «Guardar y activar alertas» queda fijo abajo mientras el del formulario no está a la vista. Si el usuario reescribe el pedido y sale la misma propuesta, se le avisa que ya está lista y se enfoca el botón de guardar.
+   - **Autoguardado** (`web/lib/assisted-autosave.ts`, 2026-11): si el resultado es **un único borrador** `resolved`, con marca y modelo del catálogo, sin notas que pidan elegir o completar algo («elegí…», «No encontramos…», «Falta…», «No reconocimos la zona…»), con zona (la del texto o, si no dice, la aproximada del pedido con 30 km, como un formulario nuevo) y el plan tiene lugar, la web lo guarda sola (`saveSearch` con `origin.mode = 'assisted_auto'`) y muestra «Tu búsqueda ya está activa» con el link a la búsqueda y el formulario debajo, que edita esa misma búsqueda. Si el guardado falla, vuelve a la revisión normal con el error. `sameActiveSearch` y `search_profiles_active_unique_idx` evitan duplicados (re-render, StrictMode, reintentos).
 6. Si hay error o timeout (60 s), se muestra el mensaje "No pude interpretarlo, completá los filtros" y el formulario estructurado vacío.
 
-**Guardarraíles del §44:** el LLM nunca calcula precio, score, dedupe ni timestamps, y nunca aplica filtros sin la confirmación del usuario. Lo que el usuario guarda son siempre filtros estructurados.
+**Medición** (eventos en `events`, embudo en la vista `v_assisted_funnel`, solo service role):
+- `assisted_search_requested { llm_job_id, chars }`: se encoló el pedido.
+- `assisted_review_shown { llm_job_id, drafts, resolved, autosaved, preview_count? }`: se mostró la revisión (o «ya está activa»), una vez por job.
+- `assisted_fallback_shown { llm_job_id, reason }`: se cayó al formulario manual (`error`, `invalid`, `empty`, `timeout`, `unavailable`).
+- `search_save_failed { reason, fields, llm_job_id, mode }`: el servidor rechazó una creación.
+- `search_intent_missing`: una cuenta solo-email sin búsquedas llegó a `/app/searches/new` sin el pedido de la portada (una vez por cuenta).
+- `v_assisted_funnel`: por día de alta, `signup_completed → assisted_search_requested → assisted_review_shown → search_profile_created`, más autoguardadas, fallbacks, guardados fallidos e intención perdida.
+
+**Guardarraíles del §44:** el LLM nunca calcula precio, score, dedupe ni timestamps, y nunca aplica filtros que el usuario no pidió: el autoguardado solo toma un pedido sin ambigüedades, y lo que se guarda son siempre filtros estructurados, visibles y editables en el momento.
 
 ---
 

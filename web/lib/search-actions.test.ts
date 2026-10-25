@@ -137,6 +137,20 @@ describe("saveSearch", () => {
     expect(await setSearchEnabled(9, true)).toEqual(duplicate);
   });
 
+  it("records a refused creation (search_save_failed), not a refused edit", async () => {
+    state.dbError = { message: "plan_limit_exceeded" };
+    state.catalog = { make: "Chevrolet", model: "Corsa", body_types: [] };
+    const auto = { mode: "assisted_auto" as const, jobId: 42, edited: false, stay: true };
+    expect(await saveSearch(null, CORSA, auto)).toEqual({ error: "Llegaste al máximo de búsquedas de tu plan." });
+    expect(state.track).toHaveBeenCalledWith(expect.anything(), "account", "search_save_failed", {
+      reason: "Llegaste al máximo de búsquedas de tu plan.", fields: [], llm_job_id: 42, mode: "assisted_auto",
+    });
+    state.track.mockClear();
+    state.catalog = null;
+    await saveSearch(9, CORSA);
+    expect(state.track).not.toHaveBeenCalledWith(expect.anything(), "account", "search_save_failed", expect.anything());
+  });
+
   it.each([
     ["plan_feature_unavailable", { error: MODEL_LESS_UNAVAILABLE }],
     ["search_needs_model_or_body_type", { error: "Elegí un modelo o al menos una carrocería.",

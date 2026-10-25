@@ -4,12 +4,28 @@ import { beforeEach, expect, it, vi } from "vitest";
 import type { SearchLimit } from "./assisted";
 import type { DetectedLocation } from "./search-location";
 
-const state = vi.hoisted(() => ({ headers: {} as Record<string, string>, access: null as unknown, modelLessSearch: false, emailOnly: false }));
-beforeEach(() => { state.headers = {}; state.access = null; state.modelLessSearch = false; state.emailOnly = false; });
+const state = vi.hoisted(() => ({
+  headers: {} as Record<string, string>, access: null as unknown, modelLessSearch: false, emailOnly: false,
+  searches: 0, recorded: 0, tracked: [] as string[],
+}));
+beforeEach(() => {
+  state.headers = {}; state.access = null; state.modelLessSearch = false; state.emailOnly = false;
+  state.searches = 0; state.recorded = 0; state.tracked = [];
+});
 vi.mock("next/headers", () => ({ headers: async () => new Headers(state.headers) }));
 
 vi.mock("@/lib/auth", () => ({ requireUser: vi.fn().mockResolvedValue({ id: "user", email: "user@example.com" }), isEmailOnly: async () => state.emailOnly }));
-vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ rpc: async () => ({ data: state.access }) }) }));
+vi.mock("@/lib/supabase/server", () => ({
+  createClient: async () => ({
+    rpc: async () => ({ data: state.access }),
+    from: (table: string) => {
+      const result = { count: table === "events" ? state.recorded : state.searches };
+      const query = { eq: async () => result, then: (resolve: (r: typeof result) => void) => resolve(result) };
+      return { select: () => query };
+    },
+  }),
+}));
+vi.mock("@/lib/events", () => ({ track: async (_s: unknown, _u: string, name: string) => { state.tracked.push(name); } }));
 vi.mock("@/lib/config", async () => {
   const { DEFAULT_PLAN_LIMITS, DEFAULT_PRO_OFFER } = await import("@/lib/pro");
   return { webConfig: async () => ({ planLimits: DEFAULT_PLAN_LIMITS, proOffer: DEFAULT_PRO_OFFER }) };
@@ -91,4 +107,22 @@ it("hands the search by body type to both flows when the plan has it (docs/CARRO
   const structuredTab = tabs.props.children[1];
   expect(structuredTab.props.children.props.modelLessSearch).toBe(true);
   expect(structuredTab.props.children.props.initial.body_types).toEqual([]);
+});
+
+it("records an email-only account without searches that arrives without its prompt, once", async () => {
+  state.emailOnly = true;
+  await NewSearchPage({ params: Promise.resolve({}), searchParams: Promise.resolve({}) });
+  expect(state.tracked).toEqual(["search_intent_missing"]);
+
+  state.tracked = [];
+  await NewSearchPage({ params: Promise.resolve({}), searchParams: Promise.resolve({ prompt: "Hilux SRV" }) });
+  state.searches = 1;
+  await NewSearchPage({ params: Promise.resolve({}), searchParams: Promise.resolve({}) });
+  state.searches = 0;
+  state.recorded = 1;
+  await NewSearchPage({ params: Promise.resolve({}), searchParams: Promise.resolve({}) });
+  state.emailOnly = false;
+  state.recorded = 0;
+  await NewSearchPage({ params: Promise.resolve({}), searchParams: Promise.resolve({}) });
+  expect(state.tracked).toEqual([]);
 });
