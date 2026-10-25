@@ -2,11 +2,12 @@
 
 * After enrichment: transmission or version may go from unknown to a value,
   and the description feeds the red flags (`rescore_listings`).
-* Nightly: the matches of active listings seen in the last 14 days, because
-  the comparables' median moves (`nightly_loop`, at app_config.rescore.hour ART).
+* Periodic: the matches of active listings seen in the last 14 days, because
+  the comparables' median moves and a listing may stop fitting its search
+  (`nightly_loop`, every app_config.rescore.every_hours from rescore.hour ART).
 * When SCORING_VERSION changes, every match (`rescore_outdated`, at startup).
 
-The nightly pass also runs the retention (pipeline/retention.py).
+The pass at rescore.hour also runs the retention (pipeline/retention.py).
 
 A match whose listing no longer passes the search (a detail page placed it
 outside the radius, the price went over the cap...) is deleted: the user
@@ -101,16 +102,28 @@ def seconds_until(hour: str, now: datetime) -> float:
     return (nxt - local).total_seconds()
 
 
+def next_slot(hour: str, every_hours: int, now: datetime) -> tuple[float, bool]:
+    """Seconds to the next re-score and whether it is the one at `hour`
+    (the one that also runs the retention). Slots are `hour` + k * every_hours,
+    wrapped in the day; an every_hours that does not divide 24 counts as 24."""
+    every = every_hours if 0 < every_hours < 24 and 24 % every_hours == 0 else 24
+    hh, mm = hour.split(":")
+    slots = [f"{(int(hh) + k * every) % 24:02d}:{mm}" for k in range(24 // every)]
+    wait, slot = min((seconds_until(t, now), t) for t in slots)
+    return wait, slot == slots[0]
+
+
 async def nightly_loop(stop: asyncio.Event) -> None:
-    """Re-score matches once a night, then purge stale listings; also, once at
-    startup, whatever an older SCORING_VERSION scored."""
+    """Re-score matches every `every_hours` (anchored at `hour`); at `hour`, also
+    purge stale listings. Once at startup, whatever an older SCORING_VERSION
+    scored."""
     try:
         await rescore_outdated()
     except Exception:
         await log_error("rescore", "outdated", traceback.format_exc())
     while not stop.is_set():
         cfg = {**DEFAULT_RESCORE, **(await db.get_config("rescore", {}) or {})}
-        wait = seconds_until(str(cfg["hour"]), datetime.now(_AR))
+        wait, is_anchor = next_slot(str(cfg["hour"]), int(cfg["every_hours"]), datetime.now(_AR))
         try:
             await asyncio.wait_for(stop.wait(), timeout=wait)
             return
@@ -120,6 +133,8 @@ async def nightly_loop(stop: asyncio.Event) -> None:
             await rescore_recent()
         except Exception:
             await log_error("rescore", "nightly", traceback.format_exc())
+        if not is_anchor:
+            continue
         try:
             await purge_stale_listings()
             await purge_raw_pages()

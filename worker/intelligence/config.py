@@ -40,7 +40,7 @@ DEFAULT_CURVES: dict[str, dict[str, float]] = {
 }
 DEFAULT_RED_FLAGS = {"much_cheaper_pct": 25, "anticipo_pct": 50, "min_km_per_year": 5000,
                      "min_description_chars": 150}
-DEFAULT_RESCORE = {"days": 14, "hour": "04:00"}
+DEFAULT_RESCORE = {"days": 14, "hour": "04:00", "every_hours": 24}
 
 
 def _merge(defaults: Mapping[str, Any], value: Any) -> dict[str, Any]:
