@@ -26,8 +26,14 @@ y acceder al aviso original.
   en `worker/notifications/assets/ese-auto-logo.png`: no requiere un nuevo
   despliegue web, un bucket ni una URL pública.
 - Se conserva la baja de emails y la baja con un clic, los reintentos,
-  la idempotencia, las preferencias y los límites de envío. No se agregan
-  píxeles de apertura. Telegram y la bandeja web conservan su comportamiento.
+  la idempotencia, las preferencias y los límites de envío. Telegram y la
+  bandeja web conservan su comportamiento.
+- Cada email (alertas, resumen y mails de plan) termina con una imagen de 1 px,
+  `/o/<id>?k=n|m`, que marca `opened_at` la primera vez que se carga
+  (`20261109120000_email_opens.sql`). Sin ella un email sin clic no distinguía
+  «no llegó» de «no interesó»: desde el 15/10/2026 salieron 66 emails sin un
+  solo clic. Los proxys de Gmail cuentan como apertura real; Apple Mail precarga
+  las imágenes y puede contar de más. La política de privacidad lo informa.
 - Sin `WEB_BASE_URL`, los enlaces de autos conservan el destino externo y el
   resumen no oculta resultados: no hay web configurada donde consultar el resto.
 - Con `ALERT_LINK_SECRET`, «Ver auto en Ese Auto» (y cada auto del resumen) y el

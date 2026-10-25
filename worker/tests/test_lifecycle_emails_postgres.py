@@ -700,3 +700,60 @@ class MeasuringTests(LifecycleCase):
             await self.rows("SELECT * FROM lifecycle_emails", actor=user)
         with self.assertRaisesRegex(Exception, "permission denied"):
             await self.rows("SELECT track_lifecycle_click(1)", actor=user)
+
+
+class SearchActivatedTests(LifecycleCase):
+    """The welcome: 45 minutes after the account's first search."""
+
+    async def first_search(self, user: str, *, minutes_ago: float, model: str = "Focus") -> int:
+        profile = await self.search(user, model)
+        await self.rows("UPDATE search_profiles SET created_at = now() - make_interval(secs => %s) WHERE id = %s",
+                        minutes_ago * 60, profile)
+        return profile
+
+    async def test_once_per_account_with_what_its_search_already_found(self):
+        user = await self.account(trial_ended_hours_ago=None)
+        profile = await self.first_search(user, minutes_ago=50)
+        for level in ("high", "good", "good"):
+            await self.match(profile, level=level)
+
+        self.assertEqual(await self.send(), 1)
+        row = await self.ledger(user, "search_activated")
+        self.assertEqual((row["status"], row["event_key"], row["search_profile_id"], row["target"], row["payload"]),
+                         ("sent", "first", profile, f"/app/searches/{profile}",
+                          {"model": "Ford Focus", "found": 3, "below": 1}))
+        [body] = self.emails()
+        self.assertEqual((body["to"], body["subject"]), ([await self.email_of(user)], "Tu búsqueda de Ford Focus ya está activa"))
+        self.assertIn(f"Ver mis resultados: https://automotive.app/m/{row['id']}", body["text"])
+        self.assertIn(f"/o/{row['id']}?k=m", body["html"])
+
+        await self.first_search(user, minutes_ago=50, model="Ka")     # a second search: no second welcome
+        self.assertEqual(await self.send(), 0)
+
+    async def test_not_before_45_minutes_nor_for_a_paused_search_or_an_admin(self):
+        early = await self.account(trial_ended_hours_ago=None)
+        await self.first_search(early, minutes_ago=10)
+        paused = await self.account(trial_ended_hours_ago=None)
+        await self.rows("UPDATE search_profiles SET enabled = false WHERE id = %s",
+                        await self.first_search(paused, minutes_ago=50))
+        await self.first_search(self.admin, minutes_ago=50)
+
+        self.assertEqual(await self.send(), 0)
+        for user in (early, paused, self.admin):
+            self.assertIsNone(await self.ledger(user, "search_activated"))
+
+    async def test_skipped_if_the_search_was_paused_before_its_turn(self):
+        user = await self.account(trial_ended_hours_ago=None)
+        profile = await self.first_search(user, minutes_ago=50)
+        [row] = await self.rows("SELECT id FROM claim_lifecycle_emails('search_activated', interval '48 hours', 5)")
+        await self.rows("UPDATE search_profiles SET enabled = false WHERE id = %s", profile)
+
+        self.assertEqual(await self.send(), 0)
+        self.assertEqual((await self.ledger(user, "search_activated"))["id"], row["id"])
+        self.assertEqual((await self.ledger(user, "search_activated"))["status"], "skipped")
+
+    async def test_a_first_search_older_than_the_window_never_gets_one(self):
+        user = await self.account(trial_ended_hours_ago=None)
+        await self.first_search(user, minutes_ago=60 * 50)
+        self.assertEqual(await self.send(), 0)
+        self.assertIsNone(await self.ledger(user, "search_activated"))

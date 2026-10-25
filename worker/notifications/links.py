@@ -5,7 +5,11 @@
     <WEB_BASE_URL>/r/<id>?to=listing&l=<listing_id>   (one item of a digest)
 
 the button of a plan email (docs/MAILS_DE_PLAN.md) is /m/<lifecycle_email_id>,
-and every email carries the user's unsubscribe link (F7, punto 7):
+every email carries a 1 px image that marks it opened,
+
+    <WEB_BASE_URL>/o/<id>?k=n|m             → notifications | lifecycle_emails
+
+and the user's unsubscribe link (F7, punto 7):
 
     <WEB_BASE_URL>/baja?t=<token>           → a page with a confirm button
     <WEB_BASE_URL>/api/baja?t=<token>       → one-click POST (RFC 8058)
@@ -73,6 +77,11 @@ class Links:
         click and redirects to the email's target. `owner` signs it."""
         query = self._signed({}, "m", email_id, owner)
         return f"{self.base_url}/m/{email_id}" + (f"?{urlencode(query)}" if query else "")
+
+    def open_pixel(self, kind: str, item_id: int) -> str | None:
+        """The 1 px image that marks an email opened: kind "n" (notifications)
+        or "m" (lifecycle_emails). Unsigned: it only ever sets opened_at."""
+        return f"{self.base_url}/o/{item_id}?{urlencode({'k': kind})}" if self.tracked else None
 
     def unsubscribe(self, token: str | None) -> str | None:
         return f"{self.base_url}/baja?{urlencode({'t': token})}" if self.tracked and token else None

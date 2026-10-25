@@ -118,7 +118,8 @@ def _email_note(note: str) -> str:
 def render(c: Content, *, kind: str, now: datetime, day: str | None,
            detail_url: str | None, app_url: str | None, unsubscribe_url: str | None,
            footer: str, unsubscribe_label: str, eyebrow: str | None = None,
-           title: str | None = None, preheader: str | None = None) -> str:
+           title: str | None = None, preheader: str | None = None,
+           open_pixel_url: str | None = None) -> str:
     """An alert, the digest or (with eyebrow/title/preheader) any other
     account email, such as the free-trial reminder."""
     try:
@@ -247,5 +248,8 @@ def render(c: Content, *, kind: str, now: datetime, day: str | None,
         '-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%">',
         '<div style="display:none;font-size:1px;color:#f1f3f7;line-height:1px;max-height:0;max-width:0;'
         f'opacity:0;overflow:hidden;mso-hide:all" aria-hidden="true">{escape(preheader)}</div>',
-        wrapper, '</body></html>',
+        wrapper,
+        *([f'<img src="{escape(open_pixel_url)}" alt="" width="1" height="1" border="0" '
+           'style="display:block;width:1px;height:1px;border:0">'] if open_pixel_url else []),
+        '</body></html>',
     ])

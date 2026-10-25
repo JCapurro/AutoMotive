@@ -8,6 +8,7 @@ Son los mails de la fase 2 de [planes](PLANES_2026-10.md), los que llevan a paga
 | 2.2 Fin de la prueba | Al terminar las 72 h, si la cuenta nunca compró | Listo |
 | 2.3 Vencimiento de Particular | 5 días antes y el día que vence el pase | Listo |
 | 2.5 Conteo después de vencer | 7, 14 y 21 días después del vencimiento, si apareció algo | Listo |
+| Bienvenida | 45 minutos después de la primera búsqueda de la cuenta | Listo |
 
 ## Reglas para todos
 
@@ -73,6 +74,16 @@ Juan aprobó el 14/10/2026 rastrear una vez por día, durante esas 3 semanas, lo
 - **Apagado.** Con `kinds.count_after_expiry = false` se corta también este rastreo.
 - **Costo.** No suma plata: el worker corre en el mismo VPS y los portales no cobran. Cada modelo que solo piden búsquedas vencidas agrega una consulta por día y por portal; una búsqueda activa hace decenas por día (Mercado Libre, cada 10 minutos).
 
+## Bienvenida
+
+No lleva a pagar: es el primer mail que recibe la cuenta y existe para que los que siguen lleguen a Principal. Desde el 15/10/2026 salieron 66 mails a usuarios reales sin un solo clic.
+
+- **A quién.** Una vez por cuenta (`event_key = 'first'`), 45 minutos después de su primera búsqueda, si esa cuenta recibe emails y tiene una búsqueda activa. Los 45 minutos dejan que el primer rastreo cuente coincidencias. Si la búsqueda se pausó antes del envío, la fila queda `skipped`.
+- **Asunto.** «Tu búsqueda de {modelo} ya está activa».
+- **Cuerpo.** «Ya encontramos {X} autos que coinciden con tu búsqueda de {modelo}, y {Y} están por debajo de publicaciones comparables. Te avisamos de los nuevos apenas aparezcan.» Con X en 0: «Ya estamos revisando las publicaciones para tu búsqueda de {modelo}. Todavía no apareció ninguno que coincida: te avisamos apenas aparezca.» Después: «Para que nuestras alertas no terminen en Spam o Promociones, agregá este remitente a tus contactos o mové este email a Principal.»
+- **Botón.** «Ver mis resultados», a `/app/searches/<id>` (la búsqueda activa que más encontró).
+- **Código.** [`20261109130000_search_activated_email.sql`](../supabase/migrations/20261109130000_search_activated_email.sql): las funciones de reserva y re-chequeo de los demás tipos quedan como `*_base` y las nuevas las llaman.
+
 ## Clics y eventos
 
 - **Clics.** El botón pasa por `/m/<id>` ([ruta](../web/app/m/[emailId]/route.ts)). Esa ruta registra `lifecycle_email_clicked` (con `kind`) y redirige al destino guardado en la fila, que siempre es una ruta del sitio. Las vistas previas de enlaces y los HEAD no cuentan.
@@ -87,7 +98,7 @@ Se edita desde `/admin/config`. Un valor inválido se reemplaza por su valor por
 | Campo | Por defecto | Qué hace |
 | --- | --- | --- |
 | `enabled` | `true` | `false` apaga todos los tipos. |
-| `kinds` | Todos prendidos: 2.1, 2.2, 2.3 y 2.5 | Prende o apaga cada tipo. Apagar `count_after_expiry` también corta su rastreo. |
+| `kinds` | Todos prendidos: 2.1, 2.2, 2.3, 2.5 y `search_activated` (bienvenida) | Prende o apaga cada tipo. Apagar `count_after_expiry` también corta su rastreo. |
 | `send_from` / `send_until` | `"09:00"` / `"21:00"` | Horario de envío, hora argentina. |
 | `window_hours` | `48` | Plazo para mandar una fila reservada. Pasado ese plazo queda `skipped` (`outside_window`). Tiene que superar la noche sin envíos. |
 | `max_per_day` | `30` | Mails reservados por día calendario argentino, entre todos los tipos. Resend gratis permite 100 por día entre alertas y estos mails. |
