@@ -14,8 +14,9 @@ import { worker } from "./support/worker";
 
 test.describe.configure({ mode: "serial" });
 
-// A golden phrase with a recorded answer (worker/tests/fixtures/llm/).
+// Golden phrases with a recorded answer (worker/tests/fixtures/llm/).
 const TWO_VEHICLES = "Fiesta Titanium o Polo Highline, 2017 en adelante, hasta 12 mil dólares";
+const ONE_VEHICLE = "Busco Fiesta Titanium manual 2016 a 2018 hasta USD 11.500 y menos de 150.000 km";
 
 /** The web only queues a job if the worker beat recently; `tools.llm_jobs --replay` doesn't beat. */
 async function setHeartbeat(ago: string) {
@@ -119,7 +120,10 @@ test("F5: dos vehículos en un pedido, revisados y guardados", async ({ page }, 
 test("F5: sumar a mano otro vehículo al pedido", async ({ page }, testInfo) => {
   const email = `assisted-add-${testInfo.project.name}-${Date.now()}@${E2E_EMAIL_DOMAIN}`;
   await signIn(page, email);
-  await ask(page, "Busco Fiesta Titanium manual 2016 a 2018 hasta USD 11.500 y menos de 150.000 km");
+  // A single vehicle, but neither the text nor the request (no Vercel headers locally) says where:
+  // no autosave, the review asks for the zone.
+  await ask(page, ONE_VEHICLE);
+  await expect(page.getByTestId("assisted-step-left")).toContainText("Falta un paso: guardá para activar las alertas");
   await page.getByRole("button", { name: "Agregar otro vehículo" }).click();
 
   const vehicles = page.getByRole("navigation", { name: "Vehículos del pedido" });
@@ -146,6 +150,62 @@ test("F5: sumar a mano otro vehículo al pedido", async ({ page }, testInfo) => 
     expect.objectContaining({ make: "Volkswagen", model: "Gol Trend", year_min: 2016, year_max: 2018, km_max: 150000 }),
     expect.objectContaining({ make: "Ford", model: "Fiesta", year_min: 2016, year_max: 2018 }),
   ]);
+});
+
+test("F5: portada → email → búsqueda activa sin tocar Guardar (autoguardado)", async ({ page }, testInfo) => {
+  const email = `assisted-auto-${testInfo.project.name}-${Date.now()}@${E2E_EMAIL_DOMAIN}`;
+  // The zone Vercel's headers give in production (approximateLocationFromHeaders): a new search starts there.
+  await page.context().setExtraHTTPHeaders({
+    "x-vercel-ip-country": "AR",
+    "x-vercel-ip-latitude": "-34.6037",
+    "x-vercel-ip-longitude": "-58.3816",
+    "x-vercel-ip-city": "Buenos%20Aires",
+  });
+  await page.goto("/");
+  const form = page.locator("#landing-search");
+  await form.getByLabel("¿Qué auto buscás?").fill(ONE_VEHICLE);
+  await form.getByRole("button", { name: "Crear mi búsqueda" }).click();
+  const dialog = page.getByRole("dialog", { name: "¿A qué email te avisamos?" });
+  await dialog.getByLabel("Tu email").fill(email);
+  await dialog.getByRole("button", { name: "Seguir" }).click();
+  await expect(page).toHaveURL(/\/app\/searches\/new/);
+  // The landing's prompt is sent on arrival.
+  await expect(page.getByRole("status")).toContainText("Interpretando tu búsqueda");
+  worker("llm_jobs", "--replay");
+
+  const active = page.getByTestId("assisted-active");
+  await expect(active).toContainText("Tu búsqueda ya está activa");
+  await expect(page.getByRole("button", { name: "Guardar cambios" })).toBeVisible();
+  await expectNoHorizontalScroll(page);
+
+  const saved = await query<{ id: number; filters: Record<string, unknown>; radius_km: number }>(
+    `select sp.id, sp.filters, sp.radius_km from public.search_profiles sp
+       join public.profiles p on p.id = sp.user_id where p.email = $1`,
+    [email],
+  );
+  expect(saved).toHaveLength(1);
+  expect(saved[0].filters).toMatchObject({ make: "Ford", model: "Fiesta", year_min: 2016, year_max: 2018, price_max: 11500 });
+  expect(saved[0].radius_km).toBe(30);
+  await expect(active.getByRole("link", { name: "Ver la búsqueda" })).toHaveAttribute("href", `/app/searches/${saved[0].id}`);
+
+  const events = await query<{ name: string; props: Record<string, unknown> }>(
+    `select e.name, e.props from public.events e join public.profiles p on p.id = e.user_id
+      where p.email = $1 and e.name in ('search_profile_created', 'assisted_review_shown', 'search_created') order by e.id`,
+    [email],
+  );
+  expect(events.map((e) => e.name).sort()).toEqual(["assisted_review_shown", "search_created", "search_profile_created"]);
+  expect(events.find((e) => e.name === "search_profile_created")?.props).toMatchObject({ mode: "assisted_auto", edited: false });
+  expect(events.find((e) => e.name === "assisted_review_shown")?.props).toMatchObject({ drafts: 1, resolved: 1, autosaved: true });
+
+  // Adjusting it edits the same search instead of creating another.
+  await page.getByLabel("Año hasta").selectOption("2017");
+  await page.getByRole("button", { name: "Guardar cambios" }).click();
+  await expect(page).toHaveURL(new RegExp(`/app/searches/${saved[0].id}$`));
+  const after = await query<{ filters: Record<string, unknown> }>(
+    `select sp.filters from public.search_profiles sp join public.profiles p on p.id = sp.user_id where p.email = $1`,
+    [email],
+  );
+  expect(after.map((s) => s.filters.year_max)).toEqual([2017]);
 });
 
 test("F5: si el LLM falla, el formulario estructurado vacío", async ({ page }, testInfo) => {

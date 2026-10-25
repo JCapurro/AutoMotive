@@ -417,6 +417,24 @@ def _expand_timing(models: Sequence[CatalogModel], d: SearchDraft, market: Marke
     return out
 
 
+def catalog_misses(models: Sequence[CatalogModel], drafts: Sequence[SearchDraft]) -> list[tuple[str, str | None]]:
+    """What the drafts asked for that the catalog doesn't have, for the
+    catalog_misses table: (normalized "make model" as said, catalog make or
+    None), once each. A model that doesn't resolve counts, and a make the
+    catalog doesn't know; a known make without a model ("un Chery") doesn't."""
+    out: dict[str, str | None] = {}
+    for d in drafts:
+        d = _without_traits(_without_body_words(d))
+        entry, make, _ = _vehicle(models, d, [])
+        said_make, said_model = normalize_text(d.make), normalize_text(d.model)
+        if said_make and said_model.startswith(said_make + " "):
+            said_make = ""  # "Chery Arrizo 8" in the model field
+        said = " ".join(p for p in (said_make, said_model) if p)
+        if entry is None and said and ((d.model or "").strip() or not make):
+            out.setdefault(said[:120], make or None)
+    return list(out.items())
+
+
 def _group_key(draft: dict[str, Any]) -> tuple | None:
     """Drafts with the same key are one search: a resolved model, or a search
     without a model and its body types ("cualquier SUV" and "cualquier pick-up"
