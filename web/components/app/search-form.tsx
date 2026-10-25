@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 import { type Preview, type SaveOrigin, previewSearch, saveSearch } from "@/app/app/searches/actions";
+import { RelaxSuggestions } from "@/components/app/relax-suggestions";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,6 +35,7 @@ import {
   modelBodyTypes,
   selectedTrims,
 } from "@/lib/search-form";
+import type { RelaxChange } from "@/lib/search-relax";
 import { cn } from "@/lib/utils";
 import { analyticsEvent } from "@/lib/google-analytics";
 import { AMBA_RADIUS_KM } from "@/lib/assisted-fallback";
@@ -213,6 +215,21 @@ function toInput(d: Draft, offered: readonly string[]): SearchInput {
     notification_frequency: d.notification_frequency,
     notify_min_level: d.notify_min_level,
     opportunity_threshold_pct: percentInput(d.opportunity_threshold_pct),
+  };
+}
+
+/** A zero-results hint (lib/search-relax.ts) applied to the fields; the place goes through choosePlace. */
+function relaxDraft(d: Draft, c: RelaxChange): Draft {
+  return {
+    ...d,
+    ...(c.trim_strict !== undefined ? { trim_strict: c.trim_strict } : {}),
+    ...(c.year_min !== undefined ? { year_min: c.year_min?.toString() ?? "" } : {}),
+    ...(c.year_max !== undefined ? { year_max: c.year_max?.toString() ?? "" } : {}),
+    ...(c.price_max !== undefined ? { price_max: c.price_max != null ? number(c.price_max) : "" } : {}),
+    ...(c.km_max !== undefined ? { km_max: c.km_max != null ? number(c.km_max) : "" } : {}),
+    ...(c.transmission !== undefined ? { transmission: c.transmission } : {}),
+    ...(c.fuel !== undefined ? { fuel: c.fuel } : {}),
+    ...(c.body_types !== undefined ? { body_types: c.body_types } : {}),
   };
 }
 
@@ -410,6 +427,11 @@ export function SearchForm({
     return () => { locationRequest.current += 1; };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once, when a new search opens
   }, []);
+
+  function applyRelax(change: RelaxChange) {
+    setDraft((prev) => relaxDraft(prev, change));
+    if (change.location === null) choosePlace("");
+  }
 
   function chooseMode(mode: string) {
     setErrors({});
@@ -974,6 +996,7 @@ export function SearchForm({
                 : "Elegí marca y modelo para ver cuántas publicaciones coinciden hoy."
           }
           locationRequired={!locationReady}
+          relax={byBody ? null : <RelaxSuggestions input={input} inputKey={previewKey} onApply={(s) => applyRelax(s.change)} />}
         />
         {locked && !errors.error ? <p className="text-sm text-destructive">{MODEL_LESS_UNAVAILABLE}</p> : null}
         {errors.error ? (
@@ -1112,6 +1135,7 @@ function PreviewCard({
   ready,
   notReady,
   locationRequired,
+  relax,
 }: {
   preview: Preview | null;
   loading: boolean;
@@ -1120,6 +1144,8 @@ function PreviewCard({
   /** What to pick before there's something to count. */
   notReady: string;
   locationRequired: boolean;
+  /** With a model, what to loosen when nothing matches (RelaxSuggestions). */
+  relax?: React.ReactNode;
 }) {
   return (
     <Card size="sm" aria-live="polite">
@@ -1154,6 +1180,8 @@ function PreviewCard({
                   </li>
                 ))}
               </ul>
+            ) : preview.count === 0 && relax ? (
+              relax
             ) : (
               <p className="text-xs text-muted-foreground">
                 Hoy no hay ninguna publicada. Es normal con autos buscados: duran poco. Nosotros seguimos mirando y te
