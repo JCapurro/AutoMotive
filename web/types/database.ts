@@ -8,10 +8,16 @@ export type Database = {
   "public": {
           Tables: {
       lifecycle_emails: {
-        Row: { id: number; user_id: string; kind: string; event_key: string; search_profile_id: number | null; payload: Json; target: string; status: string; attempts: number; error: string | null; provider_id: string | null; created_at: string; sent_at: string | null; clicked_at: string | null }
+        Row: { id: number; user_id: string; kind: string; event_key: string; search_profile_id: number | null; payload: Json; target: string; status: string; attempts: number; error: string | null; provider_id: string | null; created_at: string; sent_at: string | null; clicked_at: string | null; opened_at: string | null }
         Insert: { user_id: string; kind: string; event_key: string; target: string; search_profile_id?: number | null; payload?: Json; status?: string; attempts?: number; error?: string | null; provider_id?: string | null; created_at?: string; sent_at?: string | null; clicked_at?: string | null }
         Update: { status?: string; attempts?: number; error?: string | null; provider_id?: string | null; sent_at?: string | null; clicked_at?: string | null }
         Relationships: []
+      }
+      email_feedback: {
+        Row: { id: number; lifecycle_email_id: number; user_id: string; reason: string; comment: string | null; created_at: string; updated_at: string }
+        Insert: { lifecycle_email_id: number; user_id: string; reason: string; comment?: string | null; created_at?: string; updated_at?: string }
+        Update: { reason?: string; comment?: string | null; updated_at?: string }
+        Relationships: [{ foreignKeyName: "email_feedback_lifecycle_email_id_fkey"; columns: ["lifecycle_email_id"]; isOneToOne: true; referencedRelation: "lifecycle_emails"; referencedColumns: ["id"] }]
       }
       account_proofs: {
         Row: { session_id: string; user_id: string; method: string; created_at: string }
@@ -1247,6 +1253,9 @@ isOneToOne: false
                            },
 "track_lifecycle_click":
 { Args: { "p_id": number }; Returns: string | null
+                           },
+"record_email_feedback":
+{ Args: { "p_email": number,"p_reason": string,"p_comment": string | null }; Returns: number | null
                            },
 "track_notification_click":
 { Args: { "p_listing_id"?: number,"p_notification_id": number,"p_to"?: string }; Returns: {

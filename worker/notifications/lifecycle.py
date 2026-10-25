@@ -47,12 +47,15 @@ log = logging.getLogger("lifecycle")
 # The kinds this worker sends, claimed in this order (the daily cap is shared):
 # the ones with a deadline today first, then the welcome (it's only worth it early).
 KINDS = ("pass_expires_today", "trial_ended", "search_activated", "pass_expiring", "trial_no_matches",
-         "count_after_expiry")
+         "count_after_expiry", "search_abandoned", "search_not_started", "search_feedback")
 DEFAULTS: dict[str, Any] = {"enabled": True, "send_from": "09:00", "send_until": "21:00",
                             "window_hours": 48, "max_per_day": 30,
                             "kinds": {"trial_no_matches": True, "trial_ended": True,
                                       "pass_expiring": True, "pass_expires_today": True,
-                                      "count_after_expiry": True, "search_activated": True}}
+                                      "count_after_expiry": True, "search_activated": True,
+                                      # Remarketing: off until someone turns it on in /admin/config.
+                                      "search_abandoned": False, "search_not_started": False,
+                                      "search_feedback": False}}
 # Why the last tick did nothing without config (logged once, not every tick).
 _skipped_reason: str | None = None
 
@@ -117,7 +120,8 @@ def _skip(reason: str) -> int:
 
 async def _send(channel: Any, row: Mapping[str, Any], links: Links, now: datetime,
                 context: Mapping[str, Any]) -> SendResult:
-    msg = templates.lifecycle_email(row, links, now, offer=context.get("offer"), limits=context.get("limits"))
+    msg = templates.lifecycle_email(row, links, now, offer=context.get("offer"), limits=context.get("limits"),
+                                    remarketing=context.get("remarketing"))
     try:
         return await channel.send_message(row["email"], msg, idempotency_key=f"lifecycle-{row['id']}",
                                           unsubscribe_token=row["unsubscribe_token"])
@@ -165,7 +169,8 @@ async def run_lifecycle_emails(channel: Any, links: Links, *, now: datetime | No
 
     rows = await repo.pending(cfg["max_per_day"]) if cfg["max_per_day"] > 0 else []
     context = ({"offer": await db.get_config("pro_offer", None),
-                "limits": await db.get_config("plan_limits", None)} if rows else {})
+                "limits": await db.get_config("plan_limits", None),
+                "remarketing": await db.get_config("remarketing", None)} if rows else {})
     window = timedelta(hours=cfg["window_hours"])
     sent = 0
     for row in rows:

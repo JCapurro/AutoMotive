@@ -1,0 +1,35 @@
+=== email subject ===
+¿Qué te frenó?
+=== email text ===
+Hola,
+
+Soy Juan, hago Ese Auto. Vi que empezaste a buscar un Toyota Hilux y no seguiste. ¿Me contás qué pasó? Con un clic alcanza.
+
+- Solo estaba mirando: https://automotive.app/f/41?r=browsing
+- No encontré mi modelo o versión: https://automotive.app/f/41?r=missing_model
+- La búsqueda que armaron no era lo que pedí: https://automotive.app/f/41?r=wrong_search
+- No entendí qué hace Ese Auto: https://automotive.app/f/41?r=unclear
+- Ya compré un auto: https://automotive.app/f/41?r=bought
+- Otro motivo: https://automotive.app/f/41?r=other
+
+O respondé este email: lo leo yo.
+
+Si todavía la querés, sigue lista para activar:
+https://automotive.app/m/41
+
+Juan, de Ese Auto
+
+—
+Recibís este email porque se creó una cuenta en Ese Auto con esta dirección.
+Dejar de recibir estos emails: https://automotive.app/baja?t=3f0c1a52-6c55-4a43-9f39-0d8f3c7c2b11
+=== email html ===
+<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.5;color:#222">
+<p>Hola,</p>
+<p>Soy Juan, hago Ese Auto. Vi que empezaste a buscar un Toyota Hilux y no seguiste. ¿Me contás qué pasó? Con un clic alcanza.</p>
+<ul><li><a href="https://automotive.app/f/41?r=browsing">Solo estaba mirando</a></li><li><a href="https://automotive.app/f/41?r=missing_model">No encontré mi modelo o versión</a></li><li><a href="https://automotive.app/f/41?r=wrong_search">La búsqueda que armaron no era lo que pedí</a></li><li><a href="https://automotive.app/f/41?r=unclear">No entendí qué hace Ese Auto</a></li><li><a href="https://automotive.app/f/41?r=bought">Ya compré un auto</a></li><li><a href="https://automotive.app/f/41?r=other">Otro motivo</a></li></ul>
+<p>O respondé este email: lo leo yo.</p>
+<p>Si todavía la querés, sigue lista para activar: <a href="https://automotive.app/m/41">Activar mi búsqueda</a></p>
+<p>Juan, de Ese Auto</p>
+<p style="font-size:12px;color:#888">Recibís este email porque se creó una cuenta en Ese Auto con esta dirección. <a href="https://automotive.app/baja?t=3f0c1a52-6c55-4a43-9f39-0d8f3c7c2b11" style="color:#888">Dejar de recibir estos emails</a></p>
+<img src="https://automotive.app/o/41?k=m" width="1" height="1" alt="" style="display:block;border:0">
+</div>

@@ -9,6 +9,7 @@ List-Unsubscribe with one-click POST (RFC 8058) besides the footer link.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from email.utils import formataddr, parseaddr
 from typing import Callable
 
 import httpx
@@ -42,13 +43,23 @@ class ResendEmailChannel:
                                        idempotency_key=f"notification-{notification.id}",
                                        unsubscribe_token=notification.unsubscribe_token)
 
+    def _sender(self, name: str | None) -> str:
+        """EMAIL_FROM, or its address under another display name (same domain: SPF and DKIM still align)."""
+        address = parseaddr(self.sender)[1]
+        return formataddr((name, address)) if name and address else self.sender
+
     async def send_message(self, to: str, msg: templates.EmailMessage, *, idempotency_key: str,
                            unsubscribe_token: str | None) -> SendResult:
         """POST an already rendered email (an alert, or a plan email,
         notifications/lifecycle.py). The key must be unique per email.
-        Every rendered email shows the inline logo, so it always goes attached."""
-        body = {"from": self.sender, "to": [to], "subject": msg.subject,
-                "html": msg.html, "text": msg.text, "attachments": [logo_attachment()]}
+        Every branded email shows the inline logo, so it goes attached
+        unless the message says otherwise (the remarketing ones)."""
+        body = {"from": self._sender(msg.from_name), "to": [to], "subject": msg.subject,
+                "html": msg.html, "text": msg.text}
+        if msg.logo:
+            body["attachments"] = [logo_attachment()]
+        if msg.reply_to:
+            body["reply_to"] = msg.reply_to
         if one_click := self.links.unsubscribe_one_click(unsubscribe_token):
             body["headers"] = {"List-Unsubscribe": f"<{one_click}>",
                                "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"}

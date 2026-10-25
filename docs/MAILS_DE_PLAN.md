@@ -9,6 +9,7 @@ Son los mails de la fase 2 de [planes](PLANES_2026-10.md), los que llevan a paga
 | 2.3 Vencimiento de Particular | 5 días antes y el día que vence el pase | Listo |
 | 2.5 Conteo después de vencer | 7, 14 y 21 días después del vencimiento, si apareció algo | Listo |
 | Bienvenida | 45 minutos después de la primera búsqueda de la cuenta | Listo |
+| Remarketing 1A, 1B y seguimiento | Cuentas sin búsqueda: 24 h después de pedirla o de registrarse, y 4 días después | Listo, apagado |
 
 ## Reglas para todos
 
@@ -84,6 +85,22 @@ No lleva a pagar: es el primer mail que recibe la cuenta y existe para que los q
 - **Botón.** «Ver mis resultados», a `/app/searches/<id>` (la búsqueda activa que más encontró).
 - **Código.** [`20261109130000_search_activated_email.sql`](../supabase/migrations/20261109130000_search_activated_email.sql): las funciones de reserva y re-chequeo de los demás tipos quedan como `*_base` y las nuevas las llaman.
 
+## Remarketing: cuentas sin búsqueda
+
+No lleva a pagar: busca que la cuenta arme su primera búsqueda o que cuente por qué no. Al 25/10/2026 eran 12 de 36 cuentas: 9 habían escrito qué auto buscaban en el modo asistido sin activarlo y 3 nunca escribieron nada.
+
+- **Remitente.** Una persona, no la marca: `remarketing.sender_name` (por defecto «Juan de Ese Auto») con la dirección de `EMAIL_FROM`, así SPF y DKIM siguen alineados. Texto casi plano, sin logo ni plantilla, firmado por `remarketing.signer`. Con `remarketing.reply_to` las respuestas van a esa casilla y el mail dice «O respondé este email: lo leo yo.»; sin él, esa frase no aparece.
+- **1A, búsqueda sin activar (`search_abandoned`).** 24 horas después del último pedido asistido (`llm_jobs` `parse_search` terminado) de una cuenta que no tiene ninguna búsqueda, ni pausada.
+  - **Asunto.** «Tu búsqueda de {modelo} quedó sin activar».
+  - **Cuerpo.** «El {día} nos escribiste: «{texto}». La dejamos lista: con un clic empezamos a revisar las publicaciones y te avisamos cuando aparezca un auto que coincida. La prueba gratis arranca recién cuando la activás.»
+  - **Botón.** «Activar mi búsqueda», a `/app/searches/new?prompt=<texto>`: el modo asistido con lo que había escrito.
+- **1B, nunca escribió (`search_not_started`).** 24 horas después del registro, sin pedido asistido ni búsqueda. Asunto «¿Qué auto estás buscando?», con dos ejemplos y el botón «Empezar mi búsqueda» a `/app/searches/new`.
+- **Seguimiento (`search_feedback`).** 4 días después de que salió 1A o 1B, si todavía no tiene búsqueda y no contestó ningún motivo. Asunto «¿Qué te frenó?»: «Soy Juan, hago Ese Auto. Vi que empezaste a buscar un {modelo} y no seguiste. ¿Me contás qué pasó?», los motivos y, al final, el botón del primer mail. Después de este, nada más.
+- **Motivos.** Debajo del botón: «Solo estaba mirando», «No encontré mi modelo o versión», «La búsqueda que armaron no era lo que pedí» (solo después de un pedido asistido), «No entendí qué hace Ese Auto», «Ya compré un auto» y «Otro motivo». Cada uno es `/f/<id>?r=<motivo>&s=<firma>` ([página](../web/app/f/[emailId]/page.tsx)): abrirlo no registra nada, porque los antivirus del correo abren todos los links; la página muestra el motivo marcado, un campo opcional para comentar y el botón «Enviar». La firma es la del botón del mismo mail. Se guarda en `email_feedback`, uno por mail (un segundo envío lo reemplaza), con el evento `email_feedback`. Se ven en `/admin/metrics`, «Por qué no armaron su búsqueda».
+- **Cuentas que ya estaban.** `remarketing.backfill_since` (por defecto 1/10/2026): al prender 1A o 1B, las cuentas cuyo evento es posterior a esa fecha reciben el suyo aunque sea más viejo que `window_hours`. Es una vez por cuenta, como todos. Con `null`, solo cuenta la ventana. El seguimiento no usa esa fecha: se mide desde que salió el primero.
+- **Apagados.** Los tres tipos nacen en `false` en `lifecycle_emails.kinds`.
+- **Código.** [`20261110120000_remarketing_no_search.sql`](../supabase/migrations/20261110120000_remarketing_no_search.sql): las funciones de reserva y re-chequeo anteriores quedan como `*_welcome` y las nuevas las llaman. Los textos, en `remarketing_email` de `notifications/templates.py`.
+
 ## Clics y eventos
 
 - **Clics.** El botón pasa por `/m/<id>` ([ruta](../web/app/m/[emailId]/route.ts)). Esa ruta registra `lifecycle_email_clicked` (con `kind`) y redirige al destino guardado en la fila, que siempre es una ruta del sitio. Las vistas previas de enlaces y los HEAD no cuentan.
@@ -98,7 +115,7 @@ Se edita desde `/admin/config`. Un valor inválido se reemplaza por su valor por
 | Campo | Por defecto | Qué hace |
 | --- | --- | --- |
 | `enabled` | `true` | `false` apaga todos los tipos. |
-| `kinds` | Todos prendidos: 2.1, 2.2, 2.3, 2.5 y `search_activated` (bienvenida) | Prende o apaga cada tipo. Apagar `count_after_expiry` también corta su rastreo. |
+| `kinds` | Prendidos: 2.1, 2.2, 2.3, 2.5 y `search_activated` (bienvenida). Apagados: `search_abandoned`, `search_not_started` y `search_feedback` (remarketing) | Prende o apaga cada tipo. Apagar `count_after_expiry` también corta su rastreo. |
 | `send_from` / `send_until` | `"09:00"` / `"21:00"` | Horario de envío, hora argentina. |
 | `window_hours` | `48` | Plazo para mandar una fila reservada. Pasado ese plazo queda `skipped` (`outside_window`). Tiene que superar la noche sin envíos. |
 | `max_per_day` | `30` | Mails reservados por día calendario argentino, entre todos los tipos. Resend gratis permite 100 por día entre alertas y estos mails. |
@@ -120,7 +137,7 @@ El worker revisa cada `TRIAL_REMINDER_TICK_SECONDS` (900 s). El nombre se conser
 2. Envíos por tipo: `select kind, status, count(*) from lifecycle_emails group by 1, 2 order by 1, 2;`.
 3. Errores: `select * from pipeline_errors where stage = 'lifecycle_email' order by created_at desc;`.
 4. Log del worker: líneas `plan emails: N <kind> claimed` y `N sent`, o `plan emails off: …` si falta el canal o `WEB_BASE_URL`.
-5. Eventos: `select name, count(*) from events where name in ('trial_ended', 'lifecycle_email_sent', 'lifecycle_email_clicked', 'reactivated_from_count_email') group by 1;`.
+5. Eventos: `select name, count(*) from events where name in ('trial_ended', 'lifecycle_email_sent', 'lifecycle_email_clicked', 'reactivated_from_count_email', 'email_feedback') group by 1;`.
 6. 2.5, búsquedas que se cuentan ahora: `select * from count_after_expiry_searches();`.
 7. 2.5, objetivos diarios: `select source, make, model, query->'count_profile_ids', next_run_at from crawl_targets where active and query->>'count_only' = 'true';`.
 8. 2.5, lo contado: `select search_profile_id, access_ended_at, count(*), count(*) filter (where level = 'high') from expired_search_matches group by 1, 2;`.
