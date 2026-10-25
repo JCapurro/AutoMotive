@@ -17,9 +17,22 @@ ALLOWED_USER_IDS = {
     int(x) for x in os.getenv("ALLOWED_USER_IDS", "").split(",") if x.strip().isdigit()
 }
 
-# How often the crawl loop wakes up to look for due crawl targets. Each
+# How often the crawl loop wakes up to sync targets, bootstrap new searches and
+# start the idle sources' lanes on their due targets; it never waits for a
+# crawl, so this is how long a new search waits for its first one. Each
 # target's own cadence is sources.crawl_interval_seconds (sección 5.1).
-TICK_INTERVAL_SECONDS = int(os.getenv("TICK_INTERVAL_SECONDS", "300"))
+TICK_INTERVAL_SECONDS = int(os.getenv("TICK_INTERVAL_SECONDS", "15"))
+# One collector search may take this long before it is cancelled and the
+# target fails (Facebook reading dates one by one has taken 33 minutes).
+COLLECTOR_TIMEOUT_SECONDS = max(60, int(os.getenv("COLLECTOR_TIMEOUT_SECONDS", "2400")))
+# ... and one detail page (enrichment, watchlist).
+DETAIL_TIMEOUT_SECONDS = max(30, int(os.getenv("DETAIL_TIMEOUT_SECONDS", "180")))
+# A source that answers with a login wall or an expired session is left alone
+# this long before trying again (pipeline/breaker.py).
+SOURCE_BLOCKED_PAUSE_SECONDS = max(60, int(os.getenv("SOURCE_BLOCKED_PAUSE_SECONDS", "1800")))
+# The heartbeat stops when the crawl loop hasn't finished a tick for this long,
+# so the watchdog's stale-heartbeat alert also covers a stuck loop.
+CRAWL_LOOP_STALE_SECONDS = max(120, int(os.getenv("CRAWL_LOOP_STALE_SECONDS", "900")))
 # Pause between two targets of the same source (randomized in [x/2, x]).
 CRAWL_JITTER_SECONDS = float(os.getenv("CRAWL_JITTER_SECONDS", "8"))
 # Caps mark the scan incomplete rather than silently finishing a bootstrap.
@@ -29,6 +42,23 @@ RECENT_ML_DETAIL_SECONDS = max(0, float(os.getenv("RECENT_ML_DETAIL_SECONDS", "8
 # Mercado Libre ads read for their date in one scan; past it the scan is incomplete and resumes later.
 RECENT_ML_MAX_DATE_FETCHES = max(1, int(os.getenv("RECENT_ML_MAX_DATE_FETCHES", "200")))
 RECENT_FB_DETAIL_SECONDS = max(0, float(os.getenv("RECENT_FB_DETAIL_SECONDS", "30")))
+# Facebook item pages read for their date in one scan (30 s apart, so ~7 min:
+# what a restart can throw away and what a due target waits behind at most);
+# past it the scan is incomplete and the retry, 180 s later
+# (pipeline/crawl.py retry_seconds), resumes from the dates already read.
+RECENT_FB_MAX_DATE_FETCHES = max(1, int(os.getenv("RECENT_FB_MAX_DATE_FETCHES", "12")))
+# Facebook's date memory also keeps the item pages that loaded without a date
+# ("id@epoch#n", collectors/_recency.py): off until unknown_dates is measured.
+FB_DATE_MEMORY_UNKNOWN = os.getenv("FB_DATE_MEMORY_UNKNOWN", "0").strip().lower() in {"1", "true", "yes", "on"}
+# The years a target reads past its searches' year bounds (crawl_targets.query.year_band),
+# so that comparables(), year ± comparables.year_tol, sees both sides of an
+# edge year (pipeline/crawl.py). 0 turns it off; 1 at most, for the cost. Not
+# read from app_config.comparables.year_tol: a scoring edit must not
+# multiply what is crawled.
+REFERENCE_YEAR_BAND = min(1, max(0, int(os.getenv("REFERENCE_YEAR_BAND", "1"))))
+# A Facebook card is dated from the search page's own data (its listing's
+# creation_time) before opening its item page; 0 reads every page as before.
+FB_FEED_DATES = os.getenv("FB_FEED_DATES", "1").strip().lower() in {"1", "true", "yes", "on"}
 # Enrichment of matched listings (sección 5.5) and the watchlist refresher
 # (sección 5.6) wake up this often; each listing is checked at most daily.
 ENRICH_TICK_SECONDS = int(os.getenv("ENRICH_TICK_SECONDS", "300"))
@@ -36,6 +66,41 @@ WATCHLIST_TICK_SECONDS = int(os.getenv("WATCHLIST_TICK_SECONDS", "3600"))
 # Recommended listings whose `published_at` is older than this are dropped.
 # When the source doesn't expose a date, only the seen set (matches) + bootstrap apply.
 RECOMMENDED_MAX_AGE_DAYS = int(os.getenv("RECOMMENDED_MAX_AGE_DAYS", "15"))
+
+
+def _switch(name: str, default: str) -> bool:
+    return os.getenv(name, default).strip().lower() not in {"0", "false", "no", "off", ""}
+
+
+# Which new listings of a source without publication dates are old stock, not
+# news (pipeline/news.py), one switch per rule to roll it back from the .env:
+# a read that brings half the stock again, a car back under another ID, an
+# empty first run that doesn't finish the bootstrap (pipeline/crawl.py), and
+# a car outside the year/km a target read before (crawl_targets.query._read).
+NEWS_GUARD_STEP = _switch("NEWS_GUARD_STEP", "1")
+NEWS_GUARD_REAPPEARANCE = _switch("NEWS_GUARD_REAPPEARANCE", "1")
+NEWS_GUARD_EMPTY_FIRST = _switch("NEWS_GUARD_EMPTY_FIRST", "1")
+NEWS_GUARD_ENVELOPE = _switch("NEWS_GUARD_ENVELOPE", "1")
+# ... and the years only REFERENCE_YEAR_BAND reads: stock for comparables(), never news.
+NEWS_GUARD_BAND = _switch("NEWS_GUARD_BAND", "1")
+# A target of such a source back after a day inactive starts its bootstrap
+# over (targets.sync_targets): what it finds was listed while nobody read it.
+NEWS_GUARD_REACTIVATION = _switch("NEWS_GUARD_REACTIVATION", "1")
+# An incomplete run of such a source, past its first, retries after the
+# source's interval instead of 15 minutes (crawl.retry_seconds).
+NEWS_PARTIAL_RETRY = _switch("NEWS_PARTIAL_RETRY", "1")
+# A reappearance also gets probable_repost_of (the copy right before it),
+# which takes it out of comparables() while that copy counts: on only once
+# comparables count the live copy (E3).
+NEWS_LINK_REPOST = _switch("NEWS_LINK_REPOST", "0")
+
+# Comparables fase 2: a Mercado Libre target reads its whole stock this often
+# (crawl.full_read), so a sold car stops counting as a comparable
+# (crawl_targets.last_full_read_at). One such read per source this far apart
+# at most: the first ones after a deploy don't all land together.
+FULL_READ = _switch("FULL_READ", "1")
+FULL_READ_HOURS = max(1.0, float(os.getenv("FULL_READ_HOURS", "48")))
+FULL_READ_SPACING_SECONDS = max(0, int(os.getenv("FULL_READ_SPACING_SECONDS", "1800")))
 
 # Geocoding is used to turn listing location text into coordinates and then
 # enforce a user-origin radius in kilometers.

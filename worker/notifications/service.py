@@ -166,10 +166,16 @@ class Notifier:
                 payload=payload(listing, ev, min_n=min_n, profile_name=a["profile_name"])))
         return await self._commit(events, now=now)
 
-    async def on_listing_events(self, listing_events: Iterable[Any], *,
-                                now: datetime | None = None) -> list[int]:
+    async def on_listing_events(self, listing_events: Iterable[Any], *, now: datetime | None = None,
+                                matched_before: datetime | None = None) -> list[int]:
         """price_drop and listing_gone (pipeline/ingest.ListingEvent) → notifications.
-        Run after re-scoring, so a price_drop carries the new score."""
+        Run after re-scoring, so a price_drop carries the new score.
+        `matched_before`: a backfill match counts only if generated before it
+        (the first run of a target that ran before,
+        pipeline/scheduler.process_batch); news matches and saved listings
+        always do. A price_drop reaches a saved listing or a match of level
+        match or better (engine.classify); following one only counts for
+        listing_gone."""
         wanted = [e for e in listing_events if e.kind in (PRICE_DROP, LISTING_GONE)]
         if not wanted:
             return []
@@ -177,7 +183,7 @@ class Notifier:
         async with db.connection() as cx:
             rows = await listings_repo.rows_for_scoring(cx, ids)
         by_listing: dict[int, list[dict[str, Any]]] = {}
-        for a in await repo.listing_audiences(ids):
+        for a in await repo.listing_audiences(ids, matched_before=matched_before):
             by_listing.setdefault(a["listing_id"], []).append(a)
         min_n = await _min_n()
         events = []

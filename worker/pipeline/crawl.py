@@ -5,6 +5,15 @@ grouped by (source, make, model) with the widest query: lowest year_min,
 highest year_max, highest km_max (or none) and **no price filter** (prices
 are compared after currency conversion). Scraping cost depends on how many
 models are searched, not on how many users search them.
+A target also reads config.REFERENCE_YEAR_BAND years past those bounds
+(query.year_band), so that comparables() (year ± 1) sees both sides of an
+edge year: always on the sources that read their whole stock, on Mercado
+Libre only in its one-request "Publicados hoy" reads (_run_band), never on
+Facebook (BaseScraper.YEAR_BAND), count-only or inventory targets. Those
+rows feed the price reference: the target's searches keep their exact years,
+and on a source without publication dates they are never news to them nor
+counted in 2.5 for them; read for the first time, they are old stock
+(pipeline/news.py, band_ids and old_band).
 Small catalogs/feeds opt into INVENTORY_TARGET: one unfiltered source target,
 without make/model hints, shared by every eligible profile that selects it.
 A search without a model, only by body type (docs/CARROCERIA.md), gets one
@@ -12,29 +21,54 @@ target per (source, body type) on the sources app_config.body_type_targets
 names whose collector can search that body type (BODY_TYPES). Those targets
 run every body_type_targets.interval_seconds, and before ingesting they drop
 what none of their searches could want: above the highest price cap in USD,
-below the lowest year, above the highest km.
+below the lowest year (less the reference band), above the highest km.
 The searches whose access ended in the last 3 weeks are only counted (2.5,
 docs/MAILS_DE_PLAN.md): they ride the targets above as they are, and a model
 nobody else searches gets a `count_only` target crawled once a day.
 
-Sources run in parallel; the targets of one source run one after the other,
-with jitter. The next run is scheduled after the source's interval. For recent
-publications, last_run_at records the successful scan's start to preserve coverage.
+Each source runs in its own lane (Lanes): the targets of one source run one
+after the other, with jitter, and a source that is slow or hung never holds up
+the others. A target that never ran goes first, then the due targets that
+notify, then the first-run retries and the count-only targets
+(targets.claim_next): a long bootstrap never makes them wait more than one
+of its scans. A lane claims each target before crawling it
+(targets.claim_next, a lease of LEASE_SECONDS), so crawl_targets is a queue
+that several workers can share and that heals itself when one dies; a source
+is crawled by one lane at a time across all of them. A
+collector search is cancelled after COLLECTOR_TIMEOUT_SECONDS; an ISOLATED
+collector (Facebook, Instagram) runs in a child process that is killed then
+(collectors/_isolated.py). The next run is scheduled after the source's
+interval. For recent publications, last_run_at records the successful scan's
+start to preserve coverage. On a source without publication dates,
+pipeline/news.py tells which new listings are old stock (backfill), and a
+first run that read nothing holds the bootstrap for a couple of runs, without
+moving the last_run_at of a target that ran before. There
+a complete read of a target by model keeps the year and km it read in
+query._read, for its next run to tell what a widened search brings, and one
+of a target reading a whole stock in query._covers, for the others to tell
+what is new to the source.
 """
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import math
 import random
+import time
 import traceback
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable
 
 from collectors import REGISTRY, Listing
+from collectors.base import PARTIAL_PREFIX, CollectorBlocked
+from collectors.facebook import DATE_FETCH_LIMIT as FB_DATE_FETCH_LIMIT
+from collectors._isolated import call as isolated_call, isolated
 from collectors._loop import run_collector
-from collectors._recency import POLICY_VERSION, SOURCES as RECENT_SOURCES, target_window
+import config
+from config import COLLECTOR_TIMEOUT_SECONDS
+from collectors._recency import POLICY_VERSION, SOURCES as RECENT_SOURCES, one_request_read, target_window
 from db.pool import connection
 from db.repos import runs, targets as targets_repo
 from db.repos.config import get_config
@@ -43,16 +77,27 @@ from db.repos.runs import SourceHealth
 from intelligence.matching import filter_currency, malformed_vehicle, model_less, wanted_body_types
 from normalization.listing import Target
 from normalization.normalize import normalize_brand, normalize_text
+from pipeline import breaker, news
 from pipeline.ingest import IngestResult, ingest
 
 
 log = logging.getLogger("crawl")
 
+# How long a lane holds the target it claimed (targets.claim_next): its
+# search's timeout plus time for the batch. A worker that dies mid-run frees
+# it when this runs out.
+LEASE_SECONDS = COLLECTOR_TIMEOUT_SECONDS + 900
 # A failed target retries after its interval, but never later than this.
 FAILURE_RETRY_SECONDS = 900
 # A failed count-only target (2.5) waits longer: nobody waits for it, and a
 # source that is blocking requests shouldn't get extra ones.
 COUNT_ONLY_RETRY_SECONDS = 6 * 3600
+# A Facebook scan that stopped at its item-page cap (facebook.DATE_FETCH_LIMIT)
+# goes on soon: it kept what it read, and the due targets go before it anyway.
+DATE_FETCH_RETRY_SECONDS = 180
+# A read of a target's whole stock (full_read) gives up after this long. It
+# runs inside the target's claim, in the lease's margin past the search.
+FULL_READ_TIMEOUT_SECONDS = 900
 
 # app_config.body_type_targets when the row is missing (the migration's value).
 DEFAULT_BODY_TYPE_TARGETS = {"sources": ["mercadolibre", "kavak"], "interval_seconds": 1800}
@@ -89,9 +134,28 @@ class TargetRun:
     first_run: bool
     complete: bool = True
     covered_until: datetime | None = None
-    # Listings stored for the first time that this target's prefilter had
-    # dropped before (prefilter_rejected): old stock, matched as backfill.
+    # A first run of a source without dates (news.UNDATED_SOURCES): how many
+    # ok runs in a row before it read nothing and held the bootstrap.
+    empty_runs: int = 0
+    # Listings stored for the first time that are old stock, matched as
+    # backfill: the ones pipeline/news.py says are not news (the reference
+    # year band's first read among them), and the ones this target's
+    # prefilter had dropped before (prefilter_rejected).
     backfill_ids: frozenset[int] = frozenset()
+    # What this read covered, when it was complete (news.read_envelope,
+    # news.read_covers): finish_target keeps it in query._read or _covers.
+    read_envelope: dict[str, Any] | None = None
+    read_covers: dict[str, Any] | None = None
+    # What the prefilter dropped, for prefilter_rejected: this read's after a
+    # complete read, added to the last ones after a partial one. None: the
+    # target remembers nothing. finish_target writes it with read_covers, so
+    # it never lacks what the read behind _covers dropped (news._covered).
+    rejected: frozenset[str] | None = None
+
+
+class SourceBlocked(Exception):
+    """run_target: the source blocked us and is paused (pipeline/breaker.py);
+    its lane stops instead of trying its other targets."""
 
 
 BatchHandler = Callable[[TargetRun], Awaitable[None]]
@@ -161,21 +225,32 @@ def _usd_cap(f: dict[str, Any], fx_rate: float | None) -> int | None:
     return math.ceil(cap / fx_rate) if currency == "ARS" and fx_rate else None
 
 
+def _coverage(source: str) -> dict[str, Any]:
+    """The collector's COVERAGE_VERSION, if it declares one: a new value
+    starts the bootstrap of its targets over (targets.sync_targets)."""
+    version = getattr(REGISTRY.get(source), "COVERAGE_VERSION", None)
+    return {"coverage": version} if version is not None else {}
+
+
 def _spec(key: _Key, members: list[dict[str, Any]], names: _Names, *,
-          count_only: bool = False, body: BodyTypeTargets | None = None) -> TargetSpec:
+          count_only: bool = False, body: BodyTypeTargets | None = None, year_band: int = 0) -> TargetSpec:
     # A count-only target lists its searches apart: profile_ids are the active
-    # members (the web reads them).
+    # members (the web reads them). year_min/year_max stay the searches' own;
+    # year_band says how far past them the target reads (scraper_filters).
     members_ids = sorted(m["id"] for m in members)
     ids = ({"count_only": True, "count_profile_ids": members_ids} if count_only
            else {"profile_ids": members_ids})
     if getattr(REGISTRY.get(key[0]), "INVENTORY_TARGET", False):
-        return TargetSpec(key[0], None, None, {"inventory": True, **ids})
+        return TargetSpec(key[0], None, None, {"inventory": True, **_coverage(key[0]), **ids})
     filters = [m.get("filters") or {} for m in members]
     query: dict[str, Any] = {
         "year_min": _widest([f.get("year_min") for f in filters], min),
         "year_max": _widest([f.get("year_max") for f in filters], max),
         "km_max": _widest([f.get("km_max") for f in filters], max),
     }
+    if (year_band and not count_only and getattr(REGISTRY.get(key[0]), "YEAR_BAND", False)
+            and (query["year_min"] is not None or query["year_max"] is not None)):
+        query["year_band"] = year_band
     if key[3]:
         # By body type: what ingest keeps (prefilter) and its own cadence.
         body = body or BodyTypeTargets()
@@ -183,6 +258,7 @@ def _spec(key: _Key, members: list[dict[str, Any]], names: _Names, *,
         query["interval_seconds"] = body.interval_seconds
     if key[0] in RECENT_SOURCES:
         query["publication_policy"] = POLICY_VERSION
+    query.update(_coverage(key[0]))
     # Facebook searches around a city: the oldest profile with a location picks it.
     located = next((m for m in sorted(members, key=lambda m: m["id"])
                     if m.get("origin_lat") is not None), None)
@@ -196,7 +272,7 @@ def _spec(key: _Key, members: list[dict[str, Any]], names: _Names, *,
 
 def derive_targets(profiles: list[dict[str, Any]], sources: list[str],
                    counting: list[dict[str, Any]] = (), *,
-                   body_types: BodyTypeTargets | None = None) -> list[TargetSpec]:
+                   body_types: BodyTypeTargets | None = None, year_band: int = 0) -> list[TargetSpec]:
     """Group profiles by vehicle, by body type, or once per inventory source without filters.
 
     `sources` are the enabled sources with a collector; a profile that names
@@ -206,24 +282,54 @@ def derive_targets(profiles: list[dict[str, Any]], sources: list[str],
     never change a target of the active profiles (its query, its cadence or
     the city Facebook searches around) and only add the vehicles none of
     those cover, as count-only targets; never a body type.
+    `year_band` (config.REFERENCE_YEAR_BAND) goes on the active targets with
+    a year bound whose collector reads it (BaseScraper.YEAR_BAND), never on
+    a count-only one.
     """
     groups, names = _group(profiles, sources, body_types)
-    specs = [_spec(key, members, names[key], body=body_types) for key, members in sorted(groups.items())]
+    specs = [_spec(key, members, names[key], body=body_types, year_band=year_band)
+             for key, members in sorted(groups.items())]
     counted, counted_names = _group(list(counting), sources)
     specs += [_spec(key, members, counted_names[key], count_only=True)
               for key, members in sorted(counted.items()) if key not in groups]
     return specs
 
 
-def retry_seconds(target: dict[str, Any]) -> int:
-    """When a failed or incomplete run of this target is tried again."""
+def retry_seconds(target: dict[str, Any], *, reason: str | None = None, partial: bool = False) -> int:
+    """When a failed or incomplete run of this target is tried again: a
+    count-only target in 6 hours, a Facebook scan cut by its item-page cap
+    (`reason`) in 180 s, any other one after its interval, 15 minutes at
+    most. `partial`: the run read part of the source (SearchResults.complete
+    is False). A partial read past the first one, on a source without
+    publication dates, waits for the whole interval (config.NEWS_PARTIAL_RETRY):
+    a source that cut the read short (a 503, a Retry-After) isn't hammered
+    every 15 minutes, and what it read is stored."""
+    interval = int(target.get("crawl_interval_seconds") or FAILURE_RETRY_SECONDS)
     if (target.get("query") or {}).get("count_only") is True:
         return COUNT_ONLY_RETRY_SECONDS
-    return min(int(target.get("crawl_interval_seconds") or FAILURE_RETRY_SECONDS), FAILURE_RETRY_SECONDS)
+    if reason == FB_DATE_FETCH_LIMIT:
+        return DATE_FETCH_RETRY_SECONDS
+    if (partial and config.NEWS_PARTIAL_RETRY and target.get("first_run_done")
+            and target.get("source") not in RECENT_SOURCES):
+        return interval
+    return min(interval, FAILURE_RETRY_SECONDS)
+
+
+def _run_band(target: dict[str, Any], f: dict[str, Any]) -> int:
+    """How many years past its query's bounds this run reads (query.year_band):
+    all of them on a source that reads its whole stock; on Mercado Libre
+    only when the run goes through "Publicados hoy" (_recency.one_request_read,
+    `f` being its filters), never in a first run or after a gap, which date
+    every card one ad page at a time; never on Facebook."""
+    band = int((target.get("query") or {}).get("year_band") or 0)
+    if not band or target.get("source") not in RECENT_SOURCES:
+        return band
+    return band if one_request_read(target["source"], f) else 0
 
 
 def scraper_filters(target: dict[str, Any]) -> dict[str, Any]:
-    """A target's query in the collectors' filter vocabulary."""
+    """A target's query in the collectors' filter vocabulary, its years
+    widened by the run's reference band (_run_band)."""
     q = target.get("query") or {}
     f: dict[str, Any] = {"marca": target.get("make"), "modelo": target.get("model"),
                          # A target by body type has no marca/modelo (BaseScraper.BODY_TYPES).
@@ -234,6 +340,11 @@ def scraper_filters(target: dict[str, Any]) -> dict[str, Any]:
                          # Only searches with ended access want it (2.5): a collector may read less.
                          "count_only": True if q.get("count_only") is True else None}
     f.update(target_window(target))
+    if band := _run_band(target, f):
+        if f["anio_min"] is not None:
+            f["anio_min"] = int(f["anio_min"]) - band
+        if f["anio_max"] is not None:
+            f["anio_max"] = int(f["anio_max"]) + band
     return {k: v for k, v in f.items() if v is not None}
 
 
@@ -242,18 +353,24 @@ def prefilter(target: dict[str, Any]) -> Callable[[dict[str, Any]], bool] | None
     of its searches could want (docs/CARROCERIA.md), so the database grows
     with what is searched and not with every SUV in the country. A row goes
     when its USD price is above the highest cap (price_usd_max, plus
-    PRICE_CEILING_MARGIN), its year below the lowest year_min or its km above
-    the highest km_max. Unknown values and partial prices pass. None (keep
-    everything) for any other target.
+    PRICE_CEILING_MARGIN), its year below the lowest year_min less the
+    reference band (query.year_band: a body type's read is "Publicados hoy"
+    on Mercado Libre and the whole stock on Kavak, so it always reads the
+    band) or its km above the highest km_max. Unknown values and partial
+    prices pass. None (keep everything) for any other target.
 
     On a source without publication dates (Kavak) a body type's whole stock
     is read on every run, so what the prefilter drops is remembered
-    (crawl_targets.prefilter_rejected, run_target): a wider search, a price
-    cut or the quote can let it in later, and then it is not news."""
+    (crawl_targets.prefilter_rejected, TargetRun.rejected): a wider search, a price
+    cut or the quote can let it in later, and then it is not news. A
+    Facebook target by model keeps its date memory in that column instead
+    (_date_memory); no target uses it both ways."""
     if not target.get("body_type"):
         return None
     q = target.get("query") or {}
     year_min, km_max, usd_max = q.get("year_min"), q.get("km_max"), q.get("price_usd_max")
+    if year_min is not None:
+        year_min = int(year_min) - int(q.get("year_band") or 0)
     ceiling = usd_max * (1 + PRICE_CEILING_MARGIN) if usd_max is not None else None
 
     def keep(row: dict[str, Any]) -> bool:
@@ -274,14 +391,24 @@ async def run_target(target: dict[str, Any], on_health: HealthHandler | None = N
     try:
         scraper = REGISTRY[source]()
         filters = scraper_filters(target)
+        # Before the search: what is sent, whatever the collector does with the dict.
+        read, covers = news.read_envelope(target, filters), news.read_covers(target, filters)
         if source in RECENT_SOURCES:
             filters["known_publication_dates"] = await targets_repo.publication_dates(target)
-        items = await run_collector(scraper.search(filters))
+        if _date_memory(target):
+            filters["date_skips"] = list(target.get("prefilter_rejected") or ())
+        if isolated(scraper):
+            items = await run_collector(isolated_call(scraper, "search", filters, timeout=COLLECTOR_TIMEOUT_SECONDS))
+        else:
+            items = await run_collector(scraper.search(filters), timeout=COLLECTOR_TIMEOUT_SECONDS)
     except Exception as exc:
         log.warning("target=%s %s %s failed: %s", target["id"], source, _label(target), exc)
         health = await runs.finish_run(run_id, ok=False, error=traceback.format_exc())
         await targets_repo.finish_target(target["id"], ok=False, retry_seconds=retry)
         await _report(on_health, health)
+        if isinstance(exc, CollectorBlocked):
+            breaker.pause(source, str(exc))
+            raise SourceBlocked(source) from exc
         return None
     keep, rejected = prefilter(target), set()
     if keep is not None and source not in RECENT_SOURCES:
@@ -303,36 +430,62 @@ async def run_target(target: dict[str, Any], on_health: HealthHandler | None = N
         await _report(on_health, health)
         return None
     complete = getattr(items, "complete", True)
-    error = getattr(items, "reason", None) if not complete else None
+    first_run = not target["first_run_done"]
+    remembers = keep is not None and source not in RECENT_SOURCES
+    readmitted = _readmitted(target, result) if remembers else frozenset()
+    # Right after the ingest, so that little can stop the run before the marks.
+    backfill_ids = await news.classify(target, items, result, run_id=run_id, first_run=first_run,
+                                       complete=complete, readmitted=readmitted)
+    error = PARTIAL_PREFIX + (getattr(items, "reason", None) or "sin detalle") if not complete else None
     health = await runs.finish_run(run_id, ok=complete, found=result.found, new=result.new,
                                    updated=result.updated, error=error)
     await _report(on_health, health)
-    log.info("target=%s %s %s found=%d new=%d updated=%d events=%d", target["id"], source,
-             _label(target), result.found, result.new, result.updated, len(result.events))
+    probe = getattr(items, "probe", None)
+    log.info("target=%s %s %s found=%d new=%d updated=%d events=%d%s", target["id"], source,
+             _label(target), result.found, result.new, result.updated, len(result.events),
+             f" probe={json.dumps(probe, separators=(',', ':'))}" if probe else "")
     covered_until = (datetime.fromtimestamp(filters["publication_until"], timezone.utc)
                      if "publication_until" in filters else None)
-    backfill_ids = await _remember_rejected(target, result, rejected, complete=complete) \
-        if keep is not None and source not in RECENT_SOURCES else frozenset()
-    return TargetRun(target, items, result, first_run=not target["first_run_done"],
-                     complete=complete, covered_until=covered_until, backfill_ids=backfill_ids)
+    if _date_memory(target):
+        await _remember_dates(target, getattr(items, "date_skips", None))
+    if readmitted:
+        log.info("target=%s %s: %d listings the prefilter had dropped are backfill",
+                 target["id"], _label(target), len(readmitted))
+    if remembers and not complete:
+        rejected |= set(target.get("prefilter_rejected") or ())
+    empty_runs = (await runs.empty_ok_streak(target["id"], exclude_run=run_id)
+                  if first_run and config.NEWS_GUARD_EMPTY_FIRST and source in news.UNDATED_SOURCES else 0)
+    return TargetRun(target, items, result, first_run=first_run, complete=complete,
+                     covered_until=covered_until, empty_runs=empty_runs, backfill_ids=backfill_ids | readmitted,
+                     read_envelope=read if complete else None, read_covers=covers if complete else None,
+                     rejected=frozenset(rejected) if remembers else None)
 
 
-async def _remember_rejected(target: dict[str, Any], result: IngestResult, rejected: set[str], *,
-                             complete: bool) -> frozenset[int]:
-    """The new listings the prefilter had dropped on an earlier run (see
-    prefilter), and the ones it dropped now for the next run: all of them
-    after a complete run, added to the last ones after a partial one."""
-    before = set(target.get("prefilter_rejected") or ())
-    backfill = frozenset(e.listing_id for e in result.events
-                         if e.kind == "listing_new" and e.external_id in before)
+def _date_memory(target: dict[str, Any]) -> bool:
+    """Whether the target keeps Facebook's date memory (collectors/_recency.py)
+    in prefilter_rejected: a Facebook target by model. A target by body type
+    keeps what its prefilter dropped there."""
+    return target["source"] == "facebook" and not target.get("body_type")
+
+
+async def _remember_dates(target: dict[str, Any], date_skips: list[str] | None) -> None:
+    """Store the date memory the scan left (the collector merges it with the
+    previous one), unless it kept none or it didn't change."""
+    if date_skips is None or sorted(set(date_skips)) == sorted(set(target.get("prefilter_rejected") or ())):
+        return
     try:
-        await targets_repo.set_prefilter_rejected(target["id"], rejected if complete else rejected | before)
+        await targets_repo.set_prefilter_rejected(target["id"], date_skips)
     except Exception:
         await runs.log_error("crawl", f"target:{target['id']}", traceback.format_exc())
-    if backfill:
-        log.info("target=%s %s: %d listings the prefilter had dropped are backfill",
-                 target["id"], _label(target), len(backfill))
-    return backfill
+
+
+def _readmitted(target: dict[str, Any], result: IngestResult) -> frozenset[int]:
+    """The listings of this read that this target's prefilter had dropped on
+    an earlier run (prefilter_rejected): old stock a wider search or a price
+    cut let in. Stored now, or by a run cut before its finish_target updated
+    prefilter_rejected (pipeline/news.py catches that run up)."""
+    before = set(target.get("prefilter_rejected") or ())
+    return frozenset(lid for (_, external_id), lid in result.ids.items() if external_id in before)
 
 
 def _label(target: dict[str, Any]) -> str:
@@ -350,43 +503,191 @@ async def _report(on_health: HealthHandler | None, health: SourceHealth | None) 
         log.exception("source health handler failed")
 
 
+async def _run_one(target: dict[str, Any], on_batch: BatchHandler | None,
+                   on_health: HealthHandler | None = None) -> None:
+    """Crawl one target, handle its batch and schedule its next run (which
+    also frees its claim)."""
+    run = await run_target(target, on_health)
+    if run is None:
+        return
+    if on_batch is not None:
+        try:
+            await on_batch(run)
+        except Exception:
+            await runs.log_error("notify", f"target:{target['id']}", traceback.format_exc())
+            await targets_repo.finish_target(target["id"], ok=False, retry_seconds=retry_seconds(target))
+            return
+    # Only now is the first run over: its batch was handled as backfill. A
+    # source without publication dates that read nothing may not be loaded
+    # yet: the stock its next read finds is that first run's, for
+    # news.EMPTY_FIRST_RUNS empty reads in a row at most.
+    bootstrap = not (config.NEWS_GUARD_EMPTY_FIRST and run.first_run and run.result.found == 0
+                     and target.get("source") in news.UNDATED_SOURCES and run.empty_runs < news.EMPTY_FIRST_RUNS)
+    blocked = await full_read(target)
+    retry = 0 if run.complete else retry_seconds(target, reason=getattr(run.items, "reason", None), partial=True)
+    await targets_repo.finish_target(target["id"], ok=run.complete, retry_seconds=retry,
+                                    covered_until=run.covered_until, bootstrap=bootstrap, read=run.read_envelope,
+                                    covers=run.read_covers, rejected=run.rejected,
+                                    full_read=target.get("source") not in RECENT_SOURCES)
+    if blocked:
+        raise SourceBlocked(target["source"])
+
+
+# When each source last started a full read, in this process (FULL_READ_SPACING_SECONDS).
+_full_reads: dict[str, float] = {}
+
+
+def full_read_due(target: dict[str, Any]) -> bool:
+    """Whether this run of the target also reads its whole stock (comparables
+    fase 2): a target by model or inventory of a collector that can
+    (`full_read`, Mercado Libre), whose last such read is FULL_READ_HOURS old
+    or never happened, when no other target of the source started one in the
+    last FULL_READ_SPACING_SECONDS."""
+    source = target.get("source")
+    if not config.FULL_READ or target.get("body_type") or not hasattr(REGISTRY.get(source), "full_read"):
+        return False
+    last = target.get("last_full_read_at")
+    if last is not None and (datetime.now(timezone.utc) - last).total_seconds() < config.FULL_READ_HOURS * 3600:
+        return False
+    started = _full_reads.get(source)
+    return started is None or time.monotonic() - started >= config.FULL_READ_SPACING_SECONDS
+
+
+def full_read_filters(target: dict[str, Any]) -> dict[str, Any]:
+    """What a full read searches: what listing_unconfirmed takes the target to
+    cover, its query's years widened by year_band, and its km."""
+    q = target.get("query") or {}
+    band = int(q.get("year_band") or 0)
+    f = {"marca": target.get("make"), "modelo": target.get("model"),
+         "anio_min": int(q["year_min"]) - band if q.get("year_min") is not None else None,
+         "anio_max": int(q["year_max"]) + band if q.get("year_max") is not None else None,
+         "km_max": q.get("km_max")}
+    return {k: v for k, v in f.items() if v is not None}
+
+
+async def full_read(target: dict[str, Any]) -> bool:
+    """Read the target's whole stock if it is due (full_read_due): the
+    listings it sees get last_full_seen_at, and a complete read sets the
+    target's last_full_read_at to its start, the evidence that drops from the
+    comparables what it no longer saw (migration 20261106120000). Never fails
+    the run. Returns True if the source blocked it (and is paused)."""
+    if not full_read_due(target):
+        return False
+    source = target["source"]
+    _full_reads[source] = time.monotonic()
+    started = datetime.now(timezone.utc)
+    try:
+        read = await run_collector(REGISTRY[source]().full_read(full_read_filters(target)),
+                                   timeout=FULL_READ_TIMEOUT_SECONDS)
+        seen = await targets_repo.record_full_read(target, started, read.ids, complete=read.complete)
+    except CollectorBlocked as exc:
+        log.warning("target=%s %s %s full read blocked: %s", target["id"], source, _label(target), exc)
+        breaker.pause(source, str(exc))
+        return True
+    except Exception:
+        await runs.log_error("full_read", f"target:{target['id']}", traceback.format_exc())
+        return False
+    log.info("target=%s %s %s full read: listed=%d stored=%d pages=%d complete=%s%s", target["id"], source,
+             _label(target), len(read.ids), seen, read.pages, read.complete,
+             f" reason={read.reason}" if read.reason else "")
+    return False
+
+
 async def _run_source(targets: list[dict[str, Any]], on_batch: BatchHandler | None,
                       jitter_seconds: float, stop: asyncio.Event | None,
                       on_health: HealthHandler | None = None) -> None:
+    """These targets one after the other, with jitter, without claiming them."""
     for i, target in enumerate(targets):
         if stop is not None and stop.is_set():
             return
         if i and jitter_seconds > 0:
             await asyncio.sleep(random.uniform(jitter_seconds / 2, jitter_seconds))
-        run = await run_target(target, on_health)
-        if run is None:
-            continue
-        if on_batch is not None:
+        try:
+            await _run_one(target, on_batch, on_health)
+        except SourceBlocked:
+            return
+
+
+async def _drain(source: str, on_batch: BatchHandler | None, jitter_seconds: float,
+                 stop: asyncio.Event | None, on_health: HealthHandler | None = None) -> int:
+    """Claim and crawl `source`'s due targets one at a time, in claim_next's
+    order, with jitter, until none is left or another worker is crawling the
+    source. Returns how many it crawled."""
+    done = 0
+    while (stop is None or not stop.is_set()) and not breaker.paused(source):
+        target = await targets_repo.claim_next(source, runs.worker_id(), LEASE_SECONDS)
+        if target is None:
+            break
+        if done and jitter_seconds > 0:
+            await asyncio.sleep(random.uniform(jitter_seconds / 2, jitter_seconds))
+        try:
+            await _run_one(target, on_batch, on_health)
+        except SourceBlocked:
+            return done + 1
+        except Exception:
+            await runs.log_error("crawl", f"target:{target['id']}", traceback.format_exc())
+            # Free it: a held claim keeps the whole source waiting (claim_next).
             try:
-                await on_batch(run)
-            except Exception:
-                await runs.log_error("notify", f"target:{target['id']}", traceback.format_exc())
                 await targets_repo.finish_target(target["id"], ok=False, retry_seconds=retry_seconds(target))
-                continue
-        # Only now is the first run over: its batch was handled as backfill.
-        await targets_repo.finish_target(target["id"], ok=run.complete,
-                                        retry_seconds=0 if run.complete else retry_seconds(target),
-                                        covered_until=run.covered_until)
+            except Exception:
+                log.exception("target=%s keeps its claim until the lease ends", target["id"])
+        done += 1
+    return done
+
+
+def _due_sources(due: list[dict[str, Any]]) -> list[str]:
+    """The sources with a collector among these due targets, in their order."""
+    return list(dict.fromkeys(t["source"] for t in due if t["source"] in REGISTRY))
 
 
 async def crawl_due(on_batch: BatchHandler | None = None, *, jitter_seconds: float = 5.0,
                     stop: asyncio.Event | None = None, on_health: HealthHandler | None = None) -> int:
-    """Run every due target: sources in parallel, targets of a source in series.
-    Returns how many targets were due."""
-    due = await targets_repo.due_targets()
-    by_source: dict[str, list[dict[str, Any]]] = {}
-    for t in due:
-        if t["source"] in REGISTRY:
-            by_source.setdefault(t["source"], []).append(t)
-    if by_source:
-        await asyncio.gather(*(_run_source(ts, on_batch, jitter_seconds, stop, on_health)
-                               for ts in by_source.values()))
-    return len(due)
+    """Crawl every due target and wait for all of them: sources in parallel,
+    targets of a source in series (tests and tools; the worker uses Lanes).
+    Returns how many targets were crawled."""
+    sources = _due_sources(await targets_repo.due_targets())
+    done = await asyncio.gather(*(_drain(s, on_batch, jitter_seconds, stop, on_health) for s in sources))
+    return sum(done)
+
+
+class Lanes:
+    """One crawl task per source (_drain), started without waiting for it. A
+    source whose lane is still running is left alone until it ends, so a slow
+    or hung source only delays itself, and new searches keep being crawled
+    elsewhere. The claims (targets.claim_next) keep two lanes, of this worker
+    or another one, from ever crawling the same source at once."""
+
+    def __init__(self) -> None:
+        self._tasks: dict[str, asyncio.Task[int]] = {}
+
+    def running(self) -> set[str]:
+        return {s for s, t in self._tasks.items() if not t.done()}
+
+    async def start_due(self, on_batch: BatchHandler | None = None, *, jitter_seconds: float = 5.0,
+                        stop: asyncio.Event | None = None, on_health: HealthHandler | None = None) -> list[str]:
+        """Start a lane for every idle source with due targets. Returns those sources."""
+        busy = self.running()
+        started = [s for s in _due_sources(await targets_repo.due_targets())
+                   if s not in busy and not breaker.paused(s)]
+        for source in started:
+            task = asyncio.create_task(_drain(source, on_batch, jitter_seconds, stop, on_health),
+                                       name=f"lane:{source}")
+            task.add_done_callback(_lane_done)
+            self._tasks[source] = task
+        return started
+
+    async def close(self) -> None:
+        """Cancel the running lanes and wait for them."""
+        tasks = [t for t in self._tasks.values() if not t.done()]
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        self._tasks.clear()
+
+
+def _lane_done(task: asyncio.Task[int]) -> None:
+    if not task.cancelled() and task.exception() is not None:
+        log.error("%s failed", task.get_name(), exc_info=task.exception())
 
 
 async def body_type_targets(profiles: list[dict[str, Any]]) -> BodyTypeTargets:
@@ -408,8 +709,12 @@ async def body_type_targets(profiles: list[dict[str, Any]]) -> BodyTypeTargets:
 
 
 async def sync_targets(profiles: list[dict[str, Any]],
-                       counting: list[dict[str, Any]] = ()) -> list[TargetSpec]:
+                       counting: list[dict[str, Any]] | None = ()) -> list[TargetSpec]:
+    """`counting` None: the counted searches couldn't be read, so the
+    count-only targets stay as they are (targets.sync_targets keep_count_only)."""
     sources = [s for s in await targets_repo.enabled_sources() if s in REGISTRY]
-    specs = derive_targets(profiles, sources, counting, body_types=await body_type_targets(profiles))
-    await targets_repo.sync_targets(specs)
+    specs = derive_targets(profiles, sources, counting or (), body_types=await body_type_targets(profiles),
+                           year_band=config.REFERENCE_YEAR_BAND)
+    await targets_repo.sync_targets(specs, undated=news.UNDATED_SOURCES if config.NEWS_GUARD_REACTIVATION else (),
+                                    keep_count_only=counting is None)
     return specs

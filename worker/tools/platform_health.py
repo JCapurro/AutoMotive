@@ -20,6 +20,8 @@ import httpx
 
 from aio import run
 from collectors._recency import POLICY_VERSION, SOURCES as RECENT_SOURCES
+from collectors.base import PARTIAL_PREFIX
+from collectors.facebook import DATE_FETCH_LIMIT as FB_DATE_FETCH_LIMIT
 from collectors.mercadolibre import DATE_FETCH_LIMIT
 import config
 import db
@@ -31,8 +33,11 @@ from tools.watchdog import check_web, transitions, worker_problem
 
 STATE_FILE = config.ROOT / "logs" / "platform_health_state.json"
 ART = timezone(timedelta(hours=-3))
-# How long a new Mercado Libre target may take to date its first 30 days.
+# How long a new Mercado Libre target may take to date its first 30 days, and
+# a Facebook target may go without a complete scan while it stops at its cap.
 FIRST_LOAD_GRACE = timedelta(days=1)
+# Partial reads in a row (collectors.base.PARTIAL_PREFIX) before a collector alerts.
+PARTIAL_RUNS = 6
 
 RESEND_USAGE_URL = 'https://api.resend.com/usage'
 QUOTA_KEYS = {'daily': 'resend:hoy', 'monthly': 'resend:mes'}
@@ -54,10 +59,11 @@ with eligible as (
       and {PROFILE_WANTS_TARGET}
   )
 )
-select t.id, t.source, t.name, t.make, t.model, t.body_type, t.query, t.first_run_done, t.created_at, t.updated_at, t.next_run_at,
+select t.id, t.source, t.name, t.make, t.model, t.body_type, t.query, t.first_run_done, t.last_run_at, t.created_at, t.updated_at, t.next_run_at,
   t.crawl_interval_seconds, latest.started_at, latest.status as latest_status,
   latest.error as latest_error, coalesce(history.statuses, '{{}}') as statuses,
   coalesce(history.found, '{{}}') as found, history.errors[1] as last_error,
+  coalesce(history.errors, '{{}}') as errors,
   exists(select 1 from collector_runs r where r.target_id=t.id and r.status='ok'
     and r.found>0 and r.started_at>now()-interval '7 days') as had_results
 from eligible t
@@ -93,19 +99,41 @@ def safe_error(error: str | None) -> str:
                   r"\1=[redactado]", text)
 
 
+def is_partial(error: str | None) -> bool:
+    """A run that read part of the source (collectors.base.PARTIAL_PREFIX), unless
+    it stopped at a date-fetch cap: those have their own grace (first_load) and
+    alert like a failure after it."""
+    return (error or '').startswith(PARTIAL_PREFIX) and reason_of(error) not in (DATE_FETCH_LIMIT, FB_DATE_FETCH_LIMIT)
+
+
+def reason_of(error: str | None) -> str | None:
+    """The last line of a run's error without its "partial: " mark."""
+    line = last_error_line(error)
+    return line.removeprefix(PARTIAL_PREFIX) if line else line
+
+
 def first_load(row: dict, now: datetime) -> bool:
     """A new Mercado Libre target dating its first 30 days, 200 ads per scan
     (config.RECENT_ML_MAX_DATE_FETCHES): each scan ends incomplete, so failed,
-    while it stores what it read (target 445406, incident f9a58b7f). Past
-    FIRST_LOAD_GRACE it alerts like any failure. The last finished run
-    decides: the next scan is often running."""
-    return (row.get('first_run_done') is False and row['statuses'][:1] == ['failed']
-            and last_error_line(row.get('last_error')) == DATE_FETCH_LIMIT
+    while it stores what it read (target 445406, incident f9a58b7f). Facebook
+    does the same 12 item pages at a time (config.RECENT_FB_MAX_DATE_FETCHES),
+    and not only on a first load: a count-only target, one back from a gap or
+    one reset by a new policy stop at the cap too. With the date memory each
+    of those scans reads new pages (collectors/_recency.py), so it isn't a
+    loop: a Facebook target is loading while its last complete scan (or its
+    creation) is less than FIRST_LOAD_GRACE old. Past it, it alerts like any
+    failure. The last finished run decides: the next scan is often running."""
+    if row['statuses'][:1] != ['failed']:
+        return False
+    error = reason_of(row.get('last_error'))
+    if row['source'] == 'facebook' and error == FB_DATE_FETCH_LIMIT:
+        return now - (row.get('last_run_at') or row['created_at']) < FIRST_LOAD_GRACE
+    return (row.get('first_run_done') is False and error in (DATE_FETCH_LIMIT, FB_DATE_FETCH_LIMIT)
             and now - row['created_at'] < FIRST_LOAD_GRACE)
 
 
 def collector_checks(rows: list[dict], now: datetime, *, failures: int = 3,
-                     timeout_minutes: int = 30, empty_runs: int = 3,
+                     timeout_minutes: int = 30, empty_runs: int = 3, partial_runs: int = PARTIAL_RUNS,
                      previous: dict[str, str | None] | None = None) -> dict[str, str | None]:
     checks: dict[str, str | None] = {}
     # A parser break empties every search of the source. When another target
@@ -121,8 +149,18 @@ def collector_checks(rows: list[dict], now: datetime, *, failures: int = 3,
                   " ".join(p for p in (row.get('make'), row.get('model')) if p) or f"target {row['id']}")
         reason = None
         loading = first_load(row, now)
-        if (not loading and len(statuses) >= failures
-                and all(s == 'failed' for s in statuses[:failures])):
+        # A partial read (the collector kept what it read, collectors.base.SearchResults)
+        # is a failed run that is no break: it alerts only past `partial_runs` in a row,
+        # and the failures count (3) only when one of them is a real failure.
+        errors = list(row.get('errors') or [row.get('last_error')])
+        errors += [None] * (len(statuses) - len(errors))
+        failed = 0
+        while failed < len(statuses) and statuses[failed] == 'failed':
+            failed += 1
+        all_partial = failed and all(is_partial(e) for e in errors[:failed])
+        if not loading and all_partial and failed >= partial_runs > 0:
+            reason = f"{failed} lecturas parciales seguidas. {safe_error(row['latest_error'])}"
+        elif not loading and failed >= failures and not all_partial:
             reason = f"{failures} corridas fallidas consecutivas. {safe_error(row['latest_error'])}"
         elif row['latest_status'] == 'running':
             if now - row['started_at'] > timedelta(minutes=timeout_minutes):
@@ -159,7 +197,7 @@ async def inspect_database(previous: dict[str, str | None] | None = None) -> dic
                 "SELECT value FROM app_config WHERE key='collector_failure_alert_after'")).fetchone()
             threshold = max(1, min(100, int(threshold_row['value'] if threshold_row else 3)))
             rows = await (await cx.execute(COLLECTORS_SQL, {
-                'history': max(threshold, config.PLATFORM_HEALTH_EMPTY_RUNS)})).fetchall()
+                'history': max(threshold, config.PLATFORM_HEALTH_EMPTY_RUNS, PARTIAL_RUNS)})).fetchall()
         checks = collector_checks(rows, datetime.now(timezone.utc), failures=threshold,
                                   timeout_minutes=config.PLATFORM_HEALTH_RUN_TIMEOUT_MINUTES,
                                   empty_runs=config.PLATFORM_HEALTH_EMPTY_RUNS, previous=previous)

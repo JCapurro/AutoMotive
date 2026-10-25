@@ -2,10 +2,11 @@ from __future__ import annotations
 import asyncio
 import logging
 import signal
+import socket
 
 from telegram.ext import Application
 
-from config import (EMAIL_FROM, ENRICH_TICK_SECONDS, HEARTBEAT_SECONDS, LOG_FILE, LOG_KEEP_DAYS,
+from config import (CRAWL_LOOP_STALE_SECONDS, EMAIL_FROM, ENRICH_TICK_SECONDS, HEARTBEAT_SECONDS, LOG_FILE, LOG_KEEP_DAYS,
                     NOTIFY_TICK_SECONDS, RESEND_API_KEY, TELEGRAM_ADMIN_CHAT_ID, TELEGRAM_ENABLED, TELEGRAM_TOKEN,
                     TRIAL_REMINDER_TICK_SECONDS, WATCHLIST_TICK_SECONDS, WEB_BASE_URL, ALERT_LINK_SECRET,
                     startup_warnings)
@@ -19,11 +20,13 @@ from notifications.links import Links
 from notifications.ops import SourceAlerts
 from notifications.service import Notifier
 from notifications.lifecycle import run_lifecycle_emails
+from db.repos import targets as targets_repo
+from db.repos.runs import dead_workers, fail_orphan_runs
 from pipeline import heartbeat
 from pipeline.enrich import enrich_pass
 from pipeline.llm_jobs import llm_jobs_loop
 from pipeline.rescore import nightly_loop
-from pipeline.scheduler import run_loop
+from pipeline.scheduler import loop_stale, run_loop
 from pipeline.watchlist import refresh_watchlist
 from collectors._browser import shutdown as browser_shutdown
 from collectors._loop import run_collector
@@ -61,6 +64,16 @@ async def _every(name: str, seconds: int, job, stop: asyncio.Event) -> None:
             await asyncio.wait_for(stop.wait(), timeout=seconds)
         except asyncio.TimeoutError:
             pass
+
+
+async def beat_while_crawling(started_at) -> None:
+    """Beat only while the crawl loop comes round: a stuck loop then looks
+    like a dead worker to the watchdog, which alerts (incident 2026-10-21:
+    the crawl stood still for an hour while the heartbeat kept beating)."""
+    if loop_stale(CRAWL_LOOP_STALE_SECONDS):
+        log.error("crawl loop hasn't come round in %d s: heartbeat withheld", CRAWL_LOOP_STALE_SECONDS)
+        return
+    await heartbeat.beat(started_at)
 
 
 def build_notifier(bot, links: Links) -> Notifier:
@@ -123,9 +136,18 @@ async def amain() -> None:
         pass
 
     started_at = heartbeat.started_now()
+    try:
+        orphans = await fail_orphan_runs(started_at)
+        host = socket.gethostname()
+        freed = await targets_repo.release_claims(dead_workers(await targets_repo.claim_holders(host), host))
+        if orphans or freed:
+            log.warning("previous worker on this host: %d runs left running marked failed, %d targets freed",
+                        orphans, freed)
+    except Exception:
+        log.exception("could not clean up after the previous worker")
     tasks = [
         asyncio.create_task(_every("heartbeat", HEARTBEAT_SECONDS,
-                                   lambda _stop: heartbeat.beat(started_at), stop)),
+                                   lambda _stop: beat_while_crawling(started_at), stop)),
         asyncio.create_task(run_loop(notifier, stop, source_alerts.on_health if source_alerts else None)),
         asyncio.create_task(_every("enrichment", ENRICH_TICK_SECONDS,
                                    notifying(enrich_pass, notifier), stop)),

@@ -6,6 +6,7 @@ Postgres with fake collectors.
 """
 from __future__ import annotations
 
+from contextlib import nullcontext
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -23,6 +24,9 @@ from pgcase import TEST_FX_RATE, requires_db
 from pipeline import crawl, enrich, rematch, scheduler
 from pipeline.ingest import ingest
 from collectors.base import ListingDetail
+from notifications.channels.web import WebChannel
+from notifications.links import Links
+from notifications.service import Notifier
 from test_ingest_postgres import FakeSource, IngestCase, card
 
 pytestmark = [pytest.mark.db, requires_db]
@@ -168,17 +172,18 @@ class BatchProfilesTests(BodyTypeCase):
             eco("no-price", precio=None, moneda=None),
             eco("expensive", precio=45_000.0),
             eco("old", anio=2010),
+            eco("edge", anio=2014),                                     # the reference band's year
             eco("worn", km=200_000),
         ]
         await self.tick()
 
-        self.assertEqual(FakeSource.searches, [("kavak", {"carroceria": "suv", "anio_min": 2015,
+        self.assertEqual(FakeSource.searches, [("kavak", {"carroceria": "suv", "anio_min": 2014,
                                                           "km_max": 120_000})])
         stored = await self.rows("SELECT external_id, body_type FROM listings ORDER BY external_id")
         self.assertEqual([(r["external_id"], r["body_type"]) for r in stored],
-                         [("ars", "suv"), ("no-price", "suv"), ("ok", "suv")])
+                         [("ars", "suv"), ("edge", "suv"), ("no-price", "suv"), ("ok", "suv")])
         [run] = await self.rows("SELECT status, found, new FROM collector_runs")
-        self.assertEqual(tuple(run.values()), ("ok", 6, 3))             # the dropped ones were found
+        self.assertEqual(tuple(run.values()), ("ok", 7, 4))             # the dropped ones were found
         matched = dict(await self.matched(suv))
         self.assertTrue(matched["ok"] and matched["ars"])                # a first run is backfill
         self.assertNotIn("expensive", matched)
@@ -257,10 +262,203 @@ class ForeignBatchTests(BodyTypeCase):
         # Searches with a model don't care: their batches matched it without the body type.
         self.assertEqual(await self.matched(fiesta), [])
 
+    def ka(self, listing_id: str, year: int, **kw) -> object:
+        base = dict(titulo=f"Ford Ka 1.5 SE {listing_id}", marca="Ford", modelo="Ka", anio=year,
+                    carroceria="Hatchback")
+        base.update(kw)
+        return card(listing_id, source="kavak", **base)
+
+    async def band_read(self, *, banded_before: bool = True, classify_fails: bool = False) -> int:
+        """A Ka search from 2010 on Kavak, which reads 2009 too (the reference
+        band), next to a bootstrapped search for any hatchback. The second
+        read brings a new Ka 2009 and a new Ka 2011. `banded_before`: the
+        first read had the band too; if not, the second is the band's first."""
+        ka = await self.fiesta_alert(marcas=["Ford"], modelos=["Ka"], anio_min=2010, sources=["kavak"])
+        hatch = await self.body_alert(body=("hatchback",), sources=["kavak"])
+        async with db.connection() as cx:
+            await cx.execute("UPDATE search_profiles SET channels = '{web}' WHERE id = ANY(%s)", ([ka, hatch],))
+        market = [self.ka(f"c{i}", 2011 + i % 2, precio=12_000.0 + i * 100, km=90_000 + i * 2_000)
+                  for i in range(6)]
+        FakeSource.results["kavak"] = market
+        with patch.object(crawl.config, "REFERENCE_YEAR_BAND", int(banded_before)):
+            await self.tick()                                           # the target's first run
+        self.assertEqual(FakeSource.searches[0][1]["anio_min"], 2010 - banded_before)
+        FakeSource.results["kavak"] = market + [self.ka("old", 2009, precio=9_000.0, km=95_000),
+                                                self.ka("new", 2011, precio=9_000.0, km=95_500)]
+        fails = (patch("pipeline.news._classify", AsyncMock(side_effect=RuntimeError("db"))) if classify_fails
+                 else nullcontext())
+        with patch.object(crawl.config, "REFERENCE_YEAR_BAND", 1), fails:
+            await self.tick()
+        [t] = await self.rows("SELECT query FROM crawl_targets WHERE active")
+        self.assertEqual((t["query"]["year_min"], t["query"]["year_band"], t["query"]["_read"]["year_min"]),
+                         (2010, 1, 2009))
+        return hatch
+
+    async def notified(self) -> set[str]:
+        return {r["external_id"] for r in await self.rows(
+            "SELECT l.external_id FROM notifications n JOIN listings l ON l.id = n.listing_id")}
+
+    async def test_a_band_row_listed_later_is_news_for_a_search_without_a_model(self):
+        # Only the Ka search can't match a Ka 2009: for any hatchback it is a car just listed.
+        hatch = await self.band_read()
+        matched = dict(await self.matched(hatch))
+        self.assertEqual((matched["old"], matched["new"]), (False, False))
+        self.assertIn("new", await self.notified())
+        self.assertNotIn("_not_news", (await self.listing("old"))["attributes"])
+
+    async def test_the_band_s_first_read_is_backfill_for_a_search_without_a_model(self):
+        hatch = await self.band_read(banded_before=False)
+        matched = dict(await self.matched(hatch))
+        self.assertEqual((matched["old"], matched["new"]), (True, False))
+        self.assertEqual(await self.notified(), {"new"})
+        [t] = await self.rows("SELECT id FROM crawl_targets WHERE active")
+        self.assertEqual({k: v for k, v in (await self.listing("old"))["attributes"]["_not_news"].items()
+                          if k in ("reason", "target_id")}, {"reason": "band", "target_id": t["id"]})
+
+    async def test_the_band_s_first_read_stays_backfill_when_classify_fails(self):
+        hatch = await self.band_read(banded_before=False, classify_fails=True)
+        [err] = await self.rows("SELECT stage FROM pipeline_errors")
+        self.assertEqual(err["stage"], "news")
+        matched = dict(await self.matched(hatch))
+        self.assertEqual((matched["old"], matched["new"]), (True, False))
+        self.assertEqual(await self.notified(), {"new"})
+        self.assertNotIn("_not_news", (await self.listing("old"))["attributes"])
+
     async def test_a_crawl_that_fills_a_body_type_lists_it(self):
         await ingest([card("1")], geocode=None)                         # a Fiesta, body type unknown
         result = await ingest([card("1", carroceria="Hatchback")], geocode=None)
         self.assertEqual(result.body_type_filled, [(await self.listing("1"))["id"]])
+
+
+class BandOfAnotherTargetTests(BodyTypeCase):
+    """A target's reference band is its own business: a car only its band
+    reads is still news for another target's searches whose years include
+    it, whichever target reads it first (E5 review)."""
+    SOURCES = ("mercadolibre", "kavak", "mardelusados", "deruedas")
+
+    @staticmethod
+    def jeep(listing_id: str, year: int) -> object:
+        return card(listing_id, source="kavak", titulo=f"Jeep Renegade 1.8 Sport {listing_id}", marca="Jeep",
+                    modelo="Renegade", anio=year, carroceria="SUV", precio=15_000.0, km=60_000)
+
+    @staticmethod
+    def renault(listing_id: str, model: str, year: int) -> object:
+        return card(listing_id, source="deruedas", titulo=f"Renault {model} 1.6 {listing_id}", marca="Renault",
+                    modelo=model, anio=year, carroceria="Hatchback", precio=11_000.0, km=60_000)
+
+    async def on_the_web(self, *aids: int) -> None:
+        async with db.connection() as cx:
+            await cx.execute("UPDATE search_profiles SET channels = '{web}' WHERE id = ANY(%s)", (list(aids),))
+
+    async def crawl_only(self, column: str, value: str | None) -> None:
+        """One crawl of the targets whose `column` is `value`, the others not due."""
+        async with db.connection() as cx:
+            await cx.execute(f"UPDATE crawl_targets SET next_run_at = CASE WHEN {column} IS NOT DISTINCT FROM %s "
+                             "  THEN NULL ELSE now() + interval '1 hour' END", (value,))
+        notifier = Notifier({"web": WebChannel(Links())})
+        await crawl.crawl_due(scheduler.batch_handler(notifier), jitter_seconds=0)
+
+    async def renegade_and_suv(self) -> tuple[int, int]:
+        """'Any SUV from 2018' (kavak/suv reads 2017 too) and 'Renegade
+        2015-2017' (kavak Renegade reads 2014-2018), past their first runs."""
+        suv = await self.body_alert(anio_min=2018)
+        renegade = await self.fiesta_alert(marcas=["Jeep"], modelos=["Renegade"], anio_min=2015, anio_max=2017,
+                                           sources=["kavak"])
+        await self.on_the_web(suv, renegade)
+        FakeSource.results["kavak"] = [self.jeep("r16", 2016), self.jeep("r19", 2019)]
+        await self.tick()
+        queries = {t["body_type"]: t["query"] for t in await self.rows("SELECT body_type, query FROM crawl_targets")}
+        self.assertEqual((queries["suv"]["year_band"], queries[None]["year_band"]), (1, 1))
+        return suv, renegade
+
+    async def test_a_car_a_body_type_reads_in_its_band_is_news_for_the_model_search_that_wants_it(self):
+        suv, renegade = await self.renegade_and_suv()
+        FakeSource.results["kavak"] += [self.jeep("r17", 2017)]
+        await self.crawl_only("body_type", "suv")                       # its band: the SUVs from 2018 can't want it
+        self.assertNotIn("r17", dict(await self.matched(suv)))
+        await self.crawl_only("body_type", None)
+        self.assertEqual(dict(await self.matched(renegade))["r17"], False)
+
+    async def test_a_car_a_model_reads_in_its_band_is_news_for_the_search_by_body_type(self):
+        suv, renegade = await self.renegade_and_suv()
+        FakeSource.results["kavak"] += [self.jeep("r18", 2018)]
+        await self.crawl_only("body_type", None)                        # the Renegade's band: its search can't want it
+        self.assertNotIn("r18", dict(await self.matched(renegade)))
+        self.assertEqual(dict(await self.matched(suv))["r18"], False)
+        await self.crawl_only("body_type", "suv")
+        self.assertEqual(dict(await self.matched(suv))["r18"], False)
+
+    async def test_a_sibling_model_s_band_read_leaves_the_car_news_for_its_own_search(self):
+        # deruedas searches a Stepway within the Sandero: turned on, the band of
+        # 'Stepway 2018-2020' brings a Sandero 2021 first, which 'Sandero 2019-2022' wants.
+        stepway = await self.fiesta_alert(marcas=["Renault"], modelos=["Stepway"], anio_min=2018, anio_max=2020,
+                                          sources=["deruedas"])
+        sandero = await self.fiesta_alert(marcas=["Renault"], modelos=["Sandero"], anio_min=2019, anio_max=2022,
+                                          sources=["deruedas"])
+        await self.on_the_web(stepway, sandero)
+        FakeSource.results["deruedas"] = [self.renault("st19", "Stepway", 2019), self.renault("sa20", "Sandero", 2020)]
+        with patch.object(crawl.config, "REFERENCE_YEAR_BAND", 0):
+            await self.tick()
+        FakeSource.results["deruedas"] += [self.renault("sa21", "Sandero", 2021)]
+        with patch.object(crawl.config, "REFERENCE_YEAR_BAND", 1):
+            await self.sync()
+            await self.crawl_only("model", "Stepway")
+        # The Sandero target reads 2021 in its searches' years: no band mark (news._covered).
+        self.assertNotIn("_not_news", (await self.listing("sa21"))["attributes"])
+        with patch.object(crawl.config, "REFERENCE_YEAR_BAND", 1):
+            await self.crawl_only("model", "Sandero")
+        self.assertEqual(dict(await self.matched(sandero))["sa21"], False)
+
+    async def sibling_band_read(self, *, sandero_read: bool = True) -> tuple[int, int, dict[str, bool]]:
+        """'Stepway 2018-2020', 'Sandero 2019-2022' and any hatchback on
+        deruedas, past their first runs; then the Stepway's band is turned on
+        and brings first a Sandero 2021 and a Sandero 2017. The Sandero's
+        search and the hatchback's matches, and the Stepway target's id.
+        `sandero_read=False`: the Sandero target kept no last read."""
+        stepway = await self.fiesta_alert(marcas=["Renault"], modelos=["Stepway"], anio_min=2018, anio_max=2020,
+                                          sources=["deruedas"])
+        sandero = await self.fiesta_alert(marcas=["Renault"], modelos=["Sandero"], anio_min=2019, anio_max=2022,
+                                          sources=["deruedas"])
+        hatch = await self.body_alert(body=("hatchback",), sources=["deruedas"])
+        await self.on_the_web(stepway, sandero, hatch)
+        FakeSource.results["deruedas"] = [self.renault("st19", "Stepway", 2019), self.renault("sa20", "Sandero", 2020)]
+        with patch.object(crawl.config, "REFERENCE_YEAR_BAND", 0):
+            await self.tick()
+        [s] = await self.rows("SELECT query FROM crawl_targets WHERE model = 'Sandero'")
+        self.assertEqual({k: s["query"]["_read"].get(k) for k in ("year_min", "year_max")},
+                         {"year_min": 2019, "year_max": 2022})
+        if not sandero_read:
+            async with db.connection() as cx:
+                await cx.execute("UPDATE crawl_targets SET query = query - '_read' WHERE model = 'Sandero'")
+        FakeSource.results["deruedas"] += [self.renault("sa21", "Sandero", 2021),
+                                           self.renault("sa17", "Sandero", 2017)]
+        with patch.object(crawl.config, "REFERENCE_YEAR_BAND", 1):
+            await self.sync()
+            await self.crawl_only("model", "Stepway")
+        [t] = await self.rows("SELECT id FROM crawl_targets WHERE model = 'Stepway'")
+        mark = (await self.listing("sa17"))["attributes"]["_not_news"]     # no target read 2017: old stock
+        self.assertEqual((mark["reason"], mark["target_id"]), ("band", t["id"]))
+        return sandero, t["id"], dict(await self.matched(hatch))
+
+    async def test_a_car_a_sibling_model_reads_in_its_searches_years_is_news_without_a_model(self):
+        # The Sandero target's last read covered 2021: what it never stored was listed after.
+        sandero, _, hatch = await self.sibling_band_read()
+        self.assertNotIn("_not_news", (await self.listing("sa21"))["attributes"])
+        self.assertEqual((hatch["sa21"], hatch["sa17"]), (False, True))
+        with patch.object(crawl.config, "REFERENCE_YEAR_BAND", 1):
+            await self.crawl_only("model", "Sandero")
+        self.assertEqual(dict(await self.matched(sandero))["sa21"], False)
+
+    async def test_a_sibling_model_without_a_last_read_vouches_for_nothing(self):
+        # Its searches may have widened to 2021 after its last read: the Stepway's band read
+        # it first, old stock for the hatchbacks, still news for the Sandero's own search.
+        sandero, stepway, hatch = await self.sibling_band_read(sandero_read=False)
+        mark = (await self.listing("sa21"))["attributes"]["_not_news"]
+        self.assertEqual((mark["reason"], mark["target_id"]), ("band", stepway))
+        self.assertEqual((hatch["sa21"], hatch["sa17"]), (True, True))
+        with patch.object(crawl.config, "REFERENCE_YEAR_BAND", 1):
+            await self.crawl_only("model", "Sandero")
+        self.assertEqual(dict(await self.matched(sandero))["sa21"], False)
 
 
 class KavakPrefilterMemoryTests(BodyTypeCase):

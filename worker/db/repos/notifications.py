@@ -51,10 +51,15 @@ async def interactions(pairs: Iterable[tuple[str, int]]) -> dict[tuple[str, int]
     return {(r["user_id"], r["listing_id"]): r for r in rows}
 
 
-async def listing_audiences(listing_ids: Iterable[int]) -> list[dict[str, Any]]:
+async def listing_audiences(listing_ids: Iterable[int], *,
+                            matched_before: datetime | None = None) -> list[dict[str, Any]]:
     """Everyone a listing event concerns (price_drop, listing_gone): users with
     an enabled profile that matched it (their best match: highest level, then
-    score) and users who saved or follow it. One row per (user, listing)."""
+    score) and users who saved or follow it. One row per (user, listing).
+    `matched_before`: of the backfill matches, only those generated before it
+    (not a first run's own, nor a rematch's for a search created since); a
+    news match always counts: a batch that read the listing matched it as
+    news, so at the stored price or an earlier one."""
     ids = list(dict.fromkeys(listing_ids))
     if not ids:
         return []
@@ -68,6 +73,7 @@ async def listing_audiences(listing_ids: Iterable[int]) -> list[dict[str, Any]]:
             "         sp.notify_min_level::text AS min_level, sp.channels, " + _THRESHOLD +
             "    FROM matches m JOIN search_profiles sp ON sp.id = m.search_profile_id "
             "   WHERE m.listing_id = ANY(%(ids)s) AND public.search_access_active(sp.id) "
+            "     AND (%(before)s::timestamptz IS NULL OR m.generated_at < %(before)s OR NOT m.is_backfill) "
             "   ORDER BY sp.user_id, m.listing_id, m.level, m.score DESC "
             "), ix AS ( "
             "  SELECT user_id, listing_id, saved, status::text AS status "
@@ -87,7 +93,7 @@ async def listing_audiences(listing_ids: Iterable[int]) -> list[dict[str, Any]]:
             "  FROM best FULL JOIN ix ON ix.user_id = best.user_id AND ix.listing_id = best.listing_id "
             "  JOIN profiles p ON p.id = coalesce(best.user_id, ix.user_id) "
             " WHERE public.commercial_access_active(p.id)",
-            {"ids": ids})).fetchall()
+            {"ids": ids, "before": matched_before})).fetchall()
 
 
 async def existing_keys(user_ids: Iterable[str], listing_ids: Iterable[int]) -> set[tuple[str, str]]:

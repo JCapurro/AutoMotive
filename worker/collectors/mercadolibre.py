@@ -10,10 +10,14 @@ A challenge or a login wall is never solved: the run fails as blocked.
 A target by body type (docs/CARROCERIA.md) reads "Publicados hoy" of the
 code's VEHICLE_BODY_TYPE values, and labels the cards with the code only
 when the page shows the filter applied.
+
+A target's whole stock is also read every couple of days (full_read,
+comparables fase 2), only for the ids of what is still listed.
 """
 from __future__ import annotations
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import date
 import json
 import logging
 import random
@@ -26,6 +30,7 @@ from bs4 import BeautifulSoup
 import config
 from normalization import body_type
 from .base import BaseScraper, CollectorBlocked, Listing, ListingDetail, SearchResults
+from . import _recency
 from ._recency import PublicationWindow
 from ._dates import publication_date
 from ._http import Page, dedupe, fetch_page, json_ld_of_type, multiline_text, soup, text_of, to_int
@@ -33,14 +38,18 @@ from ._http import Page, dedupe, fetch_page, json_ld_of_type, multiline_text, so
 
 log = logging.getLogger("collectors.mercadolibre")
 
+# The wall's own sentence ("Para continuar, ingresá a tu cuenta"): every
+# logged-out page has "Ingresá" in its header, and an ad's description can say
+# "para continuar" (MLA-3770582028, 22/10/2026), so the two words apart are no wall.
+_LOGIN_TEXT_RE = re.compile(r"para continuar,?\s+ingres[aá]")
+
 
 def _wall_reason(url: str, body_text: str = "") -> str | None:
     url_l = (url or "").lower()
     text_l = (body_text or "").lower()
     if "/captcha/" in url_l or ("por seguridad" in text_l and "complet" in text_l and "desaf" in text_l):
         return "security challenge"
-    if ("account-verification" in url_l or "/login" in url_l
-            or ("para continuar" in text_l and ("ingresa" in text_l or "ingresá" in text_l))):
+    if ("account-verification" in url_l or "/login" in url_l or _LOGIN_TEXT_RE.search(text_l)):
         return "login required"
     return None
 
@@ -78,7 +87,7 @@ PAGE_SIZE = 48
 # 15/10/2026 it still listed most ads it had at 18:54 the day before. The hour
 # on top absorbs the window's 10-minute overlap and scheduling delays; a gap of
 # 24 to 25 hours can miss what was published in that margin.
-TODAY_FILTER_SPAN = 25 * 3600
+TODAY_FILTER_SPAN = _recency.TODAY_SPAN
 
 # Dates read from ads, by id, for the worker's lifetime: an ad outside the
 # window is never stored, and would otherwise be read again on every scan.
@@ -405,6 +414,39 @@ async def _get(url: str, what: str, *, allow_404: bool = False) -> Page:
     return page
 
 
+# ---------- whole stock ----------
+
+# Pages Mercado Libre serves of one search: 42 of 48 results, 2,016 (15/10/2026).
+MAX_PAGE_COUNT = 42
+# A search read a year at a time without a year_min starts with every year
+# before this many, in one search.
+OPEN_YEARS = 15
+
+
+@dataclass
+class FullRead:
+    """MercadoLibreScraper.full_read: the ids it saw, and whether they are
+    every ad the search lists."""
+    ids: set[str] = field(default_factory=set)
+    complete: bool = True
+    reason: str | None = None
+    pages: int = 0
+
+
+def _year_buckets(filters: dict) -> list[dict]:
+    """A search too big to read whole, a year at a time: each year of its
+    range, and without a year_min, every year before the last OPEN_YEARS in
+    one search."""
+    hi = int(filters.get("anio_max") or date.today().year + 1)
+    out: list[dict] = []
+    if filters.get("anio_min") is not None:
+        lo = int(filters["anio_min"])
+    else:
+        lo = hi - OPEN_YEARS + 1
+        out.append({**filters, "anio_min": 1900, "anio_max": lo - 1})
+    return out + [{**filters, "anio_min": y, "anio_max": y} for y in range(lo, hi + 1)]
+
+
 # ---------- scraper ----------
 
 class BodyTypeNotApplied(RuntimeError):
@@ -467,7 +509,8 @@ class MercadoLibreScraper(BaseScraper):
         """Every result of the window, kept if published inside it.
 
         A window of up to TODAY_FILTER_SPAN, or a count-only target (2.5), is
-        read through "Publicados hoy": one request, and its results are kept
+        read through "Publicados hoy" (_recency.one_request_read, which
+        pipeline/crawl.py also asks): one request, and its results are kept
         as they come, since Mercado Libre's own filter vouches for them while
         an ad's page only says "hace 1 día" (the public pages carry no exact
         date). Without a stored date, detection time stands in, which the
@@ -479,8 +522,7 @@ class MercadoLibreScraper(BaseScraper):
         results = SearchResults()
         seen: set[str] = set()
         known = filters.get("known_publication_dates") or {}
-        today = (window.today_only or filters.get("count_only") is True
-                 or window.until - window.since <= TODAY_FILTER_SPAN)
+        today = _recency.one_request_read(self.name, filters, window)
         fetched = 0
         pages = 0
         try:
@@ -608,6 +650,67 @@ class MercadoLibreScraper(BaseScraper):
         log.info("mercadolibre body type %s: ids=%s pages=%d kept=%d complete=%s reason=%s",
                  code, ",".join(ids), pages, len(results), results.complete, results.reason)
         return results
+
+    async def full_read(self, filters: dict) -> FullRead:
+        """The ids of every ad the target's search lists (comparables fase 2:
+        a sold car stops counting once a read like this no longer sees it).
+        Mercado Libre serves 42 pages at most: a search with more is read a
+        year at a time (_year_buckets). Nothing is dated, kept or stored here.
+
+        Complete only when every page of every search was read: a page count
+        on the first page, every page but the last one full, no page repeated.
+        A wall raises (the source pauses); any other failure keeps what was
+        seen and ends incomplete."""
+        out = FullRead()
+        base = {k: filters[k] for k in ("marca", "modelo", "anio_min", "anio_max", "km_max")
+                if filters.get(k) is not None}
+        try:
+            if not await self._read_whole(base, out):
+                for bucket in _year_buckets(base):
+                    if not await self._read_whole(bucket, out):
+                        out.complete = False
+                        out.reason = (f"mercadolibre: {bucket['anio_min']}-{bucket['anio_max']} has more "
+                                      f"results than its {MAX_PAGE_COUNT} pages show")
+                        break
+        except CollectorBlocked:
+            raise
+        except Exception as exc:
+            out.complete, out.reason = False, f"mercadolibre: {type(exc).__name__}: {exc}"
+        log.info("mercadolibre full read: pages=%d ids=%d complete=%s reason=%s",
+                 out.pages, len(out.ids), out.complete, out.reason)
+        return out
+
+    async def _read_whole(self, filters: dict, out: FullRead) -> bool:
+        """Every page of one search, its ids into `out`. False, after its
+        first page, when Mercado Libre doesn't serve them all."""
+        ids: set[str] = set()
+        page, last = 1, None
+        while True:
+            if out.pages:
+                await _page_pause()
+            html = (await _get(_build_url(filters, page), "full read")).html
+            out.pages += 1
+            cards = _results(html)
+            if page == 1:
+                last = search_state(html).page_count
+                if last is not None and last >= MAX_PAGE_COUNT:
+                    out.ids |= {c.listing_id for c in cards}
+                    return False
+                if last is None and len(cards) >= PAGE_SIZE:
+                    out.complete, out.reason = False, "mercadolibre: a full first page without a page count"
+            fresh = {c.listing_id for c in cards} - ids
+            if cards and not fresh:
+                out.complete, out.reason = False, "mercadolibre: pagination repeated a page"
+                break
+            ids |= fresh
+            out.ids |= fresh
+            if len(cards) < PAGE_SIZE or last is None or page >= last:
+                break
+            page += 1
+        if out.complete and last and len(ids) <= (last - 1) * PAGE_SIZE:
+            out.complete = False
+            out.reason = f"mercadolibre: {len(ids)} ads in {last} pages"
+        return True
 
     parse_detail = staticmethod(parse_detail)
 

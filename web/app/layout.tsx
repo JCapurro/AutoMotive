@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Archivo, Geist_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 import { MetaPixel } from "@/components/meta-pixel";
 import { GoogleAnalytics } from "@/components/google-analytics";
@@ -30,6 +31,8 @@ export const metadata: Metadata = {
     description: DESCRIPTION,
   },
   twitter: { card: "summary_large_image" },
+  // Meta Business Manager domain verification for eseauto.com.ar.
+  verification: { other: { "facebook-domain-verification": "o6fjll7a6bnjjqdd8zf6ed2xmblcqa" } },
 };
 
 export const viewport: Viewport = {
@@ -48,6 +51,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <MicrosoftClarity />
         <MetaPixel />
         <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );

@@ -33,6 +33,8 @@ GATES_RESERVE_S = 30 * 60        # after Claude: suite (15), deploy (7), idle wa
 IN_TICK_VERIFY_S = 10 * 60       # verification goes on in later ticks
 VERIFY_POLL_S = 30
 IDLE_POLL_S = 15
+# A restart also waits for these sources' claimed targets, whatever the incident's source is.
+IDLE_SOURCES = ('facebook', 'mercadolibre')
 TESTS_TIMEOUT_S = 900
 REOPEN_AFTER_S = 3600            # 'done' but the monitor still reports the source
 EXTERNAL_RETRY_S = (15 * 60, 24 * 3600)
@@ -98,6 +100,9 @@ class Database:
 
     def running_runs(self, source: str) -> int:
         return self._call('running_runs', source)
+
+    def held_claims(self, sources: list[str]) -> int:
+        return self._call('held_claims', sources)
 
     def kick(self, source: str, target_ids: list[int]) -> list[int]:
         return self._call('kick', source, target_ids)
@@ -877,9 +882,11 @@ class _Tick:
             f'Causa diagnosticada: {attempt.root_cause}'], n=attempt.n)
 
     def wait_idle(self, source: str) -> None:
-        """Up to wait_idle_s for the source's runs in progress: a restart would cut them."""
+        """Up to wait_idle_s for the source's runs in progress, and for the Facebook and Mercado Libre
+        targets being crawled (their scans read dates page by page): a restart would cut them."""
         deadline = self.now() + timedelta(seconds=self.settings.wait_idle_s)
-        while self.db.running_runs(source) > 0 and self.now() < deadline:
+        while ((self.db.running_runs(source) > 0 or self.db.held_claims(list(IDLE_SOURCES)) > 0)
+               and self.now() < deadline):
             self.clock.sleep(IDLE_POLL_S)
 
     def verify(self, incident: dict, state: st.IncidentState, poll_until: datetime | None = None) -> None:

@@ -1,9 +1,11 @@
 """Kavak Argentina scraper.
 
-Kavak is a SPA — search results render via JS only, so search uses the
-shared headless browser, scrolling until no more cards load: the model page
+Search reads `/ar/usados/{marca-modelo}` with plain GETs: the pages are
+rendered on the server, 30 cars each, `?page=N` from 0, and the model page
 lists every car of the model, whatever its order, so reading all of it
-misses no new arrival. Each card links to `/ar/venta/{slug}` (marca,
+misses no new arrival. (The first versions drove the headless browser and
+scrolled and stopped at 30 cars, so a model with more lost the rest:
+COVERAGE_VERSION 2.) Each card links to `/ar/venta/{slug}` (marca,
 modelo, version, year) and carries the car's numeric id in `data-testid`;
 the slug is shared by every car of the same version and year, so the id is
 the listing id and the detail URL is `/ar/venta/{slug}?id={id}`.
@@ -13,8 +15,7 @@ GET. When a car is sold Kavak serves another car of the same model at that
 URL, so fetch_detail compares the page's canonical slug with the one asked for.
 
 A target by body type (docs/CARROCERIA.md) reads `/ar/usados/{carroceria}`
-with plain GETs instead: Kavak renders those pages on the server, 30 cars a
-page, `?page=N` from 0.
+the same way.
 """
 from __future__ import annotations
 import asyncio
@@ -28,7 +29,6 @@ from bs4 import BeautifulSoup
 
 from .base import BaseScraper, CollectorBlocked, Listing, ListingDetail, SearchResults
 from ._dates import publication_date
-from ._browser import browser_context
 from ._http import Page, dedupe, fetch_page, slim_html, json_ld_of_type, soup, text_of, to_int
 from normalization import body_type
 from normalization.fx import usd_ars_rate
@@ -253,12 +253,15 @@ async def _page_pause() -> None:
 class KavakScraper(BaseScraper):
     DETAIL_PARSER_VERSION = 2
     name = "kavak"
-    BASE = "https://www.kavak.com/ar/usados"
-    MAX_SCROLLS = 30
+    SITE = "https://www.kavak.com"
     BODY_TYPES = frozenset(BODY_TYPE_SLUGS)
-    # The pages of a body type a run reads at most: SUV had 15 (422 cars) on
-    # 15/10/2026, the whole catalog 47.
-    MAX_BODY_TYPE_PAGES = 40
+    # Reads /ar/usados/{make-model} to its last page, where before it stopped at
+    # 30 cars (a second page was never loaded): the targets already in the pool
+    # reload in silence (targets.sync_targets). Bump it if this read grows again.
+    COVERAGE_VERSION = 2
+    # The pages a run reads at most: SUV had 15 (422 cars) on 15/10/2026, the
+    # whole catalog 47; a model has 1-2 (Sandero: 37 cars on 24/10/2026).
+    MAX_PAGES = 40
 
     @staticmethod
     def matches_filters(item: Listing, f: dict) -> bool:
@@ -273,63 +276,42 @@ class KavakScraper(BaseScraper):
                 item = replace(item, precio=item.precio * rate, moneda="ARS")
         return BaseScraper.matches_filters(item, filters)
 
-    def _build_url(self, f: dict) -> str:
-        parts = [_slug(f[k]) for k in ("marca", "modelo") if f.get(k)]
-        if not parts:
-            return self.BASE
-        return f"{self.BASE}/" + "-".join(parts)
+    @staticmethod
+    def _listing_slug(f: dict) -> str:
+        """The /ar/usados/{slug} of a search by make and model ("" = the whole catalog)."""
+        return "-".join(_slug(f[k]) for k in ("marca", "modelo") if f.get(k))
 
-    async def search(self, filters: dict) -> list[Listing]:
+    async def search(self, filters: dict) -> SearchResults:
         if code := _searched_body_type(filters):
-            return await self._search_body_type(filters, code)
-        url = self._build_url(filters)
-        out: list[Listing] = []
-        async with browser_context() as ctx:
-            page = await ctx.new_page()
-            try:
-                await page.goto(url, timeout=45_000, wait_until="domcontentloaded")
-                # Kavak lazy-loads via scroll: stop once two scrolls in a row add no card.
-                counts: list[int] = []
-                for _ in range(self.MAX_SCROLLS):
-                    await page.mouse.wheel(0, 4000)
-                    await page.wait_for_timeout(900)
-                    counts.append(await page.locator(_CARD_SELECTOR).count())
-                    if len(counts) >= 4 and counts[-1] == counts[-2] == counts[-3]:
-                        break
-                html = await page.content()
-            finally:
-                await page.close()
-        for listing in parse_search(html):
-            self.annotate_partial_price(listing)
-            if self.matches_filters(listing, filters):
-                out.append(listing)
-        return out
+            slug = BODY_TYPE_SLUGS.get(code)
+            if not slug:
+                raise ValueError(f"kavak: no listing for body type {code!r}")
+            return await self._read_pages(slug, filters, code)
+        return await self._read_pages(self._listing_slug(filters), filters)
 
-    async def _search_body_type(self, filters: dict, code: str) -> SearchResults:
-        """A target by body type: the pages of /ar/usados/{slug} up to the
-        count the first one states (or one without new cars), at most
-        MAX_BODY_TYPE_PAGES.
+    async def _read_pages(self, slug: str, filters: dict, code: str | None = None) -> SearchResults:
+        """The pages of /ar/usados/{slug} up to the count the first one states
+        (or one without new cars), at most MAX_PAGES. A page holds 30 cars,
+        `?page=N` from 0, server-rendered (the browser's scroll stopped at the first).
+        A search that stops short is a partial read.
 
-        Each card's slug names its body. A card whose slug doesn't gets the
-        code, and only from a page that shows the filter applied; a page that
-        doesn't show it fails the run: Kavak ignoring the filter would serve
-        its whole catalog."""
-        slug = BODY_TYPE_SLUGS.get(code)
-        if not slug:
-            raise ValueError(f"kavak: no listing for body type {code!r}")
+        With `code` (a target by body type), each card's slug names its body.
+        A card whose slug doesn't gets the code, and only from a page that
+        shows the filter applied; a page that doesn't show it fails the run:
+        Kavak ignoring the filter would serve its whole catalog."""
+        path = f"/ar/usados/{slug}" if slug else "/ar/usados"
         results = SearchResults()
         seen: set[str] = set()
         page, pages = 0, None
         try:
             while pages is None or page < pages:
-                if page >= self.MAX_BODY_TYPE_PAGES:
+                if page >= self.MAX_PAGES:
                     results.complete = False
-                    results.reason = (f"kavak: read the first {page} pages of /ar/usados/{slug}"
-                                      + (f", of {pages}" if pages else ""))
+                    results.reason = f"kavak: read the first {page} pages of {path}" + (f", of {pages}" if pages else "")
                     break
                 if page:
                     await _page_pause()
-                url = f"{self.BASE}/{slug}" + (f"?page={page}" if page else "")
+                url = f"{self.SITE}{path}" + (f"?page={page}" if page else "")
                 html = await _get_list(url)
                 state = list_state(html)
                 cards = parse_search(html)
@@ -337,7 +319,7 @@ class KavakScraper(BaseScraper):
                     if page == 0 and state.total != 0:
                         raise RuntimeError(f"kavak: {url} shows no cars and doesn't say it has none")
                     break
-                if slug not in state.body_types:
+                if code and slug not in state.body_types:
                     raise BodyTypeNotApplied(f"kavak: {url} doesn't show its body type filter applied")
                 pages = pages or state.pages
                 page += 1
@@ -348,7 +330,7 @@ class KavakScraper(BaseScraper):
                     break
                 for listing in fresh:
                     seen.add(listing.listing_id)
-                    if body_type.from_source(listing.carroceria) is None:
+                    if code and body_type.from_source(listing.carroceria) is None:
                         listing.carroceria = code
                     self.annotate_partial_price(listing)
                     if self.matches_filters(listing, filters):
@@ -359,8 +341,8 @@ class KavakScraper(BaseScraper):
             if not seen:
                 raise
             results.complete, results.reason = False, f"kavak: {type(exc).__name__}: {exc}"
-        log.info("kavak body type %s: pages=%d of %s kept=%d complete=%s reason=%s",
-                 code, page, pages, len(results), results.complete, results.reason)
+        log.info("kavak %s: pages=%d of %s kept=%d complete=%s reason=%s",
+                 path, page, pages, len(results), results.complete, results.reason)
         return results
 
     parse_detail = staticmethod(parse_detail)

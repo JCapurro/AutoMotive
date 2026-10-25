@@ -30,6 +30,9 @@ class CatalogModel:
     # vehicle_catalog.body_types: the model's possible body types, most
     # common first; a single one is certain (normalization/body_type.py).
     body_types: tuple[str, ...] = ()
+    # vehicle_catalog.timing_belt of the model row: True belt, False chain,
+    # None unknown or it depends on the engine (docs/DISTRIBUCION.md).
+    timing_belt: bool | None = None
 
     def names(self) -> list[str]:
         return [normalize_text(self.model), *(normalize_text(a) for a in self.aliases)]
@@ -93,12 +96,16 @@ def _best_by_name(text: str, candidates: list[CatalogModel], *,
     With `yearlike=False`, names such as Peugeot "2008" are skipped: without
     the brand in the text they are more likely the car's year."""
     hits: list[tuple[int, CatalogModel]] = []
+    years: list[tuple[int, CatalogModel]] = []
     for m in candidates:
         for name in m.names():
-            if not yearlike and _YEARLIKE.fullmatch(name):
+            is_year = _YEARLIKE.fullmatch(name) is not None
+            if not yearlike and is_year:
                 continue
             if _has_phrase(text, name):
-                hits.append((len(name), m))
+                (years if is_year else hits).append((len(name), m))
+    # "Peugeot 307 XS 2008": next to another model's name, "2008" is the year.
+    hits = hits or years
     if not hits:
         return []
     top = max(length for length, _ in hits)

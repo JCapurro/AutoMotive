@@ -117,6 +117,114 @@ async def set_repost_of(cx: AsyncConnection, listing_id: int, original_id: int) 
                      (original_id, listing_id))
 
 
+async def new_rows(cx: AsyncConnection, ids: Iterable[int]) -> list[dict[str, Any]]:
+    """A run's new listings as pipeline/news.py reads them."""
+    ids = list(dict.fromkeys(ids))
+    if not ids:
+        return []
+    rows = await (await cx.execute(
+        "SELECT id, source, external_id, title, make, model, year, mileage_km, trim, transmission, seller_name, "
+        "       body_type, price, currency, price_usd, price_partial, images, published_at, first_seen_at, "
+        "       probable_repost_of "
+        "  FROM listings WHERE id = ANY(%s) ORDER BY id", (ids,))).fetchall()
+    return [_pythonic(r) for r in rows]
+
+
+async def unclassified(cx: AsyncConnection, ids: Iterable[int], *, target_id: int, run_id: int) -> list[int]:
+    """Of these listings, the ones pipeline/news.py never looked at: first
+    seen after the end of the target's last run that got to classify
+    (`run_id`, the current one, left out) and without a mark. Only a run
+    cut between its ingest and classify (a restart) leaves them so. A run
+    that got to classify records how many it stored (collector_runs.new);
+    one that failed in the collector or the ingest, or that a restart cut
+    (fail_orphan_runs), doesn't, and leaves the window open."""
+    ids = list(dict.fromkeys(ids))
+    if not ids:
+        return []
+    rows = await (await cx.execute(
+        "SELECT id FROM listings WHERE id = ANY(%(ids)s) "
+        "   AND first_seen_at > (SELECT max(r.finished_at) FROM collector_runs r "
+        "                         WHERE r.target_id = %(target)s AND r.id <> %(run)s AND r.new IS NOT NULL) "
+        "   AND NOT (attributes ? '_not_news' OR attributes ? '_republished') ORDER BY id",
+        {"ids": ids, "target": target_id, "run": run_id})).fetchall()
+    return [r["id"] for r in rows]
+
+
+# A title compared without case or repeated spaces.
+_TITLE = "lower(regexp_replace(btrim({}), '\\s+', ' ', 'g'))"
+
+
+async def find_reappeared(cx: AsyncConnection, row: dict[str, Any], *, batch_external_ids: list[str],
+                          window_days: int, price_tol_pct: float, km_tol: int,
+                          unsellered_hours: int) -> dict[str, Any] | None:
+    """The old copy of a car that `row` publishes again under another ID
+    (pipeline/news.py): the same source, make, model and year, seller (km
+    within `km_tol`), compatible version (the same, or one is the other
+    plus more words: XLS and XLS Pack, never LT and LTZ) and gearbox, a price within `price_tol_pct` (in USD across
+    currencies), seen in the last `window_days`, and missing from this read
+    (`batch_external_ids`, everything the collector returned). Without a
+    seller, the same km, and seen at most `unsellered_hours` before `row`
+    or under the same title: private sellers round their km. On top of it
+    the same plate on Grupo Randazzo, and the same first photo on Autocity
+    and Car One when both have one. A row without make, model, year, 1.000
+    km or a full price never reappears: too many cars look alike.
+    Returns {id, price, currency, price_usd}, or None."""
+    if (not (row.get("make") and row.get("model") and row.get("year")) or (row.get("mileage_km") or 0) < 1000
+            or row.get("price_partial") or not row.get("price")):
+        return None
+    images = row.get("images") or []
+    found = await (await cx.execute(
+        "SELECT o.id, o.price, o.currency, o.price_usd "
+        "  FROM listings o "
+        " WHERE o.source = %(source)s AND o.id <> %(id)s AND NOT o.external_id = ANY(%(batch)s::text[]) "
+        "   AND lower(o.make) = lower(%(make)s) AND lower(o.model) = lower(%(model)s) AND o.year = %(year)s "
+        "   AND lower(o.seller_name) IS NOT DISTINCT FROM lower(%(seller)s::text) "
+        "   AND CASE WHEN o.seller_name IS NULL "
+        "            THEN o.mileage_km = %(km)s::int "
+        "                 AND (o.last_seen_at >= coalesce(%(seen)s::timestamptz, now()) "
+        "                                        - make_interval(hours => %(hours)s) "
+        f"                     OR {_TITLE.format('o.title')} = {_TITLE.format('%(title)s::text')}) "
+        "            ELSE abs(o.mileage_km - %(km)s::int) <= %(km_tol)s END "
+        "   AND (o.trim IS NULL OR %(trim)s::text IS NULL OR lower(o.trim) = lower(%(trim)s::text) "
+        "        OR starts_with(lower(o.trim), lower(%(trim)s::text) || ' ') "
+        "        OR starts_with(lower(%(trim)s::text), lower(o.trim) || ' ')) "
+        "   AND (o.transmission IS NULL OR %(gearbox)s::text IS NULL "
+        "        OR lower(o.transmission) = lower(%(gearbox)s::text)) "
+        "   AND NOT o.price_partial "
+        "   AND o.last_seen_at >= now() - make_interval(days => %(window)s) "
+        "   AND CASE WHEN o.currency = %(currency)s::text "
+        "            THEN o.price > 0 AND abs(o.price - %(price)s::numeric) <= o.price * %(tol)s::numeric / 100 "
+        "            ELSE o.price_usd > 0 "
+        "                 AND abs(o.price_usd - %(price_usd)s::numeric) <= o.price_usd * %(tol)s::numeric / 100 END "
+        "   AND (o.source <> 'gruporandazzo' "
+        "        OR split_part(o.external_id, '_', 1) = split_part(%(external_id)s, '_', 1)) "
+        "   AND (o.source NOT IN ('autocity', 'carone') OR o.images->>0 IS NULL OR %(image)s::text IS NULL "
+        "        OR o.images->>0 = %(image)s::text) "
+        " ORDER BY o.last_seen_at DESC, o.id DESC LIMIT 1",
+        {"source": row["source"], "id": row["id"], "batch": list(batch_external_ids),
+         "make": row["make"], "model": row["model"], "year": row["year"], "seller": row.get("seller_name"),
+         "km": row["mileage_km"], "km_tol": km_tol, "trim": row.get("trim"), "gearbox": row.get("transmission"),
+         "seen": row.get("first_seen_at"), "hours": unsellered_hours, "title": row.get("title"),
+         "window": window_days, "currency": row.get("currency"), "price": row["price"],
+         "price_usd": row.get("price_usd"), "tol": price_tol_pct, "external_id": row["external_id"],
+         "image": images[0] if images and isinstance(images[0], str) else None})).fetchone()
+    return _pythonic(found) if found else None
+
+
+async def mark_not_news(cx: AsyncConnection, marks: Iterable[tuple[int, dict[str, Any], int | None]]) -> None:
+    """pipeline/news.py's marks, (listing_id, attributes, repost_of): the
+    attributes (_not_news, _republished) join the listing's, and repost_of
+    becomes its probable_repost_of if it has none."""
+    marks = list(marks)
+    if not marks:
+        return
+    async with cx.cursor() as cur:
+        await cur.executemany(
+            "UPDATE listings SET attributes = attributes || %s, "
+            "  probable_repost_of = coalesce(probable_repost_of, %s::bigint) WHERE id = %s",
+            [(Jsonb(attrs), repost_of, lid) for lid, attrs, repost_of in marks])
+
+
 async def mark_gone(cx: AsyncConnection, listing_id: int) -> bool:
     """status = 'gone'. True if it was active (so the caller emits listing_gone once)."""
     cur = await cx.execute(
@@ -260,16 +368,34 @@ async def recent_active_by_body(body_types: list[str], *, days: int, sources: li
 _DETAIL_RETRY = "6 hours"
 
 
+# A listing only a target's reference year band brought (pipeline/crawl.py,
+# crawl_targets.query.year_band): its year one past the searches' own, on
+# the target's source. Facebook targets never read the band.
+_BAND_ROW = (
+    "EXISTS (SELECT 1 FROM crawl_targets t "
+    "         WHERE t.active AND t.body_type IS NULL AND t.source = l.source AND t.query ? 'year_band' "
+    "           AND lower(t.make) = lower(l.make) AND lower(t.model) = lower(l.model) "
+    "           AND ((l.year < (t.query->>'year_min')::numeric "
+    "                 AND l.year >= (t.query->>'year_min')::numeric - (t.query->>'year_band')::numeric) "
+    "             OR (l.year > (t.query->>'year_max')::numeric "
+    "                 AND l.year <= (t.query->>'year_max')::numeric + (t.query->>'year_band')::numeric)))")
+
+
 async def enrichment_queue(*, per_source: int, max_age_days: int) -> list[dict]:
     """Listings to read the detail page of (sección 5.5), per source newest
     first: the ones with a live (non-backfill) match, then backfill matches,
     then listings without a match whose published price looks partial (an
     anticipo or a cuota): only their description can give the total that
-    would let them match."""
+    would let them match, and the reference band's (_BAND_ROW) without a
+    transmission, which comparables() needs at its finer levels. `band` is
+    true for those last ones when nothing else queued them: pipeline/enrich.py
+    reads them without the LLM, since only the version and the transmission
+    are wanted, and they never take its daily budget."""
     async with connection() as cx:
         return await (await cx.execute(
             "SELECT * FROM ("
             "  SELECT l.id, l.source, l.external_id, l.url, l.make, l.model, "
+            "         count(m.listing_id) = 0 AND NOT l.price_partial AS band, "
             "         row_number() OVER (PARTITION BY l.source "
             "           ORDER BY coalesce(bool_or(NOT m.is_backfill), false) DESC, "
             "                    count(m.listing_id) > 0 DESC, l.first_seen_at DESC) AS n "
@@ -278,7 +404,8 @@ async def enrichment_queue(*, per_source: int, max_age_days: int) -> list[dict]:
             "     AND l.last_seen_at >= now() - make_interval(days => %s) "
             f"    AND (l.detail_checked_at IS NULL OR l.detail_checked_at < now() - interval '{_DETAIL_RETRY}') "
             "   GROUP BY l.id "
-            "  HAVING count(m.listing_id) > 0 OR l.price_partial) q "
+            "  HAVING count(m.listing_id) > 0 OR l.price_partial "
+            f"     OR (l.transmission IS NULL AND l.year IS NOT NULL AND {_BAND_ROW})) q "
             "WHERE n <= %s ORDER BY source, n",
             (max_age_days, per_source))).fetchall()
 

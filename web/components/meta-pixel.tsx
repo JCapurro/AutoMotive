@@ -131,26 +131,20 @@ fbq('init','${metaPixelId}');fbq('track','PageView');`}
 function ConsentBanner() {
   return (
     <section
-      aria-labelledby="cookie-banner-title"
-      className="fixed inset-x-4 bottom-4 z-50 mx-auto max-w-xl rounded-xl border bg-background p-4 text-sm shadow-lg"
+      aria-label="Uso de cookies"
+      className="fixed inset-x-4 bottom-4 z-50 mx-auto flex max-w-2xl flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl border bg-background px-4 py-2 text-xs shadow-lg"
     >
-      <h2 id="cookie-banner-title" className="font-semibold">
-        Uso de cookies
-      </h2>
-      <p className="mt-1 text-muted-foreground">
-        Además de las cookies propias que hacen funcionar el sitio, ya están activas las de medición (Google
-        Analytics, Microsoft Clarity y Meta), para analizar el uso y medir nuestros anuncios. Con «Rechazar» las
-        desactivamos todas. Para más información, consultá nuestra{" "}
+      <p className="text-muted-foreground">
+        Usamos cookies de medición.{" "}
         <Link href="/privacidad#cookies" className="text-foreground underline underline-offset-2">
-          Política de privacidad
+          Más info
         </Link>
-        .
       </p>
-      <div className="mt-3 flex flex-wrap justify-end gap-2">
-        <Button variant="outline" size="sm" onClick={() => setConsent("denied")}>
+      <div className="flex gap-2">
+        <Button variant="outline" size="xs" onClick={() => setConsent("denied")}>
           Rechazar
         </Button>
-        <Button size="sm" onClick={() => setConsent("granted")}>
+        <Button size="xs" onClick={() => setConsent("granted")}>
           Aceptar
         </Button>
       </div>

@@ -13,7 +13,13 @@ The site has no newest-first order (only relevance, price, cuota and
 anticipo), so a new ad can land on any page: search() walks every page of
 the model (48 cards each, `?pidx=N`, `<link rel="next">` while there are
 more). The site is slow and answers 503 now and then, so each page is
-retried before the run gives up.
+retried before the run gives up. A later page that still fails keeps the
+cards read, as a partial read (SearchResults.complete False): never the
+target's last complete read (query._read) nor a step's base
+(pipeline/news.py), and tried again (crawl.retry_seconds). A first page
+or an ad's page answering 401, 403 or 429 pauses the source
+(CollectorBlocked, pipeline/breaker.py). The MAX_PAGES cap and a page without new cards still
+end a read taken as complete.
 """
 from __future__ import annotations
 import asyncio
@@ -27,7 +33,7 @@ import httpx
 from http_clients import async_client
 from bs4 import BeautifulSoup
 
-from .base import BaseScraper, Listing, ListingDetail
+from .base import BaseScraper, CollectorBlocked, Listing, ListingDetail, SearchResults
 from ._dates import publication_date
 from ._http import HEADERS, Page, dedupe, fetch_page, multiline_text, soup, text_of, to_int
 
@@ -87,7 +93,7 @@ def _price(container, block: str) -> tuple[float | None, str | None, str | None]
 
 
 class AutoCosmosScraper(BaseScraper):
-    DETAIL_PARSER_VERSION = 3
+    DETAIL_PARSER_VERSION = 4  # 4: a sold ad is gone ('vendido')
     name = "autocosmos"
     BASE = "https://www.autocosmos.com.ar"
     MAX_PAGES = 20             # 960 cards: a safety cap, no model comes close today
@@ -207,6 +213,12 @@ class AutoCosmosScraper(BaseScraper):
         car = doc.select_one("article[itemscope][itemtype*='Car']")
         if car is None or car.select_one(".car-specifics__name") is None:
             return ListingDetail(url, gone=True, gone_reason="sin vehículo en la página")
+        # A sold ad still answers 200 with the car: a "vendido" photo and
+        # "Este auto ya fue vendido" where the contact form was (Fiat Pulse
+        # 7b0c5ed1…, 24/10). Only in the ad, never in a related card.
+        if car.select_one(".m-vendido") is not None or "ya fue vendido" in (
+                text_of(car.select_one(".car-specifics__no-form")) or "").lower():
+            return ListingDetail(url, gone=True, gone_reason="vendido")
 
         def meta(prop: str) -> str | None:
             el = car.select_one(f"meta[itemprop='{prop}']")
@@ -284,7 +296,12 @@ class AutoCosmosScraper(BaseScraper):
                         url, r.status_code, pause, attempt + 1, self.RETRIES)
         raise AssertionError("unreachable")
 
-    async def search(self, filters: dict) -> list[Listing]:
+    async def search(self, filters: dict) -> SearchResults:
+        """Every page while there is a next one with new cards. The first
+        page fails the run unless it answers 200, or 404 or 410 (a model
+        without stock); a 401, 403 or 429 is the site turning us away, not
+        0 results, and pauses the source. A later one that fails or answers
+        anything but 200 makes the read partial."""
         out: list[Listing] = []
         seen: set[str] = set()
         async with async_client(
@@ -297,18 +314,25 @@ class AutoCosmosScraper(BaseScraper):
                 url = self._build_url(filters, page=p)
                 try:
                     r = await self._get(cx, url)
-                except httpx.HTTPError:
+                except httpx.HTTPError as e:
                     if p == 1:
                         raise
                     log.warning("autocosmos: %s failed, keeping the %d cards read", url, len(seen))
-                    break
+                    return SearchResults(out, complete=False,
+                                         reason=f"autocosmos: página {p} falló ({type(e).__name__})")
                 if r.status_code != 200:
-                    if p == 1 and r.status_code >= 500:
-                        r.raise_for_status()
-                    if p > 1:
-                        log.warning("autocosmos: %s answered %d, keeping the %d cards read",
-                                    url, r.status_code, len(seen))
-                    break
+                    if p == 1:
+                        if r.status_code in (401, 403, 429):
+                            raise CollectorBlocked(f"autocosmos: HTTP {r.status_code}")
+                        if r.status_code not in (404, 410):
+                            # Another 2xx too: a challenge page is no "0 results".
+                            raise httpx.HTTPStatusError(f"autocosmos: HTTP {r.status_code} for {url}",
+                                                        request=r.request, response=r)
+                        break
+                    log.warning("autocosmos: %s answered %d, keeping the %d cards read",
+                                url, r.status_code, len(seen))
+                    return SearchResults(out, complete=False,
+                                         reason=f"autocosmos: página {p} respondió {r.status_code}")
                 listings = [l for l in self.parse_search(r.text) if l.listing_id not in seen]
                 if not listings:
                     break
@@ -319,10 +343,20 @@ class AutoCosmosScraper(BaseScraper):
                         out.append(listing)
                 if not _NEXT_PAGE_RE.search(r.text):
                     break
-        return out
+            else:
+                log.warning("autocosmos: %s stops at %d pages with more to read, keeping the %d cards read",
+                            self._build_url(filters), self.MAX_PAGES, len(seen))
+        return SearchResults(out)
 
     async def fetch_detail_page(self, url: str) -> Page:
+        """Only a 404, a 410 or a page without the car proves the ad over
+        (parse_detail): a 401, 403 or 429 pauses the source, and any other
+        answer but 200 is retried later, never taken for a listing gone."""
         page = await fetch_page(url)
         if page.status >= 500:
             raise RuntimeError(f"autocosmos {page.status} for {url}")
+        if page.status in (401, 403, 429):
+            raise CollectorBlocked(f"autocosmos: HTTP {page.status} for {url}")
+        if page.status not in (200, 404, 410):
+            raise RuntimeError(f"autocosmos: HTTP {page.status} for {url}")
         return page

@@ -52,6 +52,9 @@ type Seed = {
   publishedDaysAgo?: number;
   description?: string;
   prices?: [number, number][]; // [daysAgo, price] history before the current price
+  source?: string; // mercadolibre by default
+  seenDaysAgo?: number; // last_seen_at, today by default
+  status?: "active" | "gone";
 };
 
 const OLIVOS: [string, number, number] = ["Olivos", -34.5102, -58.4922];
@@ -103,10 +106,10 @@ async function insertListing(externalId: string, s: Seed): Promise<number> {
     `insert into public.listings
        (source, external_id, url, title, description, make, model, trim, year, price, currency, price_usd,
         mileage_km, transmission, fuel, location_text, lat, lon, seller_type, published_at, first_seen_at,
-        last_seen_at, fingerprint, body_type)
-     values ('mercadolibre', $1, $2, $3, $4, 'Ford', 'Fiesta', 'Titanium', $5, $6, 'USD', $6, $7, $8, 'nafta',
+        last_seen_at, fingerprint, body_type, status)
+     values ($14, $1, $2, $3, $4, 'Ford', 'Fiesta', 'Titanium', $5, $6, 'USD', $6, $7, $8, 'nafta',
              $9, $10, $11, 'private', now() - make_interval(days => $12), now() - make_interval(days => $12),
-             now(), $1, $13)
+             now() - make_interval(days => $15), $1, $13, $16)
      returning id`,
     [
       externalId,
@@ -122,6 +125,9 @@ async function insertListing(externalId: string, s: Seed): Promise<number> {
       lon,
       days,
       s.bodyType ?? null,
+      s.source ?? "mercadolibre",
+      s.seenDaysAgo ?? 0,
+      s.status ?? "active",
     ],
   );
   const history = [...(s.prices ?? []), [0, s.price] as [number, number]];
@@ -182,6 +188,42 @@ export async function finishFirstCollection(profileId: number, make: string, mod
       [source, target.id],
     );
   }
+}
+
+/**
+ * Two more comparables for the listing page's "autos parecidos" (comparables
+ * fase 1, migration 20261105120000), at both ends of the price range so the
+ * list shows them whenever they are in the pool:
+ *   * an Autocity one last seen 3 days ago, which Autocity's complete read an
+ *     hour ago no longer saw: out of the pool;
+ *   * a Mercado Libre one that is gone: it still counts (0f348a8).
+ * Above the search's cap or gone, neither is backfilled.
+ */
+export async function seedConfirmationComparables(run: string): Promise<void> {
+  await insertListing(`${E2E_LISTING_PREFIX}unconfirmed-${run}`, {
+    key: "unconfirmed",
+    year: 2017,
+    km: 100_000,
+    price: 13_579, // the dearest Fiesta Titanium
+    source: "autocity",
+    publishedDaysAgo: 10,
+    seenDaysAgo: 3,
+  });
+  await insertListing(`${E2E_LISTING_PREFIX}gone-${run}`, {
+    key: "gone",
+    year: 2017,
+    km: 100_000,
+    price: 8_765, // the cheapest
+    publishedDaysAgo: 10,
+    seenDaysAgo: 2,
+    status: "gone",
+  });
+  await query(
+    `insert into public.crawl_targets (source, make, model, query, last_run_at, first_run_done)
+     values ('autocity', null, null, '{"inventory": true}', now() - interval '1 hour', true)
+     on conflict on constraint crawl_targets_unique do update
+       set last_run_at = excluded.last_run_at, query = crawl_targets.query || '{"inventory": true}'`,
+  );
 }
 
 /** A listing that "just appeared": a clear opportunity for the e2e search. */

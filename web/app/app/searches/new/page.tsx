@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { SearchLimit } from "@/lib/assisted";
 import { isEmailOnly, requireUser } from "@/lib/auth";
 import { webConfig } from "@/lib/config";
+import { track } from "@/lib/events";
 import { type PlanLimits, planPrice, searchCapacity } from "@/lib/pro";
 import type { SearchValues } from "@/lib/search-form";
 import { searchIntentPrompt } from "@/lib/search-intent";
@@ -29,6 +30,8 @@ export default async function NewSearchPage({ searchParams }: PageProps<"/app/se
     webConfig(),
     isEmailOnly(),
   ]);
+  // An email-only account comes from the landing with what it wants: here without it, the intent got lost on the way.
+  if (emailOnly && !prompt) await recordMissingIntent(supabase, user.id);
   // One model is one search: a request with more models than the plan has room for asks which to activate.
   const access = (snapshot ?? null) as PlanLimits | null;
   const capacity = searchCapacity(access);
@@ -108,4 +111,13 @@ export default async function NewSearchPage({ searchParams }: PageProps<"/app/se
       </Tabs>
     </div>
   );
+}
+
+/** search_intent_missing, once per account: an email-only sign-up without searches landed here without its prompt. */
+async function recordMissingIntent(supabase: Awaited<ReturnType<typeof createClient>>, userId: string) {
+  const [{ count: searches }, { count: recorded }] = await Promise.all([
+    supabase.from("search_profiles").select("id", { count: "exact", head: true }),
+    supabase.from("events").select("id", { count: "exact", head: true }).eq("name", "search_intent_missing"),
+  ]);
+  if (searches === 0 && recorded === 0) await track(supabase, userId, "search_intent_missing", {});
 }

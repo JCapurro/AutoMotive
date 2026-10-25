@@ -89,7 +89,7 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
   const name = vehicle(listing);
   const sourceName = listing.sources?.name ?? listing.source;
   const history = priceHistory(snapshots ?? []);
-  const similar = gone ? [] : await similarListings(supabase, listing, priceRef, cfg.comparables);
+  const similar = gone ? [] : await similarListings(supabase, listing, priceRef);
   const back = best ? `/app/searches/${best.search_profile_id}` : "/app";
 
   return (
@@ -536,35 +536,19 @@ function plain(text: string): string {
 }
 
 /**
- * A few of the listings behind the price comparison: public.comparables' pool
- * (same make and model, year ± tol, km ± tol%, seen in the window, no partial
- * prices nor reposts) at the level the score used, spread from cheapest to
- * dearest. The stored price_ref may predate a listing or two.
+ * A few of the listings behind the price comparison: public.comparable_pool,
+ * the same pool public.comparables() counts (same make and model, year ± tol,
+ * km ± tol%, seen in the window, no partial prices, and not one a later
+ * complete read of its source no longer saw), at the level the score used,
+ * spread from cheapest to dearest. The stored price_ref may predate a listing
+ * or two.
  */
-async function similarListings(
-  supabase: Supabase,
-  listing: Listing,
-  refs: PriceRef | null,
-  window: WebConfig["comparables"],
-): Promise<Similar[]> {
+async function similarListings(supabase: Supabase, listing: Listing, refs: PriceRef | null): Promise<Similar[]> {
   if (!refs || !listing.make || !listing.model) return [];
   const literal = (value: string) => value.replace(/[\\%_]/g, (c) => `\\${c}`);
   let query = supabase
-    .from("listings")
-    .select("id, make, model, trim, year, title, mileage_km, price_usd, source, sources(name)")
-    .neq("id", listing.id)
-    .ilike("make", literal(listing.make))
-    .ilike("model", literal(listing.model))
-    .gt("price_usd", 0)
-    .eq("price_partial", false)
-    .is("probable_repost_of", null)
-    .gte("last_seen_at", new Date(Date.now() - window.maxAgeDays * 86_400_000).toISOString());
-  if (listing.year) query = query.gte("year", listing.year - window.yearTol).lte("year", listing.year + window.yearTol);
-  if (listing.mileage_km) {
-    const lo = Math.floor(listing.mileage_km * (1 - window.kmTolPct / 100));
-    const hi = Math.ceil(listing.mileage_km * (1 + window.kmTolPct / 100));
-    query = query.or(`mileage_km.is.null,and(mileage_km.gte.${lo},mileage_km.lte.${hi})`);
-  }
+    .rpc("comparable_pool", { p_listing_id: listing.id })
+    .select("id, make, model, trim, year, title, mileage_km, price_usd, source, sources(name)");
   if (refs.level_used !== "model") {
     if (!listing.transmission) return [];
     query = query.eq("transmission", listing.transmission);

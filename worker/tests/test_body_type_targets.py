@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock, patch
 
 from collectors import REGISTRY
 from collectors._recency import BODY_TYPE_SPAN, DAY, PublicationWindow, target_window
+from collectors.base import SearchResults
 from db.legacy_filters import to_legacy, to_profile
 from pipeline import crawl, ingest as ingest_module
 from pipeline.crawl import BodyTypeTargets, TargetSpec, derive_targets, prefilter, scraper_filters
@@ -70,6 +71,12 @@ class BodyTypeTargetTests(unittest.TestCase):
         self.assertEqual(kavak.query, {"year_min": 2012, "km_max": 120_000, "price_usd_max": 25_000,
                                        "interval_seconds": 1800, "profile_ids": [1, 2]})
 
+    def test_a_target_by_body_type_reads_the_reference_band(self):
+        with patch.dict(REGISTRY, {"kavak": type("Kavak", (FAKES["kavak"],), {"YEAR_BAND": True})}):
+            [kavak] = derive_targets([suv(1, year_min=2016, sources=["kavak"])], SOURCES, body_types=BODY,
+                                     year_band=1)
+        self.assertEqual((kavak.query["year_min"], kavak.query["year_band"]), (2016, 1))
+
     def test_mercado_libre_keeps_its_publication_policy(self):
         [spec] = self.derive([suv(1, sources=["mercadolibre"])])
         self.assertEqual(spec.query["publication_policy"], crawl.POLICY_VERSION)
@@ -129,6 +136,12 @@ class ScraperFilterTests(unittest.TestCase):
         self.assertNotIn("marca", f)
         self.assertNotIn("modelo", f)
 
+    def test_a_body_type_always_reads_the_reference_band(self):
+        banded = dict(self.TARGET, query=dict(self.TARGET["query"], year_band=1))
+        with patch("collectors._recency.time.time", return_value=NOW):
+            for source in ("kavak", "mercadolibre"):
+                self.assertEqual(scraper_filters(dict(banded, source=source))["anio_min"], 2014, source)
+
 
 class BodyTypeWindowTests(unittest.TestCase):
     def window(self, source="mercadolibre", **target):
@@ -174,6 +187,12 @@ class PrefilterTests(unittest.TestCase):
         self.assertTrue(keep(dict(ok, price_usd=60_000, price_partial=True)))   # a down payment says nothing
         self.assertTrue(keep({"year": None, "mileage_km": None, "price_usd": None}))
 
+    def test_the_reference_band_keeps_a_year_below_the_lowest(self):
+        keep = prefilter(dict(self.TARGET, query=dict(self.TARGET["query"], year_band=1)))
+        ok = {"year": 2018, "mileage_km": 50_000, "price_usd": 18_000}
+        self.assertTrue(keep(dict(ok, year=2014)))
+        self.assertFalse(keep(dict(ok, year=2013)))
+
     def test_an_unbounded_query_keeps_everything(self):
         keep = prefilter({"body_type": "suv", "query": {}})
         self.assertTrue(keep({"year": 1980, "mileage_km": 900_000, "price_usd": 1_000_000}))
@@ -196,18 +215,29 @@ class IngestPrefilterTests(unittest.IsolatedAsyncioTestCase):
 
 
 class RunTargetTests(unittest.IsolatedAsyncioTestCase):
-    async def test_a_target_by_body_type_ingests_with_its_hint_and_prefilter(self):
+    TARGET = dict(ScraperFilterTests.TARGET, id=9, first_run_done=True, last_run_at=None,
+                  prefilter_rejected=["old-1", "gone"])
+
+    async def run_target(self, target: dict, ingest, *, not_news: frozenset[int] = frozenset(),
+                         complete: bool = True):
         class Kavak:
             BODY_TYPES = frozenset({"suv"})
             searched: list[dict] = []
 
             async def search(self, filters):
                 Kavak.searched.append(filters)
-                return []
+                return SearchResults([], complete=complete, reason=None if complete else "partial: page 2")
 
-        target = dict(ScraperFilterTests.TARGET, id=9, first_run_done=True, last_run_at=None,
-                      prefilter_rejected=["old-1", "gone"])
+        self.searched = Kavak.searched
+        with patch.dict(REGISTRY, {"kavak": Kavak}, clear=True), \
+                patch.object(crawl.runs, "start_run", AsyncMock(return_value=1)), \
+                patch.object(crawl.runs, "finish_run", AsyncMock(return_value=None)), \
+                patch.object(crawl.targets_repo, "set_prefilter_rejected", AsyncMock()) as self.remember, \
+                patch.object(crawl.news, "classify", AsyncMock(return_value=not_news)) as self.classify, \
+                patch.object(crawl, "ingest", AsyncMock(side_effect=ingest)) as self.ingested:
+            return await crawl.run_target(target)
 
+    async def test_a_target_by_body_type_ingests_with_its_hint_and_prefilter(self):
         async def ingest(items, *, target, keep):
             self.assertFalse(keep({"external_id": "old-2", "year": 2010}))     # dropped now
             self.assertTrue(keep({"external_id": "old-1", "year": 2020}))      # dropped before, kept now
@@ -215,19 +245,53 @@ class RunTargetTests(unittest.IsolatedAsyncioTestCase):
             result = IngestResult()
             result.events = [ListingEvent("listing_new", 31, "kavak", "old-1"),
                              ListingEvent("listing_new", 32, "kavak", "new")]
+            result.ids = {("kavak", "old-1"): 31, ("kavak", "new"): 32}
             return result
 
-        with patch.dict(REGISTRY, {"kavak": Kavak}, clear=True), \
-                patch.object(crawl.runs, "start_run", AsyncMock(return_value=1)), \
-                patch.object(crawl.runs, "finish_run", AsyncMock(return_value=None)), \
-                patch.object(crawl.targets_repo, "set_prefilter_rejected", AsyncMock()) as remember, \
-                patch.object(crawl, "ingest", AsyncMock(side_effect=ingest)) as ingested:
-            run = await crawl.run_target(target)
-        self.assertEqual(Kavak.searched, [{"carroceria": "suv", "anio_min": 2015, "km_max": 100_000}])
-        self.assertEqual(ingested.await_args.kwargs["target"], Target(None, None, "suv"))
-        # Old stock the prefilter let in later is backfill; the next run remembers what it dropped now.
+        run = await self.run_target(self.TARGET, ingest)
+        self.assertEqual(self.searched, [{"carroceria": "suv", "anio_min": 2015, "km_max": 100_000}])
+        self.assertEqual(self.ingested.await_args.kwargs["target"], Target(None, None, "suv"))
+        # Old stock the prefilter let in later is backfill; the next run remembers what it dropped now,
+        # which finish_target writes with what the read covered (crawl._run_one).
         self.assertEqual(run.backfill_ids, frozenset({31}))
-        remember.assert_awaited_once_with(9, {"old-2"})
+        self.assertEqual((run.rejected, run.read_covers), (frozenset({"old-2"}), {"year_min": 2015, "km_max": 100_000}))
+        self.remember.assert_not_awaited()
+        # The dropped one let in now is no step and gets no mark (pipeline/news.py).
+        self.assertEqual(self.classify.await_args.kwargs, {"run_id": 1, "first_run": False, "complete": True,
+                                                           "readmitted": frozenset({31})})
+
+    async def test_a_partial_read_adds_what_it_dropped_to_the_last_ones(self):
+        async def ingest(items, *, target, keep):
+            self.assertFalse(keep({"external_id": "old-2", "year": 2010}))
+            return IngestResult()
+
+        run = await self.run_target(self.TARGET, ingest, complete=False)
+        self.assertEqual((run.rejected, run.read_covers), (frozenset({"old-1", "gone", "old-2"}), None))
+        self.remember.assert_not_awaited()
+
+    async def test_news_ids_join_the_prefilter_backfill(self):
+        async def ingest(items, *, target, keep):
+            result = IngestResult()
+            result.events = [ListingEvent("listing_new", 31, "kavak", "old-1"),
+                             ListingEvent("listing_new", 33, "kavak", "step")]
+            result.ids = {("kavak", "old-1"): 31, ("kavak", "step"): 33}
+            return result
+
+        run = await self.run_target(self.TARGET, ingest, not_news=frozenset({33}))
+        self.assertEqual(run.backfill_ids, frozenset({31, 33}))
+
+    async def test_a_model_target_never_writes_prefilter_rejected(self):
+        async def ingest(items, *, target, keep):
+            self.assertIsNone(keep)
+            return IngestResult()
+
+        target = {"id": 4, "source": "kavak", "make": "Ford", "model": "Ka", "body_type": None,
+                  "query": {"year_min": 2015, "profile_ids": [1]}, "first_run_done": True, "last_run_at": None,
+                  "prefilter_rejected": []}
+        run = await self.run_target(target, ingest, not_news=frozenset({40}))
+        self.assertEqual(run.backfill_ids, frozenset({40}))
+        self.assertIsNone(run.rejected)
+        self.remember.assert_not_awaited()
 
 
 class PlatformHealthLabelTests(unittest.TestCase):

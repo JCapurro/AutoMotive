@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }) }));
-vi.mock("@/app/app/searches/actions", () => ({ saveSearch: vi.fn(), previewSearch: vi.fn() }));
+vi.mock("@/app/app/searches/actions", () => ({ saveSearch: vi.fn(), previewSearch: vi.fn(), relaxSuggestions: vi.fn() }));
 
 import { SearchForm } from "@/components/app/search-form";
 import type { Catalog } from "@/lib/catalog";

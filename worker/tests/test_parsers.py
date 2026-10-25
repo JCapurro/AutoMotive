@@ -163,6 +163,25 @@ class AutoCosmosParserTests(unittest.TestCase):
     def test_404_is_gone(self):
         self.assertTrue(autocosmos.AutoCosmosScraper.parse_detail("", "u", 404).gone)
 
+    def test_a_sold_ad_answering_200_is_gone(self):
+        # Fiat Pulse 7b0c5ed1…: out of the listing, its page still has the car,
+        # a "vendido" photo and "Este auto ya fue vendido".
+        url = "https://www.autocosmos.com.ar/auto/usado/fiat/pulse/13-drive/7b0c5ed1262b4223b2de21ea856abf07"
+        scraper = autocosmos.AutoCosmosScraper()
+        full = html("autocosmos_sold_detail.html")
+        for page in (full, scraper.slim_page(Page(200, url, full))):
+            detail = scraper.parse_detail(page, url)
+            self.assertEqual((detail.gone, detail.gone_reason), (True, "vendido"))
+
+    def test_a_live_ad_is_not_gone_whatever_its_related_cards_say(self):
+        for name in ("autocosmos_detail.html", "autocosmos_bodytype_detail.html"):
+            self.assertFalse(autocosmos.AutoCosmosScraper.parse_detail(html(name), "u").gone, name)
+        related = ('<article itemscope itemtype="http://schema.org/Car">'
+                   '<div class="car-specifics__image m-vendido"></div>'
+                   '<div class="car-specifics__no-form"><p>Este auto ya fue vendido</p></div></article>')
+        page = html("autocosmos_detail.html").replace("</body>", related + "</body>")
+        self.assertFalse(autocosmos.AutoCosmosScraper.parse_detail(page, "u").gone)
+
 
 class FacebookParserTests(unittest.TestCase):
     def test_card(self):

@@ -62,15 +62,28 @@ class CollectorBlocked(RuntimeError):
     session. The run fails (collector_runs) instead of looking like "0 results"."""
 
 
+# How a run that read only part of the source is recorded in collector_runs.error:
+# "partial: <the collector's reason>". Not a failure of the collector, so
+# tools/platform_health.py alerts only past PARTIAL_RUNS of them in a row.
+PARTIAL_PREFIX = "partial: "
+
+
 class SearchResults(list[Listing]):
-    """Keep usable results from a partial crawl without advancing its checkpoint."""
+    """Keep usable results from a partial crawl without advancing its checkpoint.
+
+    `date_skips`: the target's date memory after this scan (collectors/_recency.py,
+    Facebook), None when the collector keeps none. `probe`: counters about the
+    search page's own data, only logged (facebook.py, _FeedProbe)."""
 
     def __init__(self, items=(), *, complete: bool = True, reason: str | None = None,
-                 unknown_dates: int = 0):
+                 unknown_dates: int = 0, date_skips: list[str] | None = None,
+                 probe: dict | None = None):
         super().__init__(items)
         self.complete = complete
         self.reason = reason
         self.unknown_dates = unknown_dates
+        self.date_skips = date_skips
+        self.probe = probe
 
 
 @dataclass
@@ -100,6 +113,17 @@ class BaseScraper:
     # Body-type codes this collector can search without a make or model
     # (search() gets filters["carroceria"] and no "marca"/"modelo").
     BODY_TYPES: frozenset[str] = frozenset()
+    # Declare or raise it when search() comes to read more of the source than
+    # before (pages it didn't follow, a cap lifted): its targets carry it in
+    # query.coverage, and a new value starts their bootstrap over once, so the
+    # stock the wider read finds is backfill, not news (targets.sync_targets).
+    COVERAGE_VERSION: int | None = None
+    # Reads config.REFERENCE_YEAR_BAND past its searches' years (pipeline/crawl.py);
+    # off where each extra card costs a detail page.
+    YEAR_BAND: bool = True
+    # search() and fetch_detail_page() run in a child process that is killed
+    # past its timeout (collectors/_isolated.py): the logged-in browser ones.
+    ISOLATED: bool = False
 
     async def search(self, filters: dict) -> list[Listing]:
         raise NotImplementedError

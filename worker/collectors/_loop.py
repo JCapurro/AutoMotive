@@ -32,8 +32,21 @@ def _collector_loop() -> asyncio.AbstractEventLoop:
     return _loop
 
 
-async def run_collector(coro: Coroutine[Any, Any, T]) -> T:
+class CollectorTimeout(TimeoutError):
+    """A collector call ran past its `timeout` and was cancelled."""
+
+
+async def run_collector(coro: Coroutine[Any, Any, T], *, timeout: float | None = None) -> T:
+    """Await `coro` on the collectors' loop. With `timeout`, cancel it after
+    that many seconds and raise CollectorTimeout: a hung page must fail its
+    own run, never stall the loop that awaits it."""
     if sys.platform != "win32" or isinstance(asyncio.get_running_loop(), asyncio.ProactorEventLoop):
-        return await coro
-    future = asyncio.run_coroutine_threadsafe(coro, _collector_loop())
-    return await asyncio.wrap_future(future)
+        work = coro
+    else:
+        work = asyncio.wrap_future(asyncio.run_coroutine_threadsafe(coro, _collector_loop()))
+    if timeout is None:
+        return await work
+    try:
+        return await asyncio.wait_for(work, timeout)
+    except TimeoutError as exc:
+        raise CollectorTimeout(f"collector timed out after {timeout:g}s") from exc

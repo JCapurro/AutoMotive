@@ -133,6 +133,17 @@ class QueuePostgresTests(PostgresTestCase):
             self.assertEqual(await queue.running_runs(cx, 'autocosmos'), 1)
             self.assertEqual(await queue.running_runs(cx, 'facebook'), 0)
 
+    async def test_held_claims_count_the_live_claims_of_those_sources(self):
+        crawling, expired = await self.target('facebook', 'Ka'), await self.target('mercadolibre', 'Ka')
+        elsewhere = await self.target('kavak', 'Ka')
+        async with db.connection() as cx:
+            self.assertEqual(await queue.held_claims(cx, ['facebook', 'mercadolibre']), 0)
+            for target, seconds in ((crawling, 600), (expired, -1), (elsewhere, 600)):
+                await cx.execute("UPDATE crawl_targets SET claimed_by = 'vps:1', "
+                                 "claimed_until = now() + make_interval(secs => %s) WHERE id = %s", (seconds, target))
+        async with db.connection() as cx:
+            self.assertEqual(await queue.held_claims(cx, ['facebook', 'mercadolibre']), 1)
+
     async def test_kick_makes_only_active_targets_of_the_source_due_and_reports_them(self):
         first, second = await self.target(model='Fiesta'), await self.target(model='Focus')
         untouched = await self.target(model='Ka')

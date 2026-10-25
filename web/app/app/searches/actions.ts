@@ -18,6 +18,7 @@ import {
   toColumns,
   toFilters,
 } from "@/lib/search-form";
+import { type RelaxSuggestion, applyRelax, bestSuggestions, relaxVariants } from "@/lib/search-relax";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { Json } from "@/types/database";
@@ -28,9 +29,11 @@ export type SaveResult = { error?: string; fields?: Record<string, string>; save
  * came from, whether the user changed the proposal, and `stay` to get the new
  * id back instead of a redirect (several vehicles reviewed on one page).
  * `assisted_fallback`: the parse failed and the user filled the form by hand.
+ * `assisted_auto`: a single, unambiguous proposal saved without the user
+ * touching Guardar (lib/assisted-autosave.ts).
  */
 export type SaveOrigin = {
-  mode: "assisted" | "assisted_fallback";
+  mode: "assisted" | "assisted_fallback" | "assisted_auto";
   jobId: number | null;
   edited: boolean;
   stay: boolean;
@@ -90,8 +93,26 @@ function modelLessError(message: string): SaveResult | null {
   return null;
 }
 
-/** Create or edit a search (§12). The worker then stores its backfill. */
+/**
+ * Create or edit a search (§12). The worker then stores its backfill. A
+ * creation the server refuses is recorded (search_save_failed): a user who
+ * gave up after an error is otherwise invisible.
+ */
 export async function saveSearch(id: number | null, raw: SearchInput, origin?: SaveOrigin): Promise<SaveResult> {
+  const result = await save(id, raw, origin);
+  if (id == null && result.error) {
+    const user = await requireUser();
+    await track(await createClient(), user.id, "search_save_failed", {
+      reason: result.error,
+      fields: Object.keys(result.fields ?? {}),
+      llm_job_id: origin?.jobId ?? null,
+      mode: origin?.mode ?? "structured",
+    });
+  }
+  return result;
+}
+
+async function save(id: number | null, raw: SearchInput, origin?: SaveOrigin): Promise<SaveResult> {
   const user = await requireUser();
   const parsed = SearchInput.safeParse(raw);
   if (!parsed.success) {
@@ -253,6 +274,40 @@ export async function finishAssisted(jobId: number): Promise<void> {
   await recordSearchRequest(await createClient(), user.id, jobId, "assisted");
 }
 
+/**
+ * What the assisted request showed (sección 8.4, medición): the review screen
+ * with its proposals, or the manual form after a failed read. Once per job and
+ * screen, whatever the re-renders. preview_count: how many current listings
+ * the single proposal matches (a review that shows "0" may explain a drop-off).
+ */
+export async function trackAssistedView(
+  jobId: number | null,
+  view:
+    | { name: "assisted_review_shown"; drafts: number; resolved: number; values?: SearchInput; autosaved?: boolean }
+    | { name: "assisted_fallback_shown"; reason: string },
+): Promise<void> {
+  const user = await requireUser();
+  if (jobId != null && (!Number.isSafeInteger(jobId) || jobId <= 0)) return;
+  const supabase = await createClient();
+  if (jobId != null) {
+    const { data: seen } = await supabase.from("events").select("id").eq("name", view.name)
+      .eq("props->>llm_job_id", String(jobId)).limit(1);
+    if (seen?.length) return;
+  }
+  if (view.name === "assisted_fallback_shown") {
+    await track(supabase, user.id, view.name, { llm_job_id: jobId, reason: String(view.reason).slice(0, 40) });
+    return;
+  }
+  const preview = view.values ? await previewSearch(view.values) : null;
+  await track(supabase, user.id, view.name, {
+    llm_job_id: jobId,
+    drafts: view.drafts,
+    resolved: view.resolved,
+    autosaved: view.autosaved ?? false,
+    ...(preview ? { preview_count: preview.count } : {}),
+  });
+}
+
 /** What the user typed for an assisted job (RLS: only their own jobs). */
 async function jobText(supabase: Awaited<ReturnType<typeof createClient>>, jobId: number): Promise<string | null> {
   const { data } = await supabase.from("llm_jobs").select("input").eq("id", jobId).maybeSingle();
@@ -353,4 +408,31 @@ export async function deleteSearch(id: number): Promise<void> {
   const { error } = await supabase.from("search_profiles").delete().eq("id", id);
   if (!error) await track(supabase, user.id, "search_profile_deleted", { profile_id: id });
   redirect("/app");
+}
+
+/**
+ * Zero results in the preview (lib/search-relax.ts): the search with one filter
+ * loosened at a time, counted in parallel (at most MAX_RELAX_VARIANTS
+ * preview_search calls); the best ones with some listing. Only searches with a model.
+ */
+export async function relaxSuggestions(raw: SearchInput): Promise<RelaxSuggestion[]> {
+  await requireUser();
+  const parsed = SearchInput.safeParse(raw);
+  if (!parsed.success) return [];
+  const variants = relaxVariants(parsed.data);
+  if (!variants.length) return [];
+  const supabase = await createClient();
+  const sources = await enabledSources(supabase);
+  const counted = await Promise.all(variants.map(async (variant) => {
+    const v = applyRelax(parsed.data, variant.change);
+    const { data, error } = await supabase.rpc("preview_search", {
+      p_filters: toFilters(v, sources) as Json,
+      p_origin_lat: v.location?.lat,
+      p_origin_lon: v.location?.lon,
+      p_radius_km: v.location?.radius_km,
+    });
+    const count = error ? 0 : Number((data as { count?: unknown } | null)?.count ?? 0);
+    return { ...variant, count: Number.isFinite(count) ? count : 0 };
+  }));
+  return bestSuggestions(counted);
 }

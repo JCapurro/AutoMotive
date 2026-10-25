@@ -149,15 +149,28 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
-                },"crawl_targets": {
+                },"catalog_misses": {
                   Row: {
-                    "active": boolean,"body_type": string | null,"created_at": string,"first_run_done": boolean,"id": number,"last_run_at": string | null,"make": string | null,"model": string | null,"next_run_at": string | null,"prefilter_rejected": string[],"query": NonNullable<Json>,"source": string,"updated_at": string
+                    "count": number,"first_seen_at": string,"last_llm_job_id": number | null,"last_seen_at": string,"make": string | null,"said": string
                   }
                   Insert: {
-                    "active"?: boolean,"body_type"?: string | null,"created_at"?: string,"first_run_done"?: boolean,"id"?: never,"last_run_at"?: string | null,"make"?: string | null,"model"?: string | null,"next_run_at"?: string | null,"prefilter_rejected"?: string[],"query"?: NonNullable<Json>,"source": string,"updated_at"?: string
+                    "count"?: number,"first_seen_at"?: string,"last_llm_job_id"?: number | null,"last_seen_at"?: string,"make"?: string | null,"said": string
                   }
                   Update: {
-                    "active"?: boolean,"body_type"?: string | null,"created_at"?: string,"first_run_done"?: boolean,"id"?: never,"last_run_at"?: string | null,"make"?: string | null,"model"?: string | null,"next_run_at"?: string | null,"prefilter_rejected"?: string[],"query"?: NonNullable<Json>,"source"?: string,"updated_at"?: string
+                    "count"?: number,"first_seen_at"?: string,"last_llm_job_id"?: number | null,"last_seen_at"?: string,"make"?: string | null,"said"?: string
+                  }
+                  Relationships: [
+
+                  ]
+                },"crawl_targets": {
+                  Row: {
+                    "active": boolean,"body_type": string | null,"created_at": string,"first_run_done": boolean,"id": number,"last_full_read_at": string | null,"last_run_at": string | null,"make": string | null,"model": string | null,"next_run_at": string | null,"prefilter_rejected": string[],"query": NonNullable<Json>,"source": string,"updated_at": string
+                  }
+                  Insert: {
+                    "active"?: boolean,"body_type"?: string | null,"created_at"?: string,"first_run_done"?: boolean,"id"?: never,"last_full_read_at"?: string | null,"last_run_at"?: string | null,"make"?: string | null,"model"?: string | null,"next_run_at"?: string | null,"prefilter_rejected"?: string[],"query"?: NonNullable<Json>,"source": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "active"?: boolean,"body_type"?: string | null,"created_at"?: string,"first_run_done"?: boolean,"id"?: never,"last_full_read_at"?: string | null,"last_run_at"?: string | null,"make"?: string | null,"model"?: string | null,"next_run_at"?: string | null,"prefilter_rejected"?: string[],"query"?: NonNullable<Json>,"source"?: string,"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -252,13 +265,13 @@ isOneToOne: false
                   ]
                 },"listings": {
                   Row: {
-                    "attributes": NonNullable<Json>,"body_type": string | null,"currency": string | null,"description": string | null,"description_facts": Json | null,"detail_checked_at": string | null,"enriched_at": string | null,"external_id": string,"fingerprint": string | null,"first_seen_at": string,"fuel": string | null,"id": number,"images": NonNullable<Json>,"last_seen_at": string,"lat": number | null,"location_text": string | null,"lon": number | null,"make": string | null,"mileage_km": number | null,"model": string | null,"normalization_confidence": number | null,"price": number | null,"price_partial": boolean,"price_partial_reason": string | null,"price_published": number | null,"price_published_currency": string | null,"price_source": string,"price_usd": number | null,"probable_repost_of": number | null,"published_at": string | null,"seller_name": string | null,"seller_type": string | null,"source": string,"status": Database["public"]['Enums']["listing_status"],"title": string,"transmission": string | null,"trim": string | null,"url": string,"year": number | null
+                    "attributes": NonNullable<Json>,"body_type": string | null,"currency": string | null,"description": string | null,"description_facts": Json | null,"detail_checked_at": string | null,"enriched_at": string | null,"external_id": string,"fingerprint": string | null,"first_seen_at": string,"fuel": string | null,"id": number,"images": NonNullable<Json>,"last_full_seen_at": string | null,"last_seen_at": string,"lat": number | null,"location_text": string | null,"lon": number | null,"make": string | null,"mileage_km": number | null,"model": string | null,"normalization_confidence": number | null,"price": number | null,"price_partial": boolean,"price_partial_reason": string | null,"price_published": number | null,"price_published_currency": string | null,"price_source": string,"price_usd": number | null,"probable_repost_of": number | null,"published_at": string | null,"seller_name": string | null,"seller_type": string | null,"source": string,"status": Database["public"]['Enums']["listing_status"],"title": string,"transmission": string | null,"trim": string | null,"url": string,"year": number | null
                   }
                   Insert: {
-                    "attributes"?: NonNullable<Json>,"body_type"?: string | null,"currency"?: string | null,"description"?: string | null,"description_facts"?: Json | null,"detail_checked_at"?: string | null,"enriched_at"?: string | null,"external_id": string,"fingerprint"?: string | null,"first_seen_at"?: string,"fuel"?: string | null,"id"?: never,"images"?: NonNullable<Json>,"last_seen_at"?: string,"lat"?: number | null,"location_text"?: string | null,"lon"?: number | null,"make"?: string | null,"mileage_km"?: number | null,"model"?: string | null,"normalization_confidence"?: number | null,"price"?: number | null,"price_partial"?: boolean,"price_partial_reason"?: string | null,"price_published"?: number | null,"price_published_currency"?: string | null,"price_source"?: string,"price_usd"?: number | null,"probable_repost_of"?: number | null,"published_at"?: string | null,"seller_name"?: string | null,"seller_type"?: string | null,"source": string,"status"?: Database["public"]['Enums']["listing_status"],"title": string,"transmission"?: string | null,"trim"?: string | null,"url": string,"year"?: number | null
+                    "attributes"?: NonNullable<Json>,"body_type"?: string | null,"currency"?: string | null,"description"?: string | null,"description_facts"?: Json | null,"detail_checked_at"?: string | null,"enriched_at"?: string | null,"external_id": string,"fingerprint"?: string | null,"first_seen_at"?: string,"fuel"?: string | null,"id"?: never,"images"?: NonNullable<Json>,"last_full_seen_at"?: string | null,"last_seen_at"?: string,"lat"?: number | null,"location_text"?: string | null,"lon"?: number | null,"make"?: string | null,"mileage_km"?: number | null,"model"?: string | null,"normalization_confidence"?: number | null,"price"?: number | null,"price_partial"?: boolean,"price_partial_reason"?: string | null,"price_published"?: number | null,"price_published_currency"?: string | null,"price_source"?: string,"price_usd"?: number | null,"probable_repost_of"?: number | null,"published_at"?: string | null,"seller_name"?: string | null,"seller_type"?: string | null,"source": string,"status"?: Database["public"]['Enums']["listing_status"],"title": string,"transmission"?: string | null,"trim"?: string | null,"url": string,"year"?: number | null
                   }
                   Update: {
-                    "attributes"?: NonNullable<Json>,"body_type"?: string | null,"currency"?: string | null,"description"?: string | null,"description_facts"?: Json | null,"detail_checked_at"?: string | null,"enriched_at"?: string | null,"external_id"?: string,"fingerprint"?: string | null,"first_seen_at"?: string,"fuel"?: string | null,"id"?: never,"images"?: NonNullable<Json>,"last_seen_at"?: string,"lat"?: number | null,"location_text"?: string | null,"lon"?: number | null,"make"?: string | null,"mileage_km"?: number | null,"model"?: string | null,"normalization_confidence"?: number | null,"price"?: number | null,"price_partial"?: boolean,"price_partial_reason"?: string | null,"price_published"?: number | null,"price_published_currency"?: string | null,"price_source"?: string,"price_usd"?: number | null,"probable_repost_of"?: number | null,"published_at"?: string | null,"seller_name"?: string | null,"seller_type"?: string | null,"source"?: string,"status"?: Database["public"]['Enums']["listing_status"],"title"?: string,"transmission"?: string | null,"trim"?: string | null,"url"?: string,"year"?: number | null
+                    "attributes"?: NonNullable<Json>,"body_type"?: string | null,"currency"?: string | null,"description"?: string | null,"description_facts"?: Json | null,"detail_checked_at"?: string | null,"enriched_at"?: string | null,"external_id"?: string,"fingerprint"?: string | null,"first_seen_at"?: string,"fuel"?: string | null,"id"?: never,"images"?: NonNullable<Json>,"last_full_seen_at"?: string | null,"last_seen_at"?: string,"lat"?: number | null,"location_text"?: string | null,"lon"?: number | null,"make"?: string | null,"mileage_km"?: number | null,"model"?: string | null,"normalization_confidence"?: number | null,"price"?: number | null,"price_partial"?: boolean,"price_partial_reason"?: string | null,"price_published"?: number | null,"price_published_currency"?: string | null,"price_source"?: string,"price_usd"?: number | null,"probable_repost_of"?: number | null,"published_at"?: string | null,"seller_name"?: string | null,"seller_type"?: string | null,"source"?: string,"status"?: Database["public"]['Enums']["listing_status"],"title"?: string,"transmission"?: string | null,"trim"?: string | null,"url"?: string,"year"?: number | null
                   }
                   Relationships: [
                     {
@@ -1045,6 +1058,14 @@ isOneToOne: false
             "commercial_access_active":
 { Args: { "p_user": string }; Returns: boolean
                            },
+"comparable_pool":
+{ Args: { "p_km_tol_pct"?: number,"p_listing_id": number,"p_max_age_days"?: number,"p_year_tol"?: number }; Returns: Database["public"]["Tables"]["listings"]["Row"][]
+                          SetofOptions: {
+        from: "*"
+        to: "listings"
+        isOneToOne: false
+        isSetofReturn: true
+      } },
 "comparables":
 { Args: { "p_km_tol_pct"?: number,"p_listing_id": number,"p_max_age_days"?: number,"p_min_n"?: number,"p_year_tol"?: number }; Returns: Json
                            },

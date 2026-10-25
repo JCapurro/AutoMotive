@@ -1,12 +1,12 @@
 "use client";
 
-import { Check, Loader2, PenLine, Plus, RotateCcw, Sparkles, Trash2 } from "lucide-react";
+import { BellRing, Check, CircleAlert, Loader2, PenLine, Plus, RotateCcw, Sparkles, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 
-import { finishAssisted, startAssisted } from "@/app/app/searches/actions";
+import { type SaveResult, finishAssisted, saveSearch, startAssisted, trackAssistedView } from "@/app/app/searches/actions";
 import { SearchForm } from "@/components/app/search-form";
 import { SearchPromptInput } from "@/components/search-prompt-input";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -30,7 +30,9 @@ import {
 import type { Catalog } from "@/lib/catalog";
 import type { SearchValues } from "@/lib/search-form";
 import type { DetectedLocation } from "@/lib/search-location";
+import { autoSaveValues, sameProposal } from "@/lib/assisted-autosave";
 import { roughDraft } from "@/lib/assisted-fallback";
+import { analyticsEvent } from "@/lib/google-analytics";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
@@ -44,26 +46,44 @@ type Reviewed = {
   savedId?: number;
   /** Added by the user on the review screen, not found in the text. */
   added?: boolean;
+  /** The worker matched it to the catalog (AssistedDraft.resolved). */
+  resolved?: boolean;
 };
 
 type Phase =
   | { kind: "idle" }
   | { kind: "waiting"; jobId: number }
-  | { kind: "review"; jobId: number; drafts: Reviewed[]; active: number }
+  /**
+   * `error`: the autosave failed, so the proposal is back to review.
+   * `repeated`: a rewritten request read exactly as the previous one.
+   */
+  | { kind: "review"; jobId: number; drafts: Reviewed[]; active: number; error?: string; repeated?: boolean }
+  /** A single unambiguous proposal being saved without the user (lib/assisted-autosave.ts). */
+  | { kind: "autosaving"; jobId: number; draft: Reviewed }
+  /** …and saved: the form below edits that search. */
+  | { kind: "active"; jobId: number; draft: Reviewed; savedId: number }
   /** More models than the plan has room for: pick which ones to review. */
   | { kind: "choose"; jobId: number; drafts: Reviewed[]; selected: number[] }
   /** The plan has no room for another active search. */
   | { kind: "full"; jobId: number; found: number }
-  | { kind: "failed"; jobId: number | null; reason: "error" | "empty" | "unavailable" };
+  | { kind: "failed"; jobId: number | null; reason: FailReason };
+
+/** Why the form took over: the job failed, its output didn't parse, no vehicle, the deadline, no worker. */
+type FailReason = "error" | "invalid" | "empty" | "timeout" | "unavailable";
 
 type JobRow = { status: string; output: unknown };
 
 // Sección 8.4, paso 6: the structured form takes over.
-const FALLBACK_TITLE = {
-  error: "No pudimos leer tu descripción automáticamente. Revisá y completá los datos del auto abajo.",
+const UNREAD = "No pudimos leer tu descripción automáticamente. Revisá y completá los datos del auto abajo.";
+const FALLBACK_TITLE: Record<FailReason, string> = {
+  error: UNREAD,
+  invalid: UNREAD,
+  timeout: UNREAD,
   empty: "No encontramos una marca y modelo en tu descripción. Completá los datos del auto abajo.",
-  unavailable: "No pudimos leer tu descripción automáticamente. Revisá y completá los datos del auto abajo.",
-} as const;
+  unavailable: UNREAD,
+};
+
+const AUTOSAVE_FAILED = "No pudimos activar tu búsqueda automáticamente. Revisala y tocá «Crear búsqueda».";
 
 /**
  * Modo asistido (§12, sección 8.4): the user writes what they want, the
@@ -71,7 +91,8 @@ const FALLBACK_TITLE = {
  * pre-filled structured form to correct and confirm. If the LLM fails, times
  * out or finds no vehicle, the empty structured form takes over. With
  * enforced plan limits (`limit`), a request with more models than the plan's
- * room first asks which ones to activate.
+ * room first asks which ones to activate. A single proposal without doubts is
+ * saved at once (autosave) and the form below adjusts the saved search.
  */
 export function AssistedSearch({
   catalog,
@@ -101,6 +122,14 @@ export function AssistedSearch({
   const router = useRouter();
   const autoStarted = useRef(false);
   const requestInFlight = useRef(false);
+  // Jobs already autosaved and screens already recorded: StrictMode and re-renders run effects twice.
+  const autosaved = useRef(new Set<number>());
+  const tracked = useRef(new Set<string>());
+  // What the last review proposed, to notice a rewritten request read the same way.
+  const lastProposal = useRef<SearchValues[] | null>(null);
+  const reviewRef = useRef<HTMLDivElement>(null);
+  // The review form's own button on screen: the sticky one (mobile) steps aside.
+  const [formButtonVisible, setFormButtonVisible] = useState(false);
 
   const sendPrompt = useCallback((prompt: string) => {
     if (requestInFlight.current) return;
@@ -153,7 +182,7 @@ export function AssistedSearch({
       }
       const parsed = AssistedOutput.safeParse(row.output);
       if (!parsed.success) {
-        setPhase({ kind: "failed", jobId: waitingJob, reason: "error" });
+        setPhase({ kind: "failed", jobId: waitingJob, reason: "invalid" });
       } else if (!parsed.data.drafts.length) {
         setPhase({ kind: "failed", jobId: waitingJob, reason: "empty" });
       } else {
@@ -161,13 +190,47 @@ export function AssistedSearch({
           title: draftTitle(draft, i),
           ...draftToValues(draft, base, modelLessSearch),
           state: "pending",
+          resolved: draft.resolved,
         }));
         const next = afterParse(drafts.length, limit);
-        if (next === "choose") setPhase({ kind: "choose", jobId: waitingJob, drafts, selected: [] });
+        const auto = next === "review" && drafts.length === 1
+          ? autoSaveValues({ drafts: parsed.data.drafts, values: drafts[0].values, notes: drafts[0].notes, catalog, limit, approximateLocation })
+          : null;
+        if (auto) {
+          setPhase({ kind: "autosaving", jobId: waitingJob, draft: drafts[0] });
+          void autoSave(waitingJob, drafts[0], auto);
+        } else if (next === "choose") setPhase({ kind: "choose", jobId: waitingJob, drafts, selected: [] });
         else if (next === "full") {
           setPhase({ kind: "full", jobId: waitingJob, found: drafts.length });
           void finishAssisted(waitingJob);
-        } else setPhase({ kind: "review", jobId: waitingJob, active: 0, drafts });
+        } else {
+          const proposal = drafts.map((d) => d.values);
+          const previous = lastProposal.current;
+          const repeated = previous != null && previous.length === proposal.length && proposal.every((v, i) => sameProposal(v, previous[i]));
+          lastProposal.current = proposal;
+          setPhase({ kind: "review", jobId: waitingJob, active: 0, drafts, repeated });
+        }
+      }
+    };
+
+    // Once per job, whatever the re-renders. A refusal (or a network error) goes back to the review with the reason.
+    const autoSave = async (jobId: number, draft: Reviewed, values: SearchValues) => {
+      if (autosaved.current.has(jobId)) return;
+      autosaved.current.add(jobId);
+      let result: SaveResult;
+      try {
+        result = await saveSearch(null, values, { mode: "assisted_auto", jobId, edited: false, stay: true });
+      } catch {
+        result = { error: AUTOSAVE_FAILED };
+      }
+      if (result.savedId != null) {
+        analyticsEvent("search", { search_type: "assisted" });
+        analyticsEvent("search_created", { search_type: "assisted" });
+        setPhase({ kind: "active", jobId, draft: { ...draft, values, state: "saved", savedId: result.savedId }, savedId: result.savedId });
+        void finishAssisted(jobId);
+      } else {
+        lastProposal.current = [draft.values];
+        setPhase({ kind: "review", jobId, active: 0, drafts: [draft], error: result.error ?? AUTOSAVE_FAILED });
       }
     };
 
@@ -194,7 +257,7 @@ export function AssistedSearch({
     const deadline = setTimeout(() => {
       if (settled) return;
       settled = true;
-      setPhase({ kind: "failed", jobId: waitingJob, reason: "error" });
+      setPhase({ kind: "failed", jobId: waitingJob, reason: "timeout" });
     }, ASSISTED_DEADLINE_MS);
 
     return () => {
@@ -203,7 +266,49 @@ export function AssistedSearch({
       clearTimeout(deadline);
       if (channel) void supabase.removeChannel(channel);
     };
-  }, [waitingJob, supabase, base, limit, modelLessSearch]);
+  }, [waitingJob, supabase, base, limit, modelLessSearch, catalog, approximateLocation]);
+
+  // Medición (sección 8.4): what each request ended up showing, once per job and screen.
+  const shownKey = phase.kind === "review" || phase.kind === "active" || phase.kind === "choose" || phase.kind === "full"
+    ? `review:${phase.jobId}`
+    : phase.kind === "failed" ? `fallback:${phase.jobId ?? "none"}:${phase.reason}` : null;
+  useEffect(() => {
+    if (!shownKey || tracked.current.has(shownKey)) return;
+    tracked.current.add(shownKey);
+    if (phase.kind === "failed") {
+      void trackAssistedView(phase.jobId, { name: "assisted_fallback_shown", reason: phase.reason });
+      return;
+    }
+    if (phase.kind !== "review" && phase.kind !== "active" && phase.kind !== "choose") return;
+    const drafts = phase.kind === "active" ? [phase.draft] : phase.drafts;
+    void trackAssistedView(phase.jobId, {
+      name: "assisted_review_shown",
+      drafts: drafts.length,
+      resolved: drafts.filter((d) => d.resolved).length,
+      values: drafts.length === 1 ? drafts[0].values : undefined,
+      autosaved: phase.kind === "active",
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per screen: shownKey names it
+  }, [shownKey]);
+
+  // The same proposal again: point at the button that's missing.
+  const repeatedJob = phase.kind === "review" && phase.repeated ? phase.jobId : null;
+  useEffect(() => {
+    if (repeatedJob == null) return;
+    const button = reviewRef.current?.querySelector<HTMLButtonElement>("section:not([hidden]) form button[type=submit]");
+    button?.scrollIntoView({ behavior: "smooth", block: "center" });
+    button?.focus({ preventScroll: true });
+  }, [repeatedJob]);
+
+  const reviewedDraft = phase.kind === "review" ? `${phase.jobId}:${phase.active}:${phase.drafts[phase.active]?.state}` : null;
+  useEffect(() => {
+    if (reviewedDraft == null) return;
+    const button = reviewRef.current?.querySelector("section:not([hidden]) form button[type=submit]");
+    if (!button || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(([entry]) => setFormButtonVisible(entry.isIntersecting));
+    observer.observe(button);
+    return () => observer.disconnect();
+  }, [reviewedDraft]);
 
   function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -250,6 +355,54 @@ export function AssistedSearch({
     }
   }, [done, savedCount, reviewJob, router]);
 
+  if (phase.kind === "autosaving") {
+    return (
+      <div className="space-y-4">
+        <RequestSummary text={text} onEdit={() => setPhase({ kind: "idle" })}>
+          Encontramos «{phase.draft.title}» en tu pedido.
+        </RequestSummary>
+        <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden /> Activando tu búsqueda…
+        </p>
+      </div>
+    );
+  }
+
+  if (phase.kind === "active") {
+    return (
+      <div className="space-y-4">
+        <Alert data-testid="assisted-active">
+          <BellRing aria-hidden />
+          <AlertTitle>Tu búsqueda ya está activa</AlertTitle>
+          <AlertDescription>
+            <p>
+              Te avisamos cuando aparezca un «{phase.draft.title}» que coincida. Si querés ajustar algo, cambialo abajo y
+              tocá «Guardar cambios».
+            </p>
+            <p>
+              <Link href={`/app/searches/${phase.savedId}`} className="font-medium underline underline-offset-3">
+                Ver la búsqueda
+              </Link>
+            </p>
+          </AlertDescription>
+        </Alert>
+        <RequestSummary text={text} onEdit={() => setPhase({ kind: "idle" })}>
+          Así leímos tu pedido. Escribir otro crea una búsqueda nueva.
+        </RequestSummary>
+        <SearchForm
+          catalog={catalog}
+          sources={sources}
+          initial={phase.draft.values}
+          profileId={phase.savedId}
+          approximateLocation={approximateLocation}
+          notes={phase.draft.notes}
+          thresholdAlerts={thresholdAlerts}
+          modelLessSearch={modelLessSearch}
+        />
+      </div>
+    );
+  }
+
   if (phase.kind === "review") {
     const single = phase.drafts.length === 1;
     const found = phase.drafts.filter((d) => !d.added).length;
@@ -260,8 +413,23 @@ export function AssistedSearch({
         <Plus aria-hidden /> Agregar otro vehículo
       </Button>
     ) : null;
+    // Mobile: the form's own button is below every field; this one is always at hand.
+    const submitActive = () =>
+      reviewRef.current?.querySelector<HTMLFormElement>("section:not([hidden]) form")?.requestSubmit();
+    const pending = phase.drafts[phase.active]?.state === "pending";
     return (
-      <div className="space-y-4">
+      <div ref={reviewRef} className="space-y-4 pb-20 lg:pb-0">
+        <Alert data-testid="assisted-step-left" variant={phase.error ? "destructive" : "default"}>
+          {phase.error ? <CircleAlert aria-hidden /> : <BellRing aria-hidden />}
+          <AlertTitle>{phase.error ?? "Falta un paso: guardá para activar las alertas"}</AlertTitle>
+          {phase.repeated ? (
+            <AlertDescription data-testid="assisted-repeated">
+              Leímos tu pedido igual que la vez anterior: la búsqueda ya está lista, solo falta guardarla.
+            </AlertDescription>
+          ) : phase.error ? (
+            <AlertDescription>Falta un paso: guardá para activar las alertas.</AlertDescription>
+          ) : null}
+        </Alert>
         <RequestSummary text={text} onEdit={() => setPhase({ kind: "idle" })}>
           {found === 1
             ? "Encontramos este vehículo en tu pedido. Revisá los filtros y corregí lo que haga falta antes de guardar."
@@ -345,6 +513,14 @@ export function AssistedSearch({
             )}
           </section>
         ))}
+
+        {pending && !formButtonVisible ? (
+          <div className="fixed inset-x-0 bottom-[calc(3.75rem+env(safe-area-inset-bottom))] z-30 border-t bg-background/95 p-3 backdrop-blur md:bottom-0 lg:hidden">
+            <Button type="button" className="h-11 w-full text-base" onClick={submitActive} data-testid="assisted-sticky-save">
+              Guardar y activar alertas
+            </Button>
+          </div>
+        ) : null}
       </div>
     );
   }

@@ -15,7 +15,9 @@ class ConfigTests(unittest.TestCase):
         try:
             with patch.object(dotenv, "load_dotenv"), patch.dict(os.environ, {}, clear=True):
                 config = importlib.import_module("config")
-            self.assertEqual(config.TICK_INTERVAL_SECONDS, 300)
+            self.assertEqual(config.TICK_INTERVAL_SECONDS, 15)
+            self.assertEqual(config.COLLECTOR_TIMEOUT_SECONDS, 2400)
+            self.assertEqual(config.DETAIL_TIMEOUT_SECONDS, 180)
             self.assertEqual(config.ENRICH_TICK_SECONDS, 300)
             self.assertEqual(config.WATCHLIST_TICK_SECONDS, 3600)
             self.assertFalse(hasattr(config, "ALERT_RESCRAPE_INTERVAL_SECONDS"))

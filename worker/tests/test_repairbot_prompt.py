@@ -44,7 +44,7 @@ def test_system_prompt_states_the_policy():
             'saltear captchas, muros de login', 'prueba de regresión', '`onlycarsusados` y `sc_clasificados`',
             '`"supported": false`', 'no hacés commit, push, deploy ni reinicios',
             'cambio mínimo', '`needs_human`', '`external`', '`recovered`', '`no_fix`', '`fixed`',
-            '`human_action`', '`retry_in_minutes`', 'Nada de `VAR=valor`', '`--author=x`', 'No existen `rm`'):
+            '`human_action`', '`retry_in_minutes`', 'empieza con `partial:`', 'Nada de `VAR=valor`', '`--author=x`', 'No existen `rm`'):
         assert expected in text, expected
     assert '\\' not in text.replace('\\n', '')   # Git Bash reads forward slashes
     assert not re.search(r'(?<!TEST_)DATABASE_URL', text) and 'automotive-vps' not in text

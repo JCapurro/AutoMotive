@@ -134,6 +134,14 @@ class UnknownTests(unittest.TestCase):
         self.assertIsNone(match(fiesta_listing(model="Focus"), fiesta_profile()))
         self.assertIsNone(match(fiesta_listing(mileage_km=180_000), fiesta_profile()))
 
+    def test_a_band_listing_never_matches_its_model_search(self):
+        """The reference year band (pipeline/crawl.py) reads a Ka 2009 for a search from 2010: no match."""
+        ka = fiesta_listing(model="Ka", title="Ford Ka 1.5 SE 2009", trim="SE", year=2009, price=5_000.0,
+                            price_usd=5_000.0)
+        profile = fiesta_profile(model="Ka", trims=[], year_min=2010, year_max=None, price_max=None)
+        self.assertIsNone(evaluate(ka, profile, price_ref=MARKET, cfg=CFG, now=NOW, fx_rate=FX))
+        self.assertIsNotNone(evaluate(dict(ka, year=2010), profile, price_ref=MARKET, cfg=CFG, now=NOW, fx_rate=FX))
+
     def test_a_non_strict_trim_is_soft_and_a_strict_one_is_hard(self):
         sel = fiesta_listing(trim="SEL")
         self.assertIsNotNone(match(sel, fiesta_profile()))

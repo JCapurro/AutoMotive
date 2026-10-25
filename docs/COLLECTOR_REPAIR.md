@@ -140,9 +140,13 @@ $G fetch origin
 test -z "$($G status --porcelain --untracked-files=no)"   # sin parches en caliente
 $G merge --ff-only origin/main
 test "$($G rev-parse HEAD)" = "$($G rev-parse origin/main)"
+# Hasta 20 minutos a que terminen los escaneos de Facebook y Mercado Libre en curso.
+(cd /opt/automotive/worker && sudo -u automotive -H /opt/automotive/.venv/bin/python -m tools.wait_idle facebook mercadolibre --max-wait 1200) || true
 systemctl restart automotive-worker.service
 systemctl status automotive-worker.service --no-pager
 ```
+
+`tools.wait_idle` espera a que ningún target de esas fuentes esté tomado (`crawl_targets.claimed_until`): un reinicio mata el escaneo en curso y tira lo que leyó, y un escaneo de Facebook lee las fechas ficha por ficha, 30 s entre una y otra. Sale con 0 al quedar libres y con 2 si se agota el tiempo; el `|| true` reinicia igual. El repair bot hace lo mismo antes de su reinicio, con su tope de `wait_idle_s` (300 s).
 
 Si `status` muestra archivos modificados, son parches en caliente: commitearlos en `main` antes de desplegar. Nunca usar `git clean` en el VPS (borra `.env`, las sesiones `*_state.json`, `.ml_chrome_profile/` y `logs/`).
 

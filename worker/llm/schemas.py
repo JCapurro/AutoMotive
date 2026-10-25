@@ -24,6 +24,8 @@ Currency = Literal["USD", "ARS"]
 Transmission = Literal["manual", "automatic"]
 Fuel = Literal["nafta", "diesel", "gnc", "hibrido", "electrico"]
 SellerType = Literal["private", "dealer"]
+# Timing drive the person asks for: chain («cadenero», «sin correa») or belt.
+Timing = Literal["chain", "belt"]
 # docs/CARROCERIA.md: the same codes, in the same order, everywhere.
 BodyType = Literal[BODY_TYPE_CODES]  # type: ignore[valid-type]
 
@@ -61,6 +63,10 @@ class SearchDraft(_Strict):
     seller_type: SellerType | None = Field(description="private = particular / dueño directo; dealer = agencia.")
     location: str | None = Field(description="Zona o ciudad tal como la dice el usuario, p. ej. «zona norte».")
     radius_km: int | None = Field(description="Radio en km alrededor de la zona, si lo dice.")
+    # Defaulted, like body_types, so recordings from before the field stay valid.
+    timing: Timing | None = Field(default=None,
+                                  description="chain si pide distribución a cadena («cadenero», «con cadena», "
+                                              "«sin correa»); belt si pide «con correa». Nunca va en make/model.")
 
 
 class SearchDrafts(_Strict):
