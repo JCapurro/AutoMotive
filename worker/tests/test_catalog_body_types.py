@@ -9,7 +9,7 @@ from seed_catalog import SEED, body_types_block, seed_catalog
 # The first list, and the models added later with their body types.
 MIGRATIONS = [SEED.parent / "migrations" / name for name in
               ("20261030120100_catalog_body_types.sql", "20261102120000_catalog_all_models.sql",
-               "20261107120000_catalog_arrizo_and_misses.sql")]
+               "20261107120000_catalog_arrizo_and_misses.sql", "20261108120000_catalog_more_makes.sql")]
 
 
 def _by_model() -> dict[tuple[str, str], tuple[str, ...]]:
