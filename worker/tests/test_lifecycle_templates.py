@@ -29,8 +29,10 @@ LIMITS = {"enforced": True, "free": {"max_profiles": 1}, "pass": {"max_profiles"
 TOKEN = "3f0c1a52-6c55-4a43-9f39-0d8f3c7c2b11"
 # The plans document forbids these in every plan email.
 BANNED = ("en tiempo real", "todos los portales", "el mas barato")
+# Every kind on, except remarketing: it starts off (it goes out in a person's name).
 ALL_ON = {"trial_no_matches": True, "trial_ended": True, "pass_expiring": True, "pass_expires_today": True,
-          "count_after_expiry": True, "search_activated": True}
+          "count_after_expiry": True, "search_activated": True,
+          "search_abandoned": False, "search_not_started": False, "search_feedback": False}
 
 
 def render(msg: templates.EmailMessage) -> str:
@@ -38,9 +40,17 @@ def render(msg: templates.EmailMessage) -> str:
                       "=== email html ===", msg.html, ""])
 
 
+REMARKETING = {"sender_name": "Juan de Ese Auto", "signer": "Juan", "reply_to": "juan@automotive.test"}
+
+
 def email(kind: str, payload: dict, **kw) -> templates.EmailMessage:
     row = {"id": 41, "kind": kind, "payload": payload, "unsubscribe_token": TOKEN}
-    return templates.lifecycle_email(row, LINKS, NOW, offer=kw.get("offer", OFFER), limits=kw.get("limits", LIMITS))
+    return templates.lifecycle_email(row, LINKS, NOW, offer=kw.get("offer", OFFER), limits=kw.get("limits", LIMITS),
+                                     remarketing=kw.get("remarketing", REMARKETING))
+
+
+ABANDONED = {"text": "Toyota hilux 2.5 de 2013 a 2016", "model": "Toyota Hilux",
+             "asked_at": "2026-10-24T02:30:00+00:00", "job_id": 7}
 
 
 class PlanEmailSnapshotTests(unittest.TestCase):
@@ -57,7 +67,12 @@ class PlanEmailSnapshotTests(unittest.TestCase):
                                                                 {"model": "Ford Focus", "found": 9, "below": 2,
                                                                  "stage": 7}),
                           "lifecycle_search_activated": email("search_activated",
-                                                              {"model": "Ford Focus", "found": 14, "below": 2})}.items():
+                                                              {"model": "Ford Focus", "found": 14, "below": 2}),
+                          "lifecycle_search_abandoned": email("search_abandoned", ABANDONED),
+                          "lifecycle_search_not_started": email("search_not_started", {}),
+                          "lifecycle_search_feedback": email("search_feedback",
+                                                             {"model": "Toyota Hilux", "after": "search_abandoned"})
+                          }.items():
             with self.subTest(name=name):
                 text = render(msg)
                 path = SNAPSHOTS / f"{name}.txt"
@@ -280,3 +295,56 @@ class SettingsTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RemarketingEmailTests(unittest.TestCase):
+    """Accounts without a search (docs/MAILS_DE_PLAN.md, «Remarketing»)."""
+
+    def test_the_request_comes_back_with_its_day_in_argentina(self):
+        msg = email("search_abandoned", ABANDONED)
+        self.assertEqual(msg.subject, "Tu búsqueda de Toyota Hilux quedó sin activar")
+        self.assertIn("El 23/10 nos escribiste: «Toyota hilux 2.5 de 2013 a 2016».", msg.text)
+        self.assertIn("Activar mi búsqueda: https://automotive.app/m/41", msg.text)
+
+    def test_a_person_writes_it_without_the_brand_template(self):
+        msg = email("search_not_started", {})
+        self.assertEqual((msg.from_name, msg.reply_to, msg.logo), ("Juan de Ese Auto", "juan@automotive.test", False))
+        self.assertIn("Juan, de Ese Auto", msg.text)
+        self.assertNotIn("cid:", msg.html)
+        self.assertIn('/o/41?k=m"', msg.html)
+
+    def test_reason_links_and_wrong_search_only_after_a_request(self):
+        abandoned = email("search_abandoned", ABANDONED).text
+        not_started = email("search_not_started", {}).text
+        for reason, _ in templates.FEEDBACK_REASONS:
+            self.assertIn(f"https://automotive.app/f/41?r={reason}", abandoned)
+            self.assertEqual(f"r={reason}" in not_started, reason != "wrong_search")
+
+    def test_without_reply_to_it_does_not_ask_for_a_reply(self):
+        msg = email("search_feedback", {"after": "search_not_started"}, remarketing={"reply_to": "no es un email"})
+        self.assertIsNone(msg.reply_to)
+        self.assertNotIn(templates.REPLY_LINE, msg.text)
+        self.assertIn("Vi que te sumaste a Ese Auto y no llegaste a armar una búsqueda.", msg.text)
+        self.assertIn("Si todavía estás buscando, empezá acá:", msg.text)
+
+    def test_the_follow_up_without_a_resolved_model(self):
+        msg = email("search_feedback", {"after": "search_abandoned"})
+        self.assertIn("Soy Juan, hago Ese Auto. Vi que empezaste a armar una búsqueda y no seguiste.", msg.text)
+        self.assertIn("r=wrong_search", msg.text)
+
+    def test_signed_links_sign_the_reason_links_too(self):
+        links = Links("https://automotive.app", "s" * 32)
+        row = {"id": 41, "kind": "search_not_started", "payload": {}, "unsubscribe_token": TOKEN, "user_id": "u-1"}
+        msg = templates.lifecycle_email(row, links, NOW)
+        button = links.lifecycle(41, owner="u-1")
+        signature = button.split("s=")[1]
+        self.assertIn(button, msg.text)
+        self.assertIn(f"/f/41?r=other&s={signature}", msg.text)
+
+    def test_no_banned_or_forbidden_words(self):
+        for kind, payload in (("search_abandoned", ABANDONED), ("search_not_started", {}),
+                              ("search_feedback", {"model": "Toyota Hilux", "after": "search_abandoned"})):
+            msg = email(kind, payload)
+            text = normalize_text(f"{msg.subject} {msg.text} {msg.html}")
+            for term in BANNED + FORBIDDEN_TERMS:
+                self.assertNotRegex(text, rf"\b{normalize_text(term)}\b", term)

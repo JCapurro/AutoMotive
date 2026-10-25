@@ -757,3 +757,143 @@ class SearchActivatedTests(LifecycleCase):
         await self.first_search(user, minutes_ago=60 * 50)
         self.assertEqual(await self.send(), 0)
         self.assertIsNone(await self.ledger(user, "search_activated"))
+
+
+class RemarketingTests(LifecycleCase):
+    """Accounts without a search: 1A wrote one and never saved it, 1B never wrote one; the follow-up asks why."""
+
+    KINDS_ON = {"search_abandoned": True, "search_not_started": True, "search_feedback": True}
+
+    async def asyncSetUp(self) -> None:
+        await super().asyncSetUp()
+        async with db.connection() as cx:
+            self.saved += await (await cx.execute(
+                "SELECT key, value FROM app_config WHERE key = 'remarketing'")).fetchall()
+        await self.config(kinds={**DEFAULTS["kinds"], **self.KINDS_ON})
+        await self.config("remarketing", backfill_since=None, reply_to="juan@automotive.test")
+
+    async def signed_up(self, *, hours_ago: float) -> str:
+        user = await self.account(trial_ended_hours_ago=None)
+        await self.rows("UPDATE profiles SET created_at = now() - make_interval(secs => %s) WHERE id = %s",
+                        hours_ago * 3600, user)
+        return user
+
+    async def asked(self, user: str, text: str, *, hours_ago: float, model: str | None = "Hilux",
+                    status: str = "done") -> int:
+        output = {"drafts": [{"values": {"make": "Toyota", "model": model} if model else {}, "resolved": bool(model)}]}
+        [row] = await self.rows(
+            "INSERT INTO llm_jobs (user_id, kind, input, output, status, created_at) "
+            "VALUES (%s, 'parse_search', %s, %s, %s::llm_job_status, now() - make_interval(secs => %s)) RETURNING id",
+            user, Jsonb({"text": text}), Jsonb(output), status, hours_ago * 3600)
+        return row["id"]
+
+    async def test_an_abandoned_request_gets_its_own_search_back_ready_to_activate(self):
+        user = await self.signed_up(hours_ago=30)
+        await self.asked(user, "Toyota hilux 2013 a 2016", hours_ago=29)
+        job = await self.asked(user, "Toyota hilux 2.5 de 2013 a 2016 & más", hours_ago=25)
+
+        self.assertEqual(await self.send(), 1)
+        row = await self.ledger(user, "search_abandoned")
+        self.assertEqual((row["status"], row["event_key"], row["target"]),
+                         ("sent", "first", "/app/searches/new?prompt=Toyota%20hilux%202.5%20de%202013%20a%202016"
+                                           "%20%26%20m%C3%A1s"))
+        self.assertEqual((row["payload"]["text"], row["payload"]["model"], row["payload"]["job_id"]),
+                         ("Toyota hilux 2.5 de 2013 a 2016 & más", "Toyota Hilux", job))
+        [body] = self.emails()
+        self.assertEqual((body["from"], body["reply_to"], body["subject"]),
+                         ("Juan de Ese Auto <hola@automotive.test>", "juan@automotive.test",
+                          "Tu búsqueda de Toyota Hilux quedó sin activar"))
+        self.assertNotIn("attachments", body)
+        self.assertIn(f"Activar mi búsqueda: https://automotive.app/m/{row['id']}", body["text"])
+        self.assertIn(f"- Ya compré un auto: https://automotive.app/f/{row['id']}?r=bought", body["text"])
+        self.assertIn("List-Unsubscribe", body["headers"])
+        # Not a second time, nor the 1B email.
+        self.assertEqual(await self.send(), 0)
+        self.assertIsNone(await self.ledger(user, "search_not_started"))
+
+    async def test_who_never_wrote_anything_is_asked_what_car(self):
+        user = await self.signed_up(hours_ago=25)
+        self.assertEqual(await self.send(), 1)
+        row = await self.ledger(user, "search_not_started")
+        self.assertEqual((row["target"], row["payload"]), ("/app/searches/new", {}))
+        [body] = self.emails()
+        self.assertEqual(body["subject"], "¿Qué auto estás buscando?")
+        self.assertNotIn("r=wrong_search", body["text"])
+
+    async def test_not_before_24_hours_nor_with_a_search_nor_to_an_admin_or_an_opt_out(self):
+        early = await self.signed_up(hours_ago=5)
+        with_search = await self.signed_up(hours_ago=30)
+        await self.rows("UPDATE search_profiles SET enabled = false WHERE id = %s", await self.search(with_search))
+        opted_out = await self.signed_up(hours_ago=30)
+        await self.rows("UPDATE profiles SET default_channels = '{web}' WHERE id = %s", opted_out)
+        await self.rows("UPDATE profiles SET created_at = now() - interval '30 hours' WHERE id = %s", self.admin)
+        fresh_request = await self.signed_up(hours_ago=30)
+        await self.asked(fresh_request, "Gol trend", hours_ago=2)      # the request resets the clock
+
+        self.assertEqual(await self.send(), 0)
+        self.assertEqual(await self.rows("SELECT * FROM lifecycle_emails"), [])
+
+    async def test_skipped_if_the_search_was_created_before_its_turn(self):
+        user = await self.signed_up(hours_ago=30)
+        await self.asked(user, "Gol trend", hours_ago=25)
+        await self.rows("SELECT id FROM claim_lifecycle_emails('search_abandoned', interval '48 hours', 5)")
+        await self.search(user, "Gol", "Volkswagen")
+
+        self.assertEqual(await self.send(), 0)
+        self.assertEqual((await self.ledger(user, "search_abandoned"))["status"], "skipped")
+
+    async def test_the_backfill_reaches_accounts_older_than_the_window_once(self):
+        old = await self.signed_up(hours_ago=24 * 20)
+        await self.asked(old, "Chery Arrizo 8", hours_ago=24 * 19)
+        older = await self.signed_up(hours_ago=24 * 40)
+
+        self.assertEqual(await self.send(), 0)                          # no backfill: too old for the window
+        await self.config("remarketing", backfill_since=(datetime.now(AR) - timedelta(days=30)).isoformat())
+        self.assertEqual(await self.send(), 1)
+        self.assertEqual((await self.ledger(old, "search_abandoned"))["status"], "sent")
+        self.assertIsNone(await self.ledger(older, "search_not_started"))
+
+    async def test_the_follow_up_four_days_later_unless_they_answered_or_started(self):
+        asked, answered, started = [await self.signed_up(hours_ago=30) for _ in range(3)]
+        for user in (asked, answered, started):
+            await self.asked(user, "Renault Sandero 2021", hours_ago=25, model="Sandero")
+        self.assertEqual(await self.send(), 3)
+        firsts = {u: (await self.ledger(u, "search_abandoned"))["id"] for u in (asked, answered, started)}
+        await self.rows("UPDATE lifecycle_emails SET sent_at = now() - interval '4 days 1 hour'")
+        [fb] = await self.rows("SELECT record_email_feedback(%s, 'browsing', '  solo miraba ') AS id", firsts[answered])
+        self.assertIsNotNone(fb["id"])
+        await self.search(started)
+
+        self.requests.clear()
+        self.assertEqual(await self.send(), 1)
+        row = await self.ledger(asked, "search_feedback")
+        self.assertEqual((row["payload"], row["target"]),
+                         ({"model": "Toyota Sandero", "after": "search_abandoned"},
+                          "/app/searches/new?prompt=Renault%20Sandero%202021"))
+        [body] = self.emails()
+        self.assertEqual(body["subject"], "¿Qué te frenó?")
+        self.assertIn("Vi que empezaste a buscar un Toyota Sandero y no seguiste.", body["text"])
+        self.assertIn("r=wrong_search", body["text"])
+        self.assertEqual(await self.events(answered, "email_feedback"),
+                         [{"email_id": firsts[answered], "kind": "search_abandoned", "reason": "browsing",
+                           "comment": True}])
+
+    async def test_feedback_only_for_a_sent_remarketing_email_and_a_second_answer_replaces_it(self):
+        user = await self.signed_up(hours_ago=25)
+        self.assertEqual(await self.send(), 1)
+        email = (await self.ledger(user, "search_not_started"))["id"]
+        await self.rows("SELECT record_email_feedback(%s, 'unclear', 'no entendí')", email)
+        await self.rows("SELECT record_email_feedback(%s, 'bought', null)", email)
+        [fb] = await self.rows("SELECT reason, comment FROM email_feedback WHERE lifecycle_email_id = %s", email)
+        self.assertEqual((fb["reason"], fb["comment"]), ("bought", "no entendí"))
+
+        other = await self.account(trial_ended_hours_ago=1)
+        await self.config(kinds={**DEFAULTS["kinds"], **self.KINDS_ON, "search_not_started": False})
+        self.assertEqual(await self.send(), 1)
+        trial = (await self.ledger(other, "trial_ended"))["id"]
+        [row] = await self.rows("SELECT record_email_feedback(%s, 'bought', null) AS id", trial)
+        self.assertIsNone(row["id"])
+        with self.assertRaisesRegex(Exception, "email_feedback_reason_check"):
+            await self.rows("SELECT record_email_feedback(%s, 'spam', null)", email)
+        with self.assertRaisesRegex(Exception, "permission denied"):
+            await self.rows("SELECT record_email_feedback(%s, 'other', null)", email, actor=user)
