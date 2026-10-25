@@ -54,7 +54,7 @@ vi.mock("@/lib/supabase/server", () => ({
   }),
 }));
 
-import { previewSearch, saveSearch, setSearchEnabled } from "@/app/app/searches/actions";
+import { previewSearch, relaxSuggestions, saveSearch, setSearchEnabled } from "@/app/app/searches/actions";
 import { MODEL_LESS_UNAVAILABLE } from "@/lib/search-form";
 
 const STAY = { mode: "assisted" as const, jobId: null, edited: false, stay: true };
@@ -159,5 +159,25 @@ describe("previewSearch", () => {
     expect(await previewSearch(SUV)).toEqual({ count: 1, sample: [] });
     const [, args] = state.rpc.find(([name]) => name === "preview_search")!;
     expect(args?.p_filters).toEqual({ body_types: ["suv", "pickup"], price_max: 20000, currency: "USD" });
+  });
+});
+
+describe("relaxSuggestions", () => {
+  it("counts each loosened variant once, with only that filter changed", async () => {
+    const audi = { make: "Audi", model: "A3", year_min: 2010, year_max: 2012, price_max: 11000, km_max: 150000, sources: ["mercadolibre", "kavak"] };
+    const suggestions = await relaxSuggestions(audi);
+    expect(suggestions.map((s) => s.label)).toEqual(["2008–2014", "Hasta USD 13.000", "Sin tope de km"]);
+    expect(suggestions.every((s) => s.count === 1)).toBe(true);
+    const filters = state.rpc.filter(([name]) => name === "preview_search").map(([, args]) => args?.p_filters as Record<string, unknown>);
+    expect(filters).toHaveLength(3);
+    expect(filters[0]).toMatchObject({ year_min: 2008, year_max: 2014, price_max: 11000, km_max: 150000 });
+    expect(filters[1]).toMatchObject({ year_min: 2010, price_max: 13000, km_max: 150000 });
+    expect(filters[2]).not.toHaveProperty("km_max");
+  });
+
+  it("asks nothing for a model-less search or an invalid one", async () => {
+    expect(await relaxSuggestions(SUV)).toEqual([]);
+    expect(await relaxSuggestions({ ...CORSA, year_min: 2020, year_max: 2010 })).toEqual([]);
+    expect(state.rpc.map(([name]) => name)).not.toContain("preview_search");
   });
 });

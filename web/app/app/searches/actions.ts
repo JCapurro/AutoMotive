@@ -18,6 +18,7 @@ import {
   toColumns,
   toFilters,
 } from "@/lib/search-form";
+import { type RelaxSuggestion, applyRelax, bestSuggestions, relaxVariants } from "@/lib/search-relax";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { Json } from "@/types/database";
@@ -353,4 +354,31 @@ export async function deleteSearch(id: number): Promise<void> {
   const { error } = await supabase.from("search_profiles").delete().eq("id", id);
   if (!error) await track(supabase, user.id, "search_profile_deleted", { profile_id: id });
   redirect("/app");
+}
+
+/**
+ * Zero results in the preview (lib/search-relax.ts): the search with one filter
+ * loosened at a time, counted in parallel (at most MAX_RELAX_VARIANTS
+ * preview_search calls); the best ones with some listing. Only searches with a model.
+ */
+export async function relaxSuggestions(raw: SearchInput): Promise<RelaxSuggestion[]> {
+  await requireUser();
+  const parsed = SearchInput.safeParse(raw);
+  if (!parsed.success) return [];
+  const variants = relaxVariants(parsed.data);
+  if (!variants.length) return [];
+  const supabase = await createClient();
+  const sources = await enabledSources(supabase);
+  const counted = await Promise.all(variants.map(async (variant) => {
+    const v = applyRelax(parsed.data, variant.change);
+    const { data, error } = await supabase.rpc("preview_search", {
+      p_filters: toFilters(v, sources) as Json,
+      p_origin_lat: v.location?.lat,
+      p_origin_lon: v.location?.lon,
+      p_radius_km: v.location?.radius_km,
+    });
+    const count = error ? 0 : Number((data as { count?: unknown } | null)?.count ?? 0);
+    return { ...variant, count: Number.isFinite(count) ? count : 0 };
+  }));
+  return bestSuggestions(counted);
 }
