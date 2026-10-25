@@ -29,10 +29,11 @@ LIMITS = {"enforced": True, "free": {"max_profiles": 1}, "pass": {"max_profiles"
 TOKEN = "3f0c1a52-6c55-4a43-9f39-0d8f3c7c2b11"
 # The plans document forbids these in every plan email.
 BANNED = ("en tiempo real", "todos los portales", "el mas barato")
-# Every kind on, except remarketing: it starts off (it goes out in a person's name).
+# Every kind on, except remarketing and the extra trial: they start off.
 ALL_ON = {"trial_no_matches": True, "trial_ended": True, "pass_expiring": True, "pass_expires_today": True,
           "count_after_expiry": True, "search_activated": True,
-          "search_abandoned": False, "search_not_started": False, "search_feedback": False}
+          "search_abandoned": False, "search_not_started": False, "search_feedback": False,
+          "bonus_trial_offer": False, "bonus_trial_ending": False, "bonus_trial_ended": False}
 
 
 def render(msg: templates.EmailMessage) -> str:
@@ -53,6 +54,11 @@ ABANDONED = {"text": "Toyota hilux 2.5 de 2013 a 2016", "model": "Toyota Hilux",
              "asked_at": "2026-10-24T02:30:00+00:00", "job_id": 7}
 
 
+BONUS = {"model": "Ford Ka", "found": 652, "new": 41, "below": 5,
+         "cars": [{"title": "Ford Ka 1.5 S", "year": 2018, "price": 9800, "currency": "USD", "km": 72000, "below": True},
+                  {"title": "Ford Ka SE 2019", "year": 2019, "price": 14500000, "currency": "ARS", "km": 51000}]}
+
+
 class PlanEmailSnapshotTests(unittest.TestCase):
     maxDiff = None
 
@@ -71,7 +77,13 @@ class PlanEmailSnapshotTests(unittest.TestCase):
                           "lifecycle_search_abandoned": email("search_abandoned", ABANDONED),
                           "lifecycle_search_not_started": email("search_not_started", {}),
                           "lifecycle_search_feedback": email("search_feedback",
-                                                             {"model": "Toyota Hilux", "after": "search_abandoned"})
+                                                             {"model": "Toyota Hilux", "after": "search_abandoned"}),
+                          "lifecycle_bonus_trial_offer": email("bonus_trial_offer", BONUS),
+                          "lifecycle_bonus_trial_ending": email("bonus_trial_ending",
+                                                                {"model": "Ford Ka", "found": 12, "below": 2,
+                                                                 "ends_at": "2026-11-02T22:00:00+00:00"}),
+                          "lifecycle_bonus_trial_ended": email("bonus_trial_ended",
+                                                               {"model": "Ford Ka", "found": 12, "below": 1}),
                           }.items():
             with self.subTest(name=name):
                 text = render(msg)
@@ -344,6 +356,49 @@ class RemarketingEmailTests(unittest.TestCase):
     def test_no_banned_or_forbidden_words(self):
         for kind, payload in (("search_abandoned", ABANDONED), ("search_not_started", {}),
                               ("search_feedback", {"model": "Toyota Hilux", "after": "search_abandoned"})):
+            msg = email(kind, payload)
+            text = normalize_text(f"{msg.subject} {msg.text} {msg.html}")
+            for term in BANNED + FORBIDDEN_TERMS:
+                self.assertNotRegex(text, rf"\b{normalize_text(term)}\b", term)
+
+
+class BonusTrialEmailTests(unittest.TestCase):
+    """The extra 7-day trial (docs/MAILS_DE_PLAN.md, «Prueba extra de 7 días»)."""
+
+    def lines(self, msg: templates.EmailMessage) -> list[str]:
+        return msg.text.split("\n—\n")[0].splitlines()
+
+    def test_the_offer_shows_what_appeared_and_up_to_three_cars(self):
+        msg = email("bonus_trial_offer", {**BONUS, "cars": BONUS["cars"] * 2})
+        self.assertEqual(msg.subject, "Te damos 7 días más para tu búsqueda de Ford Ka")
+        lines = self.lines(msg)
+        self.assertIn("Desde que pausamos tu búsqueda aparecieron 41 autos nuevos que coinciden, y 5 están "
+                      "por debajo de publicaciones comparables.", lines)
+        self.assertIn("Ford Ka 1.5 S 2018 · USD 9.800 · 72.000 km · por debajo de comparables", lines)
+        self.assertIn("Ford Ka SE 2019 · $14.500.000 · 51.000 km", lines)
+        self.assertEqual(sum(line.startswith("Ford Ka") for line in lines), 3)
+        self.assertEqual(lines[-1], "Activar mis 7 días: https://automotive.app/m/41")
+
+    def test_nothing_new_falls_back_to_what_the_trial_found_and_no_cars_no_list(self):
+        lines = self.lines(email("bonus_trial_offer", {"found": 1, "new": 0, "cars": [{"title": " "}]}))
+        self.assertEqual(lines[0], "Te damos 7 días más para tu búsqueda")
+        self.assertIn("En tu prueba encontramos 1 auto para tu búsqueda.", lines)
+        self.assertNotIn(templates.BONUS_CARS, lines)
+
+    def test_ending_names_the_day_and_the_offer(self):
+        lines = self.lines(email("bonus_trial_ending", {"found": 0, "ends_at": "2026-11-02T02:00:00+00:00"}))
+        self.assertEqual(lines[1:], ["El 1/11 tu búsqueda se pausa sola. Si querés seguir, Particular sale $15.000 "
+                                     "por 30 días, con 3 búsquedas y pago único.",
+                                     "Ver mis resultados: https://automotive.app/m/41"])
+
+    def test_ended_without_results(self):
+        msg = email("bonus_trial_ended", {"found": 0}, offer=None)
+        self.assertEqual(msg.subject, "Terminaron tus 7 días")
+        self.assertIn("Para seguir recibiendo avisos, elegí Particular.", msg.text)
+
+    def test_no_banned_or_forbidden_words(self):
+        for kind, payload in (("bonus_trial_offer", BONUS), ("bonus_trial_ending", {"found": 3, "below": 1}),
+                              ("bonus_trial_ended", {"found": 3, "below": 1})):
             msg = email(kind, payload)
             text = normalize_text(f"{msg.subject} {msg.text} {msg.html}")
             for term in BANNED + FORBIDDEN_TERMS:

@@ -10,6 +10,7 @@ Son los mails de la fase 2 de [planes](PLANES_2026-10.md), los que llevan a paga
 | 2.5 Conteo después de vencer | 7, 14 y 21 días después del vencimiento, si apareció algo | Listo |
 | Bienvenida | 45 minutos después de la primera búsqueda de la cuenta | Listo |
 | Remarketing 1A, 1B y seguimiento | Cuentas sin búsqueda: 24 h después de pedirla o de registrarse, y 4 días después | Listo, apagado |
+| Prueba extra de 7 días | Oferta 7 días después de la prueba de 72 h; aviso al día 5 y al terminar | Listo, apagado |
 
 ## Reglas para todos
 
@@ -101,6 +102,23 @@ No lleva a pagar: busca que la cuenta arme su primera búsqueda o que cuente por
 - **Apagados.** Los tres tipos nacen en `false` en `lifecycle_emails.kinds`.
 - **Código.** [`20261110120000_remarketing_no_search.sql`](../supabase/migrations/20261110120000_remarketing_no_search.sql): las funciones de reserva y re-chequeo anteriores quedan como `*_welcome` y las nuevas las llaman. Los textos, en `remarketing_email` de `notifications/templates.py`.
 
+## Prueba extra de 7 días
+
+Para las pruebas de 72 h que terminaron sin compra: una vez por cuenta, 7 días más con su búsqueda. Al 25/10/2026 eran 14, y varias habían encontrado cientos de autos sin abrir un email.
+
+- **Oferta (`bonus_trial_offer`).** 7 días después de que terminó la prueba de 72 h, si nunca pagó (un pago devuelto cuenta como compra), no tiene un checkout en curso, nunca tuvo la prueba extra y su búsqueda encontró algo. Ese día **reemplaza al conteo del 2.5**: un conteo reservado mientras hay una oferta de menos de 5 días queda `skipped`. Los conteos de los días 14 y 21 siguen si no la aceptó.
+  - **Asunto.** «Te damos 7 días más para tu búsqueda de {modelo}».
+  - **Cuerpo.** «Desde que pausamos tu búsqueda aparecieron {N} autos nuevos que coinciden, y {M} están por debajo de publicaciones comparables.» Sin nuevos: «En tu prueba encontramos {X} autos para tu búsqueda de {modelo}.» Después: «Te damos 7 días gratis para que la veas funcionar: la reactivamos tal como estaba, con los avisos por email. Sin tarjeta, y al terminar se pausa sola.»
+  - **Autos.** Hasta 3 publicaciones activas que encontró la búsqueda, primero las que están por debajo de comparables y después las más nuevas: «Ford Ka 1.5 S 2018 · USD 9.800 · 72.000 km · por debajo de comparables». A diferencia del 2.5, este mail muestra autos: estas cuentas todavía no vieron lo que encuentra la herramienta.
+  - **Botón.** «Activar mis 7 días», a `/app/bonus` ([página](../web/app/app/bonus/page.tsx)). Abrirla no cambia nada: la prueba arranca con el botón de la página (`start_my_bonus_trial`). Reactivar sin que lo pidan mandaría alertas a quien no las quiere.
+- **Cómo funciona.** `profiles.bonus_trial_started_at` marca el inicio. `plan_limits_for` responde `trial` durante 7 días (`free_trial_end`), así que búsquedas, alertas y límites son los del plan gratis, como en la primera prueba. Al activarla vuelven las búsquedas que pausó el vencimiento, hasta el cupo del plan gratis. Se registra `bonus_trial_started`.
+- **Día 5 (`bonus_trial_ending`).** «Te quedan 2 días gratis para tu búsqueda de {modelo}»: lo que encontró desde que la activó, el día en que se pausa y la oferta de Particular. Botón «Ver mis resultados».
+- **Al terminar (`bonus_trial_ended`).** «Terminaron tus 7 días: encontramos {X} para tu búsqueda», con el texto del 2.2 y el botón «Seguir con Particular». El evento `bonus_trial_ended` guarda `results`, `opportunities`, `alerts_sent`, `alerts_clicked` y `converted`.
+- **Después.** El 2.5 cuenta desde el fin de la prueba extra (`count_after_expiry_end`): un ciclo más de 7, 14 y 21 días.
+- **Pruebas que ya terminaron.** `bonus_trial.backfill_since` (por defecto 1/10/2026): al prender la oferta, las pruebas cuyo día 7 cae después de esa fecha la reciben aunque sea más viejo que `window_hours`.
+- **Apagados.** Los tres tipos nacen en `false` en `lifecycle_emails.kinds`.
+- **Código.** [`20261111120000_bonus_trial.sql`](../supabase/migrations/20261111120000_bonus_trial.sql): las funciones anteriores quedan como `*_remarketing` y las nuevas las llaman.
+
 ## Clics y eventos
 
 - **Clics.** El botón pasa por `/m/<id>` ([ruta](../web/app/m/[emailId]/route.ts)). Esa ruta registra `lifecycle_email_clicked` (con `kind`) y redirige al destino guardado en la fila, que siempre es una ruta del sitio. Las vistas previas de enlaces y los HEAD no cuentan.
@@ -137,7 +155,7 @@ El worker revisa cada `TRIAL_REMINDER_TICK_SECONDS` (900 s). El nombre se conser
 2. Envíos por tipo: `select kind, status, count(*) from lifecycle_emails group by 1, 2 order by 1, 2;`.
 3. Errores: `select * from pipeline_errors where stage = 'lifecycle_email' order by created_at desc;`.
 4. Log del worker: líneas `plan emails: N <kind> claimed` y `N sent`, o `plan emails off: …` si falta el canal o `WEB_BASE_URL`.
-5. Eventos: `select name, count(*) from events where name in ('trial_ended', 'lifecycle_email_sent', 'lifecycle_email_clicked', 'reactivated_from_count_email', 'email_feedback') group by 1;`.
+5. Eventos: `select name, count(*) from events where name in ('trial_ended', 'lifecycle_email_sent', 'lifecycle_email_clicked', 'reactivated_from_count_email', 'email_feedback', 'bonus_trial_started', 'bonus_trial_ended') group by 1;`.
 6. 2.5, búsquedas que se cuentan ahora: `select * from count_after_expiry_searches();`.
 7. 2.5, objetivos diarios: `select source, make, model, query->'count_profile_ids', next_run_at from crawl_targets where active and query->>'count_only' = 'true';`.
 8. 2.5, lo contado: `select search_profile_id, access_ended_at, count(*), count(*) filter (where level = 'high') from expired_search_matches group by 1, 2;`.
@@ -147,7 +165,7 @@ El worker revisa cada `TRIAL_REMINDER_TICK_SECONDS` (900 s). El nombre se conser
 - **Caídas largas.** Si el worker está caído más de `window_hours`, los eventos de ese lapso se quedan sin mail.
 - **Tope diario.** Cuenta reservas, incluidas las que terminan `skipped` o `failed`, y no ve el volumen de alertas que comparte la cuota de Resend.
 - **Qué significa `sent`.** Que Resend aceptó el mail; rebotes y quejas no se registran.
-- **Duración de la prueba.** Las reservas usan las 72 h de `plan_limits_for`. Si cambia esa duración, hay que revisar `claim_lifecycle_emails` y `count_after_expiry_end`.
+- **Duración de la prueba.** Las reservas usan las 72 h de la prueba y los 7 días de la prueba extra (`free_trial_end`). Si cambia alguna duración, hay que revisar `claim_lifecycle_emails` y `count_after_expiry_end`.
 - **El conteo de 2.5 es un piso.** Cuando otra búsqueda activa rastrea el mismo modelo con filtros más estrechos (por ejemplo, desde 2018, si la vencida pedía desde 2012), la vencida solo ve lo que trae esa consulta.
 - **Reinicio de bootstrap.** Si un cambio de `POLICY_VERSION` repite la carga inicial de Mercado Libre o Facebook, lo que esa carga trae por primera vez puede contarse en las corridas siguientes: el historial se mide desde la primera corrida exitosa del objetivo, no desde la última carga inicial.
 - **Publicaciones que ya no están.** N incluye las publicaciones que aparecieron aunque ya no estén publicadas; al reactivar solo se ven las que siguen activas.

@@ -378,7 +378,9 @@ def web(n: Notification, links: Links, now: datetime) -> dict[str, Any]:
 
 LIFECYCLE_EYEBROW = {"trial_no_matches": "TU PRUEBA GRATIS", "trial_ended": "TU PRUEBA GRATIS",
                      "pass_expiring": "TU PLAN PARTICULAR", "pass_expires_today": "TU PLAN PARTICULAR",
-                     "count_after_expiry": "TU BÚSQUEDA", "search_activated": "TU BÚSQUEDA"}
+                     "count_after_expiry": "TU BÚSQUEDA", "search_activated": "TU BÚSQUEDA",
+                     "bonus_trial_offer": "7 DÍAS GRATIS", "bonus_trial_ending": "TUS 7 DÍAS GRATIS",
+                     "bonus_trial_ended": "TUS 7 DÍAS GRATIS"}
 # The free-trial ones reach email-only accounts too (nobody confirmed the
 # address), so they don't say the reader created the search.
 LIFECYCLE_FOOTER = {
@@ -388,6 +390,9 @@ LIFECYCLE_FOOTER = {
     "pass_expires_today": "Recibís este email porque tenés Particular en Ese Auto.",
     "count_after_expiry": "Recibís este email porque hubo una búsqueda activa en Ese Auto con esta dirección.",
     "search_activated": "Recibís este email porque se activó una búsqueda gratis en Ese Auto con esta dirección.",
+    "bonus_trial_offer": "Recibís este email porque hubo una búsqueda activa en Ese Auto con esta dirección.",
+    "bonus_trial_ending": "Recibís este email porque se activaron 7 días gratis en Ese Auto con esta dirección.",
+    "bonus_trial_ended": "Recibís este email porque se activaron 7 días gratis en Ese Auto con esta dirección.",
 }
 
 # search_activated: the first email an account gets, 45 minutes after its first search.
@@ -440,6 +445,30 @@ COUNT_REACTIVATE = {1: "Reactivá para verlo.", "n": "Reactivá para verlos."}
 COUNT_CTA = "Reactivar por {price}"
 COUNT_CTA_FALLBACK = "Reactivar"
 
+# The extra 7-day trial: once per account, on day 7 after the 72 h trial ended.
+BONUS_SUBJECT = "Te damos 7 días más para tu búsqueda de {model}"
+BONUS_SUBJECT_ANY = "Te damos 7 días más para tu búsqueda"
+BONUS_NEW = {1: "Desde que pausamos tu búsqueda apareció 1 auto nuevo que coincide{below}.",
+             "n": "Desde que pausamos tu búsqueda aparecieron {n} autos nuevos que coinciden{below}."}
+BONUS_NEW_BELOW = {1: ", y 1 está por debajo de publicaciones comparables",
+                   "n": ", y {n} están por debajo de publicaciones comparables"}
+BONUS_FOUND = {1: "En tu prueba encontramos 1 auto para tu búsqueda{model}.",
+               "n": "En tu prueba encontramos {n} autos para tu búsqueda{model}."}
+BONUS_BODY = ("Te damos 7 días gratis para que la veas funcionar: la reactivamos tal como estaba, con los "
+              "avisos por email. Sin tarjeta, y al terminar se pausa sola.")
+BONUS_CARS = "Algunos de los que encontramos:"
+BONUS_CAR_BELOW = "por debajo de comparables"
+BONUS_CTA = "Activar mis 7 días"
+
+BONUS_ENDING_SUBJECT = "Te quedan 2 días gratis para tu búsqueda{model}"
+BONUS_ENDING_FOUND = "En estos días encontramos {found}{below}."
+BONUS_ENDING_LAST = "El {day} tu búsqueda se pausa sola. Si querés seguir, {offer}"
+BONUS_ENDING_CTA = "Ver mis resultados"
+
+BONUS_ENDED_TITLE = "Terminaron tus 7 días"
+BONUS_ENDED_SUBJECT = "Terminaron tus 7 días: encontramos {found} para tu búsqueda"
+BONUS_ENDED_FOUND = "En 7 días encontramos {found} para tu búsqueda{model}{below}."
+
 
 def _count(value: Any) -> int:
     return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else 0
@@ -464,6 +493,39 @@ def _pesos(amount: Any) -> str | None:
 
 def _plural(texts: Mapping[Any, str], n: int, **kw: Any) -> str:
     return texts[1].format(**kw) if n == 1 else texts["n"].format(n=n, **kw)
+
+
+def _day_month(value: Any) -> str | None:
+    """An ISO timestamp as 31/10, in Argentina; None if it isn't one."""
+    if not isinstance(value, str):
+        return None
+    try:
+        when = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=timezone.utc)
+    return when.astimezone(_AR).strftime("%d/%m").lstrip("0")
+
+
+def _car(car: Mapping[str, Any]) -> str | None:
+    """«Toyota Hilux 2015 · USD 21.500 · 140.000 km · por debajo de comparables»; None without a title."""
+    title = car.get("title").strip() if isinstance(car.get("title"), str) else ""
+    if not title:
+        return None
+    year = car.get("year")
+    if isinstance(year, int) and not isinstance(year, bool) and str(year) not in title:
+        title = f"{title} {year}"
+    parts = [title]
+    price, currency = car.get("price"), car.get("currency")
+    if currency in ("USD", "ARS") and (amount := _pesos(price)):
+        parts.append(f"USD {amount[1:]}" if currency == "USD" else amount)
+    km = car.get("km")
+    if isinstance(km, int) and not isinstance(km, bool) and km >= 0:
+        parts.append(f"{km:,} km".replace(",", "."))
+    if car.get("below") is True:
+        parts.append(BONUS_CAR_BELOW)
+    return " · ".join(parts)
 
 
 def particular_price(offer: Mapping[str, Any] | None) -> str | None:
@@ -535,6 +597,41 @@ def lifecycle_content(kind: str, payload: Mapping[str, Any], url: str, *,
         price = particular_price(offer)
         cta = COUNT_CTA.format(price=price) if price else COUNT_CTA_FALLBACK
         return Content(subject, subject, lines=lines, link=Link(cta, url)), subject
+    if kind == "bonus_trial_offer":
+        found, new, below = (_count(payload.get(k)) for k in ("found", "new", "below"))
+        of_model = f" de {model}" if model else ""
+        subject = BONUS_SUBJECT.format(model=model) if model else BONUS_SUBJECT_ANY
+        lines = []
+        if new:
+            lines.append(_plural(BONUS_NEW, new, below=_plural(BONUS_NEW_BELOW, below) if below else ""))
+        elif found:
+            lines.append(_plural(BONUS_FOUND, found, model=of_model))
+        lines.append(BONUS_BODY)
+        cars = [c for c in (_car(x) for x in payload.get("cars") or [] if isinstance(x, Mapping)) if c][:3]
+        if cars:
+            lines += [BONUS_CARS, *cars]
+        return Content(subject, subject, lines=lines, link=Link(BONUS_CTA, url)), subject
+    if kind == "bonus_trial_ending":
+        found, below = _count(payload.get("found")), _count(payload.get("below"))
+        subject = BONUS_ENDING_SUBJECT.format(model=f" de {model}" if model else "")
+        lines = [BONUS_ENDING_FOUND.format(found=_cars(found), below=PASS_BELOW.format(n=below) if below else "")
+                 ] if found else []
+        day = _day_month(payload.get("ends_at"))
+        offer_text = particular_offer(offer, limits).removeprefix("Para seguir recibiendo avisos, ")
+        lines.append(BONUS_ENDING_LAST.format(day=day, offer=offer_text) if day
+                     else particular_offer(offer, limits))
+        return Content(subject, subject, lines=lines, link=Link(BONUS_ENDING_CTA, url)), subject
+    if kind == "bonus_trial_ended":
+        found, below = _count(payload.get("found")), _count(payload.get("below"))
+        lines = []
+        if found:
+            below_text = (TRIAL_ENDED_BELOW.format(n=below, verb="estaba" if below == 1 else "estaban")
+                          if below else "")
+            lines.append(BONUS_ENDED_FOUND.format(found=_cars(found), model=f" de {model}" if model else "",
+                                                  below=below_text))
+        lines += [particular_offer(offer, limits), TRIAL_ENDED_KEEP]
+        subject = BONUS_ENDED_SUBJECT.format(found=_cars(found)) if found else BONUS_ENDED_TITLE
+        return Content(BONUS_ENDED_TITLE, subject, lines=lines, link=Link(TRIAL_ENDED_CTA, url)), BONUS_ENDED_TITLE
     raise ValueError(f"unknown plan email kind: {kind}")
 
 
