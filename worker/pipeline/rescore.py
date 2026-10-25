@@ -8,8 +8,10 @@
 
 The nightly pass also runs the retention (pipeline/retention.py).
 
-A match that no longer passes its hard filters keeps its last score: the row
-is also the bot's "already seen" record, and deleting it would alert again.
+A match whose listing no longer passes the search (a detail page placed it
+outside the radius, the price went over the cap...) is deleted: the user
+sees only listings that fit. The row is also the bot's "already seen"
+record, so if the listing fits again later it is a new match and alerts.
 """
 from __future__ import annotations
 
@@ -43,10 +45,15 @@ async def rescore(queue: list[dict[str, Any]], scorer: Scorer | None = None) -> 
     profiles = {a["id"]: a["profile"] for a in await profiles_by_ids(
         list({q["search_profile_id"] for q in queue}))}
     by_profile: dict[int, list[tuple[int, dict]]] = {}
+    gone: dict[int, list[int]] = {}
     for q in queue:
         profile = profiles.get(q["search_profile_id"])
-        ev = scorer.evaluate(q["listing_id"], profile) if profile else None
-        if ev is not None:
+        if profile is None or q["listing_id"] not in scorer.rows:
+            continue
+        ev = scorer.evaluate(q["listing_id"], profile)
+        if ev is None:
+            gone.setdefault(q["search_profile_id"], []).append(q["listing_id"])
+        else:
             by_profile.setdefault(q["search_profile_id"], []).append((q["listing_id"], ev.row()))
     updated = 0
     for profile_id, rows in by_profile.items():
@@ -56,6 +63,14 @@ async def rescore(queue: list[dict[str, Any]], scorer: Scorer | None = None) -> 
             updated += len(rows)
         except Exception:
             await log_error("rescore", f"profile:{profile_id}", traceback.format_exc())
+    for profile_id, listing_ids in gone.items():
+        try:
+            async with db.connection() as cx:
+                n = await matches_repo.delete_matches(cx, profile_id, listing_ids)
+            if n:
+                log.info("profile %s: %d matches no longer fit, deleted", profile_id, n)
+        except Exception:
+            await log_error("rescore", f"profile:{profile_id}:delete", traceback.format_exc())
     return updated
 
 

@@ -122,6 +122,17 @@ async def upsert_scored(cx: AsyncConnection, profile_id: int,
     return inserted
 
 
+async def delete_matches(cx: AsyncConnection, profile_id: int, listing_ids: list[int]) -> int:
+    """Delete this profile's matches of these listings (they no longer fit it).
+    Their notifications keep the row with match_id null (ON DELETE SET NULL)."""
+    if not listing_ids:
+        return 0
+    cur = await cx.execute(
+        "DELETE FROM matches WHERE search_profile_id = %s AND listing_id = ANY(%s)",
+        (profile_id, listing_ids))
+    return cur.rowcount
+
+
 async def rescore_queue(*, days: int, scoring_version: str,
                         outdated_only: bool = False) -> list[dict[str, Any]]:
     """(match_id, search_profile_id, listing_id) to re-score (sección 6.1): the

@@ -450,6 +450,19 @@ class ScoredMatchesTests(IntelligenceCase):
         self.assertEqual(after["match_reasons"]["transmission"]["result"], "ok")
         self.assertGreater(after["score"], before["score"])
 
+    async def test_rescore_deletes_a_match_that_no_longer_fits(self):
+        lid = await self.listing(price=10_000, price_usd=10_000)
+        for p in (10_000, 10_100, 10_200, 10_300, 10_400):
+            await self.listing(price=p, price_usd=p)
+        aid = await self.fiesta_alert()
+        await rematch.run_pending()
+        self.assertIsNotNone(await self.match_row(aid, lid))
+
+        async with db.connection() as cx:                               # enrichment: another model
+            await cx.execute("UPDATE listings SET model = 'Focus' WHERE id = %s", (lid,))
+        await rescore.rescore_listings([lid])
+        self.assertIsNone(await self.match_row(aid, lid))
+
     async def test_nightly_rescore_follows_the_market(self):
         lid = await self.listing(price=10_000, price_usd=10_000)
         for p in (10_000, 10_100, 10_200, 10_300, 10_400):
