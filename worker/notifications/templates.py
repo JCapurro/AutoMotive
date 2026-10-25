@@ -373,7 +373,7 @@ def web(n: Notification, links: Links, now: datetime) -> dict[str, Any]:
 
 LIFECYCLE_EYEBROW = {"trial_no_matches": "TU PRUEBA GRATIS", "trial_ended": "TU PRUEBA GRATIS",
                      "pass_expiring": "TU PLAN PARTICULAR", "pass_expires_today": "TU PLAN PARTICULAR",
-                     "count_after_expiry": "TU BÚSQUEDA"}
+                     "count_after_expiry": "TU BÚSQUEDA", "search_activated": "TU BÚSQUEDA"}
 # The free-trial ones reach email-only accounts too (nobody confirmed the
 # address), so they don't say the reader created the search.
 LIFECYCLE_FOOTER = {
@@ -382,7 +382,21 @@ LIFECYCLE_FOOTER = {
     "pass_expiring": "Recibís este email porque tenés Particular en Ese Auto.",
     "pass_expires_today": "Recibís este email porque tenés Particular en Ese Auto.",
     "count_after_expiry": "Recibís este email porque hubo una búsqueda activa en Ese Auto con esta dirección.",
+    "search_activated": "Recibís este email porque se activó una búsqueda gratis en Ese Auto con esta dirección.",
 }
+
+# search_activated: the first email an account gets, 45 minutes after its first search.
+WELCOME_SUBJECT = "Tu búsqueda de {model} ya está activa"
+WELCOME_SUBJECT_ANY = "Tu búsqueda ya está activa"
+WELCOME_FOUND = {1: "Ya encontramos 1 auto que coincide con tu búsqueda{model}{below}. Te avisamos de los nuevos apenas aparezcan.",
+                 "n": "Ya encontramos {n} autos que coinciden con tu búsqueda{model}{below}. Te avisamos de los nuevos apenas aparezcan."}
+WELCOME_BELOW = {1: ", y 1 está por debajo de publicaciones comparables",
+                 "n": ", y {n} están por debajo de publicaciones comparables"}
+WELCOME_NONE = ("Ya estamos revisando las publicaciones{model}. Todavía no apareció ninguno que coincida: "
+                "te avisamos apenas aparezca.")
+WELCOME_INBOX = ("Para que nuestras alertas no terminen en Spam o Promociones, agregá este remitente a tus "
+                 "contactos o mové este email a Principal.")
+WELCOME_CTA = "Ver mis resultados"
 
 NO_MATCHES_SUBJECT = "Tu búsqueda de {model} todavía no tuvo coincidencias nuevas"
 NO_MATCHES_SUBJECT_ANY = "Tu búsqueda todavía no tuvo coincidencias nuevas"
@@ -476,6 +490,13 @@ def lifecycle_content(kind: str, payload: Mapping[str, Any], url: str, *,
                       limits: Mapping[str, Any] | None = None) -> tuple[Content, str]:
     """The email of one ledger row: its Content and its title."""
     model = payload.get("model") if isinstance(payload.get("model"), str) and payload["model"].strip() else None
+    if kind == "search_activated":
+        found, below = _count(payload.get("found")), _count(payload.get("below"))
+        subject = WELCOME_SUBJECT.format(model=model) if model else WELCOME_SUBJECT_ANY
+        of_model = f" de {model}" if model else ""
+        first = (_plural(WELCOME_FOUND, found, model=of_model, below=_plural(WELCOME_BELOW, below) if below else "")
+                 if found else WELCOME_NONE.format(model=f" para tu búsqueda{of_model}"))
+        return Content(subject, subject, lines=[first, WELCOME_INBOX], link=Link(WELCOME_CTA, url)), subject
     if kind == "trial_no_matches":
         subject = NO_MATCHES_SUBJECT.format(model=model) if model else NO_MATCHES_SUBJECT_ANY
         return Content(subject, subject, lines=[NO_MATCHES_BODY], link=Link(NO_MATCHES_CTA, url)), subject

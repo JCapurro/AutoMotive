@@ -30,7 +30,7 @@ TOKEN = "3f0c1a52-6c55-4a43-9f39-0d8f3c7c2b11"
 # The plans document forbids these in every plan email.
 BANNED = ("en tiempo real", "todos los portales", "el mas barato")
 ALL_ON = {"trial_no_matches": True, "trial_ended": True, "pass_expiring": True, "pass_expires_today": True,
-          "count_after_expiry": True}
+          "count_after_expiry": True, "search_activated": True}
 
 
 def render(msg: templates.EmailMessage) -> str:
@@ -55,7 +55,9 @@ class PlanEmailSnapshotTests(unittest.TestCase):
                                                                 {"found": 18, "below": 4, "ended": False}),
                           "lifecycle_count_after_expiry": email("count_after_expiry",
                                                                 {"model": "Ford Focus", "found": 9, "below": 2,
-                                                                 "stage": 7})}.items():
+                                                                 "stage": 7}),
+                          "lifecycle_search_activated": email("search_activated",
+                                                              {"model": "Ford Focus", "found": 14, "below": 2})}.items():
             with self.subTest(name=name):
                 text = render(msg)
                 path = SNAPSHOTS / f"{name}.txt"
@@ -63,6 +65,34 @@ class PlanEmailSnapshotTests(unittest.TestCase):
                     path.parent.mkdir(parents=True, exist_ok=True)
                     path.write_text(text, encoding="utf-8", newline="\n")
                 self.assertEqual(text, path.read_text(encoding="utf-8"))
+
+
+class SearchActivatedEmailTests(unittest.TestCase):
+    """The welcome: 45 minutes after the account's first search."""
+
+    def lines(self, msg: templates.EmailMessage) -> list[str]:
+        return msg.text.split("\n—\n")[0].splitlines()
+
+    def test_what_it_found_and_how_to_keep_the_alerts_out_of_spam(self):
+        msg = email("search_activated", {"model": "Ford Focus", "found": 14, "below": 2})
+        self.assertEqual(msg.subject, "Tu búsqueda de Ford Focus ya está activa")
+        self.assertEqual(self.lines(msg), [
+            "Tu búsqueda de Ford Focus ya está activa",
+            "Ya encontramos 14 autos que coinciden con tu búsqueda de Ford Focus, y 2 están por debajo de "
+            "publicaciones comparables. Te avisamos de los nuevos apenas aparezcan.",
+            "Para que nuestras alertas no terminen en Spam o Promociones, agregá este remitente a tus contactos "
+            "o mové este email a Principal.",
+            "Ver mis resultados: https://automotive.app/m/41",
+        ])
+
+    def test_nothing_found_yet_and_no_model(self):
+        msg = email("search_activated", {"found": 0, "below": 0})
+        self.assertEqual(msg.subject, "Tu búsqueda ya está activa")
+        self.assertEqual(self.lines(msg)[1], "Ya estamos revisando las publicaciones para tu búsqueda. "
+                                             "Todavía no apareció ninguno que coincida: te avisamos apenas aparezca.")
+        self.assertEqual(email("search_activated", {"model": "Ford Ka", "found": 1})
+                         .text.splitlines()[1], "Ya encontramos 1 auto que coincide con tu búsqueda de Ford Ka. "
+                         "Te avisamos de los nuevos apenas aparezcan.")
 
 
 class TrialNoMatchesEmailTests(unittest.TestCase):
@@ -210,7 +240,8 @@ class PlanEmailCopyTests(unittest.TestCase):
                     email("trial_ended", {"model": "Ford Focus", "found": 12, "below": 3}),
                     email("pass_expiring", {"found": 18, "below": 4}),
                     email("pass_expires_today", {"found": 18, "below": 4}),
-                    email("count_after_expiry", {"model": "Ford Focus", "found": 9, "below": 2})):
+                    email("count_after_expiry", {"model": "Ford Focus", "found": 9, "below": 2}),
+                    email("search_activated", {"model": "Ford Focus", "found": 14, "below": 2})):
             text = normalize_text(f"{msg.subject} {msg.text} {msg.html}")
             for term in BANNED + FORBIDDEN_TERMS:
                 self.assertNotRegex(text, rf"\b{normalize_text(term)}\b", term)
