@@ -100,6 +100,24 @@ const ALIASES: [string, string][] = [
   ["bs as", AMBA.id],
 ];
 
+// «Argentina», «todo el país», «cualquier lado»: the whole country. Argentina is also a
+// town in Santiago del Estero, so these words never go to the place lookup.
+const NATIONAL = /\b(todo el pais|toda la argentina|toda argentina|todo argentina|argentina|cualquier (lado|lugar|parte|zona|provincia)|todos lados|todo el territorio|nacional)\b/g;
+const ZONE_FILLER = new Set(["de", "del", "en", "la", "el", "o", "y"]);
+
+/** A zone that says «anywhere in the country». */
+export function isNationalZone(text: string): boolean {
+  return new RegExp(NATIONAL.source).test(fold(text));
+}
+
+/** The zone without its country words («Rosario, Argentina» → «rosario»); "" when nothing else is left. */
+export function withoutCountry(text: string): string {
+  return fold(text).replace(NATIONAL, " ").split(" ").filter((w) => w && !ZONE_FILLER.has(w)).join(" ");
+}
+
+/** draftToValues' note for «todo el país»: the review form opens at the approximate zone. */
+export const NATIONAL_ZONE_NOTE = "Pediste todo el país: en Zona elegí «Todo el país».";
+
 /** The place a free-text zone names ("zona norte", "Córdoba capital", "AMBA"); undefined if none. */
 export function placeFromText(text: string | null | undefined): Place | undefined {
   const folded = ` ${fold(text ?? "")} `;
@@ -109,6 +127,44 @@ export function placeFromText(text: string | null | undefined): Place | undefine
   if (city && (!hit || ["buenos aires", "bs as"].includes(hit[0]))) return city;
   if (!hit) return cityFromText(text ?? "");
   return hit[1] === AMBA.id ? AMBA : PLACES.find((p) => p.id === hit[1]);
+}
+
+/** «Santa Fe o Buenos Aires» → its places, without the bare country words. */
+function zoneParts(text: string): string[] {
+  return text.split(/\s+o\s+|\s+y\s+|\s*[,;/]\s*/i).map((p) => p.trim()).filter((p) => withoutCountry(p));
+}
+
+type Zone = SearchValues["location"];
+
+/** A free-text zone as draftToValues would place it. */
+function placeZone(text: string): Zone {
+  const legacy = placeFromText(text);
+  const place = cityFromText(text) ?? (legacy?.id === "caba" ? cityById("caba") : legacy);
+  return place ? { label: place.label, lat: place.lat, lon: place.lon, radius_km: place.radius } : null;
+}
+
+/**
+ * The zone of a draft draftToValues couldn't place, never a reason to stop:
+ * the first place of «Santa Fe o Buenos Aires» (one zone per search), else
+ * the whole country («cualquier lado de Argentina», or a zone we don't know). The note
+ * says what we did; it doesn't ask for anything (noteNeedsChoice).
+ */
+export function zoneFromText(text: string): { location: Zone; note: string } {
+  const raw = text.trim();
+  const parts = zoneParts(raw);
+  for (const [i, part] of parts.entries()) {
+    const location = placeZone(withoutCountry(part));
+    if (!location) continue;
+    const rest = parts.filter((_, j) => j !== i);
+    return {
+      location,
+      note: rest.length
+        ? `Buscamos en ${location.label}: cada búsqueda sigue una zona. Para ${rest.join(" y ")}, creá otra búsqueda o ampliá el radio abajo.`
+        : `Buscamos en ${location.label}. Si querés otra zona, cambiala abajo.`,
+    };
+  }
+  if (isNationalZone(raw)) return { location: null, note: "Buscamos en todo el país. Si querés acotar la zona, cambiala abajo." };
+  return { location: null, note: `«${raw}» no está en nuestra lista de zonas: buscamos en todo el país. Si querés acotarla, cambiala abajo.` };
 }
 
 /**
@@ -135,9 +191,17 @@ export function draftToValues(
     notes = [...notes.filter((n) => !n.includes("sin elegir modelo")), MODEL_LESS_DRAFT_NOTE];
   }
   let location = base.location;
-  if (v.location) {
-    const legacy = placeFromText(v.location);
-    const place = cityFromText(v.location) ?? (legacy?.id === "caba" ? cityById("caba") : legacy);
+  const named = v.location ? withoutCountry(v.location) : "";
+  if (v.location && !named) {
+    if (isNationalZone(v.location)) notes.push(NATIONAL_ZONE_NOTE);
+  } else if (v.location && zoneParts(v.location).length > 1) {
+    // One zone per search: the first we know, and a note naming the rest.
+    const zone = zoneFromText(v.location);
+    if (zone.location) location = { ...zone.location, radius_km: v.radius_km ?? zone.location.radius_km };
+    notes.push(zone.location ? zone.note : `No reconocimos la zona «${v.location}»: elegila de la lista.`);
+  } else if (v.location) {
+    const legacy = placeFromText(named);
+    const place = cityFromText(named) ?? (legacy?.id === "caba" ? cityById("caba") : legacy);
     if (place) {
       location = { label: place.label, lat: place.lat, lon: place.lon, radius_km: v.radius_km ?? place.radius };
     } else {
