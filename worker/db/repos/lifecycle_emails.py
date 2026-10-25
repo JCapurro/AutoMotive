@@ -95,3 +95,10 @@ async def record_trial_ends() -> int:
     async with connection() as cx:
         row = await (await cx.execute("SELECT public.record_trial_ends() AS n")).fetchone()
     return row["n"] if row else 0
+
+
+async def record_bonus_trial_ends() -> int:
+    """bonus_trial_ended events for the extra trials that are over (public.record_bonus_trial_ends)."""
+    async with connection() as cx:
+        row = await (await cx.execute("SELECT public.record_bonus_trial_ends() AS n")).fetchone()
+    return row["n"] if row else 0

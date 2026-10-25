@@ -5,6 +5,7 @@ worker runs again or restarts.
 Every TRIAL_REMINDER_TICK_SECONDS (main.py), with app_config.lifecycle_emails:
 
     record_trial_ends()                           trial_ended events, any hour
+    record_bonus_trial_ends()                     bonus_trial_ended events, any hour
     expired_matches.prune()                       2.5's old counts
           │
     enabled? email channel? WEB_BASE_URL (unsubscribe link)?   no ──> nothing more
@@ -46,8 +47,10 @@ log = logging.getLogger("lifecycle")
 
 # The kinds this worker sends, claimed in this order (the daily cap is shared):
 # the ones with a deadline today first, then the welcome (it's only worth it early).
-KINDS = ("pass_expires_today", "trial_ended", "search_activated", "pass_expiring", "trial_no_matches",
-         "count_after_expiry", "search_abandoned", "search_not_started", "search_feedback")
+# The extra trial's offer goes before 2.5: on day 7 it replaces that day's count.
+KINDS = ("pass_expires_today", "trial_ended", "bonus_trial_ended", "search_activated", "pass_expiring",
+         "trial_no_matches", "bonus_trial_ending", "bonus_trial_offer", "count_after_expiry",
+         "search_abandoned", "search_not_started", "search_feedback")
 DEFAULTS: dict[str, Any] = {"enabled": True, "send_from": "09:00", "send_until": "21:00",
                             "window_hours": 48, "max_per_day": 30,
                             "kinds": {"trial_no_matches": True, "trial_ended": True,
@@ -55,7 +58,10 @@ DEFAULTS: dict[str, Any] = {"enabled": True, "send_from": "09:00", "send_until":
                                       "count_after_expiry": True, "search_activated": True,
                                       # Remarketing: off until someone turns it on in /admin/config.
                                       "search_abandoned": False, "search_not_started": False,
-                                      "search_feedback": False}}
+                                      "search_feedback": False,
+                                      # The extra 7-day trial: off until someone turns it on.
+                                      "bonus_trial_offer": False, "bonus_trial_ending": False,
+                                      "bonus_trial_ended": False}}
 # Why the last tick did nothing without config (logged once, not every tick).
 _skipped_reason: str | None = None
 
@@ -139,6 +145,11 @@ async def run_lifecycle_emails(channel: Any, links: Links, *, now: datetime | No
     except Exception:
         log.exception("record_trial_ends failed")
         await log_error("lifecycle_email", "record_trial_ends", traceback.format_exc())
+    try:
+        await repo.record_bonus_trial_ends()
+    except Exception:
+        log.exception("record_bonus_trial_ends failed")
+        await log_error("lifecycle_email", "record_bonus_trial_ends", traceback.format_exc())
     try:
         await expired_matches.prune()
     except Exception:

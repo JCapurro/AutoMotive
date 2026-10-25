@@ -897,3 +897,130 @@ class RemarketingTests(LifecycleCase):
             await self.rows("SELECT record_email_feedback(%s, 'spam', null)", email)
         with self.assertRaisesRegex(Exception, "permission denied"):
             await self.rows("SELECT record_email_feedback(%s, 'other', null)", email, actor=user)
+
+
+class BonusTrialTests(LifecycleCase):
+    """The extra 7-day trial: offered on day 7 after the 72 h trial, started by the person (/app/bonus)."""
+
+    KINDS_ON = {"bonus_trial_offer": True, "bonus_trial_ending": True, "bonus_trial_ended": True}
+
+    async def asyncSetUp(self) -> None:
+        await super().asyncSetUp()
+        async with db.connection() as cx:
+            self.saved += await (await cx.execute(
+                "SELECT key, value FROM app_config WHERE key = 'bonus_trial'")).fetchall()
+        await self.config(kinds={**DEFAULTS["kinds"], **self.KINDS_ON})
+        await self.config("bonus_trial", backfill_since=None)
+
+    async def ended_trial(self, days_ago: float) -> tuple[str, int]:
+        """An account whose trial ended `days_ago`, with a search that found something and that the end paused."""
+        user = await self.account(trial_ended_hours_ago=days_ago * 24)
+        profile = await self.search(user, "Ka")
+        await self.match(profile, level="high", hours_ago=days_ago * 24 + 2)
+        await self.match(profile, hours_ago=days_ago * 24 + 3)
+        await self.rows("UPDATE listings SET year = 2018, price = 9800, currency = 'USD', mileage_km = 72000")
+        await self.rows("SELECT expire_commercial_access(%s)", user)
+        return user, profile
+
+    async def counted(self, user: str, profile: int, n: int) -> None:
+        [row] = await self.rows("SELECT count_after_expiry_end(%s) AS t", user)
+        for _ in range(n):
+            ref = uuid4().hex[:10]
+            [listing] = await self.rows(
+                "INSERT INTO listings (source, external_id, url, title, make, model) "
+                "VALUES ('mercadolibre', %s, %s, 'Ford Ka', 'Ford', 'Ka') RETURNING id", ref, f"https://example.test/{ref}")
+            await self.rows("INSERT INTO expired_search_matches (search_profile_id, listing_id, access_ended_at, level) "
+                            "VALUES (%s, %s, %s, 'good')", profile, listing["id"], row["t"])
+
+    async def bonus(self, user: str, fn: str = "my_bonus_trial") -> dict:
+        [row] = await self.rows(f"SELECT {fn}() AS v", actor=user)
+        return row["v"]
+
+    async def test_day_seven_offers_it_instead_of_the_count(self):
+        user, profile = await self.ended_trial(7 + 2 / 24)
+        await self.counted(user, profile, 4)
+
+        self.assertEqual(await self.send(), 1)
+        offer = await self.ledger(user, "bonus_trial_offer")
+        self.assertEqual((offer["target"], offer["search_profile_id"], offer["event_key"]), ("/app/bonus", profile, "bonus"))
+        self.assertEqual({k: offer["payload"][k] for k in ("model", "found", "new", "below")},
+                         {"model": "Ford Ka", "found": 2, "new": 4, "below": 0})
+        self.assertEqual(offer["payload"]["cars"][0],
+                         {"title": "Ford Fiesta", "year": 2018, "price": 9800, "currency": "USD", "km": 72000,
+                          "below": True})                                # the opportunity first
+        [body] = self.emails()
+        self.assertEqual(body["subject"], "Te damos 7 días más para tu búsqueda de Ford Ka")
+        self.assertIn(f"Activar mis 7 días: https://automotive.app/m/{offer['id']}", body["text"])
+        count = await self.ledger(user, "count_after_expiry")
+        self.assertTrue(count is None or count["status"] == "skipped")
+
+    async def test_not_before_day_seven_nor_to_a_payer_nor_without_results(self):
+        early, _ = await self.ended_trial(5)
+        payer, _ = await self.ended_trial(8)
+        await self.pay(payer)
+        empty = await self.account(trial_ended_hours_ago=8 * 24)
+        await self.search(empty)
+        self.assertEqual(await self.send(), 0)
+        for user in (early, payer, empty):
+            self.assertIsNone(await self.ledger(user, "bonus_trial_offer"))
+
+    async def test_the_backfill_reaches_trials_that_ended_long_ago(self):
+        user, _ = await self.ended_trial(30)
+        self.assertEqual(await self.send(), 0)
+        await self.config("bonus_trial", backfill_since=(datetime.now(AR) - timedelta(days=60)).isoformat())
+        self.assertEqual(await self.send(), 1)
+        self.assertEqual((await self.ledger(user, "bonus_trial_offer"))["status"], "sent")
+
+    async def test_the_click_starts_seven_days_once_and_brings_the_search_back(self):
+        user, profile = await self.ended_trial(8)
+        self.assertEqual((await self.bonus(user))["state"], "unavailable")    # no offer sent yet
+        self.assertEqual(await self.send(), 1)
+        self.assertEqual(await self.bonus(user), {"state": "available", "days": 7})
+
+        started = await self.bonus(user, "start_my_bonus_trial")
+        self.assertEqual((started["state"], started["started"], started["searches_reactivated"]), ("active", True, 1))
+        [search] = await self.rows("SELECT enabled FROM search_profiles WHERE id = %s", profile)
+        self.assertTrue(search["enabled"])
+        [access] = await self.rows("SELECT plan_limits_for(%s) AS v", user)
+        self.assertEqual((access["v"]["state"], access["v"]["bonus_trial"]), ("trial", True))
+        [event] = await self.events(user, "bonus_trial_started")
+        self.assertEqual((event["email_id"], event["searches_reactivated"]),
+                         ((await self.ledger(user, "bonus_trial_offer"))["id"], 1))
+        self.assertEqual(await self.events(user, "reactivated_from_count_email"), [])
+
+        again = await self.bonus(user, "start_my_bonus_trial")
+        self.assertEqual((again["state"], again["started"]), ("active", False))
+        self.assertEqual(len(await self.events(user, "bonus_trial_started")), 1)
+        with self.assertRaisesRegex(Exception, "authentication_required"):
+            await self.rows("SELECT start_my_bonus_trial()")              # no signed-in account
+
+    async def test_day_five_and_the_end_then_two_five_counts_from_the_new_end(self):
+        user, profile = await self.ended_trial(8)
+        self.assertEqual(await self.send(), 1)
+        await self.bonus(user, "start_my_bonus_trial")
+        await self.match(profile, level="high", hours_ago=1)
+
+        await self.rows("UPDATE profiles SET bonus_trial_started_at = now() - interval '5 days 1 hour' WHERE id = %s",
+                        user)
+        self.requests.clear()
+        self.assertEqual(await self.send(), 1)
+        ending = await self.ledger(user, "bonus_trial_ending")
+        self.assertEqual((ending["target"], ending["payload"]["found"], ending["payload"]["below"]),
+                         (f"/app/searches/{profile}", 1, 1))
+        self.assertEqual(self.emails()[0]["subject"], "Te quedan 2 días gratis para tu búsqueda de Ford Ka")
+
+        await self.rows("UPDATE profiles SET bonus_trial_started_at = now() - interval '7 days 1 hour' WHERE id = %s",
+                        user)
+        await self.rows("SELECT expire_commercial_access(%s)", user)
+        self.requests.clear()
+        self.assertEqual(await self.send(), 1)
+        ended = await self.ledger(user, "bonus_trial_ended")
+        self.assertEqual((ended["target"], ended["payload"]["found"]), ("/app/pro?plan=pass_30", 1))
+        self.assertEqual(self.emails()[0]["subject"], "Terminaron tus 7 días: encontramos 1 auto para tu búsqueda")
+        [event] = await self.events(user, "bonus_trial_ended")
+        self.assertEqual((event["results"], event["opportunities"], event["converted"]), (1, 1, False))
+        [row] = await self.rows("SELECT count_after_expiry_end(%s) > now() - interval '2 hours' AS fresh, "
+                                "       (SELECT count(*) FROM count_after_expiry_searches() c WHERE c.user_id = %s) AS n",
+                                user, user)
+        self.assertEqual((row["fresh"], row["n"]), (True, 1))
+        self.assertEqual((await self.bonus(user))["state"], "unavailable")    # once per account

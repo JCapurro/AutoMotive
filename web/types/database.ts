@@ -1254,6 +1254,12 @@ isOneToOne: false
 "track_lifecycle_click":
 { Args: { "p_id": number }; Returns: string | null
                            },
+"my_bonus_trial":
+{ Args: Record<PropertyKey, never>; Returns: Json
+                           },
+"start_my_bonus_trial":
+{ Args: Record<PropertyKey, never>; Returns: Json
+                           },
 "record_email_feedback":
 { Args: { "p_email": number,"p_reason": string,"p_comment": string | null }; Returns: number | null
                            },
