@@ -20,9 +20,10 @@ from typing import Any
 import config
 import db
 from db.repos import catalog as catalog_repo
+from db.repos import catalog_misses as misses_repo
 from db.repos import llm_jobs as jobs_repo
 from llm.provider import LLMError, LLMProvider
-from normalization.drafts import normalize_drafts
+from normalization.drafts import catalog_misses, normalize_drafts
 
 log = logging.getLogger(__name__)
 
@@ -46,7 +47,15 @@ async def _parse_search(provider: LLMProvider, job: dict[str, Any]) -> dict[str,
     async with db.connection() as cx:
         models = await catalog_repo.load_models(cx)
     drafts = await provider.parse_search(text, models)
-    return normalize_drafts(models, drafts)
+    output = normalize_drafts(models, drafts)
+    if misses := catalog_misses(models, drafts):
+        # Bookkeeping for /admin: a failure here never fails the user's job.
+        try:
+            async with db.connection() as cx:
+                await misses_repo.record(cx, misses, job["id"])
+        except Exception:
+            log.exception("llm job %s: catalog_misses", job["id"])
+    return output
 
 
 _HANDLERS = {"parse_search": _parse_search}

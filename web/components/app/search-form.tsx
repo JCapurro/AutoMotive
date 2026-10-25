@@ -570,6 +570,8 @@ export function SearchForm({
                 disabled={!d.make}
                 className="w-full"
                 required
+                // An assisted draft with the make but no model ("No encontramos «Chery Arrizo 8»"): the model is what's left.
+                autoFocus={origin?.mode === "assisted" && Boolean(initial.make) && !initial.model}
               >
                 <NativeSelectOption value="">{d.make ? "Elegí un modelo" : "Primero elegí la marca"}</NativeSelectOption>
                 {models.map((m) => (

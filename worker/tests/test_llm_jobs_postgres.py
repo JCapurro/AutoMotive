@@ -15,6 +15,7 @@ from psycopg.types.json import Jsonb
 import db
 from db.repos import llm_jobs as jobs_repo
 from llm.replay import replay_provider
+from llm.schemas import SearchDraft
 from pgcase import PostgresTestCase, requires_db
 from pipeline import llm_jobs
 
@@ -29,6 +30,7 @@ class LlmJobsCase(PostgresTestCase):
         await super().asyncSetUp()
         async with db.connection() as cx:
             await cx.execute("DELETE FROM llm_jobs")
+            await cx.execute("DELETE FROM catalog_misses")
             row = await (await cx.execute(
                 "INSERT INTO auth.users (instance_id, id, aud, role, email, created_at, updated_at) "
                 "VALUES ('00000000-0000-0000-0000-000000000000', gen_random_uuid(), 'authenticated', "
@@ -78,6 +80,40 @@ class QueueTests(LlmJobsCase):
                           "transmission": "manual"})
         models = [d["values"]["model"] for d in (await self.job(two))["output"]["drafts"]]
         self.assertEqual(models, ["Fiesta", "Polo"])
+
+    async def test_models_the_catalog_lacks_are_counted(self):
+        tesla = await self.enqueue("Tesla Model 3 2021")
+        await self.enqueue("Tesla Model 3 2021")
+        await self.enqueue(FIESTA_TEXT)
+
+        self.assertEqual(await llm_jobs.drain(replay_provider()), 3)
+
+        async with db.connection() as cx:
+            rows = await (await cx.execute("SELECT * FROM catalog_misses")).fetchall()
+        self.assertEqual([(r["said"], r["make"], r["count"]) for r in rows], [("tesla model 3", None, 2)])
+        self.assertEqual(rows[0]["last_llm_job_id"], tesla + 1)
+        self.assertLessEqual(rows[0]["first_seen_at"], rows[0]["last_seen_at"])
+
+    async def test_a_known_make_with_an_unknown_model_keeps_the_make(self):
+        class Omoda:
+            name = "omoda"
+
+            async def parse_search(self, text, catalog=()):
+                return [SearchDraft(make="Chery", model="Omoda 5", trim=None, trim_strict=False, year_min=None,
+                                    year_max=None, price_max=None, price_target=None, currency=None, km_max=None,
+                                    km_target=None, transmission=None, fuel=None, seller_type=None,
+                                    location=None, radius_km=None)]
+
+        job_id = await self.enqueue("chery omoda 5")
+        await llm_jobs.drain(Omoda())
+        self.assertEqual((await self.job(job_id))["status"], "done")
+        async with db.connection() as cx:
+            row = await (await cx.execute("SELECT said, make, count FROM catalog_misses")).fetchone()
+        self.assertEqual((row["said"], row["make"], row["count"]), ("chery omoda 5", "Chery", 1))
+
+    async def test_catalog_misses_are_server_only(self):
+        with self.assertRaises(psycopg.errors.InsufficientPrivilege):
+            await self.as_user("SELECT * FROM catalog_misses")
 
     async def test_provider_failure_marks_the_job_failed(self):
         job_id = await self.enqueue("Un texto que nadie grabó")
