@@ -50,6 +50,9 @@ _KNOWN_LOCATIONS_RAW: dict[str, Coords] = {
     "capital federal": (-34.6037, -58.3816),
     "caba": (-34.6037, -58.3816),
     "ciudad autonoma de buenos aires": (-34.6037, -58.3816),
+    # Facebook Marketplace writes "Ciudad de Buenos Aires, CF"; Nominatim
+    # doesn't find it, and "buenos aires" alone is only a province fallback.
+    "ciudad de buenos aires": (-34.6037, -58.3816),
     "la plata": (-34.9205, -57.9536),
     "mar del plata": (-38.0055, -57.5426),
     "bahia blanca": (-38.7183, -62.2663),
@@ -61,6 +64,8 @@ _KNOWN_LOCATIONS_RAW: dict[str, Coords] = {
     "vicente lopez": (-34.5299, -58.4742),
     "san fernando": (-34.4416, -58.5598),
     "escobar": (-34.3494, -58.7916),
+    "ingeniero maschwitz": (-34.3817, -58.7411),
+    "maschwitz": (-34.3817, -58.7411),
     "san martin": (-34.5763, -58.5364),
     "general san martin": (-34.5763, -58.5364),
     "tres de febrero": (-34.6053, -58.5630),
