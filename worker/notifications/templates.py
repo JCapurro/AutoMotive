@@ -351,7 +351,8 @@ def email(n: Notification, links: Links, now: datetime) -> EmailMessage:
     html = render_email_html(c, kind=n.kind, now=now, day=n.payload.get("date"),
                              detail_url=detail, app_url=app_url,
                              unsubscribe_url=unsubscribe, footer=footer,
-                             unsubscribe_label=UNSUBSCRIBE_ALERTS)
+                             unsubscribe_label=UNSUBSCRIBE_ALERTS,
+                             open_pixel_url=links.open_pixel("n", n.id))
     return EmailMessage(c.subject, "\n".join(text), html)
 
 
@@ -527,5 +528,6 @@ def lifecycle_email(row: Mapping[str, Any], links: Links, now: datetime, *,
 
     html = render_email_html(c, kind=kind, now=now, day=None, detail_url=None, app_url=None,
                              unsubscribe_url=unsubscribe, footer=footer, unsubscribe_label=UNSUBSCRIBE,
-                             eyebrow=LIFECYCLE_EYEBROW[kind], title=title, preheader=c.lines[0])
+                             eyebrow=LIFECYCLE_EYEBROW[kind], title=title, preheader=c.lines[0],
+                             open_pixel_url=links.open_pixel("m", row["id"]))
     return EmailMessage(c.subject, "\n".join(text), html)

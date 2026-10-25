@@ -1242,6 +1242,9 @@ isOneToOne: false
         isOneToOne: false
         isSetofReturn: true
       } },
+"track_email_open":
+{ Args: { "p_id": number,"p_kind": string }; Returns: boolean
+                           },
 "track_lifecycle_click":
 { Args: { "p_id": number }; Returns: string | null
                            },
