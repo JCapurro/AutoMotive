@@ -19,14 +19,25 @@ export type Catalog = CatalogMake[];
 
 /** vehicle_catalog as make → model → trims, for the form's selects (autocomplete, sección 9). */
 export async function loadCatalog(supabase: SupabaseClient<Database>): Promise<Catalog> {
-  const { data } = await supabase
-    .from("vehicle_catalog")
-    .select("make, model, trim, year_from, year_to, transmissions, fuels, body_types")
-    .order("make")
-    .order("model")
-    .limit(5000);
+  // PostgREST caps a response at max_rows (1000) whatever .limit() says, and the
+  // catalog has more rows than that (models + trims): page through it, or the
+  // makes at the end of the alphabet (Volkswagen, Volvo) never reach the form.
+  const PAGE = 1000;
+  const data: Database["public"]["Tables"]["vehicle_catalog"]["Row"][] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data: page } = await supabase
+      .from("vehicle_catalog")
+      .select("make, model, trim, year_from, year_to, transmissions, fuels, body_types")
+      .order("make")
+      .order("model")
+      .order("trim", { nullsFirst: true })
+      .order("id")
+      .range(from, from + PAGE - 1);
+    data.push(...((page ?? []) as typeof data));
+    if (!page || page.length < PAGE) break;
+  }
   const makes = new Map<string, Map<string, CatalogModel>>();
-  for (const row of data ?? []) {
+  for (const row of data) {
     const models = makes.get(row.make) ?? new Map<string, CatalogModel>();
     makes.set(row.make, models);
     const entry =
