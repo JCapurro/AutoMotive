@@ -2,9 +2,7 @@
 Terminaron tus 7 días: encontramos 12 autos para tu búsqueda
 === email text ===
 Terminaron tus 7 días
-En 7 días encontramos 12 autos para tu búsqueda de Ford Ka, y 1 estaba por debajo de publicaciones comparables.
-Para seguir recibiendo avisos, Particular sale $15.000 por 30 días, con 3 búsquedas y pago único.
-Tu historial y tus favoritos quedan guardados.
+Encontramos 12 autos para tu búsqueda de Ford Ka.
 Seguir con Particular: https://automotive.app/m/41
 
 —
@@ -17,13 +15,11 @@ Dejar de recibir estos emails: https://automotive.app/baja?t=3f0c1a52-6c55-4a43-
 <title>Terminaron tus 7 días: encontramos 12 autos para tu búsqueda</title>
 <style>@media only screen and (max-width:480px){.pad{padding-left:20px!important;padding-right:20px!important}.outer{padding:12px 6px!important}}</style></head>
 <body style="margin:0;padding:0;background:#f1f3f7;font-family:Arial,Helvetica,sans-serif;color:#14213d;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%">
-<div style="display:none;font-size:1px;color:#f1f3f7;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all" aria-hidden="true">En 7 días encontramos 12 autos para tu búsqueda de Ford Ka, y 1 estaba por debajo de publicaciones comparables.</div>
+<div style="display:none;font-size:1px;color:#f1f3f7;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all" aria-hidden="true">Encontramos 12 autos para tu búsqueda de Ford Ka.</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;background:#f1f3f7;"><tr><td class="outer" align="center" style="padding:24px 12px"><!--[if mso]><table role="presentation" width="600"><tr><td><![endif]--><div style="max-width:600px;margin:0 auto"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;"><tr><td bgcolor="#ffffff" style="border:1px solid #d8dde6"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;"><tr><td bgcolor="#ffe14d" height="5" style="font-size:0;line-height:0">&nbsp;</td></tr><tr><td class="pad" style="padding:22px 28px;border-bottom:1px solid #d8dde6"><img src="cid:ese-auto-logo" alt="S Auto" width="132" height="38" border="0" style="display:block;width:132px;height:38px;border:0;font-size:26px;font-weight:bold;color:#14213d"><p style="margin:0;margin-top:8px;font-size:12px;line-height:19px;color:#4e5a73">Decinos cuál. Te avisamos cuando aparezca.</p></td></tr></table><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;"><tr><td class="pad" style="padding:28px;overflow-wrap:anywhere;word-break:break-word"><p style="margin:0;font-size:10px;line-height:16px;letter-spacing:2px;font-weight:bold;color:#4e5a73">TUS 7 DÍAS GRATIS</p>
 <p style="margin:0;margin-top:6px;font-size:12px;line-height:18px;color:#4e5a73">20 de octubre de 2026</p>
 <h1 style="margin:16px 0 0;font-size:30px;line-height:36px;letter-spacing:-1px;font-weight:bold;color:#14213d">Terminaron tus 7 días</h1>
-<p style="margin:0;margin-top:10px;font-size:14px;line-height:22px;color:#4e5a73;padding:10px 12px;background:#ffe14d;font-weight:bold;color:#14213d;">En 7 días encontramos 12 autos para tu búsqueda de Ford Ka, y 1 estaba por debajo de publicaciones comparables.</p>
-<p style="margin:0;margin-top:10px;font-size:14px;line-height:22px;color:#4e5a73;">Para seguir recibiendo avisos, Particular sale $15.000 por 30 días, con 3 búsquedas y pago único.</p>
-<p style="margin:0;margin-top:10px;font-size:14px;line-height:22px;color:#4e5a73;">Tu historial y tus favoritos quedan guardados.</p>
+<p style="margin:0;margin-top:10px;font-size:14px;line-height:22px;color:#4e5a73;">Encontramos 12 autos para tu búsqueda de Ford Ka.</p>
 <div style="margin-top:24px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;"><tr><td bgcolor="#ffe14d" style="padding:16px 18px;border-radius:5px;text-align:center"><a href="https://automotive.app/m/41" style="color:#14213d;text-decoration:none;font-size:15px;line-height:22px;font-weight:bold;display:block">Seguir con Particular &rarr;</a></td></tr></table></div></td></tr></table><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;"><tr><td class="pad" bgcolor="#f1f3f7" style="padding:22px 28px;border-top:1px solid #d8dde6"><p style="margin:0;font-size:16px;line-height:23px;font-weight:bold;color:#14213d">Menos buscar. Más encontrar.</p>
 <p style="margin:0;margin-top:10px;font-size:11px;line-height:18px;color:#4e5a73">Recibís este email porque se activaron 7 días gratis en Ese Auto con esta dirección.</p>
 <p style="margin:12px 0 0"><a href="https://automotive.app/baja?t=3f0c1a52-6c55-4a43-9f39-0d8f3c7c2b11" style="color:#4e5a73;font-size:11px;line-height:18px;text-decoration:underline">Dejar de recibir estos emails</a></p></td></tr></table></td></tr></table></div><!--[if mso]></td></tr></table><![endif]--></td></tr></table>

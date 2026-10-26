@@ -5,7 +5,7 @@
     <WEB_BASE_URL>/r/<id>?to=listing&l=<listing_id>   (one item of a digest)
 
 the button of a plan email (docs/MAILS_DE_PLAN.md) is /m/<lifecycle_email_id>,
-a reason link of a remarketing email is /f/<lifecycle_email_id>?r=<reason>,
+the feedback link of a remarketing email is /f/<lifecycle_email_id>,
 every email carries a 1 px image that marks it opened,
 
     <WEB_BASE_URL>/o/<id>?k=n|m             → notifications | lifecycle_emails
@@ -79,11 +79,12 @@ class Links:
         query = self._signed({}, "m", email_id, owner)
         return f"{self.base_url}/m/{email_id}" + (f"?{urlencode(query)}" if query else "")
 
-    def feedback(self, email_id: int, reason: str, *, owner: str | None = None) -> str:
-        """A reason link of a remarketing email: /f/<id> asks to confirm it.
-        Signed like the email's button (scope "m"): same email, same owner."""
-        query = self._signed({"r": reason}, "m", email_id, owner)
-        return f"{self.base_url}/f/{email_id}?{urlencode(query)}"
+    def feedback(self, email_id: int, reason: str | None = None, *, owner: str | None = None) -> str:
+        """The feedback link of a remarketing email: /f/<id> lists the reasons
+        (`reason` comes marked) and asks to confirm. Signed like the email's
+        button (scope "m"): same email, same owner."""
+        query = self._signed({"r": reason} if reason else {}, "m", email_id, owner)
+        return f"{self.base_url}/f/{email_id}" + (f"?{urlencode(query)}" if query else "")
 
     def open_pixel(self, kind: str, item_id: int) -> str | None:
         """The 1 px image that marks an email opened: kind "n" (notifications)

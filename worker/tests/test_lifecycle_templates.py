@@ -41,7 +41,7 @@ def render(msg: templates.EmailMessage) -> str:
                       "=== email html ===", msg.html, ""])
 
 
-REMARKETING = {"sender_name": "Juan de Ese Auto", "signer": "Juan", "reply_to": "juan@automotive.test"}
+REMARKETING = {"reply_to": "juan@automotive.test"}
 
 
 def email(kind: str, payload: dict, **kw) -> templates.EmailMessage:
@@ -312,46 +312,40 @@ if __name__ == "__main__":
 class RemarketingEmailTests(unittest.TestCase):
     """Accounts without a search (docs/MAILS_DE_PLAN.md, «Remarketing»)."""
 
-    def test_the_request_comes_back_with_its_day_in_argentina(self):
+    def test_the_brand_template_with_one_line_and_one_button(self):
         msg = email("search_abandoned", ABANDONED)
-        self.assertEqual(msg.subject, "Tu búsqueda de Toyota Hilux quedó sin activar")
-        self.assertIn("El 23/10 nos escribiste: «Toyota hilux 2.5 de 2013 a 2016».", msg.text)
-        self.assertIn("Activar mi búsqueda: https://automotive.app/m/41", msg.text)
-
-    def test_a_person_writes_it_without_the_brand_template(self):
-        msg = email("search_not_started", {})
-        self.assertEqual((msg.from_name, msg.reply_to, msg.logo), ("Juan de Ese Auto", "juan@automotive.test", False))
-        self.assertIn("Juan, de Ese Auto", msg.text)
-        self.assertNotIn("cid:", msg.html)
+        self.assertEqual(msg.subject, "Tu búsqueda de Toyota Hilux está lista")
+        self.assertEqual(msg.text.split("\n—\n")[0].splitlines(),
+                         ["Tu búsqueda de Toyota Hilux está lista", templates.ABANDONED_BODY,
+                          "Activar mi búsqueda: https://automotive.app/m/41"])
+        self.assertIn("cid:", msg.html)
+        self.assertIn("Menos buscar. Más encontrar.", msg.html)
         self.assertIn('/o/41?k=m"', msg.html)
+        self.assertNotIn("/f/41", msg.text)
 
-    def test_reason_links_and_wrong_search_only_after_a_request(self):
-        abandoned = email("search_abandoned", ABANDONED).text
-        not_started = email("search_not_started", {}).text
-        for reason, _ in templates.FEEDBACK_REASONS:
-            self.assertIn(f"https://automotive.app/f/41?r={reason}", abandoned)
-            self.assertEqual(f"r={reason}" in not_started, reason != "wrong_search")
+    def test_brand_sender_and_reply_to_from_the_config(self):
+        msg = email("search_not_started", {})
+        self.assertEqual((msg.from_name, msg.reply_to, msg.logo), (None, "juan@automotive.test", True))
+        self.assertIsNone(email("search_not_started", {}, remarketing={"reply_to": "no es un email"}).reply_to)
 
-    def test_without_reply_to_it_does_not_ask_for_a_reply(self):
-        msg = email("search_feedback", {"after": "search_not_started"}, remarketing={"reply_to": "no es un email"})
-        self.assertIsNone(msg.reply_to)
-        self.assertNotIn(templates.REPLY_LINE, msg.text)
-        self.assertIn("Vi que te sumaste a Ese Auto y no llegaste a armar una búsqueda.", msg.text)
-        self.assertIn("Si todavía estás buscando, empezá acá:", msg.text)
+    def test_the_follow_up_links_to_the_feedback_page(self):
+        msg = email("search_feedback", {"model": "Toyota Hilux", "after": "search_abandoned"})
+        self.assertEqual(msg.subject, "Tu Toyota Hilux te está esperando")
+        self.assertIn("Activar mi búsqueda: https://automotive.app/m/41", msg.text)
+        self.assertIn("¿Algo te frenó? Contanos: https://automotive.app/f/41", msg.text)
+        self.assertIn('href="https://automotive.app/f/41"', msg.html)
+        msg = email("search_feedback", {"after": "search_not_started"})
+        self.assertEqual(msg.subject, "Tu próximo auto te está esperando")
+        self.assertIn("Empezar mi búsqueda:", msg.text)
 
-    def test_the_follow_up_without_a_resolved_model(self):
-        msg = email("search_feedback", {"after": "search_abandoned"})
-        self.assertIn("Soy Juan, hago Ese Auto. Vi que empezaste a armar una búsqueda y no seguiste.", msg.text)
-        self.assertIn("r=wrong_search", msg.text)
-
-    def test_signed_links_sign_the_reason_links_too(self):
+    def test_signed_links_sign_the_feedback_link_too(self):
         links = Links("https://automotive.app", "s" * 32)
-        row = {"id": 41, "kind": "search_not_started", "payload": {}, "unsubscribe_token": TOKEN, "user_id": "u-1"}
+        row = {"id": 41, "kind": "search_feedback", "payload": {}, "unsubscribe_token": TOKEN, "user_id": "u-1"}
         msg = templates.lifecycle_email(row, links, NOW)
         button = links.lifecycle(41, owner="u-1")
         signature = button.split("s=")[1]
         self.assertIn(button, msg.text)
-        self.assertIn(f"/f/41?r=other&s={signature}", msg.text)
+        self.assertIn(f"/f/41?s={signature}", msg.text)
 
     def test_no_banned_or_forbidden_words(self):
         for kind, payload in (("search_abandoned", ABANDONED), ("search_not_started", {}),
@@ -368,33 +362,29 @@ class BonusTrialEmailTests(unittest.TestCase):
     def lines(self, msg: templates.EmailMessage) -> list[str]:
         return msg.text.split("\n—\n")[0].splitlines()
 
-    def test_the_offer_shows_what_appeared_and_up_to_three_cars(self):
-        msg = email("bonus_trial_offer", {**BONUS, "cars": BONUS["cars"] * 2})
+    def test_the_offer_says_what_appeared_in_one_line(self):
+        msg = email("bonus_trial_offer", BONUS)
         self.assertEqual(msg.subject, "Te damos 7 días más para tu búsqueda de Ford Ka")
-        lines = self.lines(msg)
-        self.assertIn("Desde que pausamos tu búsqueda aparecieron 41 autos nuevos que coinciden, y 5 están "
-                      "por debajo de publicaciones comparables.", lines)
-        self.assertIn("Ford Ka 1.5 S 2018 · USD 9.800 · 72.000 km · por debajo de comparables", lines)
-        self.assertIn("Ford Ka SE 2019 · $14.500.000 · 51.000 km", lines)
-        self.assertEqual(sum(line.startswith("Ford Ka") for line in lines), 3)
-        self.assertEqual(lines[-1], "Activar mis 7 días: https://automotive.app/m/41")
+        self.assertEqual(self.lines(msg), ["Te damos 7 días más para tu búsqueda de Ford Ka",
+                                           "Desde que pausamos tu búsqueda aparecieron 41 autos nuevos. "
+                                           "Reactivala gratis 7 días, sin tarjeta.",
+                                           "Activar mis 7 días: https://automotive.app/m/41"])
+        self.assertNotIn("Ford Ka 1.5 S", msg.html)
 
-    def test_nothing_new_falls_back_to_what_the_trial_found_and_no_cars_no_list(self):
-        lines = self.lines(email("bonus_trial_offer", {"found": 1, "new": 0, "cars": [{"title": " "}]}))
-        self.assertEqual(lines[0], "Te damos 7 días más para tu búsqueda")
-        self.assertIn("En tu prueba encontramos 1 auto para tu búsqueda.", lines)
-        self.assertNotIn(templates.BONUS_CARS, lines)
+    def test_nothing_new_falls_back_to_what_the_trial_found(self):
+        lines = self.lines(email("bonus_trial_offer", {"found": 1, "new": 0}))
+        self.assertEqual(lines[1], "En tu prueba encontramos 1 auto. Reactivala gratis 7 días, sin tarjeta.")
 
-    def test_ending_names_the_day_and_the_offer(self):
-        lines = self.lines(email("bonus_trial_ending", {"found": 0, "ends_at": "2026-11-02T02:00:00+00:00"}))
-        self.assertEqual(lines[1:], ["El 1/11 tu búsqueda se pausa sola. Si querés seguir, Particular sale $15.000 "
-                                     "por 30 días, con 3 búsquedas y pago único.",
+    def test_ending_names_the_day(self):
+        lines = self.lines(email("bonus_trial_ending", {"found": 3, "ends_at": "2026-11-02T02:00:00+00:00"}))
+        self.assertEqual(lines[:3], ["Te quedan 2 días gratis", "Ya encontramos 3 autos. El 1/11 tu búsqueda se pausa.",
                                      "Ver mis resultados: https://automotive.app/m/41"])
+        self.assertTrue(email("bonus_trial_ending", {"found": 0}).html)
 
     def test_ended_without_results(self):
         msg = email("bonus_trial_ended", {"found": 0}, offer=None)
         self.assertEqual(msg.subject, "Terminaron tus 7 días")
-        self.assertIn("Para seguir recibiendo avisos, elegí Particular.", msg.text)
+        self.assertIn(templates.BONUS_ENDED_NONE, msg.text)
 
     def test_no_banned_or_forbidden_words(self):
         for kind, payload in (("bonus_trial_offer", BONUS), ("bonus_trial_ending", {"found": 3, "below": 1}),
