@@ -260,6 +260,8 @@ _KNOWN_LOCATIONS_RAW: dict[str, Coords] = {
     "wilde buenos aires": (-34.7000, -58.3167),
     "grand bourg buenos aires": (-34.4800, -58.7300),
     "fray luis beltran santa fe": (-32.8167, -60.7333),
+    # Nominatim put "Monte, Buenos Aires" in Tierra del Fuego.
+    "monte buenos aires": (-35.4472, -58.8083),
 }
 # deRuedas also writes "Capital, <Provincia>" for the other provinces. Left to
 # Nominatim, "Capital, Santa Fe" landed in San Juan. Never Buenos Aires: CABA
