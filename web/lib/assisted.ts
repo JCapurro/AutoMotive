@@ -7,10 +7,11 @@
  */
 import { z } from "zod";
 
-import { cityById, cityFromText } from "@/lib/argentina-locations";
+import { cityById, cityFromText, provinceCapital } from "@/lib/argentina-locations";
 
 import { bodyTypeCodes, bodyTypesText } from "@/lib/copy";
 import { AMBA, PLACES, type Place } from "@/lib/locations";
+import { inWords } from "@/lib/pro";
 import { type SearchValues, isModelLess } from "@/lib/search-form";
 
 export const ASSISTED_MIN_CHARS = 3;
@@ -50,6 +51,8 @@ const DraftValues = z.object({
   body_types: z.array(z.string()).default([]),
   seller_type: z.enum(["", "private", "dealer"]),
   location: z.string(),
+  // Every place the text names, the first also in `location`; outputs written before it have none.
+  locations: z.array(z.string()).default([]),
   radius_km: z.number().nullable(),
 });
 
@@ -184,6 +187,7 @@ export function draftToValues(
   draft: AssistedDraft,
   base: SearchValues,
   modelLessSearch = true,
+  maxLocations: number | null = null,
 ): { values: SearchValues; notes: string[] } {
   const v = draft.values;
   let notes = [...draft.notes];
@@ -191,21 +195,31 @@ export function draftToValues(
     notes = [...notes.filter((n) => !n.includes("sin elegir modelo")), MODEL_LESS_DRAFT_NOTE];
   }
   let location = base.location;
-  const named = v.location ? withoutCountry(v.location) : "";
-  if (v.location && !named) {
+  let extraLocations = base.extra_locations;
+  // Every place the text names, each «Santa Fe o Buenos Aires» split into its parts and the country
+  // words dropped; drafts from before `locations` carry theirs in `location`.
+  const texts = (v.locations.length ? v.locations : v.location ? [v.location] : []).flatMap(zoneParts);
+  if (texts.length === 0 && v.location) {
     if (isNationalZone(v.location)) notes.push(NATIONAL_ZONE_NOTE);
-  } else if (v.location && zoneParts(v.location).length > 1) {
-    // One zone per search: the first we know, and a note naming the rest.
-    const zone = zoneFromText(v.location);
-    if (zone.location) location = { ...zone.location, radius_km: v.radius_km ?? zone.location.radius_km };
-    notes.push(zone.location ? zone.note : `No reconocimos la zona «${v.location}»: elegila de la lista.`);
-  } else if (v.location) {
-    const legacy = placeFromText(named);
-    const place = cityFromText(named) ?? (legacy?.id === "caba" ? cityById("caba") : legacy);
-    if (place) {
-      location = { label: place.label, lat: place.lat, lon: place.lon, radius_km: v.radius_km ?? place.radius };
-    } else {
-      notes.push(`No reconocimos la zona «${v.location}»: elegila de la lista.`);
+  } else if (texts.length) {
+    const places: NonNullable<SearchValues["location"]>[] = [];
+    for (const text of texts) {
+      const named = withoutCountry(text);
+      const legacy = placeFromText(named);
+      const place = cityFromText(named) ?? (legacy?.id === "caba" ? cityById("caba") : legacy) ?? provinceCapital(named);
+      if (!place) {
+        notes.push(`No reconocimos la zona «${text}»: elegila de la lista.`);
+      } else if (!places.some((p) => p.lat === place.lat && p.lon === place.lon)) {
+        places.push({ label: place.label, lat: place.lat, lon: place.lon, radius_km: v.radius_km ?? place.radius });
+      }
+    }
+    const kept = maxLocations == null ? places : places.slice(0, maxLocations);
+    if (kept.length < places.length) {
+      notes.push(`Tu plan permite buscar en hasta ${inWords(maxLocations ?? 0)} zonas: dejamos ${kept.map((p) => p.label).join(", ")}.`);
+    }
+    if (kept.length) {
+      location = kept[0];
+      extraLocations = kept.slice(1);
     }
   } else if (v.radius_km && location) {
     location = { ...location, radius_km: v.radius_km };
@@ -228,6 +242,7 @@ export function draftToValues(
       fuel: v.fuel,
       body_types: bodyTypeCodes(v.body_types),
       location,
+      extra_locations: extraLocations,
       km_target: v.km_target,
       price_target: v.price_target,
       seller_type: v.seller_type,

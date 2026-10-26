@@ -73,7 +73,7 @@ describe("planLimits", () => {
       pass: { max_profiles: 3, immediate_alerts_per_day: 10, model_less_search: true },
       pro: { max_profiles: 15, immediate_alerts_per_day: 50, threshold_alerts: true, model_less_search: true },
     })).toEqual({ ...DEFAULT_PLAN_LIMITS,
-      pro: { maxProfiles: 15, maxVisibleResults: null, immediateAlertsPerDay: 50, thresholdAlerts: true, modelLessSearch: true } });
+      pro: { maxProfiles: 15, maxVisibleResults: null, immediateAlertsPerDay: 50, thresholdAlerts: true, modelLessSearch: true, maxLocations: null } });
   });
   it("gives a feature only to the plans that say true", () => {
     const limits = planLimits({ pro: { max_profiles: 20, threshold_alerts: true }, pass: { max_profiles: 3, threshold_alerts: "true" } });
@@ -90,13 +90,13 @@ describe("planLimits", () => {
       pass: { max_profiles: 3, immediate_alerts: true },
       pro: { max_profiles: 10, immediate_alerts: true },
     }, 10);
-    expect(legacy.free).toEqual({ maxProfiles: 1, maxVisibleResults: 50, immediateAlertsPerDay: 0, thresholdAlerts: false, modelLessSearch: false });
-    expect(legacy.pro).toEqual({ maxProfiles: 10, maxVisibleResults: null, immediateAlertsPerDay: 10, thresholdAlerts: false, modelLessSearch: false });
+    expect(legacy.free).toEqual({ maxProfiles: 1, maxVisibleResults: 50, immediateAlertsPerDay: 0, thresholdAlerts: false, modelLessSearch: false, maxLocations: 3 });
+    expect(legacy.pro).toEqual({ maxProfiles: 10, maxVisibleResults: null, immediateAlertsPerDay: 10, thresholdAlerts: false, modelLessSearch: false, maxLocations: null });
   });
   it("keeps the defaults for a missing config or plan, and rejects junk", () => {
     expect(planLimits(null)).toEqual(DEFAULT_PLAN_LIMITS);
     expect(planLimits({ free: { max_profiles: "1", immediate_alerts_per_day: -2 } }).free)
-      .toEqual({ maxProfiles: 1, maxVisibleResults: null, immediateAlertsPerDay: 0, thresholdAlerts: false, modelLessSearch: false });
+      .toEqual({ maxProfiles: 1, maxVisibleResults: null, immediateAlertsPerDay: 0, thresholdAlerts: false, modelLessSearch: false, maxLocations: 3 });
   });
   it("words the per-plan alert caps for the plans page and terms", () => {
     expect(alertCapsText(DEFAULT_PLAN_LIMITS)).toBe(

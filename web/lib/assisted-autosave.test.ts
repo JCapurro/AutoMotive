@@ -13,7 +13,7 @@ const catalog: Catalog = [
 const base: SearchValues = {
   name: "", make: "", model: "", trim: "", trims: [], trim_strict: false, year_min: null, year_max: null,
   price_max: null, currency: "USD", km_max: null, transmission: "", fuel: "", body_types: [], sources: ["mercadolibre"],
-  location: null, km_target: null, price_target: null, seller_type: "", notification_frequency: "immediate",
+  location: null, extra_locations: [], km_target: null, price_target: null, seller_type: "", notification_frequency: "immediate",
   notify_min_level: "good", opportunity_threshold_pct: null,
 };
 
@@ -22,7 +22,7 @@ function draft(values: Partial<AssistedDraft["values"]>, notes: string[] = [], r
     values: {
       make: "Toyota", model: "Hilux", trim: "SRV", trims: ["SRV"], trim_strict: false, year_min: null, year_max: null,
       price_max: 35_000_000, price_target: null, currency: "ARS", km_max: null, km_target: null, transmission: "automatic",
-      fuel: "", body_types: [], seller_type: "", location: "zona norte", radius_km: null, ...values,
+      fuel: "", body_types: [], seller_type: "", location: "zona norte", locations: [], radius_km: null, ...values,
     },
     resolved,
     notes,
@@ -81,10 +81,18 @@ describe("autoSaveValues", () => {
     expect(saved?.notes.some(noteNeedsChoice)).toBe(false);
   });
 
-  it("takes the first zone it knows of «santa fe o Buenos Aires» and says so", () => {
+  it("keeps every zone of «santa fe o Buenos Aires»: the first as the place, the rest added", () => {
     const saved = decideWithNotes([draft({ location: "santa fe o Buenos Aires" })]);
     expect(saved?.values.location?.label).toMatch(/Santa Fe/);
-    expect(saved?.notes.find((n) => n.startsWith("Buscamos en"))).toMatch(/Buenos Aires/);
+    expect(saved?.values.extra_locations).toHaveLength(1);
+    expect(saved?.notes.some((n) => n.includes("cada búsqueda sigue una zona"))).toBe(false);
+  });
+
+  it("keeps the zones it placed when another of the text is unknown", () => {
+    const saved = decideWithNotes([draft({ location: "Rosario", locations: ["Rosario", "Córdoba", "Narnia"] })]);
+    expect(saved?.values.location?.label).toMatch(/Rosario/);
+    expect(saved?.values.extra_locations).toHaveLength(1);
+    expect(saved?.notes.at(-1)).toMatch(/^Buscamos en Rosario.* y Córdoba/);
   });
 
   it("searches the whole country for a zone it doesn't know instead of stopping", () => {

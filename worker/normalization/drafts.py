@@ -320,7 +320,11 @@ def normalize_draft(models: Sequence[CatalogModel], d: SearchDraft,
     km_target = _km(d.km_target, "kilometraje ideal", notes)
 
     radius = d.radius_km if d.radius_km and 0 < d.radius_km <= MAX_RADIUS_KM else None
-    location = (d.location or "").strip()[:80]
+    # Every place the text names, the first one also as `location` (what older readers use).
+    locations = list(dict.fromkeys(z for z in ((x or "").strip()[:80] for x in d.locations) if z))
+    location = (d.location or "").strip()[:80] or (locations[0] if locations else "")
+    if location and location not in locations:
+        locations.insert(0, location)
 
     if not make and not model:
         if body_types and not price_max:
@@ -347,6 +351,7 @@ def normalize_draft(models: Sequence[CatalogModel], d: SearchDraft,
         "fuel": d.fuel or "",
         "seller_type": d.seller_type or "",
         "location": location,
+        "locations": locations,
         "radius_km": radius,
     }
     return {"values": values, "resolved": entry is not None, "notes": list(dict.fromkeys(notes))}

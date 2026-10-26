@@ -236,22 +236,45 @@ def _body_type(listing, f) -> Reason | None:
     return Reason(FAIL, copy.REASON["body_type_other"].format(actual=shown, wanted=names))
 
 
+def search_zones(profile) -> list[tuple[float, float, float]]:
+    """The zones a search looks in as (lat, lon, radius_km): its own place
+    (origin_*, radius_km) and the ones it adds (filters.extra_locations, "Chaco
+    o Corrientes"). A listing in any of them qualifies."""
+    zones: list[tuple[float, float, float]] = []
+    if profile.get("radius_km") and profile.get("origin_lat") is not None and profile.get("origin_lon") is not None:
+        zones.append((profile["origin_lat"], profile["origin_lon"], profile["radius_km"]))
+    for z in (profile.get("filters") or {}).get("extra_locations") or []:
+        try:
+            lat, lon, radius = float(z["lat"]), float(z["lon"]), float(z["radius_km"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if radius > 0:
+            zones.append((lat, lon, radius))
+    return zones
+
+
 def distance_km(listing, profile) -> float | None:
-    if None in (listing.get("lat"), listing.get("lon"), profile.get("origin_lat"), profile.get("origin_lon")):
+    """Distance to the search's place; with several zones, to the closest one."""
+    if None in (listing.get("lat"), listing.get("lon")):
         return None
-    return haversine_km(profile["origin_lat"], profile["origin_lon"], listing["lat"], listing["lon"])
+    dists = [haversine_km(lat, lon, listing["lat"], listing["lon"]) for lat, lon, _ in search_zones(profile)]
+    if not dists and None not in (profile.get("origin_lat"), profile.get("origin_lon")):
+        return haversine_km(profile["origin_lat"], profile["origin_lon"], listing["lat"], listing["lon"])
+    return min(dists) if dists else None
 
 
 def _location(listing, profile) -> Reason | None:
-    radius = profile.get("radius_km")
-    if not radius or profile.get("origin_lat") is None or profile.get("origin_lon") is None:
+    zones = search_zones(profile)
+    if not zones:
         return None
-    dist = distance_km(listing, profile)
-    if dist is None:
+    if None in (listing.get("lat"), listing.get("lon")):
         # The search asked for a zone: a listing that can't be placed in it
         # doesn't qualify (it used to pass as unknown and reached people 400 km away).
         return Reason(FAIL, copy.REASON["no_coords"])
-    place =listing.get("location_text") or "—"
+    place = listing.get("location_text") or "—"
+    # The zone it is in, or the one it misses by the least.
+    dist, radius = min(((haversine_km(lat, lon, listing["lat"], listing["lon"]), r) for lat, lon, r in zones),
+                       key=lambda zr: zr[0] - zr[1])
     if dist > radius:
         return Reason(FAIL, copy.REASON["distance_over"].format(
             place=place, km=copy.number(dist), radius=copy.number(radius)))

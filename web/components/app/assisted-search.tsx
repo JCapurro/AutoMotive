@@ -103,6 +103,7 @@ export function AssistedSearch({
   limit = null,
   thresholdAlerts = false,
   modelLessSearch = false,
+  maxLocations = null,
 }: {
   catalog: Catalog;
   sources: Source[];
@@ -113,6 +114,8 @@ export function AssistedSearch({
   /** The plan's features, for every form below (as the structured tab's). */
   thresholdAlerts?: boolean;
   modelLessSearch?: boolean;
+  /** Places one search may look in (plan cap); null = no cap. */
+  maxLocations?: number | null;
 }) {
   const [text, setText] = useState(initialText);
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
@@ -188,7 +191,7 @@ export function AssistedSearch({
       } else {
         const drafts: Reviewed[] = parsed.data.drafts.map((draft, i) => ({
           title: draftTitle(draft, i),
-          ...draftToValues(draft, base, modelLessSearch),
+          ...draftToValues(draft, base, modelLessSearch, maxLocations),
           state: "pending",
           resolved: draft.resolved,
         }));
@@ -267,7 +270,7 @@ export function AssistedSearch({
       clearTimeout(deadline);
       if (channel) void supabase.removeChannel(channel);
     };
-  }, [waitingJob, supabase, base, limit, modelLessSearch, catalog, approximateLocation]);
+  }, [waitingJob, supabase, base, limit, modelLessSearch, maxLocations, catalog, approximateLocation]);
 
   // Medición (sección 8.4): what each request ended up showing, once per job and screen.
   const shownKey = phase.kind === "review" || phase.kind === "active" || phase.kind === "choose" || phase.kind === "full"
@@ -399,6 +402,7 @@ export function AssistedSearch({
           notes={phase.draft.notes}
           thresholdAlerts={thresholdAlerts}
           modelLessSearch={modelLessSearch}
+          maxLocations={maxLocations}
         />
       </div>
     );
@@ -509,6 +513,7 @@ export function AssistedSearch({
                   onSaved={(id) => update(i, { state: "saved", savedId: id })}
                   thresholdAlerts={thresholdAlerts}
                   modelLessSearch={modelLessSearch}
+                  maxLocations={maxLocations}
                 />
               </>
             )}
@@ -579,6 +584,7 @@ export function AssistedSearch({
           origin={{ mode: "assisted_fallback", jobId: phase.jobId, stay: false }}
           thresholdAlerts={thresholdAlerts}
           modelLessSearch={modelLessSearch}
+          maxLocations={maxLocations}
         />
       </div>
     );

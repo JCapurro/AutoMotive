@@ -9,7 +9,7 @@ import type { SearchLimit } from "@/lib/assisted";
 import { isEmailOnly, requireUser } from "@/lib/auth";
 import { webConfig } from "@/lib/config";
 import { track } from "@/lib/events";
-import { type PlanLimits, planPrice, searchCapacity } from "@/lib/pro";
+import { type PlanLimits, locationCap, planPrice, searchCapacity } from "@/lib/pro";
 import type { SearchValues } from "@/lib/search-form";
 import { searchIntentPrompt } from "@/lib/search-intent";
 import { approximateLocationFromHeaders } from "@/lib/search-location";
@@ -35,6 +35,7 @@ export default async function NewSearchPage({ searchParams }: PageProps<"/app/se
   // One model is one search: a request with more models than the plan has room for asks which to activate.
   const access = (snapshot ?? null) as PlanLimits | null;
   const capacity = searchCapacity(access);
+  const maxLocations = locationCap(access);
   const limit: SearchLimit | null = access && capacity != null ? {
     capacity,
     maxProfiles: access.limits.max_profiles ?? capacity,
@@ -61,6 +62,7 @@ export default async function NewSearchPage({ searchParams }: PageProps<"/app/se
     body_types: [],
     sources: sources.map((s) => s.id),
     location: null,
+    extra_locations: [],
     km_target: null,
     price_target: null,
     seller_type: "",
@@ -94,6 +96,7 @@ export default async function NewSearchPage({ searchParams }: PageProps<"/app/se
             approximateLocation={approximateLocation}
             thresholdAlerts={thresholdAlerts}
             modelLessSearch={modelLessSearch}
+            maxLocations={maxLocations}
           />
         </TabsContent>
         <TabsContent value="assisted" forceMount className="pt-3 data-[state=inactive]:hidden">
@@ -106,6 +109,7 @@ export default async function NewSearchPage({ searchParams }: PageProps<"/app/se
             limit={limit}
             thresholdAlerts={thresholdAlerts}
             modelLessSearch={modelLessSearch}
+            maxLocations={maxLocations}
           />
         </TabsContent>
       </Tabs>

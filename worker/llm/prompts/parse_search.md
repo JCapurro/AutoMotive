@@ -18,7 +18,7 @@ Reglas:
 - Nunca deduzcas la carrocería: ni del modelo (una Hilux ya es pick-up: `body_types` vacío), ni del uso o el tamaño («auto chico», «para trabajo», «4x4»). «Familiar» y «para la familia» hablan del uso, no de la carrocería: `body_types` vacío. «Camioneta» sola no es una carrocería (puede ser SUV o pick-up): `body_types` vacío; «camioneta SUV» → ["suv"].
 - `timing`: la distribución que pide. chain («cadenero», «cadenera», «con cadena», «a cadena», «distribución a cadena», «distribución por cadena», «sin correa»); belt («con correa», «a correa»). Estas palabras nunca van en `make`, `model` ni en las versiones: «cadenero hatchback» → `make` y `model` en null, `body_types` ["hatchback"], `timing` "chain"; «Onix con cadena» → model «Onix», `timing` "chain". Si no lo dice, null.
 - `seller_type`: private si pide «particular», «dueño directo», «sin agencia»; dealer si pide «agencia», «concesionaria».
-- `location`: la zona tal como la dice («zona norte», «Córdoba capital», «AMBA»); `radius_km` solo si dice un radio.
+- `location` y `locations`: la zona tal como la dice («zona norte», «Córdoba capital», «AMBA»). Si nombra más de una («en Chaco o Corrientes», «Rosario y Santa Fe»), `locations` lleva cada una, en el orden en que las dice, y `location` la primera; nunca descartes una ni las juntes en un solo texto. `radius_km` solo si dice un radio.
 - Cualquier dato que no se mencione va en null (`trim_strict` en false, `trims` y `body_types` vacíos, `timing` en null). No calcules precios de mercado ni opines: solo extraés lo que la persona dijo.
 
 Catálogo (marca: modelo [versiones]):

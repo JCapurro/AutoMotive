@@ -22,6 +22,7 @@ export function filterParts(filters: Filters, radiusKm?: number | null): string[
   if (!isModelLess(filters) && bodyTypesText(filters.body_types)) parts.push(bodyTypesText(filters.body_types));
   if (filters.location_label) {
     parts.push(radiusKm ? `${filters.location_label} (${number(radiusKm)} km)` : filters.location_label);
+    for (const z of filters.extra_locations ?? []) parts.push(`${z.label} (${number(z.radius_km)} km)`);
   } else if (radiusKm) {
     parts.push(`a ${number(radiusKm)} km`);
   }

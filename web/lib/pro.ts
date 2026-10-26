@@ -28,12 +28,14 @@ export const PLAN_COPY: Record<WaitlistPlan, { name: string; period: string; pit
 export type PlanCaps = {
   maxProfiles: number; maxVisibleResults: number | null; immediateAlertsPerDay: number;
   thresholdAlerts: boolean; modelLessSearch: boolean;
+  /** Places one search may look in (its own and the ones it adds); null = no cap. */
+  maxLocations: number | null;
 };
 export type PlanLimitsConfig = Record<PlanTier, PlanCaps>;
 export const DEFAULT_PLAN_LIMITS: PlanLimitsConfig = {
-  free: { maxProfiles: 1, maxVisibleResults: 100, immediateAlertsPerDay: 3, thresholdAlerts: false, modelLessSearch: false },
-  pass: { maxProfiles: 3, maxVisibleResults: null, immediateAlertsPerDay: 10, thresholdAlerts: false, modelLessSearch: true },
-  pro: { maxProfiles: 20, maxVisibleResults: null, immediateAlertsPerDay: 50, thresholdAlerts: true, modelLessSearch: true },
+  free: { maxProfiles: 1, maxVisibleResults: 100, immediateAlertsPerDay: 3, thresholdAlerts: false, modelLessSearch: false, maxLocations: 3 },
+  pass: { maxProfiles: 3, maxVisibleResults: null, immediateAlertsPerDay: 10, thresholdAlerts: false, modelLessSearch: true, maxLocations: null },
+  pro: { maxProfiles: 20, maxVisibleResults: null, immediateAlertsPerDay: 50, thresholdAlerts: true, modelLessSearch: true, maxLocations: null },
 };
 function whole(value: unknown, min: number): number | null {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= min ? value : null;
@@ -57,6 +59,8 @@ export function planLimits(value: unknown, globalCap = 10): PlanLimitsConfig {
       immediateAlertsPerDay: alertCap(limits, globalCap),
       thresholdAlerts: limits.threshold_alerts === true,
       modelLessSearch: limits.model_less_search === true,
+      // Absent keeps the plan's default (the free plan's 3); present and not a count = no cap.
+      maxLocations: "max_locations" in limits ? whole(limits.max_locations, 1) : DEFAULT_PLAN_LIMITS[tier].maxLocations,
     };
   }
   return out;
@@ -135,7 +139,7 @@ export type PlanLimits = {
   active_searches?: number;
   limits: {
     max_profiles?: number; max_visible_results?: number; immediate_alerts_per_day?: number; immediate_alerts?: boolean;
-    threshold_alerts?: boolean; model_less_search?: boolean;
+    threshold_alerts?: boolean; model_less_search?: boolean; max_locations?: number;
   };
 };
 /** Custom is arranged over WhatsApp. wa.me wants the full international number: 54 9 11 3345-4741. */
@@ -200,6 +204,24 @@ export function includesImmediateAlerts(access: PlanLimits | null): boolean {
 export function searchCapacity(access: PlanLimits | null): number | null {
   if (!access?.enforced || access.limits.max_profiles == null) return null;
   return Math.max(access.limits.max_profiles - (access.active_searches ?? 0), 0);
+}
+/**
+ * How many places one search may look in (its own plus the ones it adds):
+ * null without enforced limits or a cap (Particular and Pro). The web checks
+ * it on save; the free plan's is app_config.plan_limits.free.max_locations.
+ */
+export function locationCap(access: PlanLimits | null): number | null {
+  if (!access?.enforced) return null;
+  // A config without the key (before its migration) keeps the plan's default.
+  const plan = access.plan as PlanTier | undefined;
+  const cap = "max_locations" in access.limits
+    ? access.limits.max_locations
+    : plan && plan in DEFAULT_PLAN_LIMITS ? DEFAULT_PLAN_LIMITS[plan].maxLocations : null;
+  return typeof cap === "number" && cap >= 1 ? cap : null;
+}
+/** "Con la prueba gratis podés buscar en hasta 3 zonas…", null when there is no cap. */
+export function locationCapText(cap: number | null): string | null {
+  return cap == null ? null : `Tu plan permite buscar en hasta ${inWords(cap)} ${cap === 1 ? "zona" : "zonas"} por búsqueda.`;
 }
 export function visibleResults(total: number, limits: PlanLimits | null): { cap: number | null; over: boolean } {
   const max = limits?.limits.max_visible_results;

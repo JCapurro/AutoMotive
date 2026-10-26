@@ -35,7 +35,9 @@ import {
   modelBodyTypes,
   selectedTrims,
 } from "@/lib/search-form";
+import { locationCapText } from "@/lib/pro";
 import type { RelaxChange } from "@/lib/search-relax";
+import type { SearchPlace } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { analyticsEvent } from "@/lib/google-analytics";
 import { AMBA_RADIUS_KM } from "@/lib/assisted-fallback";
@@ -67,6 +69,8 @@ type Draft = {
   province: string;
   city: string;
   radius: string;
+  /** Places added to the one above ("Chaco o Corrientes"); each keeps the radius it was added with. */
+  extras: SearchPlace[];
   current: DetectedLocation | null;
   saved: { label: string; lat: number; lon: number } | null;
   km_target: string;
@@ -163,6 +167,7 @@ function draftFrom(
     province,
     city,
     radius: v.location ? String(v.location.radius_km) : isNew ? "30" : "",
+    extras: v.location ? v.extra_locations : [],
     current: isNew ? approximateLocation : null,
     saved,
     km_target: v.km_target != null ? number(v.km_target) : "",
@@ -209,6 +214,7 @@ function toInput(d: Draft, offered: readonly string[]): SearchInput {
     body_types: byBody ? d.body_types : d.body_types.filter((code) => offered.includes(code)),
     sources: d.sources,
     location: location(d),
+    extra_locations: d.place ? d.extras : [],
     km_target: amount(d.km_target),
     price_target: amount(d.price_target),
     seller_type: d.seller_type,
@@ -249,6 +255,7 @@ export function SearchForm({
   approximateLocation = null,
   thresholdAlerts = false,
   modelLessSearch = false,
+  maxLocations = null,
 }: {
   catalog: Catalog;
   sources: Source[];
@@ -266,6 +273,8 @@ export function SearchForm({
   thresholdAlerts?: boolean;
   /** The plan can search by body type without a model (Particular, Pro; docs/CARROCERIA.md). */
   modelLessSearch?: boolean;
+  /** Places one search may look in, its own included (the plan's cap); null = no cap. */
+  maxLocations?: number | null;
 }) {
   const fid = (key: string) => (idPrefix ? `${idPrefix}-${key}` : key);
   const isNew = profileId == null && !initial.location;
@@ -295,6 +304,9 @@ export function SearchForm({
   const [previewing, startPreview] = useTransition();
   const [locating, setLocating] = useState(false);
   const [locationNotice, setLocationNotice] = useState("");
+  // The "Otras zonas" picker: a province and a locality, added with their own radius.
+  const [addProvince, setAddProvince] = useState("");
+  const [addCity, setAddCity] = useState("");
 
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft((prev) => ({ ...prev, [key]: value }));
 
@@ -317,6 +329,29 @@ export function SearchForm({
   }, [entry]);
   const fuels = entry?.fuels.length ? entry.fuels : Object.keys(FUEL);
   const pendingVersion = versionText.trim();
+  const addCities = useMemo(() => citiesInProvince(addProvince), [addProvince]);
+  const addCityNames = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const city of addCities) counts.set(city.city, (counts.get(city.city) ?? 0) + 1);
+    return counts;
+  }, [addCities]);
+  const zonesCapText = locationCapText(maxLocations);
+  const zonesFull = maxLocations != null && 1 + d.extras.length >= maxLocations;
+  function addZone() {
+    const city = cityById(addCity);
+    if (!city || zonesFull) return;
+    const radius = amount(d.radius);
+    const radius_km = radius != null && Number.isFinite(radius) && radius > 0 ? radius : city.radius;
+    const same = (p: { lat: number; lon: number }) => p.lat === city.lat && p.lon === city.lon;
+    const primary = location(d);
+    if (d.extras.some(same) || (primary && same(primary))) {
+      setLocationNotice(`${city.label} ya está entre las zonas.`);
+      return;
+    }
+    setLocationNotice("");
+    setDraft((prev) => ({ ...prev, extras: [...prev.extras, { label: city.label, lat: city.lat, lon: city.lon, radius_km }] }));
+    setAddCity("");
+  }
 
   const input = useMemo(
     () => toInput({ ...d, trims: [...new Set([...d.trims, versionText.trim()].filter(Boolean))] }, offered),
@@ -880,6 +915,46 @@ export function SearchForm({
             ) : null}
             {d.place === "saved" && d.saved ? (
               <p className="text-xs text-muted-foreground sm:col-span-2">{d.saved.label}. Usamos la ubicación guardada en esta búsqueda.</p>
+            ) : null}
+            {d.place ? (
+              <fieldset className="space-y-2 sm:col-span-2">
+                <legend className="text-sm font-medium">Otras zonas (opcional)</legend>
+                {d.extras.length ? (
+                  <ul className="flex flex-wrap gap-2">
+                    {d.extras.map((z, i) => (
+                      <li key={`${z.lat},${z.lon}`} className="flex items-center gap-1 rounded-full border px-3 py-1 text-sm">
+                        {z.label} · {number(z.radius_km)} km
+                        <button
+                          type="button"
+                          aria-label={`Quitar ${z.label}`}
+                          className="text-muted-foreground hover:text-foreground"
+                          onClick={() => setDraft((prev) => ({ ...prev, extras: prev.extras.filter((_, j) => j !== i) }))}
+                        >
+                          <X className="size-3.5" aria-hidden />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                {zonesFull ? null : (
+                  <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                    <NativeSelect aria-label="Provincia de la otra zona" value={addProvince} onChange={(e) => { setAddProvince(e.target.value); setAddCity(""); }} className="w-full">
+                      <NativeSelectOption value="">Provincia</NativeSelectOption>
+                      {PROVINCES.map((p) => <NativeSelectOption key={p.id} value={p.id}>{p.label}</NativeSelectOption>)}
+                    </NativeSelect>
+                    <NativeSelect aria-label="Localidad de la otra zona" value={addCity} onChange={(e) => setAddCity(e.target.value)} className="w-full" disabled={!addProvince}>
+                      <NativeSelectOption value="">{addProvince ? "Localidad" : "Primero la provincia"}</NativeSelectOption>
+                      {addCities.map((city) => <NativeSelectOption key={city.id} value={city.id}>
+                        {city.city}{(addCityNames.get(city.city) ?? 0) > 1 ? ` (${city.department})` : ""}
+                      </NativeSelectOption>)}
+                    </NativeSelect>
+                    <Button type="button" variant="outline" disabled={!addCity} onClick={addZone}>Agregar zona</Button>
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Buscamos publicaciones en cualquiera de las zonas, cada una con su radio.{zonesCapText ? ` ${zonesCapText}` : ""}
+                </p>
+              </fieldset>
             ) : null}
             {locationNotice ? <p role="status" className="text-xs text-muted-foreground sm:col-span-2">{locationNotice}</p> : null}
             {d.place === "current" ? (

@@ -74,6 +74,11 @@ export function autoSaveValues({
   const unplaced = zoneText !== "" && notes.some(isZoneNote);
   const kept = unplaced ? notes.filter((n) => !isZoneNote(n)) : notes;
   if (kept.some(noteNeedsChoice)) return null;
+  if (unplaced && values.location && values.extra_locations.length) {
+    // Several places and one we don't know: the ones placed stay, the note says which.
+    const labels = [values.location, ...values.extra_locations].map((z) => z.label).join(" y ");
+    return { values, notes: [...kept, `Buscamos en ${labels}.`] };
+  }
   if (unplaced) {
     const zone = zoneFromText(zoneText);
     return { values: { ...values, location: zone.location }, notes: [...kept, zone.note] };
