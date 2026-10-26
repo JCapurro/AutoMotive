@@ -93,13 +93,8 @@ test("F4: búsqueda gratis con el email, backfill, alerta, guardar y guardados",
     await panel.getByLabel("Provincia").selectOption({ label: "Ciudad Autónoma de Buenos Aires" });
     await panel.getByLabel("Localidad").selectOption({ label: "Ciudad de Buenos Aires" });
     await panel.getByLabel("Radio (km)").fill(String(AMBA.radius_km));
-    // What preview_search counts over the whole local database (the seeded market, at least).
-    const [{ count }] = await query<{ count: number }>(
-      `select (public.preview_search($1::jsonb, $2, $3, $4)->>'count')::int as count`,
-      [JSON.stringify(SEARCH_FILTERS), AMBA.lat, AMBA.lon, AMBA.radius_km],
-    );
-    expect(count).toBeGreaterThanOrEqual(EXPECTED_BACKFILL.length);
-    await expect(panel.getByTestId("preview-count")).toContainText(`${count} publicaciones actuales coinciden`);
+    // The form no longer counts listings: nothing to wait for before saving.
+    await expect(panel.getByTestId("preview-count")).toHaveCount(0);
     await expect(panel.getByLabel("Nombre de la búsqueda")).toHaveValue("Ford Fiesta Titanium");
     await panel.getByRole("button", { name: "Crear búsqueda" }).click();
     await expect(page).toHaveURL(/\/app\/searches\/\d+$/);

@@ -57,7 +57,7 @@ describe("search by body type (docs/CARROCERIA.md)", () => {
     expect(html).toMatch(/<fieldset[^>]*disabled=""[^>]*><legend[^>]*>Carrocería/);
     expect(html).toContain(MODEL_LESS_UNAVAILABLE);
     expect(html).toMatch(/<button[^>]*type="submit"[^>]*disabled=""/);
-    expect(html).toContain("Para contar las publicaciones, elegí un modelo.");
+    expect(html).not.toContain("publicaciones actuales coinciden");
   });
 
   it("opens a model-less proposal by model for an account without the feature", () => {
