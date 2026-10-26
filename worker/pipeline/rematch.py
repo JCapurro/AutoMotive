@@ -4,6 +4,9 @@ A profile that was never bootstrapped, or whose filters changed
 (`rematch_requested_at`), is matched against the active listings of the
 last 30 days already stored. Those matches are backfill: the user sees them
 in the web right away ("first value", §36), and they are never notified.
+An edited profile's earlier matches the backfill didn't score again are
+re-checked like the nightly re-score does: the ones that no longer fit (a
+place added, a lower price cap) are deleted at once, not hours later.
 
 Matching and scoring are intelligence/'s (sección 6), the same the crawl
 applies to new listings.
@@ -26,6 +29,7 @@ from db.repos.listings import recent_active, recent_active_by_body
 from db.repos.profiles import model_less_alerts
 from db.repos.runs import log_error
 from intelligence.matching import filter_currency, model_less, wanted_body_types
+from pipeline.rescore import rescore
 from pipeline.scoring import Scorer
 
 
@@ -82,6 +86,9 @@ async def rematch_profile(alert: dict, scorer: Scorer | None = None) -> int:
     scored = [(i, ev.row()) for i in ids if (ev := scorer.evaluate(i, alert["profile"])) is not None]
     async with db.connection() as cx:
         await matches_repo.upsert_scored(cx, alert["id"], scored, backfill=True)
+    kept = {i for i, _ in scored}
+    await rescore([q for q in await matches_repo.matches_of_profile(alert["id"]) if q["listing_id"] not in kept],
+                  scorer)
     await db.mark_bootstrapped(alert["id"])
     return len(scored)
 
