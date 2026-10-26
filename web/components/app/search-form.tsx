@@ -817,22 +817,22 @@ export function SearchForm({
                       </div>
                     ) : (
                       <>
-                        <Field id={fid(`province-${z.key}`)} label={i === 0 ? "Provincia" : `Provincia ${i + 1}`}>
-                          <NativeSelect id={fid(`province-${z.key}`)} value={z.province} onChange={(e) => updateZone(z.key, { province: e.target.value, city: "" })} className="w-full">
+                        <Field id={fid(`province-${i}`)} label={i === 0 ? "Provincia" : `Provincia ${i + 1}`}>
+                          <NativeSelect id={fid(`province-${i}`)} value={z.province} onChange={(e) => updateZone(z.key, { province: e.target.value, city: "" })} className="w-full">
                             <NativeSelectOption value="">Elegí una provincia</NativeSelectOption>
                             {PROVINCES.map((p) => <NativeSelectOption key={p.id} value={p.id}>{p.label}</NativeSelectOption>)}
                           </NativeSelect>
                         </Field>
-                        <Field id={fid(`city-${z.key}`)} label={i === 0 ? "Localidad" : `Localidad ${i + 1}`}>
-                          <NativeSelect id={fid(`city-${z.key}`)} value={z.city} onChange={(e) => updateZone(z.key, { city: e.target.value })} className="w-full" disabled={!z.province}>
+                        <Field id={fid(`city-${i}`)} label={i === 0 ? "Localidad" : `Localidad ${i + 1}`}>
+                          <NativeSelect id={fid(`city-${i}`)} value={z.city} onChange={(e) => updateZone(z.key, { city: e.target.value })} className="w-full" disabled={!z.province}>
                             <NativeSelectOption value="">{z.province ? "Elegí una localidad" : "Primero elegí la provincia"}</NativeSelectOption>
                             {cityOptions(z.province)}
                           </NativeSelect>
                         </Field>
                       </>
                     )}
-                    <Field id={fid(`radius-${z.key}`)} label="Radio (km)">
-                      <Input id={fid(`radius-${z.key}`)} inputMode="numeric" value={z.radius} onChange={(e) => updateZone(z.key, { radius: e.target.value })} />
+                    <Field id={fid(`radius-${i}`)} label="Radio (km)">
+                      <Input id={fid(`radius-${i}`)} inputMode="numeric" value={z.radius} onChange={(e) => updateZone(z.key, { radius: e.target.value })} />
                     </Field>
                     {d.zones.length > 1 ? (
                       <Button type="button" variant="ghost" size="icon" aria-label={`Quitar la zona ${i + 1}`} onClick={() => removeZone(z.key)}>

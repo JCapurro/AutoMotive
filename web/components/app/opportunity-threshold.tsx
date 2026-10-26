@@ -3,10 +3,10 @@
 import { cn } from "@/lib/utils";
 
 export const THRESHOLD_MIN = 5;
-export const THRESHOLD_MAX = 50;
+export const THRESHOLD_MAX = 45;
 export const THRESHOLD_STEP = 5;
 export const THRESHOLD_DEFAULT = "10";
-const TICKS = [5, 15, 25, 35, 50];
+const TICKS = [5, 15, 25, 35, 45];
 
 /**
  * Pro's opportunity threshold (3.2) as a switch and a slider: «avisame al
