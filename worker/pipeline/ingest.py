@@ -37,7 +37,7 @@ from db.repos.catalog import load_models
 from db.repos.fx import quote_for_today
 from db.repos.runs import log_error
 from normalization.description_facts import DescriptionFacts, resolve_price
-from normalization.geo import geocode_location
+from normalization.geo import SOURCE_DEFAULT_LOCATIONS, geocode_location
 from normalization.listing import Target, attrs_hash, fingerprint, normalize_listing
 
 
@@ -379,6 +379,9 @@ async def _geocode_rows(rows: list[dict[str, Any]], geocode: GeocodeFn) -> None:
     cache: dict[str, tuple[float, float] | None] = {}
     for row in rows:
         loc = row.get("location_text")
+        if not loc:
+            # A source that never says where its units are: the town it sells in.
+            loc = SOURCE_DEFAULT_LOCATIONS.get(row.get("source"))
         if not loc:
             continue
         if loc not in cache:

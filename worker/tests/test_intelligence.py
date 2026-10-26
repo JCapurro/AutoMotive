@@ -122,11 +122,17 @@ class UnknownTests(unittest.TestCase):
         self.assertIn("transmisión no informado", unknown.score.components["match"].explanation)
 
     def test_every_hard_filter_unknown_still_matches(self):
-        bare = fiesta_listing(year=None, mileage_km=None, transmission=None, lat=None, lon=None,
+        bare = fiesta_listing(year=None, mileage_km=None, transmission=None,
                               price=None, price_usd=None)
         result = match(bare, fiesta_profile())
         self.assertIsNotNone(result)
-        self.assertEqual(set(result.unknown), {"year", "km", "transmission", "location", "price"})
+        self.assertEqual(set(result.unknown), {"year", "km", "transmission", "price"})
+
+    def test_a_listing_that_cannot_be_placed_fails_a_search_with_a_radius(self):
+        unplaced = fiesta_listing(lat=None, lon=None)
+        self.assertIsNone(match(unplaced, fiesta_profile()))
+        # Without a radius the zone was never asked for.
+        self.assertIsNotNone(match(unplaced, {**fiesta_profile(), "radius_km": None}))
 
     def test_a_fail_discards(self):
         self.assertIsNone(match(fiesta_listing(transmission="automatic"), fiesta_profile()))

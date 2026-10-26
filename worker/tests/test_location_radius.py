@@ -4,7 +4,10 @@ import unittest
 from unittest import mock
 
 from normalization.geo import (
+    SOURCE_DEFAULT_LOCATIONS,
+    clean_location_text,
     filter_listings_by_radius,
+    is_not_a_place,
     geocode_location,
     haversine_km,
     _lookup_known_location,
@@ -139,6 +142,41 @@ class LocationLookupTests(unittest.TestCase):
         # Ambiguous or unknown places still go to the geocoder instead of a guess.
         self.assertIsNone(_lookup_known_location("General Las Heras, Buenos Aires"))
         self.assertIsNone(_lookup_known_location("Capital, Buenos Aires"))
+
+
+class SourceLocationTextTests(unittest.IsolatedAsyncioTestCase):
+    def test_source_decoration_is_dropped_before_geocoding(self):
+        for raw, clean in (
+            ("Necochea - Bs.As. Costa Atlántica", "Necochea, Buenos Aires"),
+            ("Cañuelas - Buenos Aires Interior", "Cañuelas, Buenos Aires"),
+            ("La Tablada, Buenos Aires (A.M.B.A.)", "La Tablada, Buenos Aires"),
+            ("Fray Luis Beltran ,est.tte.cnl.l.beltran, Santa Fe", "Fray Luis Beltran, Santa Fe"),
+            ("Del Viso - Bs.As. G.B.A. Norte", "Del Viso - Bs.As. G.B.A. Norte"),
+            ("Ciudad de Buenos Aires, CF", "Ciudad de Buenos Aires, CF"),
+        ):
+            with self.subTest(raw=raw):
+                self.assertEqual(clean_location_text(raw), clean)
+
+    def test_what_is_not_a_place_is_dropped(self):
+        for value in ("Recién publicado", "2017 Ford mondeo 2.0 titanium ecoboot at 240cv",
+                      "115 mil km", "", None):
+            with self.subTest(value=value):
+                self.assertIsNone(clean_location_text(value))
+                self.assertTrue(is_not_a_place(value) or not value)
+        self.assertFalse(is_not_a_place("Córdoba"))
+
+    async def test_towns_of_the_interior_resolve_without_nominatim(self):
+        with mock.patch("normalization.geo._geocode_nominatim") as nominatim:
+            for raw in ("Necochea - Bs.As. Costa Atlántica", "Chivilcoy - Buenos Aires Interior",
+                        "Wilde, Buenos Aires (A.M.B.A.)", "San Nicolas De Los Arroyos,est.s.nicolas, Buenos Aires",
+                        "Fray Luis Beltran ,est.tte.cnl.l.beltran, Santa Fe"):
+                with self.subTest(raw=raw):
+                    self.assertIsNotNone(await geocode_location(raw))
+            nominatim.assert_not_called()
+
+    def test_a_dealer_source_without_a_location_has_a_default_town(self):
+        self.assertIn("rosariogarage", SOURCE_DEFAULT_LOCATIONS)
+        self.assertIsNotNone(_lookup_known_location(SOURCE_DEFAULT_LOCATIONS["rosariogarage"]))
 
 
 class GeocodeNegativeCacheTests(unittest.IsolatedAsyncioTestCase):

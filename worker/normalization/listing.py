@@ -16,7 +16,7 @@ from normalization import body_type
 from normalization import transmission as tx
 from normalization.description_facts import DescriptionFacts, parse as parse_facts, resolve_price
 from normalization.fx import FxQuote
-from normalization.geo import normalize_location_query
+from normalization.geo import is_not_a_place, normalize_location_query
 from normalization.normalize import normalize_text
 from normalization.price_check import keyword_partial
 from normalization.vehicle import CatalogModel, resolve_trim, resolve_vehicle
@@ -194,7 +194,7 @@ def normalize_listing(item: Listing, *, catalog: list[CatalogModel], target: Tar
                         or (facts.transmission if facts else None),
         "fuel": tx.fuel(item.combustible, item.version, item.titulo) or (facts.fuel if facts else None),
         "body_type": body,
-        "location_text": item.ubicacion or None,
+        "location_text": None if is_not_a_place(item.ubicacion) else item.ubicacion or None,
         "seller_name": item.vendedor_nombre or None,
         "seller_type": tx.seller_type(item.vendedor),
         "images": list(dict.fromkeys(i for i in item.imagenes if i)),

@@ -172,7 +172,8 @@ def _title_from_card(label: str, lines: list[str]) -> str:
 
 
 _DATE_LINE_PREFIXES = ("hace ",)
-_DATE_LINE_VALUES = {"ayer", "hoy", "anteayer", "just listed", "publicado recientemente"}
+_DATE_LINE_VALUES = {"ayer", "hoy", "anteayer", "just listed", "publicado recientemente",
+                     "recién publicado", "recien publicado"}
 
 
 def _looks_like_location(line: str, title: str) -> bool:
