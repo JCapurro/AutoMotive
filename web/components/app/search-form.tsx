@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 import { type SaveOrigin, saveSearch } from "@/app/app/searches/actions";
+import { OpportunityThreshold } from "@/components/app/opportunity-threshold";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -240,6 +241,7 @@ export function SearchForm({
   origin,
   onSaved,
   approximateLocation = null,
+  thresholdAlerts = false,
   modelLessSearch = false,
   maxLocations = null,
 }: {
@@ -255,6 +257,8 @@ export function SearchForm({
   /** With origin.stay: the new search's id, instead of navigating to it. */
   onSaved?: (id: number) => void;
   approximateLocation?: DetectedLocation | null;
+  /** The plan includes the opportunity threshold (Pro, 3.2). */
+  thresholdAlerts?: boolean;
   /** The plan can search by body type without a model (Particular, Pro; docs/CARROCERIA.md). */
   modelLessSearch?: boolean;
   /** Places one search may look in, its own included (the plan's cap); null = no cap. */
@@ -924,6 +928,14 @@ export function SearchForm({
                 ))}
               </NativeSelect>
             </Field>
+            {thresholdAlerts ? (
+              <OpportunityThreshold
+                id={fid("opportunity_threshold_pct")}
+                value={d.opportunity_threshold_pct}
+                onChange={(v) => set("opportunity_threshold_pct", v)}
+                error={fieldError("opportunity_threshold_pct")}
+              />
+            ) : null}
             <Field id={fid("name")} label="Nombre de la búsqueda" className="sm:col-span-2">
               <Input
                 id={fid("name")}

@@ -101,6 +101,7 @@ export function AssistedSearch({
   initialText = "",
   approximateLocation = null,
   limit = null,
+  thresholdAlerts = false,
   modelLessSearch = false,
   maxLocations = null,
 }: {
@@ -111,6 +112,7 @@ export function AssistedSearch({
   approximateLocation?: DetectedLocation | null;
   limit?: SearchLimit | null;
   /** The plan's features, for every form below (as the structured tab's). */
+  thresholdAlerts?: boolean;
   modelLessSearch?: boolean;
   /** Places one search may look in (plan cap); null = no cap. */
   maxLocations?: number | null;
@@ -398,6 +400,7 @@ export function AssistedSearch({
           profileId={phase.savedId}
           approximateLocation={approximateLocation}
           notes={phase.draft.notes}
+          thresholdAlerts={thresholdAlerts}
           modelLessSearch={modelLessSearch}
           maxLocations={maxLocations}
         />
@@ -508,6 +511,7 @@ export function AssistedSearch({
                   notes={d.notes}
                   origin={{ mode: "assisted", jobId: phase.jobId, stay: !single }}
                   onSaved={(id) => update(i, { state: "saved", savedId: id })}
+                  thresholdAlerts={thresholdAlerts}
                   modelLessSearch={modelLessSearch}
                   maxLocations={maxLocations}
                 />
@@ -578,6 +582,7 @@ export function AssistedSearch({
           profileId={null}
           approximateLocation={approximateLocation}
           origin={{ mode: "assisted_fallback", jobId: phase.jobId, stay: false }}
+          thresholdAlerts={thresholdAlerts}
           modelLessSearch={modelLessSearch}
           maxLocations={maxLocations}
         />
