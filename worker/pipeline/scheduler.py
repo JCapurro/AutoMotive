@@ -148,6 +148,16 @@ async def match_alert(staged: _Staged, scorer: Scorer, *, first_run: bool,
     return candidates
 
 
+def _missed_fields(ev) -> tuple[int | None, float | None]:
+    """The score and the % below comparables of a counted listing: what the
+    2.5 email uses to pick the one car it shows."""
+    score = getattr(getattr(ev, "score", None), "score", None)
+    ref = getattr(ev, "price_ref", None)
+    diff = getattr(ref, "diff_pct", None) if ref is not None else None
+    return (score if isinstance(score, int) else None,
+            float(diff) if isinstance(diff, (int, float)) else None)
+
+
 async def count_after_expiry(target: dict, listing_ids: list[int], scorer: Scorer, *,
                              first_run: bool, max_age_days: int, exclude: Iterable[int] = ()) -> int:
     """Step 6: the listings first seen after a counted search's access ended,
@@ -176,7 +186,7 @@ async def count_after_expiry(target: dict, listing_ids: list[int], scorer: Score
                     or news.uncounted(row, target.get("id"))):
                 continue
             if (ev := scorer.evaluate(lid, alert["profile"])) is not None:
-                counted.append((alert["id"], lid, alert["ended_at"], ev.level))
+                counted.append((alert["id"], lid, alert["ended_at"], ev.level, *_missed_fields(ev)))
     await expired_matches.store(counted)
     return len(counted)
 

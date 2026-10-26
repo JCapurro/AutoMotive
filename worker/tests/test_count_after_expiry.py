@@ -49,7 +49,7 @@ class CountAfterExpiryTests(unittest.IsolatedAsyncioTestCase):
         n, _, boot, store = await self.count(rows, bootstrapped_hours_ago=9.9)
         self.assertEqual(n, 1)
         boot.assert_awaited_once_with(5)
-        store.assert_awaited_once_with([(7, 2, ENDED, "good")])
+        store.assert_awaited_once_with([(7, 2, ENDED, "good", None, None)])
 
     async def test_a_listing_another_target_inserted_after_the_bootstrap_counts(self):
         # An Onix Plus first stored by the Onix target is not new in this run,
@@ -77,7 +77,7 @@ class CountAfterExpiryTests(unittest.IsolatedAsyncioTestCase):
         rows[5] = _row(5, hours_ago=3)
         n, _, _, store = await self.count(rows, bootstrapped_hours_ago=200)
         self.assertEqual(n, 1)
-        store.assert_awaited_once_with([(7, 5, ENDED, "good")])
+        store.assert_awaited_once_with([(7, 5, ENDED, "good", None, None)])
 
     async def test_a_band_s_first_read_is_only_its_own_target_s(self):
         # Another target's band (a body type next to this model) is news here.
@@ -85,13 +85,13 @@ class CountAfterExpiryTests(unittest.IsolatedAsyncioTestCase):
                 2: _row(2, hours_ago=3, not_news={"reason": "band", "target_id": 6})}
         n, _, _, store = await self.count(rows, bootstrapped_hours_ago=200)
         self.assertEqual(n, 1)
-        store.assert_awaited_once_with([(7, 2, ENDED, "good")])
+        store.assert_awaited_once_with([(7, 2, ENDED, "good", None, None)])
 
     async def test_backfill_ids_are_excluded(self):
         rows = {1: _row(1, hours_ago=3), 2: _row(2, hours_ago=3)}
         n, _, _, store = await self.count(rows, bootstrapped_hours_ago=200, exclude=frozenset({1}))
         self.assertEqual(n, 1)
-        store.assert_awaited_once_with([(7, 2, ENDED, "good")])
+        store.assert_awaited_once_with([(7, 2, ENDED, "good", None, None)])
 
     async def test_listings_first_seen_before_the_end_are_not_counted(self):
         n, *_ = await self.count({1: _row(1, hours_ago=48)}, bootstrapped_hours_ago=200)
@@ -111,3 +111,17 @@ class CountAfterExpiryTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MissedFieldsTests(unittest.TestCase):
+    """The score and the % below comparables go with the count: the 2.5 email
+    shows the best of those cars (public.missed_car)."""
+
+    def test_score_and_diff_from_the_evaluation(self):
+        ev = SimpleNamespace(level="high", score=SimpleNamespace(score=88),
+                             price_ref=SimpleNamespace(diff_pct=14.6))
+        self.assertEqual(scheduler._missed_fields(ev), (88, 14.6))
+
+    def test_without_comparables_only_the_score(self):
+        ev = SimpleNamespace(level="good", score=SimpleNamespace(score=61), price_ref=None)
+        self.assertEqual(scheduler._missed_fields(ev), (61, None))
