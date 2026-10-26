@@ -9,7 +9,8 @@ from seed_catalog import SEED, body_types_block, seed_catalog
 # The first list, and the models added later with their body types.
 MIGRATIONS = [SEED.parent / "migrations" / name for name in
               ("20261030120100_catalog_body_types.sql", "20261102120000_catalog_all_models.sql",
-               "20261107120000_catalog_arrizo_and_misses.sql", "20261108120000_catalog_more_makes.sql")]
+               "20261107120000_catalog_arrizo_and_misses.sql", "20261108120000_catalog_more_makes.sql",
+               "20261116120000_catalog_peugeot_classics.sql")]
 
 
 def _by_model() -> dict[tuple[str, str], tuple[str, ...]]:
@@ -46,6 +47,9 @@ def test_seed_and_migration_carry_the_same_list():
     ("Chevrolet", "Onix Plus", ("sedan",)),
     ("Ford", "Ka", ("hatchback", "sedan")),
     ("Fiat", "Palio", ("hatchback", "rural")),
+    # The classics people still search for (migration 20261116120000).
+    ("Peugeot", "106", ("hatchback",)),
+    ("Peugeot", "504", ("sedan", "pickup", "rural")),
     ("Volkswagen", "Suran", ("monovolumen",)),
     ("Mercedes-Benz", "Sprinter", ("utilitario",)),
     ("Renault", "Oroch", ("pickup",)),

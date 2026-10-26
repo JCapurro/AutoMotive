@@ -558,7 +558,12 @@ with models (make, model, aliases, year_from, year_to, transmissions, fuels, tri
   ('Zeekr', '001', '{}', 2025, null, '{automatic}', '{electrico}', '{}'),
   ('Zeekr', 'X', '{}', 2025, null, '{automatic}', '{electrico}', '{}'),
   ('Mahindra', 'Pik Up', '{pickup,pik-up}', 2010, 2018, '{manual}', '{diesel}', '{}'),
-  ('Mahindra', 'XUV500', '{xuv 500}', 2012, 2018, '{manual,automatic}', '{diesel}', '{}')
+  ('Mahindra', 'XUV500', '{xuv 500}', 2012, 2018, '{manual,automatic}', '{diesel}', '{}'),
+  ('Peugeot', '106', '{peugeot 106}', null, null, '{manual}', '{nafta}', '{}'),
+  ('Peugeot', '205', '{peugeot 205}', null, null, '{manual}', '{nafta,diesel}', '{}'),
+  ('Peugeot', '404', '{peugeot 404}', null, null, '{manual}', '{nafta,diesel}', '{}'),
+  ('Peugeot', '405', '{peugeot 405}', null, null, '{manual,automatic}', '{nafta,diesel}', '{}'),
+  ('Peugeot', '504', '{peugeot 504}', null, null, '{manual}', '{nafta,diesel}', '{}')
 )
 insert into public.vehicle_catalog (make, model, trim, aliases, year_from, year_to, transmissions, fuels)
 select make, model, null, aliases::text[], year_from, year_to, transmissions::text[], fuels::text[]
@@ -1017,6 +1022,11 @@ update public.vehicle_catalog c set body_types = v.body_types::text[]
     ('Zeekr', '001', '{rural}'),
     ('Zeekr', 'X', '{suv}'),
     ('Mahindra', 'Pik Up', '{pickup}'),
-    ('Mahindra', 'XUV500', '{suv}')
+    ('Mahindra', 'XUV500', '{suv}'),
+    ('Peugeot', '106', '{hatchback}'),
+    ('Peugeot', '205', '{hatchback}'),
+    ('Peugeot', '404', '{sedan,pickup}'),
+    ('Peugeot', '405', '{sedan,rural}'),
+    ('Peugeot', '504', '{sedan,pickup,rural}')
   ) as v (make, model, body_types)
  where lower(c.make) = lower(v.make) and lower(c.model) = lower(v.model);
