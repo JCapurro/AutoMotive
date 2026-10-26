@@ -22,7 +22,7 @@ def test_photos_flow_from_stored_listing_to_immediate_and_daily_mail():
     daily = templates.email(notification("digest", {"items": items}, listing_id=None), LINKS, NOW)
     for mail, expected_photos in ((immediate, 3), (daily, 1)):
         soup = BeautifulSoup(mail.html, "html.parser")
-        photos = [img for img in soup.find_all("img") if not img["src"].startswith("cid:")]
+        photos = [img for img in soup.find_all("img") if not img["src"].startswith("cid:") and "/o/" not in img["src"]]
         assert len(photos) == expected_photos
         for img in photos:
             assert img["src"] in listing["images"]
@@ -51,7 +51,9 @@ def test_old_or_imageless_alerts_keep_price_and_action():
         assert "Foto no disponible" in soup.get_text()
         assert "USD 10.300" in soup.get_text()
         assert "Ver auto en Ese Auto" in soup.get_text()
-        assert len(soup.find_all("img")) == 1  # the logo still appears
+        # the logo still appears, and the open pixel
+        assert [img["src"].startswith("cid:") for img in soup.find_all("img")] == [True, False]
+        assert "/o/" in soup.find_all("img")[1]["src"]
 
 
 def test_image_urls_are_safe_deduplicated_and_bounded():
@@ -67,7 +69,7 @@ def test_image_urls_are_safe_deduplicated_and_bounded():
                "images": ['https://example.test/a.jpg?x=" onerror="bad']}
     mail = templates.email(replace(OPPORTUNITY, payload={"listing": listing}), LINKS, NOW)
     soup = BeautifulSoup(mail.html, "html.parser")
-    photo = next(img for img in soup.find_all("img") if not img["src"].startswith("cid:"))
+    photo = next(img for img in soup.find_all("img") if not img["src"].startswith("cid:") and "/o/" not in img["src"])
     assert "onerror" not in photo.attrs
     assert 'Auto <b>"especial"</b>' in photo["alt"]
 

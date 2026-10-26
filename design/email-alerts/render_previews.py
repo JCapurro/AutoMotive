@@ -10,6 +10,7 @@ is only needed for the preview photos, never by the production email renderer.
 from __future__ import annotations
 
 import base64
+import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import subprocess
@@ -22,7 +23,7 @@ sys.path.insert(0, str(ROOT / "worker"))
 from notifications.channels.base import Notification
 from notifications.email_assets import LOGO_CONTENT_ID, logo_attachment
 from notifications.links import Links
-from notifications.templates import email
+from notifications.templates import email, lifecycle_email
 from playwright.sync_api import sync_playwright
 
 OUT = Path(__file__).resolve().parent
@@ -65,10 +66,21 @@ def main():
             "source": "autocosmos", "images": [ECOSPORT]},
          "price_drop": {"old_price": 14500, "new_price": 13500, "currency": "USD", "drop_pct": 6.9}},
     ]}, id=43, listing_id=None)
+    # 2.5 with the car the paused search missed (docs/MAILS_DE_PLAN.md).
+    missed = lifecycle_email({"id": 44, "kind": "count_after_expiry", "unsubscribe_token": "example-token",
+                              "payload": {"model": "Ford Fiesta", "found": 9, "below": 2, "stage": 7, "car": {
+                                  "title": "Ford Fiesta SE", "make": "Ford", "model": "Fiesta", "trim": "SE",
+                                  "year": 2018, "price": 10900, "currency": "USD", "km": 98000,
+                                  "location": "Rosario, Santa Fe", "images": PHOTOS, "below": True,
+                                  "diff_pct": 12.4, "gone": True, "days_listed": 2}}},
+                             LINKS, NOW, offer={"pass_30": {"amount": 15000, "currency": "ARS", "days": 30}})
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
-        for name, message in (("oportunidad", opportunity), ("resumen-diario", digest)):
+        for name, message in (("oportunidad", opportunity), ("resumen-diario", digest),
+                              ("oportunidad-perdida", missed)):
             html = message.html.replace(f"cid:{LOGO_CONTENT_ID}", "data:image/png;base64," + logo_attachment()["content"])
+            # The open pixel (/o/<id>) points at the sample host: it never loads here.
+            html = re.sub(r'<img src="https://eseauto\.example/o/[^"]*"[^>]*>', "", html)
             for url, image in embedded.items():
                 html = html.replace(url, image)
             path = OUT / f"{name}.html"

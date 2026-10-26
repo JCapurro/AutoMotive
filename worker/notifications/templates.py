@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from html import escape
 from typing import Any, Mapping
 
@@ -316,6 +316,10 @@ class EmailMessage:
     subject: str
     text: str
     html: str
+    # Replies to the remarketing emails reach someone who reads them.
+    from_name: str | None = None
+    reply_to: str | None = None
+    logo: bool = True
 
 
 def email(n: Notification, links: Links, now: datetime) -> EmailMessage:
@@ -351,7 +355,8 @@ def email(n: Notification, links: Links, now: datetime) -> EmailMessage:
     html = render_email_html(c, kind=n.kind, now=now, day=n.payload.get("date"),
                              detail_url=detail, app_url=app_url,
                              unsubscribe_url=unsubscribe, footer=footer,
-                             unsubscribe_label=UNSUBSCRIBE_ALERTS)
+                             unsubscribe_label=UNSUBSCRIBE_ALERTS,
+                             open_pixel_url=links.open_pixel("n", n.id))
     return EmailMessage(c.subject, "\n".join(text), html)
 
 
@@ -372,7 +377,9 @@ def web(n: Notification, links: Links, now: datetime) -> dict[str, Any]:
 
 LIFECYCLE_EYEBROW = {"trial_no_matches": "TU PRUEBA GRATIS", "trial_ended": "TU PRUEBA GRATIS",
                      "pass_expiring": "TU PLAN PARTICULAR", "pass_expires_today": "TU PLAN PARTICULAR",
-                     "count_after_expiry": "TU BÚSQUEDA"}
+                     "count_after_expiry": "TU BÚSQUEDA", "search_activated": "TU BÚSQUEDA",
+                     "bonus_trial_offer": "7 DÍAS GRATIS", "bonus_trial_ending": "TUS 7 DÍAS GRATIS",
+                     "bonus_trial_ended": "TUS 7 DÍAS GRATIS"}
 # The free-trial ones reach email-only accounts too (nobody confirmed the
 # address), so they don't say the reader created the search.
 LIFECYCLE_FOOTER = {
@@ -381,7 +388,24 @@ LIFECYCLE_FOOTER = {
     "pass_expiring": "Recibís este email porque tenés Particular en Ese Auto.",
     "pass_expires_today": "Recibís este email porque tenés Particular en Ese Auto.",
     "count_after_expiry": "Recibís este email porque hubo una búsqueda activa en Ese Auto con esta dirección.",
+    "search_activated": "Recibís este email porque se activó una búsqueda gratis en Ese Auto con esta dirección.",
+    "bonus_trial_offer": "Recibís este email porque hubo una búsqueda activa en Ese Auto con esta dirección.",
+    "bonus_trial_ending": "Recibís este email porque se activaron 7 días gratis en Ese Auto con esta dirección.",
+    "bonus_trial_ended": "Recibís este email porque se activaron 7 días gratis en Ese Auto con esta dirección.",
 }
+
+# search_activated: the first email an account gets, 45 minutes after its first search.
+WELCOME_SUBJECT = "Tu búsqueda de {model} ya está activa"
+WELCOME_SUBJECT_ANY = "Tu búsqueda ya está activa"
+WELCOME_FOUND = {1: "Ya encontramos 1 auto que coincide con tu búsqueda{model}{below}. Te avisamos de los nuevos apenas aparezcan.",
+                 "n": "Ya encontramos {n} autos que coinciden con tu búsqueda{model}{below}. Te avisamos de los nuevos apenas aparezcan."}
+WELCOME_BELOW = {1: ", y 1 está por debajo de publicaciones comparables",
+                 "n": ", y {n} están por debajo de publicaciones comparables"}
+WELCOME_NONE = ("Ya estamos revisando las publicaciones{model}. Todavía no apareció ninguno que coincida: "
+                "te avisamos apenas aparezca.")
+WELCOME_INBOX = ("Para que nuestras alertas no terminen en Spam o Promociones, agregá este remitente a tus "
+                 "contactos o mové este email a Principal.")
+WELCOME_CTA = "Ver mis resultados"
 
 NO_MATCHES_SUBJECT = "Tu búsqueda de {model} todavía no tuvo coincidencias nuevas"
 NO_MATCHES_SUBJECT_ANY = "Tu búsqueda todavía no tuvo coincidencias nuevas"
@@ -410,7 +434,20 @@ PASS_LAST_DAY = "Desde mañana dejamos de buscar y de avisarte. Tu historial y t
 PASS_KEEP = "Tu historial y tus favoritos quedan guardados."
 PASS_CTA = "Extender 30 días"
 
-# 2.5: the count, never the cars. N is never 0 (no email then).
+# 2.5: the best car that appeared since access ended (payload.car, picked by
+# public.missed_car), «la oportunidad que te perdiste»; without one, the count.
+# N is never 0 (no email then).
+MISSED_SUBJECT = {True: "Te perdiste este {car}", False: "Apareció este {car} y tu búsqueda estaba pausada"}
+MISSED_SUBJECT_DIFF = ", {d}% debajo de comparables"
+MISSED_TITLE = {True: "La oportunidad que te perdiste", False: "Esto apareció mientras tu búsqueda estaba pausada"}
+MISSED_DIFF = "{d}% debajo de publicaciones comparables."
+MISSED_BELOW = "Por debajo de publicaciones comparables."
+MISSED_GONE = {1: "Estuvo publicado 1 día y ya no está.", "n": "Estuvo publicado {n} días y ya no está."}
+MISSED_GONE_ANY = "Ya no está publicado."
+MISSED_ACTIVE = "Todavía está publicado: reactivá tu búsqueda para verlo."
+MISSED_ALERT = "Con tu búsqueda activa, te hubiéramos avisado apenas apareció."
+MISSED_MORE = "Y no fue el único: desde que venció tu acceso aparecieron {n} autos nuevos para tu búsqueda{below}."
+MISSED_MORE_BELOW = ", {n} por debajo de comparables"
 COUNT_SUBJECT = {1: "Apareció 1 auto nuevo para tu búsqueda{model}",
                  "n": "Aparecieron {n} autos nuevos para tu búsqueda{model}"}
 COUNT_FOUND = {1: "Desde que venció tu acceso apareció 1 auto nuevo que coincide con tu búsqueda{below}.",
@@ -420,6 +457,25 @@ COUNT_REACTIVATE = {1: "Reactivá para verlo.", "n": "Reactivá para verlos."}
 COUNT_CTA = "Reactivar por {price}"
 COUNT_CTA_FALLBACK = "Reactivar"
 
+# The extra 7-day trial: once per account, on day 7 after the 72 h trial ended.
+BONUS_SUBJECT = "Te damos 7 días más para tu búsqueda de {model}"
+BONUS_SUBJECT_ANY = "Te damos 7 días más para tu búsqueda"
+BONUS_NEW = {1: "Desde que pausamos tu búsqueda apareció 1 auto nuevo.",
+             "n": "Desde que pausamos tu búsqueda aparecieron {n} autos nuevos."}
+BONUS_FOUND = {1: "En tu prueba encontramos 1 auto.", "n": "En tu prueba encontramos {n} autos."}
+BONUS_BODY = "Reactivala gratis 7 días, sin tarjeta."
+BONUS_CTA = "Activar mis 7 días"
+
+BONUS_ENDING_SUBJECT = "Te quedan 2 días gratis para tu búsqueda{model}"
+BONUS_ENDING_TITLE = "Te quedan 2 días gratis"
+BONUS_ENDING_FOUND = {1: "Ya encontramos 1 auto.", "n": "Ya encontramos {n} autos."}
+BONUS_ENDING_LAST = "El {day} tu búsqueda se pausa."
+BONUS_ENDING_CTA = "Ver mis resultados"
+
+BONUS_ENDED_TITLE = "Terminaron tus 7 días"
+BONUS_ENDED_SUBJECT = "Terminaron tus 7 días: encontramos {found} para tu búsqueda"
+BONUS_ENDED_FOUND = "Encontramos {found} para tu búsqueda{model}."
+BONUS_ENDED_NONE = "Tu búsqueda queda guardada para cuando quieras seguir."
 
 def _count(value: Any) -> int:
     return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else 0
@@ -446,6 +502,22 @@ def _plural(texts: Mapping[Any, str], n: int, **kw: Any) -> str:
     return texts[1].format(**kw) if n == 1 else texts["n"].format(n=n, **kw)
 
 
+_AR = timezone(timedelta(hours=-3))
+
+
+def _day_month(value: Any) -> str | None:
+    """An ISO timestamp as 31/10, in Argentina; None if it isn't one."""
+    if not isinstance(value, str):
+        return None
+    try:
+        when = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=timezone.utc)
+    return when.astimezone(_AR).strftime("%d/%m").lstrip("0")
+
+
 def particular_price(offer: Mapping[str, Any] | None) -> str | None:
     """Particular's price from app_config.pro_offer ("$15.000"), or None if it isn't usable."""
     price = offer.get("pass_30") if isinstance(offer, Mapping) else None
@@ -470,11 +542,52 @@ def particular_offer(offer: Mapping[str, Any] | None, limits: Mapping[str, Any] 
     return TRIAL_ENDED_OFFER_FALLBACK
 
 
+def _missed(car: Any, found: int, below: int, link: Link) -> tuple[Content, str] | None:
+    """2.5 with the car it missed: photo, price and why it mattered. None when
+    the payload has no showable car (no price), so the email falls back to the count."""
+    if not isinstance(car, Mapping) or car.get("price") is None or not (car.get("title") or car.get("model")):
+        return None
+    listing = {"make": car.get("make"), "model": car.get("model"), "trim": car.get("trim"),
+               "year": car.get("year"), "title": car.get("title"), "price": car.get("price"),
+               "currency": car.get("currency"), "mileage_km": car.get("km")}
+    name, gone = vehicle(listing), car.get("gone") is True
+    diff = car.get("diff_pct")
+    diff = round(diff) if isinstance(diff, (int, float)) and not isinstance(diff, bool) and math.isfinite(diff) else 0
+    subject = MISSED_SUBJECT[gone].format(car=name) + (MISSED_SUBJECT_DIFF.format(d=diff) if diff > 0 else "")
+    lines = []
+    if diff > 0:
+        lines.append(MISSED_DIFF.format(d=diff))
+    elif car.get("below") is True:
+        lines.append(MISSED_BELOW)
+    where = " · ".join(x for x in (km(listing), car.get("location") if isinstance(car.get("location"), str) else None)
+                       if x)
+    if where:
+        lines.append(where)
+    if gone:
+        days = _count(car.get("days_listed"))
+        lines.append(_plural(MISSED_GONE, days) if days else MISSED_GONE_ANY)
+    else:
+        lines.append(MISSED_ACTIVE)
+    lines.append(MISSED_ALERT)
+    if found > 1:
+        lines.append(MISSED_MORE.format(n=found, below=MISSED_MORE_BELOW.format(n=below) if below else ""))
+    title = MISSED_TITLE[gone]
+    return Content(title, subject, vehicle=name, lines=lines, link=link,
+                   images=image_urls(car.get("images")), price=price(listing)), title
+
+
 def lifecycle_content(kind: str, payload: Mapping[str, Any], url: str, *,
                       offer: Mapping[str, Any] | None = None,
                       limits: Mapping[str, Any] | None = None) -> tuple[Content, str]:
     """The email of one ledger row: its Content and its title."""
     model = payload.get("model") if isinstance(payload.get("model"), str) and payload["model"].strip() else None
+    if kind == "search_activated":
+        found, below = _count(payload.get("found")), _count(payload.get("below"))
+        subject = WELCOME_SUBJECT.format(model=model) if model else WELCOME_SUBJECT_ANY
+        of_model = f" de {model}" if model else ""
+        first = (_plural(WELCOME_FOUND, found, model=of_model, below=_plural(WELCOME_BELOW, below) if below else "")
+                 if found else WELCOME_NONE.format(model=f" para tu búsqueda{of_model}"))
+        return Content(subject, subject, lines=[first, WELCOME_INBOX], link=Link(WELCOME_CTA, url)), subject
     if kind == "trial_no_matches":
         subject = NO_MATCHES_SUBJECT.format(model=model) if model else NO_MATCHES_SUBJECT_ANY
         return Content(subject, subject, lines=[NO_MATCHES_BODY], link=Link(NO_MATCHES_CTA, url)), subject
@@ -502,30 +615,141 @@ def lifecycle_content(kind: str, payload: Mapping[str, Any], url: str, *,
         found, below = _count(payload.get("found")), _count(payload.get("below"))
         if not found:
             raise ValueError("count_after_expiry without new listings")
+        price_label = particular_price(offer)
+        cta = COUNT_CTA.format(price=price_label) if price_label else COUNT_CTA_FALLBACK
+        if (missed := _missed(payload.get("car"), found, below, Link(cta, url))) is not None:
+            return missed
         subject = _plural(COUNT_SUBJECT, found, model=f" de {model}" if model else "")
         lines = [_plural(COUNT_FOUND, found, below=_plural(COUNT_BELOW, below) if below else ""),
                  _plural(COUNT_REACTIVATE, found)]
-        price = particular_price(offer)
-        cta = COUNT_CTA.format(price=price) if price else COUNT_CTA_FALLBACK
         return Content(subject, subject, lines=lines, link=Link(cta, url)), subject
+    if kind == "bonus_trial_offer":
+        found, new = _count(payload.get("found")), _count(payload.get("new"))
+        subject = BONUS_SUBJECT.format(model=model) if model else BONUS_SUBJECT_ANY
+        lead = _plural(BONUS_NEW, new) if new else _plural(BONUS_FOUND, found) if found else ""
+        return Content(subject, subject, lines=[f"{lead} {BONUS_BODY}".strip()],
+                       link=Link(BONUS_CTA, url)), subject
+    if kind == "bonus_trial_ending":
+        found = _count(payload.get("found"))
+        subject = BONUS_ENDING_SUBJECT.format(model=f" de {model}" if model else "")
+        day = _day_month(payload.get("ends_at"))
+        line = " ".join(x for x in (_plural(BONUS_ENDING_FOUND, found) if found else "",
+                                    BONUS_ENDING_LAST.format(day=day) if day else "") if x)
+        return Content(BONUS_ENDING_TITLE, subject, lines=[line] if line else [],
+                       link=Link(BONUS_ENDING_CTA, url)), BONUS_ENDING_TITLE
+    if kind == "bonus_trial_ended":
+        found = _count(payload.get("found"))
+        line = (BONUS_ENDED_FOUND.format(found=_cars(found), model=f" de {model}" if model else "")
+                if found else BONUS_ENDED_NONE)
+        subject = BONUS_ENDED_SUBJECT.format(found=_cars(found)) if found else BONUS_ENDED_TITLE
+        return Content(BONUS_ENDED_TITLE, subject, lines=[line], link=Link(TRIAL_ENDED_CTA, url)), BONUS_ENDED_TITLE
     raise ValueError(f"unknown plan email kind: {kind}")
 
 
 def lifecycle_email(row: Mapping[str, Any], links: Links, now: datetime, *,
                     offer: Mapping[str, Any] | None = None,
-                    limits: Mapping[str, Any] | None = None) -> EmailMessage:
+                    limits: Mapping[str, Any] | None = None,
+                    remarketing: Mapping[str, Any] | None = None) -> EmailMessage:
     """A plan email for a lifecycle_emails row (id, kind, payload, unsubscribe_token)."""
     kind = row["kind"]
+    if kind in REMARKETING_KINDS:
+        return remarketing_email(row, links, now, remarketing=remarketing)
     c, title = lifecycle_content(kind, row.get("payload") or {}, links.lifecycle(row["id"], owner=row.get("user_id")),
                                  offer=offer, limits=limits)
     footer = LIFECYCLE_FOOTER[kind]
     unsubscribe = links.unsubscribe(row.get("unsubscribe_token"))
 
-    text = [c.header, *c.lines, f"{c.link.label}: {c.link.url}", "", "—", footer]
+    text = [c.header, *[x for x in (c.vehicle, c.price) if x], *c.lines, f"{c.link.label}: {c.link.url}", "", "—", footer]
     if unsubscribe:
         text.append(f"{UNSUBSCRIBE}: {unsubscribe}")
 
     html = render_email_html(c, kind=kind, now=now, day=None, detail_url=None, app_url=None,
                              unsubscribe_url=unsubscribe, footer=footer, unsubscribe_label=UNSUBSCRIBE,
-                             eyebrow=LIFECYCLE_EYEBROW[kind], title=title, preheader=c.lines[0])
+                             eyebrow=LIFECYCLE_EYEBROW[kind], title=title, preheader=_preheader(c, title),
+                             open_pixel_url=links.open_pixel("m", row["id"]))
     return EmailMessage(c.subject, "\n".join(text), html)
+
+
+def _preheader(c: Content, title: str) -> str:
+    first = c.lines[0] if c.lines else title
+    return f"{c.vehicle}, {c.price}. {first}" if c.vehicle and c.price else first
+
+
+# ---------------------------------------------------------------------------
+# Remarketing (docs/MAILS_DE_PLAN.md, «Remarketing»): accounts without a
+# search. Same brand template as the plan emails: one short line and one
+# button into the app. The follow-up adds a small link to /f/<id>, where the
+# person picks why they stopped (it asks to confirm: mail scanners open every
+# link). app_config.remarketing.reply_to, when set, receives the replies.
+# ---------------------------------------------------------------------------
+
+REMARKETING_KINDS = ("search_abandoned", "search_not_started", "search_feedback")
+REMARKETING_DEFAULTS = {"reply_to": None}
+
+# (reason, label), in the order the page /f lists them (web/lib/email-feedback-reasons.ts).
+FEEDBACK_REASONS = (("browsing", "Solo estaba mirando"),
+                    ("missing_model", "No encontré mi modelo o versión"),
+                    ("wrong_search", "La búsqueda que armaron no era lo que pedí"),
+                    ("unclear", "No entendí qué hace Ese Auto"),
+                    ("bought", "Ya compré un auto"),
+                    ("other", "Otro motivo"))
+
+REMARKETING_EYEBROW = "TU BÚSQUEDA"
+ABANDONED_TITLE = "Tu búsqueda de {model} está lista"
+ABANDONED_TITLE_ANY = "Tu búsqueda está lista"
+ABANDONED_BODY = "La armamos con lo que nos escribiste. Activala y te avisamos cuando aparezca."
+ABANDONED_CTA = "Activar mi búsqueda"
+
+NOT_STARTED_TITLE = "¿Qué auto estás buscando?"
+NOT_STARTED_BODY = "Contanos con tus palabras y revisamos las publicaciones por vos."
+NOT_STARTED_CTA = "Empezar mi búsqueda"
+
+FEEDBACK_TITLE = "Tu {model} te está esperando"
+FEEDBACK_TITLE_ANY = "Tu próximo auto te está esperando"
+FEEDBACK_BODY = "Activá tu búsqueda en un minuto y dejá que busquemos por vos."
+FEEDBACK_LINK = "¿Algo te frenó? Contanos"
+REMARKETING_FOOTER = "Recibís este email porque se creó una cuenta en Ese Auto con esta dirección."
+
+
+def remarketing_settings(raw: Any) -> dict[str, Any]:
+    """app_config.remarketing: reply_to, only when it looks like one address."""
+    cfg = raw if isinstance(raw, Mapping) else {}
+    reply_to = cfg.get("reply_to")
+    reply_to = reply_to.strip() if isinstance(reply_to, str) else ""
+    return {"reply_to": reply_to if "@" in reply_to and "\n" not in reply_to else None}
+
+
+def remarketing_email(row: Mapping[str, Any], links: Links, now: datetime, *,
+                      remarketing: Mapping[str, Any] | None = None) -> EmailMessage:
+    """One remarketing email for a lifecycle_emails row (id, kind, payload, user_id, unsubscribe_token)."""
+    kind, payload = row["kind"], row.get("payload") or {}
+    owner = row.get("user_id")
+    action = links.lifecycle(row["id"], owner=owner)
+    model = payload.get("model") if isinstance(payload.get("model"), str) and payload["model"].strip() else None
+    feedback = None
+    if kind == "search_abandoned":
+        title = ABANDONED_TITLE.format(model=model) if model else ABANDONED_TITLE_ANY
+        line, cta = ABANDONED_BODY, ABANDONED_CTA
+    elif kind == "search_not_started":
+        title, line, cta = NOT_STARTED_TITLE, NOT_STARTED_BODY, NOT_STARTED_CTA
+    elif kind == "search_feedback":
+        title = FEEDBACK_TITLE.format(model=model) if model else FEEDBACK_TITLE_ANY
+        line = FEEDBACK_BODY
+        cta = ABANDONED_CTA if payload.get("after") == "search_abandoned" else NOT_STARTED_CTA
+        feedback = Link(FEEDBACK_LINK, links.feedback(row["id"], owner=owner))
+    else:
+        raise ValueError(f"unknown remarketing kind: {kind}")
+
+    c = Content(title, title, lines=[line], link=Link(cta, action))
+    unsubscribe = links.unsubscribe(row.get("unsubscribe_token"))
+    text = [title, line, f"{cta}: {action}"]
+    if feedback:
+        text.append(f"{feedback.label}: {feedback.url}")
+    text += ["", "—", REMARKETING_FOOTER]
+    if unsubscribe:
+        text.append(f"{UNSUBSCRIBE}: {unsubscribe}")
+    html = render_email_html(c, kind=kind, now=now, day=None, detail_url=None, app_url=None,
+                             unsubscribe_url=unsubscribe, footer=REMARKETING_FOOTER, unsubscribe_label=UNSUBSCRIBE,
+                             eyebrow=REMARKETING_EYEBROW, title=title, preheader=line,
+                             open_pixel_url=links.open_pixel("m", row["id"]), secondary=feedback)
+    return EmailMessage(title, "\n".join(text), html, reply_to=remarketing_settings(remarketing)["reply_to"])

@@ -217,7 +217,8 @@ export function AssistedSearch({
     };
 
     // Once per job, whatever the re-renders. A refusal (or a network error) goes back to the review with the reason.
-    const autoSave = async (jobId: number, draft: Reviewed, values: SearchValues) => {
+    // `auto`: what autoSaveValues settled (the zone it placed and its note); a refusal reviews the draft as it came.
+    const autoSave = async (jobId: number, draft: Reviewed, { values, notes }: { values: SearchValues; notes: string[] }) => {
       if (autosaved.current.has(jobId)) return;
       autosaved.current.add(jobId);
       let result: SaveResult;
@@ -229,7 +230,7 @@ export function AssistedSearch({
       if (result.savedId != null) {
         analyticsEvent("search", { search_type: "assisted" });
         analyticsEvent("search_created", { search_type: "assisted" });
-        setPhase({ kind: "active", jobId, draft: { ...draft, values, state: "saved", savedId: result.savedId }, savedId: result.savedId });
+        setPhase({ kind: "active", jobId, draft: { ...draft, values, notes, state: "saved", savedId: result.savedId }, savedId: result.savedId });
         void finishAssisted(jobId);
       } else {
         lastProposal.current = [draft.values];

@@ -80,3 +80,18 @@ describe("the plan's cap on places", () => {
     expect(locationCapText(null)).toBeNull();
   });
 });
+
+describe("zones with the country words and the autosave", () => {
+  it("«Chaco, Argentina» keeps Chaco and a bare «Argentina» asks for the whole country", () => {
+    expect(draftToValues(draft("Chaco, Argentina", []), base).values.location?.label).toMatch(/^Resistencia/);
+    const { values, notes } = draftToValues(draft("Argentina", ["Argentina"]), base);
+    expect(values.location).toBeNull();
+    expect(notes.join(" ")).toContain("todo el país");
+  });
+
+  it("«Santa Fe o Buenos Aires» in one text are two zones", () => {
+    const { values } = draftToValues(draft("Rosario o Córdoba", []), base);
+    expect(values.location?.label).toMatch(/^Rosario/);
+    expect(values.extra_locations.map((z) => z.label)).toEqual([expect.stringMatching(/^Córdoba/)]);
+  });
+});

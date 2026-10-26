@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { EmptyRow, PageHeader, Section, Stat, Table, Td, Th } from "@/components/admin/ui";
 import { count, percent, when } from "@/lib/admin-format";
 import { CHANNEL, INFLUENCE, LEVEL, type Level } from "@/lib/copy";
+import { FEEDBACK_REASONS, type FeedbackReason } from "@/lib/email-feedback-reasons";
 import { dayMonth, money } from "@/lib/format";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -30,7 +31,7 @@ function day(value: string | null): string {
 // sección 11: every metrics view, as the admin reads them (the admins themselves are left out).
 export default async function MetricsPage() {
   const admin = createAdminClient();
-  const [northStar, activation, firstValue, funnel, engagement, perDay, outcomes, llm, waitlist, ...cta] = await Promise.all([
+  const [northStar, activation, firstValue, funnel, engagement, perDay, outcomes, llm, waitlist, feedback, ...cta] = await Promise.all([
     admin.from("v_north_star_weekly").select("*").order("week", { ascending: false }).limit(12),
     admin.from("v_activation").select("*"),
     admin.from("v_first_value").select("*").order("created_at", { ascending: false }).limit(1000),
@@ -40,6 +41,8 @@ export default async function MetricsPage() {
     admin.from("v_outcomes").select("*").order("created_at", { ascending: false }),
     admin.from("llm_job_stats").select("*").order("day", { ascending: false }).limit(14),
     admin.from("pro_waitlist").select("plan"),
+    admin.from("email_feedback").select("id, reason, comment, created_at, lifecycle_emails(kind)")
+      .order("created_at", { ascending: false }).limit(200),
     ...CTA_EVENTS.map((name) => admin.from("events").select("id", { count: "exact", head: true }).eq("name", name)),
   ]);
   const fv = firstValue.data ?? [];
@@ -296,9 +299,39 @@ export default async function MetricsPage() {
           </Table>
         </Section>
       </div>
+
+      <Section title="Por qué no armaron su búsqueda" description="Los motivos de los emails de remarketing (/f): uno por email, el último que eligieron. Las respuestas por email llegan a la casilla de remarketing.reply_to.">
+        <Table>
+          <thead>
+            <tr>
+              <Th>Fecha</Th>
+              <Th>Email</Th>
+              <Th>Motivo</Th>
+              <Th>Comentario</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {(feedback.data ?? []).map((f) => (
+              <tr key={f.id}>
+                <Td>{when(f.created_at)}</Td>
+                <Td>{REMARKETING_EMAIL[f.lifecycle_emails?.kind ?? ""] ?? f.lifecycle_emails?.kind ?? "—"}</Td>
+                <Td>{FEEDBACK_REASONS[f.reason as FeedbackReason] ?? f.reason}</Td>
+                <Td className="max-w-md whitespace-pre-wrap">{f.comment ?? "—"}</Td>
+              </tr>
+            ))}
+            {!feedback.data?.length ? <EmptyRow colSpan={4} /> : null}
+          </tbody>
+        </Table>
+      </Section>
     </>
   );
 }
+
+const REMARKETING_EMAIL: Record<string, string> = {
+  search_abandoned: "Búsqueda sin activar",
+  search_not_started: "¿Qué auto buscás?",
+  search_feedback: "¿Qué te frenó?",
+};
 
 function Rate({ n, rate }: { n: number | null; rate: number | null }) {
   return (

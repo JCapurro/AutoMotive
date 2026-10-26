@@ -38,8 +38,9 @@ export default function PrivacyPage() {
         </li>
         <li>
           <strong>Cómo usás el servicio</strong>: publicaciones que abrís, guardás o descartás (y el motivo), estados
-          como «contacté» o «compré», clics en las alertas y respuestas a encuestas. Lo usamos para mejorar las
-          alertas y medir si el servicio es útil.
+          como «contacté» o «compré», clics en las alertas, si abriste nuestros emails (cada email trae una imagen
+          de 1 píxel que lo marca abierto cuando se cargan las imágenes) y respuestas a encuestas. Lo usamos para
+          mejorar las alertas y medir si el servicio es útil.
         </li>
         <li>
           <strong>Lo que escribís en el modo asistido</strong>, para convertirlo en filtros que después revisás.

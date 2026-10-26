@@ -94,3 +94,10 @@ class TemplatesTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_open_pixel_marks_the_email_by_kind():
+    links = Links("https://eseauto.com.ar", "")
+    assert links.open_pixel("n", 42) == "https://eseauto.com.ar/o/42?k=n"
+    assert links.open_pixel("m", 7) == "https://eseauto.com.ar/o/7?k=m"
+    assert Links("").open_pixel("n", 42) is None

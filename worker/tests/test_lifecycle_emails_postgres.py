@@ -478,6 +478,18 @@ class CountAfterExpiryTests(LifecycleCase):
                   for days, user in users.items()}
         self.assertEqual(stages, {6.9: None, 7.1: 7, 8.1: None, 14.1: 14, 21.1: 21, 22.1: None})
 
+    async def test_once_per_account_ever(self):
+        # Juan, 26/10/2026: one 2.5 email per account, not one per stage or per end.
+        user, profile = await self.ended_trial(14.1)
+        await self.counted(user, profile, 2)
+        await self.rows("INSERT INTO lifecycle_emails (user_id, kind, event_key, target, status, sent_at) "
+                        "VALUES (%s, 'count_after_expiry', 'older-end:7', '/app/pro?plan=pass_30', 'sent', "
+                        "        now() - interval '7 days')", user)
+        self.assertEqual(await self.send(), 0)
+        # A failed or skipped one never arrived: it doesn't count.
+        await self.rows("UPDATE lifecycle_emails SET status = 'failed' WHERE user_id = %s", user)
+        self.assertEqual(await self.send(), 1)
+
     async def test_the_search_that_found_the_most_and_only_this_end(self):
         user, fiesta = await self.ended_trial(7.1)
         corolla = await self.search(user, "Corolla", "Toyota")
@@ -700,3 +712,319 @@ class MeasuringTests(LifecycleCase):
             await self.rows("SELECT * FROM lifecycle_emails", actor=user)
         with self.assertRaisesRegex(Exception, "permission denied"):
             await self.rows("SELECT track_lifecycle_click(1)", actor=user)
+
+
+class SearchActivatedTests(LifecycleCase):
+    """The welcome: 45 minutes after the account's first search."""
+
+    async def first_search(self, user: str, *, minutes_ago: float, model: str = "Focus") -> int:
+        profile = await self.search(user, model)
+        await self.rows("UPDATE search_profiles SET created_at = now() - make_interval(secs => %s) WHERE id = %s",
+                        minutes_ago * 60, profile)
+        return profile
+
+    async def test_once_per_account_with_what_its_search_already_found(self):
+        user = await self.account(trial_ended_hours_ago=None)
+        profile = await self.first_search(user, minutes_ago=50)
+        for level in ("high", "good", "good"):
+            await self.match(profile, level=level)
+
+        self.assertEqual(await self.send(), 1)
+        row = await self.ledger(user, "search_activated")
+        self.assertEqual((row["status"], row["event_key"], row["search_profile_id"], row["target"], row["payload"]),
+                         ("sent", "first", profile, f"/app/searches/{profile}",
+                          {"model": "Ford Focus", "found": 3, "below": 1}))
+        [body] = self.emails()
+        self.assertEqual((body["to"], body["subject"]), ([await self.email_of(user)], "Tu búsqueda de Ford Focus ya está activa"))
+        self.assertIn(f"Ver mis resultados: https://automotive.app/m/{row['id']}", body["text"])
+        self.assertIn(f"/o/{row['id']}?k=m", body["html"])
+
+        await self.first_search(user, minutes_ago=50, model="Ka")     # a second search: no second welcome
+        self.assertEqual(await self.send(), 0)
+
+    async def test_not_before_45_minutes_nor_for_a_paused_search_or_an_admin(self):
+        early = await self.account(trial_ended_hours_ago=None)
+        await self.first_search(early, minutes_ago=10)
+        paused = await self.account(trial_ended_hours_ago=None)
+        await self.rows("UPDATE search_profiles SET enabled = false WHERE id = %s",
+                        await self.first_search(paused, minutes_ago=50))
+        await self.first_search(self.admin, minutes_ago=50)
+
+        self.assertEqual(await self.send(), 0)
+        for user in (early, paused, self.admin):
+            self.assertIsNone(await self.ledger(user, "search_activated"))
+
+    async def test_skipped_if_the_search_was_paused_before_its_turn(self):
+        user = await self.account(trial_ended_hours_ago=None)
+        profile = await self.first_search(user, minutes_ago=50)
+        [row] = await self.rows("SELECT id FROM claim_lifecycle_emails('search_activated', interval '48 hours', 5)")
+        await self.rows("UPDATE search_profiles SET enabled = false WHERE id = %s", profile)
+
+        self.assertEqual(await self.send(), 0)
+        self.assertEqual((await self.ledger(user, "search_activated"))["id"], row["id"])
+        self.assertEqual((await self.ledger(user, "search_activated"))["status"], "skipped")
+
+    async def test_a_first_search_older_than_the_window_never_gets_one(self):
+        user = await self.account(trial_ended_hours_ago=None)
+        await self.first_search(user, minutes_ago=60 * 50)
+        self.assertEqual(await self.send(), 0)
+        self.assertIsNone(await self.ledger(user, "search_activated"))
+
+
+class RemarketingTests(LifecycleCase):
+    """Accounts without a search: 1A wrote one and never saved it, 1B never wrote one; the follow-up asks why."""
+
+    KINDS_ON = {"search_abandoned": True, "search_not_started": True, "search_feedback": True}
+
+    async def asyncSetUp(self) -> None:
+        await super().asyncSetUp()
+        async with db.connection() as cx:
+            self.saved += await (await cx.execute(
+                "SELECT key, value FROM app_config WHERE key = 'remarketing'")).fetchall()
+        await self.config(kinds={**DEFAULTS["kinds"], **self.KINDS_ON})
+        await self.config("remarketing", backfill_since=None, reply_to="juan@automotive.test")
+
+    async def signed_up(self, *, hours_ago: float) -> str:
+        user = await self.account(trial_ended_hours_ago=None)
+        await self.rows("UPDATE profiles SET created_at = now() - make_interval(secs => %s) WHERE id = %s",
+                        hours_ago * 3600, user)
+        return user
+
+    async def asked(self, user: str, text: str, *, hours_ago: float, model: str | None = "Hilux",
+                    status: str = "done") -> int:
+        output = {"drafts": [{"values": {"make": "Toyota", "model": model} if model else {}, "resolved": bool(model)}]}
+        [row] = await self.rows(
+            "INSERT INTO llm_jobs (user_id, kind, input, output, status, created_at) "
+            "VALUES (%s, 'parse_search', %s, %s, %s::llm_job_status, now() - make_interval(secs => %s)) RETURNING id",
+            user, Jsonb({"text": text}), Jsonb(output), status, hours_ago * 3600)
+        return row["id"]
+
+    async def test_an_abandoned_request_gets_its_own_search_back_ready_to_activate(self):
+        user = await self.signed_up(hours_ago=30)
+        await self.asked(user, "Toyota hilux 2013 a 2016", hours_ago=29)
+        job = await self.asked(user, "Toyota hilux 2.5 de 2013 a 2016 & más", hours_ago=25)
+
+        self.assertEqual(await self.send(), 1)
+        row = await self.ledger(user, "search_abandoned")
+        self.assertEqual((row["status"], row["event_key"], row["target"]),
+                         ("sent", "first", "/app/searches/new?prompt=Toyota%20hilux%202.5%20de%202013%20a%202016"
+                                           "%20%26%20m%C3%A1s"))
+        self.assertEqual((row["payload"]["text"], row["payload"]["model"], row["payload"]["job_id"]),
+                         ("Toyota hilux 2.5 de 2013 a 2016 & más", "Toyota Hilux", job))
+        [body] = self.emails()
+        self.assertEqual((body["reply_to"], body["subject"]),
+                         ("juan@automotive.test", "Tu búsqueda de Toyota Hilux está lista"))
+        self.assertIn("attachments", body)
+        self.assertIn(f"Activar mi búsqueda: https://automotive.app/m/{row['id']}", body["text"])
+        self.assertIn("List-Unsubscribe", body["headers"])
+        # Not a second time, nor the 1B email.
+        self.assertEqual(await self.send(), 0)
+        self.assertIsNone(await self.ledger(user, "search_not_started"))
+
+    async def test_who_never_wrote_anything_is_asked_what_car(self):
+        user = await self.signed_up(hours_ago=25)
+        self.assertEqual(await self.send(), 1)
+        row = await self.ledger(user, "search_not_started")
+        self.assertEqual((row["target"], row["payload"]), ("/app/searches/new", {}))
+        [body] = self.emails()
+        self.assertEqual(body["subject"], "¿Qué auto estás buscando?")
+        self.assertNotIn("r=wrong_search", body["text"])
+
+    async def test_not_before_24_hours_nor_with_a_search_nor_to_an_admin_or_an_opt_out(self):
+        early = await self.signed_up(hours_ago=5)
+        with_search = await self.signed_up(hours_ago=30)
+        await self.rows("UPDATE search_profiles SET enabled = false WHERE id = %s", await self.search(with_search))
+        opted_out = await self.signed_up(hours_ago=30)
+        await self.rows("UPDATE profiles SET default_channels = '{web}' WHERE id = %s", opted_out)
+        await self.rows("UPDATE profiles SET created_at = now() - interval '30 hours' WHERE id = %s", self.admin)
+        fresh_request = await self.signed_up(hours_ago=30)
+        await self.asked(fresh_request, "Gol trend", hours_ago=2)      # the request resets the clock
+
+        self.assertEqual(await self.send(), 0)
+        self.assertEqual(await self.rows("SELECT * FROM lifecycle_emails"), [])
+
+    async def test_skipped_if_the_search_was_created_before_its_turn(self):
+        user = await self.signed_up(hours_ago=30)
+        await self.asked(user, "Gol trend", hours_ago=25)
+        await self.rows("SELECT id FROM claim_lifecycle_emails('search_abandoned', interval '48 hours', 5)")
+        await self.search(user, "Gol", "Volkswagen")
+
+        self.assertEqual(await self.send(), 0)
+        self.assertEqual((await self.ledger(user, "search_abandoned"))["status"], "skipped")
+
+    async def test_the_backfill_reaches_accounts_older_than_the_window_once(self):
+        old = await self.signed_up(hours_ago=24 * 20)
+        await self.asked(old, "Chery Arrizo 8", hours_ago=24 * 19)
+        older = await self.signed_up(hours_ago=24 * 40)
+
+        self.assertEqual(await self.send(), 0)                          # no backfill: too old for the window
+        await self.config("remarketing", backfill_since=(datetime.now(AR) - timedelta(days=30)).isoformat())
+        self.assertEqual(await self.send(), 1)
+        self.assertEqual((await self.ledger(old, "search_abandoned"))["status"], "sent")
+        self.assertIsNone(await self.ledger(older, "search_not_started"))
+
+    async def test_one_remarketing_email_per_account_no_follow_up(self):
+        # Juan, 26/10/2026: one email, 1A or 1B; the follow-up never goes out.
+        asked, answered = [await self.signed_up(hours_ago=30) for _ in range(2)]
+        for user in (asked, answered):
+            await self.asked(user, "Renault Sandero 2021", hours_ago=25, model="Sandero")
+        self.assertEqual(await self.send(), 2)
+        firsts = {u: (await self.ledger(u, "search_abandoned"))["id"] for u in (asked, answered)}
+        await self.rows("UPDATE lifecycle_emails SET sent_at = now() - interval '4 days 1 hour'")
+        [fb] = await self.rows("SELECT record_email_feedback(%s, 'browsing', '  solo miraba ') AS id", firsts[answered])
+        self.assertIsNotNone(fb["id"])
+
+        self.requests.clear()
+        self.assertEqual(await self.send(), 0)
+        self.assertIsNone(await self.ledger(asked, "search_feedback"))
+        self.assertEqual(self.emails(), [])
+        self.assertEqual(await self.events(answered, "email_feedback"),
+                         [{"email_id": firsts[answered], "kind": "search_abandoned", "reason": "browsing",
+                           "comment": True}])
+
+    async def test_feedback_only_for_a_sent_remarketing_email_and_a_second_answer_replaces_it(self):
+        user = await self.signed_up(hours_ago=25)
+        self.assertEqual(await self.send(), 1)
+        email = (await self.ledger(user, "search_not_started"))["id"]
+        await self.rows("SELECT record_email_feedback(%s, 'unclear', 'no entendí')", email)
+        await self.rows("SELECT record_email_feedback(%s, 'bought', null)", email)
+        [fb] = await self.rows("SELECT reason, comment FROM email_feedback WHERE lifecycle_email_id = %s", email)
+        self.assertEqual((fb["reason"], fb["comment"]), ("bought", "no entendí"))
+
+        other = await self.account(trial_ended_hours_ago=1)
+        await self.config(kinds={**DEFAULTS["kinds"], **self.KINDS_ON, "search_not_started": False})
+        self.assertEqual(await self.send(), 1)
+        trial = (await self.ledger(other, "trial_ended"))["id"]
+        [row] = await self.rows("SELECT record_email_feedback(%s, 'bought', null) AS id", trial)
+        self.assertIsNone(row["id"])
+        with self.assertRaisesRegex(Exception, "email_feedback_reason_check"):
+            await self.rows("SELECT record_email_feedback(%s, 'spam', null)", email)
+        with self.assertRaisesRegex(Exception, "permission denied"):
+            await self.rows("SELECT record_email_feedback(%s, 'other', null)", email, actor=user)
+
+
+class BonusTrialTests(LifecycleCase):
+    """The extra 7-day trial: offered on day 7 after the 72 h trial, started by the person (/app/bonus)."""
+
+    KINDS_ON = {"bonus_trial_offer": True, "bonus_trial_ending": True, "bonus_trial_ended": True}
+
+    async def asyncSetUp(self) -> None:
+        await super().asyncSetUp()
+        async with db.connection() as cx:
+            self.saved += await (await cx.execute(
+                "SELECT key, value FROM app_config WHERE key = 'bonus_trial'")).fetchall()
+        await self.config(kinds={**DEFAULTS["kinds"], **self.KINDS_ON})
+        await self.config("bonus_trial", backfill_since=None)
+
+    async def ended_trial(self, days_ago: float) -> tuple[str, int]:
+        """An account whose trial ended `days_ago`, with a search that found something and that the end paused."""
+        user = await self.account(trial_ended_hours_ago=days_ago * 24)
+        profile = await self.search(user, "Ka")
+        await self.match(profile, level="high", hours_ago=days_ago * 24 + 2)
+        await self.match(profile, hours_ago=days_ago * 24 + 3)
+        await self.rows("UPDATE listings SET year = 2018, price = 9800, currency = 'USD', mileage_km = 72000")
+        await self.rows("SELECT expire_commercial_access(%s)", user)
+        return user, profile
+
+    async def counted(self, user: str, profile: int, n: int) -> None:
+        [row] = await self.rows("SELECT count_after_expiry_end(%s) AS t", user)
+        for _ in range(n):
+            ref = uuid4().hex[:10]
+            [listing] = await self.rows(
+                "INSERT INTO listings (source, external_id, url, title, make, model) "
+                "VALUES ('mercadolibre', %s, %s, 'Ford Ka', 'Ford', 'Ka') RETURNING id", ref, f"https://example.test/{ref}")
+            await self.rows("INSERT INTO expired_search_matches (search_profile_id, listing_id, access_ended_at, level) "
+                            "VALUES (%s, %s, %s, 'good')", profile, listing["id"], row["t"])
+
+    async def bonus(self, user: str, fn: str = "my_bonus_trial") -> dict:
+        [row] = await self.rows(f"SELECT {fn}() AS v", actor=user)
+        return row["v"]
+
+    async def test_day_seven_offers_it_instead_of_the_count(self):
+        user, profile = await self.ended_trial(7 + 2 / 24)
+        await self.counted(user, profile, 4)
+
+        self.assertEqual(await self.send(), 1)
+        offer = await self.ledger(user, "bonus_trial_offer")
+        self.assertEqual((offer["target"], offer["search_profile_id"], offer["event_key"]), ("/app/bonus", profile, "bonus"))
+        self.assertEqual({k: offer["payload"][k] for k in ("model", "found", "new", "below")},
+                         {"model": "Ford Ka", "found": 2, "new": 4, "below": 0})
+        self.assertEqual(offer["payload"]["cars"][0],
+                         {"title": "Ford Fiesta", "year": 2018, "price": 9800, "currency": "USD", "km": 72000,
+                          "below": True})                                # the opportunity first
+        [body] = self.emails()
+        self.assertEqual(body["subject"], "Te damos 7 días más para tu búsqueda de Ford Ka")
+        self.assertIn(f"Activar mis 7 días: https://automotive.app/m/{offer['id']}", body["text"])
+        count = await self.ledger(user, "count_after_expiry")
+        self.assertTrue(count is None or count["status"] == "skipped")
+
+    async def test_not_before_day_seven_nor_to_a_payer_nor_without_results(self):
+        early, _ = await self.ended_trial(5)
+        payer, _ = await self.ended_trial(8)
+        await self.pay(payer)
+        empty = await self.account(trial_ended_hours_ago=8 * 24)
+        await self.search(empty)
+        self.assertEqual(await self.send(), 0)
+        for user in (early, payer, empty):
+            self.assertIsNone(await self.ledger(user, "bonus_trial_offer"))
+
+    async def test_the_backfill_reaches_trials_that_ended_long_ago(self):
+        user, _ = await self.ended_trial(30)
+        self.assertEqual(await self.send(), 0)
+        await self.config("bonus_trial", backfill_since=(datetime.now(AR) - timedelta(days=60)).isoformat())
+        self.assertEqual(await self.send(), 1)
+        self.assertEqual((await self.ledger(user, "bonus_trial_offer"))["status"], "sent")
+
+    async def test_the_click_starts_seven_days_once_and_brings_the_search_back(self):
+        user, profile = await self.ended_trial(8)
+        self.assertEqual((await self.bonus(user))["state"], "unavailable")    # no offer sent yet
+        self.assertEqual(await self.send(), 1)
+        self.assertEqual(await self.bonus(user), {"state": "available", "days": 7})
+
+        started = await self.bonus(user, "start_my_bonus_trial")
+        self.assertEqual((started["state"], started["started"], started["searches_reactivated"]), ("active", True, 1))
+        [search] = await self.rows("SELECT enabled FROM search_profiles WHERE id = %s", profile)
+        self.assertTrue(search["enabled"])
+        [access] = await self.rows("SELECT plan_limits_for(%s) AS v", user)
+        self.assertEqual((access["v"]["state"], access["v"]["bonus_trial"]), ("trial", True))
+        [event] = await self.events(user, "bonus_trial_started")
+        self.assertEqual((event["email_id"], event["searches_reactivated"]),
+                         ((await self.ledger(user, "bonus_trial_offer"))["id"], 1))
+        self.assertEqual(await self.events(user, "reactivated_from_count_email"), [])
+
+        again = await self.bonus(user, "start_my_bonus_trial")
+        self.assertEqual((again["state"], again["started"]), ("active", False))
+        self.assertEqual(len(await self.events(user, "bonus_trial_started")), 1)
+        with self.assertRaisesRegex(Exception, "authentication_required"):
+            await self.rows("SELECT start_my_bonus_trial()")              # no signed-in account
+
+    async def test_day_five_and_the_end_then_two_five_counts_from_the_new_end(self):
+        user, profile = await self.ended_trial(8)
+        self.assertEqual(await self.send(), 1)
+        await self.bonus(user, "start_my_bonus_trial")
+        await self.match(profile, level="high", hours_ago=1)
+
+        await self.rows("UPDATE profiles SET bonus_trial_started_at = now() - interval '5 days 1 hour' WHERE id = %s",
+                        user)
+        self.requests.clear()
+        self.assertEqual(await self.send(), 1)
+        ending = await self.ledger(user, "bonus_trial_ending")
+        self.assertEqual((ending["target"], ending["payload"]["found"], ending["payload"]["below"]),
+                         (f"/app/searches/{profile}", 1, 1))
+        self.assertEqual(self.emails()[0]["subject"], "Te quedan 2 días gratis para tu búsqueda de Ford Ka")
+
+        await self.rows("UPDATE profiles SET bonus_trial_started_at = now() - interval '7 days 1 hour' WHERE id = %s",
+                        user)
+        await self.rows("SELECT expire_commercial_access(%s)", user)
+        self.requests.clear()
+        self.assertEqual(await self.send(), 1)
+        ended = await self.ledger(user, "bonus_trial_ended")
+        self.assertEqual((ended["target"], ended["payload"]["found"]), ("/app/pro?plan=pass_30", 1))
+        self.assertEqual(self.emails()[0]["subject"], "Terminaron tus 7 días: encontramos 1 auto para tu búsqueda")
+        [event] = await self.events(user, "bonus_trial_ended")
+        self.assertEqual((event["results"], event["opportunities"], event["converted"]), (1, 1, False))
+        [row] = await self.rows("SELECT count_after_expiry_end(%s) > now() - interval '2 hours' AS fresh, "
+                                "       (SELECT count(*) FROM count_after_expiry_searches() c WHERE c.user_id = %s) AS n",
+                                user, user)
+        self.assertEqual((row["fresh"], row["n"]), (True, 1))
+        self.assertEqual((await self.bonus(user))["state"], "unavailable")    # once per account
