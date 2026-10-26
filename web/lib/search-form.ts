@@ -241,7 +241,8 @@ export function matchingChanged(
   return key(before) !== key(after);
 }
 
-function sortKeys(value: unknown): unknown {
+/** The same value with every object's keys in one order: jsonb hands keys back in its own order, so compare through this. */
+export function sortKeys(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(sortKeys);
   if (value && typeof value === "object") {
     return Object.fromEntries(
