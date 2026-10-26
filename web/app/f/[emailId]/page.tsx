@@ -19,9 +19,9 @@ export const metadata: Metadata = { title: "Contanos qué pasó", robots: { inde
 export const dynamic = "force-dynamic";
 
 /**
- * A reason link of a remarketing email (docs/MAILS_DE_PLAN.md,
+ * The feedback link of a remarketing email (docs/MAILS_DE_PLAN.md,
  * «Remarketing»). Opening it records nothing — mail scanners open links
- * too —; the button does, with the reason the link chose already marked.
+ * too —; the button does. A link with ?r= comes with that reason marked.
  */
 export default async function FeedbackPage({ params, searchParams }: PageProps<"/f/[emailId]">) {
   const [{ emailId }, query] = await Promise.all([params, searchParams]);

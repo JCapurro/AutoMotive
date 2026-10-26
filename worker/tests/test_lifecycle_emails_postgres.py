@@ -800,12 +800,10 @@ class RemarketingTests(LifecycleCase):
         self.assertEqual((row["payload"]["text"], row["payload"]["model"], row["payload"]["job_id"]),
                          ("Toyota hilux 2.5 de 2013 a 2016 & más", "Toyota Hilux", job))
         [body] = self.emails()
-        self.assertEqual((body["from"], body["reply_to"], body["subject"]),
-                         ("Juan de Ese Auto <hola@automotive.test>", "juan@automotive.test",
-                          "Tu búsqueda de Toyota Hilux quedó sin activar"))
-        self.assertNotIn("attachments", body)
+        self.assertEqual((body["reply_to"], body["subject"]),
+                         ("juan@automotive.test", "Tu búsqueda de Toyota Hilux está lista"))
+        self.assertIn("attachments", body)
         self.assertIn(f"Activar mi búsqueda: https://automotive.app/m/{row['id']}", body["text"])
-        self.assertIn(f"- Ya compré un auto: https://automotive.app/f/{row['id']}?r=bought", body["text"])
         self.assertIn("List-Unsubscribe", body["headers"])
         # Not a second time, nor the 1B email.
         self.assertEqual(await self.send(), 0)
@@ -871,9 +869,8 @@ class RemarketingTests(LifecycleCase):
                          ({"model": "Toyota Sandero", "after": "search_abandoned"},
                           "/app/searches/new?prompt=Renault%20Sandero%202021"))
         [body] = self.emails()
-        self.assertEqual(body["subject"], "¿Qué te frenó?")
-        self.assertIn("Vi que empezaste a buscar un Toyota Sandero y no seguiste.", body["text"])
-        self.assertIn("r=wrong_search", body["text"])
+        self.assertEqual(body["subject"], "Tu Toyota Sandero te está esperando")
+        self.assertIn(f"¿Algo te frenó? Contanos: https://automotive.app/f/{row['id']}", body["text"])
         self.assertEqual(await self.events(answered, "email_feedback"),
                          [{"email_id": firsts[answered], "kind": "search_abandoned", "reason": "browsing",
                            "comment": True}])

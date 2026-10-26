@@ -316,8 +316,7 @@ class EmailMessage:
     subject: str
     text: str
     html: str
-    # The remarketing emails go out in a person's name, with no inline logo,
-    # and replies reach someone who reads them.
+    # Replies to the remarketing emails reach someone who reads them.
     from_name: str | None = None
     reply_to: str | None = None
     logo: bool = True
@@ -448,27 +447,22 @@ COUNT_CTA_FALLBACK = "Reactivar"
 # The extra 7-day trial: once per account, on day 7 after the 72 h trial ended.
 BONUS_SUBJECT = "Te damos 7 días más para tu búsqueda de {model}"
 BONUS_SUBJECT_ANY = "Te damos 7 días más para tu búsqueda"
-BONUS_NEW = {1: "Desde que pausamos tu búsqueda apareció 1 auto nuevo que coincide{below}.",
-             "n": "Desde que pausamos tu búsqueda aparecieron {n} autos nuevos que coinciden{below}."}
-BONUS_NEW_BELOW = {1: ", y 1 está por debajo de publicaciones comparables",
-                   "n": ", y {n} están por debajo de publicaciones comparables"}
-BONUS_FOUND = {1: "En tu prueba encontramos 1 auto para tu búsqueda{model}.",
-               "n": "En tu prueba encontramos {n} autos para tu búsqueda{model}."}
-BONUS_BODY = ("Te damos 7 días gratis para que la veas funcionar: la reactivamos tal como estaba, con los "
-              "avisos por email. Sin tarjeta, y al terminar se pausa sola.")
-BONUS_CARS = "Algunos de los que encontramos:"
-BONUS_CAR_BELOW = "por debajo de comparables"
+BONUS_NEW = {1: "Desde que pausamos tu búsqueda apareció 1 auto nuevo.",
+             "n": "Desde que pausamos tu búsqueda aparecieron {n} autos nuevos."}
+BONUS_FOUND = {1: "En tu prueba encontramos 1 auto.", "n": "En tu prueba encontramos {n} autos."}
+BONUS_BODY = "Reactivala gratis 7 días, sin tarjeta."
 BONUS_CTA = "Activar mis 7 días"
 
 BONUS_ENDING_SUBJECT = "Te quedan 2 días gratis para tu búsqueda{model}"
-BONUS_ENDING_FOUND = "En estos días encontramos {found}{below}."
-BONUS_ENDING_LAST = "El {day} tu búsqueda se pausa sola. Si querés seguir, {offer}"
+BONUS_ENDING_TITLE = "Te quedan 2 días gratis"
+BONUS_ENDING_FOUND = {1: "Ya encontramos 1 auto.", "n": "Ya encontramos {n} autos."}
+BONUS_ENDING_LAST = "El {day} tu búsqueda se pausa."
 BONUS_ENDING_CTA = "Ver mis resultados"
 
 BONUS_ENDED_TITLE = "Terminaron tus 7 días"
 BONUS_ENDED_SUBJECT = "Terminaron tus 7 días: encontramos {found} para tu búsqueda"
-BONUS_ENDED_FOUND = "En 7 días encontramos {found} para tu búsqueda{model}{below}."
-
+BONUS_ENDED_FOUND = "Encontramos {found} para tu búsqueda{model}."
+BONUS_ENDED_NONE = "Tu búsqueda queda guardada para cuando quieras seguir."
 
 def _count(value: Any) -> int:
     return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else 0
@@ -495,6 +489,9 @@ def _plural(texts: Mapping[Any, str], n: int, **kw: Any) -> str:
     return texts[1].format(**kw) if n == 1 else texts["n"].format(n=n, **kw)
 
 
+_AR = timezone(timedelta(hours=-3))
+
+
 def _day_month(value: Any) -> str | None:
     """An ISO timestamp as 31/10, in Argentina; None if it isn't one."""
     if not isinstance(value, str):
@@ -506,26 +503,6 @@ def _day_month(value: Any) -> str | None:
     if when.tzinfo is None:
         when = when.replace(tzinfo=timezone.utc)
     return when.astimezone(_AR).strftime("%d/%m").lstrip("0")
-
-
-def _car(car: Mapping[str, Any]) -> str | None:
-    """«Toyota Hilux 2015 · USD 21.500 · 140.000 km · por debajo de comparables»; None without a title."""
-    title = car.get("title").strip() if isinstance(car.get("title"), str) else ""
-    if not title:
-        return None
-    year = car.get("year")
-    if isinstance(year, int) and not isinstance(year, bool) and str(year) not in title:
-        title = f"{title} {year}"
-    parts = [title]
-    price, currency = car.get("price"), car.get("currency")
-    if currency in ("USD", "ARS") and (amount := _pesos(price)):
-        parts.append(f"USD {amount[1:]}" if currency == "USD" else amount)
-    km = car.get("km")
-    if isinstance(km, int) and not isinstance(km, bool) and km >= 0:
-        parts.append(f"{km:,} km".replace(",", "."))
-    if car.get("below") is True:
-        parts.append(BONUS_CAR_BELOW)
-    return " · ".join(parts)
 
 
 def particular_price(offer: Mapping[str, Any] | None) -> str | None:
@@ -598,40 +575,25 @@ def lifecycle_content(kind: str, payload: Mapping[str, Any], url: str, *,
         cta = COUNT_CTA.format(price=price) if price else COUNT_CTA_FALLBACK
         return Content(subject, subject, lines=lines, link=Link(cta, url)), subject
     if kind == "bonus_trial_offer":
-        found, new, below = (_count(payload.get(k)) for k in ("found", "new", "below"))
-        of_model = f" de {model}" if model else ""
+        found, new = _count(payload.get("found")), _count(payload.get("new"))
         subject = BONUS_SUBJECT.format(model=model) if model else BONUS_SUBJECT_ANY
-        lines = []
-        if new:
-            lines.append(_plural(BONUS_NEW, new, below=_plural(BONUS_NEW_BELOW, below) if below else ""))
-        elif found:
-            lines.append(_plural(BONUS_FOUND, found, model=of_model))
-        lines.append(BONUS_BODY)
-        cars = [c for c in (_car(x) for x in payload.get("cars") or [] if isinstance(x, Mapping)) if c][:3]
-        if cars:
-            lines += [BONUS_CARS, *cars]
-        return Content(subject, subject, lines=lines, link=Link(BONUS_CTA, url)), subject
+        lead = _plural(BONUS_NEW, new) if new else _plural(BONUS_FOUND, found) if found else ""
+        return Content(subject, subject, lines=[f"{lead} {BONUS_BODY}".strip()],
+                       link=Link(BONUS_CTA, url)), subject
     if kind == "bonus_trial_ending":
-        found, below = _count(payload.get("found")), _count(payload.get("below"))
+        found = _count(payload.get("found"))
         subject = BONUS_ENDING_SUBJECT.format(model=f" de {model}" if model else "")
-        lines = [BONUS_ENDING_FOUND.format(found=_cars(found), below=PASS_BELOW.format(n=below) if below else "")
-                 ] if found else []
         day = _day_month(payload.get("ends_at"))
-        offer_text = particular_offer(offer, limits).removeprefix("Para seguir recibiendo avisos, ")
-        lines.append(BONUS_ENDING_LAST.format(day=day, offer=offer_text) if day
-                     else particular_offer(offer, limits))
-        return Content(subject, subject, lines=lines, link=Link(BONUS_ENDING_CTA, url)), subject
+        line = " ".join(x for x in (_plural(BONUS_ENDING_FOUND, found) if found else "",
+                                    BONUS_ENDING_LAST.format(day=day) if day else "") if x)
+        return Content(BONUS_ENDING_TITLE, subject, lines=[line] if line else [],
+                       link=Link(BONUS_ENDING_CTA, url)), BONUS_ENDING_TITLE
     if kind == "bonus_trial_ended":
-        found, below = _count(payload.get("found")), _count(payload.get("below"))
-        lines = []
-        if found:
-            below_text = (TRIAL_ENDED_BELOW.format(n=below, verb="estaba" if below == 1 else "estaban")
-                          if below else "")
-            lines.append(BONUS_ENDED_FOUND.format(found=_cars(found), model=f" de {model}" if model else "",
-                                                  below=below_text))
-        lines += [particular_offer(offer, limits), TRIAL_ENDED_KEEP]
+        found = _count(payload.get("found"))
+        line = (BONUS_ENDED_FOUND.format(found=_cars(found), model=f" de {model}" if model else "")
+                if found else BONUS_ENDED_NONE)
         subject = BONUS_ENDED_SUBJECT.format(found=_cars(found)) if found else BONUS_ENDED_TITLE
-        return Content(BONUS_ENDED_TITLE, subject, lines=lines, link=Link(TRIAL_ENDED_CTA, url)), BONUS_ENDED_TITLE
+        return Content(BONUS_ENDED_TITLE, subject, lines=[line], link=Link(TRIAL_ENDED_CTA, url)), BONUS_ENDED_TITLE
     raise ValueError(f"unknown plan email kind: {kind}")
 
 
@@ -642,7 +604,7 @@ def lifecycle_email(row: Mapping[str, Any], links: Links, now: datetime, *,
     """A plan email for a lifecycle_emails row (id, kind, payload, unsubscribe_token)."""
     kind = row["kind"]
     if kind in REMARKETING_KINDS:
-        return remarketing_email(row, links, remarketing=remarketing)
+        return remarketing_email(row, links, now, remarketing=remarketing)
     c, title = lifecycle_content(kind, row.get("payload") or {}, links.lifecycle(row["id"], owner=row.get("user_id")),
                                  offer=offer, limits=limits)
     footer = LIFECYCLE_FOOTER[kind]
@@ -654,24 +616,23 @@ def lifecycle_email(row: Mapping[str, Any], links: Links, now: datetime, *,
 
     html = render_email_html(c, kind=kind, now=now, day=None, detail_url=None, app_url=None,
                              unsubscribe_url=unsubscribe, footer=footer, unsubscribe_label=UNSUBSCRIBE,
-                             eyebrow=LIFECYCLE_EYEBROW[kind], title=title, preheader=c.lines[0],
+                             eyebrow=LIFECYCLE_EYEBROW[kind], title=title, preheader=c.lines[0] if c.lines else title,
                              open_pixel_url=links.open_pixel("m", row["id"]))
     return EmailMessage(c.subject, "\n".join(text), html)
 
 
 # ---------------------------------------------------------------------------
 # Remarketing (docs/MAILS_DE_PLAN.md, «Remarketing»): accounts without a
-# search. A person writes them (app_config.remarketing: sender_name, signer,
-# reply_to), in nearly plain text: one action link, the reason links and a
-# signature, no logo or brand template. The reason links lead to /f/<id>,
-# which asks to confirm before recording (mail scanners open every link).
+# search. Same brand template as the plan emails: one short line and one
+# button into the app. The follow-up adds a small link to /f/<id>, where the
+# person picks why they stopped (it asks to confirm: mail scanners open every
+# link). app_config.remarketing.reply_to, when set, receives the replies.
 # ---------------------------------------------------------------------------
 
 REMARKETING_KINDS = ("search_abandoned", "search_not_started", "search_feedback")
-REMARKETING_DEFAULTS = {"sender_name": "Juan de Ese Auto", "signer": "Juan", "reply_to": None}
-_AR = timezone(timedelta(hours=-3))
+REMARKETING_DEFAULTS = {"reply_to": None}
 
-# (reason, label), in the order the email lists them. wrong_search only after an assisted request.
+# (reason, label), in the order the page /f lists them (web/lib/email-feedback-reasons.ts).
 FEEDBACK_REASONS = (("browsing", "Solo estaba mirando"),
                     ("missing_model", "No encontré mi modelo o versión"),
                     ("wrong_search", "La búsqueda que armaron no era lo que pedí"),
@@ -679,132 +640,62 @@ FEEDBACK_REASONS = (("browsing", "Solo estaba mirando"),
                     ("bought", "Ya compré un auto"),
                     ("other", "Otro motivo"))
 
-ABANDONED_SUBJECT = "Tu búsqueda de {model} quedó sin activar"
-ABANDONED_SUBJECT_ANY = "Tu búsqueda quedó sin activar"
-ABANDONED_ASKED = "El {day} nos escribiste: «{text}»."
-ABANDONED_BODY = ("La dejamos lista: con un clic empezamos a revisar las publicaciones y te avisamos cuando "
-                  "aparezca un auto que coincida. La prueba gratis arranca recién cuando la activás.")
+REMARKETING_EYEBROW = "TU BÚSQUEDA"
+ABANDONED_TITLE = "Tu búsqueda de {model} está lista"
+ABANDONED_TITLE_ANY = "Tu búsqueda está lista"
+ABANDONED_BODY = "La armamos con lo que nos escribiste. Activala y te avisamos cuando aparezca."
 ABANDONED_CTA = "Activar mi búsqueda"
 
-NOT_STARTED_SUBJECT = "¿Qué auto estás buscando?"
-NOT_STARTED_BODY = ("Te sumaste a Ese Auto pero todavía no nos contaste qué auto buscás. Escribilo como se lo "
-                    "dirías a un amigo, por ejemplo «Gol Trend 2015 a 2018 hasta 120.000 km» o «algo automático "
-                    "hasta USD 12.000», y revisamos las publicaciones por vos.")
+NOT_STARTED_TITLE = "¿Qué auto estás buscando?"
+NOT_STARTED_BODY = "Contanos con tus palabras y revisamos las publicaciones por vos."
 NOT_STARTED_CTA = "Empezar mi búsqueda"
 
-FEEDBACK_SUBJECT = "¿Qué te frenó?"
-FEEDBACK_INTRO = "Soy {signer}, hago Ese Auto."
-FEEDBACK_SAW = {"model": "Vi que empezaste a buscar un {model} y no seguiste.",
-                "asked": "Vi que empezaste a armar una búsqueda y no seguiste.",
-                "none": "Vi que te sumaste a Ese Auto y no llegaste a armar una búsqueda."}
-FEEDBACK_ASK = "¿Me contás qué pasó? Con un clic alcanza."
-FEEDBACK_STILL = {"search_abandoned": "Si todavía la querés, sigue lista para activar:",
-                  "search_not_started": "Si todavía estás buscando, empezá acá:"}
-
-REASONS_ASK = {"search_abandoned": "¿No la activaste por algo? Contanos con un clic:",
-               "search_not_started": "¿Algo te frenó? Contanos con un clic:"}
-REPLY_LINE = "O respondé este email: lo leo yo."
+FEEDBACK_TITLE = "Tu {model} te está esperando"
+FEEDBACK_TITLE_ANY = "Tu próximo auto te está esperando"
+FEEDBACK_BODY = "Activá tu búsqueda en un minuto y dejá que busquemos por vos."
+FEEDBACK_LINK = "¿Algo te frenó? Contanos"
 REMARKETING_FOOTER = "Recibís este email porque se creó una cuenta en Ese Auto con esta dirección."
 
 
 def remarketing_settings(raw: Any) -> dict[str, Any]:
-    """app_config.remarketing over REMARKETING_DEFAULTS; a blank or bad value falls back."""
+    """app_config.remarketing: reply_to, only when it looks like one address."""
     cfg = raw if isinstance(raw, Mapping) else {}
-    out = {}
-    for key, default in REMARKETING_DEFAULTS.items():
-        value = cfg.get(key)
-        out[key] = value.strip() if isinstance(value, str) and value.strip() else default
-    reply_to = out["reply_to"]
-    out["reply_to"] = reply_to if isinstance(reply_to, str) and "@" in reply_to and "\n" not in reply_to else None
-    return out
+    reply_to = cfg.get("reply_to")
+    reply_to = reply_to.strip() if isinstance(reply_to, str) else ""
+    return {"reply_to": reply_to if "@" in reply_to and "\n" not in reply_to else None}
 
 
-def _asked_day(value: Any) -> str | None:
-    """'2026-10-24T15:02:00+00:00' → '24/10', in Argentina."""
-    if not isinstance(value, str):
-        return None
-    try:
-        when = datetime.fromisoformat(value)
-    except ValueError:
-        return None
-    if when.tzinfo is None:
-        when = when.replace(tzinfo=timezone.utc)
-    return when.astimezone(_AR).strftime("%d/%m").lstrip("0")
-
-
-def remarketing_email(row: Mapping[str, Any], links: Links, *, remarketing: Mapping[str, Any] | None = None
-                      ) -> EmailMessage:
+def remarketing_email(row: Mapping[str, Any], links: Links, now: datetime, *,
+                      remarketing: Mapping[str, Any] | None = None) -> EmailMessage:
     """One remarketing email for a lifecycle_emails row (id, kind, payload, user_id, unsubscribe_token)."""
     kind, payload = row["kind"], row.get("payload") or {}
-    cfg = remarketing_settings(remarketing)
     owner = row.get("user_id")
     action = links.lifecycle(row["id"], owner=owner)
     model = payload.get("model") if isinstance(payload.get("model"), str) and payload["model"].strip() else None
-    first = payload.get("after") if kind == "search_feedback" else kind
-    if first not in FEEDBACK_STILL:
-        first = "search_not_started"
-
-    paragraphs: list[str] = []
+    feedback = None
     if kind == "search_abandoned":
-        subject = ABANDONED_SUBJECT.format(model=model) if model else ABANDONED_SUBJECT_ANY
-        asked = payload.get("text").strip() if isinstance(payload.get("text"), str) else ""
-        day = _asked_day(payload.get("asked_at"))
-        if asked and day:
-            paragraphs.append(ABANDONED_ASKED.format(day=day, text=asked))
-        paragraphs.append(ABANDONED_BODY)
-        cta, ask = ABANDONED_CTA, REASONS_ASK[kind]
+        title = ABANDONED_TITLE.format(model=model) if model else ABANDONED_TITLE_ANY
+        line, cta = ABANDONED_BODY, ABANDONED_CTA
     elif kind == "search_not_started":
-        subject, cta, ask = NOT_STARTED_SUBJECT, NOT_STARTED_CTA, REASONS_ASK[kind]
-        paragraphs.append(NOT_STARTED_BODY)
+        title, line, cta = NOT_STARTED_TITLE, NOT_STARTED_BODY, NOT_STARTED_CTA
     elif kind == "search_feedback":
-        subject, ask = FEEDBACK_SUBJECT, None
-        saw = (FEEDBACK_SAW["model"].format(model=model) if model
-               else FEEDBACK_SAW["asked" if first == "search_abandoned" else "none"])
-        paragraphs.append(f"{FEEDBACK_INTRO.format(signer=cfg['signer'])} {saw} {FEEDBACK_ASK}")
-        cta = ABANDONED_CTA if first == "search_abandoned" else NOT_STARTED_CTA
+        title = FEEDBACK_TITLE.format(model=model) if model else FEEDBACK_TITLE_ANY
+        line = FEEDBACK_BODY
+        cta = ABANDONED_CTA if payload.get("after") == "search_abandoned" else NOT_STARTED_CTA
+        feedback = Link(FEEDBACK_LINK, links.feedback(row["id"], owner=owner))
     else:
         raise ValueError(f"unknown remarketing kind: {kind}")
 
-    reasons = [(label, links.feedback(row["id"], reason, owner=owner)) for reason, label in FEEDBACK_REASONS
-               if reason != "wrong_search" or first == "search_abandoned"]
-    reply = REPLY_LINE if cfg["reply_to"] else None
+    c = Content(title, title, lines=[line], link=Link(cta, action))
     unsubscribe = links.unsubscribe(row.get("unsubscribe_token"))
-    signature = f"{cfg['signer']}, de Ese Auto"
-
-    # The action comes first in the first email; in the follow-up, the question does.
-    text: list[str] = ["Hola,", ""]
-    for p in paragraphs:
-        text += [p, ""]
-    if kind != "search_feedback":
-        text += [f"{cta}: {action}", "", ask]
-    text += [f"- {label}: {url}" for label, url in reasons]
-    if reply:
-        text += ["", reply]
-    if kind == "search_feedback":
-        text += ["", FEEDBACK_STILL[first], action]
-    text += ["", signature, "", "—", REMARKETING_FOOTER]
+    text = [title, line, f"{cta}: {action}"]
+    if feedback:
+        text.append(f"{feedback.label}: {feedback.url}")
+    text += ["", "—", REMARKETING_FOOTER]
     if unsubscribe:
         text.append(f"{UNSUBSCRIBE}: {unsubscribe}")
-
-    e = escape
-    link = f'<a href="{e(action)}">{e(cta)}</a>'
-    html: list[str] = ['<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.5;color:#222">',
-                       "<p>Hola,</p>"]
-    html += [f"<p>{e(p)}</p>" for p in paragraphs]
-    if kind != "search_feedback":
-        html += [f"<p>{link}</p>", f"<p>{e(ask)}</p>"]
-    html.append("<ul>" + "".join(f'<li><a href="{e(url)}">{e(label)}</a></li>' for label, url in reasons) + "</ul>")
-    if reply:
-        html.append(f"<p>{e(reply)}</p>")
-    if kind == "search_feedback":
-        html.append(f"<p>{e(FEEDBACK_STILL[first])} {link}</p>")
-    html.append(f"<p>{e(signature)}</p>")
-    footer = e(REMARKETING_FOOTER)
-    if unsubscribe:
-        footer += f' <a href="{e(unsubscribe)}" style="color:#888">{e(UNSUBSCRIBE)}</a>'
-    html.append(f'<p style="font-size:12px;color:#888">{footer}</p>')
-    if pixel := links.open_pixel("m", row["id"]):
-        html.append(f'<img src="{e(pixel)}" width="1" height="1" alt="" style="display:block;border:0">')
-    html.append("</div>")
-    return EmailMessage(subject, "\n".join(text), "\n".join(html), from_name=cfg["sender_name"],
-                        reply_to=cfg["reply_to"], logo=False)
+    html = render_email_html(c, kind=kind, now=now, day=None, detail_url=None, app_url=None,
+                             unsubscribe_url=unsubscribe, footer=REMARKETING_FOOTER, unsubscribe_label=UNSUBSCRIBE,
+                             eyebrow=REMARKETING_EYEBROW, title=title, preheader=line,
+                             open_pixel_url=links.open_pixel("m", row["id"]), secondary=feedback)
+    return EmailMessage(title, "\n".join(text), html, reply_to=remarketing_settings(remarketing)["reply_to"])
