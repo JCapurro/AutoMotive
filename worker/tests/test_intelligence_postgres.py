@@ -463,6 +463,22 @@ class ScoredMatchesTests(IntelligenceCase):
         await rescore.rescore_listings([lid])
         self.assertIsNone(await self.match_row(aid, lid))
 
+    async def test_edited_search_drops_the_matches_its_new_place_leaves_out(self):
+        near = await self.listing(lat=-34.92, lon=-57.95)                  # La Plata
+        far = await self.listing(lat=-31.42, lon=-64.19)                   # Córdoba
+        aid = await self.fiesta_alert()                                    # no place: the whole country
+        await rematch.run_pending()
+        self.assertIsNotNone(await self.match_row(aid, far))
+
+        async with db.connection() as cx:                                  # the web adds La Plata, 90 km
+            await cx.execute(
+                "UPDATE search_profiles SET origin_lat = -34.98902, origin_lon = -58.00259, radius_km = 90, "
+                "  rematch_requested_at = now() WHERE id = %s", (aid,))
+        await rematch.run_pending()
+
+        self.assertIsNotNone(await self.match_row(aid, near))
+        self.assertIsNone(await self.match_row(aid, far))
+
     async def test_nightly_rescore_follows_the_market(self):
         lid = await self.listing(price=10_000, price_usd=10_000)
         for p in (10_000, 10_100, 10_200, 10_300, 10_400):
