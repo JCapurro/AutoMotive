@@ -478,6 +478,18 @@ class CountAfterExpiryTests(LifecycleCase):
                   for days, user in users.items()}
         self.assertEqual(stages, {6.9: None, 7.1: 7, 8.1: None, 14.1: 14, 21.1: 21, 22.1: None})
 
+    async def test_once_per_account_ever(self):
+        # Juan, 26/10/2026: one 2.5 email per account, not one per stage or per end.
+        user, profile = await self.ended_trial(14.1)
+        await self.counted(user, profile, 2)
+        await self.rows("INSERT INTO lifecycle_emails (user_id, kind, event_key, target, status, sent_at) "
+                        "VALUES (%s, 'count_after_expiry', 'older-end:7', '/app/pro?plan=pass_30', 'sent', "
+                        "        now() - interval '7 days')", user)
+        self.assertEqual(await self.send(), 0)
+        # A failed or skipped one never arrived: it doesn't count.
+        await self.rows("UPDATE lifecycle_emails SET status = 'failed' WHERE user_id = %s", user)
+        self.assertEqual(await self.send(), 1)
+
     async def test_the_search_that_found_the_most_and_only_this_end(self):
         user, fiesta = await self.ended_trial(7.1)
         corolla = await self.search(user, "Corolla", "Toyota")
@@ -851,26 +863,21 @@ class RemarketingTests(LifecycleCase):
         self.assertEqual((await self.ledger(old, "search_abandoned"))["status"], "sent")
         self.assertIsNone(await self.ledger(older, "search_not_started"))
 
-    async def test_the_follow_up_four_days_later_unless_they_answered_or_started(self):
-        asked, answered, started = [await self.signed_up(hours_ago=30) for _ in range(3)]
-        for user in (asked, answered, started):
+    async def test_one_remarketing_email_per_account_no_follow_up(self):
+        # Juan, 26/10/2026: one email, 1A or 1B; the follow-up never goes out.
+        asked, answered = [await self.signed_up(hours_ago=30) for _ in range(2)]
+        for user in (asked, answered):
             await self.asked(user, "Renault Sandero 2021", hours_ago=25, model="Sandero")
-        self.assertEqual(await self.send(), 3)
-        firsts = {u: (await self.ledger(u, "search_abandoned"))["id"] for u in (asked, answered, started)}
+        self.assertEqual(await self.send(), 2)
+        firsts = {u: (await self.ledger(u, "search_abandoned"))["id"] for u in (asked, answered)}
         await self.rows("UPDATE lifecycle_emails SET sent_at = now() - interval '4 days 1 hour'")
         [fb] = await self.rows("SELECT record_email_feedback(%s, 'browsing', '  solo miraba ') AS id", firsts[answered])
         self.assertIsNotNone(fb["id"])
-        await self.search(started)
 
         self.requests.clear()
-        self.assertEqual(await self.send(), 1)
-        row = await self.ledger(asked, "search_feedback")
-        self.assertEqual((row["payload"], row["target"]),
-                         ({"model": "Toyota Sandero", "after": "search_abandoned"},
-                          "/app/searches/new?prompt=Renault%20Sandero%202021"))
-        [body] = self.emails()
-        self.assertEqual(body["subject"], "Tu Toyota Sandero te está esperando")
-        self.assertIn(f"¿Algo te frenó? Contanos: https://automotive.app/f/{row['id']}", body["text"])
+        self.assertEqual(await self.send(), 0)
+        self.assertIsNone(await self.ledger(asked, "search_feedback"))
+        self.assertEqual(self.emails(), [])
         self.assertEqual(await self.events(answered, "email_feedback"),
                          [{"email_id": firsts[answered], "kind": "search_abandoned", "reason": "browsing",
                            "comment": True}])
