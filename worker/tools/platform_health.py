@@ -189,6 +189,30 @@ def collector_checks(rows: list[dict], now: datetime, *, failures: int = 3,
     return checks
 
 
+# Share of a source's active listings that carry coordinates. A search with a
+# radius can only show the ones that do (intelligence/matching.py).
+GEO_MIN_COVERAGE = 0.90
+GEO_MIN_LISTINGS = 50
+# Sources that don't say where a unit is and have no default town yet.
+GEO_KNOWN_GAPS = {'gruporandazzo'}
+GEO_SQL = """
+select source, count(*) as total, count(*) filter (where lat is not null) as located
+from listings where status = 'active' group by source
+"""
+
+
+def geo_check(rows: list[dict]) -> str | None:
+    low = [f"{r['source']} {r['located'] * 100 // r['total']} % ({r['located']}/{r['total']})"
+           for r in sorted(rows, key=lambda r: r['source'])
+           if r['source'] not in GEO_KNOWN_GAPS and r['total'] >= GEO_MIN_LISTINGS
+           and r['located'] / r['total'] < GEO_MIN_COVERAGE]
+    if not low:
+        return None
+    return ("Publicaciones con coordenadas por debajo de "
+            f"{int(GEO_MIN_COVERAGE * 100)} %: {', '.join(low)}. Las búsquedas con radio las descartan; "
+            "revisar el texto de ubicación de la fuente (python -m tools.backfill_geo --dry-run).")
+
+
 async def inspect_database(previous: dict[str, str | None] | None = None) -> dict[str, str | None]:
     try:
         await db.open_pool(max_size=1)
@@ -198,10 +222,11 @@ async def inspect_database(previous: dict[str, str | None] | None = None) -> dic
             threshold = max(1, min(100, int(threshold_row['value'] if threshold_row else 3)))
             rows = await (await cx.execute(COLLECTORS_SQL, {
                 'history': max(threshold, config.PLATFORM_HEALTH_EMPTY_RUNS, PARTIAL_RUNS)})).fetchall()
+            geo_rows = await (await cx.execute(GEO_SQL)).fetchall()
         checks = collector_checks(rows, datetime.now(timezone.utc), failures=threshold,
                                   timeout_minutes=config.PLATFORM_HEALTH_RUN_TIMEOUT_MINUTES,
                                   empty_runs=config.PLATFORM_HEALTH_EMPTY_RUNS, previous=previous)
-        checks.update(base=None, worker=worker_problem(await last_beat(), timedelta(minutes=config.WATCHDOG_STALE_MINUTES)))
+        checks.update(base=None, geo=geo_check(geo_rows), worker=worker_problem(await last_beat(), timedelta(minutes=config.WATCHDOG_STALE_MINUTES)))
         return checks
     except Exception as error:
         # A failed query is unknown health, never a collector/worker recovery.

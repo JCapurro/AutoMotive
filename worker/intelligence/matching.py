@@ -248,8 +248,10 @@ def _location(listing, profile) -> Reason | None:
         return None
     dist = distance_km(listing, profile)
     if dist is None:
-        return Reason(UNKNOWN, copy.REASON["no_coords"])
-    place = listing.get("location_text") or "—"
+        # The search asked for a zone: a listing that can't be placed in it
+        # doesn't qualify (it used to pass as unknown and reached people 400 km away).
+        return Reason(FAIL, copy.REASON["no_coords"])
+    place =listing.get("location_text") or "—"
     if dist > radius:
         return Reason(FAIL, copy.REASON["distance_over"].format(
             place=place, km=copy.number(dist), radius=copy.number(radius)))

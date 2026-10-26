@@ -230,6 +230,38 @@ _KNOWN_LOCATIONS_RAW: dict[str, Coords] = {
     "san justo santa fe": (-30.7891, -60.5919),          # San Justo
     "san martin santa fe": (-31.7676, -61.8285),         # Sastre
     "chacabuco buenos aires": (-34.6417, -60.4731),
+    # Towns Mercado Libre, Autocosmos and rosariogarage write as "<town>, Buenos
+    # Aires" once clean_location_text() drops their region decoration. Always
+    # with the province: "San Vicente" or "Azul" alone are also other places.
+    "necochea buenos aires": (-38.5545, -58.7396),
+    "chivilcoy buenos aires": (-34.8957, -60.0173),
+    "san nicolas buenos aires": (-33.3358, -60.2250),
+    "san nicolas de los arroyos buenos aires": (-33.3358, -60.2250),
+    "roque perez buenos aires": (-35.4000, -59.3333),
+    "las flores buenos aires": (-36.0167, -59.1000),
+    "san vicente buenos aires": (-35.0250, -58.4228),
+    "san antonio de areco buenos aires": (-34.2500, -59.4667),
+    "azul buenos aires": (-36.7770, -59.8585),
+    "balcarce buenos aires": (-37.8467, -58.2556),
+    "tres arroyos buenos aires": (-38.3739, -60.2798),
+    "bragado buenos aires": (-35.1167, -60.4833),
+    "berisso buenos aires": (-34.8731, -57.8856),
+    "mar de ajo buenos aires": (-36.7186, -56.6764),
+    "ramallo buenos aires": (-33.4833, -60.0167),
+    "rojas buenos aires": (-34.1944, -60.7333),
+    "san andres de giles buenos aires": (-34.4500, -59.4500),
+    "carlos casares buenos aires": (-35.6167, -61.3667),
+    "navarro buenos aires": (-34.6833, -59.2833),
+    "general madariaga buenos aires": (-37.0000, -57.1333),
+    "canuelas buenos aires": (-35.0500, -58.7500),
+    "marcos paz buenos aires": (-34.7833, -58.8333),
+    "la tablada buenos aires": (-34.6906, -58.5272),
+    "villa ballester buenos aires": (-34.5500, -58.5500),
+    "wilde buenos aires": (-34.7000, -58.3167),
+    "grand bourg buenos aires": (-34.4800, -58.7300),
+    "fray luis beltran santa fe": (-32.8167, -60.7333),
+    # Nominatim put "Monte, Buenos Aires" in Tierra del Fuego.
+    "monte buenos aires": (-35.4472, -58.8083),
 }
 # deRuedas also writes "Capital, <Provincia>" for the other provinces. Left to
 # Nominatim, "Capital, Santa Fe" landed in San Juan. Never Buenos Aires: CABA
@@ -291,6 +323,46 @@ def _fallback_can_stand_alone(normalized: str, fallback_key: str) -> bool:
     return bool(tokens) and all(token in key_tokens for token in tokens)
 
 
+_NOT_A_PLACE = {"recien publicado", "publicado recientemente", "just listed", "recientemente"}
+_TITLE_LIKE_RE = re.compile(r"^(?:19[6-9]\d|20[0-3]\d)\s+[a-z]")
+_AMBA_RE = re.compile(r"\(\s*a\.?\s*m\.?\s*b\.?\s*a\.?\s*\)", re.IGNORECASE)
+# rosariogarage: "Fray Luis Beltran ,est.tte.cnl.l.beltran, Santa Fe" (a station slug in the middle).
+_STATION_RE = re.compile(r"\s*,\s*est\.[^,]*", re.IGNORECASE)
+# Mercado Libre: "Necochea - Bs.As. Costa Atlántica", "Cañuelas - Buenos Aires Interior".
+_ML_REGION_RE = re.compile(
+    r"\s+-\s+(?:buenos aires interior|bs\.?\s*as\.?\s*(?:interior|costa atl[aá]ntica))\s*$", re.IGNORECASE)
+
+
+def is_not_a_place(value: str | None) -> bool:
+    """A card line the collector took for a location that isn't one: a
+    publication cue ("Recién publicado") or a listing title ("2017 Ford ...")."""
+    normalized = normalize_location_query(value)
+    return bool(normalized) and (
+        normalized in _NOT_A_PLACE
+        or bool(_TITLE_LIKE_RE.match(normalized))
+        or _looks_like_non_location_query(normalized))
+
+
+def clean_location_text(value: str | None) -> str | None:
+    """The place a source's location text names, without the source's own
+    decoration. None when the text is not a place at all."""
+    if not value or not value.strip() or is_not_a_place(value):
+        return None
+    text = _AMBA_RE.sub("", value)
+    text = _STATION_RE.sub("", text)
+    text = _ML_REGION_RE.sub(", Buenos Aires", text)
+    text = re.sub(r"\s+,", ",", text)
+    text = re.sub(r"\s{2,}", " ", text).strip(" ,")
+    return text or None
+
+
+# Dealer sources that do not say where a unit is: the town the source sells in.
+# Coordinates only, never shown as the listing's location_text.
+SOURCE_DEFAULT_LOCATIONS: dict[str, str] = {
+    "rosariogarage": "Rosario, Santa Fe",
+}
+
+
 def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     phi1 = math.radians(lat1)
     phi2 = math.radians(lat2)
@@ -343,7 +415,7 @@ def nearest_known_location_name(lat: float, lon: float, names: Iterable[str]) ->
 
 
 async def geocode_location(location: str) -> Coords | None:
-    query = normalize_location_query(location)
+    query = normalize_location_query(clean_location_text(location))
     if not query:
         return None
 
