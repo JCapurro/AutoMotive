@@ -10,6 +10,9 @@ import { BODY_TYPE_CODES, type BodyType, type Level, bodyTypeCodes, bodyTypesTex
 import { money, number } from "@/lib/format";
 import type { Filters, Preferences, SearchProfile } from "@/lib/types";
 
+/** Hard ceiling on places added to a search, whatever the plan (the plan's own cap is lower or none). */
+export const MAX_EXTRA_LOCATIONS = 9;
+
 const WHOLE = "Escribí solo números enteros, sin comas ni decimales.";
 const year = z.number("Elegí un año.").int("Elegí un año.").min(1950, "Elegí un año desde 1950.").max(2100, "Elegí un año válido.").nullable().default(null);
 const positive = z.number(WHOLE).positive("Escribí un monto mayor a 0.").max(1e12, "Ese monto es demasiado grande.").nullable().default(null);
@@ -42,6 +45,18 @@ export const SearchInput = z
       })
       .nullable()
       .default(null),
+    // Places added to `location` ("Chaco o Corrientes"); the plan's cap is checked on save (locationCap).
+    extra_locations: z
+      .array(
+        z.object({
+          label: z.string().trim().min(1).max(80),
+          lat: z.number().min(-90).max(90),
+          lon: z.number().min(-180).max(180),
+          radius_km: z.number().positive().max(3000),
+        }),
+      )
+      .max(MAX_EXTRA_LOCATIONS, "Elegiste demasiadas zonas.")
+      .default([]),
     km_target: kilometers,
     price_target: positive,
     seller_type: z.enum(["", "private", "dealer"]).default(""),
@@ -147,7 +162,11 @@ export function toFilters(v: SearchValues, allSources: string[] = []): Filters {
   // Every source selected = no restriction, so sources added later are searched too.
   const chosen = [...new Set(v.sources)];
   if (chosen.length && !allSources.every((s) => chosen.includes(s))) f.sources = chosen;
-  if (v.location) f.location_label = v.location.label;
+  if (v.location) {
+    f.location_label = v.location.label;
+    // Extras only count next to a place of its own: without one the search covers the whole country.
+    if (v.extra_locations.length) f.extra_locations = v.extra_locations;
+  }
   return f;
 }
 
@@ -197,6 +216,7 @@ export function fromProfile(p: SearchProfile, allSources: string[]): SearchValue
       p.origin_lat != null && p.origin_lon != null && p.radius_km != null
         ? { label: f.location_label ?? "Ubicación guardada", lat: p.origin_lat, lon: p.origin_lon, radius_km: p.radius_km }
         : null,
+    extra_locations: f.extra_locations ?? [],
     km_target: prefs.km_target ?? null,
     price_target: prefs.price_target ?? null,
     seller_type: prefs.seller_type ?? "",

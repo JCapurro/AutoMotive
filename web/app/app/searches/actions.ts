@@ -8,6 +8,7 @@ import { requireUser } from "@/lib/auth";
 import type { Frequency } from "@/lib/copy";
 import { track } from "@/lib/events";
 import { queuePixel } from "@/lib/meta-pixel-server";
+import { type PlanLimits, locationCap, locationCapText } from "@/lib/pro";
 import {
   MODEL_LESS_UNAVAILABLE,
   SearchInput,
@@ -122,11 +123,17 @@ async function save(id: number | null, raw: SearchInput, origin?: SaveOrigin): P
   const supabase = await createClient();
   // No make and no model: a search by body type, for plans with model_less_search (the database checks it again).
   const modelLess = isModelLess(parsed.data);
-  const [vehicle, { data: thresholdAlerts }, { data: modelLessSearch }] = await Promise.all([
+  const [vehicle, { data: thresholdAlerts }, { data: modelLessSearch }, { data: access }] = await Promise.all([
     modelLess ? null : canonical(supabase, parsed.data),
     supabase.rpc("my_plan_feature", { p_feature: "threshold_alerts" }),
     modelLess ? supabase.rpc("my_plan_feature", { p_feature: "model_less_search" }) : { data: null },
+    parsed.data.location && parsed.data.extra_locations.length ? supabase.rpc("my_plan_snapshot") : { data: null },
   ]);
+  // The place of its own plus the ones it adds, within the plan's cap (null: no cap).
+  const cap = locationCap(access as PlanLimits | null);
+  if (cap != null && parsed.data.location && parsed.data.extra_locations.length + 1 > cap) {
+    return { error: `${locationCapText(cap)} Sacá alguna zona o elegí un plan con más.`, fields: { location: "Demasiadas zonas para tu plan." } };
+  }
   if (modelLess && modelLessSearch !== true) return { error: MODEL_LESS_UNAVAILABLE };
   if (!modelLess && !vehicle) return { error: "Elegí una marca y un modelo de la lista.", fields: { model: "Modelo desconocido." } };
   // Within a model, only the body types the form offers for it (the catalog's, when it lists several).

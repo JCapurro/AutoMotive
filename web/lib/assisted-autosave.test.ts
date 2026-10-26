@@ -13,7 +13,7 @@ const catalog: Catalog = [
 const base: SearchValues = {
   name: "", make: "", model: "", trim: "", trims: [], trim_strict: false, year_min: null, year_max: null,
   price_max: null, currency: "USD", km_max: null, transmission: "", fuel: "", body_types: [], sources: ["mercadolibre"],
-  location: null, km_target: null, price_target: null, seller_type: "", notification_frequency: "immediate",
+  location: null, extra_locations: [], km_target: null, price_target: null, seller_type: "", notification_frequency: "immediate",
   notify_min_level: "good", opportunity_threshold_pct: null,
 };
 
@@ -22,7 +22,7 @@ function draft(values: Partial<AssistedDraft["values"]>, notes: string[] = [], r
     values: {
       make: "Toyota", model: "Hilux", trim: "SRV", trims: ["SRV"], trim_strict: false, year_min: null, year_max: null,
       price_max: 35_000_000, price_target: null, currency: "ARS", km_max: null, km_target: null, transmission: "automatic",
-      fuel: "", body_types: [], seller_type: "", location: "zona norte", radius_km: null, ...values,
+      fuel: "", body_types: [], seller_type: "", location: "zona norte", locations: [], radius_km: null, ...values,
     },
     resolved,
     notes,

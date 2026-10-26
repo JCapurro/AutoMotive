@@ -30,6 +30,8 @@ Timing = Literal["chain", "belt"]
 BodyType = Literal[BODY_TYPE_CODES]  # type: ignore[valid-type]
 
 MAX_VEHICLES = 5
+# Places a request may name; the plan decides how many are kept (web: maxLocations).
+MAX_LOCATIONS = 10
 
 
 class _Strict(BaseModel):
@@ -63,6 +65,10 @@ class SearchDraft(_Strict):
     seller_type: SellerType | None = Field(description="private = particular / dueño directo; dealer = agencia.")
     location: str | None = Field(description="Zona o ciudad tal como la dice el usuario, p. ej. «zona norte».")
     radius_km: int | None = Field(description="Radio en km alrededor de la zona, si lo dice.")
+    # Defaulted, like trims, so recordings from before the field stay valid.
+    locations: list[str] = Field(default_factory=list, max_length=MAX_LOCATIONS,
+                                 description="Todas las zonas o ciudades que nombra, en el orden en que las dice "
+                                             "(«Chaco o Corrientes» → [«Chaco», «Corrientes»]); vacío si no nombra ninguna.")
     # Defaulted, like body_types, so recordings from before the field stay valid.
     timing: Timing | None = Field(default=None,
                                   description="chain si pide distribución a cadena («cadenero», «con cadena», "

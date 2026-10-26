@@ -43,7 +43,12 @@ export type Filters = {
   body_types?: string[];
   sources?: string[];
   location_label?: string;
+  /** Places added to the search's own (origin_*, radius_km): a listing in any of them qualifies. */
+  extra_locations?: SearchPlace[];
 };
+
+/** A place a search looks around: the center and how far, in km. */
+export type SearchPlace = { label: string; lat: number; lon: number; radius_km: number };
 
 /** search_profiles.preferences (sección 4.3): soft, they feed the score. */
 export type Preferences = {

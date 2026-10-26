@@ -21,6 +21,7 @@
         "fuel": "",
         "seller_type": "",
         "location": "",
+        "locations": [],
         "radius_km": null
       },
       "resolved": true,
@@ -47,6 +48,7 @@
         "fuel": "",
         "seller_type": "",
         "location": "",
+        "locations": [],
         "radius_km": null
       },
       "resolved": true,
@@ -71,6 +73,7 @@
         "fuel": "",
         "seller_type": "",
         "location": "",
+        "locations": [],
         "radius_km": null
       },
       "resolved": false,
@@ -99,6 +102,9 @@
         "fuel": "",
         "seller_type": "",
         "location": "Córdoba",
+        "locations": [
+          "Córdoba"
+        ],
         "radius_km": 50
       },
       "resolved": true,

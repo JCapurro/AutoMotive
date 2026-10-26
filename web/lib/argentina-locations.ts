@@ -30,6 +30,24 @@ function fold(text: string): string {
   return text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
+/** A province's capital, for «Chaco» or «en Misiones» (a province alone doesn't name a locality). */
+const CAPITALS: Record<string, string> = {
+  chaco: "Resistencia", corrientes: "Corrientes", misiones: "Posadas", formosa: "Formosa",
+  "entre rios": "Paraná", "santa fe": "Santa Fe", cordoba: "Córdoba", tucuman: "San Miguel de Tucumán",
+  salta: "Salta", jujuy: "San Salvador de Jujuy", "santiago del estero": "Santiago del Estero",
+  catamarca: "San Fernando del Valle de Catamarca", "la rioja": "La Rioja", "san juan": "San Juan",
+  mendoza: "Mendoza", "san luis": "San Luis", "la pampa": "Santa Rosa", neuquen: "Neuquén",
+  "rio negro": "Viedma", chubut: "Rawson", "santa cruz": "Río Gallegos", "tierra del fuego": "Ushuaia",
+};
+
+/** The capital of the province the text names alone ("Chaco", "provincia de Chaco"); undefined otherwise. */
+export function provinceCapital(text: string): City | undefined {
+  const name = fold(text).replace(/^(la |el )?(provincia|prov) (de |del )?/, "").replace(/^(la |el )/, "");
+  const capital = CAPITALS[name];
+  const province = capital ? PROVINCES.find((p) => fold(p.label) === name) : undefined;
+  return province ? citiesInProvince(province.id).find((c) => fold(c.city) === fold(capital)) : undefined;
+}
+
 /** Avoid guessing when multiple provinces contain the same city name. */
 export function cityFromText(text: string): City | undefined {
   const query = ` ${fold(text)} `;

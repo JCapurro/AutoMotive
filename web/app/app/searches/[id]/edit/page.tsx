@@ -41,6 +41,7 @@ export default async function EditSearchPage({ params }: PageProps<"/app/searche
         profileId={profile.id}
         thresholdAlerts={formData.thresholdAlerts}
         modelLessSearch={formData.modelLessSearch}
+        maxLocations={formData.maxLocations}
       />
     </div>
   );

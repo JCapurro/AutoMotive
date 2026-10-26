@@ -52,7 +52,9 @@ export function SearchCriteriaSummary({ name, filters: f, preferences: p, radius
   if (mileage) main.push({ label: "Kilometraje", value: `${mileage} km`, icon: Gauge });
   if (f.transmission) main.push({ label: "Caja", value: TRANSMISSION[f.transmission] ?? f.transmission, icon: Settings2 });
   if (hasLocation && radiusKm != null && radiusKm > 0) {
-    main.push({ label: "Zona", value: `${f.location_label || "Tu ubicación"} · ${number(radiusKm)} km`, icon: MapPin });
+    const zones = [`${f.location_label || "Tu ubicación"} · ${number(radiusKm)} km`,
+      ...(f.extra_locations ?? []).map((z) => `${z.label} · ${number(z.radius_km)} km`)];
+    main.push({ label: zones.length > 1 ? "Zonas" : "Zona", value: zones.join(" / "), icon: MapPin });
   }
 
   if (f.fuel) extra.push({ label: "Combustible", value: FUEL[f.fuel] ?? f.fuel });
