@@ -16,6 +16,7 @@ import {
   isModelLess,
   matchingChanged,
   modelBodyTypes,
+  sortKeys,
   toColumns,
   toFilters,
 } from "@/lib/search-form";
@@ -237,7 +238,8 @@ async function sameActiveSearch(
 ): Promise<number | null> {
   const { data } = await supabase.from("search_profiles").select("id, filters, origin_lat, origin_lon, radius_km")
     .eq("user_id", userId).eq("enabled", true);
-  const same = (data ?? []).find((p) => JSON.stringify(p.filters) === JSON.stringify(row.filters)
+  // Through sortKeys: the database returns jsonb keys in its own order (and nested ones too, as in extra_locations).
+  const same = (data ?? []).find((p) => JSON.stringify(sortKeys(p.filters)) === JSON.stringify(sortKeys(row.filters))
     && p.origin_lat === (row.origin_lat ?? null) && p.origin_lon === (row.origin_lon ?? null) && p.radius_km === (row.radius_km ?? null));
   return same?.id ?? null;
 }

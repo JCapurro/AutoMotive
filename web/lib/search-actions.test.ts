@@ -120,6 +120,21 @@ describe("saveSearch", () => {
     expect(state.inserted).toBeNull();
   });
 
+  it("recognizes the identical search whatever order the database returns the filters' keys in", async () => {
+    state.catalog = { make: "Chevrolet", model: "Corsa", body_types: [] };
+    const zones = [{ label: "Corrientes, Corrientes", lat: -27.4692, lon: -58.8306, radius_km: 30 }];
+    const withZones = { ...CORSA, location: { label: "Resistencia, Chaco", lat: -27.4519, lon: -58.9867, radius_km: 30 }, extra_locations: zones };
+    await saveSearch(null, withZones, STAY);
+    const sent = state.inserted!;
+    state.inserted = null;
+    // jsonb gives short keys first and orders nested ones its own way.
+    const reordered = Object.fromEntries(Object.entries(sent.filters as Record<string, unknown>).reverse().map(([k, v]) =>
+      [k, k === "extra_locations" ? (v as Record<string, unknown>[]).map((z) => Object.fromEntries(Object.entries(z).reverse())) : v]));
+    state.dbError = { code: "23505", message: 'duplicate key value violates unique constraint "search_profiles_active_unique_idx"' };
+    state.activeQueue = [[], [{ id: 11, filters: reordered, origin_lat: sent.origin_lat, origin_lon: sent.origin_lon, radius_km: sent.radius_km }]];
+    expect(await saveSearch(null, withZones, STAY)).toEqual({ savedId: 11 });
+  });
+
   it("opens the winner when an identical submit got in first (the database's unique index)", async () => {
     state.catalog = { make: "Chevrolet", model: "Corsa", body_types: [] };
     await saveSearch(null, CORSA, STAY);
