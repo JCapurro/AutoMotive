@@ -1,11 +1,10 @@
 "use client";
 
-import { ChevronDown, Info, Loader2, LocateFixed, X } from "lucide-react";
+import { ChevronDown, Info, Loader2, LocateFixed, Plus, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
-import { type Preview, type SaveOrigin, previewSearch, saveSearch } from "@/app/app/searches/actions";
-import { RelaxSuggestions } from "@/components/app/relax-suggestions";
+import { type SaveOrigin, saveSearch } from "@/app/app/searches/actions";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,7 +22,7 @@ import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import type { Catalog } from "@/lib/catalog";
 import { BODY_TYPE, BODY_TYPE_CODES, type BodyType, FREQUENCY, FUEL, MIN_LEVEL_OPTIONS, SELLER, TRANSMISSION, isBodyType } from "@/lib/copy";
-import { km, money, number, vehicle } from "@/lib/format";
+import { number } from "@/lib/format";
 import { PROVINCES, citiesInProvince, cityById, cityByLocation } from "@/lib/argentina-locations";
 import {
   MODEL_LESS_UNAVAILABLE,
@@ -36,14 +35,27 @@ import {
   selectedTrims,
 } from "@/lib/search-form";
 import { locationCapText } from "@/lib/pro";
-import type { RelaxChange } from "@/lib/search-relax";
-import type { SearchPlace } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { analyticsEvent } from "@/lib/google-analytics";
-import { AMBA_RADIUS_KM } from "@/lib/assisted-fallback";
 import { detectDeviceLocation, type DetectedLocation } from "@/lib/search-location";
 
 type Source = { id: string; name: string };
+
+/** The localities of a province as select options; the department tells apart the ones that share a name. */
+function cityOptions(provinceId: string) {
+  const cities = citiesInProvince(provinceId);
+  const counts = new Map<string, number>();
+  for (const c of cities) counts.set(c.city, (counts.get(c.city) ?? 0) + 1);
+  return cities.map((c) => (
+    <NativeSelectOption key={c.id} value={c.id}>{c.city}{(counts.get(c.city) ?? 0) > 1 ? ` (${c.department})` : ""}</NativeSelectOption>
+  ));
+}
+
+/** One city of a manual place with its own radius; `fixed` is a saved place that isn't in the city list. */
+type Zone = { key: number; province: string; city: string; radius: string; fixed: { label: string; lat: number; lon: number } | null };
+let zoneKeys = 0;
+const newZone = (init: Partial<Zone> = {}): Zone => ({ key: ++zoneKeys, province: "", city: "", radius: "30", fixed: null, ...init });
+const zoneReady = (z: Zone) => z.fixed != null || z.city !== "";
 
 type Draft = {
   name: string;
@@ -65,14 +77,13 @@ type Draft = {
   /** In "model" mode only the ones the model offers count (toInput); the rest wait for another model. */
   body_types: BodyType[];
   sources: string[];
-  place: string; // "" (todo el país) | "city" | "current" | "saved"
-  province: string;
-  city: string;
+  /** "" = todo el país; "current" = the device's location; "manual" = cities picked by hand (zones). */
+  place: "" | "current" | "manual";
+  /** The radius around the current location. */
   radius: string;
-  /** Places added to the one above ("Chaco o Corrientes"); each keeps the radius it was added with. */
-  extras: SearchPlace[];
   current: DetectedLocation | null;
-  saved: { label: string; lat: number; lon: number } | null;
+  /** The cities of a manual place: the first is the search's own place, the others are added to it. */
+  zones: Zone[];
   km_target: string;
   price_target: string;
   seller_type: "" | "private" | "dealer";
@@ -108,11 +119,13 @@ function checkNumbers(input: SearchInput, d: Draft): Record<string, string> {
   if (input.year_min != null && input.year_max != null && input.year_min > input.year_max) {
     fields.year_max = "El año «desde» no puede ser mayor que el «hasta».";
   }
-  if (d.place) {
-    const radius = amount(d.radius);
+  const radii = d.place === "current" ? [d.radius] : d.place === "manual" ? d.zones.map((z) => z.radius) : [];
+  for (const text of radii) {
+    const radius = amount(text);
     if (radius == null || !Number.isFinite(radius)) fields.location = "Escribí el radio en kilómetros, sin decimales (por ejemplo: 30).";
     else if (radius <= 0) fields.location = "El radio tiene que ser mayor a 0.";
     else if (radius > 3000) fields.location = "Poné un radio de hasta 3.000 km.";
+    if (fields.location) break;
   }
   return fields;
 }
@@ -130,21 +143,14 @@ function draftFrom(
   approximateLocation: DetectedLocation | null = null,
   mode: Draft["mode"] = "model",
 ): Draft {
-  let place = isNew ? "current" : "";
-  let saved: Draft["saved"] = null;
-  let province = "";
-  let city = "";
-  if (v.location) {
-    const locality = cityByLocation(v.location);
-    if (locality) {
-      place = "city";
-      province = locality.provinceId;
-      city = locality.id;
-    } else {
-      place = "saved";
-      saved = { label: v.location.label, lat: v.location.lat, lon: v.location.lon };
-    }
-  }
+  // A saved place is shown as cities: the ones of the list pick their province and city; any other stays as it is.
+  const zones = v.location
+    ? [v.location, ...v.extra_locations].map((p) => {
+        const locality = cityByLocation(p);
+        return newZone({ radius: String(p.radius_km), ...(locality ? { province: locality.provinceId, city: locality.id } : { fixed: { label: p.label, lat: p.lat, lon: p.lon } }) });
+      })
+    : [];
+  const place: Draft["place"] = v.location ? "manual" : isNew ? "current" : "";
   return {
     name: v.name,
     nameTouched: Boolean(v.name) && v.name !== defaultName(v),
@@ -164,12 +170,9 @@ function draftFrom(
     body_types: v.body_types,
     sources: v.sources,
     place,
-    province,
-    city,
-    radius: v.location ? String(v.location.radius_km) : isNew ? "30" : "",
-    extras: v.location ? v.extra_locations : [],
+    radius: isNew ? "30" : "",
     current: isNew ? approximateLocation : null,
-    saved,
+    zones,
     km_target: v.km_target != null ? number(v.km_target) : "",
     price_target: v.price_target != null ? number(v.price_target) : "",
     seller_type: v.seller_type,
@@ -179,19 +182,21 @@ function draftFrom(
   };
 }
 
-function location(d: Draft): SearchInput["location"] {
-  // Whole km, dots as thousands like every other number here ("3.000" is 3000 km, not 3).
-  const radius_km = amount(d.radius) ?? NaN;
+/** The place the draft describes: its own and the ones added to it ("Chaco o Corrientes"). */
+function places(d: Draft): { location: SearchInput["location"]; extra_locations: NonNullable<SearchInput["extra_locations"]> } {
   if (d.place === "current" && d.current) {
     const { label, lat, lon } = d.current;
-    return { label, lat, lon, radius_km };
+    // Whole km, dots as thousands like every other number here ("3.000" is 3000 km, not 3).
+    return { location: { label, lat, lon, radius_km: amount(d.radius) ?? NaN }, extra_locations: [] };
   }
-  if (d.place === "saved" && d.saved) return { ...d.saved, radius_km };
-  if (d.place === "city") {
-    const city = cityById(d.city);
-    return city ? { label: city.label, lat: city.lat, lon: city.lon, radius_km } : null;
+  if (d.place !== "manual") return { location: null, extra_locations: [] };
+  const found: NonNullable<SearchInput["extra_locations"]> = [];
+  for (const z of d.zones) {
+    const city = z.fixed ? null : cityById(z.city);
+    const at = z.fixed ?? (city ? { label: city.label, lat: city.lat, lon: city.lon } : null);
+    if (at && !found.some((f) => f.lat === at.lat && f.lon === at.lon)) found.push({ ...at, radius_km: amount(z.radius) ?? NaN });
   }
-  return null;
+  return { location: found[0] ?? null, extra_locations: found.slice(1) };
 }
 
 /** `offered`: the body types the chosen model offers (modelBodyTypes). */
@@ -213,8 +218,7 @@ function toInput(d: Draft, offered: readonly string[]): SearchInput {
     fuel: d.fuel,
     body_types: byBody ? d.body_types : d.body_types.filter((code) => offered.includes(code)),
     sources: d.sources,
-    location: location(d),
-    extra_locations: d.place ? d.extras : [],
+    ...places(d),
     km_target: amount(d.km_target),
     price_target: amount(d.price_target),
     seller_type: d.seller_type,
@@ -224,24 +228,7 @@ function toInput(d: Draft, offered: readonly string[]): SearchInput {
   };
 }
 
-/** A zero-results hint (lib/search-relax.ts) applied to the fields; the place goes through choosePlace. */
-function relaxDraft(d: Draft, c: RelaxChange): Draft {
-  return {
-    ...d,
-    ...(c.trim_strict !== undefined ? { trim_strict: c.trim_strict } : {}),
-    ...(c.year_min !== undefined ? { year_min: c.year_min?.toString() ?? "" } : {}),
-    ...(c.year_max !== undefined ? { year_max: c.year_max?.toString() ?? "" } : {}),
-    ...(c.price_max !== undefined ? { price_max: c.price_max != null ? number(c.price_max) : "" } : {}),
-    ...(c.km_max !== undefined ? { km_max: c.km_max != null ? number(c.km_max) : "" } : {}),
-    ...(c.transmission !== undefined ? { transmission: c.transmission } : {}),
-    ...(c.fuel !== undefined ? { fuel: c.fuel } : {}),
-    ...(c.body_types !== undefined ? { body_types: c.body_types } : {}),
-  };
-}
-
 const THIS_YEAR = new Date().getFullYear();
-const AMBA = "amba";
-const isAmba = (d: Draft) => d.place === "city" && d.city === "caba" && d.radius === String(AMBA_RADIUS_KM);
 
 export function SearchForm({
   catalog,
@@ -299,14 +286,8 @@ export function SearchForm({
   const locationRequest = useRef(0);
   const [errors, setErrors] = useState<{ error?: string; fields?: Record<string, string> }>({});
   const [saving, startSaving] = useTransition();
-  // Tagged with the input it answers, so a stale count never shows for other filters.
-  const [preview, setPreview] = useState<{ key: string; data: Preview | null } | null>(null);
-  const [previewing, startPreview] = useTransition();
   const [locating, setLocating] = useState(false);
   const [locationNotice, setLocationNotice] = useState("");
-  // The "Otras zonas" picker: a province and a locality, added with their own radius.
-  const [addProvince, setAddProvince] = useState("");
-  const [addCity, setAddCity] = useState("");
 
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft((prev) => ({ ...prev, [key]: value }));
 
@@ -316,12 +297,6 @@ export function SearchForm({
   const models = useMemo(() => catalog.find((m) => m.make === d.make)?.models ?? [], [catalog, d.make]);
   const entry = byBody ? undefined : models.find((m) => m.model === d.model);
   const offered = useMemo(() => modelBodyTypes(entry?.bodyTypes), [entry]);
-  const cities = useMemo(() => citiesInProvince(d.province), [d.province]);
-  const cityNames = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const city of cities) counts.set(city.city, (counts.get(city.city) ?? 0) + 1);
-    return counts;
-  }, [cities]);
   const years = useMemo(() => {
     const from = Math.max(entry?.yearFrom ?? 1990, 1990);
     const to = Math.min(entry?.yearTo ?? THIS_YEAR, THIS_YEAR);
@@ -329,60 +304,28 @@ export function SearchForm({
   }, [entry]);
   const fuels = entry?.fuels.length ? entry.fuels : Object.keys(FUEL);
   const pendingVersion = versionText.trim();
-  const addCities = useMemo(() => citiesInProvince(addProvince), [addProvince]);
-  const addCityNames = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const city of addCities) counts.set(city.city, (counts.get(city.city) ?? 0) + 1);
-    return counts;
-  }, [addCities]);
   const zonesCapText = locationCapText(maxLocations);
-  const zonesFull = maxLocations != null && 1 + d.extras.length >= maxLocations;
-  function addZone() {
-    const city = cityById(addCity);
-    if (!city || zonesFull) return;
-    const radius = amount(d.radius);
-    const radius_km = radius != null && Number.isFinite(radius) && radius > 0 ? radius : city.radius;
-    const same = (p: { lat: number; lon: number }) => p.lat === city.lat && p.lon === city.lon;
-    const primary = location(d);
-    if (d.extras.some(same) || (primary && same(primary))) {
-      setLocationNotice(`${city.label} ya está entre las zonas.`);
-      return;
-    }
-    setLocationNotice("");
-    setDraft((prev) => ({ ...prev, extras: [...prev.extras, { label: city.label, lat: city.lat, lon: city.lon, radius_km }] }));
-    setAddCity("");
-  }
+  const zonesFull = maxLocations != null && d.zones.length >= maxLocations;
+  const updateZone = (key: number, patch: Partial<Zone>) => {
+    placeTouched.current = true;
+    setErrors({});
+    setDraft((prev) => ({ ...prev, zones: prev.zones.map((z) => (z.key === key ? { ...z, ...patch } : z)) }));
+  };
+  const removeZone = (key: number) => {
+    placeTouched.current = true;
+    setDraft((prev) => ({ ...prev, zones: prev.zones.length > 1 ? prev.zones.filter((z) => z.key !== key) : prev.zones }));
+  };
+  const addZone = () => {
+    placeTouched.current = true;
+    setDraft((prev) => ({ ...prev, zones: [...prev.zones, newZone({ radius: prev.zones.at(-1)?.radius || "30" })] }));
+  };
 
   const input = useMemo(
     () => toInput({ ...d, trims: [...new Set([...d.trims, versionText.trim()].filter(Boolean))] }, offered),
     [d, versionText, offered],
   );
   const autoName = defaultName(input);
-  // By body type the search needs a max price (lib/search-form.ts): without
-  // one previewSearch rejects the input, which isn't a failed count.
-  const bodyNeedsPrice = byBody && input.price_max == null;
-  const vehicleReady = byBody
-    ? Boolean(input.body_types?.length) && !bodyNeedsPrice && !locked
-    : Boolean(input.make && input.model);
-  // Junk in a number field (checkNumbers) isn't a failed count: the preview waits for it to be fixed.
-  const numbersOk = Object.keys(checkNumbers(input, d)).length === 0;
-  const locationReady = !((d.place === "current" && !d.current) || (d.place === "city" && !d.city));
-  const previewKey = JSON.stringify({ ...input, locationReady, name: "", notification_frequency: "", notify_min_level: "",
-    opportunity_threshold_pct: null });
-
-  useEffect(() => {
-    if (!vehicleReady || !locationReady || !numbersOk) return;
-    const timer = setTimeout(() => {
-      startPreview(async () => {
-        const data = await previewSearch(input);
-        setPreview({ key: previewKey, data });
-      });
-    }, 400);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- previewKey is the input minus the alert settings
-  }, [previewKey]);
-  const shownPreview = preview?.key === previewKey ? preview.data : null;
-  const previewFailed = preview?.key === previewKey && preview.data === null;
+  const locationReady = d.place === "current" ? Boolean(d.current) : d.place === "manual" ? d.zones.length > 0 && d.zones.every(zoneReady) : true;
 
   function chooseMake(make: string) {
     setVersionText("");
@@ -410,22 +353,19 @@ export function SearchForm({
     setOtherVersion(false);
   }
 
-  function choosePlace(choice: string) {
+  function choosePlace(choice: Draft["place"]) {
     placeTouched.current = true;
     locationRequest.current += 1;
     setLocating(false);
     setLocationNotice("");
     setErrors({});
-    // AMBA: the city and its suburbs, as a manual place (CABA's center and a wide radius).
-    const amba = choice === AMBA;
-    const place = amba ? "city" : choice;
     setDraft((prev) => ({
       ...prev,
-      place,
-      ...(amba ? { province: "02", city: "caba" } : {}),
-      radius: amba ? String(AMBA_RADIUS_KM) : prev.radius || "30",
+      place: choice,
+      radius: prev.radius || "30",
+      zones: choice === "manual" && !prev.zones.length ? [newZone()] : prev.zones,
     }));
-    if (place === "current" && !d.current) void locate(true);
+    if (choice === "current" && !d.current) void locate(true);
   }
 
   async function locate(requestPermission = false) {
@@ -450,11 +390,11 @@ export function SearchForm({
     };
     if (!d.current && !requestPermission && !placeTouched.current) {
       // Nothing detected on open: ask for the place instead of starting in an error.
-      setDraft((prev) => prev.place === "current" ? { ...prev, place: "city" } : prev);
-      setLocationNotice("Elegí dónde buscar: AMBA, una provincia y localidad, o todo el país.");
+      setDraft((prev) => prev.place === "current" ? { ...prev, place: "manual", zones: prev.zones.length ? prev.zones : [newZone()] } : prev);
+      setLocationNotice("Elegí dónde buscar: tu ubicación actual, una o más ciudades, o todo el país.");
       return;
     }
-    setLocationNotice(d.current ? notices[result.reason] : "No pudimos detectar tu zona. Elegí AMBA, Ubicación manual o usá la ubicación del dispositivo.");
+    setLocationNotice(d.current ? notices[result.reason] : "No pudimos detectar tu zona. Elegí una ubicación manual o usá la ubicación del dispositivo.");
   }
 
   useEffect(() => {
@@ -462,11 +402,6 @@ export function SearchForm({
     return () => { locationRequest.current += 1; };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once, when a new search opens
   }, []);
-
-  function applyRelax(change: RelaxChange) {
-    setDraft((prev) => relaxDraft(prev, change));
-    if (change.location === null) choosePlace("");
-  }
 
   function chooseMode(mode: string) {
     setErrors({});
@@ -511,7 +446,7 @@ export function SearchForm({
     if (!byBody && input.make && !input.model) fields.model = "Elegí un modelo.";
     if (byBody && !input.body_types?.length) fields.body_types = "Elegí al menos una carrocería.";
     if (byBody && input.price_max == null && !fields.price_max) fields.price_max = "Poné un precio máximo para buscar por carrocería.";
-    if (!locationReady) fields.location = "Elegí dónde buscar: AMBA, una provincia y localidad, o todo el país.";
+    if (!locationReady) fields.location = d.place === "manual" ? "Elegí la provincia y la localidad de cada zona, o quitá la que sobre." : "Elegí dónde buscar: tu ubicación actual, una o más ciudades, o todo el país.";
     if (Object.keys(fields).length) {
       showErrors({ fields });
       return;
@@ -859,102 +794,76 @@ export function SearchForm({
               <legend className="text-sm font-medium">Buscar cerca de</legend>
               <Segmented
                 name={fid("place")}
-                value={isAmba(d) ? AMBA : d.place}
-                onChange={choosePlace}
+                value={d.place}
+                onChange={(v) => choosePlace(v === "current" || v === "manual" ? v : "")}
                 variant="chips"
                 options={[
-                  { value: AMBA, label: "AMBA (CABA y alrededores)" },
                   { value: "current", label: "Mi ubicación actual" },
-                  { value: "city", label: "Ubicación manual" },
+                  { value: "manual", label: "Ubicación manual" },
                   { value: "", label: "Todo el país" },
-                  ...(d.saved ? [{ value: "saved", label: "Ubicación guardada" }] : []),
                 ]}
               />
               {fieldError("location")}
             </fieldset>
-            {d.place === "city" ? (
-              <>
-                <Field id={fid("province")} label="Provincia">
-                  <NativeSelect id={fid("province")} value={d.province} onChange={(e) => {
-                    placeTouched.current = true;
-                    setErrors({});
-                    setDraft((prev) => ({ ...prev, province: e.target.value, city: "" }));
-                  }} className="w-full" required>
-                    <NativeSelectOption value="">Elegí una provincia</NativeSelectOption>
-                    {PROVINCES.map((p) => <NativeSelectOption key={p.id} value={p.id}>{p.label}</NativeSelectOption>)}
-                  </NativeSelect>
-                </Field>
-                <Field id={fid("city")} label="Localidad">
-                  <NativeSelect id={fid("city")} value={d.city} onChange={(e) => {
-                    placeTouched.current = true;
-                    setErrors({});
-                    set("city", e.target.value);
-                  }} className="w-full" disabled={!d.province} required>
-                    <NativeSelectOption value="">{d.province ? "Elegí una localidad" : "Primero elegí la provincia"}</NativeSelectOption>
-                    {cities.map((city) => <NativeSelectOption key={city.id} value={city.id}>
-                      {city.city}{(cityNames.get(city.city) ?? 0) > 1 ? ` (${city.department})` : ""}
-                    </NativeSelectOption>)}
-                  </NativeSelect>
-                </Field>
-              </>
-            ) : null}
-            {d.place ? (
-              <Field id={fid("radius")} label="Radio (km)">
-                <Input id={fid("radius")} inputMode="numeric" value={d.radius} onChange={(e) => set("radius", e.target.value)} />
-              </Field>
+            {d.place === "manual" ? (
+              <div className="space-y-3 sm:col-span-2">
+                {d.zones.map((z, i) => (
+                  <div key={z.key} className="grid gap-3 sm:grid-cols-[1fr_1fr_6.5rem_auto] sm:items-end">
+                    {z.fixed ? (
+                      <div className="sm:col-span-2">
+                        <p className="text-sm font-medium">{z.fixed.label}</p>
+                        <p className="text-xs text-muted-foreground">Ubicación guardada en esta búsqueda.</p>
+                      </div>
+                    ) : (
+                      <>
+                        <Field id={fid(`province-${z.key}`)} label={i === 0 ? "Provincia" : `Provincia ${i + 1}`}>
+                          <NativeSelect id={fid(`province-${z.key}`)} value={z.province} onChange={(e) => updateZone(z.key, { province: e.target.value, city: "" })} className="w-full">
+                            <NativeSelectOption value="">Elegí una provincia</NativeSelectOption>
+                            {PROVINCES.map((p) => <NativeSelectOption key={p.id} value={p.id}>{p.label}</NativeSelectOption>)}
+                          </NativeSelect>
+                        </Field>
+                        <Field id={fid(`city-${z.key}`)} label={i === 0 ? "Localidad" : `Localidad ${i + 1}`}>
+                          <NativeSelect id={fid(`city-${z.key}`)} value={z.city} onChange={(e) => updateZone(z.key, { city: e.target.value })} className="w-full" disabled={!z.province}>
+                            <NativeSelectOption value="">{z.province ? "Elegí una localidad" : "Primero elegí la provincia"}</NativeSelectOption>
+                            {cityOptions(z.province)}
+                          </NativeSelect>
+                        </Field>
+                      </>
+                    )}
+                    <Field id={fid(`radius-${z.key}`)} label="Radio (km)">
+                      <Input id={fid(`radius-${z.key}`)} inputMode="numeric" value={z.radius} onChange={(e) => updateZone(z.key, { radius: e.target.value })} />
+                    </Field>
+                    {d.zones.length > 1 ? (
+                      <Button type="button" variant="ghost" size="icon" aria-label={`Quitar la zona ${i + 1}`} onClick={() => removeZone(z.key)}>
+                        <X aria-hidden />
+                      </Button>
+                    ) : null}
+                  </div>
+                ))}
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button type="button" variant="outline" size="sm" disabled={zonesFull} onClick={addZone}>
+                    <Plus aria-hidden /> Agregar otra ciudad
+                  </Button>
+                  <p className="text-xs text-muted-foreground">
+                    Buscamos publicaciones en cualquiera de las ciudades, cada una con su radio.{zonesCapText ? ` ${zonesCapText}` : ""}
+                  </p>
+                </div>
+              </div>
             ) : null}
             {d.place === "current" ? (
-              <p role="status" className="flex items-center gap-1.5 text-xs text-muted-foreground sm:col-span-2">
-                <LocateFixed className="size-3.5" aria-hidden />
-                {locating
-                  ? d.current ? "Podés continuar con esta zona mientras ajustamos la ubicación…" : "Buscando tu ubicación… Si hay un fallo temporal, reintentamos automáticamente."
-                  : d.current
-                    ? d.current.approximate ? `Zona aproximada por tu conexión: ${d.current.label}. Podés cambiarla si no coincide.` : "Ubicación detectada. Usamos este punto como centro del radio."
-                    : "Usá la ubicación del dispositivo o elegí una ciudad."}
-              </p>
-            ) : null}
-            {d.place === "saved" && d.saved ? (
-              <p className="text-xs text-muted-foreground sm:col-span-2">{d.saved.label}. Usamos la ubicación guardada en esta búsqueda.</p>
-            ) : null}
-            {d.place ? (
-              <fieldset className="space-y-2 sm:col-span-2">
-                <legend className="text-sm font-medium">Otras zonas (opcional)</legend>
-                {d.extras.length ? (
-                  <ul className="flex flex-wrap gap-2">
-                    {d.extras.map((z, i) => (
-                      <li key={`${z.lat},${z.lon}`} className="flex items-center gap-1 rounded-full border px-3 py-1 text-sm">
-                        {z.label} · {number(z.radius_km)} km
-                        <button
-                          type="button"
-                          aria-label={`Quitar ${z.label}`}
-                          className="text-muted-foreground hover:text-foreground"
-                          onClick={() => setDraft((prev) => ({ ...prev, extras: prev.extras.filter((_, j) => j !== i) }))}
-                        >
-                          <X className="size-3.5" aria-hidden />
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-                {zonesFull ? null : (
-                  <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
-                    <NativeSelect aria-label="Provincia de la otra zona" value={addProvince} onChange={(e) => { setAddProvince(e.target.value); setAddCity(""); }} className="w-full">
-                      <NativeSelectOption value="">Provincia</NativeSelectOption>
-                      {PROVINCES.map((p) => <NativeSelectOption key={p.id} value={p.id}>{p.label}</NativeSelectOption>)}
-                    </NativeSelect>
-                    <NativeSelect aria-label="Localidad de la otra zona" value={addCity} onChange={(e) => setAddCity(e.target.value)} className="w-full" disabled={!addProvince}>
-                      <NativeSelectOption value="">{addProvince ? "Localidad" : "Primero la provincia"}</NativeSelectOption>
-                      {addCities.map((city) => <NativeSelectOption key={city.id} value={city.id}>
-                        {city.city}{(addCityNames.get(city.city) ?? 0) > 1 ? ` (${city.department})` : ""}
-                      </NativeSelectOption>)}
-                    </NativeSelect>
-                    <Button type="button" variant="outline" disabled={!addCity} onClick={addZone}>Agregar zona</Button>
-                  </div>
-                )}
-                <p className="text-xs text-muted-foreground">
-                  Buscamos publicaciones en cualquiera de las zonas, cada una con su radio.{zonesCapText ? ` ${zonesCapText}` : ""}
+              <>
+                <Field id={fid("radius")} label="Radio (km)">
+                  <Input id={fid("radius")} inputMode="numeric" value={d.radius} onChange={(e) => set("radius", e.target.value)} />
+                </Field>
+                <p role="status" className="flex items-center gap-1.5 text-xs text-muted-foreground sm:col-span-2">
+                  <LocateFixed className="size-3.5" aria-hidden />
+                  {locating
+                    ? d.current ? "Podés continuar con esta zona mientras ajustamos la ubicación…" : "Buscando tu ubicación… Si hay un fallo temporal, reintentamos automáticamente."
+                    : d.current
+                      ? d.current.approximate ? `Zona aproximada por tu conexión: ${d.current.label}. Podés cambiarla si no coincide.` : "Ubicación detectada. Usamos este punto como centro del radio."
+                      : "Usá la ubicación del dispositivo o elegí una ciudad."}
                 </p>
-              </fieldset>
+              </>
             ) : null}
             {locationNotice ? <p role="status" className="text-xs text-muted-foreground sm:col-span-2">{locationNotice}</p> : null}
             {d.place === "current" ? (
@@ -1055,24 +964,6 @@ export function SearchForm({
       </div>
 
       <aside className="space-y-3 lg:sticky lg:top-20">
-        <PreviewCard
-          preview={shownPreview}
-          loading={previewing}
-          failed={previewFailed}
-          ready={vehicleReady && numbersOk}
-          notReady={
-            !numbersOk ? "Corregí los números marcados para contar las publicaciones."
-            : locked
-              ? "Para contar las publicaciones, elegí un modelo."
-              : byBody
-                ? input.body_types?.length
-                  ? "Poné un precio máximo para ver cuántas publicaciones coinciden hoy."
-                  : "Elegí al menos una carrocería para ver cuántas publicaciones coinciden hoy."
-                : "Elegí marca y modelo para ver cuántas publicaciones coinciden hoy."
-          }
-          locationRequired={!locationReady}
-          relax={byBody ? null : <RelaxSuggestions input={input} inputKey={previewKey} onApply={(s) => applyRelax(s.change)} />}
-        />
         {locked && !errors.error ? <p className="text-sm text-destructive">{MODEL_LESS_UNAVAILABLE}</p> : null}
         {errors.error ? (
           <p role="alert" className="text-sm text-destructive">
@@ -1203,77 +1094,3 @@ function ChipToggles({
   );
 }
 
-function PreviewCard({
-  preview,
-  loading,
-  failed,
-  ready,
-  notReady,
-  locationRequired,
-  relax,
-}: {
-  preview: Preview | null;
-  loading: boolean;
-  failed: boolean;
-  ready: boolean;
-  /** What to pick before there's something to count. */
-  notReady: string;
-  locationRequired: boolean;
-  /** With a model, what to loosen when nothing matches (RelaxSuggestions). */
-  relax?: React.ReactNode;
-}) {
-  return (
-    <Card size="sm" aria-live="polite">
-      <CardContent className="space-y-3">
-        {!ready ? (
-          <p className="text-sm text-muted-foreground">{notReady}</p>
-        ) : locationRequired ? (
-          <p className="text-sm text-muted-foreground">Elegí una ubicación para contar las publicaciones cercanas.</p>
-        ) : failed ? (
-          <p className="text-sm text-muted-foreground">No pudimos contar las publicaciones ahora. Igual podés guardar.</p>
-        ) : preview == null ? (
-          <p className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" aria-hidden /> Contando publicaciones…
-          </p>
-        ) : (
-          <>
-            <p data-testid="preview-count" className={cn("text-sm", loading && "opacity-60")}>
-              <span className="text-2xl font-semibold tabular-nums">{preview.count}</span>{" "}
-              {preview.count === 1 ? "publicación actual coincide" : "publicaciones actuales coinciden"}
-            </p>
-            {preview.sample.length ? (
-              <ul className="space-y-1.5 border-t pt-3 text-xs">
-                {preview.sample.map((l) => (
-                  <li key={l.id} className="flex justify-between gap-2">
-                    <span className="truncate">
-                      {vehicle(l)}
-                      {isBodyType(l.body_type) ? <span className="text-muted-foreground"> · {BODY_TYPE[l.body_type]}</span> : null}
-                    </span>
-                    <span className="shrink-0 text-muted-foreground">
-                      {[money(l.price, l.currency), km(l.mileage_km)].filter(Boolean).join(" · ")}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            ) : preview.count === 0 && relax ? (
-              relax
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                Hoy no hay ninguna publicada. Es normal con autos buscados: duran poco. Nosotros seguimos mirando y te
-                escribimos cuando aparezca una.
-              </p>
-            )}
-            {preview.count > 0 ? (
-              <p className="text-xs text-muted-foreground">
-                Lo importante es lo que se publique a partir de ahora: eso te lo avisamos apenas aparece.
-              </p>
-            ) : null}
-            <p className="text-[11px] text-muted-foreground">
-              Estimación con tus filtros; al guardar calculamos qué tan buena oportunidad es cada una.
-            </p>
-          </>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
