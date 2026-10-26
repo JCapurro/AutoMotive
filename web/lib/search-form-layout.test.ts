@@ -18,13 +18,12 @@ it("a plan without the threshold never sees it, even on a search that has one", 
   expect(html).not.toContain("Avisame al instante si está");
 });
 
-it("puts the submit button at the end of the form, centered, not in a side column", () => {
+it("keeps the submit button in the side column, next to the form", () => {
   const html = renderToStaticMarkup(createElement(SearchForm, {
     catalog: [], sources: [{ id: "mercadolibre", name: "MercadoLibre" }], initial, profileId: null,
   }));
-  expect(html).not.toContain("lg:grid-cols-[1fr_300px]");
-  expect(html).toContain("mx-auto w-full max-w-md");
-  expect(html.indexOf("Crear búsqueda")).toBeGreaterThan(html.indexOf("Nombre de la búsqueda"));
+  expect(html).toContain("lg:grid-cols-[1fr_300px]");
+  expect(html).toMatch(/<aside[^>]*lg:sticky[^>]*>.*Crear búsqueda/);
 });
 
 const render = (thresholdAlerts: boolean | undefined, pct: number | null) =>
@@ -35,12 +34,12 @@ const render = (thresholdAlerts: boolean | undefined, pct: number | null) =>
 
 it("offers the opportunity threshold only to a plan that has it, as a switch and a slider", () => {
   const on = render(true, 15);
-  expect(on).toContain("Avisos al instante por buen precio");
+  expect(on).toContain("Avisos al instante por oportunidad");
   expect(on).toContain('role="switch"');
   expect(on).toContain('aria-checked="true"');
   expect(on).toMatch(/<input[^>]*type="range"[^>]*value="15"/);
   expect(on).toContain("15 % o más por debajo del precio de mercado");
-  for (const html of [render(false, 15), render(undefined, null)]) expect(html).not.toContain("Avisos al instante por buen precio");
+  for (const html of [render(false, 15), render(undefined, null)]) expect(html).not.toContain("Avisos al instante por oportunidad");
 });
 
 it("a search without a threshold shows the switch off and no slider", () => {

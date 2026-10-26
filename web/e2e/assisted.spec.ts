@@ -174,7 +174,7 @@ test("F5: portada → email → búsqueda activa sin tocar Guardar (autoguardado
   worker("llm_jobs", "--replay");
 
   const active = page.getByTestId("assisted-active");
-  await expect(active).toContainText("Tu búsqueda ya está activa");
+  await expect(active).toContainText("Búsqueda guardada y activa");
   await expect(page.getByRole("button", { name: "Guardar cambios" })).toBeVisible();
   await expectNoHorizontalScroll(page);
 
@@ -186,7 +186,7 @@ test("F5: portada → email → búsqueda activa sin tocar Guardar (autoguardado
   expect(saved).toHaveLength(1);
   expect(saved[0].filters).toMatchObject({ make: "Ford", model: "Fiesta", year_min: 2016, year_max: 2018, price_max: 11500 });
   expect(saved[0].radius_km).toBe(30);
-  await expect(active.getByRole("link", { name: "Ver la búsqueda" })).toHaveAttribute("href", `/app/searches/${saved[0].id}`);
+  await expect(active.getByRole("link", { name: "Ver mi búsqueda" })).toHaveAttribute("href", `/app/searches/${saved[0].id}`);
 
   const events = await query<{ name: string; props: Record<string, unknown> }>(
     `select e.name, e.props from public.events e join public.profiles p on p.id = e.user_id
