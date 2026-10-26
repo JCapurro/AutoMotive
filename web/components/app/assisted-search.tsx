@@ -1,6 +1,6 @@
 "use client";
 
-import { BellRing, Check, CircleAlert, Loader2, PenLine, Plus, RotateCcw, Sparkles, Trash2 } from "lucide-react";
+import { BellRing, Check, CheckCircle2, CircleAlert, Loader2, PenLine, Plus, RotateCcw, Sparkles, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
@@ -28,7 +28,8 @@ import {
   toggleChoice,
 } from "@/lib/assisted";
 import type { Catalog } from "@/lib/catalog";
-import type { SearchValues } from "@/lib/search-form";
+import { filterParts } from "@/lib/search";
+import { type SearchValues, toFilters } from "@/lib/search-form";
 import type { DetectedLocation } from "@/lib/search-location";
 import { autoSaveValues, sameProposal } from "@/lib/assisted-autosave";
 import { roughDraft } from "@/lib/assisted-fallback";
@@ -375,21 +376,30 @@ export function AssistedSearch({
   if (phase.kind === "active") {
     return (
       <div className="space-y-4">
-        <Alert data-testid="assisted-active">
-          <BellRing aria-hidden />
-          <AlertTitle>Tu búsqueda ya está activa</AlertTitle>
-          <AlertDescription>
-            <p>
-              Te avisamos cuando aparezca un «{phase.draft.title}» que coincida. Si querés ajustar algo, cambialo abajo y
-              tocá «Guardar cambios».
-            </p>
-            <p>
-              <Link href={`/app/searches/${phase.savedId}`} className="font-medium underline underline-offset-3">
-                Ver la búsqueda
-              </Link>
-            </p>
-          </AlertDescription>
-        </Alert>
+        <Card data-testid="assisted-active" className="border-emerald-600/30">
+          <CardContent className="space-y-3">
+            <div className="flex items-start gap-3">
+              <CheckCircle2 className="mt-0.5 size-6 shrink-0 text-emerald-600" aria-hidden />
+              <div className="space-y-1">
+                <h2 className="text-base font-semibold">Búsqueda guardada y activa</h2>
+                <p className="text-sm">
+                  Ya estamos buscando «{phase.draft.title}». Te avisamos apenas aparezca una publicación que coincida.
+                </p>
+              </div>
+            </div>
+            <ul aria-label="Lo que guardamos" className="flex flex-wrap gap-2">
+              {filterParts(toFilters(phase.draft.values, sources.map((s) => s.id)), phase.draft.values.location?.radius_km).map((part) => (
+                <li key={part} className="rounded-full border bg-muted/40 px-3 py-1 text-xs">{part}</li>
+              ))}
+            </ul>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <Button asChild>
+                <Link href={`/app/searches/${phase.savedId}`}>Ver mi búsqueda</Link>
+              </Button>
+              <p className="text-xs text-muted-foreground">¿Querés cambiar algo? Editá los datos de abajo y tocá «Guardar cambios».</p>
+            </div>
+          </CardContent>
+        </Card>
         <RequestSummary text={text} onEdit={() => setPhase({ kind: "idle" })}>
           Así leímos tu pedido. Escribir otro crea una búsqueda nueva.
         </RequestSummary>

@@ -485,7 +485,7 @@ export function SearchForm({
     ) : null;
 
   return (
-    <form ref={formRef} onSubmit={submit} noValidate className="grid gap-5">
+    <form ref={formRef} onSubmit={submit} noValidate className="grid gap-5 lg:grid-cols-[1fr_300px] lg:items-start">
       <div className="space-y-5">
         {notes?.length ? (
           <Alert data-testid="draft-notes">
@@ -949,7 +949,7 @@ export function SearchForm({
         </Card>
       </div>
 
-      <div className="mx-auto w-full max-w-md space-y-3 pb-4 text-center">
+      <aside className="space-y-3 lg:sticky lg:top-20">
         {locked && !errors.error ? <p className="text-sm text-destructive">{MODEL_LESS_UNAVAILABLE}</p> : null}
         {errors.error ? (
           <p role="alert" className="text-sm text-destructive">
@@ -964,7 +964,7 @@ export function SearchForm({
           Al guardar buscamos coincidencias entre las publicaciones de los últimos 30 días. Esas no se notifican: las
           ves acá. Desde entonces te avisamos de las nuevas.
         </p>
-      </div>
+      </aside>
     </form>
   );
 }
