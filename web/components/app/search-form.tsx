@@ -240,7 +240,6 @@ export function SearchForm({
   origin,
   onSaved,
   approximateLocation = null,
-  thresholdAlerts = false,
   modelLessSearch = false,
   maxLocations = null,
 }: {
@@ -256,8 +255,6 @@ export function SearchForm({
   /** With origin.stay: the new search's id, instead of navigating to it. */
   onSaved?: (id: number) => void;
   approximateLocation?: DetectedLocation | null;
-  /** The plan includes the opportunity threshold (Pro, 3.2). */
-  thresholdAlerts?: boolean;
   /** The plan can search by body type without a model (Particular, Pro; docs/CARROCERIA.md). */
   modelLessSearch?: boolean;
   /** Places one search may look in, its own included (the plan's cap); null = no cap. */
@@ -484,7 +481,7 @@ export function SearchForm({
     ) : null;
 
   return (
-    <form ref={formRef} onSubmit={submit} noValidate className="grid gap-5 lg:grid-cols-[1fr_300px] lg:items-start">
+    <form ref={formRef} onSubmit={submit} noValidate className="grid gap-5">
       <div className="space-y-5">
         {notes?.length ? (
           <Alert data-testid="draft-notes">
@@ -927,29 +924,6 @@ export function SearchForm({
                 ))}
               </NativeSelect>
             </Field>
-            {thresholdAlerts ? (
-              <Field
-                id={fid("opportunity_threshold_pct")}
-                label="Umbral de oportunidad (opcional)"
-                hint="Lo que llega a ese porcentaje te lo avisamos al instante, sin tope diario. El resto, y lo que no tiene comparables, va al resumen diario. Vacío: avisos inmediatos hasta el tope diario de tu plan."
-                error={fieldError("opportunity_threshold_pct")}
-                className="sm:col-span-2"
-              >
-                <div className="flex flex-wrap items-center gap-2 text-sm">
-                  <span>Avisame al instante si está</span>
-                  <Input
-                    id={fid("opportunity_threshold_pct")}
-                    value={d.opportunity_threshold_pct}
-                    onChange={(e) => set("opportunity_threshold_pct", e.target.value)}
-                    inputMode="numeric"
-                    placeholder="10"
-                    className="w-20"
-                    aria-describedby={fid("opportunity_threshold_pct-unit")}
-                  />
-                  <span id={fid("opportunity_threshold_pct-unit")}>% o más por debajo de comparables</span>
-                </div>
-              </Field>
-            ) : null}
             <Field id={fid("name")} label="Nombre de la búsqueda" className="sm:col-span-2">
               <Input
                 id={fid("name")}
@@ -963,7 +937,7 @@ export function SearchForm({
         </Card>
       </div>
 
-      <aside className="space-y-3 lg:sticky lg:top-20">
+      <div className="mx-auto w-full max-w-md space-y-3 pb-4 text-center">
         {locked && !errors.error ? <p className="text-sm text-destructive">{MODEL_LESS_UNAVAILABLE}</p> : null}
         {errors.error ? (
           <p role="alert" className="text-sm text-destructive">
@@ -978,7 +952,7 @@ export function SearchForm({
           Al guardar buscamos coincidencias entre las publicaciones de los últimos 30 días. Esas no se notifican: las
           ves acá. Desde entonces te avisamos de las nuevas.
         </p>
-      </aside>
+      </div>
     </form>
   );
 }
