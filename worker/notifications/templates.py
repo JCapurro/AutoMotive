@@ -434,7 +434,20 @@ PASS_LAST_DAY = "Desde mañana dejamos de buscar y de avisarte. Tu historial y t
 PASS_KEEP = "Tu historial y tus favoritos quedan guardados."
 PASS_CTA = "Extender 30 días"
 
-# 2.5: the count, never the cars. N is never 0 (no email then).
+# 2.5: the best car that appeared since access ended (payload.car, picked by
+# public.missed_car), «la oportunidad que te perdiste»; without one, the count.
+# N is never 0 (no email then).
+MISSED_SUBJECT = {True: "Te perdiste este {car}", False: "Apareció este {car} y tu búsqueda estaba pausada"}
+MISSED_SUBJECT_DIFF = ", {d}% debajo de comparables"
+MISSED_TITLE = {True: "La oportunidad que te perdiste", False: "Esto apareció mientras tu búsqueda estaba pausada"}
+MISSED_DIFF = "{d}% debajo de publicaciones comparables."
+MISSED_BELOW = "Por debajo de publicaciones comparables."
+MISSED_GONE = {1: "Estuvo publicado 1 día y ya no está.", "n": "Estuvo publicado {n} días y ya no está."}
+MISSED_GONE_ANY = "Ya no está publicado."
+MISSED_ACTIVE = "Todavía está publicado: reactivá tu búsqueda para verlo."
+MISSED_ALERT = "Con tu búsqueda activa, te hubiéramos avisado apenas apareció."
+MISSED_MORE = "Y no fue el único: desde que venció tu acceso aparecieron {n} autos nuevos para tu búsqueda{below}."
+MISSED_MORE_BELOW = ", {n} por debajo de comparables"
 COUNT_SUBJECT = {1: "Apareció 1 auto nuevo para tu búsqueda{model}",
                  "n": "Aparecieron {n} autos nuevos para tu búsqueda{model}"}
 COUNT_FOUND = {1: "Desde que venció tu acceso apareció 1 auto nuevo que coincide con tu búsqueda{below}.",
@@ -529,6 +542,40 @@ def particular_offer(offer: Mapping[str, Any] | None, limits: Mapping[str, Any] 
     return TRIAL_ENDED_OFFER_FALLBACK
 
 
+def _missed(car: Any, found: int, below: int, link: Link) -> tuple[Content, str] | None:
+    """2.5 with the car it missed: photo, price and why it mattered. None when
+    the payload has no showable car (no price), so the email falls back to the count."""
+    if not isinstance(car, Mapping) or car.get("price") is None or not (car.get("title") or car.get("model")):
+        return None
+    listing = {"make": car.get("make"), "model": car.get("model"), "trim": car.get("trim"),
+               "year": car.get("year"), "title": car.get("title"), "price": car.get("price"),
+               "currency": car.get("currency"), "mileage_km": car.get("km")}
+    name, gone = vehicle(listing), car.get("gone") is True
+    diff = car.get("diff_pct")
+    diff = round(diff) if isinstance(diff, (int, float)) and not isinstance(diff, bool) and math.isfinite(diff) else 0
+    subject = MISSED_SUBJECT[gone].format(car=name) + (MISSED_SUBJECT_DIFF.format(d=diff) if diff > 0 else "")
+    lines = []
+    if diff > 0:
+        lines.append(MISSED_DIFF.format(d=diff))
+    elif car.get("below") is True:
+        lines.append(MISSED_BELOW)
+    where = " · ".join(x for x in (km(listing), car.get("location") if isinstance(car.get("location"), str) else None)
+                       if x)
+    if where:
+        lines.append(where)
+    if gone:
+        days = _count(car.get("days_listed"))
+        lines.append(_plural(MISSED_GONE, days) if days else MISSED_GONE_ANY)
+    else:
+        lines.append(MISSED_ACTIVE)
+    lines.append(MISSED_ALERT)
+    if found > 1:
+        lines.append(MISSED_MORE.format(n=found, below=MISSED_MORE_BELOW.format(n=below) if below else ""))
+    title = MISSED_TITLE[gone]
+    return Content(title, subject, vehicle=name, lines=lines, link=link,
+                   images=image_urls(car.get("images")), price=price(listing)), title
+
+
 def lifecycle_content(kind: str, payload: Mapping[str, Any], url: str, *,
                       offer: Mapping[str, Any] | None = None,
                       limits: Mapping[str, Any] | None = None) -> tuple[Content, str]:
@@ -568,11 +615,13 @@ def lifecycle_content(kind: str, payload: Mapping[str, Any], url: str, *,
         found, below = _count(payload.get("found")), _count(payload.get("below"))
         if not found:
             raise ValueError("count_after_expiry without new listings")
+        price_label = particular_price(offer)
+        cta = COUNT_CTA.format(price=price_label) if price_label else COUNT_CTA_FALLBACK
+        if (missed := _missed(payload.get("car"), found, below, Link(cta, url))) is not None:
+            return missed
         subject = _plural(COUNT_SUBJECT, found, model=f" de {model}" if model else "")
         lines = [_plural(COUNT_FOUND, found, below=_plural(COUNT_BELOW, below) if below else ""),
                  _plural(COUNT_REACTIVATE, found)]
-        price = particular_price(offer)
-        cta = COUNT_CTA.format(price=price) if price else COUNT_CTA_FALLBACK
         return Content(subject, subject, lines=lines, link=Link(cta, url)), subject
     if kind == "bonus_trial_offer":
         found, new = _count(payload.get("found")), _count(payload.get("new"))
@@ -610,15 +659,20 @@ def lifecycle_email(row: Mapping[str, Any], links: Links, now: datetime, *,
     footer = LIFECYCLE_FOOTER[kind]
     unsubscribe = links.unsubscribe(row.get("unsubscribe_token"))
 
-    text = [c.header, *c.lines, f"{c.link.label}: {c.link.url}", "", "—", footer]
+    text = [c.header, *[x for x in (c.vehicle, c.price) if x], *c.lines, f"{c.link.label}: {c.link.url}", "", "—", footer]
     if unsubscribe:
         text.append(f"{UNSUBSCRIBE}: {unsubscribe}")
 
     html = render_email_html(c, kind=kind, now=now, day=None, detail_url=None, app_url=None,
                              unsubscribe_url=unsubscribe, footer=footer, unsubscribe_label=UNSUBSCRIBE,
-                             eyebrow=LIFECYCLE_EYEBROW[kind], title=title, preheader=c.lines[0] if c.lines else title,
+                             eyebrow=LIFECYCLE_EYEBROW[kind], title=title, preheader=_preheader(c, title),
                              open_pixel_url=links.open_pixel("m", row["id"]))
     return EmailMessage(c.subject, "\n".join(text), html)
+
+
+def _preheader(c: Content, title: str) -> str:
+    first = c.lines[0] if c.lines else title
+    return f"{c.vehicle}, {c.price}. {first}" if c.vehicle and c.price else first
 
 
 # ---------------------------------------------------------------------------
