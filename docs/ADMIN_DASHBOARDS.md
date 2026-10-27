@@ -44,7 +44,7 @@ Las demás claves conservan su editor JSON avanzado. Agregar una clave no crea p
 
 Migraciones requeridas:
 
-1. `supabase/migrations/20261027145730_admin_decision_metrics.sql`
+1. `supabase/migrations/20261117120000_admin_decision_metrics.sql`
 2. `supabase/migrations/20261027145911_admin_config_audit.sql`
 
 La instalación no cambia precios, límites, envíos ni habilita cobros. Las funciones son `security invoker`, con acceso agregado y escritura administrativa restringidos a `service_role`. El registro de búsquedas usa RLS para permitir únicamente la creación de una observación propia que coincida con una búsqueda real; los usuarios no pueden cambiar su hito de valor.
