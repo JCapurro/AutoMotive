@@ -151,6 +151,17 @@ async def rescore_queue(*, days: int, scoring_version: str,
             {"days": days, "version": scoring_version})).fetchall()
 
 
+async def matches_of_profile(profile_id: int) -> list[dict[str, Any]]:
+    """(match_id, search_profile_id, listing_id) of this profile's active listings
+    (an edited search re-checks the ones its backfill didn't score again)."""
+    async with connection() as cx:
+        return await (await cx.execute(
+            "SELECT m.id, m.search_profile_id, m.listing_id FROM matches m "
+            "  JOIN listings l ON l.id = m.listing_id "
+            " WHERE m.search_profile_id = %s AND l.status = 'active' "
+            " ORDER BY m.listing_id", (profile_id,))).fetchall()
+
+
 async def matches_of_listings(listing_ids: Iterable[int]) -> list[dict[str, Any]]:
     """(match_id, search_profile_id, listing_id) of these listings (re-score after enrichment)."""
     ids = list(dict.fromkeys(listing_ids))
