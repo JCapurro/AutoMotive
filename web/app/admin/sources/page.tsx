@@ -3,18 +3,20 @@ import type { Metadata } from "next";
 import { SourceHealthTable } from "@/components/admin/sources";
 import { EmptyRow, PageHeader, Pill, Section, Table, Td, Th } from "@/components/admin/ui";
 import { count, when } from "@/lib/admin-format";
+import { requireAdmin } from "@/lib/admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const metadata: Metadata = { title: "Fuentes" };
 
 // sección 10, "Fuentes / collectors": collector_runs, failure streaks and the cadence.
 export default async function SourcesPage({ searchParams }: PageProps<"/admin/sources">) {
+  await requireAdmin();
   const { source } = await searchParams;
   const filter = typeof source === "string" && source ? source : null;
   const admin = createAdminClient();
   let runsQuery = admin.from("collector_runs").select("*").order("started_at", { ascending: false }).limit(100);
   if (filter) runsQuery = runsQuery.eq("source", filter);
-  const [{ data: health }, { data: runs }, { data: cfg }, { data: beat }] = await Promise.all([
+  const [{ data: health, error: healthError }, { data: runs }, { data: cfg }, { data: beat }] = await Promise.all([
     admin.from("admin_source_health").select("*").order("priority"),
     runsQuery,
     admin.from("app_config").select("value").eq("key", "collector_failure_alert_after").maybeSingle(),
@@ -29,7 +31,9 @@ export default async function SourcesPage({ searchParams }: PageProps<"/admin/so
         description={`Con ${alertAfter} fallas seguidas el watchdog avisa por email. Revisa los collectors cada 5 minutos; también avisa al recuperarse.`}
       />
       <WorkerStatus beat={beat} />
-      <SourceHealthTable rows={health ?? []} editable alertAfter={alertAfter} />
+      <div id="sources" className="scroll-mt-32">
+        {healthError ? <p role="alert" className="rounded-lg border border-destructive p-4 text-sm text-destructive">No pudimos leer las fuentes. Recargá la página antes de modificar su configuración.</p> : <SourceHealthTable rows={health ?? []} editable alertAfter={alertAfter} />}
+      </div>
 
       <Section title={filter ? `Corridas de ${filter}` : "Últimas corridas"} description="collector_runs, las 100 más recientes.">
         <Table>

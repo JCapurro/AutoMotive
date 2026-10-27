@@ -1,76 +1,42 @@
 import type { Metadata } from "next";
 
 import { CriteriaGrid } from "@/components/admin/criteria";
-import { NotificationTable } from "@/components/admin/inspector";
-import { SourceHealthTable } from "@/components/admin/sources";
-import { PageHeader, Section, Stat, TextLink } from "@/components/admin/ui";
-import { count, daysAgo, percent } from "@/lib/admin-format";
+import { DashboardAttention, DashboardCashNote, DashboardHeader, DashboardSummaryKpis, DashboardTrend, DashboardUnavailable } from "@/components/admin/dashboard-ui";
+import { Section, TextLink } from "@/components/admin/ui";
+import { requireAdmin } from "@/lib/admin";
+import { loadAdminDashboard } from "@/lib/admin-dashboard-data";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const metadata: Metadata = { title: "Resumen" };
 
-// sección 10, "Resumen": the §53 criteria, the headline metrics and the sources.
-export default async function AdminHome() {
+export default async function AdminHome({ searchParams }: PageProps<"/admin">) {
+  await requireAdmin();
+  const { days } = await searchParams;
   const admin = createAdminClient();
-  const since = daysAgo(7, true);
-  const [criteria, northStar, activation, perDay, sources, recent] = await Promise.all([
+  const [data, criteria] = await Promise.all([
+    loadAdminDashboard(days),
     admin.from("v_validation_criteria").select("*").order("ordinal"),
-    admin.from("v_north_star_weekly").select("*").order("week", { ascending: false }).limit(1),
-    admin.from("v_activation").select("*").is("cohort_week", null).maybeSingle(),
-    admin.from("v_alerts_per_user_day").select("*").gte("day", since),
-    admin.from("admin_source_health").select("*").order("id"),
-    admin.from("notifications").select("*").neq("kind", "digest").order("id", { ascending: false }).limit(8),
   ]);
-  const week = northStar.data?.[0];
-  const days = perDay.data ?? [];
-  const alerts7 = days.reduce((sum, d) => sum + (d.alerts ?? 0), 0);
-  const userDays = days.reduce((sum, d) => sum + (d.users ?? 0), 0);
+  const snapshot = data.metrics.data;
 
   return (
     <>
-      <PageHeader title="Resumen" description="¿Está validado el MVP? Los criterios del §53 con los datos de hoy." />
+      <DashboardHeader title="Resumen" description="Cómo se usa Ese Auto, qué valor entrega y qué necesita atención." period={data.period} />
 
-      <Section title="Criterios de validación (§53)" description="v_validation_criteria · los umbrales se editan en Config (validation_criteria).">
-        <CriteriaGrid rows={criteria.data ?? []} />
+      <Section title="El período en seis números" description="Cada indicador se compara con los días inmediatamente anteriores. Los admins quedan fuera de los agregados de usuarios.">
+        {snapshot ? <><DashboardSummaryKpis snapshot={snapshot} /><DashboardCashNote snapshot={snapshot} /></> : <DashboardUnavailable title="Indicadores del período no disponibles" error={data.metrics.error} />}
       </Section>
 
-      <Section title="Métricas clave">
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <Stat
-            label="North Star, última semana"
-            value={week ? String(week.relevant_opens_per_active_user ?? 0).replace(".", ",") : "—"}
-            note={week ? `${count(week.relevant_opens)} publicaciones relevantes · ${count(week.active_users)} usuarios activos` : "Sin actividad"}
-          />
-          <Stat
-            label="Activación"
-            value={percent(activation.data?.activation_pct ?? null)}
-            note={`${count(activation.data?.with_search)} de ${count(activation.data?.signed_up)} con email · objetivo ${percent(activation.data?.target_pct ?? 70)}`}
-          />
-          <Stat
-            label="Alertas por usuario y día (7 días)"
-            value={userDays ? (alerts7 / userDays).toFixed(2).replace(".", ",") : "—"}
-            note={`${count(alerts7)} alertas inmediatas · tope ${count(days[0]?.cap ?? null)}`}
-          />
-          <Stat
-            label="Fuentes con fallas"
-            value={count((sources.data ?? []).filter((s) => (s.consecutive_failures ?? 0) > 0).length)}
-            note={`de ${count(sources.data?.length ?? 0)} fuentes`}
-          />
-        </div>
-        <TextLink href="/admin/metrics" className="text-sm">
-          Todas las métricas →
-        </TextLink>
-      </Section>
+      <DashboardAttention data={data} />
 
-      <Section title="Fuentes">
-        <SourceHealthTable rows={sources.data ?? []} />
-      </Section>
+      {snapshot ? <Section title="Actividad diaria" description="Personas con al menos una acción humana por día. Una persona puede aparecer en más de un día; el total del período cuenta personas únicas.">
+        <DashboardTrend daily={snapshot.daily} field="activeUsers" label="Usuarios activos" />
+        <TextLink href={`/admin/metrics?view=activation&days=${data.period.days}`} className="text-sm">Explorar activación, ingresos y operación →</TextLink>
+      </Section> : null}
 
-      <Section title="Últimas alertas" description="«¿Por qué?» abre el inspector.">
-        <NotificationTable rows={recent.data ?? []} />
-        <TextLink href="/admin/notifications" className="text-sm">
-          Todas las notificaciones →
-        </TextLink>
+      <Section title="Criterios de validación (§53)" description="Los seis criterios históricos del MVP. Sus ventanas y umbrales son propios; no siguen el filtro de este resumen.">
+        {criteria.error ? <DashboardUnavailable title="Criterios no disponibles" error={criteria.error.message} /> : <CriteriaGrid rows={criteria.data ?? []} />}
+        <div className="flex flex-wrap gap-4 text-xs"><TextLink href="/admin/config#validation_criteria">Revisar umbrales →</TextLink><TextLink href="/admin/metrics/diagnostic">Abrir diagnóstico histórico →</TextLink></div>
       </Section>
     </>
   );

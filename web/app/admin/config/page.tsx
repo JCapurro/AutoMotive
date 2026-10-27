@@ -2,10 +2,12 @@ import type { Metadata } from "next";
 
 import { ConfigEditor } from "@/components/admin/config-editor";
 import { PageHeader } from "@/components/admin/ui";
+import { requireAdmin } from "@/lib/admin";
 import { when } from "@/lib/admin-format";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-export const metadata: Metadata = { title: "Config" };
+export const metadata: Metadata = { title: "Configuración" };
+const NAMES: Record<string, string> = { pro_offer: "Precios y oferta", plan_limits: "Límites por plan", lifecycle_emails: "Emails del plan" };
 
 // What each app_config key rules (Apéndice A). Unknown keys still show up.
 const HINTS: Record<string, string> = {
@@ -30,23 +32,31 @@ const HINTS: Record<string, string> = {
 
 // sección 10, "Config": business rules, editable without a deploy.
 export default async function ConfigPage() {
-  const { data } = await createAdminClient().from("app_config").select("*").order("key");
+  await requireAdmin();
+  const admin = createAdminClient();
+  const [{ data, error }, { data: history, error: historyError }] = await Promise.all([
+    admin.from("app_config").select("*").order("key"),
+    admin.from("admin_config_audit").select("*").order("created_at", { ascending: false }).order("id", { ascending: false }).limit(100),
+  ]);
   const rows = (data ?? []).sort((a, b) => Number(b.key in HINTS) - Number(a.key in HINTS));
   return (
     <>
-      <PageHeader title="Config" description="app_config (Apéndice A). El worker toma los cambios en menos de un minuto; la web, en el próximo request." />
+      <PageHeader title="Configuración" description="Revisá los cambios antes de guardarlos. Cada operación registra quién la hizo, su fecha y los valores anteriores. La web los toma en la próxima lectura; el worker, al renovar su caché (aproximadamente un minuto)." />
+      {error ? <p role="alert" className="rounded-lg border border-destructive p-4 text-sm text-destructive">No pudimos leer la configuración. Recargá la página para volver a intentar.</p> : null}
+      {historyError ? <p role="alert" className="text-sm text-destructive">No pudimos leer el historial. Los guardados solo se completan si también se registra su auditoría.</p> : <p className="text-xs text-muted-foreground">El historial muestra los últimos 100 cambios de configuración y fuentes, con hasta 5 por formulario. Fechas en hora argentina.</p>}
       <ul className="grid gap-4 lg:grid-cols-2">
         {rows.map((row) => (
-          <li key={row.key} id={row.key} className="space-y-2 rounded-xl bg-card p-4 ring-1 ring-foreground/10">
+          <li key={`${row.key}-${row.updated_at}`} id={row.key} className={`min-w-0 space-y-3 rounded-xl bg-card p-4 ring-1 ring-foreground/10 ${row.key in NAMES ? "lg:col-span-2" : ""}`}>
             <div className="flex items-baseline justify-between gap-2">
-              <h2 className="font-mono text-sm font-semibold">{row.key}</h2>
+              <h2 className="text-base font-semibold">{NAMES[row.key] ?? row.key}</h2>
               <span className="text-xs text-muted-foreground">{when(row.updated_at)}</span>
             </div>
-            {HINTS[row.key] ? <p className="text-xs text-muted-foreground">{HINTS[row.key]}</p> : null}
-            <ConfigEditor configKey={row.key} value={row.value} />
+            {HINTS[row.key] && !(row.key in NAMES) ? <p className="text-xs text-muted-foreground">{HINTS[row.key]}</p> : null}
+            {row.key === "commercial_pilot" ? <p className="text-sm">Administrar desde <a className="underline" href="/admin/billing">Cobros</a>.</p> : <ConfigEditor configKey={row.key} value={row.value} history={(history ?? []).filter((entry) => entry.target_type === "app_config" && entry.target_key === row.key).slice(0, 5)} />}
           </li>
         ))}
       </ul>
+      {(history ?? []).some((entry) => entry.target_type === "sources") ? <details className="rounded-xl bg-card p-4 ring-1 ring-foreground/10"><summary className="cursor-pointer font-medium">Historial de fuentes</summary><ol className="mt-4 space-y-4">{(history ?? []).filter((entry) => entry.target_type === "sources").map((entry) => <li key={entry.id} className="space-y-1 text-sm"><p><a href="/admin/sources" className="font-medium underline">{entry.target_key}</a> · {entry.actor_email ?? entry.actor_id} · {when(entry.created_at)}</p><p className="break-words text-xs text-muted-foreground">Antes: {JSON.stringify(entry.before_value)}</p><p className="break-words text-xs">Después: {JSON.stringify(entry.after_value)}</p></li>)}</ol></details> : null}
     </>
   );
 }

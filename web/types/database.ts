@@ -7,6 +7,24 @@ export type Database = {
 
   "public": {
           Tables: {
+      admin_metric_observation: {
+        Row: { singleton: boolean; first_value_tracking_since: string }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
+      admin_search_observations: {
+        Row: { search_profile_id: number; user_id: string; search_created_at: string; first_good_at: string | null }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
+      admin_config_audit: {
+        Row: { id: number; target_type: string; target_key: string; actor_id: string; actor_email: string | null; before_value: Json; after_value: Json; created_at: string }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
       lifecycle_emails: {
         Row: { id: number; user_id: string; kind: string; event_key: string; search_profile_id: number | null; payload: Json; target: string; status: string; attempts: number; error: string | null; provider_id: string | null; created_at: string; sent_at: string | null; clicked_at: string | null; opened_at: string | null }
         Insert: { user_id: string; kind: string; event_key: string; target: string; search_profile_id?: number | null; payload?: Json; status?: string; attempts?: number; error?: string | null; provider_id?: string | null; created_at?: string; sent_at?: string | null; clicked_at?: string | null }
@@ -1052,6 +1070,14 @@ isOneToOne: false
                 }
           }
           Functions: {
+      admin_decision_metrics: {
+        Args: { p_start: string; p_end: string; p_as_of: string }
+        Returns: Json
+      }
+      admin_update_setting: {
+        Args: { p_target_type: string; p_target_key: string; p_expected: Json; p_value: Json; p_actor_id: string }
+        Returns: number
+      }
             begin_billing_checkout: { Args: { p_user: string; p_offer: string; p_email: string; p_version: string; p_expected_amount: number }; Returns: Json },
             apply_mercadopago_payment: { Args: { p_checkout: string; p_reference: string; p_status: string; p_amount: number; p_currency: string; p_paid_at: string; p_start: string; p_end: string }; Returns: number },
             claim_auth_throttle: { Args: { p_kind: string; p_key: string; p_limit: number; p_window_seconds: number }; Returns: boolean },
