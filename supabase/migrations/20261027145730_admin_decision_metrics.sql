@@ -1,3 +1,8 @@
+-- Hold writers until the seed and observation triggers commit together. Without
+-- this lock, a concurrent search or first-good transition could be missed.
+set local lock_timeout = '5s';
+lock table public.search_profiles, public.matches in share row exclusive mode;
+
 -- Immutable observations. A match's generated_at survives re-scoring, so it
 -- cannot prove when a search first received a good result. Start measuring now;
 -- never reconstruct historical first-value observations from mutable matches.
