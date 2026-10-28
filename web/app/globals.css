@@ -240,3 +240,38 @@
   font-stretch: 90%;
   font-variant-numeric: tabular-nums lining-nums;
 }
+
+/* Loading effects only: keep every existing element and its dimensions. */
+[data-slot="skeleton"],
+svg.lucide-loader-circle.animate-spin {
+  --loading-base: var(--muted);
+  --loading-peak: var(--panel-2);
+  animation: none;
+  background-color: var(--loading-base);
+  background-image: linear-gradient(100deg, transparent 30%, color-mix(in srgb, var(--background) 75%, transparent) 50%, transparent 70%);
+  background-size: 250% 100%;
+  background-position: 150% 0;
+  background-repeat: no-repeat;
+}
+svg.lucide-loader-circle.animate-spin {
+  --loading-base: color-mix(in srgb, currentColor 20%, transparent);
+  --loading-peak: color-mix(in srgb, currentColor 50%, transparent);
+  border-radius: 0.25rem;
+}
+svg.lucide-loader-circle.animate-spin > * {
+  visibility: hidden;
+}
+@media (prefers-reduced-motion: no-preference) {
+  [data-slot="skeleton"],
+  svg.lucide-loader-circle.animate-spin {
+    animation: loading-tone 2.6s ease-in-out infinite, loading-sweep 2.6s ease-in-out infinite;
+  }
+}
+@keyframes loading-tone {
+  0%, 100% { background-color: var(--loading-base); }
+  50% { background-color: var(--loading-peak); }
+}
+@keyframes loading-sweep {
+  0% { background-position: 150% 0; }
+  65%, 100% { background-position: -150% 0; }
+}
