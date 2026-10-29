@@ -17,7 +17,7 @@ Actualizado: 29/10/2026 (versión anterior: 2/10/2026). Objetivo: ingreso comple
 | Administración | /admin/billing, /admin/config (límites y precios sin deploy), dashboards de decisiones (`admin_decision_metrics`) | 27/10 |
 | Marca y canales | eseauto.com.ar, @eseauto.ar (IG), @eseautoar (X), contacto@eseauto.com.ar, Meta verificado, GA4 + Vercel Analytics con consentimiento por defecto | 16/10 |
 
-**Hecho en local, sin publicar (sin commitear al 29/10):** tope de **50 resultados en total** durante la prueba (`20261118120000_free_results_cap_50`, hoy prod muestra 100 visibles) y **formulario de feedback** en el pop-up del tope, con mail a Juan (`20261118130000_product_feedback_leads`, [PRODUCT_FEEDBACK.md](PRODUCT_FEEDBACK.md)). Ambos necesitan aplicar la migración antes de desplegar web y worker.
+**Publicado el 29/10/2026 (V-02):** tope de **50 resultados en total** durante la prueba (`20261118120000_free_results_cap_50`; al aplicarla, 50 cuentas gratis quedaron con su cupo histórico y 15 ya estaban en 50) y **formulario de feedback** en el pop-up del tope, con mail a Juan (`20261118130000_product_feedback_leads`, [PRODUCT_FEEDBACK.md](PRODUCT_FEEDBACK.md)). Web en Vercel y worker en el VPS en `660ba13`.
 
 ### Qué pasó con el backlog del 2/10
 
@@ -60,7 +60,7 @@ P0: necesario para el primer pago real. P1: para decidir precios y canales con d
 | ID | Prio | Trabajo y resultado | Tamaño |
 |---|---|---|---|
 | V-01 | P0 | **Hablar con 10 cuentas vencidas** (de las 32): por qué no pagaron, qué buscaban, si encontraron auto. Preguntas por mail con respuesta a Juan, o llamada si dejan teléfono. Registrar en una planilla | Comercial, 1 semana |
-| V-02 | P0 | **Publicar el tope de 50 + feedback** (lo que está sin commitear): aplicar migraciones, deploy web, worker. Es la primera fuente de objeciones en el producto | S |
+| V-02 | P0 | ~~Publicar el tope de 50 + feedback~~ **Hecho el 29/10.** Es la primera fuente de objeciones en el producto: revisar los leads de `product_feedback` cada semana | S |
 | V-03 | P0 | **Un pago real externo.** Pedirle a 2–3 conocidos que compren Particular con su tarjeta (se les devuelve si quieren). Confirma el checkout, el mail de confirmación, la activación y la factura | S + operación |
 | V-04 | P0 | **Checkout visible al vencer.** Hoy 9 de 32 vencidos vieron el CTA. El mail 2.2 y la pantalla de vencido tienen que llevar directo al checkout con el precio y lo que recupera ("tus 2 búsquedas se reactivan") | S |
 | V-05 | P0 | **Diagnóstico de las pruebas con < 10 coincidencias** (23 cuentas): modelo, zona, filtros, fuentes que cubrieron. Si es cobertura, ampliar fuentes/zonas; si son filtros, que el formulario avise antes (ya hay sugerencias con 0 resultados) | M |
@@ -117,7 +117,27 @@ Son hipótesis para probar en orden, no decisiones. Cualquier cambio de precio, 
 
 **Qué no hacer todavía:** equipos y permisos (ruta C), API, marca blanca, exportación (se sacó el 15/10), WhatsApp automático antes de 5 clientes que lo pidan.
 
-### 4.3 Decisiones que piden los dos canales
+### 4.3 Ideas de producto por dolor (de [BACKLOG_PRODUCTO_2026-10](BACKLOG_PRODUCTO_2026-10.md))
+
+El backlog de producto del 26/10 parte de los dolores de cada público y detalla criterios de aceptación por ítem. Acá va solo el mapa contra los dos canales y cómo se cruza con §4.1 y §4.2; el detalle, los tamaños y las dependencias están en ese documento.
+
+| ID | Canal | Idea en una línea | Cruce con este backlog |
+|---|---|---|---|
+| H-01 | ambos | Las 3 preguntas al vendedor en el mail de oportunidad (la landing lo promete) | S, va primero: cumple la promesa antes de pedir plata |
+| PAR-03 | Particular | Días publicado, bajas acumuladas y comportamiento del modelo en tarjeta, ficha y mail | Refuerza 4.1.2: "lo que perdés" con datos del aviso |
+| PAR-01 | Particular | Costo total estimado (transferencia, patente, gestoría) por aviso | Diferenciador de Particular frente a mirar el portal |
+| PAR-02 | Particular | Señales de riesgo (fotos repetidas, "particular" con muchos avisos) y checklist antes de señar | Confianza; argumento para pagar 30 días |
+| PAR-04 | Particular | Guías por modelo como páginas públicas indexables | Es 4.1.8 con contenido además de precios: un solo proyecto SEO |
+| PAR-05 | Particular | "¿A cuánto publicarlo?" + captación de vendedores con consentimiento | P2; abre el canal del que vende para comprar |
+| PRO-01 | Pro | Filtro duro "solo particulares", push y mensaje listo para pegar | Es el argumento de demo de 4.2.2: lo que el revendedor hace a mano |
+| PRO-02 | Pro | Margen bruto estimado y umbral de alerta en USD | Completa 4.2: "oportunidades" en la unidad que usa la agencia |
+| X-01 | Pro | Estados de seguimiento (contactado, visita, comprado) y notas | S; reemplaza la planilla de WhatsApp |
+| PRO-03 / PRO-04 / PRO-05 | Pro | Monitor de stock, radar de mercado por zona, vendedores antes de publicar | P2, después de 5 Pro pagos; necesitan F-01/F-03 |
+| F-02 / F-03 / F-04 | base | Vendedor v2, agregados de mercado, canal push | Fundaciones; F-02 es P0 porque PRO-01 y PRO-02 dependen de ella |
+
+**Orden sugerido respecto de la venta:** H-01 y X-01 (chicos, mejoran la demo Pro) → F-02 → PRO-01 sin push → PAR-03 por aviso → PRO-02 margen v1. Nada de esto reemplaza V-01 a V-05: primero saber por qué no pagan; el ciclo 1 de producto corre en paralelo con las conversaciones, no antes.
+
+### 4.4 Decisiones que piden los dos canales
 
 - **Fuentes y zonas que se pueden prometer** (V-08). Vender AMBA primero; el interior se promete cuando las fuentes regionales tengan 30 días de lectura estable.
 - **Un solo embudo de medición**: pruebas → coincidencias útiles → CTA visto → checkout → pago → renovación, separado por mensaje de entrada. Los dashboards de decisiones ya tienen la mayoría.
