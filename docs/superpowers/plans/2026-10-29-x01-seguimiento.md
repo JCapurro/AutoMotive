@@ -151,8 +151,8 @@ Files: `web/lib/copy.test.ts`.
 Files: `web/e2e/acceptance.spec.ts` (paso 5, líneas ~186-188), `web/e2e/tracking.spec.ts` (nuevo), `web/e2e/seed.ts`, `web/e2e/support/db.ts` (solo si falta un helper).
 
 - [x] Cambiar el paso 5 de `acceptance.spec.ts`: hoy afirma `toHaveCount(0)` para el label «Estado» y el botón «Compré este vehículo»; pasar a afirmar que el label «Estado» existe una vez, que el flujo de Guardar sigue dejando `{status:"interested", saved:true}` y que «Ver el puntaje en números» sigue sin existir. Verificar con `Grep "Compré este vehículo" web` que no queda otra aserción de ese retiro.
-- [x] Sembrar en `seed.ts` los avisos necesarios para el spec nuevo (uno activo y uno `gone`, ambos con match del usuario e2e; el prefijo `e2e` obligatorio).
-- [x] Escribir primero `web/e2e/tracking.spec.ts` (debe fallar antes de las Tasks 6-8 si se corre desde la rama base): cambiar a «Contactado» en la ficha y leer la fila en la base; Guardar después de «Contactado» deja el estado en `contacted` con `saved=true`; guardar una nota y verla en Guardados; filtrar por estado en Guardados; cambiar el estado desde el select de la tarjeta sin abrir la ficha; «Comprado» desde el diálogo crea la fila en `owned_vehicles` y deja el select deshabilitado; `expectNoHorizontalScroll` en ficha y Guardados.
+- [x] Sembrar en `seed.ts` los avisos necesarios para el spec nuevo (uno activo y uno `gone`, ambos con match del usuario e2e; el prefijo `e2e` obligatorio). (desvío: no se tocó `seed.ts`; el sembrado es `seedTracking` en `web/e2e/support/db.ts`, que el spec llama por corrida.)
+- [x] Escribir primero `web/e2e/tracking.spec.ts` (desvío: escrito, pero nunca se corrió ni se lo vio en rojo; Playwright necesita el stack local con Docker, apagado) (debe fallar antes de las Tasks 6-8 si se corre desde la rama base): cambiar a «Contactado» en la ficha y leer la fila en la base; Guardar después de «Contactado» deja el estado en `contacted` con `saved=true`; guardar una nota y verla en Guardados; filtrar por estado en Guardados; cambiar el estado desde el select de la tarjeta sin abrir la ficha; «Comprado» desde el diálogo crea la fila en `owned_vehicles` y deja el select deshabilitado; `expectNoHorizontalScroll` en ficha y Guardados.
 - [ ] `cd web && npx playwright test e2e/tracking.spec.ts e2e/acceptance.spec.ts --project=desktop --project=mobile` en verde. Mirar capturas a 375 px del select dentro de `ListingCard`.
 
 ## Task 11: verificación de (a), PR y punto de parada
@@ -174,7 +174,7 @@ Requiere el PUNTO DE PARADA 1 resuelto. **Orden de despliegue: base primero, web
 
 Files: `supabase/tests/x01_tracking_test.sql` (nuevo; modelarlo con `supabase/tests/free_result_quota_test.sql` y `f4_web_test.sql`, que ya siembran usuarios, avisos y matches).
 
-- [x] Escribir el test completo antes de la migración, para que falle en rojo con el esquema actual:
+- [x] Escribir el test completo antes de la migración, para que falle en rojo con el esquema actual (desvío: escrito, pero no se lo vio en rojo; `supabase test db` necesita Docker, apagado):
   - RLS: A no ve ni modifica filas de `user_listing_interactions` de B, y no puede insertar con el `user_id` de B (SQLSTATE 42501).
   - CHECK: una nota de 2001 caracteres es rechazada (23514); una de 2000 pasa.
   - `match_cards.note` trae solo la nota propia.
@@ -227,7 +227,7 @@ Files: `web/app/app/searches/[id]/page.tsx` (`Filter`, `COUNT_KEY`, `EMPTY`, `FI
 
 Files: `web/e2e/tracking.spec.ts` (ampliar), `web/e2e/seed.ts`.
 
-- [x] Primero los casos nuevos (rojo): en los resultados de una búsqueda, filtrar por Contactadas / Visita agendada / Compradas y ver la publicación `gone` contactada con su cartel «Ya no está disponible»; ver la nota en la tarjeta; los conteos de las píldoras coinciden con las filas; `expectNoHorizontalScroll` en resultados con las 8 píldoras a 375 px.
+- [x] Primero los casos nuevos (desvío: escritos, pero no se los vio en rojo; Playwright no corrió sin Docker): en los resultados de una búsqueda, filtrar por Contactadas / Visita agendada / Compradas y ver la publicación `gone` contactada con su cartel «Ya no está disponible»; ver la nota en la tarjeta; los conteos de las píldoras coinciden con las filas; `expectNoHorizontalScroll` en resultados con las 8 píldoras a 375 px.
 - [ ] `cd web && npx playwright test e2e/tracking.spec.ts --project=desktop --project=mobile` en verde contra la base local ya migrada.
 
 ## Task 18: verificación de (b), PR y punto de parada
@@ -262,7 +262,7 @@ Files: `supabase/tests/f6_metrics_test.sql` (actualizar: fija los valores de los
 
 ## Task 20: cierre y rollback documentado
 
-- [x] Actualizar en el backlog y en el plan por fases el estado de X-01 (a), (b) y el criterio 5, con los commits.
+- [x] Actualizar en el backlog y en el plan por fases el estado de X-01 (a), (b) y el criterio 5, con los commits. (desvío: solo el backlog; `docs/PLAN_FASES_BACKLOG_PRODUCTO_2026-10.md` vive en la rama `claude/email-seller-questions` y no existe en esta, queda para cuando se integren.)
 - [x] `graphify update .` al final de cada bloque ya hecho; verificar que el último esté al día.
 - [x] Confirmar que ninguna tarea tocó `worker/`, `web/app/privacidad`, `web/app/terminos` ni `app_config` de producción.
 
