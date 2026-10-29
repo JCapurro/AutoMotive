@@ -8,6 +8,7 @@ market_stats run and from tools.backfill_zones; ingest.py is not touched.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections import Counter
 from typing import Any
@@ -81,7 +82,8 @@ async def _write(updates: list[tuple[int, ZoneFacts]]) -> None:
 
 async def sync_zones(*, dry_run: bool = False, source: str | None = None) -> Counter:
     counts: Counter = Counter()
-    updates = plan_zones(await _fetch(source), await _zone_map(), counts)
+    # derive_zone over every listing is CPU-bound: off the event loop.
+    updates = await asyncio.to_thread(plan_zones, await _fetch(source), await _zone_map(), counts)
     if updates and not dry_run:
         await _write(updates)
         log.info("zonas: %d avisos ubicados", len(updates))

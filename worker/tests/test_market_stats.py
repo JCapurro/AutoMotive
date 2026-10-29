@@ -2,12 +2,15 @@
 flat rows made up by hand. No database."""
 from __future__ import annotations
 
+import asyncio
 import io
+import threading
 import unittest
 from datetime import date, datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
 
 from normalization.zone import DEFAULT_ZONE_MAP
+from pipeline import market_stats as ms
 from pipeline.market_stats import (aggregate, last_closed_week, next_run, percentile, report, scheduled_run,
                                    week_bounds)
 from tools.market_stats import main as cli_main
@@ -230,6 +233,171 @@ class ScheduleTests(unittest.IsolatedAsyncioTestCase):
         run.assert_awaited_with(mode="write", write_enabled=True)
 
 
+class RunFailureTests(unittest.IsolatedAsyncioTestCase):
+    """Every failure of run_market_stats is recorded and returned, never raised."""
+    NOW = datetime(2026, 11, 4, 12, 0, tzinfo=_AR)                     # W45: last closed is W44
+
+    async def job(self, week=None, *, mode="dry_run", write_enabled=False, configs=None):
+        configs = configs or AsyncMock(return_value=({"recompute_weeks": 2}, {}, DEFAULT_ZONE_MAP))
+        with patch.object(ms, "_configs", configs), \
+             patch.object(ms, "_start_run", AsyncMock(return_value=7)) as start, \
+             patch.object(ms, "_finish_run", AsyncMock()) as finish, \
+             patch.object(ms, "log_error", AsyncMock()) as log_error, \
+             patch.object(ms, "sync_zones", AsyncMock()), \
+             patch.object(ms, "fetch_rows", AsyncMock(return_value=[row()])), \
+             patch.object(ms, "purge_market_stats", AsyncMock()):
+            result = await ms.run_market_stats(week, mode=mode, write_enabled=write_enabled, now=self.NOW)
+        return result, start, finish, log_error
+
+    async def test_write_disabled_is_a_recorded_failed_run(self):
+        result, start, finish, log_error = await self.job(mode="write", write_enabled=False)
+        self.assertEqual((result["status"], result["run_id"]), ("failed", 7))
+        self.assertIn("WriteDisabled", result["error"])
+        start.assert_awaited_once()
+        self.assertEqual(start.await_args.args[:2], ("2026-W44", "write"))
+        self.assertEqual(finish.await_args.kwargs["status"], "failed")
+        log_error.assert_awaited_once()
+        self.assertEqual(log_error.await_args.args[:2], ("market_stats", "2026-W44"))
+
+    async def test_a_config_that_cannot_be_read_is_recorded(self):
+        result, start, finish, log_error = await self.job(configs=AsyncMock(side_effect=RuntimeError("db down")))
+        self.assertEqual(result["status"], "failed")
+        self.assertIn("db down", log_error.await_args.args[2])
+        start.assert_awaited_once()
+        self.assertIn("db down", finish.await_args.kwargs["error"])
+
+    async def test_a_rejected_week_is_recorded_with_its_message(self):
+        result, start, finish, log_error = await self.job("2026-W30")
+        self.assertEqual(result["status"], "rejected")
+        self.assertIn("2026-W30", result["error"])
+        self.assertNotIn("Traceback", result["error"])
+        self.assertEqual(log_error.await_args.args[:2], ("market_stats", "2026-W30"))
+        self.assertEqual(finish.await_args.kwargs["status"], "failed")
+
+    async def test_a_preview_failure_logs_it_and_writes_no_run(self):
+        result, start, finish, log_error = await self.job("not a week", mode="preview")
+        self.assertEqual(result["status"], "failed")
+        log_error.assert_awaited_once()
+        start.assert_not_awaited()
+        finish.assert_not_awaited()
+
+    async def test_an_unknown_mode_is_a_programming_error(self):
+        with self.assertRaises(ValueError):
+            await ms.run_market_stats(mode="sometimes", write_enabled=False, now=self.NOW)
+
+    async def test_the_aggregation_runs_off_the_event_loop(self):
+        loop_thread = threading.get_ident()
+        threads = []
+
+        def spy(fn):
+            def wrapper(*args, **kwargs):
+                threads.append((fn.__name__, threading.get_ident()))
+                return fn(*args, **kwargs)
+            return wrapper
+
+        with patch.object(ms, "aggregate", spy(ms.aggregate)), patch.object(ms, "report", spy(ms.report)):
+            result, *_ = await self.job()
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual({name for name, _ in threads}, {"aggregate", "report"})
+        self.assertNotIn(loop_thread, {t for _, t in threads})
+
+
+class SyncZonesThreadTests(unittest.IsolatedAsyncioTestCase):
+    async def test_plan_zones_runs_off_the_event_loop(self):
+        from pipeline import market_zones
+        seen = []
+        real = market_zones.plan_zones
+
+        def spy(*args, **kwargs):
+            seen.append(threading.get_ident())
+            return real(*args, **kwargs)
+
+        rows = [dict(id=1, source="facebook", location_text="Rosario, Santa Fe", lat=-32.9442, lon=-60.6505,
+                     status="active", zone_lat=None, zone_lon=None)]
+        with patch.object(market_zones, "plan_zones", spy), \
+             patch.object(market_zones, "_fetch", AsyncMock(return_value=rows)), \
+             patch.object(market_zones, "_zone_map", AsyncMock(return_value=DEFAULT_ZONE_MAP)), \
+             patch.object(market_zones, "_write", AsyncMock()) as write:
+            counts = await market_zones.sync_zones()
+        self.assertEqual(len(seen), 1)
+        self.assertNotEqual(seen[0], threading.get_ident())
+        write.assert_awaited_once()
+        self.assertEqual(counts[("facebook", "con región")], 1)
+
+
+class FakeClock:
+    def __init__(self, now: datetime, until: datetime):
+        self.now, self.until, self.waits = now, until, []
+
+    def __call__(self) -> datetime:
+        return self.now
+
+    async def sleep(self, stop, seconds):
+        self.waits.append(seconds)
+        self.now += timedelta(seconds=seconds)
+        if self.now >= self.until:
+            stop.set()
+            return True
+        return False
+
+
+class LoopTests(unittest.IsolatedAsyncioTestCase):
+    async def loop(self, clock, cfgs, *, has_run=False):
+        """Run market_stats_loop on the fake clock; `cfgs` is what each read of
+        app_config.market_stats returns (the last one repeats)."""
+        cfgs = list(cfgs)
+
+        async def get_config(key, default=None):
+            return cfgs.pop(0) if len(cfgs) > 1 else cfgs[0]
+
+        ran = []
+
+        async def run(**kwargs):
+            ran.append((clock.now, kwargs["mode"]))
+            return {"status": "ok"}
+
+        with patch.object(ms.db, "get_config", get_config), \
+             patch.object(ms, "_has_run", AsyncMock(return_value=has_run)) as has, \
+             patch.object(ms, "_sleep", clock.sleep), \
+             patch.object(ms, "log_error", AsyncMock()) as log_error:
+            await ms.market_stats_loop(asyncio.Event(), clock=clock, run=run)
+        log_error.assert_not_awaited()
+        return ran, has
+
+    async def test_runs_at_the_slot_looking_at_least_every_hour(self):
+        clock = FakeClock(datetime(2026, 10, 29, 12, 0, tzinfo=_AR), datetime(2026, 11, 10, tzinfo=_AR))
+        ran, has = await self.loop(clock, [{"mode": "dry_run"}], has_run=True)
+        self.assertEqual(ran, [(datetime(2026, 11, 2, 6, 0, tzinfo=_AR), "dry_run"),
+                               (datetime(2026, 11, 9, 6, 0, tzinfo=_AR), "dry_run")])
+        self.assertLessEqual(max(clock.waits), ms.LOOP_CHECK_SECONDS)
+        has.assert_awaited_once_with("2026-W43", "dry_run")                # the slot of Monday 26/10 ran
+
+    async def test_a_schedule_changed_in_admin_config_applies_without_a_restart(self):
+        clock = FakeClock(datetime(2026, 10, 29, 9, 0, tzinfo=_AR), datetime(2026, 10, 30, tzinfo=_AR))
+        monday = {"mode": "dry_run", "schedule": {"weekday": 1, "hour": "06:00"}}
+        thursday = {"mode": "dry_run", "schedule": {"weekday": 4, "hour": "13:30"}}
+        ran, _ = await self.loop(clock, [monday, monday, thursday], has_run=True)
+        self.assertEqual(ran, [(datetime(2026, 10, 29, 13, 30, tzinfo=_AR), "dry_run")])
+
+    async def test_off_runs_nothing(self):
+        clock = FakeClock(datetime(2026, 10, 29, 12, 0, tzinfo=_AR), datetime(2026, 11, 10, tzinfo=_AR))
+        ran, has = await self.loop(clock, [{"mode": "off"}])
+        self.assertEqual(ran, [])
+        has.assert_not_awaited()
+
+    async def test_a_slot_lost_while_down_runs_at_start(self):
+        # Restarted Monday 09:00: the 06:00 slot passed with the worker down.
+        clock = FakeClock(datetime(2026, 11, 2, 9, 0, tzinfo=_AR), datetime(2026, 11, 2, 12, 0, tzinfo=_AR))
+        ran, has = await self.loop(clock, [{"mode": "write", "write_enabled": True}], has_run=False)
+        self.assertEqual(ran, [(datetime(2026, 11, 2, 9, 0, tzinfo=_AR), "write")])
+        has.assert_awaited_once_with("2026-W44", "write")
+
+    async def test_a_slot_already_run_does_not_run_again_at_start(self):
+        clock = FakeClock(datetime(2026, 11, 2, 9, 0, tzinfo=_AR), datetime(2026, 11, 2, 12, 0, tzinfo=_AR))
+        ran, _ = await self.loop(clock, [{"mode": "dry_run"}], has_run=True)
+        self.assertEqual(ran, [])
+
+
 class CliTests(unittest.IsolatedAsyncioTestCase):
     async def cli(self, argv, *, cfg=None, result=None):
         run = AsyncMock(return_value=result or {"status": "ok", "weeks": [WEEK], "rows_computed": 0,
@@ -267,6 +435,14 @@ class CliTests(unittest.IsolatedAsyncioTestCase):
                                                            "rows_computed": 0, "rows_written": 0,
                                                            "report": None})
         self.assertEqual(code, 1)
+
+    async def test_a_rejected_week_exits_2_with_its_message(self):
+        code, out, _ = await self.cli(["--week", "2026-W30", "--dry-run"],
+                                      result={"status": "rejected", "error": "la semana 2026-W30 es anterior",
+                                              "weeks": [], "rows_computed": 0, "rows_written": 0,
+                                              "report": None})
+        self.assertEqual(code, 2)
+        self.assertIn("la semana 2026-W30 es anterior", out)
 
 
 if __name__ == "__main__":

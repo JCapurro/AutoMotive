@@ -17,7 +17,7 @@ import db
 from db.repos import config as app_config
 from pgcase import PostgresTestCase, requires_db
 from pipeline import market_stats
-from pipeline.market_stats import (WeekRejected, WriteDisabled, aggregate, fetch_rows, last_closed_week,
+from pipeline.market_stats import (WriteDisabled, aggregate, fetch_rows, last_closed_week,
                                    run_market_stats, upsert_rows, week_bounds)
 from pipeline.market_zones import sync_zones
 from pipeline.retention import purge_market_stats
@@ -206,9 +206,13 @@ class RunTests(MarketCase):
         self.assertIsNotNone(await self.zone(lid))                                # sync_zones ran first
 
     async def test_write_needs_write_enabled(self):
-        with self.assertRaises(WriteDisabled):
-            await run_market_stats(mode="write", write_enabled=False, now=self.now)
-        self.assertEqual(await self.count("market_stats_runs"), 0)
+        result = await run_market_stats(mode="write", write_enabled=False, now=self.now)
+        self.assertEqual(result["status"], "failed")
+        [run] = await self.runs()
+        self.assertEqual((run["mode"], run["status"]), ("write", "failed"))
+        self.assertIn(WriteDisabled.__name__, run["error"])
+        self.assertEqual(await self.count("market_stats"), 0)
+        self.assertEqual(await self.count("pipeline_errors"), 1)
 
     async def test_write_writes_the_week_and_the_ones_before(self):
         await self.listing(first_seen_at=self.start - timedelta(days=30))
@@ -238,10 +242,10 @@ class RunTests(MarketCase):
 
     async def test_weeks_too_old_or_not_closed_are_rejected(self):
         old = (self.start - timedelta(weeks=3)).date()
-        with self.assertRaises(WeekRejected):
-            await run_market_stats(old, mode="preview", write_enabled=False, now=self.now)
-        with self.assertRaises(WeekRejected):
-            await run_market_stats(self.end.date(), mode="preview", write_enabled=False, now=self.now)
+        for week in (old, self.end.date()):
+            result = await run_market_stats(week, mode="preview", write_enabled=False, now=self.now)
+            self.assertEqual(result["status"], "rejected", week)
+        self.assertEqual(await self.count("market_stats_runs"), 0)                 # preview writes no run
         result = await run_market_stats((self.start - timedelta(weeks=2)).date(), mode="preview",
                                         write_enabled=False, now=self.now)
         self.assertEqual(len(result["weeks"]), 1)                               # nothing older is recomputed

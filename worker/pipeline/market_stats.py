@@ -354,12 +354,16 @@ async def fetch_rows(week: str | date, comparables: dict[str, Any]) -> list[dict
               "end": end, "since": start - timedelta(days=int(comparables.get("max_age_days", 30)))}
     async with db.connection() as cx:
         rows = await (await cx.execute(_FETCH, params)).fetchall()
+    await asyncio.to_thread(_derive_missing_zones, rows)
+    return rows
+
+
+def _derive_missing_zones(rows: list[dict[str, Any]]) -> None:
     for r in rows:
         if (r["zone_lat"], r["zone_lon"]) != (r["lat"], r["lon"]):
             facts = derive_zone(r["lat"], r["lon"], r["location_text"], r["source"])
             r["province_id"], r["department"], r["precision"] = (
                 (facts.province_id, facts.department, facts.precision) if facts else (None, None, None))
-    return rows
 
 
 async def upsert_rows(stats: list[StatRow], *, weeks: list[date], run_id: int | None, as_of: datetime) -> int:
@@ -420,6 +424,15 @@ async def _finish_run(run_id: int, *, status: str, error: str | None = None, **c
              run_id))
 
 
+def _target_week(week: str | date | None, now: datetime) -> str:
+    """The week a run is about, for its records even when the asked one is
+    not valid."""
+    try:
+        return week_label(week) if week is not None else last_closed_week(now)
+    except (ValueError, TypeError):
+        return last_closed_week(now)
+
+
 async def run_market_stats(week: str | date | None = None, *, mode: str, write_enabled: bool,
                            now: datetime | None = None) -> dict[str, Any]:
     """Compute the week (default: the last closed one) and the recompute_weeks
@@ -432,34 +445,43 @@ async def run_market_stats(week: str | date | None = None, *, mode: str, write_e
     * write: also writes market_stats and then purges the old weeks. Needs
       write_enabled (WriteDisabled otherwise).
 
-    A failure is recorded (market_stats_runs.error and pipeline_errors) and
-    returned as status 'failed', never raised: it must not stop the worker."""
+    A failure, reading the config, a rejected week (status 'rejected', the
+    WeekRejected message as error) and WriteDisabled included, is recorded
+    (pipeline_errors, and market_stats_runs.error unless preview) and
+    returned, never raised: it must not stop the worker. Only an unknown mode,
+    a programming error, raises."""
     if mode not in ("preview", "dry_run", "write"):
         raise ValueError(f"modo desconocido: {mode!r}")
-    if mode == "write" and not write_enabled:
-        raise WriteDisabled("app_config.market_stats.write_enabled es false: no se escribe market_stats")
     now = now or datetime.now(_AR)
-    cfg, comparables, zone_map = await _configs()
-    weeks = weeks_to_compute(week, now, int(cfg.get("recompute_weeks", 2)))
-    target = weeks[0]
-    agg_cfg = {**cfg, "max_age_days": int(comparables.get("max_age_days", 30))}
-    params = {"weeks": weeks, "min_n": cfg.get("min_n"), "year_band": cfg.get("year_band"),
-              "confirm_since": cfg.get("confirm_since"), "zone_map_version": zone_map.get("version"),
-              "confirm_sources": comparables.get("confirm_sources"),
-              "confirm_grace_hours": comparables.get("confirm_grace_hours"),
-              "max_age_days": agg_cfg["max_age_days"]}
-    result: dict[str, Any] = {"status": "ok", "run_id": None, "weeks": weeks, "rows_computed": 0,
+    target = _target_week(week, now)
+    params: dict[str, Any] = {"week": target}
+    result: dict[str, Any] = {"status": "ok", "run_id": None, "weeks": [], "rows_computed": 0,
                               "rows_written": 0, "report": None}
     try:
+        if mode == "write" and not write_enabled:
+            raise WriteDisabled("app_config.market_stats.write_enabled es false: no se escribe market_stats")
+        cfg, comparables, zone_map = await _configs()
+        weeks = weeks_to_compute(week, now, int(cfg.get("recompute_weeks", 2)))
+        target = weeks[0]
+        agg_cfg = {**cfg, "max_age_days": int(comparables.get("max_age_days", 30))}
+        params = {"weeks": weeks, "min_n": cfg.get("min_n"), "year_band": cfg.get("year_band"),
+                  "confirm_since": cfg.get("confirm_since"), "zone_map_version": zone_map.get("version"),
+                  "confirm_sources": comparables.get("confirm_sources"),
+                  "confirm_grace_hours": comparables.get("confirm_grace_hours"),
+                  "max_age_days": agg_cfg["max_age_days"]}
+        result["weeks"] = weeks
         if mode != "preview":
             result["run_id"] = await _start_run(target, mode, params)
         await sync_zones(dry_run=mode == "preview")
         for w in weeks:
             rows = await fetch_rows(w, comparables)
-            stats = aggregate(rows, week=w, zone_map=zone_map, cfg=agg_cfg)
+            # CPU-bound over every listing: off the event loop, so the
+            # scrapers' heartbeats and leases keep running meanwhile.
+            stats = await asyncio.to_thread(aggregate, rows, week=w, zone_map=zone_map, cfg=agg_cfg)
             result["rows_computed"] += len(stats)
             if w == target:
-                result["report"] = report(stats, rows, week=w, cfg=agg_cfg, zone_map=zone_map)
+                result["report"] = await asyncio.to_thread(report, stats, rows, week=w, cfg=agg_cfg,
+                                                           zone_map=zone_map)
             if mode == "write":
                 result["rows_written"] += await upsert_rows(stats, weeks=[_monday(w)],
                                                             run_id=result["run_id"], as_of=now)
@@ -472,16 +494,19 @@ async def run_market_stats(week: str | date | None = None, *, mode: str, write_e
                               no_zone_by_source=result["report"]["no_zone_by_source"])
         log.info("market_stats %s %s: %d filas calculadas, %d escritas", mode, target,
                  result["rows_computed"], result["rows_written"])
-    except Exception:
-        error = traceback.format_exc()
-        result.update(status="failed", error=error)
+    except Exception as exc:
+        rejected = isinstance(exc, WeekRejected)
+        error = str(exc) if rejected else traceback.format_exc()
+        result.update(status="rejected" if rejected else "failed", error=error)
         await log_error("market_stats", target, error)
-        if result["run_id"] is not None:
+        if mode != "preview":
             try:
+                if result["run_id"] is None:
+                    result["run_id"] = await _start_run(target, mode, params)
                 await _finish_run(result["run_id"], status="failed", error=error[-4000:],
                                   rows_computed=result["rows_computed"], rows_written=result["rows_written"])
             except Exception:
-                log.exception("could not mark market_stats run %s failed", result["run_id"])
+                log.exception("could not record the failed market_stats run of %s", target)
     return result
 
 
@@ -510,27 +535,66 @@ async def scheduled_run(cfg: dict[str, Any], *,
     return await (run or run_market_stats)(mode=mode, write_enabled=bool(cfg.get("write_enabled")))
 
 
-async def market_stats_loop(stop: asyncio.Event) -> None:
+# The loop looks at the schedule at least this often, so a slot moved in
+# /admin/config is honoured within the hour, without a deploy.
+LOOP_CHECK_SECONDS = 3600.0
+
+
+async def _market_cfg() -> dict[str, Any]:
+    return {**DEFAULT_MARKET_STATS, **(await db.get_config("market_stats", {}) or {})}
+
+
+async def _has_run(week: str, mode: str) -> bool:
+    """Whether market_stats_runs has a run of `mode` for the ISO week."""
+    async with db.connection() as cx:
+        row = await (await cx.execute(
+            "SELECT EXISTS (SELECT 1 FROM market_stats_runs WHERE week_start = %s AND mode = %s) AS hit",
+            (_monday(week), mode))).fetchone()
+    return bool(row["hit"])
+
+
+async def _sleep(stop: asyncio.Event, seconds: float) -> bool:
+    """Wait `seconds` or until `stop`; True when stopped."""
+    try:
+        await asyncio.wait_for(stop.wait(), timeout=max(seconds, 0.0))
+        return True
+    except asyncio.TimeoutError:
+        return False
+
+
+async def market_stats_loop(stop: asyncio.Event, *, clock: Callable[[], datetime] | None = None,
+                            check_every: float = LOOP_CHECK_SECONDS,
+                            run: Callable[..., Awaitable[dict[str, Any]]] | None = None) -> None:
     """Run the job at each market_stats.schedule slot, as its mode says (born
-    off). The config is read again every time, so /admin/config applies
-    without a deploy."""
+    off). The config and the next slot are read again at least every
+    `check_every` seconds, so a schedule or mode changed in /admin/config
+    applies without a deploy: a slot is due when it falls between the
+    previous look and this one.
+
+    A slot lost while the worker was down (a restart across Monday 06:00): at
+    start, when the most recent slot already passed and market_stats_runs has
+    no run of the current mode for the week that slot computes, the job runs
+    right away. It recomputes recompute_weeks back, so it covers that week.
+    `clock` is injectable for the tests."""
+    clock = clock or (lambda: datetime.now(_AR))
+    last: datetime | None = None
     while not stop.is_set():
+        wait = check_every
         try:
-            cfg = {**DEFAULT_MARKET_STATS, **(await db.get_config("market_stats", {}) or {})}
-            now = datetime.now(_AR)
-            wait = (next_run(now, cfg) - now).total_seconds()
+            cfg = await _market_cfg()
+            now = clock()
+            if last is None:
+                lost = next_run(now - timedelta(days=7), cfg)           # the most recent slot, <= now
+                due = (cfg.get("mode") in ("dry_run", "write")
+                       and not await _has_run(last_closed_week(lost), cfg["mode"]))
+            else:
+                due = next_run(last, cfg) <= now
+            last = now
+            if due:
+                await scheduled_run(cfg, run=run)
+                now = last = clock()
+            wait = min(check_every, (next_run(now, cfg) - now).total_seconds())
         except Exception:
             await log_error("market_stats", "loop", traceback.format_exc())
-            wait = 3600.0
-            cfg = None
-        try:
-            await asyncio.wait_for(stop.wait(), timeout=wait)
+        if await _sleep(stop, wait):
             return
-        except asyncio.TimeoutError:
-            pass
-        if cfg is None:
-            continue
-        try:
-            await scheduled_run({**DEFAULT_MARKET_STATS, **(await db.get_config("market_stats", {}) or {})})
-        except Exception:
-            await log_error("market_stats", "loop", traceback.format_exc())

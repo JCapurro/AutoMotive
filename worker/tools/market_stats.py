@@ -22,7 +22,7 @@ import sys
 
 import db
 from aio import run
-from pipeline.market_stats import WeekRejected, report_lines, run_market_stats
+from pipeline.market_stats import report_lines, run_market_stats
 
 log = logging.getLogger("market_stats")
 
@@ -46,15 +46,14 @@ async def main(argv: list[str]) -> int:
                 print("app_config.market_stats.write_enabled es false: no se escribe nada. "
                       "Lo prende Juan desde /admin/config; mientras tanto, usar --dry-run.")
                 return 2
-        try:
-            result = await run_market_stats(args.week, mode="write" if args.write else "preview",
-                                             write_enabled=write_enabled)
-        except WeekRejected as exc:
-            print(exc)
-            return 2
+        result = await run_market_stats(args.week, mode="write" if args.write else "preview",
+                                         write_enabled=write_enabled)
     finally:
         await db.close_pool()
 
+    if result["status"] == "rejected":
+        print(result["error"])
+        return 2
     if result["status"] != "ok":
         print(f"la corrida falló (quedó en pipeline_errors):\n{result.get('error', '')}")
         return 1
