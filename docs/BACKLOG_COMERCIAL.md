@@ -1,183 +1,149 @@
 # Ese Auto · backlog comercial
 
-Fecha: 1/10/2026. Objetivo: ingreso complementario rentable. Referencia: [propuesta comercial y proyecciones](PROPUESTA_COMERCIAL.md).
+Actualizado: 29/10/2026 (versión anterior: 2/10/2026). Objetivo: ingreso complementario rentable. Referencias: [propuesta comercial](PROPUESTA_COMERCIAL.md), [planes de octubre](PLANES_2026-10.md), [mails de plan](MAILS_DE_PLAN.md), [Mercado Pago](MERCADO_PAGO.md), [estrategia de lanzamiento](marketing/ESTRATEGIA_LANZAMIENTO_2026-10-03.md).
 
-Estado de selección: **B · Mixta, elegida por el usuario**, con foco en ingreso recurrente. PIL-01, COM-01 a COM-10 y B-01/B-02 integran el backlog seleccionado. A y C quedan en reserva. Marca **Ese Auto**, piloto asistido e integración automática con Mercado Pago implementados localmente el 2/10/2026. No se activaron cobros ni límites en producción; falta configurar y validar el entorno destino.
+**Resumen en una línea:** el producto, el cobro y los límites están en producción desde mediados de octubre; lo que falta es comercial. Hay 72 cuentas y 58 pruebas en un mes, y **cero pagos reales**. El trabajo de las próximas semanas es averiguar por qué y vender, no construir más.
 
-Precios definidos por el usuario: **Particular ARS 15.000 por 30 días, pago único; Agencia ARS 75.000/mes**. **Free permite una búsqueda por 3 días.** Como regla operativa propuesta, la prueba es única por cuenta y dura 72 horas corridas desde la primera activación de una búsqueda gratuita. Particular corresponde a `pass` con 3 búsquedas activas y Agencia a `pro` con 10 y una cuenta; Agencia Equipos (ruta C) sigue fuera del alcance. En las referencias técnicas siguientes, Pro designa ese mismo acceso Agencia, no un tercer plan pago.
+## 1. Qué está en producción (29/10/2026)
 
-## Estado de implementación al 2/10/2026
-
-| Frente | Estado | Pendiente concreto |
+| Frente | Estado en producción | Desde |
 |---|---|---|
-| Marca | Implementada: Ese Auto, logo/textos/metadata/email/bot | Dominio, remitente y nombre/usuario del bot externos, revisar disponibilidad de marca antes de lanzar |
-| COM-02 / B-01 / B-02 | Implementados: ARS, 1/3/10 búsquedas, tres días, planes y entradas por público | Publicar oferta en el entorno destino |
-| COM-03 | Implementado en SQL y worker; prueba única, acceso, capacidad atómica y cola de avisos | Aplicar migración antes de actualizar worker; habilitar límites desde Cobros tras revisar/comunicar cuentas existentes |
-| PIL-01 | Implementado: solicitud, pagos verificados, períodos, referencia única y responsable; enlaces originales incluidos en Administración | Verificar y asociar manualmente pagos de esos enlaces; cancelar suscripciones externas antes de migrar clientes al checkout identificado |
-| COM-05 / COM-06 | Implementados: renovación mensual por pago aprobado, vencimiento por impago, conciliación, baja confirmada en Mercado Pago y devolución/contracargo | Configurar proveedor y scheduler; verificar notificaciones y renovación con Mercado Pago |
-| COM-08 | Registro y tablero básicos: ingresos, Particular, mensualidades Agencia vigentes y devoluciones | Registrar costos/horas y adquisición en planilla; métricas completas de cohortes y bajas por motivo |
-| COM-10 | Pruebas locales de permisos, período, capacidad, pagos y alertas; web compilada y vista en móvil/escritorio | Prueba con proveedor real/sandbox y login, publicar y habilitar cohorte limitada |
-| COM-01 / COM-07 / COM-09 | Operación externa pendiente | Validar oferta con candidatos, observar cobertura 7 días, presupuesto/hosting, contacto, comprobantes y condiciones |
-| COM-04 autoservicio | Implementado por autorización expresa: checkout alojado por usuario, precio aceptado, firma y activación idempotente | Credenciales, ambas migraciones, despliegue y pruebas con Mercado Pago; ver [guía](MERCADO_PAGO.md) |
-| COM-11 · aviso de fin de prueba | Desde la fase 2 de planes es el mail «Fin de la prueba» (2.2), junto con «Prueba sin coincidencias» (2.1): un mail por cuenta y evento, entre 09:00 y 21:00 (hora argentina), con tope diario en `app_config.lifecycle_emails`; ver [mails del plan](MAILS_DE_PLAN.md) | Fase 2 completa: 2.3, 2.4 y 2.5 también están listos |
+| Oferta | Prueba gratis (1 búsqueda, 72 h, 3 zonas), **Particular $15.000 / 30 días** (3 búsquedas, 10 avisos/día, carrocería sin modelo), **Pro $100.000 / mes** (20 búsquedas, 50 avisos/día, umbral de oportunidad, carrocería sin modelo), **Custom** a convenir por WhatsApp | Pro reemplazó a Agencia ($75.000) el 14/10 |
+| Cobro | Mercado Pago integrado: checkout identificado, firma de notificaciones, períodos idempotentes, baja, devolución, conciliación. Extensión de Particular (+30 días sobre el vencimiento). Pagos a mano desde /admin | 7/10; extensión 14/10 |
+| Límites | `app_config.plan_limits` aplicado por base, worker y web. Prueba única de 72 h desde la primera búsqueda; al vencer se pausan búsquedas y cesan alertas (`search_paused_by_plan`) | 14/10 |
+| Mails de ciclo de vida | Bienvenida a los 45 min de la primera búsqueda, prueba sin coincidencias (2.1), fin de prueba (2.2), vencimiento de Particular (2.3), conteo 22 días después de vencer con "el auto que te perdiste" (2.5), búsqueda abandonada / no iniciada, remarketing a cuentas sin búsqueda (una vez), **prueba extra de 7 días** con la propia búsqueda. Registro de aperturas y clics | 14/10 a 26/10 |
+| Entrada por público | Dos mensajes de entrada ("busco mi auto" / "busco habitualmente"); formulario con catálogo completo (422 modelos, versiones), varias zonas por búsqueda, carrocería | 16/10 a 26/10 |
+| Producto que se puede prometer | Carriles por fuente, cola con lease, breaker, salud de plataforma, bot de reparación cada 5 min; noticias falsas filtradas en fuentes sin fecha; comparables confirmados (fases 1 y 2) | 21/10 a 24/10 |
+| Administración | /admin/billing, /admin/config (límites y precios sin deploy), dashboards de decisiones (`admin_decision_metrics`) | 27/10 |
+| Marca y canales | eseauto.com.ar, @eseauto.ar (IG), @eseautoar (X), contacto@eseauto.com.ar, Meta verificado, GA4 + Vercel Analytics con consentimiento por defecto | 16/10 |
 
-La mensualidad Agencia vigente es una medida de períodos pagados; no es MRR de suscripciones con débito automático. Las devoluciones del piloto se registran después de verificarlas en el proveedor, por el importe total, empezando por el período más nuevo si existen renovaciones adelantadas. La configuración no modifica el importe histórico de una compra.
+**Hecho en local, sin publicar (sin commitear al 29/10):** tope de **50 resultados en total** durante la prueba (`20261118120000_free_results_cap_50`, hoy prod muestra 100 visibles) y **formulario de feedback** en el pop-up del tope, con mail a Juan (`20261118130000_product_feedback_leads`, [PRODUCT_FEEDBACK.md](PRODUCT_FEEDBACK.md)). Ambos necesitan aplicar la migración antes de desplegar web y worker.
 
-[Guía de habilitación y pruebas](IMPLEMENTACION_COMERCIAL.md).
+### Qué pasó con el backlog del 2/10
 
-## Regla de alcance
+| ID | Resultado |
+|---|---|
+| COM-02, COM-03, COM-04, COM-05, COM-06, B-01, B-02, PIL-01 | **Cerrados.** Están en producción con las fases 1–3 de planes |
+| COM-07 producto prometible | **Cerrado en lo técnico** (carriles, salud, noticias, comparables). Falta la parte comercial: publicar cobertura medida por fuente/zona |
+| COM-08 medir rentabilidad | **Parcial.** Hay eventos y dashboards; falta registrar costos reales (VPS, Resend, Vercel, LLM) y horas |
+| COM-10 salida controlada | **Hecho** el recorrido con cuentas propias (3 checkouts pendientes son pruebas de Juan). **Nunca lo completó un externo** |
+| COM-01 validar la oferta con candidatos | **No se hizo.** 0 entrevistas, 0 demos a profesionales, prospectos de X sin contactar |
+| COM-09 operación comercial | **Parcial.** Términos actualizados; falta presupuesto de costos, comprobante/impuestos y horario de soporte publicado |
+| COM-11 aviso de fin de prueba | Cerrado (2.2) |
+| A-01/A-02, C-01..C-03 | Siguen en reserva |
 
-Reutilizar `profiles.plan`, `plan_expires_at`, `app_config`, el motor de notificaciones, las métricas, la pantalla de planes y el backoffice. Agregar el inicio persistente de la prueba Free por cuenta, independiente del vencimiento pago, y la persistencia de cobros necesaria para distinguir transacciones, suscripciones y eventos del proveedor. No crear otro motor genérico de planes ni una plataforma de facturación propia.
+## 2. Lo que dicen los datos (prod, 29/10/2026)
 
-P0: necesario antes del primer cobro autoservicio. P1: necesario para evaluar rentabilidad y renovar con confianza. P2: condicional. Esfuerzo orientativo de desarrollo: S = hasta 1 día, M = 2–3 días, L = 4–6 días efectivos. No incluye espera por validación comercial, habilitación del proveedor ni operación del piloto.
+| Métrica | Valor |
+|---|---|
+| Cuentas | 72, todas creadas en los últimos 30 días; **50 en los últimos 7 días** |
+| Pruebas iniciadas | 58 (65 búsquedas creadas por 50 cuentas; 27 búsquedas activas, 40 pausadas) |
+| Pruebas vencidas | 32; 33 búsquedas pausadas por plan |
+| Cuentas por coincidencias | 7 con 0, 16 con 1–9, 19 con 10–49, 16 con 50+ |
+| Uso | 356 avisos enviados, 28 clics en avisos, 161 fichas vistas, 39 salidas al portal, 4 favoritos |
+| Señal de pago | 25 `plan_limit_hit`, 9 vieron el CTA de planes, 4 lo clickearon, **3 checkouts (todos de Juan), 0 pagos** |
+| Mails de ciclo de vida | 101 enviados, 7 clics (36 bienvenida → 4 clics; 16 fin de prueba → 0; 16 sin coincidencias → 0; 10 conteo post-vencimiento → 0; 9 prueba extra → 2) |
+| Modelos más buscados | Focus 5, Argo 5, Gol Trend 4, Corolla 4, Fiesta 4, Golf 3, Polo 3, Etios 3, Ka 3, A3 3 |
 
-## Comunes a cualquier ruta
+Lecturas:
 
-| ID | Prioridad | Trabajo y resultado | Dependencia | Tamaño / tipo |
-|---|---|---|---|---|
-| COM-01 | P0 | Validar con candidatos la oferta elegida: Particular ARS 15.000/30 días y Agencia ARS 75.000/mes | Ruta y precios definidos | Comercial, 1–2 semanas de calendario |
-| COM-02 | P0 | Unificar pantalla de planes, landing y condiciones: moneda, precio final, renovación, límites y cobertura real | COM-01 | M |
-| COM-03 | P0 | Resolver límites efectivos en base de datos y worker, incluida prueba Free de 72 horas, vencimientos pagos y búsquedas activas | COM-01 | L |
-| COM-04 | P0 | Registrar compras/suscripciones y conectar checkout alojado del proveedor; confirmar pagos de manera verificable | COM-01, COM-03 | L |
-| COM-05 | P0 | Resolver renovación, impago, cancelación, devolución y conciliación, sin perder historial del usuario | COM-04 | M |
-| COM-06 | P0 | Cuenta: mostrar acceso vigente, importe/próxima renovación y cancelar; ayuda para cobro fallido | COM-04, COM-05 | M |
-| COM-07 | P0 | Verificar cobertura y continuidad con telemetría real; mostrar última actualización y fallas relevantes | COM-01 | M, más observación |
-| COM-08 | P0/P1 | Registrar pagos reales antes de cobrar; completar luego el tablero de embudo, renovación, excedente y horas | COM-01; pagos dependen de COM-04 | M |
-| COM-09 | P0 | Preparar operación comercial: hosting apto, costos máximos, condiciones, comprobantes y canal de soporte | COM-01, COM-07 | Operación + S en producto |
-| COM-10 | P0 | Validar recorrido completo con cobro de prueba, vencimiento y cancelación; habilitar cohorte limitada | COM-02 a COM-09 y módulo seleccionado | M |
+- **La adquisición funciona mejor de lo que decía la proyección** (50 cuentas en una semana, sin pauta). El cuello de botella es prueba → pago.
+- **El 40 % de las cuentas vio menos de 10 coincidencias.** Para ellas, vencer la prueba no duele: no hay nada que perder. Esto es cobertura o filtros, no precio.
+- **Los mails de "fin de prueba" y "conteo" no convierten** (26 enviados, 0 clics). El de bienvenida y la prueba extra sí mueven.
+- **Nadie llegó al checkout.** No se sabe si el precio asusta, si no se entiende qué se compra o si ni siquiera lo ven: 9 de 32 cuentas vencidas vieron el CTA.
+- **Nadie entró por el canal profesional.** Las 72 cuentas son particulares (o no se midió el mensaje de entrada elegido: verificar en `search_created.mode`).
 
-### COM-02 · Una oferta coherente
+## 3. Backlog vigente
 
-Reutilizar `web/lib/pro.ts`, `web/components/app/pro-plans.tsx`, `web/app/app/pro/page.tsx`, `web/app/app/pro/actions.ts`, `web/app/page.tsx` y `app_config.pro_offer`. Antes de tocar `web`, leer sus instrucciones `AGENTS.md`.
+P0: necesario para el primer pago real. P1: para decidir precios y canales con datos. P2: condicional. Tamaño: S hasta 1 día, M 2–3, L 4–6.
 
-Criterios de aceptación:
+| ID | Prio | Trabajo y resultado | Tamaño |
+|---|---|---|---|
+| V-01 | P0 | **Hablar con 10 cuentas vencidas** (de las 32): por qué no pagaron, qué buscaban, si encontraron auto. Preguntas por mail con respuesta a Juan, o llamada si dejan teléfono. Registrar en una planilla | Comercial, 1 semana |
+| V-02 | P0 | **Publicar el tope de 50 + feedback** (lo que está sin commitear): aplicar migraciones, deploy web, worker. Es la primera fuente de objeciones en el producto | S |
+| V-03 | P0 | **Un pago real externo.** Pedirle a 2–3 conocidos que compren Particular con su tarjeta (se les devuelve si quieren). Confirma el checkout, el mail de confirmación, la activación y la factura | S + operación |
+| V-04 | P0 | **Checkout visible al vencer.** Hoy 9 de 32 vencidos vieron el CTA. El mail 2.2 y la pantalla de vencido tienen que llevar directo al checkout con el precio y lo que recupera ("tus 2 búsquedas se reactivan") | S |
+| V-05 | P0 | **Diagnóstico de las pruebas con < 10 coincidencias** (23 cuentas): modelo, zona, filtros, fuentes que cubrieron. Si es cobertura, ampliar fuentes/zonas; si son filtros, que el formulario avise antes (ya hay sugerencias con 0 resultados) | M |
+| V-06 | P1 | **Costos reales y horas** en /admin: VPS, Resend, Vercel, LLM por mes, horas de Juan por semana. Cierra COM-08 | S |
+| V-07 | P1 | **5 demos a profesionales** con una búsqueda de su trabajo. Arrancar con los [prospectos de X](marketing/PROSPECTOS_AGENCIAS_X_2026-10-07.md). Cierra COM-01 para Pro | Comercial, 2 semanas |
+| V-08 | P1 | **Cobertura publicada por fuente y zona** (COM-07 comercial): "en AMBA leemos ML, FB, Kavak, Autocosmos y 7 agencias cada N minutos", con datos de `collector_runs` | S |
+| V-09 | P1 | **Comprobante y condiciones** (COM-09): decidir monotributo/factura, actualizar términos, publicar horario de soporte | Operación |
+| V-10 | P2 | Experimentos de precio/duración (ver §4), solo con la decisión explícita de Juan y después de V-01 | S cada uno |
 
-- Publicar nombres Particular/Agencia y montos 15.000/75.000 en ARS. Adaptar `pro_offer`, tipos y formato que hoy usan `price_usd`/«USD»; persistir moneda e importe explícitos, no cambiar solo el símbolo. No activar el pase 90 días sin precio elegido.
-- La misma oferta/versionado de precio llega a marketing, checkout, confirmación y cuenta. Registrar importe, moneda y duración comprados; cambios futuros no reescriben compras anteriores.
-- La lista de espera conserva su significado mientras no hay cobro; después el CTA explica la compra real.
-- Reemplazar la promesa actual «Búsqueda cada pocos minutos» por un texto sustentado en cobertura y mediciones. Diferenciar publicación, detección y envío.
-- Definir cada búsqueda y qué pasa al pausar, vencer o cancelar. Mostrar el tope de avisos y las excepciones de favoritos.
-- Mostrar «Prueba gratis por 3 días», inicio, fecha/hora de vencimiento y estado final. Al vencer, explicar que se conservaron historial/favoritos y ofrecer Particular o Agencia; no iniciar cobros automáticamente.
-- Un solo precio base visible por producto; los precios alternativos son experimentos por cohorte, no nuevas tarjetas simultáneas.
+## 4. Ideas por canal de venta
 
-### COM-03 · Límites que siguen vigentes al vencer
+Son hipótesis para probar en orden, no decisiones. Cualquier cambio de precio, duración o cobro necesita el OK de Juan y queda registrado en §6.
 
-Reutilizar funciones de la migración `supabase/migrations/20261003120000_f6_backoffice_metrics.sql`; cualquier cambio se agrega con una nueva migración. Revisar `worker/db/repos/notifications.py`, `worker/notifications/service.py`, `worker/notifications/engine.py`, `worker/notifications/dispatch.py`, `worker/pipeline/crawl.py`, `web/lib/pro.ts` y las consultas de resultados.
+### 4.1 Particular (B2C): comprador que busca su auto
 
-Hallazgos que justifican el trabajo:
+**Qué sabemos:** llega solo, prueba, y el 60 % ve coincidencias reales. No paga. Cuando compra el auto, se va.
 
-- `plan_limits_for()` reconoce vencimientos, pero el trigger de frecuencia actúa al insertar/cambiar la búsqueda. Los lectores de audiencias del worker inspeccionados usan la frecuencia almacenada, sin consultar el plan efectivo.
-- El límite de cantidad cuenta perfiles creados, incluidos pausados. La oferta propuesta cobra por búsquedas activas.
-- La vista web corta resultados; `search_results()` acepta límite/desplazamiento sin aplicar el plan. No presentar el corte visual como protección de datos.
-- `crawl_priority` aparece en configuración/documentación, sin aplicación encontrada en la ingesta. No ofrecer cadencias exclusivas como prestación lista.
+**Para convertir la prueba (orden sugerido):**
 
-Criterios de aceptación:
+1. **Preguntar antes de cambiar.** V-01. Diez conversaciones valen más que cualquier experimento.
+2. **Mostrar lo que pierde, no lo que gana.** Al vencer: "Desde que venció tu prueba aparecieron 14 Focus nuevos en tu zona, 3 por debajo del precio de referencia. Reactivá por $15.000". El 2.5 ya cuenta; hace falta que lo diga la pantalla y el mail 2.2, no un mail 22 días después.
+3. **Checkout de un paso desde el mail.** Enlace firmado → checkout de Mercado Pago, sin pasar por /planes. Hoy hay 3 clics entre el mail y pagar.
+4. **Particular más corto y más barato como entrada**, p. ej. 7 días por $5.000 o 15 días por $9.000 (**precio a definir por Juan**). El comprador no sabe si va a tardar un mes; 30 días es un compromiso. Medir si sube la conversión y si después extienden (la extensión ya existe).
+5. **Pago asistido por WhatsApp.** Para quien no quiere cargar tarjeta: transferencia + activación desde /admin (ya existe). Ofrecerlo en el mail 2.2 como alternativa.
+6. **Prueba extra a cambio de feedback.** Ya existe la de 7 días; condicionarla a responder 3 preguntas (V-02 trae el formulario).
+7. **Garantía simple:** "si en 30 días no te avisamos de ningún auto por debajo de referencia, te devolvemos el pago". Las devoluciones ya están implementadas. Revisar términos antes.
 
-- Crear y reactivar búsquedas aplica el límite activo de forma atómica, incluso ante dos solicitudes simultáneas. Múltiples modelos del asistente consumen la capacidad correcta y muestran qué se pudo guardar.
-- Registrar una sola vez y desde el servidor el inicio de Free (por ejemplo `free_trial_started_at` en `profiles`) al activar la primera búsqueda gratuita; una creación fallida no consume la prueba. Derivar el vencimiento a las 72 horas con tiempo del servidor, independiente de `plan_expires_at`. Pausar, editar, borrar, reemplazar o reactivar búsquedas no reinicia ni detiene el reloj; el cliente no puede modificarlo.
-- El plan efectivo se aplica al preparar y despachar alertas, incluida la cola pendiente; una búsqueda antigua no conserva beneficios por tener un valor guardado antes del vencimiento.
-- Al vencer Free sin plan pago vigente, el servidor deja de permitir búsquedas activas o nuevos resultados/actualizaciones. Pausar su demanda en crawl, rematch y seguimiento de favoritos, y detener alertas/resúmenes pendientes antes del envío. El cese no depende de que el usuario vuelva a abrir la web ni debe detener targets compartidos que usan otras cuentas habilitadas.
-- Al vencer/cancelar un plan pago no se inicia ni reinicia Free. Si una prueba ya iniciada aún tiene tiempo, puede conservarse una búsqueda elegida por el usuario (la más antigua si no elige); si no, todas se pausan. Las excedentes nunca se borran. El reloj de Free tampoco se pausa al contratar un plan.
-- Favoritos e historial ya guardados sobreviven para consulta. La excepción de avisos de baja de favoritos solo se aplica con prueba Free o plan pago vigente; no puede mantener monitoreo gratis después de las 72 horas.
-- El servidor aplica la vista de resultados contratada en los caminos normales de consulta. Si se pretende convertirla en un muro de acceso, primero revisar también vistas/tablas accesibles por Supabase; no basta modificar la pantalla.
-- Prueba integrada mínima de límites: antes de 72 horas la búsqueda Free funciona; exactamente al vencer cesa el acceso activo, incluidos favoritos y notificaciones en cola. Editar/pausar/borrar/recrear no renueva el plazo. Pagar restaura la capacidad contratada; vencer el pago no regala otra prueba. Verificar también una prueba con tiempo restante y conservar historial en todos los casos.
+**Para traer más compradores (cuando convierta algo):**
 
-### COM-04 y COM-05 · Cobro y ciclo de vida
+8. **Páginas por modelo con precio de referencia** ("¿Cuánto sale un Ford Focus usado en octubre 2026?"), generadas de `comparable_pool` para los 30 modelos más buscados. Es el único canal orgánico con intención de compra y los datos ya existen. SEO lento pero acumulativo. M.
+9. **Grupos de Facebook de modelos** (Focus, Argo, Gol Trend): responder "¿está bien de precio?" con el dato de Ese Auto y el enlace. Manual, 30 min por día.
+10. **Meta Ads tramo 1** del plan de lanzamiento: solo cuando haya 2–3 pagos orgánicos; antes no hay qué optimizar.
+11. **Referido simple:** "compartile Ese Auto a quien te manda avisos" (P13). Sin cupón hasta que haya pagos.
+12. **Mensaje de entrada medido:** confirmar que `search_created.mode` registra "busco mi auto" vs "habitualmente" y mirar la proporción.
 
-Candidato para Argentina: Mercado Pago, con pago único para pases y suscripción para mensualidades. La documentación describe cobros recurrentes y checkout por enlace; la cuenta, medios habilitados y costos deben verificarse durante la integración. [Documentación oficial de suscripciones](https://www.mercadopago.com.ar/developers/es/docs/subscriptions/overview).
+**Qué no hacer todavía:** app nativa, WhatsApp automático, cupones, anual, pase de 90 días.
 
-Trabajo propuesto en `web/app/api/` y nuevas migraciones; son ubicaciones futuras, no componentes que ya existan.
+### 4.2 Pro (B2B): revendedor, agencia chica, comprador por encargo
 
-- Persistir usuario propietario, oferta/precio comprado, identificadores únicos del proveedor, importe, moneda, estado y período pagado. Guardar solo datos necesarios; el checkout del proveedor captura los datos de tarjeta.
-- Checkout debe cobrar `currency = ARS` e importe 15.000 para Particular o 75.000 para Agencia, validado del lado del servidor. El tipo de cambio de las proyecciones solo estima costos; no interviene en el importe cobrado.
-- El cliente no fija precio ni concede Pro. Un redirect exitoso no es evidencia de cobro: verificar el estado con el proveedor.
-- Validar la autenticidad de notificaciones según la integración elegida, aplicar eventos idempotentemente y consultar el estado vigente para resolver eventos fuera de orden. Un webhook repetido no duplica acceso ni extiende un pase dos veces.
-- Separar «suscripción autorizada» de «período pagado». Pases duran 30 días desde la confirmación; en la primera versión, no permitir superponer compras incompatibles ni recomprar un pase vigente sin una regla explícita.
-- Cancelación detiene futuras renovaciones y mantiene acceso hasta el fin ya pagado. Vencido/impago aplica el estado de acceso de COM-03: solo queda Free si una prueba ya iniciada sigue vigente, sin conceder otra. Inicialmente sin prorrateos ni período de gracia oculto. Una devolución total revoca el período asociado según las condiciones publicadas.
-- Conciliación periódica recupera un webhook perdido. Registrar errores y dar un camino de revisión administrativa con trazabilidad.
-- Prueba mínima de dinero: pago válido/pendiente/rechazado; evento repetido/fuera de orden; usuario ajeno; cancelación y devolución. Usar sandbox del proveedor y base de pruebas, nunca vaciar datos del piloto.
+**Qué sabemos:** nada de clientes. Cero demos, cero contactos, cero cuentas con el mensaje "busco habitualmente" verificadas. Pro vale $100.000/mes y tiene las funciones que un profesional pediría (20 búsquedas, umbral de oportunidad, carrocería sin modelo). Un profesional vale 6,7 Particulares.
 
-### COM-06 · Autogestión
+**El argumento de venta es el umbral:** "cuando un Corolla 2020 aparece un 12 % abajo de los 40 publicados, te llega al instante". Eso es lo que un revendedor hace a mano todo el día en ML y FB. No vender "búsquedas"; vender "oportunidades antes que los demás".
 
-Extender `web/app/app/settings/` y la pantalla de planes. El usuario ve plan efectivo, fecha de fin o próxima renovación, precio/moneda y estado del cobro. Puede cancelar con confirmación clara y comprobación posterior del estado; la baja de emails y la baja de suscripción son acciones distintas. Mantener acceso y mensajes útiles mientras un pago está pendiente.
+**Para conseguir los primeros 5 (orden sugerido):**
 
-### COM-07 · Producto que se puede prometer
+1. **Prospección en X e Instagram** con la rutina de PROSPECTOS_AGENCIAS_X: 5 perfiles por día, 1 mensaje por negocio, empezar por HF Garage y Renato. Meta: 5 demos en 2 semanas (V-07).
+2. **Demo con su búsqueda, no con la nuestra.** 15 minutos: armar un Pro de prueba desde /admin con sus modelos y zona, dejarlo 7 días, mostrarle el lunes qué oportunidades detectó. La prueba Pro no existe como producto; se hace a mano con `plan` y `plan_expires_at` desde /admin.
+3. **Primeros 5 a precio piloto** (p. ej. $50.000/mes los primeros 3 meses, **a definir por Juan**) a cambio de una llamada semanal de 15 min. Se cobra por checkout normal; el monto de cada suscripción es propio. Reabrir `agency_founders.slots` si se quiere marcar.
+4. **Reporte semanal de oportunidades por mail** para Pro: "esta semana detectamos 23 avisos bajo referencia en tus 8 búsquedas; 4 siguen publicados". Es un digest que ya casi existe (2.5 lo hace para vencidos). Da valor visible para renovar.
+5. **WhatsApp para Pro, manual primero.** Antes de la Cloud API ([WHATSAPP_ALERTAS.md](WHATSAPP_ALERTAS.md)), Juan reenvía a mano las oportunidades de umbral a los 5 primeros por WhatsApp Business. Si lo piden, se automatiza.
+6. **Canal indirecto: inspectores y gestores** (tipo Dynaco). No compran; recomiendan. Un Particular referido por ellos con comisión o un mes gratis para el que refiere.
+7. **Vertical concreta para empezar:** revendedores de un segmento (p. ej. autos de $10–20 M en GBA oeste) en vez de "agencias" en general. La cobertura de fuentes en AMBA es la mejor.
+8. **Landing /pro** separada de /planes, con el umbral explicado y un botón "Pedir demo" (WhatsApp, como Custom). Hoy Pro vive en la misma tabla que Particular y habla a dos públicos a la vez. S.
 
-Reutilizar `collector_runs`, `worker_heartbeat`, alertas operativas, administración y los scripts de `ops/`. No reescribir el supervisor ni agregar infraestructura antes de medir.
+**Qué no hacer todavía:** equipos y permisos (ruta C), API, marca blanca, exportación (se sacó el 15/10), WhatsApp automático antes de 5 clientes que lo pidan.
 
-- Observar al menos 7 días consecutivos: fuentes operativas por modelo/zona, retraso de ingesta, tiempo detección→envío, fallas, recuperaciones y ruido. La ventana es un criterio interno propuesto.
-- Publicar cobertura respaldada por esa observación. Definir metas por fuente antes de ofrecer velocidad; no confundir `first_seen_at` con fecha de publicación.
-- Mostrar degradación/frescura y evitar cobrar por una promesa de cobertura que se sabe incumplida. Definir el procedimiento de soporte en una interrupción prolongada.
-- Medir costo por target y por usuario, trabajos asistidos y errores de IA. Mantener formulario manual como alternativa; el asistente no puede ser un bloqueo del producto pago.
-- Verificar que el proveedor de IA y su modalidad de uso son adecuados para producción; presupuestar la API o alternativa elegida. No asumir que una suscripción personal implica costo comercial cero o capacidad ilimitada.
+### 4.3 Decisiones que piden los dos canales
 
-### COM-08 · Medir rentabilidad, no solo intención
+- **Fuentes y zonas que se pueden prometer** (V-08). Vender AMBA primero; el interior se promete cuando las fuentes regionales tengan 30 días de lectura estable.
+- **Un solo embudo de medición**: pruebas → coincidencias útiles → CTA visto → checkout → pago → renovación, separado por mensaje de entrada. Los dashboards de decisiones ya tienen la mayoría.
+- **Presupuesto y horas**: cuántas horas por semana tiene Juan para hablar con gente. Sin eso, V-01 y V-07 no pasan.
 
-Extender `web/app/admin/metrics/page.tsx`, `web/lib/events.ts` y las vistas existentes. Capturar segmento opcional, origen de adquisición y oferta vista. Separar `waitlist_joined` de pago confirmado y de renovación.
-
-Tablero mínimo: inicio de prueba Free → primer resultado útil → vencimiento/conversión → oferta → checkout → pago confirmado; MRR solo de suscripciones vigentes; ventas de pases por separado; bajas por motivo; devoluciones; renovaciones elegibles y completadas; costos y horas del dueño. Medir conversión por cohorte de prueba y personas que usaron Free durante el mes, sin contarlas como búsquedas permanentes. Excluir admins, cuentas de prueba técnicas y reintentos duplicados. Distinguir bajas por «ya compré» de abandono por falta de valor.
-
-Prueba mínima: la misma transacción recibida dos veces cuenta una vez; un pase no suma MRR; un suscriptor vencido deja de contarlo. Un registro manual semanal de costos/horas alcanza inicialmente.
-
-### COM-09 · Operación comercial
-
-- Comparar el hosting actual con los requisitos de uso comercial y fijar un presupuesto. No contratar planes ni mover el worker por este documento.
-- Revisar cobertura permitida y continuidad de las fuentes: el README ya señala limitaciones de sesión y condiciones de Facebook; no tratar todos los portales como fuentes garantizadas.
-- Definir moneda, impuestos/comprobante, cancelaciones, devoluciones y revisión de precios con asesoramiento adecuado al negocio. Actualizar `web/app/terminos/` y, si cambia el tratamiento de datos, privacidad. Esto es una tarea de preparación, no una conclusión jurídica.
-- Verificar login, emails de acceso y canal de soporte. Definir horario razonable; no vender soporte 24/7.
-
-### COM-10 · Salida controlada
-
-Recorrido: registrarse → activar búsqueda y prueba de 72 horas → encontrar valor → vencer Free → contratar Particular/Agencia → obtener capacidad → recibir aviso → cancelar/vencer → quedar sin acceso activo, salvo prueba iniciada aún vigente. Verificar también compra antes de vencer Free, acceso desde móvil y fallas de pago. Reutilizar las herramientas y pruebas ya instaladas; las pruebas de base/worker usan la base aislada `_test`.
-
-Activar límites gradualmente con tratamiento explícito de usuarios existentes del piloto. Definir y comunicar cómo empieza la prueba de las cuentas actuales antes de habilitar su vencimiento; no inferir retroactivamente un inicio desde la fecha de registro. Revisar cuentas que exceden el límite antes de cambiar `enforced`; no cortar búsquedas silenciosamente. Medir soporte de la primera cohorte antes de abrir adquisición general.
-
-## Módulos según la elección
-
-| ID | Ruta | Agregar / adaptar | Criterio de cierre | Tamaño |
-|---|---|---|---|---|
-| A-01 | A | Compra mensual y pases 30/90, todos con capacidad de particular; adaptar mensajes y duraciones | El checkout y el vencimiento distinguen renovación mensual de pago único; 90 días no suma MRR | M |
-| A-02 | A | Registrar «ya compré» al pausar/cancelar y medir resultado de la búsqueda | Separar éxito de compra de abandono; no obliga a seguir suscripto | S |
-| B-01 | B | Configurar Free 1 por 3 días, Particular 3 y Agencia 10 búsquedas activas; ARS 15.000/30 días y ARS 75.000/mes | Oferta, SQL, worker y checkout coinciden; Free no se renueva al recrear búsquedas; `pass` no concede capacidad `pro`; Agencia mantiene una cuenta | S después de COM-03/04 |
-| B-02 | B | Dos mensajes de entrada: «busco mi auto» y «busco vehículos habitualmente» | Recomienda Particular o Agencia, conserva elección libre y permite medir ambos públicos | S |
-| C-01 | C | Organizaciones, invitaciones, integrantes y permisos; acceso aislado por agencia | Una persona no ve datos de otra agencia; revocar invitación/acceso funciona | L |
-| C-02 | C | Búsquedas y favoritos compartidos, asignación simple de contacto y capacidad por equipo | 30 búsquedas y 3 integrantes por agencia; evitar trabajo duplicado dentro del equipo | L |
-| C-03 | C | Suscripción propiedad de la agencia y administrador de facturación | Salida de un integrante no cancela ni transfiere el cobro; renovación/cancelación correctas | M |
-
-C modifica la unidad de cobro y acceso de persona a organización. Si se elige C, cerrar ese modelo antes de implementar COM-03/04 para evitar construir dos sistemas consecutivos.
-
-## Secuencia de ejecución seleccionada: B
-
-1. COM-01 + B-02 → oferta local concreta para compradores y profesionales; primeras señales de disposición a pagar.
-2. COM-02 y COM-07/09 → promesa verificable y operación posible.
-3. COM-03 + B-01 → PIL-01; Free 1 por 3 días, Particular 3 y Agencia 10 búsquedas activas, con registro básico de pagos/horas en ARS y verificación de vencimientos.
-4. Si hay pagos y recompra: COM-04 → COM-05/06 → COM-08 → COM-10, cobro autoservicio y ampliación.
-
-**PIL-01 · Piloto asistido antes de automatizar facturación.** Hasta 5 Agencia a ARS 75.000 y 5 Particular a ARS 15.000, con enlaces de pago del proveedor, verificación manual de pago y activación administrativa auditada de plan/vencimiento. Crear únicamente la operación administrativa mínima si no existe; un usuario común nunca puede cambiar su plan. Mantener un registro de transacción, usuario, importe, moneda y período, y conciliar diariamente. Agencia se ofrece como 30 días con renovación manual en esta etapa: no es todavía una suscripción automática. Publicar procedimiento de baja/devolución y ejecutar una prueba de vencimiento. Dependencias: COM-01/02/03/07/09, B-01/B-02 y registro básico de COM-08. Tamaño específico de activación/registro: S–M, además de esas dependencias. No contratar servicios ni emitir enlaces reales como parte de esta planificación.
-
-Orden de magnitud para completar A/B con autoservicio: aproximadamente 25–35 días efectivos de desarrollo y verificación, sujeto a lo que falle en el piloto y al proveedor de cobros. El piloto asistido evita hacer COM-04/05/06 completos antes de comprobar pagos; no elimina sus requisitos para automatizar. La validación comercial y los siete días de observación suman calendario; algunas tareas se pueden solapar. No es una fecha de entrega. A tiempo parcial, dividir las horas estimadas por las horas semanales disponibles; los seis meses de la proyección comienzan al habilitar cobros y no incluyen esta preparación. C agrega aproximadamente 10–15 días efectivos y mayor operación comercial.
-
-## Reserva: implementar solo con demanda demostrada
+## 5. Reserva: implementar solo con demanda demostrada
 
 | Idea | Condición para priorizarla |
 |---|---|
-| Pase 90 días en B | Usuarios del pase piden más duración y hay suficiente retención |
-| WhatsApp | Clientes pagos lo piden y el margen cubre costo por mensajes e integración |
-| Más avisos inmediatos / prioridad de rastreo por plan | Mediciones prueban pérdida de valor por el tope o cadencia actual y existe capacidad operativa |
-| Exportaciones o informes | Profesionales concretos pagan por ese flujo |
-| Suscripción anual | Retención y cobertura demostradas durante varios ciclos |
-| Referidos automáticos / cupones | Referidos manuales aportan altas pagas repetidas |
-| App nativa, CRM completo, API y marca blanca | Demanda suficiente para recuperar desarrollo y soporte |
+| Pase de 7/15 días (4.1.4) | V-01 dice que 30 días es la objeción |
+| WhatsApp automático | 5 clientes Pro lo piden y pagan |
+| Páginas SEO por modelo (4.1.8) | 2–3 pagos orgánicos confirman que el comprador paga |
+| Prueba Pro autoservicio | Más de 5 demos manuales por mes |
+| Equipos (ruta C) | Una agencia paga y pide un segundo usuario |
+| Pase 90 días, anual, cupones, app nativa, API | Retención demostrada durante varios ciclos |
 
-No incluir inicialmente comisión por compraventa: la operación cierra fuera de Ese Auto y falta atribución verificable. No incluir mensajes automáticos a vendedores, detección certificada de deuda ni promesas de rentabilidad.
+No incluir comisión por compraventa, mensajes automáticos a vendedores ni promesas de rentabilidad.
 
-## Registro de decisión
+## 6. Registro de decisión
 
-Actualización 2/10/2026: el usuario autorizó automatizar acceso y renovaciones mediante la API de Mercado Pago. El código amplía COM-04/05/06/10 con checkout identificado, firma de notificaciones, períodos idempotentes, baja real y conciliación. La configuración externa y las pruebas con el proveedor siguen pendientes; ver [Mercado Pago](MERCADO_PAGO.md). El piloto manual descrito arriba se conserva como recorrido previo y alternativa asistida.
-
-- [x] Objetivo confirmado: ingreso complementario rentable.
-- [x] Ruta B elegida; PIL-01, COM-01 a COM-10 y B-01/B-02 seleccionados, A/C en reserva.
-- [x] Precios definidos: Particular ARS 15.000/30 días y Agencia ARS 75.000/mes; capacidades de B conservadas (3 y 10 búsquedas, una cuenta).
-- [x] Duración Free definida por el usuario: una búsqueda por 3 días; reglas operativas de inicio, no reinicio y vencimiento documentadas en COM-03 para implementar.
-- [ ] Presupuesto y condiciones de lanzamiento definidos.
-- [x] Implementación autorizada y realizada para marca y PIL-01; publicación y operación comercial pendientes.
+- [x] Objetivo: ingreso complementario rentable (1/10).
+- [x] Ruta B; Particular $15.000 / 30 días; Agencia $75.000 → **Pro $100.000 / mes** desde el 14/10. Fundadoras cerradas sin ninguna.
+- [x] Cobro automático con Mercado Pago autorizado (2/10) y en producción (7/10).
+- [x] Prueba: 1 búsqueda, 72 h, 3 zonas; tope de 50 resultados en total aprobado el 28/10, **sin publicar**.
+- [x] Exportación CSV quitada el 15/10.
+- [ ] Presupuesto de costos y horas semanales de Juan para venta.
+- [ ] Comprobante / tratamiento impositivo.
+- [ ] Precio piloto Pro y pase corto Particular (§4): **pendientes de decisión de Juan**, no implementar sin OK.
+- [ ] Primer pago real de un externo.
