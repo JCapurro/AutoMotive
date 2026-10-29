@@ -293,8 +293,56 @@ class RedFlagTests(unittest.TestCase):
         self.assertEqual(self.flags(probable_repost_of=99), ["repost"])
 
     def test_every_flag_reads_as_something_to_verify(self):
+        # PAR-02: much_cheaper_verify says "motivo para verificar", not "conviene".
         for text in copy.RED_FLAG.values():
-            self.assertIn("conviene", text.lower())
+            self.assertTrue("conviene" in text.lower() or "verificar" in text.lower(), text)
+
+
+class MuchCheaperBandTests(unittest.TestCase):
+    """PAR-02 tramo 1: three texts for the same much_cheaper flag (25 / 35 / 50)."""
+
+    def text(self, diff_pct: float, cfg: IntelligenceConfig = CFG) -> str | None:
+        flags = red_flags(fiesta_listing(), diff_pct=diff_pct, guard=None,
+                          timing_belt=True, cfg=cfg, now=NOW)
+        return next((f.text for f in flags if f.id == "much_cheaper"), None)
+
+    @staticmethod
+    def expected(key: str, diff_pct: float) -> str:
+        return copy.RED_FLAG[key].format(pct=f"{diff_pct:.0f}")
+
+    def test_the_band_for_each_edge(self):
+        self.assertIsNone(self.text(24.9))
+        for diff, key in ((25.0, "much_cheaper"), (34.9, "much_cheaper"),
+                          (35.0, "much_cheaper_verify"), (49.9, "much_cheaper_verify"),
+                          (50.0, "much_cheaper_anticipo")):
+            with self.subTest(diff=diff):
+                self.assertEqual(self.text(diff), self.expected(key, diff))
+
+    def test_the_flag_keeps_its_id_and_severity(self):
+        flags = red_flags(fiesta_listing(), diff_pct=40.0, guard=None, timing_belt=True, cfg=CFG, now=NOW)
+        self.assertEqual([(f.id, f.severity) for f in flags], [("much_cheaper", "warning")])
+
+    def test_incoherent_thresholds_fall_back_to_two_bands(self):
+        for verify in (20, 25, 50, 60):
+            cfg = IntelligenceConfig.from_app_config({"red_flags": {"much_cheaper_verify_pct": verify}})
+            with self.subTest(verify=verify):
+                self.assertEqual(self.text(40.0, cfg), self.expected("much_cheaper", 40.0))
+                self.assertEqual(self.text(55.0, cfg), self.expected("much_cheaper_anticipo", 55.0))
+
+    def test_only_the_text_changes(self):
+        """Same score, level, flag ids, severities and questions as without the middle band."""
+        two_bands = IntelligenceConfig.from_app_config({"red_flags": {"much_cheaper_verify_pct": 50}})
+        for diff in (25.0, 34.9, 35.0, 49.9, 50.0):
+            price = 11_200 * (1 - diff / 100)
+            listing = fiesta_listing(price=price, price_usd=price)
+            ref = PriceRef(n=23, level_used="model", median=11_200.0, median_km=125_000.0, diff_pct=diff)
+            with self.subTest(diff=diff):
+                _, s1, ev1 = assess(listing, fiesta_profile(), price_ref=ref, cfg=CFG, now=NOW)
+                _, s2, ev2 = assess(listing, fiesta_profile(), price_ref=ref, cfg=two_bands, now=NOW)
+                self.assertEqual((s1.score, s1.level), (s2.score, s2.level))
+                self.assertEqual([(f.id, f.severity) for f in ev1.red_flags],
+                                 [(f.id, f.severity) for f in ev2.red_flags])
+                self.assertEqual(ev1.questions, ev2.questions)
 
 
 class SellerQuestionTests(unittest.TestCase):
@@ -360,6 +408,14 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(cfg.curve("recency")["half_life_hours"], 12)
         self.assertEqual(cfg.curve("price")["pct_per_unit"], 20)
         self.assertEqual(cfg.min_n, 5)
+
+    def test_the_verify_threshold_defaults_to_35(self):
+        production = {"much_cheaper_pct": 25, "anticipo_pct": 50, "min_km_per_year": 5000,
+                      "min_description_chars": 150}
+        self.assertEqual(IntelligenceConfig.from_app_config({"red_flags": production})
+                         .red_flags["much_cheaper_verify_pct"], 35)
+        tuned = IntelligenceConfig.from_app_config({"red_flags": {**production, "much_cheaper_verify_pct": 40}})
+        self.assertEqual(tuned.red_flags["much_cheaper_verify_pct"], 40)
 
 
 if __name__ == "__main__":

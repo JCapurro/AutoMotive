@@ -38,8 +38,10 @@ DEFAULT_CURVES: dict[str, dict[str, float]] = {
     "guards": {"suspicious_pct": SUSPICIOUS_BELOW_MEDIAN_PCT,
                "partial_pct": ALMOST_CERTAIN_BELOW_MEDIAN_PCT},
 }
-DEFAULT_RED_FLAGS = {"much_cheaper_pct": 25, "anticipo_pct": 50, "min_km_per_year": 5000,
-                     "min_description_chars": 150}
+# much_cheaper_verify_pct (PAR-02): from there the much_cheaper text asks to verify
+# everything before a down payment; only used when much_cheaper_pct < it <= anticipo_pct.
+DEFAULT_RED_FLAGS = {"much_cheaper_pct": 25, "much_cheaper_verify_pct": 35, "anticipo_pct": 50,
+                     "min_km_per_year": 5000, "min_description_chars": 150}
 DEFAULT_RESCORE = {"days": 14, "hour": "04:00", "every_hours": 24}
 
 

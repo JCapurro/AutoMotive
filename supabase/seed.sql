@@ -55,7 +55,7 @@ insert into public.app_config (key, value) values
      "completeness": {"min_description_chars": 150, "min_images": 3},
      "guards":       {"suspicious_pct": 50, "partial_pct": 65}
    }'),
-  ('red_flags',                     '{"much_cheaper_pct": 25, "anticipo_pct": 50, "min_km_per_year": 5000, "min_description_chars": 150}'),
+  ('red_flags',                     '{"much_cheaper_pct": 25, "much_cheaper_verify_pct": 35, "anticipo_pct": 50, "min_km_per_year": 5000, "min_description_chars": 150}'),
   ('rescore',                       '{"days": 14, "hour": "04:00"}'),
   ('digest_top_n',                  '10'),
   ('llm_limits',                    '{"per_user_hour": 30}'),
