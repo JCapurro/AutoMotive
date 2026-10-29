@@ -138,6 +138,11 @@ select is((public.admin_decision_metrics('2026-02-01 03:00Z','2026-02-08 03:00Z'
 select is((public.admin_decision_metrics('2026-02-01 03:00Z','2026-02-08 03:00Z','2026-02-08 12:00Z')#>>'{current,searchesCreated}'), '5', 'search creation history survives deletion and deduplicates event plus row');
 insert into public.events(user_id,name,created_at) values ('da000000-0000-4000-8000-000000000002','search_profile_paused','2026-02-06 03:00Z');
 select is((public.admin_decision_metrics('2026-02-01 03:00Z','2026-02-08 03:00Z','2026-02-08 12:00Z')#>>'{current,activeUsers}'), '3', 'human pause and creation actions are activity');
+-- PAR-02: copying the «Antes de señar» checklist is an explicit action; seeing it is not.
+insert into public.events(user_id,name,props,created_at) values ('da000000-0000-4000-8000-000000000005','risk_checklist_viewed','{"listing_id":99001}','2026-02-06 03:00Z');
+select is((public.admin_decision_metrics('2026-02-01 03:00Z','2026-02-08 03:00Z','2026-02-08 12:00Z')#>>'{current,activeUsers}'), '3', 'a viewed risk checklist is not activity (PAR-02)');
+insert into public.events(user_id,name,props,created_at) values ('da000000-0000-4000-8000-000000000005','risk_checklist_copied','{"listing_id":99001}','2026-02-06 04:00Z');
+select is((public.admin_decision_metrics('2026-02-01 03:00Z','2026-02-08 03:00Z','2026-02-08 12:00Z')#>>'{current,activeUsers}'), '4', 'a copied risk checklist is activity (PAR-02)');
 select is((public.admin_decision_metrics('2026-02-01 03:00Z','2026-02-08 03:00Z','2026-02-08 12:00Z')#>>'{current,firstValueUnobserved}'), '0', 'instrumented synthetic cohort has full coverage');
 update public.admin_metric_observation set first_value_tracking_since='2026-02-03 03:00Z';
 select is((public.admin_decision_metrics('2026-02-01 03:00Z','2026-02-08 03:00Z','2026-02-08 12:00Z')#>>'{current,firstValueUnobserved}'), '1', 'legacy mature search is reported as unobserved, not a failed result');
