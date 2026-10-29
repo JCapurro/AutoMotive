@@ -545,10 +545,11 @@ async def _market_cfg() -> dict[str, Any]:
 
 
 async def _has_run(week: str, mode: str) -> bool:
-    """Whether market_stats_runs has a run of `mode` for the ISO week."""
+    """Whether market_stats_runs has a finished run of `mode` for the ISO week:
+    a failed or interrupted one is retried on the next start."""
     async with db.connection() as cx:
         row = await (await cx.execute(
-            "SELECT EXISTS (SELECT 1 FROM market_stats_runs WHERE week_start = %s AND mode = %s) AS hit",
+            "SELECT EXISTS (SELECT 1 FROM market_stats_runs WHERE week_start = %s AND mode = %s AND status = 'ok') AS hit",
             (_monday(week), mode))).fetchone()
     return bool(row["hit"])
 

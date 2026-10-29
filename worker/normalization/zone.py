@@ -198,7 +198,10 @@ def _compiled(zone_map: dict[str, Any]) -> _CompiledMap:
     and the map only changes when /admin/config does. The last map is kept, by
     identity and, failing that, by value (get_config hands a new dict each run)."""
     hit = _compiled.cache
-    if hit is not None and (hit[0] is zone_map or hit[1] == zone_map):
+    if hit is not None and hit[0] is zone_map:
+        return hit[2]
+    if hit is not None and hit[1] == zone_map:
+        _compiled.cache = (zone_map, hit[1], hit[2])   # same map, new dict: next lookup by identity
         return hit[2]
     compiled = _compile(zone_map)
     _compiled.cache = (zone_map, copy.deepcopy(zone_map), compiled)
