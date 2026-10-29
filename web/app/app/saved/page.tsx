@@ -58,8 +58,11 @@ export default async function SavedPage({ searchParams }: PageProps<"/app/saved"
     <>
       <div className="space-y-1">
         <h1 className="type-heading text-[30px] leading-tight">Guardados</h1>
+        {/* The worker's refresher skips purchased (FOLLOWED's note): don't promise a daily check for them. */}
         <p className="text-sm text-muted-foreground">
-          Las publicaciones que guardaste o seguís. Las revisamos todos los días.
+          {filter === "purchased"
+            ? "Las publicaciones que marcaste como compradas. Quedan acá como registro."
+            : "Las publicaciones que guardaste o seguís. Revisamos todos los días las que seguís; las compradas quedan como registro."}
         </p>
       </div>
       <nav aria-label="Filtrar por estado" data-testid="saved-filters" className="-mx-4 flex gap-1 overflow-x-auto px-4 sm:mx-0 sm:px-0">
