@@ -29,6 +29,7 @@ OPPORTUNITY = notification("opportunity", {
     "listing": FIESTA, "profile_name": "Fiesta Titanium AMBA",
     "match": {"score": 88, "level": "high", "diff_pct": 8.2},
     "red_flags": ["No especifica cantidad de dueños: conviene verificar."],
+    "questions": ["¿Cuántos dueños tuvo?", "¿Tiene VTV vigente?"],
 })
 NEW_MATCH = notification("new_match", {
     "listing": {**FIESTA, "mileage_km": 128000, "price": 11000.0, "published_at": None},

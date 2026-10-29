@@ -165,6 +165,7 @@ class Content:
     lines: list[str] = field(default_factory=list)       # §22 body, in order
     link: Link | None = None
     notes: list[str] = field(default_factory=list)       # what explains it
+    questions: list[str] = field(default_factory=list)   # for the seller (email only)
     sections: list[tuple[str, list[DigestItem]]] = field(default_factory=list)   # digest
     images: list[str] = field(default_factory=list)
     price: str | None = None
@@ -210,6 +211,7 @@ def content(n: Notification, links: Links, now: datetime, *, owner: str | None =
                 c.lines.insert(0, REPOST)
             if match.get("level"):
                 c.notes.insert(0, f"{copy.LEVEL_LABEL[match['level']]} · {match.get('score')}/100")
+        c.questions = list(p.get("questions") or [])
     elif n.kind == "price_drop":
         drop = p.get("price_drop") or {}
         before, after = before_after(drop, listing)
@@ -337,6 +339,8 @@ def email(n: Notification, links: Links, now: datetime) -> EmailMessage:
     if c.vehicle:
         text.append(c.vehicle)
     text += c.lines
+    if c.questions:
+        text += ["", copy.QUESTIONS_TITLE] + [f"- {q}" for q in c.questions] + [copy.QUESTIONS_FOOTER]
     if c.link:
         text.append(f"{c.link.label}: {c.link.url}")
     for title, rows in c.sections:

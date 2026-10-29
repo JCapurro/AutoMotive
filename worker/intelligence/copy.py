@@ -137,6 +137,10 @@ RED_FLAG = {
 # Seller questions (§25). The web only copies the text; nobody is contacted.
 # ---------------------------------------------------------------------------
 
+# H-01: the block of seller questions in the alert email.
+QUESTIONS_TITLE = "Preguntas para hacerle al vendedor"
+QUESTIONS_FOOTER = "Podés copiar el mensaje completo desde la ficha del auto."
+
 QUESTION = {
     "timing_pending": "Sobre la distribución pendiente, ¿qué trabajo necesita? ¿Tenés un presupuesto?",
     "condition_photos": "¿Podés compartir fotos recientes para revisar el estado de chapa y pintura?",

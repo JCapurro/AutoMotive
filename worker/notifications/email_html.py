@@ -9,6 +9,7 @@ from datetime import date, datetime, timedelta, timezone
 from html import escape
 from typing import TYPE_CHECKING
 
+from intelligence.copy import QUESTIONS_FOOTER, QUESTIONS_TITLE
 from notifications.email_assets import LOGO_CONTENT_ID
 
 if TYPE_CHECKING:
@@ -186,6 +187,10 @@ def render(c: Content, *, kind: str, now: datetime, day: str | None,
             line = line.replace("Opportunity Score ", "Puntaje de oportunidad: ", 1)
         emphasis = f"padding:10px 12px;background:{YELLOW};font-weight:bold;color:{INK};" if "debajo de publicaciones comparables" in line else ""
         body.append(_p(line, style=f"margin-top:10px;font-size:14px;line-height:22px;color:{MUTED};{emphasis}"))
+    if c.questions:
+        body.append(_p(QUESTIONS_TITLE, style=f"margin-top:22px;font-size:14px;line-height:22px;font-weight:bold;color:{INK}"))
+        body += [_p(f"• {q}", style=f"margin-top:6px;font-size:14px;line-height:22px;color:{MUTED}") for q in c.questions]
+        body.append(_p(QUESTIONS_FOOTER, style=f"margin-top:8px;font-size:12px;line-height:19px;color:{MUTED}"))
     if c.link:
         body.append('<div style="margin-top:24px">' + _button(c.link.label, c.link.url) + '</div>')
         if detail_url:
