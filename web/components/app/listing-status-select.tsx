@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { type InteractionStatus, STATUS, TRACKING } from "@/lib/copy";
-import { canChangeStatus, selectableStatuses } from "@/lib/listing-tracking";
+import { canChangeStatus, parsePurchasePrice, selectableStatuses } from "@/lib/listing-tracking";
 
 /**
  * X-01: the listing's follow-up status, in the detail's "Seguimiento" block
@@ -93,9 +93,15 @@ export function ListingStatusSelect({
         onOpenChange={(open) => setDialog(open ? "purchased" : null)}
         onConfirm={(purchase) =>
           start(async () => {
-            const result = await recordPurchase({ listingId, profileId, ...purchase });
-            if (result.error) {
-              toast.error(result.error);
+            // Like change(): a failure keeps the dialog open and the status as it was.
+            try {
+              const result = await recordPurchase({ listingId, profileId, ...purchase });
+              if (result.error) {
+                toast.error(result.error);
+                return;
+              }
+            } catch {
+              toast.error("No pudimos registrar la compra. Probá de nuevo.");
               return;
             }
             setDialog(null);
@@ -126,8 +132,9 @@ export function PurchaseDialog({
   const [price, setPrice] = useState("");
   const [currency, setCurrency] = useState<"USD" | "ARS">("USD");
   const [date, setDate] = useState("");
-  const amount = price.trim() ? Number(price.replace(/\./g, "").replace(",", ".")) : null;
-  const invalid = amount != null && !(Number.isFinite(amount) && amount > 0);
+  const parsed = parsePurchasePrice(price);
+  const amount = "price" in parsed ? parsed.price : null;
+  const invalid = "error" in parsed;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
@@ -140,11 +147,17 @@ export function PurchaseDialog({
             <Label htmlFor="purchase-price">{TRACKING.purchasePrice}</Label>
             <Input
               id="purchase-price"
-              inputMode="decimal"
+              inputMode="numeric"
               value={price}
               aria-invalid={invalid || undefined}
+              aria-describedby={invalid ? "purchase-price-error" : undefined}
               onChange={(e) => setPrice(e.target.value)}
             />
+            {"error" in parsed ? (
+              <p id="purchase-price-error" className="text-[13px] text-destructive">
+                {parsed.error}
+              </p>
+            ) : null}
           </div>
           <div className="grid gap-1.5">
             <Label htmlFor="purchase-currency">{TRACKING.purchaseCurrency}</Label>

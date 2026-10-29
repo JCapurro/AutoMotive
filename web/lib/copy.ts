@@ -57,6 +57,7 @@ export const TRACKING = {
   purchaseTitle: "¿La compraste?",
   purchaseDescription: "Es definitivo: después no vas a poder cambiar el estado desde acá. Precio, moneda y fecha son opcionales.",
   purchasePrice: "Precio que pagaste",
+  purchasePriceInvalid: "Escribí el precio sin centavos, solo números: por ejemplo 9800 o 9.800.",
   purchaseCurrency: "Moneda",
   purchaseDate: "Fecha de compra",
   purchaseConfirm: "Marcar como comprada",

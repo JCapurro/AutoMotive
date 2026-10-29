@@ -4,7 +4,9 @@ import {
   canChangeStatus,
   listingTrackingConfig,
   NOTE_MAX_DEFAULT,
+  noteLength,
   normalizeNote,
+  parsePurchasePrice,
   selectableStatuses,
   statusOnSave,
 } from "@/lib/listing-tracking";
@@ -66,6 +68,39 @@ describe("normalizeNote", () => {
   it("keeps line breaks and control characters but drops NUL", () => {
     expect(normalizeNote("visita\nmartes\t10 hs\u0007", 500)).toEqual({ note: "visita\nmartes\t10 hs\u0007" });
     expect(normalizeNote("a\u0000b", 500)).toEqual({ note: "ab" });
+  });
+});
+
+describe("noteLength", () => {
+  it("counts what normalizeNote stores: trimmed, without NUL, in code points", () => {
+    expect(noteLength("  hola \n")).toBe(4);
+    expect(noteLength("a\u0000b")).toBe(2);
+    expect(noteLength("🚗".repeat(500))).toBe(500);
+    expect("🚗".repeat(500).length).toBe(1000);
+  });
+  it("agrees with normalizeNote at the limit", () => {
+    const atLimit = ` ${"🚗".repeat(300)} `;
+    expect(noteLength(atLimit)).toBe(300);
+    expect(normalizeNote(atLimit, 300)).toEqual({ note: "🚗".repeat(300) });
+    expect(noteLength(` ${"🚗".repeat(300)}a `)).toBe(301);
+    expect(normalizeNote(` ${"🚗".repeat(300)}a `, 300)).toHaveProperty("error");
+  });
+});
+
+describe("parsePurchasePrice", () => {
+  it("is null when left empty", () => {
+    expect(parsePurchasePrice("")).toEqual({ price: null });
+    expect(parsePurchasePrice("   ")).toEqual({ price: null });
+  });
+  it("takes whole numbers, with or without '.' thousands separators", () => {
+    expect(parsePurchasePrice("9800")).toEqual({ price: 9800 });
+    expect(parsePurchasePrice(" 9.800 ")).toEqual({ price: 9800 });
+    expect(parsePurchasePrice("12.500.000")).toEqual({ price: 12500000 });
+  });
+  it("rejects anything ambiguous instead of guessing", () => {
+    for (const raw of ["9800.50", "9800,50", "9,800", "1.5", "98.00", "9.8000", "9 800", "US$ 9800", "-9800", "1e4", "0", "0.000"]) {
+      expect(parsePurchasePrice(raw), raw).toHaveProperty("error");
+    }
   });
 });
 

@@ -4,7 +4,7 @@
  * "Guardar" does to them and what a private note may hold. The server
  * actions and the "Seguimiento" block share them.
  */
-import { type InteractionStatus, STATUS } from "@/lib/copy";
+import { type InteractionStatus, STATUS, TRACKING } from "@/lib/copy";
 
 /** app_config.listing_tracking.note_max_chars when the row is missing (design §10). */
 export const NOTE_MAX_DEFAULT = 500;
@@ -35,10 +35,32 @@ export function canChangeStatus(from: InteractionStatus, to: InteractionStatus):
  * counted like the database's char_length (code points, not UTF-16 units).
  */
 export function normalizeNote(raw: string, max: number): { note: string | null } | { error: string } {
-  const note = raw.replace(/\u0000/g, "").trim();
+  const note = cleanNote(raw);
   if (!note) return { note: null };
-  if ([...note].length > max) return { error: `La nota puede tener hasta ${max} caracteres.` };
+  if (noteLength(note) > max) return { error: `La nota puede tener hasta ${max} caracteres.` };
   return { note };
+}
+
+/** The note's length as normalizeNote counts it, for the block's counter. */
+export function noteLength(raw: string): number {
+  return [...cleanNote(raw)].length;
+}
+
+function cleanNote(raw: string): string {
+  return raw.replace(/\u0000/g, "").trim();
+}
+
+/**
+ * "Precio que pagaste" (§38): whole numbers only, "." as an optional
+ * thousands separator ("9800", "9.800"). Anything else ("9800.50", "9,800")
+ * is an error, never a guess: "9800.50" read as 980050 would store a wrong price.
+ */
+export function parsePurchasePrice(raw: string): { price: number | null } | { error: string } {
+  const text = raw.trim();
+  if (!text) return { price: null };
+  const price = /^(\d+|\d{1,3}(\.\d{3})+)$/.test(text) ? Number(text.replace(/\./g, "")) : Number.NaN;
+  if (!(Number.isSafeInteger(price) && price > 0)) return { error: TRACKING.purchasePriceInvalid };
+  return { price };
 }
 
 /** app_config.listing_tracking, with the default when missing or malformed. */
