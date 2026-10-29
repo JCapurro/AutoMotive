@@ -26,6 +26,9 @@ import {
  * Auto checked. Closed by default; open with an emphasis line when the price
  * itself is a reason for care. risk_checklist_viewed is logged once per mount:
  * when the open block enters the screen, or when the closed one is expanded.
+ * The toggle event a block that starts open fires on mount is not an expansion
+ * (it can arrive before the block is on screen), so only a closed-to-open
+ * change counts there; the emphasized block is left to the IntersectionObserver.
  */
 export function RiskChecklist({
   listingId,
@@ -40,6 +43,7 @@ export function RiskChecklist({
 }) {
   const ref = useRef<HTMLDetailsElement>(null);
   const viewed = useRef(false);
+  const lastOpen = useRef(emphasized);
 
   function view() {
     if (viewed.current) return;
@@ -61,16 +65,6 @@ export function RiskChecklist({
     return () => observer.disconnect();
   }, [emphasized, listingId]);
 
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(checklistText(title));
-      toast.success(RISK_COPIED);
-    } catch {
-      toast.error(RISK_COPY_FAILED);
-    }
-    void trackRiskChecklist(listingId, "copied");
-  }
-
   return (
     <details
       ref={ref}
@@ -78,7 +72,10 @@ export function RiskChecklist({
       data-testid="risk-checklist"
       className="mt-3 rounded-lg bg-muted p-4"
       onToggle={(event) => {
-        if (event.currentTarget.open) view();
+        const open = event.currentTarget.open;
+        const wasOpen = lastOpen.current;
+        lastOpen.current = open;
+        if (open && !wasOpen) view();
       }}
     >
       <summary className="flex cursor-pointer items-center gap-2 text-sm font-semibold">
@@ -96,12 +93,25 @@ export function RiskChecklist({
             <Item key={item.id} item={item} />
           ))}
         </ol>
-        <Button onClick={copy}>
+        <Button onClick={() => void copyChecklist(listingId, title)}>
           <Copy aria-hidden /> {RISK_COPY_LABEL}
         </Button>
       </div>
     </details>
   );
+}
+
+/** Copies the checklist; risk_checklist_copied only when the clipboard took it. */
+export async function copyChecklist(listingId: number, title: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(checklistText(title));
+  } catch {
+    toast.error(RISK_COPY_FAILED);
+    return false;
+  }
+  toast.success(RISK_COPIED);
+  void trackRiskChecklist(listingId, "copied");
+  return true;
 }
 
 function OfficialLink({ link, children }: { link: RiskLink; children: React.ReactNode }) {

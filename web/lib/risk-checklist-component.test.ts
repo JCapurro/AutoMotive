@@ -1,12 +1,22 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/app/app/listings/actions", () => ({ trackRiskChecklist: vi.fn() }));
-vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+const mock = vi.hoisted(() => ({ track: vi.fn(), success: vi.fn(), error: vi.fn() }));
+vi.mock("@/app/app/listings/actions", () => ({ trackRiskChecklist: mock.track }));
+vi.mock("sonner", () => ({ toast: { success: mock.success, error: mock.error } }));
 
-import { RiskChecklist } from "@/components/app/risk-checklist";
-import { CHECKLIST_ITEMS, RISK_EMPHASIS, RISK_HEADER, type RiskConfig, riskConfig } from "@/lib/risk-checklist";
+import { copyChecklist, RiskChecklist } from "@/components/app/risk-checklist";
+import {
+  CHECKLIST_ITEMS,
+  checklistText,
+  RISK_COPIED,
+  RISK_COPY_FAILED,
+  RISK_EMPHASIS,
+  RISK_HEADER,
+  type RiskConfig,
+  riskConfig,
+} from "@/lib/risk-checklist";
 
 function render(config: RiskConfig, emphasized = false) {
   return renderToStaticMarkup(createElement(RiskChecklist, { listingId: 42, title: "Ford Fiesta Titanium 2017", config, emphasized }));
@@ -67,5 +77,36 @@ describe("RiskChecklist (PAR-02)", () => {
     const html = render(config);
     expect(anchors(html)).toEqual([]);
     expect(html).not.toContain("javascript:");
+  });
+
+  describe("copyChecklist", () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
+      vi.clearAllMocks();
+    });
+
+    it("logs risk_checklist_copied after the clipboard took the text", async () => {
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      vi.stubGlobal("navigator", { clipboard: { writeText } });
+      await expect(copyChecklist(42, "Ford Fiesta Titanium 2017")).resolves.toBe(true);
+      expect(writeText).toHaveBeenCalledWith(checklistText("Ford Fiesta Titanium 2017"));
+      expect(mock.success).toHaveBeenCalledWith(RISK_COPIED);
+      expect(mock.track.mock.calls).toEqual([[42, "copied"]]);
+    });
+
+    it("a failed copy shows the error and logs nothing", async () => {
+      vi.stubGlobal("navigator", { clipboard: { writeText: vi.fn().mockRejectedValue(new Error("denied")) } });
+      await expect(copyChecklist(42, "Ford Fiesta Titanium 2017")).resolves.toBe(false);
+      expect(mock.error).toHaveBeenCalledWith(RISK_COPY_FAILED);
+      expect(mock.success).not.toHaveBeenCalled();
+      expect(mock.track).not.toHaveBeenCalled();
+    });
+
+    it("without a clipboard API it is a failed copy too", async () => {
+      vi.stubGlobal("navigator", {});
+      await expect(copyChecklist(42, "Ford Fiesta Titanium 2017")).resolves.toBe(false);
+      expect(mock.error).toHaveBeenCalledWith(RISK_COPY_FAILED);
+      expect(mock.track).not.toHaveBeenCalled();
+    });
   });
 });

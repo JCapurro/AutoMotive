@@ -45,7 +45,12 @@ async function signIn(page: Page, email: string) {
 }
 
 /** A user with a match on the seeded Fiesta (support/db.ts); returns the listing id. */
-async function seedMatch(page: Page, prefix: string, run: string, redFlags: unknown[] = []): Promise<{ email: string; listingId: number }> {
+async function seedMatch(
+  page: Page,
+  prefix: string,
+  run: string,
+  redFlags: unknown[] = [],
+): Promise<{ email: string; listingId: number; profileId: string }> {
   const email = `${prefix}-${run}@${E2E_EMAIL_DOMAIN}`;
   await signIn(page, email);
   const [target] = await query<{ id: string }>(`select id from public.listings where external_id = $1`, [
@@ -63,7 +68,36 @@ async function seedMatch(page: Page, prefix: string, run: string, redFlags: unkn
      values ($1, $2, 72, 'good', '{}', '{}', $3::jsonb, 'e2e')`,
     [profile.id, target.id, JSON.stringify(redFlags)],
   );
-  return { email, listingId: Number(target.id) };
+  return { email, listingId: Number(target.id), profileId: profile.id };
+}
+
+const MUCH_CHEAPER = {
+  id: "much_cheaper",
+  text: "Publicación 40% más barata que publicaciones comparables: un precio tan por debajo es motivo para verificar todo antes de señar.",
+  severity: "warning",
+};
+
+async function riskEvents(email: string, listingId: number): Promise<string[]> {
+  const rows = await query<{ name: string }>(
+    `select e.name from public.events e join public.profiles p on p.id = e.user_id
+      where p.email = $1 and e.name like 'risk_checklist_%' and (e.props->>'listing_id')::bigint = $2`,
+    [email, listingId],
+  );
+  return rows.map((row) => row.name).sort();
+}
+
+/** The open block is fully below the fold: it logs no view until it is scrolled into it. */
+async function expectViewedOnlyOnScreen(page: Page, email: string, listingId: number) {
+  const block = page.getByTestId("risk-checklist");
+  await expect(block).toHaveAttribute("open", "");
+  const below = await block.evaluate((node) => node.getBoundingClientRect().top - window.innerHeight);
+  expect(below, "the block has to start below the fold for this check").toBeGreaterThan(0);
+  // What fired on mount would have been recorded by now.
+  await page.waitForTimeout(2_500);
+  expect(await riskEvents(email, listingId)).toEqual([]);
+
+  await block.scrollIntoViewIfNeeded();
+  await expect.poll(() => riskEvents(email, listingId)).toEqual(["risk_checklist_viewed"]);
 }
 
 async function expectNoHorizontalScroll(page: Page) {
@@ -96,16 +130,47 @@ test("la ficha muestra «Antes de señar» y copia la checklist sin links", asyn
   expect(copied).not.toContain("http");
   expect(copied).not.toContain(email);
 
-  await expect
-    .poll(async () => {
-      const rows = await query<{ name: string }>(
-        `select e.name from public.events e join public.profiles p on p.id = e.user_id
-          where p.email = $1 and e.name like 'risk_checklist_%' and (e.props->>'listing_id')::bigint = $2`,
-        [email, listingId],
-      );
-      return rows.map((row) => row.name).sort();
-    })
-    .toEqual(["risk_checklist_copied", "risk_checklist_viewed"]);
+  await expect.poll(() => riskEvents(email, listingId)).toEqual(["risk_checklist_copied", "risk_checklist_viewed"]);
+});
+
+test("una copia que falla no se registra como copiada", async ({ page }, testInfo) => {
+  const run = `${testInfo.project.name}-${Date.now()}`;
+  const { email, listingId } = await seedMatch(page, "risk-copy-fail", run);
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: () => Promise.reject(new DOMException("denied", "NotAllowedError")) },
+    });
+  });
+
+  await page.goto(`/app/listings/${listingId}`);
+  const block = page.getByTestId("risk-checklist");
+  await block.locator("summary").click();
+  await expect.poll(() => riskEvents(email, listingId)).toEqual(["risk_checklist_viewed"]);
+
+  await block.getByRole("button", { name: "Copiar checklist" }).click();
+  await expect(page.getByText("No pudimos copiar. Seleccioná el texto y copialo a mano.")).toBeVisible();
+  await page.waitForTimeout(2_500);
+  expect(await riskEvents(email, listingId)).toEqual(["risk_checklist_viewed"]);
+});
+
+test("expandida por much_cheaper, la vista cuenta recién cuando el bloque entra en pantalla", async ({ page }, testInfo) => {
+  const run = `${testInfo.project.name}-${Date.now()}`;
+  const viewport = page.viewportSize() ?? { width: 1280, height: 720 };
+  await page.setViewportSize({ width: viewport.width, height: 240 });
+
+  // Server-rendered load.
+  const first = await seedMatch(page, "risk-fold-ssr", run, [MUCH_CHEAPER]);
+  await page.goto(`/app/listings/${first.listingId}`);
+  await expectViewedOnlyOnScreen(page, first.email, first.listingId);
+
+  // Client-side navigation from the search's results, where React creates the block.
+  await page.context().clearCookies();
+  const second = await seedMatch(page, "risk-fold-nav", run, [MUCH_CHEAPER]);
+  await page.goto(`/app/searches/${second.profileId}`);
+  await page.locator(`a[href="/app/listings/${second.listingId}"]`).first().click();
+  await expect(page).toHaveURL(new RegExp(`/app/listings/${second.listingId}$`));
+  await expectViewedOnlyOnScreen(page, second.email, second.listingId);
 });
 
 test("los links oficiales cargados abren en otra pestaña", async ({ page }, testInfo) => {
@@ -141,13 +206,7 @@ test("los links oficiales cargados abren en otra pestaña", async ({ page }, tes
 
 test("con much_cheaper abre expandida; apagada o con el aviso dado de baja no está", async ({ page }, testInfo) => {
   const run = `${testInfo.project.name}-${Date.now()}`;
-  const { listingId } = await seedMatch(page, "risk-flags", run, [
-    {
-      id: "much_cheaper",
-      text: "Publicación 40% más barata que publicaciones comparables: un precio tan por debajo es motivo para verificar todo antes de señar.",
-      severity: "warning",
-    },
-  ]);
+  const { listingId } = await seedMatch(page, "risk-flags", run, [MUCH_CHEAPER]);
 
   await page.goto(`/app/listings/${listingId}`);
   const block = page.getByTestId("risk-checklist");
