@@ -72,7 +72,8 @@ test("seguimiento: estado, nota, Guardados con filtro y compra", async ({ page }
       `select e.props from public.events e join public.profiles p on p.id = e.user_id where p.email = $1 and e.name = 'listing_note_saved'`,
       [email],
     );
-    expect(event.props).toEqual({ listing_id: seeded.active, length: 40 });
+    // pg returns the bigint id as a string; the event carries it as a number.
+    expect(event.props).toEqual({ listing_id: Number(seeded.active), length: 40 });
     await expectNoHorizontalScroll(page);
   });
 
