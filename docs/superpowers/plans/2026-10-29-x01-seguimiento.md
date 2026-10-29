@@ -214,20 +214,20 @@ Files: `web/types/database.ts`.
 
 Files: `web/app/app/searches/[id]/page.tsx` (`Filter`, `COUNT_KEY`, `EMPTY`, `FILTERS`, `loadCounts`, líneas ~37-100 y ~148), `web/components/app/listing-card.tsx` (nota recortada a una línea), `web/lib/search-preparation.test.ts` y `web/lib/free-result-limit-page.test.ts` (mocks), `web/lib/follow-filters.test.ts` (nuevo).
 
-- [ ] Tests primero:
+- [x] Tests primero:
   - `Filter` acepta `contacted`, `visit_scheduled`, `purchased`; `?f=` desconocido sigue cayendo en `all`.
   - Las tres píldoras se dibujan siempre, con su conteo, aunque sea 0 (decisión 5).
   - `loadCounts` llama también a `search_follow_counts` y tolera `null`/error: los mocks de `search-preparation.test.ts` y `free-result-limit-page.test.ts` devuelven `null` para RPCs que no conocen, y la página no debe romper ni mostrar `NaN`.
   - Textos vacíos propios por filtro («No marcaste publicaciones como contactadas.», etc.).
   - `ListingCard` muestra la nota recortada a una línea y escapada cuando `card.note` existe; sin nota no cambia el markup actual (`lib/listing-card.test.ts` sigue verde).
-- [ ] Implementar; el `nav` de píldoras ya hace scroll horizontal (quedan 8 a 375 px).
-- [ ] `cd web && npm test && npm run typecheck && npm run lint`.
+- [x] Implementar; el `nav` de píldoras ya hace scroll horizontal (quedan 8 a 375 px).
+- [x] `cd web && npm test && npm run typecheck && npm run lint`.
 
 ## Task 17: e2e de (b)
 
 Files: `web/e2e/tracking.spec.ts` (ampliar), `web/e2e/seed.ts`.
 
-- [ ] Primero los casos nuevos (rojo): en los resultados de una búsqueda, filtrar por Contactadas / Visita agendada / Compradas y ver la publicación `gone` contactada con su cartel «Ya no está disponible»; ver la nota en la tarjeta; los conteos de las píldoras coinciden con las filas; `expectNoHorizontalScroll` en resultados con las 8 píldoras a 375 px.
+- [x] Primero los casos nuevos (rojo): en los resultados de una búsqueda, filtrar por Contactadas / Visita agendada / Compradas y ver la publicación `gone` contactada con su cartel «Ya no está disponible»; ver la nota en la tarjeta; los conteos de las píldoras coinciden con las filas; `expectNoHorizontalScroll` en resultados con las 8 píldoras a 375 px.
 - [ ] `cd web && npx playwright test e2e/tracking.spec.ts --project=desktop --project=mobile` en verde contra la base local ya migrada.
 
 ## Task 18: verificación de (b), PR y punto de parada

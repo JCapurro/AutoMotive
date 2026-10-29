@@ -787,7 +787,7 @@ isOneToOne: false
                   ]
                 },"match_cards": {
                   Row: {
-                    "body_type": string | null,"currency": string | null,"financing_offered": boolean | null,"first_seen_at": string | null,"fuel": string | null,"generated_at": string | null,"images": Json | null,"is_backfill": boolean | null,"level": Database["public"]['Enums']["match_level"] | null,"listing_id": number | null,"listing_status": Database["public"]['Enums']["listing_status"] | null,"location_text": string | null,"make": string | null,"match_id": number | null,"mileage_km": number | null,"model": string | null,"price": number | null,"price_kind": string | null,"price_published": number | null,"price_published_currency": string | null,"price_ref": Json | null,"price_source": string | null,"price_usd": number | null,"probable_repost_of": number | null,"profile_name": string | null,"published_at": string | null,"red_flags": Json | null,"rejection_reason": Database["public"]['Enums']["rejection_reason"] | null,"saved": boolean | null,"score": number | null,"search_profile_id": number | null,"source": string | null,"status": Database["public"]['Enums']["interaction_status"] | null,"title": string | null,"transmission": string | null,"trim": string | null,"user_id": string | null,"year": number | null
+                    "body_type": string | null,"currency": string | null,"financing_offered": boolean | null,"first_seen_at": string | null,"fuel": string | null,"generated_at": string | null,"images": Json | null,"is_backfill": boolean | null,"level": Database["public"]['Enums']["match_level"] | null,"listing_id": number | null,"listing_status": Database["public"]['Enums']["listing_status"] | null,"location_text": string | null,"make": string | null,"match_id": number | null,"mileage_km": number | null,"model": string | null,"note": string | null,"price": number | null,"price_kind": string | null,"price_published": number | null,"price_published_currency": string | null,"price_ref": Json | null,"price_source": string | null,"price_usd": number | null,"probable_repost_of": number | null,"profile_name": string | null,"published_at": string | null,"red_flags": Json | null,"rejection_reason": Database["public"]['Enums']["rejection_reason"] | null,"saved": boolean | null,"score": number | null,"search_profile_id": number | null,"source": string | null,"status": Database["public"]['Enums']["interaction_status"] | null,"title": string | null,"transmission": string | null,"trim": string | null,"user_id": string | null,"year": number | null
                   }
                   Relationships: [
                     {
@@ -1181,6 +1181,7 @@ isOneToOne: false
 "match_id": number | null,
 "mileage_km": number | null,
 "model": string | null,
+"note": string | null,
 "price": number | null,
 "price_kind": string | null,
 "price_published": number | null,
@@ -1225,6 +1226,11 @@ isOneToOne: false
 "search_access_active":
 { Args: { "p_search": number }; Returns: boolean
                            },
+"search_follow_counts":
+{ Args: { "p_profile_id": number }; Returns: {
+              "contacted_count": number,"purchased_count": number,"visit_scheduled_count": number
+            }[]
+                           },
 "search_result_counts":
 { Args: { "p_profile_id": number }; Returns: {
               "all_count": number,"discarded_count": number,"new_count": number,"opportunities_count": number,"saved_count": number
@@ -1248,6 +1254,7 @@ isOneToOne: false
 "match_id": number | null,
 "mileage_km": number | null,
 "model": string | null,
+"note": string | null,
 "price": number | null,
 "price_kind": string | null,
 "price_published": number | null,

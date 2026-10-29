@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth";
 import { webConfig } from "@/lib/config";
+import { FOLLOW_EMPTY, FOLLOW_LABEL } from "@/lib/copy";
 import { accessDate, freeResultQuota, includesImmediateAlerts, type PlanLimits, visibleResults } from "@/lib/pro";
 import { describeVehicle } from "@/lib/search";
 import { collectionPending } from "@/lib/search-collection";
@@ -26,13 +27,24 @@ import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Resultados" };
 
-// §29
+/**
+ * X-01: search_follow_counts' three numbers, or zeros when the RPC is missing
+ * or fails (the web may reach a database without the migration yet).
+ */
+function followCounts(data: unknown): Record<string, number> {
+  const row = (Array.isArray(data) ? data[0] : null) as Record<string, unknown> | null;
+  const n = (key: string) => (typeof row?.[key] === "number" ? (row[key] as number) : 0);
+  return { contacted_count: n("contacted_count"), visit_scheduled_count: n("visit_scheduled_count"), purchased_count: n("purchased_count") };
+}
+
+// §29, plus X-01's follow-up states (search_follow_counts), always shown.
 const FILTERS = {
   new: "Nuevos",
   opportunities: "Oportunidades",
   all: "Todos",
   saved: "Favoritos",
   discarded: "Descartados",
+  ...FOLLOW_LABEL,
 } as const;
 type Filter = keyof typeof FILTERS;
 const COUNT_KEY: Record<Filter, string> = {
@@ -41,6 +53,9 @@ const COUNT_KEY: Record<Filter, string> = {
   all: "all_count",
   saved: "saved_count",
   discarded: "discarded_count",
+  contacted: "contacted_count",
+  visit_scheduled: "visit_scheduled_count",
+  purchased: "purchased_count",
 };
 const EMPTY: Record<Filter, string> = {
   new: "No hay publicaciones nuevas sin ver.",
@@ -48,6 +63,7 @@ const EMPTY: Record<Filter, string> = {
   all: "Todavía no hay publicaciones que coincidan. Te avisamos cuando aparezca una.",
   saved: "No guardaste publicaciones de esta búsqueda.",
   discarded: "No descartaste publicaciones.",
+  ...FOLLOW_EMPTY,
 };
 const PAGE_SIZE = 50;
 
@@ -62,7 +78,7 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
 
   const supabase = await createClient();
   const profileId = Number(id);
-  const [{ data: profile }, { data: results }, { data: counts }, { data: planLimits }, { data: sources }] = await Promise.all([
+  const [{ data: profile }, { data: results }, { data: counts }, follow, { data: planLimits }, { data: sources }] = await Promise.all([
     supabase.from("search_profiles").select("*").eq("id", profileId).maybeSingle(),
     supabase.rpc("search_results", {
       p_profile_id: profileId,
@@ -72,6 +88,7 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
       p_offset: 0,
     }),
     supabase.rpc("search_result_counts", { p_profile_id: profileId }),
+    supabase.rpc("search_follow_counts", { p_profile_id: profileId }),
     supabase.rpc("my_plan_limits"),
     supabase.from("sources").select("id,name,enabled").order("priority"),
   ]);
@@ -83,7 +100,7 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
   const needsPreparation = !profile.bootstrapped_at || Boolean(profile.rematch_requested_at) || collecting;
   const pending = profile.enabled && needsPreparation;
   const retryCollection = profile.enabled && collectionSources?.some((source) => source.collectionState === "failed" || source.collectionState === "unknown");
-  const count = (counts?.[0] ?? {}) as Record<string, number>;
+  const count = { ...(counts?.[0] ?? {}), ...followCounts(follow?.data) } as Record<string, number>;
   const access = (planLimits ?? null) as PlanLimits | null;
   const quota = freeResultQuota(access);
   const checkoutConfig = quota?.reached ? await webConfig() : null;

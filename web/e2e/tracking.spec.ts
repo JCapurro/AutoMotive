@@ -1,6 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 
-import { query, seedTracking } from "./support/db";
+import { finishFirstCollection, query, seedTracking } from "./support/db";
 import { E2E_EMAIL_DOMAIN } from "./support/env";
 import { magicLink } from "./support/mail";
 
@@ -124,6 +124,30 @@ test("seguimiento: estado, nota, Guardados con filtro y compra", async ({ page }
     await page.goto("/app/saved?e=contacted");
     await expect(page.getByTestId("listing-card")).toHaveCount(1);
     await expect(page.getByTestId("listing-card")).toContainText("Ya no está disponible");
+    await expectNoHorizontalScroll(page);
+  });
+
+  // Entrega (b): needs migration 20261119120000_x01_tracking.sql on the local database.
+  await test.step("resultados: píldoras de seguimiento con conteo, la caída incluida", async () => {
+    await finishFirstCollection(seeded.profileId, "Ford", "Fiesta");
+    await page.goto(`/app/searches/${seeded.profileId}`);
+    const pills = page.getByTestId("result-filters");
+    await expect(pills.getByRole("link", { name: /^Contactados/ })).toContainText("1");
+    await expect(pills.getByRole("link", { name: /^Visita agendada/ })).toContainText("0");
+    await expect(pills.getByRole("link", { name: /^Comprados/ })).toContainText("1");
+    await expectNoHorizontalScroll(page);
+
+    await pills.getByRole("link", { name: /^Contactados/ }).click();
+    await expect(page).toHaveURL(/f=contacted/);
+    await expect(page.getByTestId("listing-card")).toHaveCount(1);
+    await expect(page.getByTestId("listing-card")).toContainText("Ya no está disponible");
+
+    await pills.getByRole("link", { name: /^Visita agendada/ }).click();
+    await expect(page.getByText("No marcaste publicaciones con visita agendada.")).toBeVisible();
+
+    await pills.getByRole("link", { name: /^Comprados/ }).click();
+    await expect(page.getByTestId("listing-card")).toHaveCount(1);
+    await expect(page.getByTestId("card-note")).toContainText("Llamé el martes.");
     await expectNoHorizontalScroll(page);
   });
 });
