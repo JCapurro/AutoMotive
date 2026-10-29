@@ -61,9 +61,10 @@ select throws_ok($$insert into public.crawl_targets (source, body_type) values (
                  '23505', null, '... only one');
 select throws_ok($$insert into public.crawl_targets (source, body_type) values ('kavak', 'van')$$,
                  '23514', null, '... of a known body type');
-select is((select attname::text from pg_attribute
-            where attrelid = 'public.match_cards'::regclass and attnum > 0 and not attisdropped
-            order by attnum desc limit 1), 'body_type', 'match_cards: body_type is the last column');
+select is(array(select attname::text from pg_attribute
+                  where attrelid = 'public.match_cards'::regclass and attnum > 0 and not attisdropped
+                  order by attnum desc limit 2), array['note', 'body_type'],
+          'match_cards: body_type stays after the old columns, and X-01''s note comes after it');
 select ok(has_column_privilege('authenticated', 'public.search_profiles', 'opportunity_threshold_pct', 'UPDATE'),
           'the web can edit a search: it always sends opportunity_threshold_pct');
 

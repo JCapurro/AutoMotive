@@ -22,8 +22,8 @@ overriding system value values
   (996005, 'mercadolibre', 'X01-5', 'https://example.test/x01-5', 'Pgtap Sigo 5', 'Pgtap', 'Sigo', 13000, 'USD', 13000, 'active');
 
 insert into public.matches (search_profile_id, listing_id, score, level, score_breakdown, match_reasons, scoring_version)
-select 9961, 996000 + n, 100 - n, 'good', '{}', '{}', 'test' from generate_series(1, 5) n
-union all select 9962, 996001, 70, 'good', '{}', '{}', 'test';
+select 9961, 996000 + n, (100 - n)::smallint, 'good'::public.match_level, '{}'::jsonb, '{}'::jsonb, 'test' from generate_series(1, 5) n
+union all select 9962, 996001, 70, 'good'::public.match_level, '{}', '{}', 'test';
 
 insert into public.user_listing_interactions (user_id, listing_id, status, saved, note) values
   ('61616161-6161-6161-6161-616161616161', 996001, 'contacted', false, 'nota de A'),
