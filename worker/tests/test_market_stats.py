@@ -2,11 +2,15 @@
 flat rows made up by hand. No database."""
 from __future__ import annotations
 
+import io
 import unittest
 from datetime import date, datetime, timedelta, timezone
+from unittest.mock import AsyncMock, patch
 
 from normalization.zone import DEFAULT_ZONE_MAP
-from pipeline.market_stats import (aggregate, last_closed_week, percentile, report, week_bounds)
+from pipeline.market_stats import (aggregate, last_closed_week, next_run, percentile, report, scheduled_run,
+                                   week_bounds)
+from tools.market_stats import main as cli_main
 
 _AR = timezone(timedelta(hours=-3))
 WEEK = "2026-W44"                                   # Monday 26/10 to Sunday 1/11/2026
@@ -194,6 +198,75 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(rep["rows_with_price_sample"], 4)                    # model and body type, amba and todas
         self.assertEqual(sum(rep["price_n"].values()), len(out))
         self.assertGreater(rep["projected_mb_26_weeks"], 0)
+
+
+class ScheduleTests(unittest.IsolatedAsyncioTestCase):
+    SCHEDULE = {"schedule": {"weekday": 1, "hour": "06:00"}}
+
+    def test_next_run_is_the_next_monday_at_six_in_argentina(self):
+        thursday = datetime(2026, 10, 29, 12, 0, tzinfo=_AR)
+        self.assertEqual(next_run(thursday, self.SCHEDULE), datetime(2026, 11, 2, 6, 0, tzinfo=_AR))
+        monday_early = datetime(2026, 11, 2, 5, 59, tzinfo=_AR)
+        self.assertEqual(next_run(monday_early, self.SCHEDULE), datetime(2026, 11, 2, 6, 0, tzinfo=_AR))
+        monday_late = datetime(2026, 11, 2, 6, 0, tzinfo=_AR)
+        self.assertEqual(next_run(monday_late, self.SCHEDULE), datetime(2026, 11, 9, 6, 0, tzinfo=_AR))
+        utc = datetime(2026, 11, 2, 8, 0, tzinfo=timezone.utc)                # 05:00 in Argentina
+        self.assertEqual(next_run(utc, self.SCHEDULE), datetime(2026, 11, 2, 6, 0, tzinfo=_AR))
+        self.assertEqual(next_run(thursday, {"schedule": {"weekday": 3, "hour": "22:30"}}),
+                         datetime(2026, 11, 4, 22, 30, tzinfo=_AR))
+        self.assertEqual(next_run(thursday, {}), datetime(2026, 11, 2, 6, 0, tzinfo=_AR))   # the default
+
+    async def test_off_runs_nothing(self):
+        run = AsyncMock()
+        self.assertIsNone(await scheduled_run({"mode": "off", "write_enabled": True}, run=run))
+        self.assertIsNone(await scheduled_run({}, run=run))
+        run.assert_not_called()
+
+    async def test_dry_run_and_write_call_the_job_with_their_mode(self):
+        run = AsyncMock(return_value={"status": "ok"})
+        await scheduled_run({"mode": "dry_run", "write_enabled": False}, run=run)
+        run.assert_awaited_with(mode="dry_run", write_enabled=False)
+        await scheduled_run({"mode": "write", "write_enabled": True}, run=run)
+        run.assert_awaited_with(mode="write", write_enabled=True)
+
+
+class CliTests(unittest.IsolatedAsyncioTestCase):
+    async def cli(self, argv, *, cfg=None, result=None):
+        run = AsyncMock(return_value=result or {"status": "ok", "weeks": [WEEK], "rows_computed": 0,
+                                                "rows_written": 0, "report": None})
+        with patch("tools.market_stats.db.open_pool", AsyncMock()), \
+             patch("tools.market_stats.db.close_pool", AsyncMock()), \
+             patch("tools.market_stats.db.get_config", AsyncMock(return_value=cfg or {})), \
+             patch("tools.market_stats.run_market_stats", run), \
+             patch("sys.stdout", new_callable=io.StringIO) as out:
+            code = await cli_main(argv)
+        return code, out.getvalue(), run
+
+    async def test_dry_run_or_write_must_be_said(self):
+        with patch("sys.stderr", new_callable=io.StringIO), self.assertRaises(SystemExit):
+            await cli_main(["--week", WEEK])
+
+    async def test_dry_run(self):
+        code, _, run = await self.cli(["--week", WEEK, "--dry-run"])
+        self.assertEqual(code, 0)
+        run.assert_awaited_once_with("2026-W44", mode="preview", write_enabled=False)
+        code, _, run = await self.cli(["--week", "--dry-run"])                 # the last closed week
+        run.assert_awaited_once_with(None, mode="preview", write_enabled=False)
+
+    async def test_write_needs_write_enabled(self):
+        code, out, run = await self.cli(["--write"], cfg={"write_enabled": False})
+        self.assertEqual(code, 2)
+        self.assertIn("write_enabled", out)
+        run.assert_not_called()
+        code, _, run = await self.cli(["--write"], cfg={"write_enabled": True})
+        self.assertEqual(code, 0)
+        run.assert_awaited_once_with(None, mode="write", write_enabled=True)
+
+    async def test_a_failed_run_exits_1(self):
+        code, _, _ = await self.cli(["--dry-run"], result={"status": "failed", "error": "boom", "weeks": [],
+                                                           "rows_computed": 0, "rows_written": 0,
+                                                           "report": None})
+        self.assertEqual(code, 1)
 
 
 if __name__ == "__main__":

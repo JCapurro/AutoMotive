@@ -94,16 +94,16 @@ Files: `worker/pipeline/market_stats.py` (parte pura), `worker/tests/test_market
 
 Files: `worker/pipeline/market_stats.py` (parte con base), `worker/tests/test_market_stats_postgres.py`.
 
-- [ ] Escribir tests que fallen (en la misma clase de base): `fetch_rows(week, cfg)` devuelve una fila por aviso con banderas de confirmación y provincia/departamento de `listing_zones`, usando fixtures de `crawl_targets` con `last_full_read_at` posterior a `last_seen_at + 36 h` (patrón de `test_intelligence_postgres.py`) para que `listing_unconfirmed()` devuelva targets reales; `upsert_rows()` dos veces con la misma semana no duplica y reemplaza (idempotente); un aviso `gone` confirmado entra a `gone_count`, uno de Facebook (no está en `confirm_sources`) no.
-- [ ] Implementar `fetch_rows()` leyendo `app_config.comparables.confirm_sources`, `confirm_grace_hours` y `max_age_days` en cada corrida (no copiar la lista a una constante), cuidando el rendimiento de `listing_unconfirmed()`: llamarla solo para fuentes de `confirm_sources` (la migración de comparables documenta que el planificador es sensible); y `upsert_rows()` con `insert ... on conflict on constraint market_stats_unique do update`.
+- [x] Escribir tests que fallen (en la misma clase de base): `fetch_rows(week, cfg)` devuelve una fila por aviso con banderas de confirmación y provincia/departamento de `listing_zones`, usando fixtures de `crawl_targets` con `last_full_read_at` posterior a `last_seen_at + 36 h` (patrón de `test_intelligence_postgres.py`) para que `listing_unconfirmed()` devuelva targets reales; `upsert_rows()` dos veces con la misma semana no duplica y reemplaza (idempotente); un aviso `gone` confirmado entra a `gone_count`, uno de Facebook (no está en `confirm_sources`) no.
+- [x] Implementar `fetch_rows()` leyendo `app_config.comparables.confirm_sources`, `confirm_grace_hours` y `max_age_days` en cada corrida (no copiar la lista a una constante), cuidando el rendimiento de `listing_unconfirmed()`: llamarla solo para fuentes de `confirm_sources` (la migración de comparables documenta que el planificador es sensible); y `upsert_rows()` con `insert ... on conflict on constraint market_stats_unique do update`.
 - [ ] Correr `python -m pytest worker/tests/test_market_stats_postgres.py -q` con `TEST_DATABASE_URL`.
 
 ## Task 6: corrida, modos y CLI (tests primero)
 
 Files: `worker/pipeline/market_stats.py` (`run_market_stats`), `worker/tools/market_stats.py`, `worker/tests/test_market_stats.py`, `worker/tests/test_market_stats_postgres.py`.
 
-- [ ] Escribir tests que fallen: `--dry-run` no escribe nada (ni `market_stats` ni `market_stats_runs`) e imprime el informe; sin `--dry-run` hace falta `--write`, y con `write_enabled = false` aborta con mensaje claro; el modo programado `dry_run` deja **una** fila en `market_stats_runs` con `rows_written = 0`; `write` escribe y marca la corrida `ok`; un error en la corrida deja `status = 'failed'`, el texto en `market_stats_runs.error` y una fila en `pipeline_errors` con `stage = 'market_stats'` (vía `log_error()` de `db/repos/runs.py`); semana anterior a `recompute_weeks` rechazada (sin `--retro`); cada corrida recalcula también las `recompute_weeks` (2) anteriores; `sync_zones()` corre al empezar.
-- [ ] Implementar `run_market_stats(week=None, *, mode, write_enabled)` y `worker/tools/market_stats.py` (`python -m tools.market_stats --week [2026-W44] --dry-run`; sin valor, la última semana cerrada; `--write` explícito). Los errores nunca rompen el worker: se registran y se sigue.
+- [x] Escribir tests que fallen: `--dry-run` no escribe nada (ni `market_stats` ni `market_stats_runs`) e imprime el informe; sin `--dry-run` hace falta `--write`, y con `write_enabled = false` aborta con mensaje claro; el modo programado `dry_run` deja **una** fila en `market_stats_runs` con `rows_written = 0`; `write` escribe y marca la corrida `ok`; un error en la corrida deja `status = 'failed'`, el texto en `market_stats_runs.error` y una fila en `pipeline_errors` con `stage = 'market_stats'` (vía `log_error()` de `db/repos/runs.py`); semana anterior a `recompute_weeks` rechazada (sin `--retro`); cada corrida recalcula también las `recompute_weeks` (2) anteriores; `sync_zones()` corre al empezar.
+- [x] Implementar `run_market_stats(week=None, *, mode, write_enabled)` y `worker/tools/market_stats.py` (`python -m tools.market_stats --week [2026-W44] --dry-run`; sin valor, la última semana cerrada; `--write` explícito). Los errores nunca rompen el worker: se registran y se sigue.
 - [ ] Correr `python -m pytest worker/tests/test_market_stats.py worker/tests/test_market_stats_postgres.py -q`.
 
 ## Task 7: loop semanal y enganche en `main.py` (tests primero)
@@ -118,8 +118,8 @@ Files: `worker/pipeline/market_stats.py` (`market_stats_loop`), `worker/main.py`
 
 Files: `worker/pipeline/retention.py`, `worker/tests/test_market_stats_postgres.py`.
 
-- [ ] Escribir tests que fallen: `purge_market_stats()` borra `market_stats` con `week_start` anterior a `retention.market_stats_weeks` (26) semanas y las corridas viejas de `market_stats_runs`, conserva las recientes, y devuelve el conteo; si falta la clave usa 26.
-- [ ] Implementar `purge_market_stats()` en `worker/pipeline/retention.py` (mismo estilo que `purge_raw_pages`, leyendo `db.get_config("retention", {})`) y llamarla **al final de cada corrida `write`** desde `run_market_stats`. No editar `rescore.py`.
+- [x] Escribir tests que fallen: `purge_market_stats()` borra `market_stats` con `week_start` anterior a `retention.market_stats_weeks` (26) semanas y las corridas viejas de `market_stats_runs`, conserva las recientes, y devuelve el conteo; si falta la clave usa 26.
+- [x] Implementar `purge_market_stats()` en `worker/pipeline/retention.py` (mismo estilo que `purge_raw_pages`, leyendo `db.get_config("retention", {})`) y llamarla **al final de cada corrida `write`** desde `run_market_stats`. No editar `rescore.py`.
 - [ ] Correr `python -m pytest worker/tests/test_market_stats_postgres.py -k purge -q`.
 
 ## Task 9: verificación y cierre

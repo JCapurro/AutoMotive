@@ -29,13 +29,24 @@ null and the counts are kept.
 """
 from __future__ import annotations
 
+import asyncio
+import logging
 import math
+import traceback
 from collections import Counter, defaultdict
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Iterable
+from typing import Any, Awaitable, Callable, Iterable
 
-from normalization.zone import DEFAULT_ZONE_MAP, resolve_region
+from psycopg.types.json import Jsonb
+
+import db
+from db.repos.runs import log_error
+from normalization.zone import DEFAULT_ZONE_MAP, derive_zone, resolve_region
+from pipeline.market_zones import sync_zones
+from pipeline.retention import purge_market_stats
+
+log = logging.getLogger("market_stats")
 
 # America/Argentina/Buenos_Aires (no DST since 2009).
 _AR = timezone(timedelta(hours=-3))
@@ -286,3 +297,240 @@ def report_lines(rep: dict[str, Any]) -> list[str]:
         pct = 100 * s["no_zone"] / s["total"] if s["total"] else 0
         lines.append(f"  {source:<14} sin zona {s['no_zone']:>6} de {s['total']:>6} ({pct:.0f} %)")
     return lines
+
+
+# ---------------------------------------------------------------------------
+# Database: flat rows in, stats out
+# ---------------------------------------------------------------------------
+
+# listing_unconfirmed() only for the sources in confirm_sources, behind a CASE:
+# the planner is sensitive there (migration 20261106120000, comparable_listings).
+_FETCH = """
+SELECT l.id, l.source, l.make, l.model, l.body_type, l.year, l.status::text AS status,
+       l.price_usd::float8 AS price_usd, l.price_partial, l.probable_repost_of, l.first_seen_at,
+       greatest(l.last_seen_at, l.last_full_seen_at) AS seen_at, l.published_at,
+       l.attributes ? '_not_news' AS not_news, l.location_text, l.lat, l.lon,
+       z.province_id, z.department, z.precision, z.lat AS zone_lat, z.lon AS zone_lon,
+       %(confirm)s::jsonb ? l.source AS confirm_source,
+       CASE WHEN %(confirm)s::jsonb ? l.source
+            THEN EXISTS (SELECT 1 FROM public.listing_unconfirmed(
+                   l.source, l.make, l.model, l.year, l.mileage_km,
+                   greatest(l.last_seen_at, l.last_full_seen_at), %(confirm)s::jsonb,
+                   %(grace)s::numeric * interval '1 hour'))
+            ELSE false END AS unconfirmed
+  FROM listings l
+  LEFT JOIN listing_zones z ON z.listing_id = l.id
+ WHERE l.year IS NOT NULL
+   AND l.first_seen_at < %(end)s
+   AND greatest(l.last_seen_at, l.last_full_seen_at) >= %(since)s
+ ORDER BY l.id
+"""
+
+_COLUMNS = [f for f in StatRow.__dataclass_fields__]
+_UPSERT = (
+    f"INSERT INTO market_stats ({', '.join(_COLUMNS)}, as_of, run_id, basis, computed_at) "
+    f"VALUES ({', '.join(['%s'] * len(_COLUMNS))}, %s, %s, %s, now()) "
+    "ON CONFLICT ON CONSTRAINT market_stats_unique DO UPDATE SET "
+    + ", ".join(f"{c} = excluded.{c}" for c in _COLUMNS + ["as_of", "run_id", "basis", "computed_at"]))
+
+
+class WriteDisabled(RuntimeError):
+    """Writing market_stats needs app_config.market_stats.write_enabled (Juan turns it on)."""
+
+
+class WeekRejected(ValueError):
+    """A week not closed yet, or older than recompute_weeks (no --retro)."""
+
+
+async def fetch_rows(week: str | date, comparables: dict[str, Any]) -> list[dict[str, Any]]:
+    """One row per listing that may count in the week: first seen before its
+    end and seen in the max_age_days before its start. `comparables` is
+    app_config.comparables as read for this run (confirm_sources,
+    confirm_grace_hours, max_age_days). A listing whose zone row is missing or
+    stale gets its zone derived here, in memory."""
+    start, end = week_bounds(week)
+    params = {"confirm": Jsonb(list(comparables.get("confirm_sources") or [])),
+              "grace": float(comparables.get("confirm_grace_hours", 36)),
+              "end": end, "since": start - timedelta(days=int(comparables.get("max_age_days", 30)))}
+    async with db.connection() as cx:
+        rows = await (await cx.execute(_FETCH, params)).fetchall()
+    for r in rows:
+        if (r["zone_lat"], r["zone_lon"]) != (r["lat"], r["lon"]):
+            facts = derive_zone(r["lat"], r["lon"], r["location_text"], r["source"])
+            r["province_id"], r["department"], r["precision"] = (
+                (facts.province_id, facts.department, facts.precision) if facts else (None, None, None))
+    return rows
+
+
+async def upsert_rows(stats: list[StatRow], *, weeks: list[date], run_id: int | None, as_of: datetime) -> int:
+    """Write the stats of `weeks`, replacing what those weeks had: rows of
+    groups that no longer appear are deleted. Idempotent."""
+    async with db.connection() as cx:
+        async with cx.cursor() as cur:
+            if stats:
+                await cur.executemany(_UPSERT, [(*asdict(s).values(), as_of, run_id, BASIS) for s in stats])
+            # now() is the transaction's: what this call wrote has it.
+            await cur.execute("DELETE FROM market_stats WHERE week_start = ANY(%s) AND computed_at < now()",
+                              (list(weeks),))
+    return len(stats)
+
+
+# ---------------------------------------------------------------------------
+# A run
+# ---------------------------------------------------------------------------
+
+async def _configs() -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    cfg = {**DEFAULT_MARKET_STATS, **(await db.get_config("market_stats", {}) or {})}
+    comparables = await db.get_config("comparables", {}) or {}
+    zone_map = await db.get_config("market_zones", None) or DEFAULT_ZONE_MAP
+    return cfg, comparables, zone_map
+
+
+def weeks_to_compute(week: str | date | None, now: datetime, recompute_weeks: int) -> list[str]:
+    """The asked week (default: the last closed one) and the recompute_weeks
+    before it, never older than recompute_weeks before the last closed week."""
+    latest = _monday(last_closed_week(now))
+    oldest = latest - timedelta(weeks=recompute_weeks)
+    target = _monday(week) if week is not None else latest
+    if target > latest:
+        raise WeekRejected(f"la semana {week_label(target)} todavía no cerró")
+    if target < oldest:
+        raise WeekRejected(f"la semana {week_label(target)} es anterior a {week_label(oldest)}: "
+                           "las semanas pasadas no se reconstruyen")
+    return [week_label(target - timedelta(weeks=k)) for k in range(recompute_weeks + 1)
+            if target - timedelta(weeks=k) >= oldest]
+
+
+async def _start_run(week: str, mode: str, params: dict[str, Any]) -> int:
+    async with db.connection() as cx:
+        row = await (await cx.execute(
+            "INSERT INTO market_stats_runs (week_start, mode, params) VALUES (%s, %s, %s) RETURNING id",
+            (_monday(week), mode, Jsonb(params)))).fetchone()
+    return row["id"]
+
+
+async def _finish_run(run_id: int, *, status: str, error: str | None = None, **counts: Any) -> None:
+    async with db.connection() as cx:
+        await cx.execute(
+            "UPDATE market_stats_runs SET status = %s, finished_at = now(), error = %s, "
+            "  rows_computed = %s, rows_written = %s, listings_read = %s, no_zone_by_source = %s "
+            " WHERE id = %s",
+            (status, error, counts.get("rows_computed"), counts.get("rows_written"), counts.get("listings_read"),
+             Jsonb(counts["no_zone_by_source"]) if counts.get("no_zone_by_source") is not None else None,
+             run_id))
+
+
+async def run_market_stats(week: str | date | None = None, *, mode: str, write_enabled: bool,
+                           now: datetime | None = None) -> dict[str, Any]:
+    """Compute the week (default: the last closed one) and the recompute_weeks
+    before it.
+
+    * preview (the CLI's --dry-run): writes nothing at all, zones included;
+      the report is the output.
+    * dry_run (scheduled): zones are synced and the run is recorded, with no
+      stats written.
+    * write: also writes market_stats and then purges the old weeks. Needs
+      write_enabled (WriteDisabled otherwise).
+
+    A failure is recorded (market_stats_runs.error and pipeline_errors) and
+    returned as status 'failed', never raised: it must not stop the worker."""
+    if mode not in ("preview", "dry_run", "write"):
+        raise ValueError(f"modo desconocido: {mode!r}")
+    if mode == "write" and not write_enabled:
+        raise WriteDisabled("app_config.market_stats.write_enabled es false: no se escribe market_stats")
+    now = now or datetime.now(_AR)
+    cfg, comparables, zone_map = await _configs()
+    weeks = weeks_to_compute(week, now, int(cfg.get("recompute_weeks", 2)))
+    target = weeks[0]
+    agg_cfg = {**cfg, "max_age_days": int(comparables.get("max_age_days", 30))}
+    params = {"weeks": weeks, "min_n": cfg.get("min_n"), "year_band": cfg.get("year_band"),
+              "confirm_since": cfg.get("confirm_since"), "zone_map_version": zone_map.get("version"),
+              "confirm_sources": comparables.get("confirm_sources"),
+              "confirm_grace_hours": comparables.get("confirm_grace_hours"),
+              "max_age_days": agg_cfg["max_age_days"]}
+    result: dict[str, Any] = {"status": "ok", "run_id": None, "weeks": weeks, "rows_computed": 0,
+                              "rows_written": 0, "report": None}
+    try:
+        if mode != "preview":
+            result["run_id"] = await _start_run(target, mode, params)
+        await sync_zones(dry_run=mode == "preview")
+        for w in weeks:
+            rows = await fetch_rows(w, comparables)
+            stats = aggregate(rows, week=w, zone_map=zone_map, cfg=agg_cfg)
+            result["rows_computed"] += len(stats)
+            if w == target:
+                result["report"] = report(stats, rows, week=w, cfg=agg_cfg, zone_map=zone_map)
+            if mode == "write":
+                result["rows_written"] += await upsert_rows(stats, weeks=[_monday(w)],
+                                                            run_id=result["run_id"], as_of=now)
+        if mode == "write":
+            await purge_market_stats()
+        if result["run_id"] is not None:
+            await _finish_run(result["run_id"], status="ok", rows_computed=result["rows_computed"],
+                              rows_written=result["rows_written"],
+                              listings_read=result["report"]["listings_read"],
+                              no_zone_by_source=result["report"]["no_zone_by_source"])
+        log.info("market_stats %s %s: %d filas calculadas, %d escritas", mode, target,
+                 result["rows_computed"], result["rows_written"])
+    except Exception:
+        error = traceback.format_exc()
+        result.update(status="failed", error=error)
+        await log_error("market_stats", target, error)
+        if result["run_id"] is not None:
+            try:
+                await _finish_run(result["run_id"], status="failed", error=error[-4000:],
+                                  rows_computed=result["rows_computed"], rows_written=result["rows_written"])
+            except Exception:
+                log.exception("could not mark market_stats run %s failed", result["run_id"])
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Weekly schedule
+# ---------------------------------------------------------------------------
+
+def next_run(now: datetime, cfg: dict[str, Any]) -> datetime:
+    """The next market_stats.schedule slot (ISO weekday, "HH:MM" in Argentina)
+    strictly after `now`."""
+    schedule = {**DEFAULT_MARKET_STATS["schedule"], **((cfg or {}).get("schedule") or {})}
+    hh, mm = (int(x) for x in str(schedule["hour"]).split(":"))
+    local = now.astimezone(_AR)
+    days = (int(schedule["weekday"]) - local.isoweekday()) % 7
+    slot = (local + timedelta(days=days)).replace(hour=hh, minute=mm, second=0, microsecond=0)
+    return slot if slot > local else slot + timedelta(days=7)
+
+
+async def scheduled_run(cfg: dict[str, Any], *,
+                        run: Callable[..., Awaitable[dict[str, Any]]] | None = None) -> dict[str, Any] | None:
+    """What a slot does with app_config.market_stats.mode: off nothing,
+    dry_run or write the run of that mode."""
+    mode = (cfg or {}).get("mode", "off")
+    if mode not in ("dry_run", "write"):
+        return None
+    return await (run or run_market_stats)(mode=mode, write_enabled=bool(cfg.get("write_enabled")))
+
+
+async def market_stats_loop(stop: asyncio.Event) -> None:
+    """Run the job at each market_stats.schedule slot, as its mode says (born
+    off). The config is read again every time, so /admin/config applies
+    without a deploy."""
+    while not stop.is_set():
+        try:
+            cfg = {**DEFAULT_MARKET_STATS, **(await db.get_config("market_stats", {}) or {})}
+            now = datetime.now(_AR)
+            wait = (next_run(now, cfg) - now).total_seconds()
+        except Exception:
+            await log_error("market_stats", "loop", traceback.format_exc())
+            wait = 3600.0
+            cfg = None
+        try:
+            await asyncio.wait_for(stop.wait(), timeout=wait)
+            return
+        except asyncio.TimeoutError:
+            pass
+        if cfg is None:
+            continue
+        try:
+            await scheduled_run({**DEFAULT_MARKET_STATS, **(await db.get_config("market_stats", {}) or {})})
+        except Exception:
+            await log_error("market_stats", "loop", traceback.format_exc())
