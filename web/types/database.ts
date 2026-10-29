@@ -972,6 +972,13 @@ isOneToOne: false
                   Relationships: [
 
                   ]
+                },"v_contacted_metric": {
+                  Row: {
+                    "events": number | null,"users": number | null
+                  }
+                  Relationships: [
+
+                  ]
                 },"v_first_value": {
                   Row: {
                     "created_at": string | null,"first_value_at": string | null,"hours_to_first_value": number | null,"is_backfill": boolean | null,"search_profile_id": number | null,"user_id": string | null

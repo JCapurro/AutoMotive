@@ -51,6 +51,27 @@ function CriterionTile({ r }: { r: Criterion }) {
   );
 }
 
+/**
+ * X-01, decision 2: "Contactado" costs a click, so it left criterion 5 and is
+ * measured on its own (v_contacted_metric, migration 20261119130000).
+ */
+export function ContactedMetric({ row }: { row: { users: number | null; events: number | null } | null }) {
+  return (
+    <p className="text-sm" data-testid="contacted-metric">
+      <span className="font-medium">Contactado</span>{" "}
+      {row ? (
+        <>
+          <span className="font-semibold tabular-nums">{count(row.users)}</span> usuarios ·{" "}
+          <span className="font-semibold tabular-nums">{count(row.events)}</span> cambios a Contactado
+        </>
+      ) : (
+        <Pill>Sin datos</Pill>
+      )}
+      <span className="block text-xs text-muted-foreground">Se mide aparte: no cuenta para el criterio 5 (Outcome).</span>
+    </p>
+  );
+}
+
 /** 0–100 track, the fill for the value and a tick at the threshold. */
 function Meter({ value, threshold, label }: { value: number; threshold: number; label: string }) {
   const clamp = (v: number) => Math.max(0, Math.min(v, 100));
