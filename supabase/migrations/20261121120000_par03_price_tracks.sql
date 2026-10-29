@@ -48,6 +48,10 @@ $$;
 --   cum_usd: the same fall in dollars: USD directly; ARS with the last
 --            snapshot's fx_rate (today's dollar, so the dollar's move is no
 --            drop); price_usd when the currency changed.
+--   Both come rounded as they are shown (cum_pct to 0,1 and cum_usd to whole
+--   dollars; numeric round(), half away from zero), so the worker (Python)
+--   and the web (JS), whose own float rounding differs on halves (6,25 or
+--   2.500,50), print the same figures.
 create function public.listing_price_tracks(p_listing_ids bigint[])
 returns table (listing_id bigint, drops integer, rises integer, first_at timestamptz,
                first_price numeric, first_currency text, last_price numeric, last_currency text,
@@ -114,13 +118,13 @@ language sql stable security invoker set search_path = '' as $$
                     then case when f.price > 0 then (f.price - l.price) / f.price * 100 end
                     else case when f.price_usd > 0 and l.price_usd is not null
                               then (f.price_usd - l.price_usd) / f.price_usd * 100 end
-               end, 2),
+               end, 1),
          round(case when f.currency = l.currency and l.currency = 'USD' then f.price - l.price
                     when f.currency = l.currency and l.fx_rate > 0 then (f.price - l.price) / l.fx_rate
                     when f.currency = l.currency and l.price_usd > 0 then (f.price - l.price) / (l.price / l.price_usd)
                     when f.currency <> l.currency and f.price_usd is not null and l.price_usd is not null
                     then f.price_usd - l.price_usd
-               end, 2),
+               end, 0),
          c.last_drop_at
     from pts f
     join pts l on l.listing_id = f.listing_id and l.n_desc = 1

@@ -39,6 +39,17 @@ class PriceTrackLineTests(unittest.TestCase):
         self.assertEqual(templates.price_track_line(track(drops=3, cum_pct=12.04, cum_usd=2900.4)),
                          "Bajó 3 veces desde que la vimos: -USD 2.900 (-12,0%).")
 
+    def test_halves_round_up_as_on_the_web(self):
+        # The same case as web/lib/price-track.test.ts ("rounds halves up as the worker does"):
+        # Python's round() and f"{:.1f}" would print 6,2 % and USD 2.500 where the web says 6,3 % and 2.501.
+        line = "Bajó 2 veces desde que la vimos: -USD 2.501 (-6,3%)."
+        self.assertEqual(templates.price_track_line(track(drops=2, cum_pct=6.25, cum_usd=2500.5)), line)
+        p = service.price_track_payload(row(cum_pct=Decimal("6.25"), cum_usd=Decimal("2500.50")))
+        self.assertEqual(templates.price_track_line(p), line)
+        t = track(drops=2, cum_pct=10.25, cum_usd=800.5, cum_ars=1_200_000.5, currency="ARS")
+        self.assertEqual(templates.price_track_line(t),
+                         "Bajó 2 veces desde que la vimos: -$ 1.200.001 (-10,3%), unos USD 801.")
+
     def test_pesos_with_dollars(self):
         t = track(drops=2, cum_pct=10, cum_usd=800, cum_ars=1_200_000, currency="ARS")
         self.assertEqual(templates.price_track_line(t),

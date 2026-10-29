@@ -59,8 +59,23 @@ describe("summaryLine", () => {
   it("counts the drops since the first snapshot", () => {
     expect(summaryLine(track())).toBe(`1 baja · -USD 1.500 (-6,3%) desde el ${D}`);
     expect(summaryLine(track({ drops: 2 }))).toBe(`2 bajas · -USD 1.500 (-6,3%) desde el ${D}`);
-    expect(summaryLine(ars({ drops: 3 }))).toBe(`3 bajas · -$ 1.200.000 (-10,0%) desde el ${D}`);
     expect(summaryLine(track({ cum_pct: -2 }))).toBeNull();
+  });
+
+  it("tells pesos in dollars, the only approved form", () => {
+    expect(summaryLine(ars({ drops: 3 }))).toBe(`3 bajas · -USD 800 (-10,0%) desde el ${D}`);
+    expect(summaryLine(ars({ cum_usd: null }))).toBeNull();
+    expect(summaryLine(ars({ cum_usd: 0 }))).toBeNull();
+  });
+});
+
+describe("rounding (PAR-03)", () => {
+  // The same case as worker/tests/test_notifications_price_track.py
+  // (test_halves_round_up_as_on_the_web): both print 6,3 % and USD 2.501.
+  it("rounds halves up as the worker does", () => {
+    const t = track({ drops: 2, cum_pct: 6.25, cum_usd: 2500.5 });
+    expect(trackLine(t)).toBe("Bajó 2 veces desde que la vimos: -USD 2.501 (-6,3%).");
+    expect(summaryLine(t)).toBe(`2 bajas · -USD 2.501 (-6,3%) desde el ${D}`);
   });
 });
 

@@ -22,6 +22,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+from decimal import ROUND_HALF_UP, Decimal
 from html import escape
 from typing import Any, Mapping
 
@@ -94,8 +95,15 @@ def age_line(listing: Mapping[str, Any], now: datetime) -> str | None:
     return "Fecha de publicación no informada."
 
 
+def half_up(value: float | Decimal, decimals: int = 0) -> Decimal:
+    """Rounds halves up, as the web's toFixed()/Math.round() do on the figures
+    it shows (Python's round() and f"{:.1f}" send 6.25 to 6.2 and 2500.5 to
+    2500). Rounds the number as written (repr), not its binary value."""
+    return Decimal(str(value)).quantize(Decimal(1).scaleb(-decimals), rounding=ROUND_HALF_UP)
+
+
 def pct(value: float, decimals: int = 1) -> str:
-    return f"{value:.{decimals}f}".replace(".", ",")
+    return f"{half_up(value, decimals):.{decimals}f}".replace(".", ",")
 
 
 def price_track_line(track: Mapping[str, Any] | None) -> str | None:
@@ -108,9 +116,9 @@ def price_track_line(track: Mapping[str, Any] | None) -> str | None:
     drops, cum_pct = int(track.get("drops") or 0), track.get("cum_pct")
     if drops <= 0 or cum_pct is None or cum_pct <= 0:
         return None
-    usd = track.get("cum_usd")
+    usd = int(half_up(track["cum_usd"])) if track.get("cum_usd") else None
     if track.get("currency") == "ARS" and track.get("cum_ars"):
-        amount = f"$ {copy.number(track['cum_ars'])}"
+        amount = f"$ {copy.number(int(half_up(track['cum_ars'])))}"
         about = copy.PRICE_TRACK_ABOUT_USD.format(usd=copy.money(usd, "USD")) if usd else ""
     elif usd:
         amount, about = copy.money(usd, "USD"), ""

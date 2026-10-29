@@ -56,6 +56,10 @@ test("bajas de precio: tarjeta, ficha y price_history_expanded", async ({ page }
     await expect(card(seeded.detected).getByTestId("card-price-track")).toHaveText(
       "Bajó 1 vez desde que la vimos: -USD 500 (-4,8%).",
     );
+    // The same halves as the worker's email: 6,25 % and USD 2.500,50 round up.
+    await expect(card(seeded.halves).getByTestId("card-price-track")).toHaveText(
+      "Bajó 1 vez desde que la vimos: -USD 2.501 (-6,3%).",
+    );
     await expect(card(seeded.rise)).toBeVisible();
     await expect(card(seeded.rise).getByTestId("card-price-track")).toHaveCount(0);
     await expect(card(seeded.flat).getByTestId("card-price-track")).toHaveCount(0);
@@ -101,6 +105,11 @@ test("bajas de precio: tarjeta, ficha y price_history_expanded", async ({ page }
     await expect(page.getByTestId("price-track-note")).toHaveText(
       "No sabemos cuándo se publicó; contamos desde que la detectamos.",
     );
+  });
+
+  await test.step("la ficha redondea las mitades como la tarjeta y el email", async () => {
+    await page.goto(`/app/listings/${seeded.halves}`);
+    await expect(page.getByTestId("price-track-summary")).toContainText("1 baja · -USD 2.501 (-6,3%) desde el ");
   });
 
   await test.step("una suba conserva «Subió» y un solo precio no muestra la sección", async () => {

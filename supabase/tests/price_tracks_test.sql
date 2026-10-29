@@ -4,7 +4,7 @@
 -- Run with: supabase test db
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(40);
+select plan(42);
 
 insert into public.listings (id, source, external_id, url, title, make, model, price, currency, price_usd)
 overriding system value
@@ -39,7 +39,9 @@ insert into t_snap values
   -- 10: ARS drop while the dollar moves: cum_usd with the last fx_rate
   (997010, 10, 12000000, 'ARS', 10000, 1200, 'new'), (997010, 5, 10800000, 'ARS', 7200, 1500, 'price'),
   -- 11: only a rise
-  (997011, 10, 10000, 'USD', 10000, null, 'new'), (997011, 5, 10500, 'USD', 10500, null, 'price');
+  (997011, 10, 10000, 'USD', 10000, null, 'new'), (997011, 5, 10500, 'USD', 10500, null, 'price'),
+  -- 12: halves: 2.500,50 of 40.008 is exactly 6,25 %
+  (997012, 10, 40008, 'USD', 40008, null, 'new'), (997012, 5, 37507.50, 'USD', 37507.50, null, 'price');
 
 insert into public.listing_snapshots (listing_id, observed_at, price, currency, price_usd, fx_rate, attrs_hash, change_kind)
 select listing_id, date_trunc('day', now()) - make_interval(days => days) + interval '12 hours',
@@ -55,7 +57,7 @@ select is((select value from public.app_config where key = 'price_track'), '{"mi
 select is(public.price_track_min_drop_pct(), 1::numeric, 'price_track_min_drop_pct reads it');
 
 -- ------------------------------------------------------------ rows
-select is((select count(*)::int from t_track), 10,
+select is((select count(*)::int from t_track), 11,
           'one row per listing with a priced snapshot (none for the listing without snapshots)');
 select is((select count(*)::int from t_track where listing_id = 997008), 0, '... the listing without snapshots has none');
 select is((select count(*)::int from public.listing_price_tracks('{}'::bigint[])), 0, 'an empty array returns nothing');
@@ -63,7 +65,7 @@ select is((select count(*)::int from public.listing_price_tracks(array[997001, 9
           'repeated and null ids return one row');
 
 select results_eq($$select drops, rises, cum_pct, cum_usd, first_price, last_price from t_track where listing_id = 997001$$,
-                  $$values (1, 0, 10.00::numeric, 1000.00::numeric, 10000::numeric, 9000::numeric)$$,
+                  $$values (1, 0, 10.0::numeric, 1000::numeric, 10000::numeric, 9000::numeric)$$,
                   'one drop in USD: 10 %, USD 1.000');
 select is((select last_drop_at from t_track where listing_id = 997001),
           date_trunc('day', now()) - interval '5 days' + interval '12 hours', '... last_drop_at is the drop');
@@ -71,41 +73,49 @@ select is((select first_at from t_track where listing_id = 997001),
           date_trunc('day', now()) - interval '10 days' + interval '12 hours', '... first_at is the first snapshot');
 
 select results_eq($$select drops, rises, cum_pct, cum_usd from t_track where listing_id = 997002$$,
-                  $$values (3, 0, 15.00::numeric, 3000.00::numeric)$$, 'three drops in USD');
+                  $$values (3, 0, 15.0::numeric, 3000::numeric)$$, 'three drops in USD');
 select is((select last_drop_at from t_track where listing_id = 997002),
           date_trunc('day', now()) - interval '4 days' + interval '12 hours', '... last_drop_at is the latest drop');
 
 select results_eq($$select drops, rises, cum_pct, cum_usd from t_track where listing_id = 997003$$,
-                  $$values (1, 1, -10.00::numeric, -1000.00::numeric)$$,
+                  $$values (1, 1, -10.0::numeric, -1000::numeric)$$,
                   'a drop and a later rise: net rise, cum_pct negative');
 select ok((select cum_pct <= 0 from t_track where listing_id = 997003), '... so no net drop');
 
 select results_eq($$select drops, rises, cum_pct, first_at from t_track where listing_id = 997004$$,
-                  $$values (1, 0, 5.00::numeric, date_trunc('day', now()) - interval '10 days' + interval '12 hours')$$,
+                  $$values (1, 0, 5.0::numeric, date_trunc('day', now()) - interval '10 days' + interval '12 hours')$$,
                   'repeated prices collapse: one drop from the first snapshot');
 
 select results_eq($$select drops, rises, cum_pct, cum_usd from t_track where listing_id = 997005$$,
-                  $$values (0, 0, 0.00::numeric, 0.00::numeric)$$,
+                  $$values (0, 0, 0.0::numeric, 0::numeric)$$,
                   'ARS with a stable price and the dollar moving: no drop');
 
 select results_eq($$select drops, cum_pct, cum_usd, first_currency, last_currency from t_track where listing_id = 997006$$,
-                  $$values (1, 5.00::numeric, 500.00::numeric, 'ARS'::text, 'USD'::text)$$,
+                  $$values (1, 5.0::numeric, 500::numeric, 'ARS'::text, 'USD'::text)$$,
                   'ARS to USD: measured in price_usd');
 
 select results_eq($$select drops, rises, cum_pct from t_track where listing_id = 997007$$,
-                  $$values (0, 0, 0.50::numeric)$$, 'a fall under min_drop_pct is no drop');
+                  $$values (0, 0, 0.5::numeric)$$, 'a fall under min_drop_pct is no drop');
 
 select results_eq($$select drops, rises, cum_pct, cum_usd, first_at, last_drop_at from t_track where listing_id = 997009$$,
-                  $$values (0, 0, 0.00::numeric, 0.00::numeric,
+                  $$values (0, 0, 0.0::numeric, 0::numeric,
                             date_trunc('day', now()) - interval '10 days' + interval '12 hours', null::timestamptz)$$,
                   'one point (a priceless snapshot is ignored): no drop');
 
 select results_eq($$select drops, cum_pct, cum_usd, last_currency from t_track where listing_id = 997010$$,
-                  $$values (1, 10.00::numeric, 800.00::numeric, 'ARS'::text)$$,
+                  $$values (1, 10.0::numeric, 800::numeric, 'ARS'::text)$$,
                   'ARS drop: cum_pct in pesos, cum_usd with the last fx_rate (1.200.000 / 1500)');
 
 select results_eq($$select drops, rises, cum_pct from t_track where listing_id = 997011$$,
-                  $$values (0, 1, -5.00::numeric)$$, 'only a rise: no drop');
+                  $$values (0, 1, -5.0::numeric)$$, 'only a rise: no drop');
+
+-- The worker (Python) and the web (JS) round halves differently, so the
+-- function hands both the figures already rounded as they are shown.
+select results_eq($$select cum_pct, cum_usd from t_track where listing_id = 997012$$,
+                  $$values (6.3::numeric, 2501::numeric)$$,
+                  'halves round up here: 6,25 % is 6,3 and USD 2.500,50 is 2.501');
+select ok((select scale(cum_pct) = 1 and scale(cum_usd) = 0 from t_track where listing_id = 997001),
+          '... cum_pct comes with one decimal and cum_usd in whole dollars');
 
 -- ------------------------------------------------------------ min_drop_pct follows app_config
 update public.app_config set value = '{"min_drop_pct": 0.4}' where key = 'price_track';
@@ -114,7 +124,7 @@ select is((select drops from public.listing_price_tracks(array[997007]::bigint[]
 update public.app_config set value = '{"min_drop_pct": 6}' where key = 'price_track';
 select is((select drops from public.listing_price_tracks(array[997002]::bigint[])), 0,
           'min_drop_pct 6: the 5 % steps do not count');
-select is((select cum_pct from public.listing_price_tracks(array[997002]::bigint[])), 15.00::numeric,
+select is((select cum_pct from public.listing_price_tracks(array[997002]::bigint[])), 15.0::numeric,
           '... and cum_pct does not depend on it');
 update public.app_config set value = '{"min_drop_pct": "x"}' where key = 'price_track';
 select is(public.price_track_min_drop_pct(), 1::numeric, 'a non-numeric min_drop_pct falls back to 1');
@@ -138,7 +148,7 @@ select is((select count(*)::int from public.listing_price_tracks(array(select 99
             where listing_id between 997001 and 997012 and price is not null),
           '... and gets a row for each listing whose snapshots it reads');
 select results_eq($$select drops, cum_pct, cum_usd from public.listing_price_tracks(array[997002]::bigint[])$$,
-                  $$values (3, 15.00::numeric, 3000.00::numeric)$$, '... with the same numbers');
+                  $$values (3, 15.0::numeric, 3000::numeric)$$, '... with the same numbers');
 select is(public.price_track_min_drop_pct(), 1::numeric, '... and reads the setting without reaching app_config');
 select throws_ok($$select * from public.app_config$$, '42501', null, '... while app_config stays closed to it');
 reset role;

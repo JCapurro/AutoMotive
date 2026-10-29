@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 
 import httpx
 import pytest
@@ -19,6 +20,7 @@ from db.repos import config as app_config
 from db.repos import matches as matches_repo
 from db.repos import notifications as repo
 from db.repos.listings import rows_for_scoring
+from notifications import service, templates
 from notifications.channels.email import ResendEmailChannel
 from notifications.channels.telegram import TelegramChannel
 from notifications.channels.web import WebChannel
@@ -498,6 +500,16 @@ class PriceTrackTests(NotificationsCase):
         self.assertEqual((tracks[ars]["drops"], float(tracks[ars]["cum_pct"]), float(tracks[ars]["cum_usd"])),
                          (1, 10.0, 800.0))
         self.assertEqual(await repo.price_tracks([]), {})
+
+    async def test_halves_come_rounded_as_the_web_shows_them(self):
+        # 40.008 → 37.507,50: USD 2.500,50, exactly 6,25 %. The function rounds both
+        # (web/e2e/price-tracks.spec.ts checks the same listing on the card and the page).
+        halves = await self.listing(price=37_507.5, price_usd=37_507.5)
+        await self.snapshots(halves, (7, 40_008, "USD", 40_008, None), (1, 37_507.5, "USD", 37_507.5, None))
+        track = (await repo.price_tracks([halves]))[halves]
+        self.assertEqual((track["cum_pct"], track["cum_usd"]), (Decimal("6.3"), Decimal("2501")))
+        self.assertEqual(templates.price_track_line(service.price_track_payload(track)),
+                         "Bajó 1 vez desde que la vimos: -USD 2.501 (-6,3%).")
 
     async def test_an_opportunity_carries_its_drops_and_the_digest_recomputes_them(self):
         deal = await self.listing(price=9_000, price_usd=9_000)
