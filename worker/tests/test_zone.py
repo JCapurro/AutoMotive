@@ -73,6 +73,22 @@ class DeriveZoneTests(unittest.TestCase):
         self.assertEqual((facts.province_id, facts.precision), ("14", "province"))
         self.assertEqual(resolve_region(DEFAULT_ZONE_MAP, "14", None, "province"), "cordoba")
 
+    def test_caba_with_its_province_is_caba(self):
+        # Sources write the city with the province around it: CABA wins over
+        # Buenos Aires, and the place is AMBA.
+        for text in ("Capital Federal, Buenos Aires", "CABA, Buenos Aires",
+                     "Capital Federal, Buenos Aires (A.M.B.A.)", "CABA (A.M.B.A.), Buenos Aires",
+                     "Buenos Aires, Capital Federal, Argentina"):
+            with self.subTest(text):
+                facts = derive_zone(-34.6037, -58.3816, text, "mercadolibre")
+                self.assertEqual((facts.province_id, facts.precision), ("02", "province"))
+                self.assertEqual(resolve_region(DEFAULT_ZONE_MAP, facts.province_id, facts.department,
+                                                facts.precision), "amba")
+
+    def test_two_other_provinces_have_none(self):
+        facts = derive_zone(-32.9442, -60.6505, "Santa Fe, Córdoba", "facebook")
+        self.assertEqual((facts.province_id, facts.precision), (None, "province"))
+
     def test_argentina_has_no_province(self):
         facts = derive_zone(-38.4161, -63.6167, "Argentina", "facebook")
         self.assertEqual((facts.province_id, facts.precision), (None, "province"))
@@ -105,6 +121,31 @@ class DeriveZoneTests(unittest.TestCase):
                 (-34.3494, -58.7916): "buenos_aires_resto"}.items():  # Escobar
             with self.subTest(expected, lat=lat):
                 self.assertEqual(region(lat, lon), expected)
+
+
+class ResolveRegionTests(unittest.TestCase):
+    def test_departments_match_without_accents_or_case(self):
+        self.assertEqual(resolve_region(DEFAULT_ZONE_MAP, "06", "MORON", "locality"), "amba")
+        self.assertEqual(resolve_region(DEFAULT_ZONE_MAP, "06", "Pilar", "locality"), "buenos_aires_resto")
+        self.assertIsNone(resolve_region(DEFAULT_ZONE_MAP, "99", "Pilar", "locality"))
+        self.assertIsNone(resolve_region({}, "06", "Morón", "locality"))
+
+    def test_the_map_is_prepared_once_per_config(self):
+        zone._compiled.cache = None
+        with patch("normalization.zone._fold", wraps=zone._fold) as fold:
+            resolve_region(DEFAULT_ZONE_MAP, "06", "Morón", "locality")
+            first = fold.call_count
+            for _ in range(50):
+                resolve_region(DEFAULT_ZONE_MAP, "06", "Morón", "locality")
+        self.assertGreater(first, len(DEFAULT_ZONE_MAP["rules"][1]["departments"]))
+        self.assertLessEqual(fold.call_count, first + 50)              # the department only, not the rules
+
+    def test_another_map_is_prepared_again(self):
+        edited = {"version": 2, "rules": [{"region": "amba", "province": "06", "departments": ["Pilar"]}]}
+        self.assertEqual(resolve_region(DEFAULT_ZONE_MAP, "06", "Pilar", "locality"), "buenos_aires_resto")
+        self.assertEqual(resolve_region(edited, "06", "Pilar", "locality"), "amba")
+        self.assertIsNone(resolve_region(edited, "06", "Morón", "locality"))
+        self.assertEqual(resolve_region(DEFAULT_ZONE_MAP, "06", "Pilar", "locality"), "buenos_aires_resto")
 
 
 if __name__ == "__main__":

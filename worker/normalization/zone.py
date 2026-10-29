@@ -20,6 +20,7 @@ web/lib/data/argentina-locations.json (a test keeps them identical).
 """
 from __future__ import annotations
 
+import copy
 import json
 import math
 import unicodedata
@@ -136,13 +137,19 @@ def nearest_locality(lat: float, lon: float) -> Locality:
                     round(haversine_km(lat, lon, best.lat, best.lon), 2))
 
 
+_CABA, _BUENOS_AIRES = "02", "06"
+
+
 def _province_only(text: str) -> tuple[bool, str | None]:
-    """Whether the text names just a province (or the country), and which one."""
+    """Whether the text names just a province (or the country), and which one.
+    CABA with Buenos Aires around it ("Capital Federal, Buenos Aires") is CABA."""
     parts = {normalize_location_query(p) for p in text.split(",")} - {""}
     names = _province_names()
     provinces = {names[p] for p in parts if p in names}
     if not parts or not parts <= set(names) | {"argentina"}:
         return False, None
+    if provinces == {_CABA, _BUENOS_AIRES}:
+        return True, _CABA
     return True, (provinces.pop() if len(provinces) == 1 else None)
 
 
@@ -165,19 +172,53 @@ def _fold(value: str) -> str:
     return "".join(c for c in unicodedata.normalize("NFD", value.lower()) if unicodedata.category(c) != "Mn")
 
 
+@dataclass(frozen=True)
+class _CompiledMap:
+    # Per province, its rules in order: (region, folded departments or None for all).
+    rules: dict[str, list[tuple[str | None, frozenset[str] | None]]]
+    # Per province, its region when the whole province is in one (else None).
+    whole: dict[str, str | None]
+
+
+def _compile(zone_map: dict[str, Any]) -> _CompiledMap:
+    rules: dict[str, list[tuple[str | None, frozenset[str] | None]]] = {}
+    for r in zone_map.get("rules", []):
+        departments = r.get("departments")
+        rules.setdefault(r.get("province"), []).append(
+            (r.get("region"), None if departments is None else frozenset(_fold(d) for d in departments)))
+    whole = {}
+    for province, prules in rules.items():
+        regions = {region for region, _ in prules}
+        whole[province] = regions.pop() if len(regions) == 1 else None
+    return _CompiledMap(rules, whole)
+
+
+def _compiled(zone_map: dict[str, Any]) -> _CompiledMap:
+    """The map prepared once per config: the stats resolve a region per listing
+    and the map only changes when /admin/config does. The last map is kept, by
+    identity and, failing that, by value (get_config hands a new dict each run)."""
+    hit = _compiled.cache
+    if hit is not None and (hit[0] is zone_map or hit[1] == zone_map):
+        return hit[2]
+    compiled = _compile(zone_map)
+    _compiled.cache = (zone_map, copy.deepcopy(zone_map), compiled)
+    return compiled
+
+
+_compiled.cache = None  # type: ignore[attr-defined]
+
+
 def resolve_region(zone_map: dict[str, Any], province_id: str | None, department: str | None,
                    precision: str | None) -> str | None:
     """The region of a place by the first rule of `zone_map` that matches it.
     A province-precision place only when its whole province is in one region."""
     if not province_id:
         return None
-    rules = [r for r in (zone_map or {}).get("rules", []) if r.get("province") == province_id]
+    compiled = _compiled(zone_map or {})
     if precision == "province":
-        regions = {r.get("region") for r in rules}
-        return regions.pop() if len(regions) == 1 else None
+        return compiled.whole.get(province_id)
     folded = _fold(department) if department else None
-    for rule in rules:
-        departments = rule.get("departments")
-        if departments is None or (folded is not None and folded in {_fold(d) for d in departments}):
-            return rule.get("region")
+    for region, departments in compiled.rules.get(province_id, ()):
+        if departments is None or (folded is not None and folded in departments):
+            return region
     return None
