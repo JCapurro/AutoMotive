@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { proOffer } from "@/lib/pro";
+import { RiskConfigInput } from "@/lib/risk-checklist";
 
 export const MAX_CONFIG_INTEGER = 2_147_483_647;
 /** commercial_payments and billing_checkouts use numeric(12,2). */
@@ -88,6 +89,20 @@ export function validateConfigChange(key: string, value: unknown, current: unkno
       return "min_drop_pct tiene que ser un número entre 0 y 100.";
     }
   }
+  if (key === "risk") {
+    // PAR-02: the «Antes de señar» switch and its official links (https only).
+    const parsed = RiskConfigInput.safeParse(value);
+    if (!parsed.success) return parsed.error.issues[0]?.message ?? "Revisá checklist_enabled y los links.";
+  }
+  if (key === "red_flags") {
+    // PAR-02: every much_cheaper band must stay reachable (worker/intelligence/red_flags.py).
+    const v = configObject(value);
+    const pick = (name: string, fallback: number) => (name in v ? v[name] : fallback);
+    const [low, verify, high] = [pick("much_cheaper_pct", 25), pick("much_cheaper_verify_pct", 35), pick("anticipo_pct", 50)];
+    if (![low, verify, high].every((n) => typeof n === "number" && Number.isFinite(n)) || !((low as number) < (verify as number) && (verify as number) <= (high as number))) {
+      return "much_cheaper_verify_pct tiene que ser un número mayor que much_cheaper_pct y menor o igual que anticipo_pct (sin la clave: 25, 35 y 50).";
+    }
+  }
   if (key === "lifecycle_emails") {
     const parsed = AdminLifecycleInput.safeParse(value);
     if (!parsed.success) return parsed.error.issues[0]?.message ?? "Revisá los horarios, tipos y topes de emails.";
@@ -114,6 +129,12 @@ export function configFieldLabel(key: string, path: string): string {
     const planName = ({ free: "Prueba gratis", pass: "Particular", pro: "Pro" } as Record<string, string>)[tier];
     const fieldName = ({ max_profiles: "búsquedas activas", max_visible_results: "resultados por búsqueda", max_total_results: "resultados acumulados durante la prueba", immediate_alerts_per_day: "avisos inmediatos por día", max_locations: "zonas por búsqueda", threshold_alerts: "umbral de oportunidad", model_less_search: "búsqueda sin modelo" } as Record<string, string>)[field];
     if (planName) return fieldName ? `${planName}: ${fieldName}` : planName + (field ? `: ${field}` : "");
+  }
+  if (key === "risk") {
+    if (path === "checklist_enabled") return "Checklist «Antes de señar» visible";
+    const [group, name, ...rest] = path.split(".");
+    const linkName = ({ dnrpa: "informe de dominio (DNRPA)", patentes: "patentes", infracciones: "infracciones", vtv: "VTV", form_08: "formulario 08" } as Record<string, string>)[name];
+    if (group === "links" && linkName) return `Link oficial: ${linkName}${rest.length ? ` (${rest.join(".")})` : ""}`;
   }
   if (key === "lifecycle_emails") {
     if (path.startsWith("kinds.")) return LIFECYCLE_KINDS[path.slice(6) as keyof typeof LIFECYCLE_KINDS]?.label ?? path;
