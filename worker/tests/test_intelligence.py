@@ -312,11 +312,24 @@ class MuchCheaperBandTests(unittest.TestCase):
 
     def test_the_band_for_each_edge(self):
         self.assertIsNone(self.text(24.9))
-        for diff, key in ((25.0, "much_cheaper"), (34.9, "much_cheaper"),
-                          (35.0, "much_cheaper_verify"), (49.9, "much_cheaper_verify"),
+        for diff, key in ((25.0, "much_cheaper"), (34.4, "much_cheaper"),
+                          (35.0, "much_cheaper_verify"), (49.4, "much_cheaper_verify"),
                           (50.0, "much_cheaper_anticipo")):
             with self.subTest(diff=diff):
                 self.assertEqual(self.text(diff), self.expected(key, diff))
+
+    def test_the_band_follows_the_shown_percentage(self):
+        """A shown 35% or 50% always carries that band's text, whatever the decimals."""
+        for diff, shown, key in ((34.6, "35", "much_cheaper_verify"), (34.9, "35", "much_cheaper_verify"),
+                                 (34.5, "34", "much_cheaper"), (49.6, "50", "much_cheaper_anticipo"),
+                                 (49.9, "50", "much_cheaper_anticipo"), (49.5, "50", "much_cheaper_anticipo"),
+                                 (49.4, "49", "much_cheaper_verify")):
+            with self.subTest(diff=diff):
+                text = self.text(diff)
+                self.assertEqual(text, copy.RED_FLAG[key].format(pct=shown))
+        for a, b in ((34.6, 35.0), (49.6, 50.0)):
+            with self.subTest(pair=(a, b)):
+                self.assertEqual(self.text(a), self.text(b))
 
     def test_the_flag_keeps_its_id_and_severity(self):
         flags = red_flags(fiesta_listing(), diff_pct=40.0, guard=None, timing_belt=True, cfg=CFG, now=NOW)
