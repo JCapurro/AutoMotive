@@ -157,8 +157,8 @@ Files: `web/e2e/acceptance.spec.ts` (paso 5, líneas ~186-188), `web/e2e/trackin
 
 ## Task 11: verificación de (a), PR y punto de parada
 
-- [ ] `cd web && npm test && npm run typecheck && npm run lint` y `pytest` en la raíz: todo verde sin tocar worker ni SQL.
-- [ ] `graphify update .` desde la raíz.
+- [x] `cd web && npm test && npm run typecheck && npm run lint` y `pytest` en la raíz: todo verde sin tocar worker ni SQL.
+- [x] `graphify update .` desde la raíz.
 - [ ] Abrir el PR de (a) a `main` (rama `claude/x01-seguimiento`) con: qué guías de Next se leyeron, capturas desktop y 375 px, y la nota de que no hay migración.
 - [ ] Marcar «X-01 (a)» en `docs/BACKLOG_PRODUCTO_2026-10.md` y en `docs/PLAN_FASES_BACKLOG_PRODUCTO_2026-10.md` al mergear.
 
@@ -233,7 +233,7 @@ Files: `web/e2e/tracking.spec.ts` (ampliar), `web/e2e/seed.ts`.
 ## Task 18: verificación de (b), PR y punto de parada
 
 - [ ] Todo verde: `npx supabase test db`, `pytest` (con y sin `TEST_DATABASE_URL`), `cd web && npm test && npm run typecheck && npm run lint && npx playwright test --project=desktop --project=mobile` (la suite completa, para no romper otros specs).
-- [ ] `graphify update .`.
+- [x] `graphify update .`.
 - [ ] PR de (b) a `main`. Descripción con el orden de despliegue (base primero, web después), el rollback y la nota de que la migración **no está aplicada en producción**.
 - [ ] Marcar «X-01 (b)» en el backlog y el plan por fases al mergear.
 
@@ -262,9 +262,9 @@ Files: `supabase/tests/f6_metrics_test.sql` (actualizar: fija los valores de los
 
 ## Task 20: cierre y rollback documentado
 
-- [ ] Actualizar en el backlog y en el plan por fases el estado de X-01 (a), (b) y el criterio 5, con los commits.
-- [ ] `graphify update .` al final de cada bloque ya hecho; verificar que el último esté al día.
-- [ ] Confirmar que ninguna tarea tocó `worker/`, `web/app/privacidad`, `web/app/terminos` ni `app_config` de producción.
+- [x] Actualizar en el backlog y en el plan por fases el estado de X-01 (a), (b) y el criterio 5, con los commits.
+- [x] `graphify update .` al final de cada bloque ya hecho; verificar que el último esté al día.
+- [x] Confirmar que ninguna tarea tocó `worker/`, `web/app/privacidad`, `web/app/terminos` ni `app_config` de producción.
 
 ## Tareas de Juan (no las hace Code)
 
