@@ -110,9 +110,9 @@ Files: `worker/pipeline/market_stats.py` (`run_market_stats`), `worker/tools/mar
 
 Files: `worker/pipeline/market_stats.py` (`market_stats_loop`), `worker/main.py`, `worker/tests/test_market_stats.py`.
 
-- [ ] Escribir tests que fallen sobre la función pura `next_run(now, cfg)` (estilo `worker/tests/test_rescore_schedule.py`): próximo lunes 06:00 hora de Argentina según `schedule.weekday`/`schedule.hour`; `mode: off` no ejecuta nada; `dry_run` y `write` llaman a `run_market_stats` con el modo correcto.
-- [ ] Implementar `market_stats_loop(stop)` (lee `app_config.market_stats` en cada vuelta, usa `asyncio.wait_for(stop.wait(), timeout=...)` como `digest_loop`/`nightly_loop`, atrapa excepciones con `log_error("market_stats", "loop", traceback.format_exc())`). En `worker/main.py`: una línea de import (`from pipeline.market_stats import market_stats_loop`) y `asyncio.create_task(market_stats_loop(stop))` junto a `nightly_loop`. Nace en `mode: off`.
-- [ ] Correr `python -m pytest worker/tests/test_market_stats.py worker/tests/test_rescore_schedule.py -q`.
+- [x] Escribir tests que fallen sobre la función pura `next_run(now, cfg)` (estilo `worker/tests/test_rescore_schedule.py`): próximo lunes 06:00 hora de Argentina según `schedule.weekday`/`schedule.hour`; `mode: off` no ejecuta nada; `dry_run` y `write` llaman a `run_market_stats` con el modo correcto.
+- [x] Implementar `market_stats_loop(stop)` (lee `app_config.market_stats` en cada vuelta, usa `asyncio.wait_for(stop.wait(), timeout=...)` como `digest_loop`/`nightly_loop`, atrapa excepciones con `log_error("market_stats", "loop", traceback.format_exc())`). En `worker/main.py`: una línea de import (`from pipeline.market_stats import market_stats_loop`) y `asyncio.create_task(market_stats_loop(stop))` junto a `nightly_loop`. Nace en `mode: off`.
+- [x] Correr `python -m pytest worker/tests/test_market_stats.py worker/tests/test_rescore_schedule.py -q`.
 
 ## Task 8: retención (tests primero)
 

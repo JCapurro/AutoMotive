@@ -26,6 +26,7 @@ from db.repos.runs import dead_workers, fail_orphan_runs
 from pipeline import heartbeat
 from pipeline.enrich import enrich_pass
 from pipeline.llm_jobs import llm_jobs_loop
+from pipeline.market_stats import market_stats_loop
 from pipeline.rescore import nightly_loop
 from pipeline.scheduler import loop_stale, run_loop
 from pipeline.watchlist import refresh_watchlist
@@ -163,6 +164,7 @@ async def amain() -> None:
                                    lambda _stop: run_lifecycle_emails(notifier.channels.get("email"), links),
                                    stop)),
         asyncio.create_task(nightly_loop(stop)),
+        asyncio.create_task(market_stats_loop(stop)),
         asyncio.create_task(llm_jobs_loop(build_provider(), stop)),
     ]
 
