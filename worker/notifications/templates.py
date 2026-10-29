@@ -98,6 +98,28 @@ def pct(value: float, decimals: int = 1) -> str:
     return f"{value:.{decimals}f}".replace(".", ",")
 
 
+def price_track_line(track: Mapping[str, Any] | None) -> str | None:
+    """PAR-03: "Bajó 2 veces desde que la vimos: -USD 1.500 (-6,3%)." from
+    payload["price_track"] (notifications/service.price_track_payload). None
+    without a net drop: no track (an old payload), no drop counted, or a price
+    that is now the same or higher than the first one we saw."""
+    if not track:
+        return None
+    drops, cum_pct = int(track.get("drops") or 0), track.get("cum_pct")
+    if drops <= 0 or cum_pct is None or cum_pct <= 0:
+        return None
+    usd = track.get("cum_usd")
+    if track.get("currency") == "ARS" and track.get("cum_ars"):
+        amount = f"$ {copy.number(track['cum_ars'])}"
+        about = copy.PRICE_TRACK_ABOUT_USD.format(usd=copy.money(usd, "USD")) if usd else ""
+    elif usd:
+        amount, about = copy.money(usd, "USD"), ""
+    else:
+        return None
+    return copy.PRICE_TRACK.format(n=drops, times=copy.PRICE_TRACK_TIMES[drops != 1], amount=amount,
+                                   pct=pct(float(cum_pct)), about=about)
+
+
 def km(listing: Mapping[str, Any]) -> str | None:
     value = listing.get("mileage_km")
     return None if value is None else f"{copy.number(value)} km"
@@ -185,7 +207,7 @@ def content(n: Notification, links: Links, now: datetime, *, owner: str | None =
     """`owner` signs the links into the app (emails only, notifications/links.py)."""
     p = n.payload
     if n.kind == "digest":
-        return _digest(n, links, owner)
+        return _digest(n, links, now, owner)
     listing = p.get("listing") or {}
     match = p.get("match") or {}
     car = vehicle(listing)
@@ -206,6 +228,8 @@ def content(n: Notification, links: Links, now: datetime, *, owner: str | None =
                 c.lines.append(f"{round(diff)}% debajo de publicaciones comparables.")
             if age := age_line(listing, now):
                 c.lines.append(age)
+            if track := price_track_line(p.get("price_track")):
+                c.lines.append(track)
         else:
             if p.get("repost"):
                 c.lines.insert(0, REPOST)
@@ -225,7 +249,7 @@ def content(n: Notification, links: Links, now: datetime, *, owner: str | None =
     return c
 
 
-def _digest(n: Notification, links: Links, owner: str | None = None) -> Content:
+def _digest(n: Notification, links: Links, now: datetime, owner: str | None = None) -> Content:
     p = n.payload
     items = p.get("items") or []
 
@@ -247,7 +271,10 @@ def _digest(n: Notification, links: Links, owner: str | None = None) -> Content:
             return DigestItem(vehicle(listing), url, "🚫 ", details=details,
                               badge="Ya no está disponible", **visual)
         extra = [x for x in (km(listing), price(listing)) if x]
-        prefix = f"{_level_emoji(match.get('level'))} {match.get('score')} · " if match else ""
+        # PAR-03: the listing's age and its drops, recomputed when the digest
+        # was built (digest.run_digest).
+        details += [x for x in (age_line(listing, now), price_track_line(it.get("price_track"))) if x]
+        prefix =f"{_level_emoji(match.get('level'))} {match.get('score')} · " if match else ""
         label = copy.LEVEL_LABEL.get(match.get("level"))
         return DigestItem(vehicle(listing), url, prefix, "".join(f" · {x}" for x in extra),
                           details=details, price=price(listing),

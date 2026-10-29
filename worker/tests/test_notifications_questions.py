@@ -57,6 +57,7 @@ class PayloadTests(unittest.IsolatedAsyncioTestCase):
         notifier = service.Notifier({})
         with patch.object(service.repo, "profile_audiences", AsyncMock(return_value=audience)), \
              patch.object(service.repo, "interactions", AsyncMock(return_value={})), \
+             patch.object(service.repo, "price_tracks", AsyncMock(return_value={})), \
              patch.object(service, "_min_n", AsyncMock(return_value=5)), \
              patch.object(notifier, "_commit", AsyncMock(return_value=[])) as commit:
             await notifier.on_matches([cand], {listing["id"]: listing}, now=NOW)

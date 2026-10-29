@@ -51,6 +51,19 @@ async def interactions(pairs: Iterable[tuple[str, int]]) -> dict[tuple[str, int]
     return {(r["user_id"], r["listing_id"]): r for r in rows}
 
 
+async def price_tracks(listing_ids: Iterable[int]) -> dict[int, dict[str, Any]]:
+    """PAR-03: listing_id → its public.listing_price_tracks() row (drops,
+    cum_pct, cum_usd… since the first snapshot). One query for the batch;
+    listings without a priced snapshot are missing."""
+    ids = list(dict.fromkeys(listing_ids))
+    if not ids:
+        return {}
+    async with connection() as cx:
+        rows = await (await cx.execute(
+            "SELECT * FROM public.listing_price_tracks(%s::bigint[])", (ids,))).fetchall()
+    return {r["listing_id"]: r for r in rows}
+
+
 async def listing_audiences(listing_ids: Iterable[int], *,
                             matched_before: datetime | None = None) -> list[dict[str, Any]]:
     """Everyone a listing event concerns (price_drop, listing_gone): users with

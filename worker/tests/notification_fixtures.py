@@ -41,18 +41,36 @@ PRICE_DROP = notification("price_drop", {
     "match": {"score": 81, "level": "good", "diff_pct": 4.0},
     "price_drop": {"old_price": 11500.0, "new_price": 10800.0, "currency": "USD", "drop_pct": 6.09},
 })
+# PAR-03: payload["price_track"] (notifications/service.price_track_payload).
+TRACK_1 = {"drops": 1, "cum_pct": 6.0, "cum_usd": 700.0, "currency": "USD", "first_at": "2026-09-20T12:00:00+00:00"}
+TRACK_3 = {"drops": 3, "cum_pct": 12.4, "cum_usd": 1450.0, "currency": "USD", "first_at": "2026-09-12T12:00:00+00:00"}
+TRACK_ARS = {"drops": 3, "cum_pct": 9.4, "cum_usd": 1000.0, "cum_ars": 1300000.0, "currency": "ARS",
+             "first_at": "2026-09-12T12:00:00+00:00"}
+OPPORTUNITY_1_DROP = notification("opportunity", {**OPPORTUNITY.payload, "price_track": TRACK_1})
+OPPORTUNITY_3_DROPS = notification("opportunity", {**OPPORTUNITY.payload, "price_track": TRACK_3})
+OPPORTUNITY_ARS = notification("opportunity", {
+    **OPPORTUNITY.payload, "price_track": TRACK_ARS,
+    "listing": {**FIESTA, "price": 12500000.0, "currency": "ARS", "published_at": None,
+                "first_seen_at": (NOW - timedelta(days=17)).isoformat()},
+})
 DIGEST = notification("digest", {"date": "2026-09-27", "degraded": 1, "items": [
     {"section": "price_drops", "listing_id": 501, "kind": "price_drop", "listing": {**FIESTA, "price": 10800.0},
      "price_drop": {"old_price": 11500.0, "new_price": 10800.0, "currency": "USD", "drop_pct": 6.09}},
     {"section": "matches", "listing_id": 502, "kind": "opportunity", "degraded": "daily_cap",
      "listing": {**FIESTA, "id": 502, "mileage_km": 98000, "price": 10900.0},
-     "match": {"score": 86, "level": "high"}},
+     "match": {"score": 86, "level": "high"}, "price_track": TRACK_1},
     {"section": "matches", "listing_id": 503, "kind": "match",
      "listing": {**FIESTA, "id": 503, "trim": None, "year": 2016, "mileage_km": 140000,
-                 "price": 12500000.0, "currency": "ARS"},
-     "match": {"score": 58, "level": "match"}},
+                 "price": 12500000.0, "currency": "ARS", "published_at": None,
+                 "first_seen_at": (NOW - timedelta(days=2, hours=3)).isoformat()},
+     "match": {"score": 58, "level": "match"}, "price_track": TRACK_ARS},
+    {"section": "matches", "listing_id": 505, "kind": "match",
+     "listing": {**FIESTA, "id": 505, "trim": "S", "year": 2015, "mileage_km": 151000, "price": 8900.0},
+     "match": {"score": 52, "level": "match"}},
     {"section": "gone", "listing_id": 504, "kind": "listing_gone",
      "listing": {**FIESTA, "id": 504, "make": None, "title": "Fiesta Kinetic Design 2015"}},
 ]}, id=43, listing_id=None)
 
-CASES = {"opportunity": OPPORTUNITY, "new_match": NEW_MATCH, "price_drop": PRICE_DROP, "digest": DIGEST}
+CASES = {"opportunity": OPPORTUNITY, "new_match": NEW_MATCH, "price_drop": PRICE_DROP, "digest": DIGEST,
+         "opportunity_1_drop": OPPORTUNITY_1_DROP, "opportunity_3_drops": OPPORTUNITY_3_DROPS,
+         "opportunity_ars": OPPORTUNITY_ARS}

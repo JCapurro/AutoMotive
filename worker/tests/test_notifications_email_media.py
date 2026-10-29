@@ -39,7 +39,7 @@ def test_daily_links_identify_each_listing_and_keep_click_tracking():
     soup = BeautifulSoup(mail.html, "html.parser")
     clicks = [parse_qs(urlsplit(a["href"]).query) for a in soup.find_all("a")
               if "/r/43" in a["href"]]
-    assert {int(q["l"][0]) for q in clicks} == {501, 502, 503, 504}
+    assert {int(q["l"][0]) for q in clicks} == {501, 502, 503, 504, 505}
     assert all(q["to"] == ["detail"] for q in clicks)
 
 

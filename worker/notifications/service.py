@@ -107,6 +107,22 @@ def flag_texts(red_flags: Iterable[Mapping[str, Any]] | None) -> list[str]:
     return [f["text"] for f in flags[:MAX_FLAGS]]
 
 
+def price_track_payload(row: Mapping[str, Any] | None) -> dict[str, Any] | None:
+    """PAR-03: what an alert keeps of a listing_price_tracks() row, only with a
+    net drop (at least one drop counted and a last price under the first).
+    Pesos stay in pesos (cum_ars) only when the listing was always in ARS; a
+    currency change is told in dollars."""
+    if not row or int(row.get("drops") or 0) <= 0 or row.get("cum_pct") is None or row["cum_pct"] <= 0:
+        return None
+    ars = row.get("first_currency") == "ARS" and row.get("last_currency") == "ARS"
+    out: dict[str, Any] = {"drops": int(row["drops"]), "cum_pct": float(row["cum_pct"]),
+                           "cum_usd": _num(row.get("cum_usd")), "currency": "ARS" if ars else "USD",
+                           "first_at": _iso(row.get("first_at"))}
+    if ars:
+        out["cum_ars"] = float(row["first_price"] - row["last_price"])
+    return out
+
+
 def payload(listing: Mapping[str, Any], match: Mapping[str, Any] | None, *, min_n: int,
             profile_name: str | None = None, **extra: Any) -> dict[str, Any]:
     out: dict[str, Any] = {"listing": listing_payload(listing), "profile_name": profile_name}
@@ -151,6 +167,10 @@ class Notifier:
         pairs = [(str(audiences[c.profile_id]["user_id"]), c.listing_id)
                  for c in candidates if c.profile_id in audiences]
         states = await repo.interactions(pairs)
+        # PAR-03: the drops go only in the opportunity email (engine.classify:
+        # level high and not a repost), read once for the batch.
+        opportunity_ids = list(dict.fromkeys(c.listing_id for c in candidates if _opportunity(c)))
+        tracks = await repo.price_tracks(opportunity_ids) if opportunity_ids else {}
         min_n = await _min_n()
         events = []
         for c in candidates:
@@ -162,12 +182,13 @@ class Notifier:
             ev = c.evaluation
             questions = question_texts(listing, ev.get("red_flags") or [], timing_belt=listing.get("timing_belt"),
                                        now=now or datetime.now(timezone.utc))
+            track = price_track_payload(tracks.get(c.listing_id)) if _opportunity(c) else None
             events.append(Event(
                 MATCH, c.listing_id, self._audience(a), level=ev["level"], score=ev["score"],
                 match_id=c.match_id, repost=c.repost, saved=bool(state.get("saved")),
                 status=state.get("status"),
                 payload=payload(listing, ev, min_n=min_n, profile_name=a["profile_name"],
-                                questions=questions or None)))
+                                questions=questions or None, price_track=track)))
         return await self._commit(events, now=now)
 
     async def on_listing_events(self, listing_events: Iterable[Any], *, now: datetime | None = None,
@@ -226,6 +247,11 @@ class Notifier:
 
     async def deliver(self) -> int:
         return await dispatch.deliver_pending(self.channels)
+
+
+def _opportunity(c: MatchCandidate) -> bool:
+    """The match would be an opportunity alert (engine.classify), not a new_match."""
+    return c.evaluation.get("level") == "high" and not c.repost
 
 
 def _num(value: Any) -> float | None:
