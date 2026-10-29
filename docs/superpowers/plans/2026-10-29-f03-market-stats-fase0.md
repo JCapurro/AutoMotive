@@ -125,8 +125,8 @@ Files: `worker/pipeline/retention.py`, `worker/tests/test_market_stats_postgres.
 ## Task 9: verificación y cierre
 
 - [ ] `python -m pytest worker/tests -q -m "not db"` verde; con `TEST_DATABASE_URL`, suite completa (`python -m pytest worker/tests -q`) y `npx supabase test db` verdes; `cd web; npm test; cd ..` verde con los tipos regenerados.
-- [ ] Revisar que ningún texto nuevo contenga `FORBIDDEN_TERMS` («vale», «valor real», «precio real», «tasación», «tasado») ni diga «se vendió» (usar «dejó de publicarse»).
-- [ ] `graphify update .` desde la raíz.
+- [x] Revisar que ningún texto nuevo contenga `FORBIDDEN_TERMS` («vale», «valor real», «precio real», «tasación», «tasado») ni diga «se vendió» (usar «dejó de publicarse»).
+- [x] `graphify update .` desde la raíz.
 - [ ] Abrir PR de `claude/f03-market-stats-fase0` a `main` con el resumen y la lista de «Tareas de Juan». No mergear ni desplegar sin su OK.
 - [ ] **Operación, solo con OK de Juan en cada paso** (no ejecutar por iniciativa propia): (1) aplicar la migración a producción en transacción + versión exacta tras releer `max(version)`; (2) desplegar el worker con `wait_idle` (con `mode: off` no cambia nada); (3) `python -m tools.backfill_zones --dry-run` en el VPS (`sudo -u automotive`, venv del worker) para medir cobertura real por fuente (meta ≥ 90 % de activos con región; si es menor, solo se publica `todas`), luego sin `--dry-run`; (4) `python -m tools.market_stats --week --dry-run` y revisar el informe (distribución de `price_n`, % sin zona, proyección de tamaño contra el presupuesto de 100 MB, rendimiento de `listing_unconfirmed()` sobre ~25 mil avisos); (5) `mode: dry_run` programado dos semanas; (6) `write_enabled: true` y `mode: write`.
 - [ ] Marcar F-03 Fase 0 como entregada en `docs/BACKLOG_PRODUCTO_2026-10.md` y en el plan por fases al mergear (el plan por fases vive hoy en la rama de H-01).
