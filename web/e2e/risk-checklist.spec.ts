@@ -118,7 +118,7 @@ test("los links oficiales cargados abren en otra pestaña", async ({ page }, tes
         dnrpa: { label: "Informe de prueba", url: "https://example.test/dnrpa" },
         patentes: [{ label: "Jurisdicción A", url: "https://example.test/patentes-a" }],
         infracciones: [],
-        vtv: { label: "Link no seguro", url: "http://example.test/vtv" },
+        vtv: { label: "Link sin https", url: "http://example.test/vtv" },
         form_08: null,
       },
     }),
