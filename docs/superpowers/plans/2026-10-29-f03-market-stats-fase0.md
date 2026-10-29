@@ -48,8 +48,8 @@ Definiciones de métricas (todas excluyen reposts, `probable_repost_of is not nu
 
 ## Task 0: leer las reglas de `web/` y preparar la rama
 
-- [x] Leer `web/CLAUDE.md` → `web/AGENTS.md` y la guía correspondiente de `web/node_modules/next/dist/docs/` (`01-app`, `02-pages`, `03-architecture`) **antes de tocar `web/`**. En esta entrega `web/` solo cambia por el archivo generado `web/types/database.ts`; no se escribe código de web a mano, así que la lectura es de verificación (si algo exigiera código, parar y consultar).
-- [x] `git switch main && git pull && git switch -c claude/f03-market-stats-fase0`. Confirmar que el árbol está limpio de cambios ajenos (hay `graphify-out/` y `docs/*.json` sin commitear de otras sesiones: no incluirlos).
+- [ ] Leer `web/CLAUDE.md` → `web/AGENTS.md` y la guía correspondiente de `web/node_modules/next/dist/docs/` (`01-app`, `02-pages`, `03-architecture`) **antes de tocar `web/`**. (desvío: el worktree no tiene `web/node_modules`, así que la guía de Next no se leyó; no se tocó `web/` ni se regeneraron los tipos, queda para cuando se haga la Tarea 2 con la base local.) En esta entrega `web/` solo cambia por el archivo generado `web/types/database.ts`; no se escribe código de web a mano, así que la lectura es de verificación (si algo exigiera código, parar y consultar).
+- [ ] `git switch main && git pull && git switch -c claude/f03-market-stats-fase0`. (desvío: la rama se creó en un worktree aparte, sobre la rama de los diseños (`20afac1`, que sale de `main` en `048ca30`), sin `git switch main` ni `git pull`; antes de integrar hay que traerla al `main` vigente.) Confirmar que el árbol está limpio de cambios ajenos (hay `graphify-out/` y `docs/*.json` sin commitear de otras sesiones: no incluirlos).
 - [x] Línea base: `python -m pytest worker/tests -q -m "not db"` verde antes de empezar.
 
 ## Task 1: mapa de regiones y `zone.py` (tests primero)
