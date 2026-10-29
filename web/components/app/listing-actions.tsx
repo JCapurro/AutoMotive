@@ -3,12 +3,13 @@
 import { Bookmark, Check, ExternalLink, X } from "lucide-react";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { setStatus } from "@/app/app/listings/actions";
+import { setSaved, setStatus } from "@/app/app/listings/actions";
 import { Button } from "@/components/ui/button";
 import { pixel } from "@/lib/meta-pixel";
 import { analyticsEvent } from "@/lib/google-analytics";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { REJECTION, type RejectionReason, type InteractionStatus } from "@/lib/copy";
+import { statusOnSave } from "@/lib/listing-tracking";
 
 type Props = {
   listingId: number;
@@ -20,7 +21,8 @@ type Props = {
 export function ListingActions({ listingId, status, saved, outboundHref }: Props) {
   const [pending, start] = useTransition();
   const [discarding, setDiscarding] = useState(false);
-  const interested = status === "interested" && saved;
+  // X-01: "Guardada" follows saved, so a contacted listing can be saved too.
+  const interested = saved;
   const run = (fn: () => Promise<void>, ok: string) => start(async () => {
     try {
       await fn();
@@ -40,7 +42,9 @@ export function ListingActions({ listingId, status, saved, outboundHref }: Props
             pixel("AddToWishlist", { content_ids: [String(listingId)], content_type: "product" });
             analyticsEvent("add_to_wishlist", { item_id: String(listingId) });
           }
-          run(() => setStatus(listingId, "interested"), "Guardada: te avisamos si cambia");
+          // Saving never lowers Contactado or Visita agendada: it only sets saved.
+          const save = statusOnSave(status);
+          run(() => (save.kind === "setSaved" ? setSaved(listingId, true) : setStatus(listingId, save.status)), "Guardada: te avisamos si cambia");
         }}
       >
         {interested ? <Check aria-hidden /> : <Bookmark aria-hidden />} {interested ? "Guardada" : "Guardar"}
@@ -59,7 +63,8 @@ export function ListingActions({ listingId, status, saved, outboundHref }: Props
   );
 }
 
-function DiscardDialog({
+/** The §27 reason dialog; the "Seguimiento" select (X-01) opens it too. */
+export function DiscardDialog({
   open,
   onOpenChange,
   onConfirm,

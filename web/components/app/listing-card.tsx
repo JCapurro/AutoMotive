@@ -43,7 +43,10 @@ export function ListingCard({
     | "listing_status"
     | "probable_repost_of"
   > &
-    Partial<Pick<MatchCard, "price_kind" | "financing_offered" | "price_usd" | "body_type">>;
+    Partial<Pick<MatchCard, "price_kind" | "financing_offered" | "price_usd" | "body_type">> & {
+      /** X-01: the user's private note, shown on one line. */
+      note?: string | null;
+    };
   showProfile?: boolean;
   footer?: React.ReactNode;
 }) {
@@ -118,6 +121,12 @@ export function ListingCard({
           {showProfile && card.profile_name ? <span>«{card.profile_name}»</span> : null}
         </p>
       </div>
+
+      {card.note ? (
+        <p data-testid="card-note" className="col-span-full truncate text-[13px] text-muted-foreground sm:col-start-2" title={card.note}>
+          Tu nota: {card.note}
+        </p>
+      ) : null}
 
       {footer ? <div className={cn("col-span-full sm:col-start-2")}>{footer}</div> : null}
     </article>

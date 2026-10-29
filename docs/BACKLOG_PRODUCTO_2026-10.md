@@ -283,6 +283,8 @@ Criterios de aceptación:
 
 `user_listing_interactions.status` ya tiene `new | seen | interested | discarded | contacted | visit_scheduled | purchased`, `rejection_reason` y `note`; la UI solo ofrece Guardar y Descartar, y el selector de estado se retiró. Las agencias llevan esto en WhatsApp y una planilla. Para Pro: devolver el selector con `contacted`, `visit_scheduled`, `purchased`, campo de nota y filtro por estado en resultados y guardados. `listing_status_changed` ya existe como evento. Tamaño S. Exportación CSV **no**: Juan la retiró el 15/10 (`20261027120000_remove_csv_export.sql`) y sigue en reserva hasta que un Pro la pida.
 
+**Estado al 29/10:** implementado en la rama `claude/x01-seguimiento` (sin mergear, sin desplegar). (a) web: 59b3158, e4608f0, ca8951f, b6593b7; (b) migración `20261119120000_x01_tracking.sql` y resultados: 959fd74, 035fed7; criterio 5 sin «Contactado» (`20261119130000_x01_outcome_metric.sql`): 11c2aee. Ninguna migración aplicada (ni en local: el stack local no estaba disponible, así que pgTAP y Playwright no corrieron). Plan: [2026-10-29-x01-seguimiento](superpowers/plans/2026-10-29-x01-seguimiento.md).
+
 ### H-01 · El email no trae las preguntas
 
 La landing promete «por email, con el precio comparado y las preguntas para hacerle al vendedor»; el email de oportunidad solo lleva a la ficha. Sumar las 3 primeras preguntas de `matches.seller_questions` al email (`email_html.py`, `templates.py`, snapshot nuevo) o corregir la landing. Tamaño S; conviene resolverlo antes de PAR-04 y PRO-01, que amplían ese bloque.

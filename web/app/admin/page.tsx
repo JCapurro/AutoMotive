@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { CriteriaGrid } from "@/components/admin/criteria";
+import { ContactedMetric, CriteriaGrid } from "@/components/admin/criteria";
 import { DashboardAttention, DashboardCashNote, DashboardHeader, DashboardSummaryKpis, DashboardTrend, DashboardUnavailable } from "@/components/admin/dashboard-ui";
 import { Section, TextLink } from "@/components/admin/ui";
 import { requireAdmin } from "@/lib/admin";
@@ -13,9 +13,10 @@ export default async function AdminHome({ searchParams }: PageProps<"/admin">) {
   await requireAdmin();
   const { days } = await searchParams;
   const admin = createAdminClient();
-  const [data, criteria] = await Promise.all([
+  const [data, criteria, contacted] = await Promise.all([
     loadAdminDashboard(days),
     admin.from("v_validation_criteria").select("*").order("ordinal"),
+    admin.from("v_contacted_metric").select("users, events").maybeSingle(),
   ]);
   const snapshot = data.metrics.data;
 
@@ -36,6 +37,7 @@ export default async function AdminHome({ searchParams }: PageProps<"/admin">) {
 
       <Section title="Criterios de validación (§53)" description="Los seis criterios históricos del MVP. Sus ventanas y umbrales son propios; no siguen el filtro de este resumen.">
         {criteria.error ? <DashboardUnavailable title="Criterios no disponibles" error={criteria.error.message} /> : <CriteriaGrid rows={criteria.data ?? []} />}
+        <ContactedMetric row={contacted.error ? null : (contacted.data ?? null)} />
         <div className="flex flex-wrap gap-4 text-xs"><TextLink href="/admin/config#validation_criteria">Revisar umbrales →</TextLink><TextLink href="/admin/metrics/diagnostic">Abrir diagnóstico histórico →</TextLink></div>
       </Section>
     </>

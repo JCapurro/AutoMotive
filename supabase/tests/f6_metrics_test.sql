@@ -7,7 +7,7 @@
 -- the web and the worker record.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(53);
+select plan(56);
 
 delete from auth.users;
 
@@ -133,6 +133,15 @@ insert into public.events (user_id, name, props, created_at) values
   ('65555555-5555-5555-5555-555555555555', 'listing_outbound_clicked', '{"listing_id": 9603}', now() - interval '10 days'),
   ('6aaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'alert_clicked', '{"notification_id": 9610}', now() - interval '1 day');
 
+-- X-01 (20261119130000_x01_outcome_metric.sql): u2 only contacted a seller. Since
+-- Contactado costs a click it no longer counts as an outcome (criterion 5);
+-- v_contacted_metric counts it on its own. A listing u2 got no alert for.
+insert into public.user_listing_interactions (user_id, listing_id, status, saved) values
+  ('62222222-2222-2222-2222-222222222222', 9603, 'contacted', false);
+insert into public.events (user_id, name, props, created_at) values
+  ('62222222-2222-2222-2222-222222222222', 'listing_status_changed', '{"listing_id": 9603, "status": "contacted", "from": "seen", "via": "web"}', now() - interval '1 day'),
+  ('6aaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'listing_status_changed', '{"listing_id": 9601, "status": "contacted", "from": "seen", "via": "web"}', now() - interval '1 day');
+
 -- u2 joins the waitlist (as u2).
 set local role authenticated;
 set local request.jwt.claims = '{"sub": "62222222-2222-2222-2222-222222222222", "role": "authenticated"}';
@@ -149,6 +158,7 @@ select throws_ok($$insert into public.pro_waitlist (user_id, plan) values ('6222
                  '42501', null, 'the waitlist is written only through join_waitlist');
 select throws_ok($$select * from public.v_validation_criteria$$, '42501', null, 'users can''t read the metrics');
 select throws_ok($$select * from public.admin_users$$, '42501', null, '... nor the admin lists');
+select throws_ok($$select * from public.v_contacted_metric$$, '42501', null, '... nor the Contactado metric');
 select is((public.pro_cta_state()->>'show')::boolean, false, 'pro_cta_state: no CTA once on the waitlist');
 reset role;
 
@@ -167,6 +177,13 @@ select results_eq(
 select is((select count(*)::int from public.v_validation_criteria), 6, 'exactly six criteria');
 select is((select label from public.v_validation_criteria where criterion = 'retention'), 'Retención',
           'with a label for the admin');
+select is((select metric from public.v_validation_criteria where criterion = 'outcome'),
+          'Usuarios que agendaron una visita o compraron',
+          'outcome (X-01): its label names only a scheduled visit or a purchase');
+
+-- ---------------------------------------------------------------- v_contacted_metric (X-01)
+select results_eq($$select users::int, events::int from public.v_contacted_metric$$,
+                  $$values (1, 1)$$, 'v_contacted_metric: users who marked Contactado and its changes, admins out');
 
 -- ---------------------------------------------------------------- the building blocks
 select is((select count(*)::int from public.metric_users), 5, 'metric_users: everyone but the admin');

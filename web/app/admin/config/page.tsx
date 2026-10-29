@@ -24,6 +24,7 @@ const HINTS: Record<string, string> = {
   score_weights: "Pesos del Opportunity Score (sección 6.3).",
   level_thresholds: "Umbrales de 🔥 / 🟢 / 🟡 (sección 6.4).",
   comparables: "Cascada de comparables (sección 6.2).",
+  listing_tracking: "Seguimiento de publicaciones (X-01). note_max_chars: largo máximo de la nota por publicación (500).",
   digest_hour: "Hora del digest diario (ART).",
   price_drop_min_pct: "Baja mínima para alertar «Bajó de precio».",
   llm_limits: "Jobs del LLM por usuario y hora.",
