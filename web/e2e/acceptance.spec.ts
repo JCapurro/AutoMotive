@@ -183,9 +183,9 @@ test("F4: búsqueda gratis con el email, backfill, alerta, guardar y guardados",
   });
 
   await test.step("5. Guardar guarda el aviso", async () => {
-    await expect(page.getByLabel("Estado", { exact: true })).toHaveCount(0);
+    // X-01 brought the follow-up select back (tracking.spec.ts covers it); the raw score stays hidden.
+    await expect(page.getByLabel("Estado", { exact: true })).toHaveCount(1);
     await expect(page.getByText("Ver el puntaje en números")).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Compré este vehículo" })).toHaveCount(0);
     await page.getByRole("button", { name: "Guardar", exact: true }).click();
     await expect(page.getByRole("button", { name: "Guardada", exact: true })).toHaveAttribute("aria-pressed", "true");
     const [interaction] = await query<{ status: string; saved: boolean }>(

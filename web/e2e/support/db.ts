@@ -226,6 +226,44 @@ export async function seedConfirmationComparables(run: string): Promise<void> {
   );
 }
 
+/**
+ * X-01 (tracking.spec.ts): one active and one gone Fiesta, matched by a fresh
+ * search of the given user, so the follow-up can be set on both. Returns the
+ * search and listing ids.
+ */
+export async function seedTracking(email: string, run: string): Promise<{ profileId: number; active: number; gone: number }> {
+  const active = await insertListing(`${E2E_LISTING_PREFIX}tracking-active-${run}`, {
+    key: "tracking-active",
+    year: 2017,
+    km: 101_000,
+    price: 10_100,
+    place: VICENTE_LOPEZ,
+  });
+  const gone = await insertListing(`${E2E_LISTING_PREFIX}tracking-gone-${run}`, {
+    key: "tracking-gone",
+    year: 2016,
+    km: 121_000,
+    price: 9_700,
+    seenDaysAgo: 2,
+    status: "gone",
+  });
+  const [profile] = await query<{ id: number }>(
+    `insert into public.search_profiles (user_id, name, filters, notification_frequency, bootstrapped_at)
+     select id, 'Fiesta seguimiento', '{"make": "Ford", "model": "Fiesta"}', 'daily', now()
+       from public.profiles where email = $1
+     returning id`,
+    [email],
+  );
+  for (const [listing, score] of [[active, 74], [gone, 61]]) {
+    await query(
+      `insert into public.matches (search_profile_id, listing_id, score, level, score_breakdown, match_reasons, red_flags, scoring_version)
+       values ($1, $2, $3, 'good', '{}', '{}', '[]', 'e2e')`,
+      [profile.id, listing, score],
+    );
+  }
+  return { profileId: profile.id, active, gone };
+}
+
 /** A listing that "just appeared": a clear opportunity for the e2e search. */
 export async function insertFreshDeal(run: string): Promise<number> {
   return insertListing(`${E2E_LISTING_PREFIX}deal-${run}`, {
