@@ -2,10 +2,16 @@
 normalization.zone.DEFAULT_ZONE_MAP) covers the country with places that exist."""
 from __future__ import annotations
 
+import json
+import re
 import unittest
+from pathlib import Path
 
 from normalization.zone import DEFAULT_ZONE_MAP, load_localities, resolve_region
 from test_intelligence_copy import forbidden_in
+
+MIGRATION = (Path(__file__).resolve().parents[2] / "supabase" / "migrations"
+             / "20261119110000_f03_market_stats.sql")
 
 
 class ZoneMapTests(unittest.TestCase):
@@ -46,6 +52,12 @@ class ZoneMapTests(unittest.TestCase):
     def test_labels_pass_the_copy_lint(self):
         for key, label in DEFAULT_ZONE_MAP["regions"].items():
             self.assertEqual(forbidden_in(label), [], key)
+
+    def test_the_migration_seeds_the_same_map(self):
+        sql = MIGRATION.read_text(encoding="utf-8")
+        match = re.search(r"\('market_zones',\s*\$zones\$(.*?)\$zones\$", sql, re.DOTALL)
+        self.assertIsNotNone(match, "the migration seeds app_config.market_zones")
+        self.assertEqual(json.loads(match[1]), DEFAULT_ZONE_MAP)
 
 
 if __name__ == "__main__":
