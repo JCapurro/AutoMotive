@@ -131,20 +131,20 @@ Files: `web/components/app/listing-tracking.tsx` (nuevo, `"use client"`), `web/a
 
 Files: `web/app/app/saved/page.tsx`, `web/components/app/listing-card.tsx` (solo si hace falta una prop para la nota; el `footer` ya existe), `web/components/app/listing-status-select.tsx` (nuevo, select compacto reutilizable por la Task 7), `web/lib/saved-page.test.ts` (nuevo; modelarlo con `lib/free-result-limit-page.test.ts`, que ya mockea Supabase para una `page.tsx`).
 
-- [ ] Tests primero:
+- [x] Tests primero:
   - Sin `?e=`: la consulta de `user_listing_interactions` trae `saved = true` o estado en `interested, contacted, visit_scheduled, purchased` (se suma `purchased` solo en la web; `FOLLOWED` del worker no cambia) y selecciona también `note`.
   - Con `?e=contacted`, `?e=visit_scheduled`, `?e=purchased`: la consulta filtra por ese `status`; un valor desconocido de `e` cae a «Todos».
   - Se dibujan las píldoras Todos, Contactados, Visita agendada, Comprados con el estado activo marcado, y cada tarjeta muestra `StatusBadge` y la nota recortada a una línea.
   - Filtro vacío: mensaje propio («No marcaste publicaciones como contactadas.», etc.), sin romper la pantalla de «Todavía no guardaste publicaciones».
-- [ ] Implementar. El select compacto va en el `footer` de `ListingCard` con `relative z-10`: la tarjeta tiene el link estirado (`after:absolute after:inset-0`) y sin eso el click abre la ficha. Elegir «Comprado» o «Descartado» desde la tarjeta abre los mismos diálogos de la Task 7; para «Comprado» sin `profileId` conocido, pasar el del mejor match (la página ya consulta `matches`, línea ~59).
+- [x] Implementar. El select compacto va en el `footer` de `ListingCard` con `relative z-10`: la tarjeta tiene el link estirado (`after:absolute after:inset-0`) y sin eso el click abre la ficha. Elegir «Comprado» o «Descartado» desde la tarjeta abre los mismos diálogos de la Task 7; para «Comprado» sin `profileId` conocido, pasar el del mejor match (la página ya consulta `matches`, línea ~59).
 - [ ] Verificar a 375 px en la Task 10 (queda como riesgo hasta ver Playwright).
 
 ## Task 9: lint de copy
 
 Files: `web/lib/copy.test.ts`.
 
-- [ ] Agregar los textos nuevos («Seguimiento», «Estado», «Tu nota», placeholder, «Guardar nota», frase de privacidad de la nota, aclaración de «Comprado» terminal, mensajes de filtro vacío) al chequeo existente de términos prohibidos de `web/lib/copy.ts` (prohibidos «vale», «valor real», «precio real», «tasación», «tasado»). Si los textos viven en el componente y no en `copy.ts`, moverlos a `copy.ts` para que el lint los cubra.
-- [ ] `cd web && npx vitest run lib/copy.test.ts` en verde.
+- [x] Agregar los textos nuevos («Seguimiento», «Estado», «Tu nota», placeholder, «Guardar nota», frase de privacidad de la nota, aclaración de «Comprado» terminal, mensajes de filtro vacío) al chequeo existente de términos prohibidos de `web/lib/copy.ts` (prohibidos «vale», «valor real», «precio real», «tasación», «tasado»). Si los textos viven en el componente y no en `copy.ts`, moverlos a `copy.ts` para que el lint los cubra.
+- [x] `cd web && npx vitest run lib/copy.test.ts` en verde.
 
 ## Task 10: e2e de la entrega (a)
 

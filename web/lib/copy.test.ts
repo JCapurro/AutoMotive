@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { FORBIDDEN_TERMS } from "./copy";
+import { FOLLOW_EMPTY, FOLLOW_LABEL, FORBIDDEN_TERMS, TRACKING } from "./copy";
 
 const ROOT = path.resolve(__dirname, "..");
 
@@ -33,5 +33,17 @@ describe("copy lint (§19)", () => {
       }
     }
     expect(offenders).toEqual([]);
+  });
+
+  it("keeps the follow-up texts (X-01) prudent and the note's privacy honest", () => {
+    const texts = [...Object.values(TRACKING), ...Object.values(FOLLOW_LABEL), ...Object.values(FOLLOW_EMPTY)];
+    expect(texts).toContain("La nota es privada: no se la mostramos al vendedor ni a otros usuarios.");
+    for (const text of texts) {
+      for (const term of FORBIDDEN_TERMS) {
+        expect(new RegExp(`(^|[^\\p{L}\\p{N}_])${term}([^\\p{L}\\p{N}_]|$)`, "iu").test(text), `${text}: ${term}`).toBe(false);
+      }
+      // An admin with the service role can read the database: never promise "only you".
+      expect(text).not.toMatch(/solo la ves vos/i);
+    }
   });
 });
