@@ -32,8 +32,12 @@ select throws_ok($$insert into public.market_stats(week_start,group_kind,zone) v
                  '23514', null, 'group_kind is model or body_type');
 select throws_ok($$insert into public.market_stats_runs(week_start,mode) values ('2026-10-26','write_all')$$,
                  '23514', null, 'mode is dry_run or write');
-select throws_ok($$insert into public.listing_zones(listing_id,precision,lat,lon) values (980302,'street',0,0)$$,
+select throws_ok($$insert into public.listing_zones(listing_id,precision,lat,lon) values (980302,'locality',0,0)$$,
                  '23505', null, 'one zone per listing');
+select throws_ok($$insert into public.listing_zones(listing_id,precision,lat,lon) values (980301,'street',0,0)$$,
+                 '23514', null, 'precision is locality, province or source_default');
+select throws_ok($$insert into public.market_stats_runs(week_start,mode,status) values ('2026-10-26','write','done')$$,
+                 '23514', null, 'status is running, ok or failed');
 select throws_ok($$insert into public.market_stats(week_start,group_kind,make,model,body_type,year_from,zone)
                    values ('2026-10-26','model','ford','fiesta',null,2018,'amba')$$,
                  '23505', null, 'the key treats nulls as equal: a week is replaced, never duplicated');
