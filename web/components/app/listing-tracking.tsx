@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { type InteractionStatus, TRACKING } from "@/lib/copy";
+import { noteLength } from "@/lib/listing-tracking";
 
 /**
  * X-01 "Seguimiento": the follow-up status and a private note, under the
@@ -31,7 +32,9 @@ export function ListingTracking({
   const [editing, setEditing] = useState(!note);
   const [draft, setDraft] = useState(note ?? "");
   const [pending, start] = useTransition();
-  const length = [...draft.trim()].length;
+  // Counted like normalizeNote (and char_length): no native maxLength, which counts UTF-16 units.
+  const length = noteLength(draft);
+  const tooLong = length > noteMaxChars;
 
   const save = () =>
     start(async () => {
@@ -62,13 +65,13 @@ export function ListingTracking({
             <Textarea
               id="tracking-note"
               value={draft}
-              maxLength={noteMaxChars}
+              aria-invalid={tooLong || undefined}
               placeholder={TRACKING.notePlaceholder}
               onChange={(e) => setDraft(e.target.value)}
               className="bg-background"
             />
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="text-xs text-muted-foreground" aria-live="polite">
+              <span className={tooLong ? "text-xs text-destructive" : "text-xs text-muted-foreground"} aria-live="polite">
                 {length}/{noteMaxChars}
               </span>
               <div className="flex gap-2">
@@ -85,7 +88,7 @@ export function ListingTracking({
                     {TRACKING.cancel}
                   </Button>
                 ) : null}
-                <Button size="sm" disabled={pending || length > noteMaxChars} onClick={save}>
+                <Button size="sm" disabled={pending || tooLong} onClick={save}>
                   {TRACKING.saveNote}
                 </Button>
               </div>

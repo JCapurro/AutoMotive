@@ -35,7 +35,9 @@ it("asks for a private note, capped at the configured length", () => {
   const id = markup.match(/<label[^>]*for="([^"]+)"[^>]*>Tu nota<\/label>/)?.[1];
   expect(textarea).toContain(`id="${id}"`);
   expect(textarea).toContain('placeholder="Qué hablaste, cuándo es la visita, qué falta revisar"');
-  expect(textarea).toContain('maxLength="300"');
+  // No native maxLength: it counts UTF-16 units, the counter and the server count characters.
+  expect(textarea).not.toMatch(/maxlength/i);
+  expect(markup).toContain("0/300");
   expect(markup).toMatch(/<button[^>]*>Guardar nota<\/button>/);
   expect(markup).toContain("La nota es privada: no se la mostramos al vendedor ni a otros usuarios.");
   expect(markup).not.toMatch(/solo la ves vos/i);
