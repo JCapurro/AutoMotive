@@ -2,6 +2,7 @@ import "server-only";
 
 import { cache } from "react";
 
+import { listingTrackingConfig } from "@/lib/listing-tracking";
 import { type PlanLimitsConfig, planLimits, type ProOffer, proOffer } from "@/lib/pro";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { paymentsEnabled } from "@/lib/mercadopago-server";
@@ -22,6 +23,8 @@ export type WebConfig = {
   automaticPayments: boolean;
   /** app_config.email_only_signup: the free search's email-only accounts and their brakes. */
   emailOnlySignup: EmailOnlySignup;
+  /** app_config.listing_tracking (X-01): the private note's length limit. */
+  listingTracking: { noteMaxChars: number };
 };
 
 export type EmailOnlySignup = {
@@ -57,7 +60,7 @@ export const webConfig = cache(async (): Promise<WebConfig> => {
   const { data } = await createAdminClient()
     .from("app_config")
     .select("key, value")
-    .in("key", ["comparables", "watchlist_stale_days", "pro_offer", "commercial_pilot", "plan_limits", "alerts_max_per_user_day", "email_only_signup"]);
+    .in("key", ["comparables", "watchlist_stale_days", "pro_offer", "commercial_pilot", "plan_limits", "alerts_max_per_user_day", "email_only_signup", "listing_tracking"]);
   const values = Object.fromEntries((data ?? []).map((row) => [row.key, row.value]));
   const comparables = (values.comparables ?? {}) as { min_n?: number; year_tol?: number; km_tol_pct?: number; max_age_days?: number };
   return {
@@ -73,5 +76,6 @@ export const webConfig = cache(async (): Promise<WebConfig> => {
     commercialPilot: (values.commercial_pilot as { enabled?: boolean } | undefined)?.enabled === true,
     automaticPayments: paymentsEnabled() && (values.commercial_pilot as { enabled?: boolean } | undefined)?.enabled === true,
     emailOnlySignup: emailOnlySignup(values.email_only_signup),
+    listingTracking: listingTrackingConfig(values.listing_tracking),
   };
 });

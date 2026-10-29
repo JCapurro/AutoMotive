@@ -56,14 +56,14 @@ Se mantienen del diseño: disponible para todos los planes, sin gating y sin cla
 
 ## Task 1: leer las guías de la web antes de tocar `web/`
 
-- [ ] Leer `web/CLAUDE.md` (que importa `web/AGENTS.md`: «This is NOT the Next.js you know»).
-- [ ] Leer en `web/node_modules/next/dist/docs/` (`01-app/`, `index.md`) lo que corresponde a este trabajo: server actions y `'use server'`, `refresh()` de `next/cache` (la app lo usa en `actions.ts`), `searchParams` como promesa en `page.tsx`, componentes cliente. Anotar en el PR qué guías se leyeron.
-- [ ] Revisar avisos de deprecación que afecten a lo que se usa (`refresh`, `searchParams`, `useTransition` con acciones).
+- [x] Leer `web/CLAUDE.md` (que importa `web/AGENTS.md`: «This is NOT the Next.js you know»).
+- [x] Leer en `web/node_modules/next/dist/docs/` (`01-app/`, `index.md`) lo que corresponde a este trabajo: server actions y `'use server'`, `refresh()` de `next/cache` (la app lo usa en `actions.ts`), `searchParams` como promesa en `page.tsx`, componentes cliente. Anotar en el PR qué guías se leyeron.
+- [x] Revisar avisos de deprecación que afecten a lo que se usa (`refresh`, `searchParams`, `useTransition` con acciones).
 
 ## Task 2: rama y línea base
 
-- [ ] `git switch -c claude/x01-seguimiento` desde la rama con el diseño; confirmar que `git status` no arrastra cambios ajenos (los `graphify-out/` modificados y los `docs/*.json` sin seguimiento de la sesión anterior no se incluyen en los commits de X-01).
-- [ ] Línea base verde antes de cambiar nada: `cd web && npm test && npm run typecheck && npm run lint` y `pytest` en la raíz. Registrar los fallos preexistentes, si hay.
+- [x] `git switch -c claude/x01-seguimiento` desde la rama con el diseño; confirmar que `git status` no arrastra cambios ajenos (los `graphify-out/` modificados y los `docs/*.json` sin seguimiento de la sesión anterior no se incluyen en los commits de X-01).
+- [x] Línea base verde antes de cambiar nada: `cd web && npm test && npm run typecheck && npm run lint` y `pytest` en la raíz. Registrar los fallos preexistentes, si hay.
 
 ---
 
@@ -75,42 +75,42 @@ Funciona con el esquema de hoy (la columna `note` y los siete estados ya existen
 
 Files: `web/lib/listing-tracking.ts` (nuevo), `web/lib/listing-tracking.test.ts` (nuevo).
 
-- [ ] Tests primero (vitest), que fallen:
+- [x] Tests primero (vitest), que fallen:
   - `selectableStatuses()` devuelve, en este orden: `seen`, `interested`, `contacted`, `visit_scheduled`, `purchased`, `discarded`; nunca `new`. Los rótulos salen de `STATUS` en `web/lib/copy.ts` (Visto, Guardada, Contactado, Visita agendada, Comprado, Descartado).
   - `statusOnSave(current)`: con `contacted` o `visit_scheduled` devuelve `{ kind: "setSaved" }`; con cualquier otro devuelve `{ kind: "setStatus", status: "interested" }`.
   - `canChangeStatus(from, to)`: falso cuando `from === "purchased"` (terminal en v1), falso cuando `to === "purchased"` (va por `recordPurchase`) y cuando `to === "new"`; verdadero en el resto.
   - `normalizeNote(raw, max)`: `trim`; vacío o solo espacios → `null`; más de `max` → `{ error }` (no se corta en silencio); caracteres de control y saltos de línea se conservan salvo `\u0000`.
-- [ ] Implementar `web/lib/listing-tracking.ts` con esas funciones y la constante `NOTE_MAX_DEFAULT = 500`.
-- [ ] `cd web && npx vitest run lib/listing-tracking.test.ts` en verde.
+- [x] Implementar `web/lib/listing-tracking.ts` con esas funciones y la constante `NOTE_MAX_DEFAULT = 500`.
+- [x] `cd web && npx vitest run lib/listing-tracking.test.ts` en verde.
 
 ## Task 4: acciones del servidor (`setStatus` endurecido, `setNote`)
 
 Files: `web/app/app/listings/actions.ts`, `web/lib/listing-interactions.test.ts` (ampliar; ya mockea `requireUser`, `next/cache`, `@/lib/events` y `@/lib/supabase/server`).
 
-- [ ] Tests primero, que fallen:
+- [x] Tests primero, que fallen:
   - `setStatus` lanza si el estado actual es `purchased` (lectura con `currentStatus`), sin llamar a `upsert`.
   - `setStatus(…, "contacted")` y `("visit_scheduled")` hacen upsert sin tocar `saved` y emiten `listing_status_changed` con `{listing_id, status, from, via:"web"}`.
   - `setNote`: recorta, vacío guarda `null`, más del tope falla sin escribir, upsert solo de `note` con `onConflict: "user_id,listing_id"`, emite `listing_note_saved` con `{listing_id, length}` y el evento **no contiene el texto**; si el upsert devuelve error, lanza y no llama a `refresh`.
   - El tope sale de `webConfig()` (mockear `@/lib/config`), no de una constante dentro de la acción.
-- [ ] Implementar en `actions.ts`: rechazo de cambios desde `purchased` en `setStatus` (conservar el rechazo existente de `status === "purchased"`), y `export async function setNote(listingId: number, note: string)` usando `normalizeNote` y `webConfig().listingTracking.noteMaxChars`.
-- [ ] `cd web && npx vitest run lib/listing-interactions.test.ts` en verde y los tests existentes del archivo sin cambios.
+- [x] Implementar en `actions.ts`: rechazo de cambios desde `purchased` en `setStatus` (conservar el rechazo existente de `status === "purchased"`), y `export async function setNote(listingId: number, note: string)` usando `normalizeNote` y `webConfig().listingTracking.noteMaxChars`.
+- [x] `cd web && npx vitest run lib/listing-interactions.test.ts` en verde y los tests existentes del archivo sin cambios.
 
 ## Task 5: parámetro `listing_tracking` en `webConfig()`
 
 Files: `web/lib/config.ts` (lista de claves en la línea ~60 y objeto devuelto), `web/lib/config.test.ts` o el test de config existente (buscarlo con `Grep webConfig web/lib/*.test.ts`), `web/app/admin/config/page.tsx` (mapa de descripciones, junto a `comparables`).
 
-- [ ] Test primero: sin la clave, `listingTracking.noteMaxChars === 500`; con `{"note_max_chars": 300}`, 300; valores no numéricos o ≤ 0 caen al default.
-- [ ] Agregar `"listing_tracking"` a la lista `.in("key", [...])` y exponer `listingTracking: { noteMaxChars }` en `WebConfig`.
-- [ ] Agregar la descripción en `/admin/config`: «Seguimiento de publicaciones (X-01). note_max_chars: largo máximo de la nota por publicación (500).». Revisar `web/lib/admin-config*.test.ts` por si exigen que toda clave tenga esquema o descripción.
-- [ ] Nota: hasta que se aplique la migración del Bloque B la fila no existe y aplica el default; no hay que crearla a mano.
+- [x] Test primero: sin la clave, `listingTracking.noteMaxChars === 500`; con `{"note_max_chars": 300}`, 300; valores no numéricos o ≤ 0 caen al default.
+- [x] Agregar `"listing_tracking"` a la lista `.in("key", [...])` y exponer `listingTracking: { noteMaxChars }` en `WebConfig`.
+- [x] Agregar la descripción en `/admin/config`: «Seguimiento de publicaciones (X-01). note_max_chars: largo máximo de la nota por publicación (500).». Revisar `web/lib/admin-config*.test.ts` por si exigen que toda clave tenga esquema o descripción.
+- [x] Nota: hasta que se aplique la migración del Bloque B la fila no existe y aplica el default; no hay que crearla a mano.
 
 ## Task 6: Guardar nunca baja un estado de seguimiento
 
 Files: `web/components/app/listing-actions.tsx`, `web/lib/listing-tracking.ts` (ya con `statusOnSave`), test en `web/lib/listing-tracking.test.ts` y markup en un test nuevo `web/lib/listing-actions.test.ts` (patrón `renderToStaticMarkup`).
 
-- [ ] Test primero: con `status="contacted"` y `saved=true` el botón se ve «Guardada» con `aria-pressed="true"`; con `status="contacted"` y `saved=false` se ve «Guardar» y no «Guardada»; con `status="interested"` y `saved=true` igual que hoy.
-- [ ] Cambiar `const interested = status === "interested" && saved` por `saved` y el `onClick` para usar `statusOnSave`: en `contacted`/`visit_scheduled` llamar `setSaved(listingId, true)` (ya existe en `actions.ts:85`, hoy sin uso en pantallas); en el resto `setStatus(listingId, "interested")`. Mantener el `pixel("AddToWishlist")` y `analyticsEvent` solo cuando `!saved`.
-- [ ] Verificar si `setSaved` emite `listing_saved`; si no lo hace, agregarlo con su test (el evento ya existe en `setStatus`) para que la métrica de guardados no se pierda en este camino.
+- [x] Test primero: con `status="contacted"` y `saved=true` el botón se ve «Guardada» con `aria-pressed="true"`; con `status="contacted"` y `saved=false` se ve «Guardar» y no «Guardada»; con `status="interested"` y `saved=true` igual que hoy.
+- [x] Cambiar `const interested = status === "interested" && saved` por `saved` y el `onClick` para usar `statusOnSave`: en `contacted`/`visit_scheduled` llamar `setSaved(listingId, true)` (ya existe en `actions.ts:85`, hoy sin uso en pantallas); en el resto `setStatus(listingId, "interested")`. Mantener el `pixel("AddToWishlist")` y `analyticsEvent` solo cuando `!saved`.
+- [x] Verificar si `setSaved` emite `listing_saved`; si no lo hace, agregarlo con su test (el evento ya existe en `setStatus`) para que la métrica de guardados no se pierda en este camino.
 
 ## Task 7: bloque «Seguimiento» en la ficha, con diálogo de compra
 

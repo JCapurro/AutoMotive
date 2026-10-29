@@ -4,8 +4,10 @@ import { refresh } from "next/cache";
 import { z } from "zod";
 
 import { requireUser } from "@/lib/auth";
+import { webConfig } from "@/lib/config";
 import { type InteractionStatus, type RejectionReason } from "@/lib/copy";
 import { track } from "@/lib/events";
+import { canChangeStatus, normalizeNote } from "@/lib/listing-tracking";
 import { createClient } from "@/lib/supabase/server";
 import { Constants } from "@/types/database";
 
@@ -39,13 +41,18 @@ export async function markSeen(listingId: number, notificationId: number | null)
   });
 }
 
-/** §26 states; a discard may carry a §27 reason. Purchases go through recordPurchase. */
+/**
+ * §26 states; a discard may carry a §27 reason. Purchases go through
+ * recordPurchase, and a purchased listing keeps its status (X-01: terminal in
+ * v1). Contactado and Visita agendada leave saved as it was.
+ */
 export async function setStatus(listingId: number, status: InteractionStatus, reason?: RejectionReason | null) {
   const user = await requireUser();
-  if (!STATUSES.includes(status) || status === "purchased") throw new Error("invalid status");
+  if (!STATUSES.includes(status) || status === "purchased" || status === "new") throw new Error("invalid status");
   const rejection = status === "discarded" && reason && REASONS.includes(reason) ? reason : null;
   const supabase = await createClient();
   const before = await currentStatus(supabase, listingId);
+  if (!canChangeStatus((before?.status ?? "new") as InteractionStatus, status)) throw new Error("status locked");
   const { error } = await supabase
     .from("user_listing_interactions")
     .upsert({ user_id: user.id, listing_id: listingId, status, rejection_reason: rejection,
@@ -90,6 +97,25 @@ export async function setSaved(listingId: number, saved: boolean) {
     .upsert({ user_id: user.id, listing_id: listingId, saved }, { onConflict: "user_id,listing_id" });
   if (error) throw new Error(error.message);
   await track(supabase, user.id, "listing_saved", { listing_id: listingId, saved });
+  refresh();
+}
+
+/**
+ * X-01: the user's private note on a listing. Trimmed, empty → null, over
+ * app_config.listing_tracking.note_max_chars fails without writing. The event
+ * carries the length, never the text.
+ */
+export async function setNote(listingId: number, note: string) {
+  const user = await requireUser();
+  const { listingTracking } = await webConfig();
+  const normalized = normalizeNote(String(note ?? ""), listingTracking.noteMaxChars);
+  if ("error" in normalized) throw new Error(normalized.error);
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("user_listing_interactions")
+    .upsert({ user_id: user.id, listing_id: listingId, note: normalized.note }, { onConflict: "user_id,listing_id" });
+  if (error) throw new Error(error.message);
+  await track(supabase, user.id, "listing_note_saved", { listing_id: listingId, length: normalized.note ? [...normalized.note].length : 0 });
   refresh();
 }
 
