@@ -69,7 +69,7 @@ describe("planLimits", () => {
   it("reads immediate_alerts_per_day and leaves results uncapped when absent", () => {
     expect(planLimits({
       enforced: true,
-      free: { max_profiles: 1, max_visible_results: 100, immediate_alerts_per_day: 3 },
+      free: { max_profiles: 1, max_visible_results: 50, immediate_alerts_per_day: 3 },
       pass: { max_profiles: 3, immediate_alerts_per_day: 10, model_less_search: true },
       pro: { max_profiles: 15, immediate_alerts_per_day: 50, threshold_alerts: true, model_less_search: true },
     })).toEqual({ ...DEFAULT_PLAN_LIMITS,
@@ -90,13 +90,13 @@ describe("planLimits", () => {
       pass: { max_profiles: 3, immediate_alerts: true },
       pro: { max_profiles: 10, immediate_alerts: true },
     }, 10);
-    expect(legacy.free).toEqual({ maxProfiles: 1, maxVisibleResults: 50, immediateAlertsPerDay: 0, thresholdAlerts: false, modelLessSearch: false, maxLocations: 3 });
+    expect(legacy.free).toEqual({ maxProfiles: 1, maxVisibleResults: 50, maxTotalResults: 50, immediateAlertsPerDay: 0, thresholdAlerts: false, modelLessSearch: false, maxLocations: 3 });
     expect(legacy.pro).toEqual({ maxProfiles: 10, maxVisibleResults: null, immediateAlertsPerDay: 10, thresholdAlerts: false, modelLessSearch: false, maxLocations: null });
   });
   it("keeps the defaults for a missing config or plan, and rejects junk", () => {
     expect(planLimits(null)).toEqual(DEFAULT_PLAN_LIMITS);
     expect(planLimits({ free: { max_profiles: "1", immediate_alerts_per_day: -2 } }).free)
-      .toEqual({ maxProfiles: 1, maxVisibleResults: null, immediateAlertsPerDay: 0, thresholdAlerts: false, modelLessSearch: false, maxLocations: 3 });
+      .toEqual({ maxProfiles: 1, maxVisibleResults: null, maxTotalResults: 50, immediateAlertsPerDay: 0, thresholdAlerts: false, modelLessSearch: false, maxLocations: 3 });
   });
   it("words the per-plan alert caps for the plans page and terms", () => {
     expect(alertCapsText(DEFAULT_PLAN_LIMITS)).toBe(

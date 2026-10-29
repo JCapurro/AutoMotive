@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 
 import { LISTING_ROWS, ListingCard } from "@/components/app/listing-card";
 import { AutoRefresh } from "@/components/app/auto-refresh";
+import { FreeResultLimit } from "@/components/app/free-result-limit";
 import { ProBanner, VisibleResultsReport } from "@/components/app/pro-cta";
 import { FrequencySelect, PauseButton } from "@/components/app/search-actions";
 import { SearchCriteriaSummary } from "@/components/app/search-criteria-summary";
@@ -13,7 +14,8 @@ import { SortSelect } from "@/components/app/sort-select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth";
-import { accessDate, includesImmediateAlerts, type PlanLimits, visibleResults } from "@/lib/pro";
+import { webConfig } from "@/lib/config";
+import { accessDate, freeResultQuota, includesImmediateAlerts, type PlanLimits, visibleResults } from "@/lib/pro";
 import { describeVehicle } from "@/lib/search";
 import { collectionPending } from "@/lib/search-collection";
 import { loadSearchCollection } from "@/lib/search-collection-server";
@@ -83,6 +85,8 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
   const retryCollection = profile.enabled && collectionSources?.some((source) => source.collectionState === "failed" || source.collectionState === "unknown");
   const count = (counts?.[0] ?? {}) as Record<string, number>;
   const access = (planLimits ?? null) as PlanLimits | null;
+  const quota = freeResultQuota(access);
+  const checkoutConfig = quota?.reached ? await webConfig() : null;
   // §33: the free plan's visible results. Not enforced (the pilot): all of
   // them, and the database records plan_limit_hit. Enforced: capped.
   const limit = visibleResults(count.all_count ?? 0, (planLimits ?? null) as PlanLimits | null);
@@ -124,6 +128,8 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
           sources={collectionSources}
         />
       </header>
+
+      {quota?.reached && checkoutConfig ? <FreeResultLimit profileId={profileId} limit={quota.limit} offer={checkoutConfig.proOffer} automatic={checkoutConfig.automaticPayments} pilot={checkoutConfig.commercialPilot} /> : null}
 
       {pending ? (
         <SearchPreparation

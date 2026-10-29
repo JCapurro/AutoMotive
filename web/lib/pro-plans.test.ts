@@ -23,6 +23,7 @@ vi.mock("@/lib/google-analytics", () => ({ analyticsEvent: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
 import ProPage from "@/app/app/pro/page";
+import TermsPage from "@/app/terminos/page";
 import { ProPlans } from "@/components/app/pro-plans";
 import { PublicPlans } from "@/components/public-plans";
 import { CUSTOM_PLAN, DEFAULT_PLAN_LIMITS, DEFAULT_PRO_OFFER, planPrice } from "@/lib/pro";
@@ -31,6 +32,14 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.waitlist.mockResolvedValue({ data: null });
   mocks.access.mockReturnValue(null);
+});
+
+it("describes the cumulative trial quota consistently in the terms", async () => {
+  mocks.config.mockResolvedValue({ proOffer: DEFAULT_PRO_OFFER, planLimits: DEFAULT_PLAN_LIMITS });
+  const html = renderToStaticMarkup(await TermsPage());
+  expect(html).toContain("hasta 50 resultados en total durante la prueba");
+  expect(html).toContain("no reinicia el plazo ni el cupo de resultados");
+  expect(html).not.toContain("resultados por búsqueda");
 });
 
 const modes = [
@@ -84,7 +93,7 @@ it("describes the same negotiated Custom scope on public and acquisition pages",
 it("shows the plan cards with the limits and features the backend applies", () => {
   const html = renderToStaticMarkup(createElement(PublicPlans, { cfg: { proOffer: DEFAULT_PRO_OFFER, planLimits: DEFAULT_PLAN_LIMITS, automaticPayments: true, commercialPilot: true }, signedIn: false }));
   for (const copy of [
-    "por 3 días · sin tarjeta", "1 búsqueda activa", "Hasta 100 resultados", "Hasta 3 avisos inmediatos por día y resumen diario",
+    "por 3 días · sin tarjeta", "1 búsqueda activa", "Hasta 50 resultados en total durante la prueba", "Hasta 3 avisos inmediatos por día y resumen diario",
     "Las 72 horas empiezan al activar tu búsqueda. Sin contraseña: solo tu email. Una prueba por email, sin cobro automático.",
     "por 30 días · pago único", "Seguí hasta tres opciones a la vez y recibí avisos para encontrar tu próximo auto.",
     "Hasta 3 búsquedas activas", "Hasta 10 avisos inmediatos por día y resumen diario",

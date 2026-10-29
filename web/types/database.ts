@@ -1142,6 +1142,9 @@ isOneToOne: false
 "my_plan_snapshot":
 { Args: Record<PropertyKey, never>; Returns: Json
                            },
+"submit_product_feedback":
+{ Args: { "p_message": string,"p_profile": number | null,"p_request": string }; Returns: string
+                           },
 "notification_access_active":
 { Args: { "p_listing": number,"p_search": number,"p_user": string }; Returns: boolean
                            },

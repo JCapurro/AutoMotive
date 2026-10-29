@@ -671,7 +671,8 @@ No necesariamente activar pagos desde el primer día, pero diseñar límites.
 
 - 1 Search Profile;
 - frecuencia estándar;
-- cantidad limitada de resultados;
+- hasta 50 publicaciones distintas acumuladas durante toda la prueba gratis;
+- editar, pausar o recrear búsquedas no reinicia el cupo; al completarlo se muestra un pop-up con los planes y se conservan los resultados recibidos;
 - filtros básicos.
 
 ### Pro

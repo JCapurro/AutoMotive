@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Contact, LegalPage } from "@/components/legal-page";
 import { contactEmail } from "@/lib/env";
 import { webConfig } from "@/lib/config";
-import { modelLessText, type PlanCaps, planPrice } from "@/lib/pro";
+import { modelLessText, type PlanCaps, planPrice, resultsText } from "@/lib/pro";
 
 export const metadata: Metadata = { title: "Términos de uso" };
 export const dynamic = "force-dynamic";
@@ -23,7 +23,7 @@ export default async function TermsPage() {
   const { proOffer, planLimits, automaticPayments } = await webConfig();
   const { free, pass, pro } = planLimits;
   return (
-    <LegalPage title="Términos de uso" updated="15 de octubre de 2026">
+    <LegalPage title="Términos de uso" updated="28 de octubre de 2026">
       <p>
         Al crear una búsqueda con tu email o una cuenta en Ese Auto aceptás estos términos. Si no estás de acuerdo,
         no uses el servicio.
@@ -38,8 +38,8 @@ export default async function TermsPage() {
 
       <h2>Prueba y planes</h2>
       <p>La prueba gratis permite {searches(free)} durante 72 horas corridas desde su primera activación,
-        una sola vez por email o cuenta, {free.maxVisibleResults == null ? "todos los resultados disponibles" : `hasta ${free.maxVisibleResults} resultados por búsqueda`}
-        {free.immediateAlertsPerDay > 0 ? `, ${alerts(free)} y resumen diario` : " y resumen diario"}. Editar, pausar o reemplazar la búsqueda no reinicia el plazo.</p>
+        una sola vez por email o cuenta, {resultsText(free).toLowerCase()}
+        {free.immediateAlertsPerDay > 0 ? `, ${alerts(free)} y resumen diario` : " y resumen diario"}. Cada publicación cuenta una sola vez. Editar, pausar o reemplazar la búsqueda no reinicia el plazo ni el cupo de resultados. Al completar el cupo podés consultar los resultados recibidos y adquirir un plan para recibir nuevas coincidencias.</p>
       <p>Particular cuesta {planPrice(proOffer.pass_30.amount)} ARS por 30 días, permite {searches(pass)} y {alerts(pass)}, y no se renueva automáticamente.
         Si lo comprás con el acceso vigente, los 30 días se suman a tu vencimiento; si lo comprás después de vencer, rigen desde
         la aprobación del pago y reactivamos tus búsquedas anteriores, hasta {pass.maxProfiles}.

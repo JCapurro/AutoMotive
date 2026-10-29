@@ -34,7 +34,7 @@ export default async function SearchesPage() {
         </thead>
         <tbody>
           {(searches ?? []).map((s) => (
-            <tr key={s.id}>
+            <tr key={s.id} id={`search-${s.id}`}>
               <Td className="tabular-nums">{s.id}</Td>
               <Td className="max-w-72">
                 <span className="block font-medium">

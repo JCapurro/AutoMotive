@@ -41,6 +41,7 @@ export function LimitsForm({ value, onChange }: FormProps) {
       const current = configObject(raw[tier]), defaults = DEFAULT_PLAN_LIMITS[tier], caps = effective[tier], tierMissing = !(tier in raw);
       return <fieldset key={tier} disabled={!(tier in raw)} className="min-w-0 space-y-3 rounded-lg border p-3"><legend className="px-1 font-medium">{PLAN_NAMES[tier]}</legend>
         {tierMissing ? <p className="text-xs text-muted-foreground">Este plan hereda los valores predeterminados de la web que se muestran aquí. La base puede usar otros topes sin su bloque; completalo en JSON avanzado antes de usar estos controles. Abrir el formulario no agrega esos valores.</p> : null}
+        {tier === "free" ? <label className="grid gap-1 text-sm">Resultados acumulados durante la prueba<Input type="number" aria-label="Prueba gratis: Resultados acumulados durante la prueba" min={1} max={2_147_483_647} step={1} value={String(current.max_total_results ?? 50)} onChange={(e) => onChange(put(raw, [tier, "max_total_results"], e.target.value === "" ? undefined : Number(e.target.value)))} /><span className="text-xs text-muted-foreground">Cada publicación cuenta una sola vez. Editar o recrear búsquedas no reinicia el cupo.</span></label> : null}
         {LIMIT_FIELDS.map(({ key, label, min, fallback }) => {
           const inherited = !(key in current), unlimited = current[key] === null;
           // Legacy immediate_alerts is intentionally kept until this field is explicitly edited.

@@ -9,7 +9,8 @@ it("shows the web's effective defaults for absent plans without adding untouched
   const html = renderToStaticMarkup(createElement(LimitsForm, { value, onChange }));
   const free = html.slice(html.indexOf(">Prueba gratis</legend>"), html.indexOf(">Particular</legend>"));
   const pro = html.slice(html.indexOf(">Pro</legend>"));
-  expect(free).toMatch(/aria-label="Prueba gratis: Resultados por búsqueda"[^>]*value="100"/);
+  expect(free).toMatch(/aria-label="Prueba gratis: Resultados por búsqueda"[^>]*value="50"/);
+  expect(free).toContain('aria-label="Prueba gratis: Resultados acumulados durante la prueba"');
   expect(pro).toMatch(/<input type="checkbox"[^>]*checked=""[^>]*\/><span>Umbral de oportunidad/);
   expect(pro).toMatch(/<input type="checkbox"[^>]*checked=""[^>]*\/><span>Buscar por carrocería sin modelo/);
   expect(html).toContain("hereda los valores predeterminados");

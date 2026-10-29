@@ -13,6 +13,7 @@ const price = z.object({ amount: z.number().int().positive().max(MAX_OFFER_ARS),
 export const AdminOfferInput = z.object({ version: z.string().trim().min(1).max(80), pass_30: price, pro_monthly: price }).passthrough();
 const plan = z.object({
   max_profiles: count.optional(), max_visible_results: positiveCount.nullable().optional(),
+  max_total_results: positiveCount.optional(),
   immediate_alerts_per_day: count.optional(), immediate_alerts: z.boolean().optional(),
   threshold_alerts: z.boolean().optional(), model_less_search: z.boolean().optional(),
   max_locations: positiveCount.nullable().optional(),
@@ -105,7 +106,7 @@ export function configFieldLabel(key: string, path: string): string {
   if (key === "plan_limits") {
     const [tier, field] = path.split(".");
     const planName = ({ free: "Prueba gratis", pass: "Particular", pro: "Pro" } as Record<string, string>)[tier];
-    const fieldName = ({ max_profiles: "búsquedas activas", max_visible_results: "resultados por búsqueda", immediate_alerts_per_day: "avisos inmediatos por día", max_locations: "zonas por búsqueda", threshold_alerts: "umbral de oportunidad", model_less_search: "búsqueda sin modelo" } as Record<string, string>)[field];
+    const fieldName = ({ max_profiles: "búsquedas activas", max_visible_results: "resultados por búsqueda", max_total_results: "resultados acumulados durante la prueba", immediate_alerts_per_day: "avisos inmediatos por día", max_locations: "zonas por búsqueda", threshold_alerts: "umbral de oportunidad", model_less_search: "búsqueda sin modelo" } as Record<string, string>)[field];
     if (planName) return fieldName ? `${planName}: ${fieldName}` : planName + (field ? `: ${field}` : "");
   }
   if (key === "lifecycle_emails") {

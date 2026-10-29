@@ -220,8 +220,11 @@ class CommercialTests(CommercialCase):
         pid = await self.search()
         audience = await notifications.profile_audiences([pid])
         self.assertEqual(audience[pid]['frequency'],'daily')
-        await self.pay()
         lid = (await self.rows("INSERT INTO listings(source,external_id,url,title) VALUES ('mercadolibre','freq-1','https://example.test/freq-1','Fiesta') RETURNING id"))[0]['id']
+        # Keep this test about delivery frequency: the listing was already
+        # admitted during the free trial before the paid period began.
+        await self.rows("INSERT INTO matches(search_profile_id,listing_id,score,level,score_breakdown,match_reasons,scoring_version) VALUES (%s,%s,80,'high','{}','{}','test')",pid,lid)
+        await self.pay()
         nid = (await self.rows("INSERT INTO notifications(user_id,search_profile_id,listing_id,kind,channel,dedupe_key) VALUES (%s,%s,%s,'new_match','web','new:1') RETURNING id",self.user,pid,lid))[0]['id']
         await self.rows("UPDATE profiles SET plan_expires_at=now()-interval '1 second' WHERE id=%s",self.user)
         self.assertEqual((await self.access())['state'],'trial')
@@ -285,9 +288,9 @@ class CommercialTests(CommercialCase):
         pid = await self.search()
         await self.rows("INSERT INTO listings(source,external_id,url,title,make,model) SELECT 'mercadolibre',i::text,'https://example.test/'||i,'Fiesta','Ford','Fiesta' FROM generate_series(1,120) i")
         await self.rows("INSERT INTO matches(search_profile_id,listing_id,score,level,score_breakdown,match_reasons,scoring_version) SELECT %s,id,80,'high','{}','{}','test' FROM listings",pid)
-        self.assertEqual(len(await self.rows("SELECT * FROM search_results(%s,'all','recent',200,0)",pid,actor=self.user)),100)
-        self.assertEqual(len(await self.rows("SELECT * FROM search_results(%s,'all','recent',200,95)",pid,actor=self.user)),5)
-        self.assertEqual(await self.rows("SELECT * FROM search_results(%s,'all','recent',200,100)",pid,actor=self.user),[])
+        self.assertEqual(len(await self.rows("SELECT * FROM search_results(%s,'all','recent',200,0)",pid,actor=self.user)),50)
+        self.assertEqual(len(await self.rows("SELECT * FROM search_results(%s,'all','recent',200,45)",pid,actor=self.user)),5)
+        self.assertEqual(await self.rows("SELECT * FROM search_results(%s,'all','recent',200,50)",pid,actor=self.user),[])
         await self.rows("UPDATE profiles SET free_trial_started_at=now()-interval '4 days' WHERE id=%s",self.user)
         self.assertEqual(await self.rows("INSERT INTO matches(search_profile_id,listing_id,score,level,score_breakdown,match_reasons,scoring_version) VALUES (%s,1,90,'high','{}','{}','test') ON CONFLICT(search_profile_id,listing_id) DO UPDATE SET score=90 RETURNING id",pid),[])
         with self.assertRaisesRegex(Exception,'plan_access_expired'):

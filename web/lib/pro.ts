@@ -27,13 +27,15 @@ export const PLAN_COPY: Record<WaitlistPlan, { name: string; period: string; pit
  */
 export type PlanCaps = {
   maxProfiles: number; maxVisibleResults: number | null; immediateAlertsPerDay: number;
+  /** Distinct publications across the whole free trial, including recreated searches. */
+  maxTotalResults?: number;
   thresholdAlerts: boolean; modelLessSearch: boolean;
   /** Places one search may look in (its own and the ones it adds); null = no cap. */
   maxLocations: number | null;
 };
 export type PlanLimitsConfig = Record<PlanTier, PlanCaps>;
 export const DEFAULT_PLAN_LIMITS: PlanLimitsConfig = {
-  free: { maxProfiles: 1, maxVisibleResults: 100, immediateAlertsPerDay: 3, thresholdAlerts: false, modelLessSearch: false, maxLocations: 3 },
+  free: { maxProfiles: 1, maxVisibleResults: 50, maxTotalResults: 50, immediateAlertsPerDay: 3, thresholdAlerts: false, modelLessSearch: false, maxLocations: 3 },
   pass: { maxProfiles: 3, maxVisibleResults: null, immediateAlertsPerDay: 10, thresholdAlerts: false, modelLessSearch: true, maxLocations: null },
   pro: { maxProfiles: 20, maxVisibleResults: null, immediateAlertsPerDay: 50, thresholdAlerts: true, modelLessSearch: true, maxLocations: null },
 };
@@ -54,6 +56,7 @@ export function planLimits(value: unknown, globalCap = 10): PlanLimitsConfig {
     if (!plan || typeof plan !== "object") continue;
     const limits = plan as Record<string, unknown>;
     out[tier] = {
+      ...(tier === "free" ? { maxTotalResults: whole(limits.max_total_results, 1) ?? 50 } : {}),
       maxProfiles: whole(limits.max_profiles, 0) ?? DEFAULT_PLAN_LIMITS[tier].maxProfiles,
       maxVisibleResults: whole(limits.max_visible_results, 1),
       immediateAlertsPerDay: alertCap(limits, globalCap),
@@ -77,6 +80,7 @@ export function searchesText(caps: PlanCaps, upTo = true): string {
   return `${upTo ? "Hasta " : ""}${counted(caps.maxProfiles, "búsqueda activa", "búsquedas activas")}`;
 }
 export function resultsText(caps: PlanCaps): string {
+  if (caps.maxTotalResults != null) return `Hasta ${caps.maxTotalResults} resultados en total durante la prueba`;
   return caps.maxVisibleResults == null ? "Todos los resultados disponibles" : `Hasta ${caps.maxVisibleResults} resultados`;
 }
 /** "Particular incluye hasta 10 avisos inmediatos … y Pro, hasta 50 …; …" */
@@ -137,8 +141,9 @@ export type PlanLimits = {
   state?: "pilot" | "available" | "trial" | "paid" | "expired";
   expires_at?: string | null; trial_started_at?: string | null; trial_expires_at?: string | null;
   active_searches?: number;
+  free_results_used?: number; free_results_limit?: number | null;
   limits: {
-    max_profiles?: number; max_visible_results?: number; immediate_alerts_per_day?: number; immediate_alerts?: boolean;
+    max_profiles?: number; max_visible_results?: number; max_total_results?: number; immediate_alerts_per_day?: number; immediate_alerts?: boolean;
     threshold_alerts?: boolean; model_less_search?: boolean; max_locations?: number;
   };
 };
@@ -227,6 +232,13 @@ export function visibleResults(total: number, limits: PlanLimits | null): { cap:
   const max = limits?.limits.max_visible_results;
   if (max == null) return { cap: null, over: false };
   return { cap: limits?.enforced ? max : null, over: total > max };
+}
+/** Account usage, independent of this search's current filters, sort, or count. */
+export function freeResultQuota(access: PlanLimits | null): { used: number; limit: number; reached: boolean } | null {
+  if (!access?.enforced || access.plan !== "free" || access.free_results_limit == null) return null;
+  const limit = access.free_results_limit;
+  const used = access.free_results_used ?? 0;
+  return { used, limit, reached: used >= limit };
 }
 export function accessDate(value: string): string {
   return new Intl.DateTimeFormat("es-AR", { dateStyle: "medium", timeStyle: "short",

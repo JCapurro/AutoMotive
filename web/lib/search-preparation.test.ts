@@ -10,6 +10,8 @@ vi.mock("@/lib/search-collection-server", () => ({ loadSearchCollection: async (
   })) }));
 vi.mock("@/components/app/auto-refresh", () => ({ AutoRefresh: ({ every = 3000 }: { every?: number }) => createElement("span", { "data-refresh-every": every }) }));
 vi.mock("@/lib/auth", () => ({ requireUser: vi.fn().mockResolvedValue({ id: "user" }) }));
+vi.mock("@/lib/config", () => ({ webConfig: vi.fn() }));
+vi.mock("@/components/app/free-result-limit", () => ({ FreeResultLimit: () => null }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }), notFound: () => { throw Error("not-found"); } }));
 vi.mock("@/components/app/search-actions", () => ({ FrequencySelect: () => null, PauseButton: () => null }));
 vi.mock("@/components/app/sort-select", () => ({ SortSelect: () => null }));

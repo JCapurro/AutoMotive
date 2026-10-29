@@ -20,6 +20,7 @@ from notifications.links import Links
 from notifications.ops import SourceAlerts
 from notifications.service import Notifier
 from notifications.lifecycle import run_lifecycle_emails
+from notifications.product_feedback import run_product_feedback
 from db.repos import targets as targets_repo
 from db.repos.runs import dead_workers, fail_orphan_runs
 from pipeline import heartbeat
@@ -155,6 +156,8 @@ async def amain() -> None:
                                    notifying(refresh_watchlist, notifier), stop)),
         asyncio.create_task(_every("notifications", NOTIFY_TICK_SECONDS,
                                    lambda _stop: notifier.deliver(), stop)),
+        asyncio.create_task(_every("product_feedback", NOTIFY_TICK_SECONDS,
+                                   lambda _stop: run_product_feedback(notifier.channels.get("email"),links),stop)),
         asyncio.create_task(digest_loop(notifier, stop)),
         asyncio.create_task(_every("plan_emails", TRIAL_REMINDER_TICK_SECONDS,
                                    lambda _stop: run_lifecycle_emails(notifier.channels.get("email"), links),
