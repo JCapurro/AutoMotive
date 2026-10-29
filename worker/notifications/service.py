@@ -19,6 +19,7 @@ import db
 from db.repos import listings as listings_repo
 from db.repos import notifications as repo
 from intelligence.config import DEFAULT_COMPARABLES
+from intelligence.seller_questions import question_texts
 from notifications import dispatch
 from notifications.channels.base import Channel
 from notifications.engine import LISTING_GONE, MATCH, PRICE_DROP, Audience, Event, Rules, decide_all
@@ -159,11 +160,14 @@ class Notifier:
                 continue
             state = states.get((str(a["user_id"]), c.listing_id)) or {}
             ev = c.evaluation
+            questions = question_texts(listing, ev.get("red_flags") or [], timing_belt=listing.get("timing_belt"),
+                                       now=now or datetime.now(timezone.utc))
             events.append(Event(
                 MATCH, c.listing_id, self._audience(a), level=ev["level"], score=ev["score"],
                 match_id=c.match_id, repost=c.repost, saved=bool(state.get("saved")),
                 status=state.get("status"),
-                payload=payload(listing, ev, min_n=min_n, profile_name=a["profile_name"])))
+                payload=payload(listing, ev, min_n=min_n, profile_name=a["profile_name"],
+                                questions=questions or None)))
         return await self._commit(events, now=now)
 
     async def on_listing_events(self, listing_events: Iterable[Any], *, now: datetime | None = None,

@@ -79,3 +79,16 @@ def seller_questions(listing: Mapping[str, Any], flags: Iterable[RedFlag], *,
                      timing_belt: bool | None, now: datetime) -> str:
     """One message ready to copy: "Hola, ¿cómo estás? ¿Lo seguís teniendo? …"."""
     return " ".join(QUESTION[k] for k in question_keys(listing, flags, timing_belt=timing_belt, now=now))
+
+
+# Asked of every seller, so they say nothing about this listing in a short summary.
+_GENERIC = frozenset({"greeting", "available", "holder"})
+
+
+def question_texts(listing: Mapping[str, Any], flags: Iterable[RedFlag | Mapping[str, Any]], *,
+                   timing_belt: bool | None, now: datetime, limit: int = 3) -> list[str]:
+    """The questions specific to this listing, in `question_keys` order, without
+    the greeting and the ones every seller gets (the alert email, H-01)."""
+    flags = [f if isinstance(f, RedFlag) else RedFlag(**f) for f in flags]
+    keys = question_keys(listing, flags, timing_belt=timing_belt, now=now)
+    return [QUESTION[k] for k in keys if k not in _GENERIC][:limit]

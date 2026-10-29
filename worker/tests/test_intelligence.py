@@ -11,7 +11,8 @@ from intelligence.engine import assess, evaluate
 from intelligence.levels import level_for
 from intelligence.matching import match
 from intelligence.red_flags import red_flags
-from intelligence.seller_questions import seller_questions
+from intelligence.red_flags import RedFlag
+from intelligence.seller_questions import question_texts, seller_questions
 
 
 NOW = datetime(2026, 9, 27, 15, 0, tzinfo=timezone.utc)
@@ -315,6 +316,36 @@ class SellerQuestionTests(unittest.TestCase):
         self.assertIn("¿Cuántos km tiene?", text)
         self.assertIn("¿Es manual o automático?", text)
         self.assertIn("¿Qué versión es?", text)
+
+
+class QuestionTextsTests(unittest.TestCase):
+    """H-01: the questions specific to a listing, for the alert email."""
+
+    def texts(self, flags=(), **kw):
+        listing = fiesta_listing(description=LONG_DESCRIPTION, year=2025, **kw)
+        return question_texts(listing, flags, timing_belt=False, now=NOW)
+
+    def test_a_complete_listing_has_none(self):
+        self.assertEqual(self.texts(), [])
+
+    def test_never_includes_the_generic_questions(self):
+        out = question_texts(fiesta_listing(), [], timing_belt=True, now=NOW)
+        for key in ("greeting", "available", "holder"):
+            self.assertNotIn(copy.QUESTION[key], out)
+        self.assertEqual(out[0], copy.QUESTION["timing_belt"])
+
+    def test_one_specific_question(self):
+        self.assertEqual(self.texts(trim=None), [copy.QUESTION["trim"]])
+
+    def test_cuts_at_three_keeping_the_order(self):
+        out = self.texts(mileage_km=None, transmission=None, trim=None)
+        self.assertEqual(out, [copy.QUESTION[k] for k in ("km_unknown", "transmission", "trim")])
+        self.assertEqual(len(self.texts(mileage_km=None, transmission=None, trim=None, price_partial=True)), 3)
+
+    def test_flags_as_objects_or_dicts_give_the_same_questions(self):
+        flag = RedFlag("no_owners", "x", "info")
+        self.assertEqual(self.texts([flag]), self.texts([flag.to_json()]))
+        self.assertIn(copy.QUESTION["owners"], self.texts([flag]))
 
 
 class ConfigTests(unittest.TestCase):

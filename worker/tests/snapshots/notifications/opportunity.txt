@@ -23,6 +23,11 @@ USD 10.300
 Opportunity Score 88/100
 8% debajo de publicaciones comparables.
 Publicado hace 4 minutos.
+
+Preguntas para hacerle al vendedor
+- ¿Cuántos dueños tuvo?
+- ¿Tiene VTV vigente?
+Podés copiar el mensaje completo desde la ficha del auto.
 Ver auto en Ese Auto: https://automotive.app/r/42?to=detail
 
 Ver mis búsquedas: https://automotive.app/app
@@ -52,6 +57,10 @@ Recibís este email porque se creó una búsqueda en Ese Auto con esta direcció
 <p style="margin:0;margin-top:10px;font-size:14px;line-height:22px;color:#4e5a73;">Puntaje de oportunidad: 88/100</p>
 <p style="margin:0;margin-top:10px;font-size:14px;line-height:22px;color:#4e5a73;padding:10px 12px;background:#ffe14d;font-weight:bold;color:#14213d;">8% debajo de publicaciones comparables.</p>
 <p style="margin:0;margin-top:10px;font-size:14px;line-height:22px;color:#4e5a73;">Publicado hace 4 minutos.</p>
+<p style="margin:0;margin-top:22px;font-size:14px;line-height:22px;font-weight:bold;color:#14213d">Preguntas para hacerle al vendedor</p>
+<p style="margin:0;margin-top:6px;font-size:14px;line-height:22px;color:#4e5a73">• ¿Cuántos dueños tuvo?</p>
+<p style="margin:0;margin-top:6px;font-size:14px;line-height:22px;color:#4e5a73">• ¿Tiene VTV vigente?</p>
+<p style="margin:0;margin-top:8px;font-size:12px;line-height:19px;color:#4e5a73">Podés copiar el mensaje completo desde la ficha del auto.</p>
 <div style="margin-top:24px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;"><tr><td bgcolor="#ffe14d" style="padding:16px 18px;border-radius:5px;text-align:center"><a href="https://automotive.app/r/42?to=detail" style="color:#14213d;text-decoration:none;font-size:15px;line-height:22px;font-weight:bold;display:block">Ver auto en Ese Auto &rarr;</a></td></tr></table></div>
 <p style="margin:0;margin-top:10px;font-size:12px;line-height:19px;color:#4e5a73">Mirá el análisis, guardá el auto y accedé a la publicación original.</p>
 <p style="margin:0;margin-top:24px;font-size:12px;color:#4e5a73">Otras fotos de la publicación</p>
