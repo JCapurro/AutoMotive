@@ -163,3 +163,14 @@ export async function trackSellerQuestions(listingId: number, action: "generated
   const supabase = await createClient();
   await track(supabase, user.id, `seller_questions_${action}`, { listing_id: listingId });
 }
+
+/** PAR-03: the listing page's price history was opened (once per view, components/app/price-history-details.tsx). */
+export async function trackPriceHistoryExpanded(listingId: number, drops: number, days: number) {
+  const user = await requireUser();
+  const parsed = z
+    .object({ listingId: z.number().int().positive(), drops: z.number().int().min(0).max(1000), days: z.number().int().min(0).max(100_000) })
+    .safeParse({ listingId, drops, days });
+  if (!parsed.success) return;
+  const supabase = await createClient();
+  await track(supabase, user.id, "price_history_expanded", { listing_id: listingId, drops, days });
+}

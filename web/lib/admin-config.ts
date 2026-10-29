@@ -82,6 +82,12 @@ export function validateConfigChange(key: string, value: unknown, current: unkno
     if (!AdminPlanLimitsInput.safeParse(value).success) return "Revisá los límites: cantidades enteras entre 0 y 2.147.483.647, resultados y zonas desde 1 (o sin tope), funciones true/false.";
     if (configObject(value).enforced !== configObject(current).enforced) return "La aplicación de límites se cambia desde Cobros, junto con el piloto comercial.";
   }
+  if (key === "price_track") {
+    // PAR-03: the smallest fall, in %, that counts as a drop (public.price_track_min_drop_pct).
+    if (!z.object({ min_drop_pct: z.number().min(0).max(100) }).safeParse(value).success) {
+      return "min_drop_pct tiene que ser un número entre 0 y 100.";
+    }
+  }
   if (key === "lifecycle_emails") {
     const parsed = AdminLifecycleInput.safeParse(value);
     if (!parsed.success) return parsed.error.issues[0]?.message ?? "Revisá los horarios, tipos y topes de emails.";

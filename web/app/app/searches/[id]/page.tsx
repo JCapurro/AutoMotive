@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth";
 import { webConfig } from "@/lib/config";
 import { FOLLOW_EMPTY, FOLLOW_LABEL } from "@/lib/copy";
+import { fetchPriceTracks } from "@/lib/price-track";
 import { accessDate, freeResultQuota, includesImmediateAlerts, type PlanLimits, visibleResults } from "@/lib/pro";
 import { describeVehicle } from "@/lib/search";
 import { collectionPending } from "@/lib/search-collection";
@@ -111,6 +112,11 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
   const reach = limit.cap != null ? Math.min(PAGE_SIZE * page, limit.cap) : PAGE_SIZE * page;
   const more = rows.length > reach && reach === PAGE_SIZE * page;
   const shown = rows.slice(0, reach);
+  // PAR-03: the drops of the listings on this page only, in one call; on error, no drop line.
+  const tracks = await fetchPriceTracks(
+    (fn, args) => supabase.rpc(fn, args),
+    shown.map((card) => card.listing_id).filter((lid): lid is number => lid != null),
+  );
   const href = (next: Partial<{ f: Filter; s: Sort; p: number }>) => {
     const qs = new URLSearchParams({ f: next.f ?? filter, s: next.s ?? sort });
     if (next.p && next.p > 1) qs.set("p", String(next.p));
@@ -184,7 +190,7 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
       {shown.length ? (
         <div className={LISTING_ROWS} data-testid="results">
           {shown.map((card) => (
-            <ListingCard key={card.listing_id} card={card} />
+            <ListingCard key={card.listing_id} card={card} track={card.listing_id != null ? tracks.get(card.listing_id) : null} />
           ))}
         </div>
       ) : needsPreparation ? null : (

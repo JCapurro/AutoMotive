@@ -234,3 +234,16 @@ export const NOTIFICATION_TITLE: Record<string, string> = {
 // §25: the part every message starts with, shown while a match has no
 // stored questions yet (rows scored before F4 get them on the next re-score).
 export const BASE_SELLER_QUESTIONS = "Hola, ¿cómo estás? ¿Lo seguís teniendo? ¿Sos titular?";
+
+// PAR-03: a listing's price drops since we first saw it (its first snapshot,
+// not its publication). Same wording as worker/intelligence/copy.py.
+export const PRICE_TRACK = {
+  line: "Bajó {n} {times} desde que la vimos: -{amount} (-{pct}){about}.",
+  times: ["vez", "veces"],
+  aboutUsd: ", unos {usd}",
+  summary: "{n} {drops} · -{amount} (-{pct}) desde el {date}",
+  drops: ["baja", "bajas"],
+  detected: "No sabemos cuándo se publicó; contamos desde que la detectamos.",
+  trackedSince: "Seguimos este aviso desde el {date}; no vemos los cambios anteriores.",
+  historyToggle: "Ver el histórico de precios",
+} as const;
