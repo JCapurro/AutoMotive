@@ -50,15 +50,18 @@ export function trackLine(track: PriceTrack | null | undefined): string | null {
   });
 }
 
-/** The listing page: "2 bajas · -USD 1.500 (-6,3%) desde el 20/09"; null without a net drop. */
+/**
+ * The listing page: "2 bajas · -USD 1.500 (-6,3%) desde el 20/09"; null
+ * without a net drop. Always in dollars (cum_usd), pesos included: the
+ * approved copy has only the USD form (the card tells pesos in pesos).
+ */
 export function summaryLine(track: PriceTrack | null | undefined): string | null {
   if (!hasNetDrop(track)) return null;
-  const a = amount(track);
-  if (!a) return null;
+  if (track.cum_usd == null || Number(track.cum_usd) <= 0) return null;
   return fill(PRICE_TRACK.summary, {
     n: track.drops,
     drops: PRICE_TRACK.drops[track.drops === 1 ? 0 : 1],
-    amount: a.amount,
+    amount: money(Number(track.cum_usd), "USD"),
     pct: pct(Number(track.cum_pct), 1),
     date: dayMonth(track.first_at),
   });
