@@ -179,7 +179,7 @@ select is((select label from public.v_validation_criteria where criterion = 'ret
           'with a label for the admin');
 select is((select metric from public.v_validation_criteria where criterion = 'outcome'),
           'Usuarios que agendaron una visita o compraron',
-          'outcome (X-01): only a scheduled visit or a purchase; u2''s Contactado does not count');
+          'outcome (X-01): its label names only a scheduled visit or a purchase');
 
 -- ---------------------------------------------------------------- v_contacted_metric (X-01)
 select results_eq($$select users::int, events::int from public.v_contacted_metric$$,
