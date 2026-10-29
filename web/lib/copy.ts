@@ -44,6 +44,39 @@ export const STATUSES: InteractionStatus[] = [
   "purchased",
 ];
 
+// X-01: the "Seguimiento" block, its purchase dialog and the filters by status.
+export const TRACKING = {
+  title: "Seguimiento",
+  status: "Estado",
+  note: "Tu nota",
+  notePlaceholder: "Qué hablaste, cuándo es la visita, qué falta revisar",
+  saveNote: "Guardar nota",
+  editNote: "Editar nota",
+  notePrivacy: "La nota es privada: no se la mostramos al vendedor ni a otros usuarios.",
+  purchasedLocked: "Marcaste que la compraste. Por ahora la compra no se puede deshacer desde acá.",
+  purchaseTitle: "¿La compraste?",
+  purchaseDescription: "Es definitivo: después no vas a poder cambiar el estado desde acá. Precio, moneda y fecha son opcionales.",
+  purchasePrice: "Precio que pagaste",
+  purchaseCurrency: "Moneda",
+  purchaseDate: "Fecha de compra",
+  purchaseConfirm: "Marcar como comprada",
+  cancel: "Cancelar",
+} as const;
+
+/** Saved listings' and results' filters by follow-up status, with what an empty one says. */
+export const FOLLOW_FILTERS = ["contacted", "visit_scheduled", "purchased"] as const;
+export type FollowFilter = (typeof FOLLOW_FILTERS)[number];
+export const FOLLOW_LABEL: Record<FollowFilter, string> = {
+  contacted: "Contactados",
+  visit_scheduled: "Visita agendada",
+  purchased: "Comprados",
+};
+export const FOLLOW_EMPTY: Record<FollowFilter, string> = {
+  contacted: "No marcaste publicaciones como contactadas.",
+  visit_scheduled: "No marcaste publicaciones con visita agendada.",
+  purchased: "No marcaste publicaciones como compradas.",
+};
+
 // §27
 export const REJECTION: Record<RejectionReason, string> = {
   too_expensive: "Demasiado caro",

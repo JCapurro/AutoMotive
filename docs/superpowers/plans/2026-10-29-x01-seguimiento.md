@@ -116,16 +116,16 @@ Files: `web/components/app/listing-actions.tsx`, `web/lib/listing-tracking.ts` (
 
 Files: `web/components/app/listing-tracking.tsx` (nuevo, `"use client"`), `web/app/app/listings/[id]/page.tsx` (montarlo debajo de `ListingActions`, ~línea 198, y ampliar la consulta de la línea 67 con `note`), `web/lib/listing-tracking-ui.test.ts` (nuevo).
 
-- [ ] Tests primero (`renderToStaticMarkup`, en `web/lib/listing-tracking-ui.test.ts`):
+- [x] Tests primero (`renderToStaticMarkup`, en `web/lib/listing-tracking-ui.test.ts`):
   - El bloque se llama «Seguimiento» y tiene un select con label «Estado» y exactamente las seis opciones de `selectableStatuses()`.
   - Con `status="purchased"` el select está deshabilitado y aparece una aclaración de que la compra no se puede deshacer desde acá.
   - Textarea con label «Tu nota», placeholder «Qué hablaste, cuándo es la visita, qué falta revisar», botón «Guardar nota» y la frase «La nota es privada: no se la mostramos al vendedor ni a otros usuarios.»; `maxLength` igual al tope recibido por props.
   - La nota existente se muestra con `whitespace-pre-line` y como texto (un `<script>` en la nota sale escapado).
   - El bloque aparece también cuando la publicación ya no está disponible (`listing_status` distinto de `active`).
-- [ ] Implementar con `NativeSelect` (el que ya usa la app; confirmar el componente con `Grep NativeSelect web/components`). «Descartado» abre el `DiscardDialog` existente (extraerlo de `listing-actions.tsx` a un export reutilizable en vez de duplicarlo); «Comprado» abre un diálogo nuevo (precio, moneda `USD|ARS`, fecha; todo opcional; texto de confirmación de que es definitivo) que llama a `recordPurchase({ listingId, profileId: best?.search_profile_id, … })` con el esquema `Purchase` de `actions.ts`; si devuelve `error`, `toast.error` y el estado no cambia.
-- [ ] Cambios de estado: `canChangeStatus` antes de llamar a `setStatus`; usar `useTransition` y `toast` como `ListingActions`. La nota: `setNote`, con contador de caracteres.
-- [ ] Pasar por props el tope (`webConfig().listingTracking.noteMaxChars`, ya cargado en la página) y la `note` actual.
-- [ ] `cd web && npx vitest run lib/listing-tracking-ui.test.ts` en verde.
+- [x] Implementar con `NativeSelect` (el que ya usa la app; confirmar el componente con `Grep NativeSelect web/components`). «Descartado» abre el `DiscardDialog` existente (extraerlo de `listing-actions.tsx` a un export reutilizable en vez de duplicarlo); «Comprado» abre un diálogo nuevo (precio, moneda `USD|ARS`, fecha; todo opcional; texto de confirmación de que es definitivo) que llama a `recordPurchase({ listingId, profileId: best?.search_profile_id, … })` con el esquema `Purchase` de `actions.ts`; si devuelve `error`, `toast.error` y el estado no cambia.
+- [x] Cambios de estado: `canChangeStatus` antes de llamar a `setStatus`; usar `useTransition` y `toast` como `ListingActions`. La nota: `setNote`, con contador de caracteres.
+- [x] Pasar por props el tope (`webConfig().listingTracking.noteMaxChars`, ya cargado en la página) y la `note` actual.
+- [x] `cd web && npx vitest run lib/listing-tracking-ui.test.ts` en verde.
 
 ## Task 8: Guardados con filtro, estado, nota y select
 

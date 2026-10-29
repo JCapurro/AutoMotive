@@ -6,6 +6,7 @@ import { notFound } from "next/navigation";
 import { ListingActions } from "@/components/app/listing-actions";
 import { DealerFeesNotice } from "@/components/app/dealer-fees-notice";
 import { ListingGallery } from "@/components/app/listing-gallery";
+import { ListingTracking } from "@/components/app/listing-tracking";
 import { DescriptionPriceContext, SellerDescription } from "@/components/app/description-insights";
 import { type PricePoint, PriceHistory } from "@/components/app/price-history";
 import { SellerQuestions } from "@/components/app/seller-questions";
@@ -64,7 +65,7 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
       )
       .eq("listing_id", listingId)
       .order("score", { ascending: false }),
-    supabase.from("user_listing_interactions").select("status, saved, rejection_reason").eq("listing_id", listingId).maybeSingle(),
+    supabase.from("user_listing_interactions").select("status, saved, rejection_reason, note").eq("listing_id", listingId).maybeSingle(),
     supabase
       .from("listing_snapshots")
       .select("observed_at, price, currency, price_usd, change_kind")
@@ -179,6 +180,16 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
           status={status}
           saved={interaction?.saved ?? false}
           outboundHref={outboundHref}
+        />
+      </div>
+
+      <div className="mt-5">
+        <ListingTracking
+          listingId={listingId}
+          status={status}
+          note={interaction?.note ?? null}
+          noteMaxChars={cfg.listingTracking.noteMaxChars}
+          profileId={best?.search_profile_id ?? null}
         />
       </div>
 
