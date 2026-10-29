@@ -174,7 +174,7 @@ Requiere el PUNTO DE PARADA 1 resuelto. **Orden de despliegue: base primero, web
 
 Files: `supabase/tests/x01_tracking_test.sql` (nuevo; modelarlo con `supabase/tests/free_result_quota_test.sql` y `f4_web_test.sql`, que ya siembran usuarios, avisos y matches).
 
-- [ ] Escribir el test completo antes de la migración, para que falle en rojo con el esquema actual:
+- [x] Escribir el test completo antes de la migración, para que falle en rojo con el esquema actual:
   - RLS: A no ve ni modifica filas de `user_listing_interactions` de B, y no puede insertar con el `user_id` de B (SQLSTATE 42501).
   - CHECK: una nota de 2001 caracteres es rechazada (23514); una de 2000 pasa.
   - `match_cards.note` trae solo la nota propia.
@@ -190,13 +190,13 @@ Files: `supabase/tests/x01_tracking_test.sql` (nuevo; modelarlo con `supabase/te
 
 Files: `supabase/migrations/20261119120000_x01_tracking.sql` (nombre provisorio; ver «Orden de edición»).
 
-- [ ] Encabezado `--` que cite `docs/BACKLOG_PRODUCTO_2026-10.md` y el ID **X-01** y el diseño `docs/superpowers/specs/2026-10-29-x01-seguimiento-design.md`. No editar migraciones viejas.
-- [ ] `create or replace view match_cards` copiando exacto la definición de `20261030120000_body_type.sql` (línea ~80) y agregando `i.note` **al final** de la lista de columnas (solo se agregan columnas al final). Mantener `security_invoker`.
-- [ ] `create or replace function search_results` con la misma firma, copiando exacto `20261013120000_available_opportunities_keep_history.sql` y cambiando solo el `case` de `p_filter`: tres ramas nuevas `contacted`, `visit_scheduled`, `purchased` con `c.status = '<estado>'` y **sin** `listing_status = 'active'`. Los demás filtros y el orden no cambian. Releer ambos archivos antes de copiar; si PAR-03/PAR-02 ya aterrizaron algo, copiar la última definición.
-- [ ] `search_follow_counts(p_profile_id)` → `(contacted_count, visit_scheduled_count, purchased_count)`, `security invoker`, `set search_path = ''`, con `revoke all … from public, anon` y `grant execute … to authenticated` explícitos (no confiar en los default privileges). **No tocar `search_result_counts`** (cambiar sus columnas obliga a `drop function` y rompe `worker/tests/test_availability_postgres.py:62`, que compara `SELECT *` contra un dict de exactamente 5 claves).
-- [ ] `alter table user_listing_interactions add constraint … check (note is null or char_length(note) <= 2000) not valid;` y después `validate constraint` (si hay filas de más en producción, `validate` falla: por eso se mide antes, tarea de Juan).
-- [ ] `insert into app_config … 'listing_tracking' '{"note_max_chars": 500}' on conflict do nothing`.
-- [ ] Sin cambios de RLS, de `record_purchase` ni de `v_validation_criteria` (eso es el Bloque C).
+- [x] Encabezado `--` que cite `docs/BACKLOG_PRODUCTO_2026-10.md` y el ID **X-01** y el diseño `docs/superpowers/specs/2026-10-29-x01-seguimiento-design.md`. No editar migraciones viejas.
+- [x] `create or replace view match_cards` copiando exacto la definición de `20261030120000_body_type.sql` (línea ~80) y agregando `i.note` **al final** de la lista de columnas (solo se agregan columnas al final). Mantener `security_invoker`.
+- [x] `create or replace function search_results` con la misma firma, copiando exacto `20261013120000_available_opportunities_keep_history.sql` y cambiando solo el `case` de `p_filter`: tres ramas nuevas `contacted`, `visit_scheduled`, `purchased` con `c.status = '<estado>'` y **sin** `listing_status = 'active'`. Los demás filtros y el orden no cambian. Releer ambos archivos antes de copiar; si PAR-03/PAR-02 ya aterrizaron algo, copiar la última definición.
+- [x] `search_follow_counts(p_profile_id)` → `(contacted_count, visit_scheduled_count, purchased_count)`, `security invoker`, `set search_path = ''`, con `revoke all … from public, anon` y `grant execute … to authenticated` explícitos (no confiar en los default privileges). **No tocar `search_result_counts`** (cambiar sus columnas obliga a `drop function` y rompe `worker/tests/test_availability_postgres.py:62`, que compara `SELECT *` contra un dict de exactamente 5 claves).
+- [x] `alter table user_listing_interactions add constraint … check (note is null or char_length(note) <= 2000) not valid;` y después `validate constraint` (si hay filas de más en producción, `validate` falla: por eso se mide antes, tarea de Juan).
+- [x] `insert into app_config … 'listing_tracking' '{"note_max_chars": 500}' on conflict do nothing`.
+- [x] Sin cambios de RLS, de `record_purchase` ni de `v_validation_criteria` (eso es el Bloque C).
 
 ## Task 14: aplicar en local y correr todo
 
