@@ -1,4 +1,5 @@
--- Comparables fase 1 (migration 20261105120000_comparables_confirmed_pool.sql):
+-- Comparables fase 1 (migration 20261105120000_comparables_confirmed_pool.sql)
+-- and fase 2 (20261106120000_comparables_full_read.sql):
 -- the config, the grants and the web's door to the pool. The rules themselves
 -- are tested in worker/tests/test_intelligence_postgres.py
 -- (ComparablesConfirmationTests). Run with: supabase test db
@@ -8,8 +9,8 @@ select plan(17);
 
 -- ---------------------------------------------------------------- app_config, as the migration left it
 select is((select value->'confirm_sources' from public.app_config where key = 'comparables'),
-          '["autocity", "carone", "deruedas", "gruporandazzo", "mardelusados", "rosariogarage"]'::jsonb,
-          'confirm_sources: the sources whose reads are complete, without kavak or autocosmos');
+          '["autocity", "carone", "deruedas", "gruporandazzo", "mardelusados", "rosariogarage", "mercadolibre"]'::jsonb,
+          'confirm_sources: the sources whose reads are complete, without kavak or autocosmos; mercadolibre since fase 2');
 select is((select (value->>'confirm_grace_hours')::int from public.app_config where key = 'comparables'), 36,
           'confirm_grace_hours: 36');
 select is((select value->'gone_max_age_days' from public.app_config where key = 'comparables'), null,
@@ -57,8 +58,11 @@ insert into public.listings (id, source, external_id, url, title, make, model, y
    13000, 'USD', 13000, 100000, 'manual', now() - interval '20 days');
 update public.listings set status = 'gone' where id = 9904;
 -- A complete read of the model an hour ago: 9903 (seen 3 days ago) wasn't in it.
-insert into public.crawl_targets (source, make, model, query, last_run_at, first_run_done)
-values ('rosariogarage', 'Pgtap', 'Comparable', '{"year_min": 2015}', now() - interval '1 hour', true);
+-- Since fase 2 the evidence is last_full_read_at, which finish_target moves with
+-- last_run_at on the sources without publication dates.
+insert into public.crawl_targets (source, make, model, query, last_run_at, last_full_read_at, first_run_done)
+values ('rosariogarage', 'Pgtap', 'Comparable', '{"year_min": 2015}', now() - interval '1 hour',
+        now() - interval '1 hour', true);
 
 set local role authenticated;
 set local request.jwt.claims = '{"sub": "c1000000-0000-0000-0000-000000000001", "role": "authenticated"}';

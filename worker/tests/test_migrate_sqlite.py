@@ -37,8 +37,8 @@ def _make_sqlite(path: Path) -> None:
     cx = sqlite3.connect(path)
     cx.executescript(SQLITE_SCHEMA)
     cx.executemany("INSERT INTO alerts VALUES (?,?,?,?,?,?,?,?,?)", [
-        (1, 111, 111, "Fiesta y Mondeo", json.dumps(
-            {"marcas": ["Ford"], "modelos": ["Fiesta", "Mondeo"], "descuento_pct": 15}), 1, T0, 1, T0 + 60),
+        (1, 111, 111, "Fiesta y Cougar", json.dumps(
+            {"marcas": ["Ford"], "modelos": ["Fiesta", "Cougar"], "descuento_pct": 15}), 1, T0, 1, T0 + 60),
         (2, 222, 222, "Gol", json.dumps({"marcas": ["VW"], "modelos": ["Gol Trend"]}), 0, T0, 0, None),
     ])
     cx.executemany("INSERT INTO listings_cache (source, listing_id, marca, modelo, anio, km, precio, "
@@ -105,12 +105,12 @@ class MigrateSqliteTests(PostgresTestCase):
         self.assertEqual(m.stats["listings_inserted"], 2)
         self.assertEqual(m.stats["listings_skipped_unknown_source"], 1)
         self.assertEqual(m.stats["profiles_created"], 2)          # Fiesta + Gol Trend
-        self.assertEqual(m.stats["profiles_skipped_not_in_catalog"], 1)   # Mondeo
+        self.assertEqual(m.stats["profiles_skipped_not_in_catalog"], 1)   # Cougar: out of the catalog (Mondeo joined it in 20261102120000)
         self.assertEqual(m.stats["matches_inserted"], 2)
         self.assertEqual(m.stats["seen_without_listing"], 1)
         self.assertEqual(m.stats["seen_of_deleted_alerts"], 1)
         self.assertEqual(m.stats["geocode_inserted"], 1)
-        self.assertTrue(any("Mondeo" in n for n in m.notes))
+        self.assertTrue(any("Cougar" in n for n in m.notes))
 
         self.assertEqual(again.stats["listings_inserted"], 0)
         self.assertEqual(again.stats["profiles_created"], 0)

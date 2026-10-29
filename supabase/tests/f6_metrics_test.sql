@@ -259,8 +259,9 @@ set local request.jwt.claims = '{"sub": "63333333-3333-3333-3333-333333333333", 
 select is(public.my_plan_limits()->>'enforced', 'false', 'my_plan_limits: the pilot doesn''t enforce');
 
 -- A second search over the free limit: allowed, measured, and it brings the CTA.
+-- Not identical to 9603: that one is refused by its own rule (20261101120000).
 select lives_ok($$insert into public.search_profiles (user_id, name, filters, notification_frequency)
-                  values ('63333333-3333-3333-3333-333333333333', 'u3 bis', '{"make": "Pgtap", "model": "F6"}', 'daily')$$,
+                  values ('63333333-3333-3333-3333-333333333333', 'u3 bis', '{"make": "Pgtap", "model": "F6", "year_min": 2000}', 'daily')$$,
                 'max_profiles not enforced: the search is created');
 select is((select count(*)::int from public.events where name = 'plan_limit_hit' and props->>'limit' = 'max_profiles'), 1,
           '... and plan_limit_hit is recorded');
@@ -312,7 +313,7 @@ select lives_ok($$insert into public.search_profiles (id, user_id, name, filters
 select is((select notification_frequency::text from public.search_profiles where id = 9604), 'immediate',
           '... asking for immediate alerts keeps the preference');
 select throws_ok($$insert into public.search_profiles (user_id, name, filters)
-                   values ('64444444-4444-4444-4444-444444444444', 'u4 bis', '{"make": "Pgtap", "model": "F6"}')$$,
+                   values ('64444444-4444-4444-4444-444444444444', 'u4 bis', '{"make": "Pgtap", "model": "F6", "year_min": 2000}')$$,
                  'P0001', 'plan_limit_exceeded', '... and a second search is rejected');
 reset role;
 select is(public.effective_search_frequency('64444444-4444-4444-4444-444444444444', 'immediate')::text, 'daily',
