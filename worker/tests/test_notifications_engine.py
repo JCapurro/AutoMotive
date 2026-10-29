@@ -280,5 +280,22 @@ class DedupeAndMultiProfileTests(unittest.TestCase):
         self.assertEqual({(d.profile_id, d.channel) for d in out}, {(2, "telegram"), (2, "web")})
 
 
+class FlagTextsTests(unittest.TestCase):
+    """PAR-02: the [35, 50) much_cheaper text is a warning, so it survives the 2-flag cut."""
+
+    def test_much_cheaper_goes_first_within_the_limit(self):
+        from intelligence.copy import RED_FLAG
+        from notifications.service import flag_texts
+        from notifications.templates import MAX_FLAGS
+
+        verify = RED_FLAG["much_cheaper_verify"].format(pct="40")
+        flags = [{"id": "no_owners", "text": RED_FLAG["no_owners"], "severity": "info"},
+                 {"id": "short_description", "text": RED_FLAG["short_description"], "severity": "info"},
+                 {"id": "much_cheaper", "text": verify, "severity": "warning"}]
+        out = flag_texts(flags)
+        self.assertEqual(MAX_FLAGS, 2)
+        self.assertEqual(out, [verify, RED_FLAG["no_owners"]])
+
+
 if __name__ == "__main__":
     unittest.main()
