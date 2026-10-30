@@ -152,7 +152,11 @@ test("F4: búsqueda gratis con el email, backfill, alerta, guardar y guardados",
     expect(prices).toEqual([...prices].sort((a, b) => a - b));
 
     // The full detail (§23) of a backfilled listing, with its price history (§31).
-    await page.getByTestId("listing-card").filter({ hasText: "Vicente López" }).getByRole("link").click();
+    // By id: other specs (tracking) leave Fiestas in Vicente López that also match this search.
+    const [target] = await query<{ id: number }>(`select id from public.listings where external_id = $1`, [
+      `${E2E_LISTING_PREFIX}target`,
+    ]);
+    await page.locator(`[data-testid="listing-card"] a[href="/app/listings/${target.id}"]`).click();
     await expect(page).toHaveURL(/\/app\/listings\/\d+/);
     await expect(page.getByRole("heading", { name: "¿Por qué apareció?" })).toBeVisible();
     await expect(page.getByTestId("match-reasons")).toContainText("Dentro del presupuesto");

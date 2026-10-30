@@ -242,8 +242,10 @@ test("F5: con el worker caído, el formulario sin encolar nada", async ({ page }
   await page.getByLabel("¿Qué auto buscás?").fill(TWO_VEHICLES);
   await page.getByRole("button", { name: "Interpretar" }).click();
 
-  await expect(page.getByTestId("assisted-fallback")).toContainText("No pudimos leer tu descripción automáticamente");
-  await expect(page.getByLabel("Marca")).toHaveValue("");
+  // The worker is down, so the form is filled from the typed text alone (lib/assisted-fallback.ts).
+  await expect(page.getByTestId("assisted-fallback")).toContainText("Completamos lo que pudimos de tu descripción");
+  await expect(page.getByLabel("Marca")).toHaveValue("Ford");
+  await expect(page.getByLabel("Modelo")).toHaveValue("Fiesta");
   const jobs = await query(
     `select j.id from public.llm_jobs j join public.profiles p on p.id = j.user_id where p.email = $1`,
     [email],

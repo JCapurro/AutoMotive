@@ -219,10 +219,12 @@ export async function seedConfirmationComparables(run: string): Promise<void> {
     status: "gone",
   });
   await query(
-    `insert into public.crawl_targets (source, make, model, query, last_run_at, first_run_done)
-     values ('autocity', null, null, '{"inventory": true}', now() - interval '1 hour', true)
+    // last_full_read_at is what listing_unconfirmed() reads as evidence of a full read.
+    `insert into public.crawl_targets (source, make, model, query, last_run_at, last_full_read_at, first_run_done)
+     values ('autocity', null, null, '{"inventory": true}', now() - interval '1 hour', now() - interval '1 hour', true)
      on conflict on constraint crawl_targets_unique do update
-       set last_run_at = excluded.last_run_at, query = crawl_targets.query || '{"inventory": true}'`,
+       set last_run_at = excluded.last_run_at, last_full_read_at = excluded.last_full_read_at,
+           query = crawl_targets.query || '{"inventory": true}'`,
   );
 }
 
