@@ -1,0 +1,4170 @@
+{
+ "_doc": "PAR-01 golden vectors. Shared by worker/tests/test_cost_estimator.py and web/lib/cost-estimator.test.ts. Expected values are written by hand from the design's formulas (docs/superpowers/specs/2026-10-30-par01-costo-total-design.md), never produced by the calculators. Numbers compare with a 0.01 tolerance, strings exactly. config_patch: path (list) + value, or delete. config_cases.expect_null: the blocks the tolerant parser drops (null: the whole config).",
+ "config": {
+  "as_of": "2026-10-30",
+  "status": "aprobado",
+  "review": {
+   "max_age_days": 120,
+   "months": [
+    12,
+    1
+   ],
+   "source": "Decisión de Juan 30/10/2026: ciclo cuatrimestral del MRPA (Res. MJ 308/2026) y leyes impositivas de diciembre y enero",
+   "as_of": "2026-10-30"
+  },
+  "fx": {
+   "max_age_days": 3,
+   "note": "Montos en ARS. Aviso en ARS: el dólar con el que se calculó price_usd (price / price_usd, como listing_snapshots.fx_rate). Aviso en USD: fila blue más reciente de fx_rates (si no hay, la oficial más reciente), descartada si tiene más de max_age_days días",
+   "source": "Decisión de Juan 30/10/2026 (respuesta 6 a la revisión 2 de PAR-01)",
+   "as_of": "2026-10-30"
+  },
+  "buyer_zone": {
+   "max_locality_km": 80,
+   "note": "Una zona de la búsqueda a más de max_locality_km de la localidad argentina más cercana no tiene jurisdicción (falta)",
+   "source": "Decisión de Juan 30/10/2026 (respuesta 5 a la revisión 2 de PAR-01). Medido: Montevideo 106,8 km, Santiago de Chile 91,3 km, hueco máximo entre localidades del continente 127,7 km",
+   "as_of": "2026-10-30"
+  },
+  "vf_from_price_k": {
+   "min": 0.7,
+   "max": 1.0,
+   "source": "Supuesto propio, no oficial. Fundado en Res. AGIP 54/2026 (tabla con ACARA de oct-2025) y Ley 15.558 PBA art. 35 (ACARA x 0,95)",
+   "as_of": "2026-10-30"
+  },
+  "transfer_base": {
+   "value": "price",
+   "note": "Arancel y sellos se calculan sobre el mayor entre precio y tabla; con k <= 1 es el precio",
+   "source": "Res. MJ 412/2026 Anexo I; Res. 55/AGIP/26 art. 9",
+   "as_of": "2026-09-01"
+  },
+  "mrpa_ars": {
+   "min": 1010,
+   "max": 1090,
+   "source": "Res. MJ 308/2026 art. 1 (https://www.argentina.gob.ar/normativa/nacional/norma-427475/texto) + UVA BCRA var. 31; el max es una proyección desde el 04/11/2026",
+   "as_of": "2026-10-30"
+  },
+  "dnrpa": {
+   "pct": {
+    "min": 1.0,
+    "max": 1.0
+   },
+   "dealer_pct": {
+    "min": 0.9,
+    "max": 1.0
+   },
+   "min_mrpa": 32,
+   "source": "Res. MJ 412/2026, Anexo I, arancel 2A (https://www.cira.org.ar/wp-content/uploads/anexo_7754131_1.pdf)",
+   "as_of": "2026-09-01"
+  },
+  "fixed_ars": {
+   "form_08": {
+    "min": 8000,
+    "max": 9600,
+    "source": "IF-2026-06520679-APN-SSGA#MJ (https://www.dnrpa.gov.ar/portal_dnrpa/guia_tramites/IF-2026-06520679-APN-SSGA_MJ.pdf); max = +20 % no verificado en norma",
+    "as_of": "2026-01-19"
+   },
+   "form_12": {
+    "min": 0,
+    "max": 9240,
+    "source": "IF-2026-06520679-APN-SSGA#MJ (lista 7.700); min 0 por excepciones no confirmadas; max = +20 % no verificado",
+    "as_of": "2026-01-19"
+   }
+  },
+  "domain_report": {
+   "mrpa": 4,
+   "in_total": false,
+   "note": "Opcional; recomendado antes de señar (checklist de PAR-02)",
+   "source": "Res. MJ 412/2026, Anexo I, arancel 5A",
+   "as_of": "2026-09-01"
+  },
+  "stamp_tax_pct": {
+   "caba": {
+    "private": {
+     "min": 3.0,
+     "max": 3.0
+    },
+    "dealer": {
+     "min": 3.0,
+     "max": 3.0
+    },
+    "source": "Ley 6927 Anexo art. 32 (https://boletinoficial.buenosaires.gob.ar/normativaba/norma/829857); Res. 55/AGIP/26 arts. 9 y 14",
+    "as_of": "2026-01-01"
+   },
+   "ba": {
+    "private": {
+     "min": 3.0,
+     "max": 3.0
+    },
+    "dealer": {
+     "min": 1.0,
+     "max": 3.0
+    },
+    "source": "Ley 15.558 art. 39 A) 12 a) y b) (https://www.arba.gov.ar/archivos/Publicaciones/leyimpositiva2026.pdf); el 1 % exige factura de agencia",
+    "as_of": "2026-01-01"
+   },
+   "rest": {
+    "private": {
+     "min": 1.0,
+     "max": 3.0
+    },
+    "dealer": {
+     "min": 0.5,
+     "max": 3.0
+    },
+    "source": "Córdoba Ley 11.090 art. 45; Santa Fe nomenclador API (Ley 14.426); Mendoza Ley 9680 art. 7; Tucumán tabla Rentas feb-2026. Techo 3 % prudente: 19 provincias sin revisar",
+    "as_of": "2026-10-30"
+   }
+  },
+  "patente": {
+   "values_year": 2026,
+   "caba": {
+    "brackets": [
+     {
+      "from": 0,
+      "fixed": 0,
+      "pct": 1.6
+     },
+     {
+      "from": 7460000,
+      "fixed": 119350,
+      "pct": 4.0
+     },
+     {
+      "from": 17155000,
+      "fixed": 507150,
+      "pct": 4.5
+     },
+     {
+      "from": 26850000,
+      "fixed": 943500,
+      "pct": 5.5
+     },
+     {
+      "from": 36550000,
+      "fixed": 1477000,
+      "pct": 6.5
+     },
+     {
+      "from": 50350000,
+      "fixed": 2374000,
+      "pct": 7.0
+     },
+     {
+      "from": 73100000,
+      "fixed": 3965000,
+      "pct": 8.0
+     }
+    ],
+    "cap_pct_of_vf": 6.0,
+    "min_ars": 13300,
+    "pickup_flat_pct": 2.3,
+    "pickup_body_types": [
+     "pickup"
+    ],
+    "subte_factor": {
+     "min": 1.0,
+     "max": 1.1
+    },
+    "old_model_min_zero": {
+     "age_years": 25,
+     "note": "Mínimo 0 hasta confirmar el art. 433 del Código Fiscal (decisión de Juan 30/10/2026)"
+    },
+    "note": "Factor Subte después del tope. La bonificación de la Ley 6942 (IPCBA 2025 = 31,8 %) puede bajar el monto y no se calcula",
+    "source": "Ley 6927 Anexo art. 50 (https://documentosboletinoficial.buenosaires.gob.ar/publico/PL-LEY-LCABA-LCBA-6927-25-ANX.pdf); Ley 6942",
+    "as_of": "2026-01-01"
+   },
+   "ba": {
+    "brackets": [
+     {
+      "from": 0,
+      "fixed": 0,
+      "pct": 1.0
+     },
+     {
+      "from": 14100000,
+      "fixed": 141000,
+      "pct": 2.0
+     },
+     {
+      "from": 18700000,
+      "fixed": 233000,
+      "pct": 3.0
+     },
+     {
+      "from": 26100000,
+      "fixed": 455000,
+      "pct": 4.0
+     },
+     {
+      "from": 53900000,
+      "fixed": 1567000,
+      "pct": 4.5
+     }
+    ],
+    "ipc_factor": {
+     "min": 1.0,
+     "max": 1.25
+    },
+    "discount_pct": 0,
+    "min_model_year": 1990,
+    "note": "ipc_factor.max provisorio hasta que ARBA publique el coeficiente; modelos < 1990 sin cálculo",
+    "source": "Ley 15.558 arts. 33, 34, 35, 37 y 167 (https://normas.gba.gob.ar/ar-b/ley/2025/15558/554025)",
+    "as_of": "2026-01-01"
+   },
+   "rest": {
+    "min_pct": 0.85,
+    "old_model": {
+     "max_year": 2016,
+     "min_pct": 0
+    },
+    "max_pct_bands": [
+     {
+      "vf_upto": 59100000,
+      "pct": 2.3
+     },
+     {
+      "vf_upto": 87500000,
+      "pct": 2.5
+     },
+     {
+      "vf_upto": null,
+      "pct": 3.0
+     }
+    ],
+    "note": "Solo Córdoba, Santa Fe y Mendoza revisadas",
+    "source": "Córdoba Ley 11.090 arts. 55-57; Santa Fe LIA art. 55 y Ley 14.426; Mendoza Ley 9680 art. 9",
+    "as_of": "2026-01-01"
+   }
+  },
+  "gestoria": {
+   "in_total": false,
+   "official_value": null,
+   "note": "Sin tabla oficial; honorarios libres. Se muestra como línea aparte",
+   "source": "Sin norma que fije honorarios (Res. MJ 412/2026 y Digesto revisados)",
+   "as_of": "2026-10-30"
+  }
+ },
+ "cases": [
+  {
+   "name": "1 CABA, particular, 2017",
+   "input": {
+    "listing": {
+     "price": 20000000,
+     "currency": "ARS",
+     "fx_rate": 1300,
+     "cash": false,
+     "year": 2017,
+     "body_type": "sedan"
+    },
+    "jurisdiction": [
+     "caba"
+    ],
+    "seller": "private",
+    "fx_latest": null
+   },
+   "expect": {
+    "terms": [
+     {
+      "code": "arancel",
+      "min": 200000,
+      "max": 200000
+     },
+     {
+      "code": "sellos",
+      "min": 600000,
+      "max": 600000
+     },
+     {
+      "code": "formularios",
+      "min": 8000,
+      "max": 18840
+     },
+     {
+      "code": "patente",
+      "min": 380950,
+      "max": 698692.5
+     }
+    ],
+    "total_ars": {
+     "min": 21188950,
+     "max": 21517532.5
+    },
+    "total_usd": {
+     "min": 16299.192307692309,
+     "max": 16551.948076923076
+    },
+    "extras": [
+     {
+      "code": "domain_report",
+      "min": 4040,
+      "max": 4360
+     },
+     {
+      "code": "gestoria",
+      "min": null,
+      "max": null
+     }
+    ],
+    "missing": [],
+    "line": "Costo total estimado: USD 16.290 – 16.560 (ARS 21.188.000 – 21.518.000)",
+    "p_ars": 20000000,
+    "rate": {
+     "value": 1300,
+     "kind": "listing",
+     "date": null
+    },
+    "price_label": "published",
+    "details": {
+     "arancel": "ARS 200.000",
+     "sellos": "ARS 600.000",
+     "formularios": "ARS 8.000 – 18.900",
+     "patente": "ARS 380.900 – 698.700",
+     "domain_report": "ARS 4.000 – 4.400"
+    }
+   }
+  },
+  {
+   "name": "2 Buenos Aires",
+   "input": {
+    "listing": {
+     "price": 20000000,
+     "currency": "ARS",
+     "fx_rate": 1300,
+     "cash": false,
+     "year": 2017,
+     "body_type": "sedan"
+    },
+    "jurisdiction": [
+     "ba"
+    ],
+    "seller": "private",
+    "fx_latest": null
+   },
+   "expect": {
+    "terms": [
+     {
+      "code": "arancel",
+      "min": 200000,
+      "max": 200000
+     },
+     {
+      "code": "sellos",
+      "min": 600000,
+      "max": 600000
+     },
+     {
+      "code": "formularios",
+      "min": 8000,
+      "max": 18840
+     },
+     {
+      "code": "patente",
+      "min": 140000,
+      "max": 340000
+     }
+    ],
+    "total_ars": {
+     "min": 20948000,
+     "max": 21158840
+    },
+    "total_usd": {
+     "min": 16113.846153846154,
+     "max": 16276.030769230769
+    },
+    "extras": [
+     {
+      "code": "domain_report",
+      "min": 4040,
+      "max": 4360
+     },
+     {
+      "code": "gestoria",
+      "min": null,
+      "max": null
+     }
+    ],
+    "missing": [],
+    "line": "Costo total estimado: USD 16.110 – 16.280 (ARS 20.948.000 – 21.159.000)"
+   }
+  },
+  {
+   "name": "3 Resto del país",
+   "input": {
+    "listing": {
+     "price": 20000000,
+     "currency": "ARS",
+     "fx_rate": 1300,
+     "cash": false,
+     "year": 2017,
+     "body_type": "sedan"
+    },
+    "jurisdiction": [
+     "rest"
+    ],
+    "seller": "private",
+    "fx_latest": null
+   },
+   "expect": {
+    "terms": [
+     {
+      "code": "arancel",
+      "min": 200000,
+      "max": 200000
+     },
+     {
+      "code": "sellos",
+      "min": 200000,
+      "max": 600000
+     },
+     {
+      "code": "formularios",
+      "min": 8000,
+      "max": 18840
+     },
+     {
+      "code": "patente",
+      "min": 119000,
+      "max": 460000
+     }
+    ],
+    "total_ars": {
+     "min": 20527000,
+     "max": 21278840
+    },
+    "total_usd": {
+     "min": 15790.0,
+     "max": 16368.338461538462
+    },
+    "extras": [
+     {
+      "code": "domain_report",
+      "min": 4040,
+      "max": 4360
+     },
+     {
+      "code": "gestoria",
+      "min": null,
+      "max": null
+     }
+    ],
+    "missing": [],
+    "line": "Costo total estimado: USD 15.790 – 16.370 (ARS 20.527.000 – 21.279.000)"
+   }
+  },
+  {
+   "name": "4 AMBA",
+   "input": {
+    "listing": {
+     "price": 20000000,
+     "currency": "ARS",
+     "fx_rate": 1300,
+     "cash": false,
+     "year": 2017,
+     "body_type": "sedan"
+    },
+    "jurisdiction": [
+     "caba",
+     "ba"
+    ],
+    "seller": "private",
+    "fx_latest": null
+   },
+   "expect": {
+    "terms": [
+     {
+      "code": "arancel",
+      "min": 200000,
+      "max": 200000
+     },
+     {
+      "code": "sellos",
+      "min": 600000,
+      "max": 600000
+     },
+     {
+      "code": "formularios",
+      "min": 8000,
+      "max": 18840
+     },
+     {
+      "code": "patente",
+      "min": 140000,
+      "max": 698692.5
+     }
+    ],
+    "total_ars": {
+     "min": 20948000,
+     "max": 21517532.5
+    },
+    "total_usd": {
+     "min": 16113.846153846154,
+     "max": 16551.948076923076
+    },
+    "extras": [
+     {
+      "code": "domain_report",
+      "min": 4040,
+      "max": 4360
+     },
+     {
+      "code": "gestoria",
+      "min": null,
+      "max": null
+     }
+    ],
+    "missing": [],
+    "line": "Costo total estimado: USD 16.110 – 16.560 (ARS 20.948.000 – 21.518.000)"
+   }
+  },
+  {
+   "name": "5 agencia en Buenos Aires: arancel 0,9-1 % y sellos 1-3 %",
+   "input": {
+    "listing": {
+     "price": 20000000,
+     "currency": "ARS",
+     "fx_rate": 1300,
+     "cash": false,
+     "year": 2017,
+     "body_type": "sedan"
+    },
+    "jurisdiction": [
+     "ba"
+    ],
+    "seller": "dealer",
+    "fx_latest": null
+   },
+   "expect": {
+    "terms": [
+     {
+      "code": "arancel",
+      "min": 180000,
+      "max": 200000
+     },
+     {
+      "code": "sellos",
+      "min": 200000,
+      "max": 600000
+     },
+     {
+      "code": "formularios",
+      "min": 8000,
+      "max": 18840
+     },
+     {
+      "code": "patente",
+      "min": 140000,
+      "max": 340000
+     }
+    ],
+    "total_ars": {
+     "min": 20528000,
+     "max": 21158840
+    },
+    "total_usd": {
+     "min": 15790.76923076923,
+     "max": 16276.030769230769
+    },
+    "extras": [
+     {
+      "code": "domain_report",
+      "min": 4040,
+      "max": 4360
+     },
+     {
+      "code": "gestoria",
+      "min": null,
+      "max": null
+     }
+    ],
+    "missing": [],
+    "line": "Costo total estimado: USD 15.790 – 16.280 (ARS 20.528.000 – 21.159.000)"
+   }
+  },
+  {
+   "name": "6 vendedor sin informar en Buenos Aires: unión de particular y agencia",
+   "input": {
+    "listing": {
+     "price": 20000000,
+     "currency": "ARS",
+     "fx_rate": 1300,
+     "cash": false,
+     "year": 2017,
+     "body_type": "sedan"
+    },
+    "jurisdiction": [
+     "ba"
+    ],
+    "seller": null,
+    "fx_latest": null
+   },
+   "expect": {
+    "terms": [
+     {
+      "code": "arancel",
+      "min": 180000,
+      "max": 200000
+     },
+     {
+      "code": "sellos",
+      "min": 200000,
+      "max": 600000
+     },
+     {
+      "code": "formularios",
+      "min": 8000,
+      "max": 18840
+     },
+     {
+      "code": "patente",
+      "min": 140000,
+      "max": 340000
+     }
+    ],
+    "total_ars": {
+     "min": 20528000,
+     "max": 21158840
+    },
+    "total_usd": {
+     "min": 15790.76923076923,
+     "max": 16276.030769230769
+    },
+    "extras": [
+     {
+      "code": "domain_report",
+      "min": 4040,
+      "max": 4360
+     },
+     {
+      "code": "gestoria",
+      "min": null,
+      "max": null
+     }
+    ],
+    "missing": [],
+    "line": "Costo total estimado: USD 15.790 – 16.280 (ARS 20.528.000 – 21.159.000)"
+   }
+  },
+  {
+   "name": "7 aviso en USD con dólar blue",
+   "input": {
+    "listing": {
+     "price": 15000,
+     "currency": "USD",
+     "fx_rate": null,
+     "cash": false,
+     "year": 2017,
+     "body_type": "sedan"
+    },
+    "jurisdiction": [
+     "caba"
+    ],
+    "seller": "private",
+    "fx_latest": {
+     "rate": 1300,
+     "kind": "blue",
+     "date": "2026-10-29"
+    }
+   },
+   "expect": {
+    "terms": [
+     {
+      "code": "arancel",
+      "min": 195000,
+      "max": 195000
+     },
+     {
+      "code": "sellos",
+      "min": 585000,
+      "max": 585000
+     },
+     {
+      "code": "formularios",
+      "min": 8000,
+      "max": 18840
+     },
+     {
+      "code": "patente",
+      "min": 366950,
+      "max": 673942.5
+     }
+    ],
+    "total_ars": {
+     "min": 20654950,
+     "max": 20972782.5
+    },
+    "total_usd": {
+     "min": 15888.423076923076,
+     "max": 16132.909615384615
+    },
+    "extras": [
+     {
+      "code": "domain_report",
+      "min": 4040,
+      "max": 4360
+     },
+     {
+      "code": "gestoria",
+      "min": null,
+      "max": null
+     }
+    ],
+    "missing": [],
+    "line": "Costo total estimado: USD 15.880 – 16.140 (ARS 20.654.000 – 20.973.000)",
+    "p_ars": 19500000,
+    "rate": {
+     "value": 1300,
+     "kind": "blue",
+     "date": "2026-10-29"
+    }
+   }
+  },
+  {
+   "name": "8 aviso en USD sin dólar: estimación vacía",
+   "input": {
+    "listing": {
+     "price": 15000,
+     "currency": "USD",
+     "fx_rate": null,
+     "cash": false,
+     "year": 2017,
+     "body_type": "sedan"
+    },
+    "jurisdiction": [
+     "caba"
+    ],
+    "seller": "private",
+    "fx_latest": null
+   },
+   "expect": {
+    "p_ars": null,
+    "terms": [],
+    "extras": [],
+    "total_ars": null,
+    "total_usd": null,
+    "rate": null,
+    "missing": [
+     {
+      "code": "fx",
+      "reason": "no_fx"
+     }
+    ],
+    "line": "Costo total estimado: sin dólar del día, no se puede estimar"
+   }
+  },
+  {
+   "name": "9 aviso en ARS sin fx_rate: solo pesos",
+   "input": {
+    "listing": {
+     "price": 20000000,
+     "currency": "ARS",
+     "fx_rate": null,
+     "cash": false,
+     "year": 2017,
+     "body_type": "sedan"
+    },
+    "jurisdiction": [
+     "caba"
+    ],
+    "seller": "private",
+    "fx_latest": null
+   },
+   "expect": {
+    "terms": [
+     {
+      "code": "arancel",
+      "min": 200000,
+      "max": 200000
+     },
+     {
+      "code": "sellos",
+      "min": 600000,
+      "max": 600000
+     },
+     {
+      "code": "formularios",
+      "min": 8000,
+      "max": 18840
+     },
+     {
+      "code": "patente",
+      "min": 380950,
+      "max": 698692.5
+     }
+    ],
+    "total_ars": {
+     "min": 21188950,
+     "max": 21517532.5
+    },
+    "total_usd": null,
+    "extras": [
+     {
+      "code": "domain_report",
+      "min": 4040,
+      "max": 4360
+     },
+     {
+      "code": "gestoria",
+      "min": null,
+      "max": null
+     }
+    ],
+    "missing": [
+     {
+      "code": "fx",
+      "reason": "no_fx"
+     }
+    ],
+    "line": "Costo total estimado: ARS 21.188.000 – 21.518.000 (sin dólar del día)",
+    "rate": null
+   }
+  },
+  {
+   "name": "10 pick-up en CABA: 2,30 % plano, con mínimo y Subte",
+   "input": {
+    "listing": {
+     "price": 20000000,
+     "currency": "ARS",
+     "fx_rate": 1300,
+     "cash": false,
+     "year": 2017,
+     "body_type": "pickup"
+    },
+    "jurisdiction": [
+     "caba"
+    ],
+    "seller": "private",
+    "fx_latest": null
+   },
+   "expect": {
+    "terms": [
+     {
+      "code": "arancel",
+      "min": 200000,
+      "max": 200000
+     },
+     {
+      "code": "sellos",
+      "min": 600000,
+      "max": 600000
+     },
+     {
+      "code": "formularios",
+      "min": 8000,
+      "max": 18840
+     },
+     {
+      "code": "patente",
+      "min": 321999.99999999994,
+      "max": 506000.00000000006
+     }
+    ],
+    "total_ars": {
+     "min": 21130000.0,
+     "max": 21324840.0
+    },
+    "total_usd": {
+     "min": 16253.846153846154,
+     "max": 16403.723076923077
+    },
+    "extras": [
+     {
+      "code": "domain_report",
+      "min": 4040,
+      "max": 4360
+     },
+     {
+      "code": "gestoria",
+      "min": null,
+      "max": null
+     }
+    ],
+    "missing": [],
+    "line": "Costo total estimado: USD 16.250 – 16.410 (ARS 21.130.000 – 21.325.000)",
+    "details": {
+     "patente": "ARS 322.000 – 506.000"
+    }
+   }
+  },
+  {
+   "name": "11 CABA modelo 2001: mínimo de patente 0",
+   "input": {
+    "listing": {
+     "price": 500000,
+     "currency": "ARS",
+     "fx_rate": 1300,
+     "cash": false,
+     "year": 2001,
+     "body_type": "sedan"
+    },
+    "jurisdiction": [
+     "caba"
+    ],
+    "seller": "private",
+    "fx_latest": null
+   },
+   "expect": {
+    "terms": [
+     {
+      "code": "arancel",
+      "min": 32320,
+      "max": 34880
+     },
+     {
+      "code": "sellos",
+      "min": 15000,
+      "max": 15000
+     },
+     {
+      "code": "formularios",
+      "min": 8000,
+      "max": 18840
+     },
+     {
+      "code": "patente",
+      "min": 5600,
+      "max": 8800.0
+     }
+    ],
+    "total_ars": {
+     "min": 560920,
+     "max": 577520
+    },
+    "total_usd": {
+     "min": 431.4769230769231,
+     "max": 444.24615384615385
+    },
+    "extras": [
+     {
+      "code": "domain_report",
+      "min": 4040,
+      "max": 4360
+     },
+     {
+      "code": "gestoria",
+      "min": null,
+      "max": null
+     }
+    ],
+    "missing": [],
+    "line": "Costo total estimado: USD 430 – 450 (ARS 560.000 – 578.000)"
+   }
+  },
+  {
+   "name": "11 CABA modelo 2002: mínimo de 13.300",
+   "input": {
+    "listing": {
+     "price": 500000,
+     "currency": "ARS",
+     "fx_rate": 1300,
+     "cash": false,
+     "year": 2002,
+     "body_type": "sedan"
+    },
+    "jurisdiction": [
+     "caba"
+    ],
+    "seller": "private",
+    "fx_latest": null
+   },
+   "expect": {
+    "terms": [
+     {
+      "code": "arancel",
+      "min": 32320,
+      "max": 34880
+     },
+     {
+      "code": "sellos",
+      "min": 15000,
+      "max": 15000
+     },
+     {
+      "code": "formularios",
+      "min": 8000,
+      "max": 18840
+     },
+     {
+      "code": "patente",
+      "min": 13300,
+      "max": 14630.000000000002
+     }
+    ],
+    "total_ars": {
+     "min": 568620,
+     "max": 583350
+    },
+    "total_usd": {
+     "min": 437.4,
+     "max": 448.7307692307692
+    },
+    "extras": [
+     {
+      "code": "domain_report",
+      "min": 4040,
+      "max": 4360
+     },
+     {
+      "code": "gestoria",
+      "min": null,
+      "max": null
+     }
+    ],
+    "missing": [],
+    "line": "Costo total estimado: USD 430 – 450 (ARS 568.000 – 584.000)"
+   }
+  },
+  {
+   "name": "12 Buenos Aires 1985: sin patente",
+   "input": {
+    "listing": {
+     "price": 20000000,
+     "currency": "ARS",
+     "fx_rate": 1300,
+     "cash": false,
+     "year": 1985,
+     "body_type": "sedan"
+    },
+    "jurisdiction": [
+     "ba"
+    ],
+    "seller": "private",
+    "fx_latest": null
+   },
+   "expect": {
+    "terms": [
+     {
+      "code": "arancel",
+      "min": 200000,
+      "max": 200000
+     },
+     {
+      "code": "sellos",
+      "min": 600000,
+      "max": 600000
+     },
+     {
+      "code": "formularios",
+      "min": 8000,
+      "max": 18840
+     }
+    ],
+    "total_ars": {
+     "min": 20808000,
+     "max": 20818840
+    },
+    "total_usd": {
+     "min": 16006.153846153846,
+     "max": 16014.492307692308
+    },
+    "extras": [
+     {
+      "code": "domain_report",
+      "min": 4040,
+      "max": 4360
+     },
+     {
+      "code": "gestoria",
+      "min": null,
+      "max": null
+     }
+    ],
+    "missing": [
+     {
+      "code": "patente",
+      "reason": "pre_min_year"
+     }
+    ],
+    "line": "Costo total estimado (sin patente): USD 16.000 – 16.020 (ARS 20.808.000 – 20.819.000)"
+   }
+  },
+  {
+   "name": "13 resto modelo 2016: mínimo 0",
+   "input": {
+    "listing": {
+     "price": 20000000,
+     "currency": "ARS",
+     "fx_rate": 1300,
+     "cash": false,
+     "year": 2016,
+     "body_type": "sedan"
+    },
+    "jurisdiction": [
+     "rest"
+    ],
+    "seller": "private",
+    "fx_latest": null
+   },
+   "expect": {
+    "terms": [
+     {
+      "code": "arancel",
+      "min": 200000,
+      "max": 200000
+     },
+     {
+      "code": "sellos",
+      "min": 200000,
+      "max": 600000
+     },
+     {
+      "code": "formularios",
+      "min": 8000,
+      "max": 18840
+     },
+     {
+      "code": "patente",
+      "min": 0,
+      "max": 460000
+     }
+    ],
+    "total_ars": {
+     "min": 20408000,
+     "max": 21278840
+    },
+    "total_usd": {
+     "min": 15698.461538461539,
+     "max": 16368.338461538462
+    },
+    "extras": [
+     {
+      "code": "domain_report",
+      "min": 4040,
+      "max": 4360
+     },
+     {
+      "code": "gestoria",
+      "min": null,
+      "max": null
+     }
+    ],
+    "missing": [],
+    "line": "Costo total estimado: USD 15.690 – 16.370 (ARS 20.408.000 – 21.279.000)"
+   }
+  },
+  {
+   "name": "13 resto modelo 2017: 0,85 %",
+   "input": {
+    "listing": {
+     "price": 20000000,
+     "currency": "ARS",
+     "fx_rate": 1300,
+     "cash": false,
+     "year": 2017,
+     "body_type": "sedan"
+    },
+    "jurisdiction": [
+     "rest"
+    ],
+    "seller": "private",
+    "fx_latest": null
+   },
+   "expect": {
+    "terms": [
+     {
+      "code": "arancel",
+      "min": 200000,
+      "max": 200000
+     },
+     {
+      "code": "sellos",
+      "min": 200000,
+      "max": 600000
+     },
+     {
+      "code": "formularios",
+      "min": 8000,
+      "max": 18840
+     },
+     {
+      "code": "patente",
+      "min": 119000,
+      "max": 460000
+     }
+    ],
+    "total_ars": {
+     "min": 20527000,
+     "max": 21278840
+    },
+    "total_usd": {
+     "min": 15790.0,
+     "max": 16368.338461538462
+    },
+    "extras": [
+     {
+      "code": "domain_report",
+      "min": 4040,
+      "max": 4360
+     },
+     {
+      "code": "gestoria",
+      "min": null,
+      "max": null
+     }
+    ],
+    "missing": [],
+    "line": "Costo total estimado: USD 15.790 – 16.370 (ARS 20.527.000 – 21.279.000)"
+   }
+  },
+  {
+   "name": "14 ARS 2.000.000: arancel en el mínimo",
+   "input": {
+    "listing": {
+     "price": 2000000,
+     "currency": "ARS",
+     "fx_rate": 1300,
+     "cash": false,
+     "year": 2017,
+     "body_type": "sedan"
+    },
+    "jurisdiction": [
+     "caba"
+    ],
+    "seller": "private",
+    "fx_latest": null
+   },
+   "expect": {
+    "terms": [
+     {
+      "code": "arancel",
+      "min": 32320,
+      "max": 34880
+     },
+     {
+      "code": "sellos",
+      "min": 60000,
+      "max": 60000
+     },
+     {
+      "code": "formularios",
+      "min": 8000,
+      "max": 18840
+     },
+     {
+      "code": "patente",
+      "min": 22400,
+      "max": 35200.0
+     }
+    ],
+    "total_ars": {
+     "min": 2122720,
+     "max": 2148920
+    },
+    "total_usd": {
+     "min": 1632.8615384615384,
+     "max": 1653.0153846153846
+    },
+    "extras": [
+     {
+      "code": "domain_report",
+      "min": 4040,
+      "max": 4360
+     },
+     {
+      "code": "gestoria",
+      "min": null,
+      "max": null
+     }
+    ],
+    "missing": [],
+    "line": "Costo total estimado: USD 1.630 – 1.660 (ARS 2.122.000 – 2.149.000)"
+   }
+  },
+  {
+   "name": "15 CABA VF de 100.000.000: tope de 6 %",
+   "input": {
+    "listing": {
+     "price": 100000000,
+     "currency": "ARS",
+     "fx_rate": 1300,
+     "cash": false,
+     "year": 2017,
+     "body_type": "sedan"
+    },
+    "jurisdiction": [
+     "caba"
+    ],
+    "seller": "private",
+    "fx_latest": null
+   },
+   "expect": {
+    "terms": [
+     {
+      "code": "arancel",
+      "min": 1000000,
+      "max": 1000000
+     },
+     {
+      "code": "sellos",
+      "min": 3000000,
+      "max": 3000000
+     },
+     {
+      "code": "formularios",
+      "min": 8000,
+      "max": 18840
+     },
+     {
+      "code": "patente",
+      "min": 3749500,
+      "max": 6600000.000000001
+     }
+    ],
+    "total_ars": {
+     "min": 107757500,
+     "max": 110618840
+    },
+    "total_usd": {
+     "min": 82890.38461538461,
+     "max": 85091.41538461538
+    },
+    "extras": [
+     {
+      "code": "domain_report",
+      "min": 4040,
+      "max": 4360
+     },
+     {
+      "code": "gestoria",
+      "min": null,
+      "max": null
+     }
+    ],
+    "missing": [],
+    "line": "Costo total estimado: USD 82.890 – 85.100 (ARS 107.757.000 – 110.619.000)"
+   }
+  },
+  {
+   "name": "16 CABA VF de 500.000: mínimo de 13.300",
+   "input": {
+    "listing": {
+     "price": 500000,
+     "currency": "ARS",
+     "fx_rate": 1300,
+     "cash": false,
+     "year": 2017,
+     "body_type": "sedan"
+    },
+    "jurisdiction": [
+     "caba"
+    ],
+    "seller": "private",
+    "fx_latest": null
+   },
+   "expect": {
+    "terms": [
+     {
+      "code": "arancel",
+      "min": 32320,
+      "max": 34880
+     },
+     {
+      "code": "sellos",
+      "min": 15000,
+      "max": 15000
+     },
+     {
+      "code": "formularios",
+      "min": 8000,
+      "max": 18840
+     },
+     {
+      "code": "patente",
+      "min": 13300,
+      "max": 14630.000000000002
+     }
+    ],
+    "total_ars": {
+     "min": 568620,
+     "max": 583350
+    },
+    "total_usd": {
+     "min": 437.4,
+     "max": 448.7307692307692
+    },
+    "extras": [
+     {
+      "code": "domain_report",
+      "min": 4040,
+      "max": 4360
+     },
+     {
+      "code": "gestoria",
+      "min": null,
+      "max": null
+     }
+    ],
+    "missing": [],
+    "line": "Costo total estimado: USD 430 – 450 (ARS 568.000 – 584.000)"
+   }
+  },
+  {
+   "name": "17 resto VF.max 70 M: banda de 2,5 %",
+   "input": {
+    "listing": {
+     "price": 70000000,
+     "currency": "ARS",
+     "fx_rate": 1300,
+     "cash": false,
+     "year": 2017,
+     "body_type": "sedan"
+    },
+    "jurisdiction": [
+     "rest"
+    ],
+    "seller": "private",
+    "fx_latest": null
+   },
+   "expect": {
+    "terms": [
+     {
+      "code": "arancel",
+      "min": 700000,
+      "max": 700000
+     },
+     {
+      "code": "sellos",
+      "min": 700000,
+      "max": 2100000
+     },
+     {
+      "code": "formularios",
+      "min": 8000,
+      "max": 18840
+     },
+     {
+      "code": "patente",
+      "min": 416500,
+      "max": 1750000
+     }
+    ],
+    "total_ars": {
+     "min": 71824500,
+     "max": 74568840
+    },
+    "total_usd": {
+     "min": 55249.61538461538,
+     "max": 57360.64615384615
+    },
+    "extras": [
+     {
+      "code": "domain_report",
+      "min": 4040,
+      "max": 4360
+     },
+     {
+      "code": "gestoria",
+      "min": null,
+      "max": null
+     }
+    ],
+    "missing": [],
+    "line": "Costo total estimado: USD 55.240 – 57.370 (ARS 71.824.000 – 74.569.000)"
+   }
+  },
+  {
+   "name": "17 resto VF.max 100 M: banda de 3 %",
+   "input": {
+    "listing": {
+     "price": 100000000,
+     "currency": "ARS",
+     "fx_rate": 1300,
+     "cash": false,
+     "year": 2017,
+     "body_type": "sedan"
+    },
+    "jurisdiction": [
+     "rest"
+    ],
+    "seller": "private",
+    "fx_latest": null
+   },
+   "expect": {
+    "terms": [
+     {
+      "code": "arancel",
+      "min": 1000000,
+      "max": 1000000
+     },
+     {
+      "code": "sellos",
+      "min": 1000000,
+      "max": 3000000
+     },
+     {
+      "code": "formularios",
+      "min": 8000,
+      "max": 18840
+     },
+     {
+      "code": "patente",
+      "min": 595000,
+      "max": 3000000
+     }
+    ],
+    "total_ars": {
+     "min": 102603000,
+     "max": 107018840
+    },
+    "total_usd": {
+     "min": 78925.38461538461,
+     "max": 82322.18461538461
+    },
+    "extras": [
+     {
+      "code": "domain_report",
+      "min": 4040,
+      "max": 4360
+     },
+     {
+      "code": "gestoria",
+      "min": null,
+      "max": null
+     }
+    ],
+    "missing": [],
+    "line": "Costo total estimado: USD 78.920 – 82.330 (ARS 102.603.000 – 107.019.000)"
+   }
+  },
+  {
+   "name": "18 sin jurisdicción",
+   "input": {
+    "listing": {
+     "price": 20000000,
+     "currency": "ARS",
+     "fx_rate": 1300,
+     "cash": false,
+     "year": 2017,
+     "body_type": "sedan"
+    },
+    "jurisdiction": null,
+    "seller": "private",
+    "fx_latest": null
+   },
+   "expect": {
+    "terms": [
+     {
+      "code": "arancel",
+      "min": 200000,
+      "max": 200000
+     },
+     {
+      "code": "formularios",
+      "min": 8000,
+      "max": 18840
+     }
+    ],
+    "total_ars": {
+     "min": 20208000,
+     "max": 20218840
+    },
+    "total_usd": {
+     "min": 15544.615384615385,
+     "max": 15552.953846153847
+    },
+    "extras": [
+     {
+      "code": "domain_report",
+      "min": 4040,
+      "max": 4360
+     },
+     {
+      "code": "gestoria",
+      "min": null,
+      "max": null
+     }
+    ],
+    "missing": [
+     {
+      "code": "sellos",
+      "reason": "no_zone"
+     },
+     {
+      "code": "patente",
+      "reason": "no_zone"
+     }
+    ],
+    "line": "Costo total estimado (sin sellos ni patente): USD 15.540 – 15.560 (ARS 20.208.000 – 20.219.000)"
+   }
+  },
+  {
+   "name": "19 CABA sin año",
+   "input": {
+    "listing": {
+     "price": 20000000,
+     "currency": "ARS",
+     "fx_rate": 1300,
+     "cash": false,
+     "year": null,
+     "body_type": "sedan"
+    },
+    "jurisdiction": [
+     "caba"
+    ],
+    "seller": "private",
+    "fx_latest": null
+   },
+   "expect": {
+    "terms": [
+     {
+      "code": "arancel",
+      "min": 200000,
+      "max": 200000
+     },
+     {
+      "code": "sellos",
+      "min": 600000,
+      "max": 600000
+     },
+     {
+      "code": "formularios",
+      "min": 8000,
+      "max": 18840
+     }
+    ],
+    "total_ars": {
+     "min": 20808000,
+     "max": 20818840
+    },
+    "total_usd": {
+     "min": 16006.153846153846,
+     "max": 16014.492307692308
+    },
+    "extras": [
+     {
+      "code": "domain_report",
+      "min": 4040,
+      "max": 4360
+     },
+     {
+      "code": "gestoria",
+      "min": null,
+      "max": null
+     }
+    ],
+    "missing": [
+     {
+      "code": "patente",
+      "reason": "no_year"
+     }
+    ],
+    "line": "Costo total estimado (sin patente): USD 16.000 – 16.020 (ARS 20.808.000 – 20.819.000)"
+   }
+  },
+  {
+   "name": "21 escalas de Buenos Aires desordenadas: faltan parámetros",
+   "input": {
+    "listing": {
+     "price": 20000000,
+     "currency": "ARS",
+     "fx_rate": 1300,
+     "cash": false,
+     "year": 2017,
+     "body_type": "sedan"
+    },
+    "jurisdiction": [
+     "ba"
+    ],
+    "seller": "private",
+    "fx_latest": null,
+    "config_patch": [
+     {
+      "path": [
+       "patente",
+       "ba",
+       "brackets"
+      ],
+      "value": [
+       {
+        "from": 0,
+        "fixed": 0,
+        "pct": 1.0
+       },
+       {
+        "from": 18700000,
+        "fixed": 233000,
+        "pct": 3.0
+       },
+       {
+        "from": 14100000,
+        "fixed": 141000,
+        "pct": 2.0
+       }
+      ]
+     }
+    ]
+   },
+   "expect": {
+    "terms": [
+     {
+      "code": "arancel",
+      "min": 200000,
+      "max": 200000
+     },
+     {
+      "code": "sellos",
+      "min": 600000,
+      "max": 600000
+     },
+     {
+      "code": "formularios",
+      "min": 8000,
+      "max": 18840
+     }
+    ],
+    "total_ars": {
+     "min": 20808000,
+     "max": 20818840
+    },
+    "total_usd": {
+     "min": 16006.153846153846,
+     "max": 16014.492307692308
+    },
+    "extras": [
+     {
+      "code": "domain_report",
+      "min": 4040,
+      "max": 4360
+     },
+     {
+      "code": "gestoria",
+      "min": null,
+      "max": null
+     }
+    ],
+    "missing": [
+     {
+      "code": "patente",
+      "reason": "params"
+     }
+    ],
+    "line": "Costo total estimado (sin patente): USD 16.000 – 16.020 (ARS 20.808.000 – 20.819.000)"
+   }
+  },
+  {
+   "name": "22 form_12 sin source: sin formularios",
+   "input": {
+    "listing": {
+     "price": 20000000,
+     "currency": "ARS",
+     "fx_rate": 1300,
+     "cash": false,
+     "year": 2017,
+     "body_type": "sedan"
+    },
+    "jurisdiction": [
+     "caba"
+    ],
+    "seller": "private",
+    "fx_latest": null,
+    "config_patch": [
+     {
+      "path": [
+       "fixed_ars",
+       "form_12",
+       "source"
+      ],
+      "delete": true
+     }
+    ]
+   },
+   "expect": {
+    "terms": [
+     {
+      "code": "arancel",
+      "min": 200000,
+      "max": 200000
+     },
+     {
+      "code": "sellos",
+      "min": 600000,
+      "max": 600000
+     },
+     {
+      "code": "patente",
+      "min": 380950,
+      "max": 698692.5
+     }
+    ],
+    "total_ars": {
+     "min": 21180950,
+     "max": 21498692.5
+    },
+    "total_usd": {
+     "min": 16293.038461538461,
+     "max": 16537.455769230768
+    },
+    "extras": [
+     {
+      "code": "domain_report",
+      "min": 4040,
+      "max": 4360
+     },
+     {
+      "code": "gestoria",
+      "min": null,
+      "max": null
+     }
+    ],
+    "missing": [
+     {
+      "code": "formularios",
+      "reason": "params"
+     }
+    ],
+    "line": "Costo total estimado (sin formularios): USD 16.290 – 16.540 (ARS 21.180.000 – 21.499.000)"
+   }
+  },
+  {
+   "name": "23 sin as_of en la raíz: sin estimación",
+   "input": {
+    "listing": {
+     "price": 20000000,
+     "currency": "ARS",
+     "fx_rate": 1300,
+     "cash": false,
+     "year": 2017,
+     "body_type": "sedan"
+    },
+    "jurisdiction": [
+     "caba"
+    ],
+    "seller": "private",
+    "fx_latest": null,
+    "config_patch": [
+     {
+      "path": [
+       "as_of"
+      ],
+      "delete": true
+     }
+    ]
+   },
+   "expect": null
+  },
+  {
+   "name": "24 min == max tras redondear: un solo número",
+   "input": {
+    "listing": {
+     "price": 20000000,
+     "currency": "ARS",
+     "fx_rate": 1010.4,
+     "cash": false,
+     "year": null,
+     "body_type": "sedan"
+    },
+    "jurisdiction": null,
+    "seller": "private",
+    "fx_latest": null,
+    "config_patch": [
+     {
+      "path": [
+       "fixed_ars",
+       "form_08",
+       "max"
+      ],
+      "value": 8000
+     },
+     {
+      "path": [
+       "fixed_ars",
+       "form_12",
+       "max"
+      ],
+      "value": 0
+     }
+    ]
+   },
+   "expect": {
+    "terms": [
+     {
+      "code": "arancel",
+      "min": 200000,
+      "max": 200000
+     },
+     {
+      "code": "formularios",
+      "min": 8000,
+      "max": 8000
+     }
+    ],
+    "total_ars": {
+     "min": 20208000,
+     "max": 20208000
+    },
+    "total_usd": {
+     "min": 20000,
+     "max": 20000
+    },
+    "extras": [
+     {
+      "code": "domain_report",
+      "min": 4040,
+      "max": 4360
+     },
+     {
+      "code": "gestoria",
+      "min": null,
+      "max": null
+     }
+    ],
+    "missing": [
+     {
+      "code": "sellos",
+      "reason": "no_zone"
+     },
+     {
+      "code": "patente",
+      "reason": "no_zone"
+     }
+    ],
+    "line": "Costo total estimado (sin sellos ni patente): USD 20.000 (ARS 20.208.000)"
+   }
+  },
+  {
+   "name": "25 sin jurisdicción y form_12 inválido",
+   "input": {
+    "listing": {
+     "price": 20000000,
+     "currency": "ARS",
+     "fx_rate": 1300,
+     "cash": false,
+     "year": 2017,
+     "body_type": "sedan"
+    },
+    "jurisdiction": null,
+    "seller": "private",
+    "fx_latest": null,
+    "config_patch": [
+     {
+      "path": [
+       "fixed_ars",
+       "form_12",
+       "min"
+      ],
+      "value": 10000
+     }
+    ]
+   },
+   "expect": {
+    "terms": [
+     {
+      "code": "arancel",
+      "min": 200000,
+      "max": 200000
+     }
+    ],
+    "total_ars": {
+     "min": 20200000,
+     "max": 20200000
+    },
+    "total_usd": {
+     "min": 15538.461538461539,
+     "max": 15538.461538461539
+    },
+    "extras": [
+     {
+      "code": "domain_report",
+      "min": 4040,
+      "max": 4360
+     },
+     {
+      "code": "gestoria",
+      "min": null,
+      "max": null
+     }
+    ],
+    "missing": [
+     {
+      "code": "sellos",
+      "reason": "no_zone"
+     },
+     {
+      "code": "formularios",
+      "reason": "params"
+     },
+     {
+      "code": "patente",
+      "reason": "no_zone"
+     }
+    ],
+    "line": "Costo total estimado (sin sellos, formularios ni patente): USD 15.530 – 15.540 (ARS 20.200.000)"
+   }
+  },
+  {
+   "name": "25 sin dnrpa: sin arancel",
+   "input": {
+    "listing": {
+     "price": 20000000,
+     "currency": "ARS",
+     "fx_rate": 1300,
+     "cash": false,
+     "year": 2017,
+     "body_type": "sedan"
+    },
+    "jurisdiction": [
+     "caba"
+    ],
+    "seller": "private",
+    "fx_latest": null,
+    "config_patch": [
+     {
+      "path": [
+       "dnrpa"
+      ],
+      "delete": true
+     }
+    ]
+   },
+   "expect": {
+    "terms": [
+     {
+      "code": "sellos",
+      "min": 600000,
+      "max": 600000
+     },
+     {
+      "code": "formularios",
+      "min": 8000,
+      "max": 18840
+     },
+     {
+      "code": "patente",
+      "min": 380950,
+      "max": 698692.5
+     }
+    ],
+    "total_ars": {
+     "min": 20988950,
+     "max": 21317532.5
+    },
+    "total_usd": {
+     "min": 16145.346153846154,
+     "max": 16398.101923076923
+    },
+    "extras": [
+     {
+      "code": "domain_report",
+      "min": 4040,
+      "max": 4360
+     },
+     {
+      "code": "gestoria",
+      "min": null,
+      "max": null
+     }
+    ],
+    "missing": [
+     {
+      "code": "arancel",
+      "reason": "params"
+     }
+    ],
+    "line": "Costo total estimado (sin arancel): USD 16.140 – 16.400 (ARS 20.988.000 – 21.318.000)"
+   }
+  },
+  {
+   "name": "25 sin jurisdicción, sin dnrpa y sin año",
+   "input": {
+    "listing": {
+     "price": 20000000,
+     "currency": "ARS",
+     "fx_rate": 1300,
+     "cash": false,
+     "year": null,
+     "body_type": "sedan"
+    },
+    "jurisdiction": null,
+    "seller": "private",
+    "fx_latest": null,
+    "config_patch": [
+     {
+      "path": [
+       "dnrpa"
+      ],
+      "delete": true
+     }
+    ]
+   },
+   "expect": {
+    "terms": [
+     {
+      "code": "formularios",
+      "min": 8000,
+      "max": 18840
+     }
+    ],
+    "total_ars": {
+     "min": 20008000,
+     "max": 20018840
+    },
+    "total_usd": {
+     "min": 15390.76923076923,
+     "max": 15399.107692307693
+    },
+    "extras": [
+     {
+      "code": "domain_report",
+      "min": 4040,
+      "max": 4360
+     },
+     {
+      "code": "gestoria",
+      "min": null,
+      "max": null
+     }
+    ],
+    "missing": [
+     {
+      "code": "arancel",
+      "reason": "params"
+     },
+     {
+      "code": "sellos",
+      "reason": "no_zone"
+     },
+     {
+      "code": "patente",
+      "reason": "no_zone"
+     }
+    ],
+    "line": "Costo total estimado (sin arancel, sellos ni patente): USD 15.390 – 15.400 (ARS 20.008.000 – 20.019.000)"
+   }
+  },
+  {
+   "name": "26 CABA sin carrocería: unión de los incisos a) y b)",
+   "input": {
+    "listing": {
+     "price": 20000000,
+     "currency": "ARS",
+     "fx_rate": 1300,
+     "cash": false,
+     "year": 2017,
+     "body_type": null
+    },
+    "jurisdiction": [
+     "caba"
+    ],
+    "seller": "private",
+    "fx_latest": null
+   },
+   "expect": {
+    "terms": [
+     {
+      "code": "arancel",
+      "min": 200000,
+      "max": 200000
+     },
+     {
+      "code": "sellos",
+      "min": 600000,
+      "max": 600000
+     },
+     {
+      "code": "formularios",
+      "min": 8000,
+      "max": 18840
+     },
+     {
+      "code": "patente",
+      "min": 321999.99999999994,
+      "max": 698692.5
+     }
+    ],
+    "total_ars": {
+     "min": 21130000.0,
+     "max": 21517532.5
+    },
+    "total_usd": {
+     "min": 16253.846153846154,
+     "max": 16551.948076923076
+    },
+    "extras": [
+     {
+      "code": "domain_report",
+      "min": 4040,
+      "max": 4360
+     },
+     {
+      "code": "gestoria",
+      "min": null,
+      "max": null
+     }
+    ],
+    "missing": [],
+    "line": "Costo total estimado: USD 16.250 – 16.560 (ARS 21.130.000 – 21.518.000)",
+    "details": {
+     "patente": "ARS 322.000 – 698.700"
+    }
+   }
+  },
+  {
+   "name": "27 enero: el mismo resultado que en octubre (sin reloj)",
+   "input": {
+    "listing": {
+     "price": 500000,
+     "currency": "ARS",
+     "fx_rate": 1300,
+     "cash": false,
+     "year": 2002,
+     "body_type": "sedan"
+    },
+    "jurisdiction": [
+     "caba"
+    ],
+    "seller": "private",
+    "fx_latest": null,
+    "config_patch": [
+     {
+      "path": [
+       "patente",
+       "values_year"
+      ],
+      "value": 2026
+     }
+    ]
+   },
+   "expect": {
+    "terms": [
+     {
+      "code": "arancel",
+      "min": 32320,
+      "max": 34880
+     },
+     {
+      "code": "sellos",
+      "min": 15000,
+      "max": 15000
+     },
+     {
+      "code": "formularios",
+      "min": 8000,
+      "max": 18840
+     },
+     {
+      "code": "patente",
+      "min": 13300,
+      "max": 14630.000000000002
+     }
+    ],
+    "total_ars": {
+     "min": 568620,
+     "max": 583350
+    },
+    "total_usd": {
+     "min": 437.4,
+     "max": 448.7307692307692
+    },
+    "extras": [
+     {
+      "code": "domain_report",
+      "min": 4040,
+      "max": 4360
+     },
+     {
+      "code": "gestoria",
+      "min": null,
+      "max": null
+     }
+    ],
+    "missing": [],
+    "line": "Costo total estimado: USD 430 – 450 (ARS 568.000 – 584.000)"
+   }
+  },
+  {
+   "name": "27 values_year 2027: el modelo 2002 pasa a mínimo 0",
+   "input": {
+    "listing": {
+     "price": 500000,
+     "currency": "ARS",
+     "fx_rate": 1300,
+     "cash": false,
+     "year": 2002,
+     "body_type": "sedan"
+    },
+    "jurisdiction": [
+     "caba"
+    ],
+    "seller": "private",
+    "fx_latest": null,
+    "config_patch": [
+     {
+      "path": [
+       "patente",
+       "values_year"
+      ],
+      "value": 2027
+     }
+    ]
+   },
+   "expect": {
+    "terms": [
+     {
+      "code": "arancel",
+      "min": 32320,
+      "max": 34880
+     },
+     {
+      "code": "sellos",
+      "min": 15000,
+      "max": 15000
+     },
+     {
+      "code": "formularios",
+      "min": 8000,
+      "max": 18840
+     },
+     {
+      "code": "patente",
+      "min": 5600,
+      "max": 8800.0
+     }
+    ],
+    "total_ars": {
+     "min": 560920,
+     "max": 577520
+    },
+    "total_usd": {
+     "min": 431.4769230769231,
+     "max": 444.24615384615385
+    },
+    "extras": [
+     {
+      "code": "domain_report",
+      "min": 4040,
+      "max": 4360
+     },
+     {
+      "code": "gestoria",
+      "min": null,
+      "max": null
+     }
+    ],
+    "missing": [],
+    "line": "Costo total estimado: USD 430 – 450 (ARS 560.000 – 578.000)"
+   }
+  },
+  {
+   "name": "28 CABA y resto: unión",
+   "input": {
+    "listing": {
+     "price": 20000000,
+     "currency": "ARS",
+     "fx_rate": 1300,
+     "cash": false,
+     "year": 2017,
+     "body_type": "sedan"
+    },
+    "jurisdiction": [
+     "caba",
+     "rest"
+    ],
+    "seller": "private",
+    "fx_latest": null
+   },
+   "expect": {
+    "terms": [
+     {
+      "code": "arancel",
+      "min": 200000,
+      "max": 200000
+     },
+     {
+      "code": "sellos",
+      "min": 200000,
+      "max": 600000
+     },
+     {
+      "code": "formularios",
+      "min": 8000,
+      "max": 18840
+     },
+     {
+      "code": "patente",
+      "min": 119000,
+      "max": 698692.5
+     }
+    ],
+    "total_ars": {
+     "min": 20527000,
+     "max": 21517532.5
+    },
+    "total_usd": {
+     "min": 15790.0,
+     "max": 16551.948076923076
+    },
+    "extras": [
+     {
+      "code": "domain_report",
+      "min": 4040,
+      "max": 4360
+     },
+     {
+      "code": "gestoria",
+      "min": null,
+      "max": null
+     }
+    ],
+    "missing": [],
+    "line": "Costo total estimado: USD 15.790 – 16.560 (ARS 20.527.000 – 21.518.000)"
+   }
+  },
+  {
+   "name": "29 sin patente.values_year: sin patente",
+   "input": {
+    "listing": {
+     "price": 20000000,
+     "currency": "ARS",
+     "fx_rate": 1300,
+     "cash": false,
+     "year": 2017,
+     "body_type": "sedan"
+    },
+    "jurisdiction": [
+     "caba"
+    ],
+    "seller": "private",
+    "fx_latest": null,
+    "config_patch": [
+     {
+      "path": [
+       "patente",
+       "values_year"
+      ],
+      "delete": true
+     }
+    ]
+   },
+   "expect": {
+    "terms": [
+     {
+      "code": "arancel",
+      "min": 200000,
+      "max": 200000
+     },
+     {
+      "code": "sellos",
+      "min": 600000,
+      "max": 600000
+     },
+     {
+      "code": "formularios",
+      "min": 8000,
+      "max": 18840
+     }
+    ],
+    "total_ars": {
+     "min": 20808000,
+     "max": 20818840
+    },
+    "total_usd": {
+     "min": 16006.153846153846,
+     "max": 16014.492307692308
+    },
+    "extras": [
+     {
+      "code": "domain_report",
+      "min": 4040,
+      "max": 4360
+     },
+     {
+      "code": "gestoria",
+      "min": null,
+      "max": null
+     }
+    ],
+    "missing": [
+     {
+      "code": "patente",
+      "reason": "params"
+     }
+    ],
+    "line": "Costo total estimado (sin patente): USD 16.000 – 16.020 (ARS 20.808.000 – 20.819.000)"
+   }
+  },
+  {
+   "name": "transfer_base distinto de price: sin arancel ni sellos",
+   "input": {
+    "listing": {
+     "price": 20000000,
+     "currency": "ARS",
+     "fx_rate": 1300,
+     "cash": false,
+     "year": 2017,
+     "body_type": "sedan"
+    },
+    "jurisdiction": [
+     "caba"
+    ],
+    "seller": "private",
+    "fx_latest": null,
+    "config_patch": [
+     {
+      "path": [
+       "transfer_base",
+       "value"
+      ],
+      "value": "table"
+     }
+    ]
+   },
+   "expect": {
+    "terms": [
+     {
+      "code": "formularios",
+      "min": 8000,
+      "max": 18840
+     },
+     {
+      "code": "patente",
+      "min": 380950,
+      "max": 698692.5
+     }
+    ],
+    "total_ars": {
+     "min": 20388950,
+     "max": 20717532.5
+    },
+    "total_usd": {
+     "min": 15683.807692307691,
+     "max": 15936.563461538462
+    },
+    "extras": [
+     {
+      "code": "domain_report",
+      "min": 4040,
+      "max": 4360
+     },
+     {
+      "code": "gestoria",
+      "min": null,
+      "max": null
+     }
+    ],
+    "missing": [
+     {
+      "code": "arancel",
+      "reason": "base"
+     },
+     {
+      "code": "sellos",
+      "reason": "base"
+     }
+    ],
+    "line": "Costo total estimado (sin arancel ni sellos): USD 15.680 – 15.940 (ARS 20.388.000 – 20.718.000)"
+   }
+  },
+  {
+   "name": "contado: el rótulo del precio",
+   "input": {
+    "listing": {
+     "price": 20000000,
+     "currency": "ARS",
+     "fx_rate": 1300,
+     "cash": true,
+     "year": 2017,
+     "body_type": "sedan"
+    },
+    "jurisdiction": [
+     "caba"
+    ],
+    "seller": "private",
+    "fx_latest": null
+   },
+   "expect": {
+    "terms": [
+     {
+      "code": "arancel",
+      "min": 200000,
+      "max": 200000
+     },
+     {
+      "code": "sellos",
+      "min": 600000,
+      "max": 600000
+     },
+     {
+      "code": "formularios",
+      "min": 8000,
+      "max": 18840
+     },
+     {
+      "code": "patente",
+      "min": 380950,
+      "max": 698692.5
+     }
+    ],
+    "total_ars": {
+     "min": 21188950,
+     "max": 21517532.5
+    },
+    "total_usd": {
+     "min": 16299.192307692309,
+     "max": 16551.948076923076
+    },
+    "extras": [
+     {
+      "code": "domain_report",
+      "min": 4040,
+      "max": 4360
+     },
+     {
+      "code": "gestoria",
+      "min": null,
+      "max": null
+     }
+    ],
+    "missing": [],
+    "line": "Costo total estimado: USD 16.290 – 16.560 (ARS 21.188.000 – 21.518.000)",
+    "price_label": "cash"
+   }
+  },
+  {
+   "name": "sin informe de dominio: el total no cambia",
+   "input": {
+    "listing": {
+     "price": 20000000,
+     "currency": "ARS",
+     "fx_rate": 1300,
+     "cash": false,
+     "year": 2017,
+     "body_type": "sedan"
+    },
+    "jurisdiction": [
+     "caba"
+    ],
+    "seller": "private",
+    "fx_latest": null,
+    "config_patch": [
+     {
+      "path": [
+       "domain_report",
+       "source"
+      ],
+      "value": " "
+     }
+    ]
+   },
+   "expect": {
+    "terms": [
+     {
+      "code": "arancel",
+      "min": 200000,
+      "max": 200000
+     },
+     {
+      "code": "sellos",
+      "min": 600000,
+      "max": 600000
+     },
+     {
+      "code": "formularios",
+      "min": 8000,
+      "max": 18840
+     },
+     {
+      "code": "patente",
+      "min": 380950,
+      "max": 698692.5
+     }
+    ],
+    "total_ars": {
+     "min": 21188950,
+     "max": 21517532.5
+    },
+    "total_usd": {
+     "min": 16299.192307692309,
+     "max": 16551.948076923076
+    },
+    "extras": [
+     {
+      "code": "gestoria",
+      "min": null,
+      "max": null
+     }
+    ],
+    "missing": [],
+    "line": "Costo total estimado: USD 16.290 – 16.560 (ARS 21.188.000 – 21.518.000)"
+   }
+  }
+ ],
+ "jurisdiction_cases": [
+  {
+   "name": "AMBA con el centro de CABA",
+   "zones": [
+    {
+     "lat": -34.6037,
+     "lon": -58.3816,
+     "label": "AMBA"
+    }
+   ],
+   "expect": [
+    "caba",
+    "ba"
+   ]
+  },
+  {
+   "name": "CABA",
+   "zones": [
+    {
+     "lat": -34.6037,
+     "lon": -58.3816,
+     "label": "CABA"
+    }
+   ],
+   "expect": [
+    "caba"
+   ]
+  },
+  {
+   "name": "Ciudad de Buenos Aires, CABA",
+   "zones": [
+    {
+     "lat": -34.6037,
+     "lon": -58.3816,
+     "label": "Ciudad de Buenos Aires, CABA"
+    }
+   ],
+   "expect": [
+    "caba"
+   ]
+  },
+  {
+   "name": "Zona Norte (San Isidro)",
+   "zones": [
+    {
+     "lat": -34.4708,
+     "lon": -58.5286,
+     "label": "Zona Norte (GBA)"
+    }
+   ],
+   "expect": [
+    "ba"
+   ]
+  },
+  {
+   "name": "La Plata",
+   "zones": [
+    {
+     "lat": -34.9205,
+     "lon": -57.9536,
+     "label": "La Plata"
+    }
+   ],
+   "expect": [
+    "ba"
+   ]
+  },
+  {
+   "name": "Rosario",
+   "zones": [
+    {
+     "lat": -32.9442,
+     "lon": -60.6505,
+     "label": "Rosario"
+    }
+   ],
+   "expect": [
+    "rest"
+   ]
+  },
+  {
+   "name": "borde de la General Paz, como nearest_locality",
+   "zones": [
+    {
+     "lat": -34.535,
+     "lon": -58.47,
+     "label": "Mi ubicación actual"
+    }
+   ],
+   "expect": [
+    "caba"
+   ]
+  },
+  {
+   "name": "lat null",
+   "zones": [
+    {
+     "lat": null,
+     "lon": -58.3816,
+     "label": "CABA"
+    }
+   ],
+   "expect": null
+  },
+  {
+   "name": "sin zonas",
+   "zones": [],
+   "expect": null
+  },
+  {
+   "name": "Montevideo a 106,8 km: sin dato",
+   "zones": [
+    {
+     "lat": -34.9011,
+     "lon": -56.1645,
+     "label": "Montevideo"
+    }
+   ],
+   "expect": null
+  },
+  {
+   "name": "Punta del Este: sin dato",
+   "zones": [
+    {
+     "lat": -34.962,
+     "lon": -54.95,
+     "label": "Punta del Este"
+    }
+   ],
+   "expect": null
+  },
+  {
+   "name": "Palermo y Córdoba",
+   "zones": [
+    {
+     "lat": -34.5875,
+     "lon": -58.42,
+     "label": "Palermo, CABA"
+    },
+    {
+     "lat": -31.4201,
+     "lon": -64.1888,
+     "label": "Córdoba"
+    }
+   ],
+   "expect": [
+    "caba",
+    "rest"
+   ]
+  },
+  {
+   "name": "Palermo y Montevideo: una zona sin dato anula todo",
+   "zones": [
+    {
+     "lat": -34.5875,
+     "lon": -58.42,
+     "label": "Palermo, CABA"
+    },
+    {
+     "lat": -34.9011,
+     "lon": -56.1645,
+     "label": "Montevideo"
+    }
+   ],
+   "expect": null
+  },
+  {
+   "name": "Rosario (zona aproximada)",
+   "zones": [
+    {
+     "lat": -32.9442,
+     "lon": -60.6505,
+     "label": "Rosario (zona aproximada)"
+    }
+   ],
+   "expect": [
+    "rest"
+   ]
+  }
+ ],
+ "input_cases": [
+  {
+   "name": "aviso en ARS: R = price / price_usd (el dólar de price_usd), aunque haya fx_latest",
+   "row": {
+    "price": 20000000,
+    "currency": "ARS",
+    "price_usd": 15384.62,
+    "price_partial": false,
+    "description_facts": null,
+    "seller_type": "private",
+    "dealer_inferred": false,
+    "year": 2017,
+    "body_type": "sedan"
+   },
+   "search": {
+    "lat": -34.5875,
+    "lon": -58.42,
+    "label": "Palermo, CABA",
+    "extra_locations": []
+   },
+   "fx_latest": {
+    "rate": 1300,
+    "kind": "blue",
+    "date": "2026-10-29"
+   },
+   "today": "2026-10-30",
+   "expect": {
+    "listing": {
+     "price": 20000000,
+     "currency": "ARS",
+     "fx_rate": 1299.999610000117,
+     "cash": false,
+     "year": 2017,
+     "body_type": "sedan"
+    },
+    "jurisdiction": [
+     "caba"
+    ],
+    "seller": "private",
+    "fx_latest": null,
+    "p_ars": 20000000,
+    "zones": [
+     {
+      "lat": -34.5875,
+      "lon": -58.42,
+      "label": "Palermo, CABA"
+     }
+    ]
+   }
+  },
+  {
+   "name": "price_partial: sin estimación",
+   "row": {
+    "price": 20000000,
+    "currency": "ARS",
+    "price_usd": 15384.62,
+    "price_partial": true,
+    "description_facts": null,
+    "seller_type": "private",
+    "dealer_inferred": false,
+    "year": 2017,
+    "body_type": "sedan"
+   },
+   "search": {
+    "lat": -34.5875,
+    "lon": -58.42,
+    "label": "Palermo, CABA",
+    "extra_locations": []
+   },
+   "fx_latest": {
+    "rate": 1300,
+    "kind": "blue",
+    "date": "2026-10-29"
+   },
+   "today": "2026-10-30",
+   "expect": null
+  },
+  {
+   "name": "price_check.published_partial: sin estimación",
+   "row": {
+    "price": 20000000,
+    "currency": "ARS",
+    "price_usd": 15384.62,
+    "price_partial": false,
+    "description_facts": {
+     "price_check": {
+      "published_partial": true
+     }
+    },
+    "seller_type": "private",
+    "dealer_inferred": false,
+    "year": 2017,
+    "body_type": "sedan"
+   },
+   "search": {
+    "lat": -34.5875,
+    "lon": -58.42,
+    "label": "Palermo, CABA",
+    "extra_locations": []
+   },
+   "fx_latest": {
+    "rate": 1300,
+    "kind": "blue",
+    "date": "2026-10-29"
+   },
+   "today": "2026-10-30",
+   "expect": null
+  },
+  {
+   "name": "published_kind installment: sin estimación",
+   "row": {
+    "price": 20000000,
+    "currency": "ARS",
+    "price_usd": 15384.62,
+    "price_partial": false,
+    "description_facts": {
+     "price_check": {
+      "published_kind": "installment"
+     }
+    },
+    "seller_type": "private",
+    "dealer_inferred": false,
+    "year": 2017,
+    "body_type": "sedan"
+   },
+   "search": {
+    "lat": -34.5875,
+    "lon": -58.42,
+    "label": "Palermo, CABA",
+    "extra_locations": []
+   },
+   "fx_latest": {
+    "rate": 1300,
+    "kind": "blue",
+    "date": "2026-10-29"
+   },
+   "today": "2026-10-30",
+   "expect": null
+  },
+  {
+   "name": "published_kind down_payment: sin estimación",
+   "row": {
+    "price": 20000000,
+    "currency": "ARS",
+    "price_usd": 15384.62,
+    "price_partial": false,
+    "description_facts": {
+     "price_check": {
+      "published_kind": "down_payment"
+     }
+    },
+    "seller_type": "private",
+    "dealer_inferred": false,
+    "year": 2017,
+    "body_type": "sedan"
+   },
+   "search": {
+    "lat": -34.5875,
+    "lon": -58.42,
+    "label": "Palermo, CABA",
+    "extra_locations": []
+   },
+   "fx_latest": {
+    "rate": 1300,
+    "kind": "blue",
+    "date": "2026-10-29"
+   },
+   "today": "2026-10-30",
+   "expect": null
+  },
+  {
+   "name": "precio de contado: cash",
+   "row": {
+    "price": 20000000,
+    "currency": "ARS",
+    "price_usd": 15384.62,
+    "price_partial": false,
+    "description_facts": {
+     "price_check": {
+      "published_kind": "cash",
+      "effective_kind": "cash"
+     }
+    },
+    "seller_type": "private",
+    "dealer_inferred": false,
+    "year": 2017,
+    "body_type": "sedan"
+   },
+   "search": {
+    "lat": -34.5875,
+    "lon": -58.42,
+    "label": "Palermo, CABA",
+    "extra_locations": []
+   },
+   "fx_latest": {
+    "rate": 1300,
+    "kind": "blue",
+    "date": "2026-10-29"
+   },
+   "today": "2026-10-30",
+   "expect": {
+    "listing": {
+     "price": 20000000,
+     "currency": "ARS",
+     "fx_rate": 1299.999610000117,
+     "cash": true,
+     "year": 2017,
+     "body_type": "sedan"
+    },
+    "jurisdiction": [
+     "caba"
+    ],
+    "seller": "private",
+    "fx_latest": null
+   }
+  },
+  {
+   "name": "particular con dealer_inferred: agencia",
+   "row": {
+    "price": 20000000,
+    "currency": "ARS",
+    "price_usd": 15384.62,
+    "price_partial": false,
+    "description_facts": null,
+    "seller_type": "private",
+    "dealer_inferred": true,
+    "year": 2017,
+    "body_type": "sedan"
+   },
+   "search": {
+    "lat": -34.5875,
+    "lon": -58.42,
+    "label": "Palermo, CABA",
+    "extra_locations": []
+   },
+   "fx_latest": {
+    "rate": 1300,
+    "kind": "blue",
+    "date": "2026-10-29"
+   },
+   "today": "2026-10-30",
+   "expect": {
+    "listing": {
+     "price": 20000000,
+     "currency": "ARS",
+     "fx_rate": 1299.999610000117,
+     "cash": false,
+     "year": 2017,
+     "body_type": "sedan"
+    },
+    "jurisdiction": [
+     "caba"
+    ],
+    "seller": "dealer",
+    "fx_latest": null
+   }
+  },
+  {
+   "name": "concesionaria",
+   "row": {
+    "price": 20000000,
+    "currency": "ARS",
+    "price_usd": 15384.62,
+    "price_partial": false,
+    "description_facts": null,
+    "seller_type": "dealer",
+    "dealer_inferred": false,
+    "year": 2017,
+    "body_type": "sedan"
+   },
+   "search": {
+    "lat": -34.5875,
+    "lon": -58.42,
+    "label": "Palermo, CABA",
+    "extra_locations": []
+   },
+   "fx_latest": {
+    "rate": 1300,
+    "kind": "blue",
+    "date": "2026-10-29"
+   },
+   "today": "2026-10-30",
+   "expect": {
+    "listing": {
+     "price": 20000000,
+     "currency": "ARS",
+     "fx_rate": 1299.999610000117,
+     "cash": false,
+     "year": 2017,
+     "body_type": "sedan"
+    },
+    "jurisdiction": [
+     "caba"
+    ],
+    "seller": "dealer",
+    "fx_latest": null
+   }
+  },
+  {
+   "name": "vendedor sin informar",
+   "row": {
+    "price": 20000000,
+    "currency": "ARS",
+    "price_usd": 15384.62,
+    "price_partial": false,
+    "description_facts": null,
+    "seller_type": null,
+    "dealer_inferred": false,
+    "year": 2017,
+    "body_type": "sedan"
+   },
+   "search": {
+    "lat": -34.5875,
+    "lon": -58.42,
+    "label": "Palermo, CABA",
+    "extra_locations": []
+   },
+   "fx_latest": {
+    "rate": 1300,
+    "kind": "blue",
+    "date": "2026-10-29"
+   },
+   "today": "2026-10-30",
+   "expect": {
+    "listing": {
+     "price": 20000000,
+     "currency": "ARS",
+     "fx_rate": 1299.999610000117,
+     "cash": false,
+     "year": 2017,
+     "body_type": "sedan"
+    },
+    "jurisdiction": [
+     "caba"
+    ],
+    "seller": null,
+    "fx_latest": null
+   }
+  },
+  {
+   "name": "aviso en USD con fx_latest: P = price x rate",
+   "row": {
+    "price": 15000,
+    "currency": "USD",
+    "price_usd": 15000,
+    "price_partial": false,
+    "description_facts": null,
+    "seller_type": "private",
+    "dealer_inferred": false,
+    "year": 2017,
+    "body_type": "sedan"
+   },
+   "search": {
+    "lat": -34.5875,
+    "lon": -58.42,
+    "label": "Palermo, CABA",
+    "extra_locations": []
+   },
+   "fx_latest": {
+    "rate": 1300,
+    "kind": "blue",
+    "date": "2026-10-29"
+   },
+   "today": "2026-10-30",
+   "expect": {
+    "listing": {
+     "price": 15000,
+     "currency": "USD",
+     "fx_rate": null,
+     "cash": false,
+     "year": 2017,
+     "body_type": "sedan"
+    },
+    "jurisdiction": [
+     "caba"
+    ],
+    "seller": "private",
+    "fx_latest": {
+     "rate": 1300,
+     "kind": "blue",
+     "date": "2026-10-29"
+    },
+    "p_ars": 19500000
+   }
+  },
+  {
+   "name": "aviso en USD con dólar de hace 3 días: vigente",
+   "row": {
+    "price": 15000,
+    "currency": "USD",
+    "price_usd": 15000,
+    "price_partial": false,
+    "description_facts": null,
+    "seller_type": "private",
+    "dealer_inferred": false,
+    "year": 2017,
+    "body_type": "sedan"
+   },
+   "search": {
+    "lat": -34.5875,
+    "lon": -58.42,
+    "label": "Palermo, CABA",
+    "extra_locations": []
+   },
+   "fx_latest": {
+    "rate": 1300,
+    "kind": "blue",
+    "date": "2026-10-27"
+   },
+   "today": "2026-10-30",
+   "expect": {
+    "listing": {
+     "price": 15000,
+     "currency": "USD",
+     "fx_rate": null,
+     "cash": false,
+     "year": 2017,
+     "body_type": "sedan"
+    },
+    "jurisdiction": [
+     "caba"
+    ],
+    "seller": "private",
+    "fx_latest": {
+     "rate": 1300,
+     "kind": "blue",
+     "date": "2026-10-27"
+    },
+    "p_ars": 19500000
+   }
+  },
+  {
+   "name": "aviso en USD con dólar de hace 4 días: sin dólar",
+   "row": {
+    "price": 15000,
+    "currency": "USD",
+    "price_usd": 15000,
+    "price_partial": false,
+    "description_facts": null,
+    "seller_type": "private",
+    "dealer_inferred": false,
+    "year": 2017,
+    "body_type": "sedan"
+   },
+   "search": {
+    "lat": -34.5875,
+    "lon": -58.42,
+    "label": "Palermo, CABA",
+    "extra_locations": []
+   },
+   "fx_latest": {
+    "rate": 1300,
+    "kind": "blue",
+    "date": "2026-10-26"
+   },
+   "today": "2026-10-30",
+   "expect": {
+    "listing": {
+     "price": 15000,
+     "currency": "USD",
+     "fx_rate": null,
+     "cash": false,
+     "year": 2017,
+     "body_type": "sedan"
+    },
+    "jurisdiction": [
+     "caba"
+    ],
+    "seller": "private",
+    "fx_latest": null,
+    "p_ars": null
+   }
+  },
+  {
+   "name": "aviso en USD sin cotización guardada",
+   "row": {
+    "price": 15000,
+    "currency": "USD",
+    "price_usd": 15000,
+    "price_partial": false,
+    "description_facts": null,
+    "seller_type": "private",
+    "dealer_inferred": false,
+    "year": 2017,
+    "body_type": "sedan"
+   },
+   "search": {
+    "lat": -34.5875,
+    "lon": -58.42,
+    "label": "Palermo, CABA",
+    "extra_locations": []
+   },
+   "fx_latest": null,
+   "today": "2026-10-30",
+   "expect": {
+    "listing": {
+     "price": 15000,
+     "currency": "USD",
+     "fx_rate": null,
+     "cash": false,
+     "year": 2017,
+     "body_type": "sedan"
+    },
+    "jurisdiction": [
+     "caba"
+    ],
+    "seller": "private",
+    "fx_latest": null,
+    "p_ars": null
+   }
+  },
+  {
+   "name": "aviso en ARS sin price_usd: sin R",
+   "row": {
+    "price": 20000000,
+    "currency": "ARS",
+    "price_usd": null,
+    "price_partial": false,
+    "description_facts": null,
+    "seller_type": "private",
+    "dealer_inferred": false,
+    "year": 2017,
+    "body_type": "sedan"
+   },
+   "search": {
+    "lat": -34.5875,
+    "lon": -58.42,
+    "label": "Palermo, CABA",
+    "extra_locations": []
+   },
+   "fx_latest": {
+    "rate": 1300,
+    "kind": "blue",
+    "date": "2026-10-29"
+   },
+   "today": "2026-10-30",
+   "expect": {
+    "listing": {
+     "price": 20000000,
+     "currency": "ARS",
+     "fx_rate": null,
+     "cash": false,
+     "year": 2017,
+     "body_type": "sedan"
+    },
+    "jurisdiction": [
+     "caba"
+    ],
+    "seller": "private",
+    "fx_latest": null
+   }
+  },
+  {
+   "name": "búsqueda con extra_locations: unión de zonas",
+   "row": {
+    "price": 20000000,
+    "currency": "ARS",
+    "price_usd": 15384.62,
+    "price_partial": false,
+    "description_facts": null,
+    "seller_type": "private",
+    "dealer_inferred": false,
+    "year": 2017,
+    "body_type": "sedan"
+   },
+   "search": {
+    "lat": -34.5875,
+    "lon": -58.42,
+    "label": "Palermo, CABA",
+    "extra_locations": [
+     {
+      "label": "Córdoba",
+      "lat": -31.4201,
+      "lon": -64.1888,
+      "radius_km": 40
+     }
+    ]
+   },
+   "fx_latest": {
+    "rate": 1300,
+    "kind": "blue",
+    "date": "2026-10-29"
+   },
+   "today": "2026-10-30",
+   "expect": {
+    "listing": {
+     "price": 20000000,
+     "currency": "ARS",
+     "fx_rate": 1299.999610000117,
+     "cash": false,
+     "year": 2017,
+     "body_type": "sedan"
+    },
+    "jurisdiction": [
+     "caba",
+     "rest"
+    ],
+    "seller": "private",
+    "fx_latest": null,
+    "zones": [
+     {
+      "lat": -34.5875,
+      "lon": -58.42,
+      "label": "Palermo, CABA"
+     },
+     {
+      "lat": -31.4201,
+      "lon": -64.1888,
+      "label": "Córdoba"
+     }
+    ]
+   }
+  },
+  {
+   "name": "sin búsqueda: sin jurisdicción",
+   "row": {
+    "price": 20000000,
+    "currency": "ARS",
+    "price_usd": 15384.62,
+    "price_partial": false,
+    "description_facts": null,
+    "seller_type": "private",
+    "dealer_inferred": false,
+    "year": 2017,
+    "body_type": "sedan"
+   },
+   "search": null,
+   "fx_latest": {
+    "rate": 1300,
+    "kind": "blue",
+    "date": "2026-10-29"
+   },
+   "today": "2026-10-30",
+   "expect": {
+    "listing": {
+     "price": 20000000,
+     "currency": "ARS",
+     "fx_rate": 1299.999610000117,
+     "cash": false,
+     "year": 2017,
+     "body_type": "sedan"
+    },
+    "jurisdiction": null,
+    "seller": "private",
+    "fx_latest": null,
+    "zones": []
+   }
+  },
+  {
+   "name": "búsqueda sin origen: sin jurisdicción",
+   "row": {
+    "price": 20000000,
+    "currency": "ARS",
+    "price_usd": 15384.62,
+    "price_partial": false,
+    "description_facts": null,
+    "seller_type": "private",
+    "dealer_inferred": false,
+    "year": 2017,
+    "body_type": "sedan"
+   },
+   "search": {
+    "lat": null,
+    "lon": null,
+    "label": null,
+    "extra_locations": []
+   },
+   "fx_latest": {
+    "rate": 1300,
+    "kind": "blue",
+    "date": "2026-10-29"
+   },
+   "today": "2026-10-30",
+   "expect": {
+    "listing": {
+     "price": 20000000,
+     "currency": "ARS",
+     "fx_rate": 1299.999610000117,
+     "cash": false,
+     "year": 2017,
+     "body_type": "sedan"
+    },
+    "jurisdiction": null,
+    "seller": "private",
+    "fx_latest": null,
+    "zones": []
+   }
+  },
+  {
+   "name": "precio 0: sin estimación",
+   "row": {
+    "price": 0,
+    "currency": "ARS",
+    "price_usd": 15384.62,
+    "price_partial": false,
+    "description_facts": null,
+    "seller_type": "private",
+    "dealer_inferred": false,
+    "year": 2017,
+    "body_type": "sedan"
+   },
+   "search": {
+    "lat": -34.5875,
+    "lon": -58.42,
+    "label": "Palermo, CABA",
+    "extra_locations": []
+   },
+   "fx_latest": {
+    "rate": 1300,
+    "kind": "blue",
+    "date": "2026-10-29"
+   },
+   "today": "2026-10-30",
+   "expect": null
+  },
+  {
+   "name": "precio null: sin estimación",
+   "row": {
+    "price": null,
+    "currency": "ARS",
+    "price_usd": 15384.62,
+    "price_partial": false,
+    "description_facts": null,
+    "seller_type": "private",
+    "dealer_inferred": false,
+    "year": 2017,
+    "body_type": "sedan"
+   },
+   "search": {
+    "lat": -34.5875,
+    "lon": -58.42,
+    "label": "Palermo, CABA",
+    "extra_locations": []
+   },
+   "fx_latest": {
+    "rate": 1300,
+    "kind": "blue",
+    "date": "2026-10-29"
+   },
+   "today": "2026-10-30",
+   "expect": null
+  },
+  {
+   "name": "modelo y carrocería null pasan como null",
+   "row": {
+    "price": 20000000,
+    "currency": "ARS",
+    "price_usd": 15384.62,
+    "price_partial": false,
+    "description_facts": null,
+    "seller_type": "private",
+    "dealer_inferred": false,
+    "year": null,
+    "body_type": null
+   },
+   "search": {
+    "lat": -34.5875,
+    "lon": -58.42,
+    "label": "Palermo, CABA",
+    "extra_locations": []
+   },
+   "fx_latest": {
+    "rate": 1300,
+    "kind": "blue",
+    "date": "2026-10-29"
+   },
+   "today": "2026-10-30",
+   "expect": {
+    "listing": {
+     "price": 20000000,
+     "currency": "ARS",
+     "fx_rate": 1299.999610000117,
+     "cash": false,
+     "year": null,
+     "body_type": null
+    },
+    "jurisdiction": [
+     "caba"
+    ],
+    "seller": "private",
+    "fx_latest": null
+   }
+  }
+ ],
+ "config_cases": [
+  {
+   "name": "la config aprobada: todos los bloques",
+   "config_patch": [],
+   "expect_null": []
+  },
+  {
+   "name": "rango invertido",
+   "config_patch": [
+    {
+     "path": [
+      "dnrpa",
+      "pct"
+     ],
+     "value": {
+      "min": 2,
+      "max": 1
+     }
+    }
+   ],
+   "expect_null": [
+    "dnrpa"
+   ]
+  },
+  {
+   "name": "porcentaje mayor que 100",
+   "config_patch": [
+    {
+     "path": [
+      "stamp_tax_pct",
+      "caba",
+      "private",
+      "max"
+     ],
+     "value": 101
+    }
+   ],
+   "expect_null": [
+    "stamp_tax_pct.caba"
+   ]
+  },
+  {
+   "name": "mínimo negativo",
+   "config_patch": [
+    {
+     "path": [
+      "mrpa_ars",
+      "min"
+     ],
+     "value": -1
+    }
+   ],
+   "expect_null": [
+    "mrpa_ars"
+   ]
+  },
+  {
+   "name": "k mayor que 1",
+   "config_patch": [
+    {
+     "path": [
+      "vf_from_price_k",
+      "max"
+     ],
+     "value": 1.1
+    }
+   ],
+   "expect_null": [
+    "vf_from_price_k"
+   ]
+  },
+  {
+   "name": "k igual a 0",
+   "config_patch": [
+    {
+     "path": [
+      "vf_from_price_k",
+      "min"
+     ],
+     "value": 0
+    }
+   ],
+   "expect_null": [
+    "vf_from_price_k"
+   ]
+  },
+  {
+   "name": "from no creciente",
+   "config_patch": [
+    {
+     "path": [
+      "patente",
+      "ba",
+      "brackets",
+      1,
+      "from"
+     ],
+     "value": 0
+    }
+   ],
+   "expect_null": [
+    "patente.ba"
+   ]
+  },
+  {
+   "name": "primer from distinto de 0",
+   "config_patch": [
+    {
+     "path": [
+      "patente",
+      "caba",
+      "brackets",
+      0,
+      "from"
+     ],
+     "value": 100
+    }
+   ],
+   "expect_null": [
+    "patente.caba"
+   ]
+  },
+  {
+   "name": "pct negativo en una escala",
+   "config_patch": [
+    {
+     "path": [
+      "patente",
+      "caba",
+      "brackets",
+      1,
+      "pct"
+     ],
+     "value": -1
+    }
+   ],
+   "expect_null": [
+    "patente.caba"
+   ]
+  },
+  {
+   "name": "banda final no null",
+   "config_patch": [
+    {
+     "path": [
+      "patente",
+      "rest",
+      "max_pct_bands",
+      2,
+      "vf_upto"
+     ],
+     "value": 1000000000
+    }
+   ],
+   "expect_null": [
+    "patente.rest"
+   ]
+  },
+  {
+   "name": "vf_upto no creciente",
+   "config_patch": [
+    {
+     "path": [
+      "patente",
+      "rest",
+      "max_pct_bands",
+      1,
+      "vf_upto"
+     ],
+     "value": 100
+    }
+   ],
+   "expect_null": [
+    "patente.rest"
+   ]
+  },
+  {
+   "name": "as_of inválido",
+   "config_patch": [
+    {
+     "path": [
+      "mrpa_ars",
+      "as_of"
+     ],
+     "value": "2026-13-01"
+    }
+   ],
+   "expect_null": [
+    "mrpa_ars"
+   ]
+  },
+  {
+   "name": "as_of con otro formato",
+   "config_patch": [
+    {
+     "path": [
+      "transfer_base",
+      "as_of"
+     ],
+     "value": "01/09/2026"
+    }
+   ],
+   "expect_null": [
+    "transfer_base"
+   ]
+  },
+  {
+   "name": "source vacío",
+   "config_patch": [
+    {
+     "path": [
+      "fx",
+      "source"
+     ],
+     "value": ""
+    }
+   ],
+   "expect_null": [
+    "fx"
+   ]
+  },
+  {
+   "name": "sin source",
+   "config_patch": [
+    {
+     "path": [
+      "gestoria",
+      "source"
+     ],
+     "delete": true
+    }
+   ],
+   "expect_null": [
+    "gestoria"
+   ]
+  },
+  {
+   "name": "número como texto",
+   "config_patch": [
+    {
+     "path": [
+      "buyer_zone",
+      "max_locality_km"
+     ],
+     "value": "80"
+    }
+   ],
+   "expect_null": [
+    "buyer_zone"
+   ]
+  },
+  {
+   "name": "booleano como número",
+   "config_patch": [
+    {
+     "path": [
+      "fixed_ars",
+      "form_08",
+      "min"
+     ],
+     "value": true
+    }
+   ],
+   "expect_null": [
+    "fixed_ars.form_08"
+   ]
+  },
+  {
+   "name": "mes 13 en review",
+   "config_patch": [
+    {
+     "path": [
+      "review",
+      "months"
+     ],
+     "value": [
+      12,
+      13
+     ]
+    }
+   ],
+   "expect_null": [
+    "review"
+   ]
+  },
+  {
+   "name": "review.max_age_days 0",
+   "config_patch": [
+    {
+     "path": [
+      "review",
+      "max_age_days"
+     ],
+     "value": 0
+    }
+   ],
+   "expect_null": [
+    "review"
+   ]
+  },
+  {
+   "name": "fx.max_age_days no entero",
+   "config_patch": [
+    {
+     "path": [
+      "fx",
+      "max_age_days"
+     ],
+     "value": 2.5
+    }
+   ],
+   "expect_null": [
+    "fx"
+   ]
+  },
+  {
+   "name": "buyer_zone.max_locality_km 0",
+   "config_patch": [
+    {
+     "path": [
+      "buyer_zone",
+      "max_locality_km"
+     ],
+     "value": 0
+    }
+   ],
+   "expect_null": [
+    "buyer_zone"
+   ]
+  },
+  {
+   "name": "min_model_year no entero",
+   "config_patch": [
+    {
+     "path": [
+      "patente",
+      "ba",
+      "min_model_year"
+     ],
+     "value": 1990.5
+    }
+   ],
+   "expect_null": [
+    "patente.ba"
+   ]
+  },
+  {
+   "name": "age_years no entero",
+   "config_patch": [
+    {
+     "path": [
+      "patente",
+      "caba",
+      "old_model_min_zero",
+      "age_years"
+     ],
+     "value": "25"
+    }
+   ],
+   "expect_null": [
+    "patente.caba"
+   ]
+  },
+  {
+   "name": "old_model.max_year no entero",
+   "config_patch": [
+    {
+     "path": [
+      "patente",
+      "rest",
+      "old_model",
+      "max_year"
+     ],
+     "value": null
+    }
+   ],
+   "expect_null": [
+    "patente.rest"
+   ]
+  },
+  {
+   "name": "values_year como texto",
+   "config_patch": [
+    {
+     "path": [
+      "patente",
+      "values_year"
+     ],
+     "value": "2026"
+    }
+   ],
+   "expect_null": [
+    "patente.values_year"
+   ]
+  },
+  {
+   "name": "informe de dominio dentro del total",
+   "config_patch": [
+    {
+     "path": [
+      "domain_report",
+      "in_total"
+     ],
+     "value": true
+    }
+   ],
+   "expect_null": [
+    "domain_report"
+   ]
+  },
+  {
+   "name": "gestoría con valor oficial",
+   "config_patch": [
+    {
+     "path": [
+      "gestoria",
+      "official_value"
+     ],
+     "value": 5000
+    }
+   ],
+   "expect_null": [
+    "gestoria"
+   ]
+  },
+  {
+   "name": "transfer_base sin value",
+   "config_patch": [
+    {
+     "path": [
+      "transfer_base",
+      "value"
+     ],
+     "value": ""
+    }
+   ],
+   "expect_null": [
+    "transfer_base"
+   ]
+  },
+  {
+   "name": "dnrpa.min_mrpa negativo",
+   "config_patch": [
+    {
+     "path": [
+      "dnrpa",
+      "min_mrpa"
+     ],
+     "value": -32
+    }
+   ],
+   "expect_null": [
+    "dnrpa"
+   ]
+  },
+  {
+   "name": "subte_factor invertido",
+   "config_patch": [
+    {
+     "path": [
+      "patente",
+      "caba",
+      "subte_factor"
+     ],
+     "value": {
+      "min": 1.1,
+      "max": 1.0
+     }
+    }
+   ],
+   "expect_null": [
+    "patente.caba"
+   ]
+  },
+  {
+   "name": "bloque que no es objeto",
+   "config_patch": [
+    {
+     "path": [
+      "stamp_tax_pct",
+      "rest"
+     ],
+     "value": [
+      1,
+      3
+     ]
+    }
+   ],
+   "expect_null": [
+    "stamp_tax_pct.rest"
+   ]
+  },
+  {
+   "name": "sin as_of en la raíz: toda la config",
+   "config_patch": [
+    {
+     "path": [
+      "as_of"
+     ],
+     "delete": true
+    }
+   ],
+   "expect_null": null
+  },
+  {
+   "name": "as_of de la raíz inválido: toda la config",
+   "config_patch": [
+    {
+     "path": [
+      "as_of"
+     ],
+     "value": "30/10/2026"
+    }
+   ],
+   "expect_null": null
+  }
+ ]
+}

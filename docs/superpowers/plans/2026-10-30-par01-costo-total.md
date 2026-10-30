@@ -62,8 +62,8 @@ Files: `supabase/tests/par01_cost_estimator_test.sql`, `supabase/migrations/2026
 
 Files: `worker/tests/fixtures/cost_estimator/golden.json`.
 
-- [ ] Formato: `{"config": <JSON del diseño>, "cases": [{name, input: {listing, jurisdiction, seller, fx_latest, config_patch?}, expect: {total_ars, total_usd, terms, extras, missing, line}}], "jurisdiction_cases": [{zones, expect}], "input_cases": [{row, zones, fx_latest, expect: {listing, jurisdiction, seller} | null}]}`. Los valores esperados se calculan a mano en el JSON, no con el código. `line` es el string exacto del encabezado, con el sufijo de faltantes.
-- [ ] Casos (precio ARS 20.000.000, carrocería `sedan`, `R` = 1.300, salvo que se diga otra cosa):
+- [x] Formato: `{"config": <JSON del diseño>, "cases": [{name, input: {listing, jurisdiction, seller, fx_latest, config_patch?}, expect: {total_ars, total_usd, terms, extras, missing, line}}], "jurisdiction_cases": [{zones, expect}], "input_cases": [{row, zones, fx_latest, expect: {listing, jurisdiction, seller} | null}]}`. Los valores esperados se calculan a mano en el JSON, no con el código. `line` es el string exacto del encabezado, con el sufijo de faltantes.
+- [x] Casos (precio ARS 20.000.000, carrocería `sedan`, `R` = 1.300, salvo que se diga otra cosa):
   1. CABA, particular, 2017 → crudo 21.188.950 – 21.517.532,5; línea «USD 16.290 – 16.560 (ARS 21.188.000 – 21.518.000)».
   2. Buenos Aires → 20.948.000 – 21.158.840.
   3. Resto → 20.527.000 – 21.278.840.
@@ -93,7 +93,7 @@ Files: `worker/tests/fixtures/cost_estimator/golden.json`.
   27. Enero: `config_patch` sin cambios y la misma fila del caso 11 → el mismo resultado. Con `values_year` 2027 en el patch, el modelo 2002 pasa a mínimo 0. Así se prueba que el corte sale de `values_year` y no del reloj.
   28. Varias jurisdicciones `{caba, rest}` → sellos 1–3 % (unión de CABA y resto) y patente con el mínimo de resto y el máximo de CABA.
   29. `patente.values_year` ausente → falta `patente`.
-- [ ] Casos de jurisdicción (`jurisdiction_cases`, con `zones` = `[{lat, lon, label}]`):
+- [x] Casos de jurisdicción (`jurisdiction_cases`, con `zones` = `[{lat, lon, label}]`):
   - «AMBA» con el centro de CABA → `{caba, ba}`;
   - «CABA» y «Ciudad de Buenos Aires, CABA» → `{caba}`;
   - Zona Norte → `{ba}` (San Isidro); La Plata → `{ba}`; Rosario → `{rest}`;
@@ -102,7 +102,7 @@ Files: `worker/tests/fixtures/cost_estimator/golden.json`.
   - Montevideo (-34.9011, -56.1645, a 106,8 km) → null con el corte de 80; Punta del Este → null;
   - Palermo + Córdoba → `{caba, rest}`; Palermo + Montevideo → null (una zona sin dato anula todo);
   - rótulo «Rosario (zona aproximada)» → `{rest}`, y el texto lo cita tal cual.
-- [ ] Casos de armado (`input_cases`), los mismos para `build_input` (Python) y `buildCostInput` (TS):
+- [x] Casos de armado (`input_cases`), los mismos para `build_input` (Python) y `buildCostInput` (TS):
   - `price_partial` true → null;
   - `description_facts.price_check.published_partial` true y `price_partial` false → null;
   - `published_kind` `installment` → null; `cash` → entrada con `cash` true;
@@ -114,32 +114,32 @@ Files: `worker/tests/fixtures/cost_estimator/golden.json`.
 
 Files: `worker/intelligence/cost_estimator.py`, `worker/intelligence/copy.py`, `worker/tests/test_cost_estimator.py`.
 
-- [ ] Tests que fallen:
+- [x] Tests que fallen:
   - todos los `cases`, `jurisdiction_cases` e `input_cases` del JSON dorado;
   - `parse_config`: cada regla del validador deja su bloque en `None` (rango invertido, k > 1, `from` no creciente, banda final no null, `as_of` inválido, `source` vacío), sin tirar excepción y sin defaults numéricos;
   - `review_status(cfg, today)`: `stale` a los 121 días, nada a los 120, `missing` sin `review`. `due` con `as_of` 2026-10-30 el 2026-12-20; nada con `as_of` 2026-12-05 el 2026-12-20 ni el 2027-01-15; `due` con `as_of` 2026-11-30 el 2027-01-02;
   - formato: miles con punto, redondeo hacia afuera con el margen (`floor_to(321999.99999999994, 100)` = 322000 y `ceil_to(506000.00000000006, 100)` = 506000);
   - `missing_suffix` para cada combinación de códigos.
-- [ ] Implementar:
+- [x] Implementar:
   - `parse_config`, `buyer_jurisdiction(zones, cfg)` (con `zone.nearest_locality` más la distancia; sin `derive_zone`), `build_input(row, zones, fx_latest, cfg)` (con `pipeline.ingest.published_partial` e `effective_seller`), `estimate(...)`, `missing_suffix(codes)`, `format_line(estimate)` (códigos más números; el texto sale de `copy.TOTAL_COST`) y `review_status`;
   - redondeo solo con `floor_to`/`ceil_to` (margen 0,01); `base * pct / 100`.
-- [ ] Copy `TOTAL_COST` en `intelligence/copy.py`. Lint por funcionalidad (formato de `test_notifications_price_track.py:66-75`) con «precio final», «costo real», «costo exacto» y «total real», además de `FORBIDDEN_TERMS`.
+- [x] Copy `TOTAL_COST` en `intelligence/copy.py`. Lint por funcionalidad (formato de `test_notifications_price_track.py:66-75`) con «precio final», «costo real», «costo exacto» y «total real», además de `FORBIDDEN_TERMS`.
 
 ## Task 4: calculadora web (tests primero)
 
 Files: `web/lib/cost-estimator.ts`, `web/lib/cost-estimator.test.ts`, `web/lib/buyer-jurisdiction.ts`, `web/lib/buyer-jurisdiction.test.ts`, `web/lib/format.ts`, `web/lib/format.test.ts`, `web/lib/copy.ts`, `web/lib/copy.test.ts`.
 
-- [ ] Tests que fallen:
+- [x] Tests que fallen:
   - el mismo JSON dorado (las tres listas), leído con `readFileSync(path.resolve(__dirname, "../../worker/tests/fixtures/cost_estimator/golden.json"))`;
   - los mismos casos de parser, `costEstimatorReview` y formato que en Python;
   - el lint de `copy.test.ts` escanea también `lib/cost-estimator.ts`;
   - un test explícito de los valores de `COST_ESTIMATE` (como el de `TRACKING`).
-- [ ] Implementar:
+- [x] Implementar:
   - `CostEstimatorInput` (zod estricto, que reusa el validador), `parseCostEstimator` (tolerante), `buildCostInput` (con `publishedIsPartial`, `isCashPrice` y `effectiveSeller`), `estimateCost`, `missingSuffix`, `costEstimatorReview`;
   - `formatArsRange`/`formatUsdRange` en `format.ts`, con miles a mano, sin `Intl` y con `floorTo`/`ceilTo` (margen 0,01);
   - `buyerJurisdiction(zones, cfg)` en `buyer-jurisdiction.ts` con `import "server-only"`: el mismo algoritmo de `nearest_locality` (preselección por distancia plana con el mismo número de candidatos y haversine), que devuelve también la distancia, con caché por `(lat, lon)`, el corte `buyer_zone.max_locality_km` y la unión de zonas;
   - `COST_ESTIMATE` en `copy.ts`.
-- [ ] vitest, typecheck y eslint de los archivos tocados.
+- [x] vitest, typecheck y eslint de los archivos tocados.
 
 ## Task 5: config y admin web
 
