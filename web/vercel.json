@@ -1,4 +1,5 @@
 {
   "crons": [{ "path": "/api/mercadopago/reconcile", "schedule": "0 9 * * *" }],
-  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- ."
+  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- .",
+  "regions": ["gru1"]
 }
