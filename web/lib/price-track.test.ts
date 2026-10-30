@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import { FORBIDDEN_TERMS, PRICE_TRACK } from "./copy";
 import { dayMonth } from "./format";
-import { fetchPriceTracks, hasNetDrop, type PriceTrack, summaryLine, trackingNote, trackLine } from "./price-track";
+import { publishedIsPartial } from "./price";
+import { cardTrackLine, fetchPriceTracks, hasNetDrop, type PriceTrack, summaryLine, trackingNote, trackLine } from "./price-track";
 
 function track(over: Partial<PriceTrack> = {}): PriceTrack {
   return {
@@ -52,6 +53,37 @@ describe("trackLine (PAR-03)", () => {
       expect(trackLine(t)).toBeNull();
     }
     expect(hasNetDrop(track({ drops: 2, rises: 1, cum_pct: -3 }))).toBe(false);
+  });
+});
+
+describe("cardTrackLine (PAR-03, opción B)", () => {
+  it("keeps the line when the card shows the published price", () => {
+    const t = track({ first_price: 14_000, last_price: 13_500, cum_pct: 3.57, cum_usd: 500 });
+    const line = "Bajó 1 vez desde que la vimos: -USD 500 (-3,6%).";
+    for (const price_source of ["published", null, undefined]) expect(cardTrackLine(t, { price_source })).toBe(line);
+  });
+
+  it("says nothing when the price shown was read from the description", () => {
+    // A fixed cash price next to published drops, or the total behind a lower
+    // down payment (in pesos next to a price in dollars): neither is what changed.
+    expect(cardTrackLine(track({ drops: 2 }), { price_source: "description" })).toBeNull();
+    expect(cardTrackLine(ars({ drops: 2 }), { price_source: "description" })).toBeNull();
+  });
+});
+
+describe("publishedIsPartial (PAR-03, opción B)", () => {
+  const facts = (published_kind: string | null) => ({ price_check: { published_kind, effective_kind: "cash", source: "description" } });
+
+  it("is a down payment or an installment as the description calls it, or a partial price", () => {
+    expect(publishedIsPartial({ description_facts: facts("down_payment") })).toBe(true);
+    expect(publishedIsPartial({ description_facts: facts("installment"), price_partial: false })).toBe(true);
+    expect(publishedIsPartial({ description_facts: null, price_partial: true })).toBe(true);
+  });
+
+  it("is a price otherwise: a list or cash price, or nothing said", () => {
+    for (const kind of ["list", "cash", "generic", null]) expect(publishedIsPartial({ description_facts: facts(kind), price_partial: false })).toBe(false);
+    expect(publishedIsPartial({ description_facts: {} })).toBe(false);
+    expect(publishedIsPartial({ description_facts: null, price_partial: null })).toBe(false);
   });
 });
 

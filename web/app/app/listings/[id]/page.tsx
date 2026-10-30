@@ -33,7 +33,7 @@ import {
 } from "@/lib/copy";
 import { ageLine, daysSince, imageUrls, km, money, number, pct, vehicle } from "@/lib/format";
 import { fetchPriceTracks, summaryLine, trackingNote } from "@/lib/price-track";
-import { financingOffered, financingTerms, isCashPrice, publishedKind } from "@/lib/price";
+import { financingOffered, financingTerms, isCashPrice, publishedIsPartial, publishedKind } from "@/lib/price";
 import { emphasize, RISK_HINT, RISK_TITLE } from "@/lib/risk-checklist";
 import { createClient } from "@/lib/supabase/server";
 import type { Component, Listing, PriceRef, Reason, RedFlag } from "@/lib/types";
@@ -101,6 +101,8 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
   const track = tracks.get(listingId) ?? null;
   const summary = summaryLine(track);
   const trackNote = trackingNote(listing, track?.first_at ?? snapshots?.[0]?.observed_at);
+  // A down payment or an installment that moved is no price history (PAR-03).
+  const showHistory = history.length >= 2 && !publishedIsPartial(listing);
   const similar = gone ? [] : await similarListings(supabase, listing, priceRef);
   const back = best ? `/app/searches/${best.search_profile_id}` : "/app";
 
@@ -130,7 +132,7 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
             {ageLine(listing) ? <span>{ageLine(listing)}</span> : null}
             {listing.probable_repost_of ? <span>Re-publicada</span> : null}
           </p>
-          {!listing.published_at && history.length < 2 ? (
+          {!listing.published_at && !showHistory ? (
             <p data-testid="detected-note" className="mt-1 text-[13px] text-muted-foreground">
               {PRICE_TRACK.detected}
             </p>
@@ -292,7 +294,7 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
             </Section>
           ) : null}
 
-          {history.length >= 2 ? (
+          {showHistory ? (
             <Section title="Histórico de precios" hint="Cada cambio de precio publicado que detectamos.">
               <div className="mt-3 space-y-2">
                 {summary ? (

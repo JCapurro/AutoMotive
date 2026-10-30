@@ -40,6 +40,16 @@ export function publishedKind(raw: unknown): string | null {
   return kind ? (PUBLISHED_KIND[kind] ?? null) : null;
 }
 
+/**
+ * PAR-03: the published price is a down payment or an installment, not a
+ * price (the description calls it so, or it stands as partial): its drops
+ * are no price drops. As worker/pipeline/ingest.published_partial.
+ */
+export function publishedIsPartial(listing: { description_facts: unknown; price_partial?: boolean | null }): boolean {
+  const kind = facts(listing.description_facts).price_check?.published_kind;
+  return kind === "down_payment" || kind === "installment" || Boolean(listing.price_partial);
+}
+
 export function financingOffered(raw: unknown): boolean {
   return Boolean(facts(raw).financing?.offered);
 }
