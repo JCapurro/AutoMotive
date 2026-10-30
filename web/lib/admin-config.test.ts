@@ -32,6 +32,22 @@ describe("guided config validators", () => {
     // Restoring an old price with the current version is validated like any other edit.
     expect(validateConfigChange("pro_offer", DEFAULT_PRO_OFFER, changed)).toMatch(/versión/);
   });
+  it("keeps seller_classification within the worker's bounds (F-02)", () => {
+    const current = { enabled: true, min_listings: 6, window_days: 30 };
+    const message = "enabled debe ser true/false, min_listings un entero entre 2 y 100 y window_days entre 1 y 180.";
+    expect(validateConfigChange("seller_classification", current, current)).toBeNull();
+    expect(validateConfigChange("seller_classification", { enabled: false, min_listings: 2, window_days: 180 }, current)).toBeNull();
+    expect(validateConfigChange("seller_classification", { enabled: true, min_listings: 100, window_days: 1 }, current)).toBeNull();
+    for (const bad of [
+      { enabled: "true" }, { enabled: 1 }, { enabled: null },
+      { min_listings: 1 }, { min_listings: 101 }, { min_listings: 6.5 }, { min_listings: "6" },
+      { window_days: 0 }, { window_days: 181 }, { window_days: 7.5 }, { window_days: "30" },
+    ]) {
+      expect(validateConfigChange("seller_classification", { ...current, ...bad }, current)).toBe(message);
+    }
+    expect(validateConfigChange("seller_classification", { enabled: true, min_listings: 6 }, current)).toBe(message);
+    expect(validateConfigChange("seller_classification", { ...current, min_listing: 5 }, current)).toBe(message);
+  });
   it("keeps price_track.min_drop_pct a percentage (PAR-03)", () => {
     const current = { min_drop_pct: 1 };
     expect(validateConfigChange("price_track", { min_drop_pct: 0.5 }, current)).toBeNull();

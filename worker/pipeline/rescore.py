@@ -7,6 +7,11 @@
   (`nightly_loop`, every app_config.rescore.every_hours from rescore.hour ART).
 * When SCORING_VERSION changes, every match (`rescore_outdated`, at startup).
 
+Before the startup pass and the one at rescore.hour, the seller
+classification (F-02, pipeline/seller_classification.py) refreshes
+listings.seller_listing_count, so a rescore sees today's counts. A failure
+there is logged and the rescore runs anyway.
+
 The pass at rescore.hour also runs the retention (pipeline/retention.py).
 
 A match whose listing no longer passes the search (a detail page placed it
@@ -29,6 +34,7 @@ from db.repos.runs import log_error
 from intelligence.config import DEFAULT_RESCORE, SCORING_VERSION
 from pipeline.retention import purge_raw_pages, purge_stale_listings
 from pipeline.scoring import Scorer
+from pipeline.seller_classification import classify_sellers
 
 
 log = logging.getLogger("rescore")
@@ -116,7 +122,11 @@ def next_slot(hour: str, every_hours: int, now: datetime) -> tuple[float, bool]:
 async def nightly_loop(stop: asyncio.Event) -> None:
     """Re-score matches every `every_hours` (anchored at `hour`); at `hour`, also
     purge stale listings. Once at startup, whatever an older SCORING_VERSION
-    scored."""
+    scored. The seller classification runs before both (F-02)."""
+    try:
+        await classify_sellers("startup")
+    except Exception:
+        await log_error("seller_classification", "startup", traceback.format_exc())
     try:
         await rescore_outdated()
     except Exception:
@@ -129,6 +139,11 @@ async def nightly_loop(stop: asyncio.Event) -> None:
             return
         except asyncio.TimeoutError:
             pass
+        if is_anchor:
+            try:
+                await classify_sellers("nightly")
+            except Exception:
+                await log_error("seller_classification", "nightly", traceback.format_exc())
         try:
             await rescore_recent()
         except Exception:
