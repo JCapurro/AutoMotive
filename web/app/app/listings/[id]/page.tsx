@@ -10,6 +10,7 @@ import { ListingTracking } from "@/components/app/listing-tracking";
 import { DescriptionPriceContext, SellerDescription } from "@/components/app/description-insights";
 import { type PricePoint, PriceChange, PriceHistory } from "@/components/app/price-history";
 import { PriceHistoryDetails } from "@/components/app/price-history-details";
+import { RiskChecklist } from "@/components/app/risk-checklist";
 import { SellerQuestions } from "@/components/app/seller-questions";
 import { ViewTracker } from "@/components/app/view-tracker";
 import { requireUser } from "@/lib/auth";
@@ -33,6 +34,7 @@ import {
 import { ageLine, daysSince, imageUrls, km, money, number, pct, vehicle } from "@/lib/format";
 import { fetchPriceTracks, summaryLine, trackingNote } from "@/lib/price-track";
 import { financingOffered, financingTerms, isCashPrice, publishedKind } from "@/lib/price";
+import { emphasize, RISK_HINT, RISK_TITLE } from "@/lib/risk-checklist";
 import { createClient } from "@/lib/supabase/server";
 import type { Component, Listing, PriceRef, Reason, RedFlag } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -283,6 +285,12 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
               <SellerQuestions listingId={listingId} text={best?.seller_questions ?? BASE_SELLER_QUESTIONS} />
             </div>
           </Section>
+
+          {!gone && cfg.risk.checklistEnabled ? (
+            <Section title={RISK_TITLE} hint={RISK_HINT}>
+              <RiskChecklist listingId={listingId} title={name} config={cfg.risk} emphasized={emphasize(flags)} />
+            </Section>
+          ) : null}
 
           {history.length >= 2 ? (
             <Section title="Histórico de precios" hint="Cada cambio de precio publicado que detectamos.">

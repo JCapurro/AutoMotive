@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
+from intelligence.copy import RED_FLAG
 from notifications.channels.base import Notification
 from notifications.links import Links
 
@@ -53,6 +54,11 @@ OPPORTUNITY_ARS = notification("opportunity", {
     "listing": {**FIESTA, "price": 12500000.0, "currency": "ARS", "published_at": None,
                 "first_seen_at": (NOW - timedelta(days=17)).isoformat()},
 })
+# PAR-02: much_cheaper in the [35, 50) band, first (warning), then an informative flag.
+OPPORTUNITY_MUCH_CHEAPER = notification("opportunity", {
+    **OPPORTUNITY.payload,
+    "red_flags": [RED_FLAG["much_cheaper_verify"].format(pct="40"), RED_FLAG["no_owners"]],
+})
 DIGEST = notification("digest", {"date": "2026-09-27", "degraded": 1, "items": [
     {"section": "price_drops", "listing_id": 501, "kind": "price_drop", "listing": {**FIESTA, "price": 10800.0},
      "price_drop": {"old_price": 11500.0, "new_price": 10800.0, "currency": "USD", "drop_pct": 6.09}},
@@ -73,4 +79,4 @@ DIGEST = notification("digest", {"date": "2026-09-27", "degraded": 1, "items": [
 
 CASES = {"opportunity": OPPORTUNITY, "new_match": NEW_MATCH, "price_drop": PRICE_DROP, "digest": DIGEST,
          "opportunity_1_drop": OPPORTUNITY_1_DROP, "opportunity_3_drops": OPPORTUNITY_3_DROPS,
-         "opportunity_ars": OPPORTUNITY_ARS}
+         "opportunity_ars": OPPORTUNITY_ARS, "opportunity_much_cheaper_verify": OPPORTUNITY_MUCH_CHEAPER}

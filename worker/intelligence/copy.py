@@ -121,6 +121,8 @@ RED_FLAG = {
     "no_service": "No informa services: conviene verificar el historial.",
     "no_timing_belt": "No informa la distribución: conviene verificar cuándo se cambió.",
     "much_cheaper": "Publicación {pct}% más barata que publicaciones comparables: conviene verificar por qué.",
+    "much_cheaper_verify": ("Publicación {pct}% más barata que publicaciones comparables: "
+                            "un precio tan por debajo es motivo para verificar todo antes de señar."),
     "much_cheaper_anticipo": ("Publicación {pct}% más barata que publicaciones comparables: "
                               "conviene verificar que el precio publicado no sea un anticipo."),
     "short_description": "Descripción muy corta: conviene pedir más información.",

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { AdminLifecycleInput, AdminOfferInput, AdminPlanLimitsInput, configDifferences, LIFECYCLE_KINDS, MAX_OFFER_ARS, sameConfig, SourceUpdateInput, validateConfigChange } from "@/lib/admin-config";
+import { AdminLifecycleInput, AdminOfferInput, AdminPlanLimitsInput, configDifferences, configFieldLabel, LIFECYCLE_KINDS, MAX_OFFER_ARS, sameConfig, SourceUpdateInput, validateConfigChange } from "@/lib/admin-config";
 import { DEFAULT_PRO_OFFER } from "@/lib/pro";
 
 describe("guided config validators", () => {
@@ -40,6 +40,36 @@ describe("guided config validators", () => {
       expect(validateConfigChange("price_track", { min_drop_pct }, current)).toMatch(/min_drop_pct/);
     }
     expect(validateConfigChange("price_track", {}, current)).toMatch(/min_drop_pct/);
+  });
+  it("accepts only safe official links in risk (PAR-02)", () => {
+    const current = { checklist_enabled: true, links: { dnrpa: null, patentes: [], infracciones: [], vtv: null, form_08: null } };
+    expect(validateConfigChange("risk", current, current)).toBeNull();
+    const withLink = (url: string, label = "DNRPA") => ({ ...current, links: { ...current.links, dnrpa: { label, url } } });
+    expect(validateConfigChange("risk", withLink("https://dnrpa.example.test/informe"), current)).toBeNull();
+    for (const url of ["http://dnrpa.example.test/", "javascript:alert(1)", "https://u:p@dnrpa.example.test/", `https://dnrpa.example.test/${"x".repeat(300)}`]) {
+      expect(validateConfigChange("risk", withLink(url), current)).toMatch(/https/);
+    }
+    expect(validateConfigChange("risk", withLink("https://dnrpa.example.test/", " "), current)).toMatch(/etiqueta/);
+    expect(validateConfigChange("risk", { ...current, checklist_enabled: "no" }, current)).toMatch(/checklist_enabled/);
+    expect(validateConfigChange("risk", [], current)).toMatch(/object/);
+  });
+  it("names the risk fields in the change preview (PAR-02)", () => {
+    expect(configFieldLabel("risk", "checklist_enabled")).toBe("Checklist «Antes de señar» visible");
+    expect(configFieldLabel("risk", "links.dnrpa.url")).toBe("Link oficial: informe de dominio (DNRPA) (url)");
+    expect(configFieldLabel("risk", "links.patentes")).toBe("Link oficial: patentes");
+    expect(configFieldLabel("risk", "other")).toBe("other");
+  });
+  it("keeps the much_cheaper bands reachable in red_flags (PAR-02)", () => {
+    const current = { much_cheaper_pct: 25, anticipo_pct: 50, min_km_per_year: 5000, min_description_chars: 150 };
+    expect(validateConfigChange("red_flags", current, current)).toBeNull();
+    expect(validateConfigChange("red_flags", { ...current, much_cheaper_verify_pct: 35 }, current)).toBeNull();
+    expect(validateConfigChange("red_flags", { ...current, much_cheaper_verify_pct: 50 }, current)).toBeNull();
+    for (const much_cheaper_verify_pct of [20, 25, 51, "35"]) {
+      expect(validateConfigChange("red_flags", { ...current, much_cheaper_verify_pct }, current)).toMatch(/much_cheaper_verify_pct/);
+    }
+    // Missing keys fall back to the worker's defaults (25 / 35 / 50).
+    expect(validateConfigChange("red_flags", { anticipo_pct: 30 }, current)).toMatch(/much_cheaper_verify_pct/);
+    expect(validateConfigChange("red_flags", { much_cheaper_pct: 40 }, current)).toMatch(/much_cheaper_verify_pct/);
   });
   it("fits the numeric(12,2) payment ledger", () => {
     expect(AdminOfferInput.safeParse({ ...DEFAULT_PRO_OFFER, pass_30: { ...DEFAULT_PRO_OFFER.pass_30, amount: MAX_OFFER_ARS } }).success).toBe(true);
