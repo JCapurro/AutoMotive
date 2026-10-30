@@ -17,6 +17,10 @@ from normalization.seller import STOPLIST, seller_key
     ("JUAN  PÉREZ", "juan perez"),
     ("Autos S.A.", "Autos SA"),
     ("Autos S.A.", "autos s.a"),
+    ("Autos S. A.", "Autos S.A."),
+    ("Autos S. A.", "Autos SA"),
+    ("Motors S. R. L.", "Motors S.R.L."),
+    ("Motors S R L", "Motors SRL"),
     ("D'Angelo Autos", "Dangelo autos"),
     ("Peña-Motors", "pena motors"),
     ("🚗 Juan Pérez 🚗", "juan perez"),
@@ -28,6 +32,8 @@ def test_same_seller_same_key(a, b):
 
 def test_key_keeps_only_letters_digits_and_spaces():
     assert seller_key("Autos S.A.") == "autos sa"
+    assert seller_key("Autos S. A.") == "autos sa"
+    assert seller_key("Motors S. R. L.") == "motors srl"
     assert seller_key("🚗 Juan Pérez 🚗") == "juan perez"
     assert seller_key("Usados & Cía. (Rosario)") == "usados cia rosario"
 

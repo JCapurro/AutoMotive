@@ -5,6 +5,9 @@ ways groups together within a source.
 * normalize_text (no accents, lower case, spaces collapsed); then `.` and `'`
   are dropped and every other symbol, punctuation mark or emoji becomes a
   space, leaving `[a-z0-9 ]`: «Autos S.A.» and «Autos SA» → `autos sa`.
+  Runs of single letters are then joined, so spaced initials group with
+  the written-together ones: «Autos S. A.» and «Motors S. R. L.» →
+  `autos sa`, `motors srl`.
 * Only digits (a phone): Argentine formats are brought to the 10-digit
   national number (no +54, no 9 after it, no leading 0 of the area code, no
   15 after the area code), so «0341 15 555-1234» and «+54 9 341 555-1234»
@@ -31,6 +34,7 @@ _DROPPED = re.compile(r"[.'’`´]")
 _OTHER = re.compile(r"[^a-z0-9 ]+")
 _SPACES = re.compile(r"\s+")
 _DIGITS_ONLY = re.compile(r"[0-9 ]+")
+_INITIALS = re.compile(r"\b([a-z]) (?=[a-z]\b)")   # «s a» → «sa»
 
 _NATIONAL = 10       # area code + number, without the 0 and the 15
 _MIN_PHONE = 8
@@ -60,6 +64,7 @@ def seller_key(name: str | None) -> str | None:
     group by (missing, generic or too short)."""
     text = _DROPPED.sub("", normalize_text(name))
     text = _SPACES.sub(" ", _OTHER.sub(" ", text)).strip()
+    text = _INITIALS.sub(r"\1", text)
     if not text:
         return None
     if _DIGITS_ONLY.fullmatch(text):
