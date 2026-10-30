@@ -33,6 +33,14 @@ SELECT sp.id, sp.name, sp.filters, sp.preferences, sp.origin_lat, sp.origin_lon,
 
 # A search without a model, only by body type (docs/CARROCERIA.md). One
 # without a body type either matches nothing (intelligence/matching.py).
+# The searches whose matches and targets count, computed once per query
+# (`live`): search_access_active() (plan limits, access, profile count) per
+# match or per target took the worker's queues and crawl_targets reads to tens
+# of seconds on production, until Postgres stopped taking connections
+# (2026-10-30).
+LIVE_SEARCHES = ("WITH live AS MATERIALIZED ("
+                 "  SELECT id FROM search_profiles WHERE public.search_access_active(id)) ")
+
 _MODEL_LESS = ("(public.search_is_model_less({0}.filters) "
                " AND public.search_body_types({0}.filters) IS NOT NULL)")
 

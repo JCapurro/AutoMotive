@@ -12,6 +12,7 @@ from typing import Any, Iterable
 from psycopg.types.json import Jsonb
 
 from db.pool import connection
+from db.repos.profiles import LIVE_SEARCHES
 
 # 2.5: a model only searches with ended access want is crawled once a day.
 COUNT_ONLY_INTERVAL_SECONDS = 86_400
@@ -164,13 +165,13 @@ async def publication_dates(target: dict[str, Any]) -> dict[str, int]:
 # A due target (t, joined to its source s): active, of an enabled source,
 # next_run_at come (or never ran), for a search with access (a count-only
 # target was derived this tick from the searches 2.5 counts), and not held by
-# a worker (claim_next).
+# a worker (claim_next). The query starts with LIVE_SEARCHES.
 _DUE = (
     " t.active AND s.enabled AND (t.next_run_at IS NULL OR t.next_run_at <= now()) "
     " AND (t.claimed_until IS NULL OR t.claimed_until < now()) "
     " AND (t.query->>'count_only' = 'true' "
-    "  OR EXISTS (SELECT 1 FROM search_profiles sp WHERE public.search_access_active(sp.id) "
-    f"   AND {PROFILE_WANTS_TARGET})) ")
+    "  OR EXISTS (SELECT 1 FROM search_profiles sp JOIN live ON live.id = sp.id "
+    f"   WHERE {PROFILE_WANTS_TARGET})) ")
 _TARGET_COLUMNS = ("t.id, t.source, t.make, t.model, t.body_type, t.query, t.first_run_done, "
                    "t.prefilter_rejected, t.last_run_at, t.last_full_read_at, "
                    f"{INTERVAL_SECONDS} AS crawl_interval_seconds")
@@ -180,7 +181,7 @@ async def due_targets() -> list[dict[str, Any]]:
     """The due targets (_DUE). crawl_interval_seconds is the target's cadence."""
     async with connection() as cx:
         return await (await cx.execute(
-            f"SELECT {_TARGET_COLUMNS} FROM crawl_targets t JOIN sources s ON s.id = t.source "
+            LIVE_SEARCHES + f"SELECT {_TARGET_COLUMNS} FROM crawl_targets t JOIN sources s ON s.id = t.source "
             f" WHERE {_DUE} ORDER BY s.priority, t.next_run_at NULLS FIRST, t.id")).fetchall()
 
 
@@ -201,7 +202,7 @@ async def claim_next(source: str, worker: str, lease_seconds: int) -> dict[str, 
     async with connection() as cx:
         await cx.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (f"crawl_source:{source}",))
         return await (await cx.execute(
-            "WITH next AS (SELECT t.id FROM crawl_targets t JOIN sources s ON s.id = t.source "
+            LIVE_SEARCHES + ", next AS (SELECT t.id FROM crawl_targets t JOIN sources s ON s.id = t.source "
             f"  WHERE t.source = %s AND {_DUE} "
             "    AND NOT EXISTS (SELECT 1 FROM crawl_targets c WHERE c.source = t.source "
             "                    AND c.claimed_until > now()) "

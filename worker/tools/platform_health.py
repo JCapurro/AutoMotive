@@ -25,6 +25,7 @@ from collectors.facebook import DATE_FETCH_LIMIT as FB_DATE_FETCH_LIMIT
 from collectors.mercadolibre import DATE_FETCH_LIMIT
 import config
 import db
+from db.repos.profiles import LIVE_SEARCHES
 from db.repos.targets import INTERVAL_SECONDS, PROFILE_WANTS_TARGET
 from normalization.body_type import LABELS as BODY_TYPE_LABELS
 from notifications.ops import last_error_line
@@ -50,13 +51,13 @@ UNREADABLE = ("Resend devolvió el uso en un formato desconocido: el aviso de cu
 
 # The targets the worker runs (db/repos/targets.py: the same profile predicate
 # and cadence as due_targets).
-COLLECTORS_SQL = f"""
-with eligible as (
+COLLECTORS_SQL = LIVE_SEARCHES + f""",
+eligible as (
   select t.*, s.name, {INTERVAL_SECONDS} as crawl_interval_seconds
   from crawl_targets t join sources s on s.id=t.source
   where t.active and s.enabled and exists (
-    select 1 from search_profiles sp where public.search_access_active(sp.id)
-      and {PROFILE_WANTS_TARGET}
+    select 1 from search_profiles sp join live on live.id = sp.id
+     where {PROFILE_WANTS_TARGET}
   )
 )
 select t.id, t.source, t.name, t.make, t.model, t.body_type, t.query, t.first_run_done, t.last_run_at, t.created_at, t.updated_at, t.next_run_at,
