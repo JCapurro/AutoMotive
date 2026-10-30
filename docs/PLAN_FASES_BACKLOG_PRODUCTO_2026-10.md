@@ -143,3 +143,10 @@ Producción (leído el 30/10): `max(version)` = `20261118130000`. Faltan, en est
 7. `20261122120100_par02_decision_metrics_checklist.sql`
 
 Después: worker en el VPS (`wait_idle` antes de reiniciar) y, por último, cargar `risk.links` desde `/admin/config`. La web de `main` ya tolera la base vieja: sin las migraciones, X-01 cae a «Todos», PAR-03 no muestra bajas y el checklist se ve sin links.
+
+## 8. Decisiones de Juan para la Fase 2 (30/10/2026)
+
+- **F-02:** un vendedor con **6 o más avisos activos en 30 días** (misma fuente y mismo vendedor) se marca `dealer_inferred`, con el texto «posible agencia» y el motivo visible (cantidad de avisos). Supuesto, salvo que Juan diga otra cosa: cuenta como agencia en filtros y en el aviso de gastos.
+- **PRO-01:** el filtro estricto por tipo de vendedor es **solo Pro**; el plan Particular conserva la preferencia blanda. Mensaje listo para copiar: corto, de vos, cordial y directo (3–4 líneas con las preguntas del aviso); plantilla editable en Ajustes; nunca se envía solo.
+- **PRO-02:** acondicionamiento **5 % con mínimo USD 300**; umbral por margen con mínimo **USD 500**; OK al bump de `SCORING_VERSION` (un rescore, sin reenviar alertas). Todo **solo Pro**.
+- **PAR-01:** solo números reales, basados en documentación oficial, con fecha y fuente. Si un valor no se conoce con certeza, se propone un **rango**, se dice explícitamente y el rango se lleva al cálculo final (el costo total se muestra como rango). El cálculo **reemplaza** el aviso fijo «8–10 %».
