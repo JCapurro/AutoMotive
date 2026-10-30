@@ -49,6 +49,12 @@ export type Database = {
         Update: { id?: never; kind?: string; key?: string; created_at?: string }
         Relationships: []
       }
+      search_diagnoses: {
+        Row: { search_profile_id: number; user_id: string; fingerprint: string; result_count: number; max_results: number; funnel: Json; explanation: string; suggestions: Json; provider: string | null; llm_error: string | null; created_at: string; notified_at: string | null; notified_fingerprint: string | null; dismissed_at: string | null }
+        Insert: never
+        Update: { dismissed_at?: string | null }
+        Relationships: []
+      }
       platform_health_checks: {
         Row: { id: number; checked_at: string; checks: Json; email_pending: boolean; last_email_at: string | null }
         Insert: { id: number; checked_at: string; checks: Json; email_pending?: boolean; last_email_at?: string | null }

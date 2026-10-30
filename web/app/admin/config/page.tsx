@@ -34,6 +34,7 @@ const HINTS: Record<string, string> = {
   risk: "Checklist «Antes de señar» de la ficha (PAR-02). checklist_enabled: con false el bloque desaparece sin deploy. links: los links oficiales (dnrpa, vtv, form_08, y listas patentes e infracciones por jurisdicción), cada uno {\"label\": \"...\", \"url\": \"https://...\"} o null; solo https://, sin usuario ni contraseña, hasta 300 caracteres. Sin links el bloque se muestra sin ellos.",
   seller_classification:
     "Vendedor v2 (F-02). enabled: prende la inferencia «posible agencia». min_listings: avisos del mismo vendedor y fuente (6). window_days: ventana en días (30). Se aplica en la ingesta y en el nocturno.",
+  low_results: "Bot de pocos resultados (docs/POCOS_RESULTADOS.md). enabled, max_results (umbral de resultados, 3), min_age_hours (antigüedad mínima de la búsqueda, 24), recheck_days (rehacer con los mismos filtros, 7), max_per_tick (llamadas al LLM por pasada, 10) y notify (avisar por Telegram/email).",
   email_only_signup: "Búsqueda gratis solo con email (docs/AUTENTICACION.md). enabled (con false, el pop-up de la portada avisa que por ahora no se pueden crear búsquedas nuevas), per_ip_hour y per_day (cuentas nuevas), links_per_user_hour y links_per_ip_hour (links para entrar), lookups_per_ip_hour (búsquedas de cuenta) y alert_sessions_per_user_hour (sesiones por cuenta y hora que pueden iniciar los links firmados de los emails; sin la clave, 10; 0 las apaga).",
 };
 

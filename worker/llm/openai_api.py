@@ -17,7 +17,7 @@ from pydantic import BaseModel, ValidationError
 
 from llm import prompts
 from llm.provider import LLMError, LLMTimeout
-from llm.schemas import ListingFacts, PolishedQuestions, SearchDraft, SearchDrafts, json_schema
+from llm.schemas import ListingFacts, LowResultsExplanation, PolishedQuestions, SearchDraft, SearchDrafts, json_schema
 from normalization.vehicle import CatalogModel
 
 log = logging.getLogger(__name__)
@@ -148,3 +148,7 @@ class OpenAIApiProvider:
         result = await self._structured(prompts.load("polish_questions"),
                                         prompts.polish_questions_user(questions, context), PolishedQuestions)
         return result.text
+
+    async def explain_low_results(self, context: dict) -> LowResultsExplanation:
+        return await self._structured(prompts.load("explain_low_results"),
+                                      prompts.low_results_user(context), LowResultsExplanation)

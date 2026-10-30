@@ -143,6 +143,17 @@ class PolishedQuestions(_Strict):
     text: str = Field(description="El mensaje para el vendedor, listo para copiar.")
 
 
+class LowResultsExplanation(_Strict):
+    """Why a search brings few results (pipeline/low_results.py)."""
+
+    explanation: str = Field(min_length=1, max_length=700,
+                             description="Dos a cuatro oraciones para la persona: por qué hay pocos resultados, "
+                                         "con los números del embudo, y que seguimos atentos y le avisamos.")
+    suggestions: list[str] = Field(default_factory=list, max_length=3,
+                                   description="Hasta tres cambios concretos de filtros que sumarían resultados, "
+                                               "cada uno con cuántos agregaría según el embudo; vacío si no hay.")
+
+
 def json_schema(model: type[BaseModel]) -> dict[str, Any]:
     """The model's JSON Schema, self-contained: `$defs` inlined and titles dropped.
 

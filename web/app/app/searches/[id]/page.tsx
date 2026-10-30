@@ -6,6 +6,7 @@ import { notFound } from "next/navigation";
 import { LISTING_ROWS, ListingCard } from "@/components/app/listing-card";
 import { AutoRefresh } from "@/components/app/auto-refresh";
 import { FreeResultLimit } from "@/components/app/free-result-limit";
+import { LowResultsNotice } from "@/components/app/low-results-notice";
 import { ProBanner, VisibleResultsReport } from "@/components/app/pro-cta";
 import { FrequencySelect, PauseButton } from "@/components/app/search-actions";
 import { SearchCriteriaSummary } from "@/components/app/search-criteria-summary";
@@ -79,7 +80,7 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
 
   const supabase = await createClient();
   const profileId = Number(id);
-  const [{ data: profile }, { data: results }, { data: counts }, follow, { data: planLimits }, { data: sources }] = await Promise.all([
+  const [{ data: profile }, { data: results }, { data: counts }, follow, { data: planLimits }, { data: sources }, { data: diagnosis }] = await Promise.all([
     supabase.from("search_profiles").select("*").eq("id", profileId).maybeSingle(),
     supabase.rpc("search_results", {
       p_profile_id: profileId,
@@ -92,6 +93,8 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
     supabase.rpc("search_follow_counts", { p_profile_id: profileId }),
     supabase.rpc("my_plan_limits"),
     supabase.from("sources").select("id,name,enabled").order("priority"),
+    // Bot de pocos resultados; null (no row, or a database without the table) hides the card.
+    supabase.from("search_diagnoses").select("explanation,suggestions,max_results,created_at,dismissed_at").eq("search_profile_id", profileId).maybeSingle(),
   ]);
   if (!profile) notFound();
 
@@ -103,6 +106,14 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
   const retryCollection = profile.enabled && collectionSources?.some((source) => source.collectionState === "failed" || source.collectionState === "unknown");
   const count = { ...(counts?.[0] ?? {}), ...followCounts(follow?.data) } as Record<string, number>;
   const access = (planLimits ?? null) as PlanLimits | null;
+  // The diagnosis still applies: not hidden, the search still short of results
+  // and not prepared again (edited filters) since it was written.
+  const showDiagnosis =
+    diagnosis != null &&
+    !diagnosis.dismissed_at &&
+    !needsPreparation &&
+    (count.all_count ?? 0) <= diagnosis.max_results &&
+    (!profile.bootstrapped_at || Date.parse(profile.bootstrapped_at) <= Date.parse(diagnosis.created_at));
   const quota = freeResultQuota(access);
   const checkoutConfig = quota?.reached ? await webConfig() : null;
   // §33: the free plan's visible results. Not enforced (the pilot): all of
@@ -163,6 +174,14 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
         <p role="status" className="rounded-lg border bg-muted p-5 text-sm">
           Reanudá la búsqueda para preparar {profile.bootstrapped_at ? "los resultados con tus nuevos filtros" : "tus primeros resultados"}.
         </p>
+      ) : null}
+
+      {showDiagnosis ? (
+        <LowResultsNotice
+          profileId={profileId}
+          explanation={diagnosis.explanation}
+          suggestions={Array.isArray(diagnosis.suggestions) ? diagnosis.suggestions.filter((s): s is string => typeof s === "string") : []}
+        />
       ) : null}
 
       {!needsPreparation || shown.length > 0 ? (

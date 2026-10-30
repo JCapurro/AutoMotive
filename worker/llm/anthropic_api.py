@@ -26,7 +26,7 @@ from pydantic import BaseModel, ValidationError
 
 from llm import prompts
 from llm.provider import LLMError, LLMTimeout
-from llm.schemas import ListingFacts, PolishedQuestions, SearchDraft, SearchDrafts
+from llm.schemas import ListingFacts, LowResultsExplanation, PolishedQuestions, SearchDraft, SearchDrafts
 from normalization.vehicle import CatalogModel
 
 log = logging.getLogger(__name__)
@@ -96,3 +96,7 @@ class AnthropicApiProvider:
                                           prompts.polish_questions_user(questions, context),
                                           PolishedQuestions)
         return polished.text
+
+    async def explain_low_results(self, context: dict) -> LowResultsExplanation:
+        return await self._structured(prompts.load("explain_low_results"),
+                                      prompts.low_results_user(context), LowResultsExplanation)
