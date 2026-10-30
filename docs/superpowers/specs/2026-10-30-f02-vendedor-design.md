@@ -1,233 +1,190 @@
 # F-02 · Vendedor v2
 
-Ítem F-02 del [backlog de producto](../../BACKLOG_PRODUCTO_2026-10.md) y Fase 2, fila 1, del [plan por fases](../../PLAN_FASES_BACKLOG_PRODUCTO_2026-10.md) (secciones 3, 4, 5 y 8). Estado: **borrador para que Juan lo apruebe**; nada implementado ni aplicado en producción. Plan de ejecución: [2026-10-30-f02-vendedor.md](../plans/2026-10-30-f02-vendedor.md).
+Ítem F-02 del [backlog de producto](../../BACKLOG_PRODUCTO_2026-10.md) y Fase 2, fila 1, del [plan por fases](../../PLAN_FASES_BACKLOG_PRODUCTO_2026-10.md) (secciones 3, 4, 5 y 8). Estado: **borrador para que Juan lo apruebe**; nada implementado ni aplicado en producción. Plan de ejecución: [2026-10-30-f02-vendedor.md](../plans/2026-10-30-f02-vendedor.md). Revisión 2: incorpora las 18 observaciones de la crítica de `fb4fdcd`.
 
 ## Alcance
 
-Tres pasos, cada uno se puede frenar sin dejar nada a medias:
+Tres pasos en orden. El 1 y el 2 se pueden frenar tras su deploy sin dejar nada a medias; **el 3 requiere el 2** (lee `dealer_inferred`; si el 2 se frena, el 3 sale con la variante «solo `seller_type`», ver Paso 3).
 
-1. **Conteo y métrica.** Columna `listings.seller_listing_count` (avisos activos de los últimos 30 días por fuente y `seller_name` normalizado), recalculada por el nocturno, y métrica en `/admin/sources` con el % de `seller_type` y `seller_name` null por fuente. **Sin cambio visible** para usuarios; ningún score se mueve.
-2. **`dealer_inferred` («posible agencia»).** Columna aparte `listings.dealer_inferred`; cuenta como agencia en la preferencia de vendedor (matching) y en el aviso de gastos; la ficha dice «Posible agencia (publica N autos)». **Mueve scores** de búsquedas con preferencia de vendedor (decisión de Juan): bump de `SCORING_VERSION`.
-3. **Medianas por tipo en `price_ref`.** `dealer_median`, `dealer_n`, `private_median`, `private_n` sobre el mismo pool y el mismo nivel de la cascada. `diff_pct`, `median`, `n` y `level_used` no cambian: ningún score ni alerta se mueve. Solo datos (lo consume PRO-02); sin UI de usuario.
+1. **Clave, conteo y métrica.** `listings.seller_key` (nombre normalizado, lo escribe la ingesta) con índice; `listings.seller_listing_count` (lo escribe el nocturno); tabla `seller_classification_runs`; métrica en `/admin/sources` con el % de `seller_type` y `seller_name` null por fuente. **Sin cambio visible**; ningún score se mueve.
+2. **`dealer_inferred` («posible agencia»).** Columna aparte; se calcula **en la ingesta** para los grupos tocados (antes de puntuar) y en el nocturno para todos. Cuenta como agencia en la preferencia de vendedor y en el aviso de gastos; la ficha dice «Posible agencia (publica N autos)». **Mueve scores** de búsquedas con preferencia de vendedor: bump de `SCORING_VERSION` (ver «Bump»).
+3. **Medianas por tipo en `price_ref`.** `dealer_median`, `dealer_n`, `private_median`, `private_n` en el nivel elegido de la cascada. `diff_pct`, `median`, `n`, `level_used` no cambian. Solo datos (lo consume PRO-02, solo Pro); sin UI.
 
-Fuera de alcance: filtro duro «solo particulares» (PRO-01), señal de riesgo `private_many_listings` (PAR-02, tras F-02), margen (PRO-02), mejorar la extracción de `seller_name`/`vendedor` en los collectors (posible F-02b si la métrica del paso 1 lo justifica).
+Fuera de alcance: filtro duro «solo particulares» (PRO-01, solo Pro), `private_many_listings` (PAR-02), margen y medianas por tipo en la UI (PRO-02, solo Pro), aviso de gastos nuevo (PAR-01), mejorar la extracción de `seller_name` en collectors (posible F-02b según la métrica del paso 1), alinear la comparación `lower()` de reposts.
 
-## Estado actual (verificado en el repo, rama `claude/f02-vendedor`, HEAD `94908ab`)
+## Estado actual (verificado en el repo, rama `claude/f02-vendedor`)
 
-- **Origen.** El contrato de collector trae `vendedor` (texto crudo) y `vendedor_nombre` (`worker/collectors/base.py:36,49`). `transmission.seller_type()` mapea a `private | dealer | None` (`worker/normalization/transmission.py:68-87`). `normalize_listing` guarda `seller_name` crudo y `seller_type` (`worker/normalization/listing.py:198-199`). Ambos están en `KEY_ATTRS` (`listing.py:31-32`): un cambio crea snapshot `attrs`. El fingerprint ya usa `normalize_text(seller_name)` (`listing.py:72`; `normalize_text` en `worker/normalization/normalize.py:36-40`: sin tildes, minúsculas, espacios colapsados). La detección de reposts compara `lower(seller_name)` en SQL, sin quitar tildes (`worker/db/repos/listings.py:181-182`).
-- **Merge.** `seller_name` y `seller_type` son `_DESCRIPTIVE` en `worker/pipeline/ingest.py:51-52`: un valor vacío nunca borra y el lado autoritativo pisa. Una inferencia guardada en `seller_type` se perdería en la próxima reingesta (plan, nota 2).
-- **Esquema.** `listings.seller_type text check (seller_type in ('private','dealer'))`, `seller_name text`, `source text` (`supabase/migrations/20260927120000_core_schema.sql:173-212`). Sin índice por vendedor. `listings` es legible por todo `authenticated` (`20260927120100_rls.sql:99`). `COLUMNS` del repo (`worker/db/repos/listings.py:18-24`) es la lista que escribe el pipeline: una columna fuera de esa lista **no la toca la ingesta**.
-- **Cobertura por fuente (estructural, no medida).** `seller_type` siempre null en Mar del Usados e Instagram. `seller_name` siempre null en V6 y Usados Santa Fe, y null para particulares en deRuedas y Autocosmos. Kavak, Car One, Grupo Randazzo y Autocity: `seller_type = dealer` fijo y un único `seller_name` por fuente. Facebook pone `particular` salvo que el texto diga concesionaria (`worker/collectors/facebook.py:423`): un revendedor de Facebook hoy es `private`. Los porcentajes reales solo se ven con la métrica del paso 1 contra producción.
-- **Consumidores de `seller_type`.** Worker: preferencia blanda en matching (`worker/intelligence/matching.py:348-353`: null → UNKNOWN «no informado», igual → OK, distinto → FAIL), completitud del score (`worker/intelligence/scoring.py:160`), copy (`worker/intelligence/copy.py:66-67,74`). Web: `DealerFeesNotice` solo con `=== 'dealer'` (`web/components/app/dealer-fees-notice.tsx:3-4`), hecho «Vendedor» de la ficha (`web/app/app/listings/[id]/page.tsx:180,186-189`), `SELLER` (`web/lib/copy.ts:116`), formularios con enum `'' | private | dealer` (`web/lib/search-form.ts:62`, `web/lib/assisted.ts:52`, `web/lib/types.ts:58`). Tarjeta, emails, Telegram y digest no muestran el vendedor. Ninguna función SQL lee `seller_type`.
-- **`price_ref`.** `comparables()` vigente en `20261105120000_comparables_confirmed_pool.sql:174-231` (`language sql`, `set search_path = ''`, inlinea `comparable_listings`, que devuelve `setof public.listings` y por eso ve cualquier columna nueva). `PriceRef` (`worker/intelligence/comparables.py:27-55`) descarta claves que no conoce: sin campos nuevos ahí, las medianas por tipo no llegan a `matches.price_ref`. El score usa solo `n`, `median`, `diff_pct`, `median_km` (`scoring.py:74-85,104-113,190-200`).
-- **Nocturno.** `nightly_loop` (`worker/pipeline/rescore.py:116-142`): `rescore_outdated` al arrancar; en cada slot `rescore_recent` (matches de avisos activos vistos en 14 días); en el slot ancla, retención.
-- **Config/admin.** Las claves nuevas de `app_config` se insertan por migración (`on conflict do nothing`); `/admin/config` las lista solas, `validateConfigChange` (`web/lib/admin-config.ts:70-111`) valida por clave, `HINTS` (`web/app/admin/config/page.tsx:13-36`) las describe. El worker lee con `db.get_config` (caché 60 s). Precedente de métrica por fuente: vista `admin_source_health` (`security_invoker`, revocada a `anon`/`authenticated`) en `/admin/sources`.
-- **No pude verificar:** porcentajes reales de null por fuente, cuántos vendedores pasan de 6 avisos, si `unaccent` está disponible en producción (el diseño no lo necesita), calidad real de `seller_name` en Facebook e Instagram.
+La rama sale de `handoff/fase1-par03-par02` (27 commits sobre `main`; `main` llega a la migración `20261121120000`, el handoff a `20261122120100`). **El handoff se mergea a `main` antes del PR del paso 1.**
 
-## Decisiones de Juan (plan, sección 8)
+- **Origen.** El collector trae `vendedor` y `vendedor_nombre` (`worker/collectors/base.py:36,49`). `transmission.seller_type()` mapea a `private | dealer | None` (`worker/normalization/transmission.py:68-87`). `normalize_listing` guarda `seller_name` crudo y `seller_type` (`worker/normalization/listing.py:198-199`), ambos en `KEY_ATTRS` (`listing.py:31-32`). El fingerprint usa `normalize_text(seller_name)` (`listing.py:72`; `normalize_text` en `worker/normalization/normalize.py:36-40`: sin tildes, minúsculas, espacios colapsados; **conserva puntuación y emoji**). Reposts comparan `lower(seller_name)` (`worker/db/repos/listings.py:181-182`).
+- **Merge.** `seller_name`/`seller_type` son `_DESCRIPTIVE` (`worker/pipeline/ingest.py:51-52`): un vacío nunca borra y el lado autoritativo pisa. Una inferencia guardada en `seller_type` se perdería en la próxima reingesta.
+- **Esquema.** `seller_type text check in ('private','dealer')`, `seller_name text` (`20260927120000_core_schema.sql:173-212`); sin índice por vendedor; `listings` legible por `authenticated`. `COLUMNS` (`listings.py:18-24`) es lo que escribe la ingesta. Sin triggers en `listings`.
+- **Ingesta → score.** `crawl.py:422` llama `ingest()` (commit) y después `news.classify` → `Scorer.prepare` lee la fila con `rows_for_scoring` (`listings.py:300`, `l.*`). La alerta `new_match` se deduplica por `match:<listing_id>`: si sale con el vendedor mal clasificado, no se corrige.
+- **Cobertura por fuente (estructural).** `seller_type` siempre null en Mar del Usados e Instagram. `seller_name` siempre null en V6 y Usados Santa Fe. deRuedas detalle pone nombre solo a clientes (`deruedas.py:611`); Rosario Garage detalle no pone nombre (`rosariogarage.py:308`; el listado sí, para concesionarias, `:167-168`); Mercado Libre solo toma `.ui-pdp-seller-validated__title` (`mercadolibre.py:367`), casi siempre tiendas validadas. Facebook pone `particular` salvo que diga concesionaria (`facebook.py:423`) y toma como nombre la primera línea tras «Información del vendedor»; Instagram toma `vendedor|contacto|instagram: …`; Mar del Usados, el texto del link de Instagram.
+- **Consumidores de `seller_type`.** Matching (`matching.py:348-353`: null → UNKNOWN, igual → OK, distinto → FAIL), completitud (`scoring.py:160`), copy (`copy.py:66-67,74`). Web: `DealerFeesNotice` con `=== 'dealer'` (`dealer-fees-notice.tsx:3-4`), hecho «Vendedor» (`listings/[id]/page.tsx:180,186-189`), `SELLER` (`web/lib/copy.ts:116`), formularios `'' | private | dealer`. Ninguna función SQL lo lee.
+- **Alertas.** `notifications/engine.py`: `new_match`/`opportunity` por nivel del match nuevo; `price_drop` a un match solo si su nivel actual es ≥ `match`; el digest toma el top-N por score. `upsert_scored` alerta solo en inserts.
+- **Nocturno.** `nightly_loop` (`worker/pipeline/rescore.py:116-142`): `rescore_outdated()` al arrancar; cada slot `rescore_recent` (activos vistos en 14 días); slot ancla, retención. Existe `rescore_listings(ids)` (`rescore.py:78`).
+- **`price_ref`.** `comparables()` en `20261105120000_comparables_confirmed_pool.sql:174-231`; `PriceRef` (`comparables.py:27-55`) descarta claves desconocidas.
+- **Config/admin.** `app_config` por migración (`on conflict do nothing`); `validateConfigChange` (`web/lib/admin-config.ts:70-111`); `HINTS` (`web/app/admin/config/page.tsx:13-36`); worker con `db.get_config` (caché 60 s). Precedente de registro de corridas: `market_stats_runs` (F-03).
+- **No pude verificar:** porcentajes reales por fuente, cuántos vendedores pasan de 6, tamaño actual de `listings` en producción.
 
-- Un vendedor con **6 o más avisos activos en 30 días** (misma fuente y mismo `seller_name` normalizado) es `dealer_inferred`. Reemplaza el 4 propuesto en el backlog.
-- Texto «posible agencia» con el motivo visible («publica 6 autos»).
+## Decisiones de Juan
+
+- **6 o más avisos en 30 días** (misma fuente, mismo vendedor normalizado) → `dealer_inferred`. El significado exacto de la ventana queda como pregunta (abajo).
+- Texto «posible agencia» con motivo visible («publica 6 autos»).
 - `dealer_inferred` **cuenta como agencia** en filtros y en el aviso de gastos.
 - Umbral y ventana en `app_config.seller_classification`, editables en `/admin/config`.
+- PRO-01 y PRO-02 son solo Pro. Un bump de `SCORING_VERSION` aprobado para PRO-02; plan §2: uno por deploy.
 
 ## Decisiones de diseño
 
-1. **Columnas aparte, no un tercer valor de `seller_type`.** El CHECK queda como está. Ampliarlo rompería el enum de los formularios, los `=== 'dealer'` y los `SELLER[...]`, y la ingesta lo pisaría. Columnas nuevas en `listings` (no en `attributes`): el nocturno las escribe con un `UPDATE` dirigido, la ingesta no las conoce (no están en `COLUMNS`), no hay carrera con el merge de `attributes` y llegan solas a `comparable_listings` (`o.*`), `rows_for_scoring` (`l.*`) y la ficha (`select('*')`). Se desvía del backlog («`attributes._seller` guarda la evidencia»): la evidencia es el conteo más la regla, y la regla vive en `app_config`. Son visibles para `authenticated` como el resto de `listings`; está bien porque la ficha las muestra.
-2. **Normalización en Python, no en SQL.** La clave de agrupación es `(source, normalize_text(seller_name))`, la misma que el fingerprint. Evita depender de `unaccent` y de una función inmutable. Vacío tras normalizar → sin conteo. No se toca la comparación `lower()` de reposts (fuera de alcance; anotado como riesgo).
-3. **Regla de precedencia.** `dealer_inferred = seller_listing_count >= min_listings and seller_type is distinct from 'dealer'`. Aplica aunque la fuente diga `private` o null (backlog: «aunque la fuente diga particular o null»), porque el caso que importa es Facebook, que marca todo como particular. Nunca baja un `dealer` explícito. Las fuentes de una sola tienda ya son `dealer`: no-op.
-4. **Vendedor efectivo.** Un solo helper por lado: `effective_seller(listing)` en `worker/intelligence/seller.py` y `effectiveSeller(listing)` en `web/lib/seller.ts`: `'dealer'` si `seller_type = 'dealer'` o `dealer_inferred`; si no, `seller_type`. Todos los consumidores que «cuentan como agencia» pasan por ahí.
-5. **Cuándo se recalcula.** En el slot ancla del nocturno, **antes** de `rescore_recent`, para que el rescore de esa noche ya vea la clasificación nueva. Solo escribe filas cuyo valor cambia (`is distinct from`). No crea snapshots (solo la ingesta los crea) ni eventos.
+1. **Columnas aparte, no un tercer valor de `seller_type`.** El CHECK, los formularios y los `=== 'dealer'` quedan como están, y el merge no pisa la inferencia. Las columnas llegan solas a `comparable_listings` (`o.*`), `rows_for_scoring` (`l.*`) y la ficha (`select('*')`). Se desvía del backlog (`attributes._seller`): la evidencia es el conteo más la regla en `app_config`.
+2. **Clave guardada.** `seller_key(name)` en `worker/normalization/seller.py`, en Python (sin `unaccent`):
+   - `normalize_text`; después se borran `.` y `'` y el resto de la puntuación, símbolos y emoji pasan a espacio (queda `[a-z0-9 ]`), espacios colapsados: «Autos S.A.» y «Autos SA» → `autos sa`.
+   - Solo dígitos (teléfono): con 8 o más dígitos la clave es `tel:` + los últimos 10; con menos, sin clave.
+   - **Stoplist** (coincidencia exacta tras normalizar), sin clave: largo < 3, `particular`, `dueno`, `dueno directo`, `vendedor`, `concesionaria`, `agencia`, `whatsapp`, `instagram`, `facebook`, `ver perfil`, `contacto`, `consultar`, `informacion del vendedor`. Constante en código (se amplía con lo que muestre el `--dry-run`).
+   - La escribe el repo en `insert_listing`/`update_listing` a partir del `seller_name` **ya resuelto por el merge** (no se mergea sola). No está en `KEY_ATTRS`: no crea snapshots. El fingerprint no cambia.
+3. **Conteo.** Por `(source, seller_key)`: `count(distinct coalesce(fingerprint, id::text))` de filas `status = 'active'`, `probable_repost_of is null` y dentro de la ventana. Distintos fingerprints evitan contar dos veces el mismo auto publicado dos veces (el fingerprint ya incluye el vendedor); los reposts probables no suman. El conteo del grupo se escribe en **todas** sus filas activas.
+4. **Ventana (propuesta, pendiente de Juan).** «Publicados (`coalesce(published_at, first_seen_at)`) en los últimos `window_days` días y todavía activos.» La versión anterior usaba `last_seen_at`, que en activos es casi siempre «ahora»: la ventana no filtraba nada y en Facebook (detección de vendidos débil) los activos viejos inflaban el conteo.
+5. **Regla.** `dealer_inferred = enabled and seller_listing_count >= min_listings and seller_type is distinct from 'dealer'`. Aplica aunque la fuente diga `private` o null (caso Facebook). Nunca baja un `dealer` explícito.
+6. **Vendedor efectivo, un helper por lado.** `effective_seller(listing)` (`worker/intelligence/seller.py`) y `effectiveSeller(listing)` (`web/lib/seller.ts`): `'dealer'` si `seller_type = 'dealer'` o `dealer_inferred`; si no, `seller_type`. **PRO-01 (filtro duro) y PAR-01 (reemplaza `DealerFeesNotice`) deben usarlo**; queda escrito en sus fichas del plan por fases al cerrar el paso 2.
+7. **Cuándo se clasifica.** (a) Desde el paso 2, en la ingesta, después del commit de `ingest_rows` y antes de devolver a `crawl`/`enrich` (o sea, antes de puntuar), solo para los grupos `(source, seller_key)` de filas insertadas o cuya clave cambió: una sentencia que usa el índice. Si falla, `log_error("seller_classification", "ingest", …)` y sigue (el nocturno lo corrige). (b) Al arrancar el worker, **antes** de `rescore_outdated`. (c) En el slot ancla, antes de `rescore_recent`. (b) y (c) recorren todos los grupos y re-puntúan con `rescore_listings` las filas cuyo `dealer_inferred` cambió. La misma SQL sirve para los tres: `write_groups(cx, source, keys | None, cfg)`.
+8. **Escritura por lotes.** (b) y (c) escriben por fuente y en lotes de 2.000 grupos, cada lote en su transacción, ordenados por id; solo filas con `(seller_listing_count, dealer_inferred) is distinct from` el valor nuevo. El relleno de `seller_key` del paso 1 va en lotes de 1.000 ids (CLI `--backfill-keys`; el nocturno completa los activos que falten).
 
-## Paso 1: conteo y métrica (sin cambio visible)
+## Paso 1: clave, conteo y métrica
 
-Migración `supabase/migrations/20261123120000_f02_seller_count.sql` (nombre provisorio; releer `max(version)` de producción antes de aplicar):
+Migración `supabase/migrations/<versión>_f02_seller_count.sql` (versión: `max(version)` de producción releído justo antes, por encima de lo que hayan sumado PRO-01, PRO-02 o PAR-01):
 
 ```sql
--- F-02 paso 1 (docs/superpowers/specs/2026-10-30-f02-vendedor-design.md).
--- Conteo por vendedor, config y métrica de cobertura. Sin RLS nueva, sin SCORING_VERSION.
+-- F-02 paso 1 (docs/superpowers/specs/2026-10-30-f02-vendedor-design.md). Sin RLS nueva, sin SCORING_VERSION.
 alter table public.listings
-  add column seller_listing_count integer,
-  add column seller_classified_at timestamptz;
+  add column seller_key text,
+  add column seller_listing_count integer;
+create index listings_seller_key_idx on public.listings (source, seller_key)
+  where status = 'active' and seller_key is not null;
 
-comment on column public.listings.seller_listing_count is
-  'F-02: avisos activos vistos en app_config.seller_classification.window_days con la misma '
-  'fuente y el mismo seller_name normalizado (normalize_text del worker). Lo escribe el nocturno.';
+create table public.seller_classification_runs (
+  id           bigint generated always as identity primary key,
+  trigger      text not null check (trigger in ('startup', 'nightly', 'cli')),
+  mode         text not null check (mode in ('dry_run', 'write')),
+  started_at   timestamptz not null default now(),
+  finished_at  timestamptz,
+  status       text not null default 'running' check (status in ('running', 'ok', 'failed')),
+  rows_read    integer, rows_written integer, inferred_changed integer,
+  params       jsonb, error text);
+alter table public.seller_classification_runs enable row level security;  -- sin policies: solo service role
+revoke all on public.seller_classification_runs from anon, authenticated;
 
 insert into public.app_config (key, value)
-values ('seller_classification', '{"min_listings": 6, "window_days": 30}')
+values ('seller_classification', '{"enabled": true, "min_listings": 6, "window_days": 30}')
 on conflict (key) do nothing;
 
 create view public.admin_seller_coverage with (security_invoker = true) as
-with cfg as (
-  select case when jsonb_typeof(c.value->'min_listings') = 'number'
-              then greatest((c.value->>'min_listings')::numeric, 1) else 6 end as min_listings
-    from (select 1) one
-    left join public.app_config c on c.key = 'seller_classification'
-)
-select s.id                                                              as source,
-       s.name,
-       count(l.id)                                                       as active,
-       count(l.id) filter (where l.seller_type is null)                  as seller_type_null,
-       round(100.0 * count(l.id) filter (where l.seller_type is null)
-             / nullif(count(l.id), 0), 1)                                as seller_type_null_pct,
-       count(l.id) filter (where l.seller_name is null)                  as seller_name_null,
-       round(100.0 * count(l.id) filter (where l.seller_name is null)
-             / nullif(count(l.id), 0), 1)                                as seller_name_null_pct,
-       count(l.id) filter (where l.seller_listing_count >= cfg.min_listings) as over_threshold,
-       max(l.seller_classified_at)                                       as classified_at
-  from public.sources s
- cross join cfg
-  left join public.listings l on l.source = s.id and l.status = 'active'
- group by s.id, s.name;
-
+-- por fuente: active, seller_type_null(_pct), seller_name_null(_pct), seller_key_null_pct,
+-- over_threshold (seller_listing_count >= min_listings de la config, 6 si no es número).
+...;
 revoke all on public.admin_seller_coverage from anon, authenticated;
 notify pgrst, 'reload schema';
 ```
 
-Sin índice nuevo: el job lee activos de la ventana (índice `last_seen_at` parcial existente) y la vista es solo admin. Si el `EXPLAIN` de la Task 1 del plan lo pide, se discute aparte.
+`create index` sin `concurrently` (la migración va en transacción); con el tamaño actual de `listings` es un bloqueo corto, se mide en la Task 1 contra una base de tamaño parecido. `enabled` no tiene efecto en el paso 1 (no existe `dealer_inferred`).
 
-Worker:
+Worker: `seller_classification(raw)` en `worker/intelligence/config.py` valida `enabled` booleano, `min_listings` entero **2..100**, `window_days` entero 1..180 (mismos límites que la web) y cae a defaults si no. `worker/normalization/seller.py` (`seller_key`), repo `worker/db/repos/sellers.py` (`write_groups`, `clear_stale`, `backfill_keys`, `start_run`/`finish_run`), `worker/pipeline/seller_classification.py` (`classify_sellers(trigger, dry_run=False)`), CLI `python -m tools.seller_classification [--dry-run] [--backfill-keys]` (por fuente: activos, grupos, avisos sobre el umbral, los 10 grupos más grandes con sus nombres crudos). `clear_stale`: activos sin clave o cuyo grupo ya no tiene filas en la ventana → `seller_listing_count = null` (en el paso 2, también `dealer_inferred = false`). Los `gone` conservan el último valor. `nightly_loop`: `classify_sellers("startup")` antes de `rescore_outdated()` y `classify_sellers("nightly")` antes de `rescore_recent()` en el slot ancla, cada uno con su `try/except` y `log_error`.
 
-- `worker/intelligence/config.py`: `DEFAULT_SELLER_CLASSIFICATION = {"min_listings": 6, "window_days": 30}` y `seller_classification(raw)` que valida (enteros, `min_listings >= 2`, `window_days` entre 1 y 180) y cae a defaults si no.
-- `worker/pipeline/seller_classification.py`: `classify_sellers(now=None, dry_run=False) -> Summary`. Lee `id, source, seller_name, seller_type` de `status = 'active' and last_seen_at >= now - window`; agrupa por `(source, normalize_text(seller_name))`; escribe con un `UPDATE ... FROM unnest(ids, counts)` solo donde `seller_listing_count is distinct from` el nuevo valor; pone null en activos fuera de la ventana o sin nombre que tenían valor. Los `gone` conservan el último valor (evidencia congelada para el pool de comparables). Devuelve conteos por fuente.
-- Repo: `worker/db/repos/sellers.py` (`window_rows`, `write_counts`, `clear_stale`).
-- `worker/pipeline/rescore.py`: en el slot ancla, `classify_sellers()` antes de `rescore_recent()`, con su propio `try/except` y `log_error("seller_classification", "nightly", ...)`.
-- CLI: `python -m tools.seller_classification --dry-run` imprime por fuente activos, grupos y avisos `>= min_listings`, sin escribir.
+Web: tabla «Vendedor por fuente» en `/admin/sources` (Activos, % sin tipo, % sin nombre, % sin clave, Sobre el umbral) y «Calculado» = `max(finished_at)` de `seller_classification_runs` con `status = 'ok'` (la última corrida, no el último cambio). `web/types/database.ts` a mano; `HINTS.seller_classification` y validador.
 
-Web: `web/app/admin/sources/page.tsx` lee `admin_seller_coverage` y `web/components/admin/sources.tsx` suma una tabla «Vendedor por fuente» (Activos, % sin tipo, % sin nombre, Sobre el umbral, Calculado). `web/types/database.ts`: vista nueva y columnas nuevas de `listings` (Row/Insert/Update) a mano. `HINTS.seller_classification` y validador en `validateConfigChange`.
+## Paso 2: `dealer_inferred`
 
-## Paso 2: `dealer_inferred` («posible agencia»)
-
-Migración `supabase/migrations/20261123120100_f02_dealer_inferred.sql`:
+Migración `<versión>_f02_dealer_inferred.sql` (versión releída antes de este paso):
 
 ```sql
--- F-02 paso 2. dealer_inferred aparte de seller_type (el CHECK no cambia).
-alter table public.listings
-  add column dealer_inferred boolean not null default false;
-
-comment on column public.listings.dealer_inferred is
-  'F-02: true si seller_listing_count >= app_config.seller_classification.min_listings y '
-  'seller_type no es dealer. Cuenta como agencia en matching y en el aviso de gastos. Lo escribe el nocturno.';
-
-create or replace view public.admin_seller_coverage with (security_invoker = true) as
--- misma definición del paso 1, con dos columnas nuevas al final:
---   count(l.id) filter (where l.dealer_inferred)                                   as dealer_inferred,
---   round(100.0 * count(l.id) filter (where l.seller_type is null and not l.dealer_inferred)
---         / nullif(count(l.id), 0), 1)                                            as seller_unknown_pct
-...;
+alter table public.listings add column dealer_inferred boolean not null default false;
+-- Siembra con el conteo del paso 1, para que el rescore del bump ya vea la inferencia.
+update public.listings l set dealer_inferred = true
+  from (select coalesce((value->>'enabled')::boolean, true) as enabled,
+               coalesce((value->>'min_listings')::int, 6) as min_listings
+          from public.app_config where key = 'seller_classification') c
+ where c.enabled and l.status = 'active' and l.seller_listing_count >= c.min_listings
+   and l.seller_type is distinct from 'dealer';
+create or replace view public.admin_seller_coverage ...;  -- misma vista + dealer_inferred y seller_unknown_pct al final
 notify pgrst, 'reload schema';
 ```
 
-`create or replace view` solo admite columnas nuevas al final: por eso el paso 1 deja `classified_at` último y el paso 2 agrega después. `seller_type_null_pct` (antes) y `seller_unknown_pct` (después de la inferencia) dan el «antes y después» que pide el backlog. Agregar una columna `not null default false` es solo metadato en Postgres 11+.
+La siembra es un `UPDATE` sobre los activos sobre el umbral (pocos); si la Task 6 mide más de unas decenas de miles de filas, se pasa a lotes desde el CLI. Además el worker clasifica al arrancar antes de `rescore_outdated` (decisión 7b): aun sin siembra, el rescore del bump sale con la inferencia.
 
-`classify_sellers` pasa a escribir también `dealer_inferred` con la regla de la decisión 3 (mismo `UPDATE`, condición `is distinct from` sobre las dos columnas). Un activo que baja del umbral vuelve a `false` esa noche.
-
-### Cómo cuenta como agencia, consumidor por consumidor
+`write_groups` escribe las dos columnas; `clear_stale` también pone `dealer_inferred = false`; con `enabled = false`, `classify_sellers` pone `false` en **todas** las filas (también `gone`, por el pool de comparables) y re-puntúa las afectadas. La razón «publica N autos» solo se arma con `dealer_inferred = true`, que implica N ≥ 2: nunca «publica null autos».
 
 | Consumidor | Hoy | Con F-02 |
 |---|---|---|
-| Matching, preferencia `seller_type` (`matching.py:348-353`) | compara `listing.seller_type` | compara `effective_seller(listing)`. Preferencia `dealer` + inferido → OK «vendedor posible agencia (publica 6 autos)». Preferencia `private` + inferido → FAIL «vendedor posible agencia (publica 6 autos), se prefiere particular». Null sin inferencia → UNKNOWN como hoy |
-| Completitud del score (`scoring.py:160`) | `bool(seller_type)` | **sin cambio** (un inferido con tipo null sigue incompleto; limita cuánto se mueve el score) |
-| `DealerFeesNotice` (`dealer-fees-notice.tsx`) | `sellerType === 'dealer'` | prop nueva `dealerInferred`; se muestra si `effectiveSeller(...) === 'dealer'` |
-| Ficha, hecho «Vendedor» (`page.tsx:186-189`) | `SELLER[seller_type]`, nombre | `sellerLabel(listing)`: inferido → «Posible agencia (publica N autos)», nombre |
-| Formularios de búsqueda, resumen, Telegram, LLM, `legacy_filters` | `'' \| private \| dealer` | sin cambio de valores (`dealer_inferred` es del aviso, no una preferencia). Pista bajo el select: «Incluye posibles agencias.» (propuesta) |
-| Emails, digest, Telegram, tarjeta | no muestran vendedor | sin cambio |
-| Collectors, `BaseScraper.matches_filters` | texto crudo | sin cambio |
-| PRO-01 (futuro filtro duro) | — | debe usar el mismo helper; queda escrito en este diseño |
+| Matching, preferencia (`matching.py:348-353`) | `seller_type` | `effective_seller`. Pref. `dealer` + inferido → OK «vendedor posible agencia (publica 6 autos)»; pref. `private` + inferido → FAIL «…, se prefiere particular»; null sin inferencia → UNKNOWN |
+| Completitud (`scoring.py:160`) | `bool(seller_type)` | sin cambio |
+| `DealerFeesNotice` | `sellerType === 'dealer'` | prop `dealerInferred`; `effectiveSeller(...) === 'dealer'`. PAR-01 hereda el helper |
+| Ficha, «Vendedor» | `SELLER[seller_type]` | `sellerLabel`: inferido → «Posible agencia (publica N autos)» |
+| Formularios, Telegram, LLM, `legacy_filters` | `'' \| private \| dealer` | sin cambio de valores |
+| PRO-01 (filtro duro, Pro) | — | `effective_seller` / `effectiveSeller` |
 
-`SCORING_VERSION` pasa a `f2-v5-dealer-inferred`: al arrancar, `rescore_outdated` re-puntúa todo, así las razones viejas no quedan desfasadas. Se mueven solo matches de búsquedas con `preferences.seller_type` sobre avisos inferidos. Los ya insertados no generan alertas nuevas (`upsert_scored` solo alerta en inserts); un aviso nuevo sí puede entrar o no según el score nuevo. **Requiere el OK de Juan al bump** (regla transversal del plan) y un único bump por deploy.
+**Efectos en alertas (no son reenvíos).** Para búsquedas que prefieren particular, un inferido baja de nivel: (a) un aviso nuevo de un grupo conocido entra con el nivel bajo desde la primera alerta (decisión 7a); (b) `price_drop` de un match existente sobre un inferido deja de salir si su nivel queda por debajo de `match`; (c) el top-N del digest cambia de orden. Con preferencia `dealer`, al revés. Los matches ya insertados no generan `new_match` nuevos (`upsert_scored` alerta solo en inserts). Un grupo que cruza el umbral en la ingesta marca también sus filas viejas; sus matches se re-puntúan en el próximo `rescore_recent` (o al instante si es startup/nightly).
 
-### Copy
+**Bump.** `SCORING_VERSION` cambia una sola vez por deploy. Si el paso 2 sale en el mismo deploy que PRO-02, **comparten una versión** (p. ej. `f2-v5-seller-margin`) y un solo rescore. Si sale solo, necesita su propio OK (pregunta 2).
 
-Aprobado por Juan: «posible agencia», motivo «publica N autos».
-
-- Worker (`worker/intelligence/copy.py`): `SELLER_INFERRED = "posible agencia"`, `REASON["seller_inferred"] = "publica {n} autos"`; razones «vendedor posible agencia (publica 6 autos)» y «vendedor posible agencia (publica 6 autos), se prefiere particular».
-- Web (`web/lib/copy.ts`): `SELLER_INFERRED = "Posible agencia"`, ficha «Posible agencia (publica 6 autos)». Con N = 1 no aplica (el umbral mínimo es 2), así que el plural es siempre correcto.
-- **Propuestas para aprobar:** (a) si la fuente dice particular, agregar «; la publicación dice particular»; (b) pista del formulario «Incluye posibles agencias.»; (c) hint de `/admin/config` (abajo).
-
-### Config
-
-`app_config.seller_classification = {"min_listings": 6, "window_days": 30}`. Validador web: objeto con `min_listings` entero 2..100 y `window_days` entero 1..180; mensaje «min_listings debe ser un entero entre 2 y 100 y window_days entre 1 y 180.». El worker repite la validación y cae a defaults (el RPC `admin_update_setting` solo valida el tipo jsonb). Hint propuesto: «Vendedor v2 (F-02). min_listings: avisos activos del mismo vendedor y fuente para marcarlo «posible agencia» (6). window_days: ventana en días (30). Se aplica en el nocturno; mueve la preferencia de vendedor y el aviso de gastos, no las medianas generales.»
+Copy aprobado: worker `SELLER_INFERRED = "posible agencia"`, `REASON["seller_inferred"] = "publica {n} autos"`; web `SELLER_INFERRED = "Posible agencia"`. Config: hint «Vendedor v2 (F-02). enabled: prende la inferencia «posible agencia». min_listings: avisos del mismo vendedor y fuente (6). window_days: ventana en días (30). Se aplica en la ingesta y en el nocturno.»; mensaje del validador «enabled debe ser true/false, min_listings un entero entre 2 y 100 y window_days entre 1 y 180.».
 
 ## Paso 3: medianas por tipo en `price_ref`
 
-Migración `supabase/migrations/20261123120200_f02_price_ref_by_seller.sql`: `create or replace function public.comparables(...)` con la misma firma, `language sql stable set search_path = ''`, inlineando `comparable_listings` como hoy. Cambios exactos respecto de `20261105120000:174-231` (el resto del cuerpo, incluido el `where lv.n >= cfg.min_n or lv.rank = 3`, queda idéntico byte a byte):
+Requiere el paso 2. Migración `<versión>_f02_price_ref_by_seller.sql` (versión releída antes): `create or replace function public.comparables(...)`, misma firma, `language sql stable set search_path = ''`, cuerpo de `20261105120000:174-231` con estos cambios y el resto idéntico:
 
 ```sql
-  pool as (
-    select o.price_usd, o.mileage_km,
-           lower(o.trim) = lower(t.trim) and o.transmission = t.transmission as same_trim_transmission,
-           o.transmission = t.transmission                                    as same_transmission,
-           coalesce(o.seller_type = 'dealer' or o.dealer_inferred, false)     as is_dealer,
-           coalesce(o.seller_type = 'private' and not o.dealer_inferred, false) as is_private
-      from target t
-     cross join public.comparable_listings(p_listing_id, p_year_tol, p_km_tol_pct, p_max_age_days) o
-  ),
-  levels as (
-    select v.rank, v.level_used,
-           count(p.price_usd)                                              as n,
-           percentile_cont(0.5)  within group (order by p.price_usd)       as median,
-           percentile_cont(0.25) within group (order by p.price_usd)       as p25,
-           percentile_cont(0.75) within group (order by p.price_usd)       as p75,
-           percentile_cont(0.5)  within group (order by p.mileage_km)      as median_km,
-           count(p.price_usd) filter (where p.is_dealer)                   as dealer_n,
-           percentile_cont(0.5)  within group (order by p.price_usd) filter (where p.is_dealer)  as dealer_median,
-           count(p.price_usd) filter (where p.is_private)                  as private_n,
-           percentile_cont(0.5)  within group (order by p.price_usd) filter (where p.is_private) as private_median
-      ...
-  )
-  select jsonb_build_object(
-           -- las 7 claves actuales, sin cambios, y:
-           'dealer_median',  round(lv.dealer_median::numeric, 2),
-           'dealer_n',       lv.dealer_n,
-           'private_median', round(lv.private_median::numeric, 2),
-           'private_n',      lv.private_n)
+  pool as (select o.price_usd, o.mileage_km, <igual que hoy>,
+                  coalesce(o.seller_type = 'dealer' or o.dealer_inferred, false)      as is_dealer,
+                  coalesce(o.seller_type = 'private' and not o.dealer_inferred, false) as is_private ...),
+  levels as (select ..., count(p.price_usd) filter (where p.is_dealer) as dealer_n,
+                  percentile_cont(0.5) within group (order by p.price_usd) filter (where p.is_dealer) as dealer_median,
+                  <ídem private> ...)
+  -- jsonb_build_object: las 7 claves actuales sin cambios + dealer_median, dealer_n, private_median, private_n
 ```
 
-- Se calculan **en el nivel elegido** (mismas filas que `n`): `dealer_n + private_n <= n`; el resto es «sin dato». `count` da 0 (no null) en grupos vacíos; la mediana queda null con n = 0. No se ocultan medianas con pocos casos en SQL: el mínimo lo decide el consumidor (PRO-02 pide `dealer_n >= 5`).
-- `comment on function` se re-declara con las claves nuevas. Los grants se conservan (`create or replace`).
-- `PriceRef` suma `dealer_median`, `dealer_n`, `private_median`, `private_n` con default `None`; `to_json` redondea las medianas a 2; `from_json` las lee si están. Ningún cálculo de score las usa.
-- `web/lib/types.ts` `PriceRef`: las cuatro claves opcionales. Sin UI de usuario en este paso; el inspector de `/admin` ya muestra el JSON.
-- **Sin bump de `SCORING_VERSION`**: el rescore nocturno reescribe `price_ref` de los matches de avisos vistos en 14 días; los viejos quedan con 7 claves y los consumidores tratan las nuevas como opcionales. Si los pasos 2 y 3 salen en el mismo deploy, el bump del paso 2 re-escribe todo.
+- `is_dealer` e `is_private` son excluyentes y cada uno exige `price_usd` contado en `n`, así que `dealer_n + private_n <= n` en cada nivel de la cascada; el test lo comprueba en los tres. `count` da 0 en grupos vacíos; la mediana, null. El mínimo de casos lo decide el consumidor (PRO-02: `dealer_n >= 5`).
+- Variante si el paso 2 no salió: `is_dealer = coalesce(o.seller_type = 'dealer', false)`, `is_private = coalesce(o.seller_type = 'private', false)`; al salir el paso 2 se re-aplica con `dealer_inferred` (sin bump).
+- `PriceRef` suma las cuatro claves con default `None`; ningún cálculo de score las usa. `web/lib/types.ts`: opcionales. **Sin bump**: el rescore nocturno las completa en los matches de los últimos 14 días; los viejos quedan con 7 claves.
 
 ## Riesgos
 
-- **Falsos «posible agencia»** por `seller_name` malo: Facebook toma la primera línea tras el encabezado del vendedor; Instagram, una etiqueta del caption; Mar del Usados, el texto del link de Instagram (puede ser la cuenta de la tienda, que en ese caso sí es agencia). Mitigación: el `--dry-run` y la métrica del paso 1 muestran los grupos antes de prender el paso 2; Juan revisa una muestra.
-- **Falsos negativos:** fuentes sin `seller_name` (V6, Usados Santa Fe, particulares de deRuedas/Autocosmos) nunca se infieren. Un revendedor que cambia el nombre o reparte avisos entre fuentes no se agrupa (por diseño: misma fuente).
-- **Scores que se mueven en el paso 2** para búsquedas con preferencia de vendedor; explícito, con bump y OK de Juan.
-- **Desfase:** la clasificación se actualiza una vez por noche; un umbral editado en `/admin/config` se aplica en el próximo slot ancla.
-- **Desacuerdo SQL/Python de normalización** (reposts con `lower()` y conteo con `normalize_text`): conocido, no se toca.
-- **Rendimiento de `comparables()`:** las columnas nuevas vienen de `o.*` (sin join extra) y el plan sigue inlineado; se confirma con `EXPLAIN (ANALYZE)` antes/después en base `_test` (criterio: sin regresión mayor a 10 %).
-- **Tipos a mano:** olvidar `web/types/database.ts` rompe `typecheck` (o deja `any`). `comparable_pool` hereda la fila de `listings`.
-- **Tests de base que ya fallan en `main`** (`comparables_test.sql`, entre otros, según PAR-03): comparar contra la línea base, no exigir verde global.
+- **Falsos «posible agencia»** por nombres genéricos que pasen la stoplist. Mitigación: `--dry-run` con los 10 grupos más grandes por fuente y muestra revisada por Juan antes del paso 2; `enabled = false` lo apaga sin deploy.
+- **Falsos negativos:** fuentes o vendedores sin nombre (V6, Usados Santa Fe, particulares de deRuedas, Rosario Garage detalle, Mercado Libre no validado) nunca se infieren; tampoco quien cambia de nombre o reparte entre fuentes.
+- **Contención en la ingesta:** la sentencia de la decisión 7a corre en su propia transacción corta tras el commit, ordenada por id, para no alargar el lock de `ingest_rows` ni cruzar locks entre crawls concurrentes.
+- **Desfase de N:** «publica N autos» queda en `match_reasons` hasta el próximo rescore; un `gone` conserva su último N. Aceptado.
+- **`comparables()`:** `EXPLAIN (ANALYZE)` antes/después; criterio: sigue inlineado y menos de 10 % de diferencia.
+- **Tests de base que ya fallan** (`comparables_test.sql`, entre otros): comparar contra la línea base.
 
 ## Qué NO cambia
 
-- `listings.seller_type`, su CHECK, la ingesta, `KEY_ATTRS`, snapshots, fingerprint, detección de reposts.
-- `diff_pct`, `median`, `p25`, `p75`, `median_km`, `n`, `level_used`; `price_component`, `km_component`, red flags, guards, umbrales de alerta.
-- Completitud del score. Paso 1 y paso 3: ningún score ni alerta. Paso 2: solo la preferencia blanda de vendedor.
-- Preferencias guardadas, formularios (valores), Telegram, LLM, emails, digest, tarjeta.
+`seller_type`, su CHECK, `KEY_ATTRS`, snapshots, fingerprint, detección de reposts; `diff_pct`, `median`, `p25`, `p75`, `median_km`, `n`, `level_used`, componentes del score, red flags, umbrales de alerta; completitud; valores de preferencias y formularios; emails, Telegram, tarjeta (no muestran vendedor).
 
 ## Operación y rollback
 
-- **Producción:** cada migración con OK explícito de Juan, en una transacción con el insert de su versión exacta, releyendo `max(version)` antes (hoy `20261122120100`). Worker con `wait_idle` antes de reiniciar. Deploy de la web en Vercel con su OK.
-- **Orden:** paso 1 (migración + worker + web admin). Correr `--dry-run` en producción (solo lectura) y revisar la métrica unos días. Paso 2 (migración + worker con bump + web). Paso 3 (migración + worker). Cada paso se puede detener tras su deploy.
-- **Rollback paso 1:** desactivar la llamada nocturna (revert del worker); las columnas quedan sin uso. Si hace falta, `drop view admin_seller_coverage; alter table listings drop column seller_listing_count, drop column seller_classified_at;` (antes del paso 2).
-- **Rollback paso 2:** `update listings set dealer_inferred = false where dealer_inferred;` apaga el efecto sin deploy (el nocturno lo vuelve a prender: para dejarlo apagado, subir `min_listings` a 100 en `/admin/config`). Revert del worker vuelve a la versión anterior de `SCORING_VERSION` y re-puntúa.
-- **Rollback paso 3:** re-aplicar el cuerpo de `20261105120000` (`create or replace`); `PriceRef` ignora claves faltantes.
+- **Producción:** cada migración con OK de Juan, en una transacción con el insert de su versión exacta, releyendo `max(version)` **antes de cada paso** y renombrando el archivo si otra migración quedó por encima. Worker con `wait_idle`; Vercel con su OK.
+- **Orden:** handoff de Fase 1 mergeado → paso 1 (migración, worker, `--backfill-keys`, web admin); unos días de `--dry-run` y métrica → paso 2 → paso 3.
+- **Rollback paso 1:** revert del worker; columnas, índice y tabla sin uso (o `drop` antes del paso 2).
+- **Rollback paso 2:** `enabled = false` en `/admin/config` y reiniciar el worker (o esperar al slot ancla): todas las filas a `false` y sus matches re-puntuados (decisión 7). Revert del worker vuelve la versión anterior de `SCORING_VERSION` y re-puntúa todo.
+- **Rollback paso 3:** re-aplicar el cuerpo de `20261105120000`; `PriceRef` ignora claves faltantes.
 
 ## Tests
 
-- pgTAP `supabase/tests/f02_seller_test.sql`: columnas y CHECK intacto (`'dealer_inferred'` en `seller_type` sigue fallando con 23514); fila `seller_classification` e idempotencia (re-correr el insert no pisa un valor editado); `authenticated` no lee `app_config` ni `admin_seller_coverage`; la vista cuenta bien con fixtures (null tipo, null nombre, sobre umbral, inferidos). Paso 3: `comparables()` con un pool de 3 agencias, 2 inferidos, 4 particulares y 2 sin dato: `dealer_n = 5`, `private_n = 4`, medianas esperadas, y `median/p25/p75/median_km/n/diff_pct/level_used` idénticos a la versión anterior (se guarda el resultado antes de aplicar el cuerpo nuevo dentro del test); grupos vacíos → `*_n = 0`, mediana null.
-- Worker offline: `effective_seller`, copy (lint de `FORBIDDEN_TERMS`), matching con preferencia `dealer`/`private` y aviso inferido (OK/FAIL con el texto), `PriceRef` round-trip con y sin claves nuevas, validación de config.
-- Worker `-m db`: fixtures con un mismo vendedor en 6 avisos (y 5 en otro, con tildes y mayúsculas distintas para probar la normalización): `classify_sellers` pone conteos y `dealer_inferred`; nunca toca `seller_type` ni `seller_name`; **no crea `listing_snapshots`** ni cambia `matches.score` en los pasos 1 y 3; un `dealer` fijo no se infiere; re-correr no escribe filas (idempotente); bajar del umbral vuelve a `false`; app_config se guarda y restaura con `clear_config_cache()`.
-- Web vitest: `effectiveSeller`/`sellerLabel`, `DealerFeesNotice` con inferido, validador de config, vista admin.
-- e2e: la ficha de un aviso inferido muestra «Posible agencia (publica 6 autos)» y el aviso de gastos (seed con modelo y fuente propios, para no mover `comparables.spec.ts`).
+- **pgTAP** `supabase/tests/f02_seller_test.sql`: columnas, índice parcial, CHECK intacto (`'dealer_inferred'` en `seller_type` → 23514); config e idempotencia del insert; `anon`/`authenticated` sin acceso a `app_config`, `seller_classification_runs` ni la vista; la vista con fixtures. Paso 3: pool de 3 agencias, 2 inferidos, 4 particulares, 2 sin dato → `dealer_n = 5`, `private_n = 4` y medianas, y **las 7 claves viejas comparadas con literales calculados a mano** (no se puede correr el cuerpo viejo tras aplicar la migración); fixtures que fuerzan los niveles 1, 2 y 3 con `dealer_n + private_n <= n` en cada uno; sin agencias → `dealer_n = 0`, mediana null; `prosecdef = false`, `search_path=""`, grants iguales.
+- **Worker offline:** `seller_key` (tildes, «Autos S.A.»/«Autos SA», teléfonos con y sin `+54 9`, stoplist, emoji); validación de config (incluye `min_listings = 101` y `enabled` no booleano); `effective_seller`; matching OK/FAIL/UNKNOWN con textos; copy lint; `PriceRef` round-trip; `nightly_loop` llama `classify_sellers("startup")` antes de `rescore_outdated` y una excepción no impide el rescore; slot ancla sí, no ancla no.
+- **Worker `-m db`:**
+  - conteo: 6 avisos del mismo vendedor (tildes, mayúsculas, puntuación) → 6; dos filas con el mismo fingerprint cuentan 1; un repost probable no suma; un activo publicado hace 40 días no suma pero recibe el conteo del grupo; nombre en la stoplist → sin clave ni conteo; no toca `seller_type`, `seller_name`, `attributes` ni `listing_snapshots`; segunda corrida con `rows_written = 0` en `seller_classification_runs`;
+  - paso 1 sin efecto: slot ancla (clasificar + `rescore_recent`) deja `matches.score` y `match_reasons` iguales a `rescore_recent` solo;
+  - **ingesta**: 5 avisos activos de un grupo + búsqueda con preferencia `private`; se ingiere el 6.º por `ingest()` y se puntúa como en `crawl` → el match nuevo sale con FAIL «posible agencia» y la notificación `new_match` (si su nivel alcanza) no dice «vendedor particular»;
+  - **startup**: conteos del paso 1, `dealer_inferred` en false, `SCORING_VERSION` nueva → tras la secuencia de arranque los matches tienen la versión nueva y la razón FAIL;
+  - reset: un grupo que baja del umbral o pierde la clave vuelve a `false` con conteo null; `enabled = false` apaga todo y re-puntúa; `min_listings` 5 marca el grupo de 5; un `dealer` fijo nunca se infiere;
+  - paso 3: `matches.price_ref` con las cuatro claves y `median`, `n`, `diff_pct`, `level_used`, `score` iguales a una corrida sin datos de vendedor.
+- **Web vitest:** `effectiveSeller`, `sellerLabel`, `DealerFeesNotice` con inferido, validador (límites y `enabled`).
+- **e2e:** ficha de un aviso sembrado con `dealer_inferred = true` y `seller_listing_count = 7` muestra «Posible agencia (publica 7 autos)» y el aviso de gastos (el N sale de la semilla; el test no espera que N cambie).
 
-## Preguntas abiertas para Juan
+## Preguntas para Juan
 
-1. **Precedencia con «particular» explícito.** El diseño marca «posible agencia» aunque la fuente diga particular (lo pide el backlog y es el caso Facebook). ¿Vale también para fuentes donde «particular» es una señal fuerte (deRuedas, Rosario Garage en detalle), o ahí gana la fuente?
-2. **OK al bump de `SCORING_VERSION` en el paso 2** (re-puntúa todo al arrancar; solo cambian matches con preferencia de vendedor).
-3. **Copy propuesto:** «; la publicación dice particular» en la ficha, «Incluye posibles agencias.» en el formulario y el hint de `/admin/config`.
-4. **Medianas por tipo en la UI:** el paso 3 no las muestra; ¿se quedan solo para PRO-02 o se agrega una línea en la ficha (con mínimo de casos)?
+1. **¿Qué cuenta como «6 avisos en 30 días»?** Propuesta: avisos **publicados en los últimos 30 días** (fecha de publicación, o la primera vez que lo vimos si la fuente no la da) **y todavía activos**. La alternativa, «activos vistos en los últimos 30 días», cuenta casi todo lo activo y en Facebook infla los números con autos ya vendidos. **Recomiendo la propuesta.**
+2. **Cambio de versión del puntaje en el paso 2.** El paso 2 re-puntúa (cambia la preferencia de vendedor). Aprobaste un cambio para PRO-02 y la regla es uno por deploy. **Recomiendo** sacar el paso 2 junto con PRO-02 con un único cambio compartido; si el paso 2 sale antes, necesito tu OK para un cambio propio.
+3. **«Posible agencia» aunque el aviso diga particular.** En la práctica solo pasa en Facebook (marca todo como particular), y en avisos de Rosario Garage donde el listado mostró el nombre de una agencia y el detalle dijo «dueño directo». En deRuedas, Rosario Garage (detalle) y Mercado Libre los particulares no traen nombre, así que nunca se marcan. **Recomiendo** que la marca gane igual, y agregar en la ficha «; la publicación dice particular».
+4. **Textos propuestos.** Pista en el formulario de búsqueda «Incluye posibles agencias.» y la ayuda de `/admin/config` de la sección Paso 2. **Recomiendo** aprobarlos tal cual.
