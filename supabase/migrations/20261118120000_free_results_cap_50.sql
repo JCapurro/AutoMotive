@@ -1,7 +1,11 @@
 -- One cumulative quota per account. Keeping all matches lets a paid upgrade
 -- unlock them immediately. A listing admitted once never consumes another slot.
 set local lock_timeout = '5s';
-lock table public.search_profiles, public.matches in share row exclusive mode;
+-- Inside DO: the Supabase CLI applies a file outside a transaction block, where a
+-- bare LOCK TABLE fails. Applied in a transaction (production), it holds until commit.
+do $$ begin
+  lock table public.search_profiles, public.matches in share row exclusive mode;
+end $$;
 update public.app_config set value = jsonb_set(
   jsonb_set(value, '{free,max_visible_results}', '50'), '{free,max_total_results}', '50')
 where key = 'plan_limits';
