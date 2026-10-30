@@ -28,13 +28,13 @@ import {
   PRICE_TRACK,
   REASON_NAME,
   REASON_OK,
-  SELLER,
   TRANSMISSION,
 } from "@/lib/copy";
 import { ageLine, daysSince, imageUrls, km, money, number, pct, vehicle } from "@/lib/format";
 import { fetchPriceTracks, summaryLine, trackingNote } from "@/lib/price-track";
 import { financingOffered, financingTerms, isCashPrice, publishedIsPartial, publishedKind } from "@/lib/price";
 import { emphasize, RISK_HINT, RISK_TITLE } from "@/lib/risk-checklist";
+import { sellerLabel } from "@/lib/seller";
 import { createClient } from "@/lib/supabase/server";
 import type { Component, Listing, PriceRef, Reason, RedFlag } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -177,15 +177,14 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
               ) : null}
             </span>
           ) : null}
-          <DealerFeesNotice sellerType={listing.seller_type} />
+          <DealerFeesNotice sellerType={listing.seller_type} dealerInferred={listing.dealer_inferred} />
         </Fact>
         <Fact label="Kilometraje">{km(listing.mileage_km) ?? "No informado"}</Fact>
         <Fact label="Año">{listing.year ?? "No informado"}</Fact>
         <Fact label="Caja">{listing.transmission ? TRANSMISSION[listing.transmission] : "No informada"}</Fact>
         <Fact label="Combustible">{listing.fuel ? (FUEL[listing.fuel] ?? listing.fuel) : "No informado"}</Fact>
         <Fact label="Vendedor">
-          {[listing.seller_type ? SELLER[listing.seller_type] : null, listing.seller_name].filter(Boolean).join(", ") ||
-            "No informado"}
+          {[sellerLabel(listing), listing.seller_name].filter(Boolean).join(", ") || "No informado"}
         </Fact>
         <Fact label="Ubicación">
           {reasons.location?.result === "ok" ? reasons.location.detail : (listing.location_text ?? "No informada")}

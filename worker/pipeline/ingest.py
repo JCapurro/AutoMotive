@@ -39,6 +39,8 @@ from db.repos.runs import log_error
 from normalization.description_facts import PARTIAL_KINDS, DescriptionFacts, resolve_price
 from normalization.geo import SOURCE_DEFAULT_LOCATIONS, geocode_location
 from normalization.listing import Target, attrs_hash, fingerprint, normalize_listing
+from normalization.seller import seller_key
+from pipeline.seller_classification import classify_groups
 
 
 log = logging.getLogger("ingest")
@@ -81,6 +83,11 @@ class IngestResult:
     # so: body_type is not a key attribute, but searches by body type alone
     # have to see them.
     body_type_filled: list[int] = field(default_factory=list)
+    # F-02: the (source, seller_key) groups this batch changed (an insert, a
+    # key that changed, a listing back to active) and the listings that lost
+    # their key; ingest() classifies them before anything scores the batch.
+    seller_groups: set[tuple[str, str]] = field(default_factory=set)
+    seller_keyless: list[int] = field(default_factory=list)
 
     def extend(self, other: "IngestResult") -> None:
         self.found += other.found
@@ -89,6 +96,8 @@ class IngestResult:
         self.events += other.events
         self.ids.update(other.ids)
         self.body_type_filled += other.body_type_filled
+        self.seller_groups |= other.seller_groups
+        self.seller_keyless += other.seller_keyless
 
 
 @dataclass(frozen=True)
@@ -354,6 +363,8 @@ async def _on_insert(cx, stored: dict[str, Any], row: dict[str, Any], result: In
         await repo.set_repost_of(cx, lid, original)
     result.new += 1
     result.ids[(stored["source"], stored["external_id"])] = lid
+    if stored.get("seller_key"):
+        result.seller_groups.add((stored["source"], stored["seller_key"]))
     result.events.append(ListingEvent(
         "listing_new", lid, stored["source"], stored["external_id"], snapshot_id=snap,
         new_price=stored.get("price"), currency=stored.get("currency"), repost_of=original))
@@ -365,6 +376,7 @@ async def _on_update(cx, old: dict[str, Any], row: dict[str, Any], result: Inges
     values, changes = merge(old, row, detail=detail)
     await repo.update_listing(cx, lid, values, detail=detail, seen=seen)
     result.ids[(old["source"], old["external_id"])] = lid
+    _seller_groups(old, values, result, seen=seen)
     if values.get("body_type") and values.get("body_type") != old.get("body_type"):
         result.body_type_filled.append(lid)
     if not changes:
@@ -383,6 +395,27 @@ async def _on_update(cx, old: dict[str, Any], row: dict[str, Any], result: Inges
     if "price" in changes and not partial and (drop := price_drop_pct(before, after)) is not None \
             and drop >= config.price_drop_min_pct:
         result.events.append(ListingEvent("price_drop", drop_pct=drop, **base))
+
+
+def _seller_groups(old: dict[str, Any], values: dict[str, Any], result: IngestResult, *, seen: bool) -> None:
+    """F-02: an update moves a listing between seller groups when its key
+    changes (update_listing writes it from the merged seller_name) or brings it
+    back to active: both groups are counted again. Its group is also classified
+    again when seller_type crosses 'dealer' (a detail that says «dueño
+    directo» on a card that said concesionaria, or the reverse): the rule
+    never infers an explicit dealer, so dealer_inferred changes with it."""
+    before = old.get("seller_key")
+    after = seller_key(values["seller_name"]) if "seller_name" in values else before
+    back = seen and old.get("status") != "active"
+    was_dealer = old.get("seller_type") == "dealer"
+    is_dealer = values.get("seller_type", old.get("seller_type")) == "dealer"
+    if after == before and not back and was_dealer == is_dealer:
+        return
+    for key in (before, after):
+        if key:
+            result.seller_groups.add((old["source"], key))
+    if after is None and (old.get("seller_listing_count") is not None or old.get("dealer_inferred")):
+        result.seller_keyless.append(old["id"])
 
 
 # ---------------------------------------------------------------------------
@@ -443,6 +476,10 @@ async def ingest(items: Iterable[Listing], *, target: Target | None = None, deta
         await _geocode_rows(kept, geocode)
     result = await ingest_rows(kept, detail=detail, config=config or await IngestConfig.load(), seen=seen)
     result.found += dropped
+    # F-02 (decision 7a): after the batch commits and before the caller scores
+    # it, so a new listing of a known group is a «posible agencia» from its
+    # first alert. Its own short transactions; never raises.
+    await classify_groups(result.seller_groups, result.seller_keyless)
     # Legacy consumers (the Telegram opportunity engine) read make/model from
     # the Listing: give them the catalog's names instead of the raw ones.
     by_key = {(r["source"], r["external_id"]): r for r in rows}

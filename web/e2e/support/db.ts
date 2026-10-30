@@ -55,6 +55,12 @@ type Seed = {
   source?: string; // mercadolibre by default
   seenDaysAgo?: number; // last_seen_at, today by default
   status?: "active" | "gone";
+  make?: string; // Ford by default
+  model?: string; // Fiesta by default
+  sellerType?: "private" | "dealer" | null; // private by default
+  sellerName?: string | null; // none by default
+  sellerListingCount?: number | null; // F-02
+  dealerInferred?: boolean; // F-02 «posible agencia», false by default
 };
 
 const OLIVOS: [string, number, number] = ["Olivos", -34.5102, -58.4922];
@@ -106,10 +112,10 @@ async function insertListing(externalId: string, s: Seed): Promise<number> {
     `insert into public.listings
        (source, external_id, url, title, description, make, model, trim, year, price, currency, price_usd,
         mileage_km, transmission, fuel, location_text, lat, lon, seller_type, published_at, first_seen_at,
-        last_seen_at, fingerprint, body_type, status)
-     values ($14, $1, $2, $3, $4, 'Ford', 'Fiesta', 'Titanium', $5, $6, 'USD', $6, $7, $8, 'nafta',
-             $9, $10, $11, 'private', now() - make_interval(days => $12), now() - make_interval(days => $12),
-             now() - make_interval(days => $15), $1, $13, $16)
+        last_seen_at, fingerprint, body_type, status, seller_name, seller_listing_count, dealer_inferred)
+     values ($14, $1, $2, $3, $4, $17, $18, 'Titanium', $5, $6, 'USD', $6, $7, $8, 'nafta',
+             $9, $10, $11, $19, now() - make_interval(days => $12), now() - make_interval(days => $12),
+             now() - make_interval(days => $15), $1, $13, $16, $20, $21, $22)
      returning id`,
     [
       externalId,
@@ -128,6 +134,12 @@ async function insertListing(externalId: string, s: Seed): Promise<number> {
       s.source ?? "mercadolibre",
       s.seenDaysAgo ?? 0,
       s.status ?? "active",
+      s.make ?? "Ford",
+      s.model ?? "Fiesta",
+      s.sellerType === undefined ? "private" : s.sellerType,
+      s.sellerName ?? null,
+      s.sellerListingCount ?? null,
+      s.dealerInferred ?? false,
     ],
   );
   const history = [...(s.prices ?? []), [0, s.price] as [number, number]];
@@ -275,6 +287,47 @@ export async function insertFreshDeal(run: string): Promise<number> {
     price: 9_900,
     publishedDaysAgo: 0,
   });
+}
+
+/**
+ * F-02 (seller.spec.ts): two Ford Ka of the given user's fresh search, a model
+ * no other spec searches. inferred: a «posible agencia» that publishes 7 cars
+ * (the worker would have written dealer_inferred and the count; the listing
+ * itself says «particular»); private: a plain private seller.
+ */
+export async function seedSellerListings(email: string, run: string): Promise<{ inferred: number; private: number }> {
+  const base = { year: 2018, km: 90_000, price: 9_000, make: "Ford", model: "Ka" } as const;
+  const inferred = await insertListing(`${E2E_LISTING_PREFIX}seller-inferred-${run}`, {
+    ...base,
+    key: "seller-inferred",
+    sellerType: "private",
+    sellerName: "Autos del Parque",
+    sellerListingCount: 7,
+    dealerInferred: true,
+  });
+  const priv = await insertListing(`${E2E_LISTING_PREFIX}seller-private-${run}`, {
+    ...base,
+    key: "seller-private",
+    km: 95_000,
+    sellerType: "private",
+    sellerName: "Juan Pérez",
+    sellerListingCount: 1,
+  });
+  const [profile] = await query<{ id: string }>(
+    `insert into public.search_profiles (user_id, name, filters, notification_frequency, bootstrapped_at)
+     select id, 'Ka vendedor', '{"make": "Ford", "model": "Ka"}', 'daily', now()
+       from public.profiles where email = $1
+     returning id`,
+    [email],
+  );
+  for (const id of [inferred, priv]) {
+    await query(
+      `insert into public.matches (search_profile_id, listing_id, score, level, score_breakdown, match_reasons, red_flags, scoring_version)
+       values ($1, $2, 72, 'good', '{}', '{}', '[]', 'e2e')`,
+      [profile.id, id],
+    );
+  }
+  return { inferred, private: priv };
 }
 
 /**

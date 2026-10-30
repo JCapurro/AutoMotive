@@ -1,11 +1,17 @@
-"""F-02 paso 1 (docs/superpowers/specs/2026-10-30-f02-vendedor-design.md): the
-seller key and the seller_classification config. No database."""
+"""F-02 (docs/superpowers/specs/2026-10-30-f02-vendedor-design.md): the seller
+key and the seller_classification config (paso 1); the effective seller and
+the seller preference with «posible agencia» (paso 2). No database."""
 from __future__ import annotations
 
 import pytest
 
-from intelligence.config import DEFAULT_SELLER_CLASSIFICATION, seller_classification
+from intelligence import copy
+from intelligence.config import DEFAULT_SELLER_CLASSIFICATION, IntelligenceConfig, seller_classification
+from intelligence.matching import evaluate
+from intelligence.scoring import completeness_fields
+from intelligence.seller import effective_seller, seller_kind
 from normalization.seller import STOPLIST, seller_key
+from test_intelligence import fiesta_listing, fiesta_profile
 
 
 # ---------------------------------------------------------------------------
@@ -141,3 +147,93 @@ def test_window_days_out_of_range_falls_back_to_30(bad):
 
 def test_unknown_keys_are_dropped():
     assert seller_classification({**DEFAULTS, "extra": 1}) == DEFAULTS
+
+
+# ---------------------------------------------------------------------------
+# Paso 2: effective seller («posible agencia»)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("seller_type, inferred, expected", [
+    ("dealer", False, "dealer"),
+    ("dealer", True, "dealer"),
+    ("private", True, "dealer"),      # Juan, 30/10: the inference wins over «particular»
+    (None, True, "dealer"),
+    ("private", False, "private"),
+    (None, False, None),
+])
+def test_effective_seller(seller_type, inferred, expected):
+    assert effective_seller({"seller_type": seller_type, "dealer_inferred": inferred}) == expected
+
+
+def test_effective_seller_of_a_row_without_the_column_is_the_type():
+    """Rows read before the migration, and test fixtures, have no dealer_inferred."""
+    assert effective_seller({"seller_type": "private"}) == "private"
+    assert effective_seller({}) is None
+
+
+def test_seller_kind_tells_the_reason():
+    assert copy.SELLER_INFERRED == "posible agencia"
+    assert copy.REASON["seller_inferred"] == "publica {n} autos"
+    assert seller_kind({"seller_type": None, "dealer_inferred": True, "seller_listing_count": 6}) == \
+        "posible agencia (publica 6 autos)"
+    assert seller_kind({"seller_type": "private", "dealer_inferred": True, "seller_listing_count": 9}) == \
+        "posible agencia (publica 9 autos)"
+    # Never «publica None autos».
+    assert seller_kind({"seller_type": None, "dealer_inferred": True, "seller_listing_count": None}) == \
+        "posible agencia"
+    assert seller_kind({"seller_type": "dealer", "dealer_inferred": False, "seller_listing_count": 9}) == \
+        "concesionaria"
+    assert seller_kind({"seller_type": "private", "dealer_inferred": False}) == "particular"
+    assert seller_kind({"seller_type": None}) is None
+
+
+def _seller_reason(listing_kw: dict, wanted: str | None) -> dict:
+    profile = fiesta_profile()
+    if wanted:
+        profile["preferences"]["seller_type"] = wanted
+    return evaluate(fiesta_listing(**listing_kw), profile).reasons.get("seller_type")
+
+
+INFERRED = {"seller_type": "private", "dealer_inferred": True, "seller_listing_count": 6}
+
+
+def test_matching_an_inferred_dealer_against_a_dealer_preference_is_ok():
+    r = _seller_reason(INFERRED, "dealer")
+    assert (r.result, r.detail, r.hard) == ("ok", "vendedor posible agencia (publica 6 autos)", False)
+
+
+def test_matching_an_inferred_dealer_against_a_private_preference_fails():
+    r = _seller_reason({**INFERRED, "seller_type": None}, "private")
+    assert (r.result, r.detail, r.hard) == ("fail", "vendedor posible agencia (publica 6 autos), se prefiere particular",
+                                            False)
+    assert "vendedor particular" not in r.detail
+
+
+def test_matching_without_type_nor_inference_is_unknown():
+    r = _seller_reason({"seller_type": None, "dealer_inferred": False, "seller_listing_count": 3}, "private")
+    assert (r.result, r.detail) == ("unknown", copy.NOT_INFORMED)
+
+
+def test_matching_explicit_types_did_not_change():
+    assert _seller_reason({"seller_type": "private"}, "private").detail == "vendedor particular"
+    r = _seller_reason({"seller_type": "dealer"}, "private")
+    assert (r.result, r.detail) == ("fail", "vendedor concesionaria, se prefiere particular")
+    assert _seller_reason({"seller_type": "dealer", "dealer_inferred": False}, "dealer").result == "ok"
+    assert _seller_reason(INFERRED, None) is None, "no preference: no reason"
+
+
+def test_completeness_still_reads_the_source_seller_type():
+    """The inference is no informed field: an inferred listing with no type
+    stays incomplete (design: completitud sin cambio)."""
+    cfg = IntelligenceConfig()
+    plain = completeness_fields(fiesta_listing(seller_type=None), cfg)
+    inferred = completeness_fields(fiesta_listing(seller_type=None, dealer_inferred=True, seller_listing_count=7), cfg)
+    assert plain == inferred
+    assert inferred["seller_type"] is False
+
+
+def test_scoring_version_is_the_one_shared_with_pro02():
+    """Paso 2 moves scores with a seller preference: one bump, shared with
+    PRO-02 in the same deploy (Juan, 30/10/2026). PRO-02 must not bump again."""
+    from intelligence.config import SCORING_VERSION
+    assert SCORING_VERSION == "f2-v5-seller-margin"

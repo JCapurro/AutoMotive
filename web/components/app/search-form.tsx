@@ -22,7 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import type { Catalog } from "@/lib/catalog";
-import { BODY_TYPE, BODY_TYPE_CODES, type BodyType, FREQUENCY, FUEL, MIN_LEVEL_OPTIONS, SELLER, TRANSMISSION, isBodyType } from "@/lib/copy";
+import { BODY_TYPE, BODY_TYPE_CODES, type BodyType, FREQUENCY, FUEL, MIN_LEVEL_OPTIONS, SELLER, SELLER_FORM_HINT, TRANSMISSION, isBodyType } from "@/lib/copy";
 import { number } from "@/lib/format";
 import { PROVINCES, citiesInProvince, cityById, cityByLocation } from "@/lib/argentina-locations";
 import {
@@ -712,6 +712,11 @@ export function SearchForm({
                 <NativeSelectOption value="private">{SELLER.private}</NativeSelectOption>
                 <NativeSelectOption value="dealer">{SELLER.dealer}</NativeSelectOption>
               </NativeSelect>
+              {d.seller_type === "dealer" ? (
+                <p className="text-[13px] text-muted-foreground" data-testid="seller-type-hint">
+                  {SELLER_FORM_HINT}
+                </p>
+              ) : null}
             </Field>
             <Field id={fid("km_max")} label="Kilometraje máximo" error={fieldError("km_max")}>
               <Input

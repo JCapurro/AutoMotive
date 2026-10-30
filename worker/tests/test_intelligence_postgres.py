@@ -498,6 +498,32 @@ class ScoredMatchesTests(IntelligenceCase):
         self.assertGreater(after["score"], before["score"])
         self.assertEqual(after["generated_at"], before["generated_at"])
 
+    async def test_price_ref_gains_the_seller_medians_and_nothing_else_moves(self):
+        """F-02 paso 3: a run without seller data, then the same pool with sellers."""
+        lid = await self.listing(price=10_300, price_usd=10_300)
+        ids = [await self.listing(price=p, price_usd=p) for p in (11_000, 11_100, 11_200, 11_300, 11_400)]
+        aid = await self.fiesta_alert(km_max=150_000)
+        await rematch.run_pending()
+        before = await self.match_row(aid, lid)
+        self.assertEqual({k: before["price_ref"][k] for k in ("dealer_n", "dealer_median", "private_n", "private_median")},
+                         {"dealer_n": 0, "dealer_median": None, "private_n": 0, "private_median": None})
+
+        sellers = [("dealer", False), ("dealer", False), ("private", True), ("private", False), ("private", False)]
+        async with db.connection() as cx:
+            for cid, (seller_type, inferred) in zip(ids, sellers):
+                await cx.execute("UPDATE listings SET seller_type = %s, dealer_inferred = %s WHERE id = %s",
+                                 (seller_type, inferred, cid))
+        await rescore.rescore_listings([lid])
+        after = await self.match_row(aid, lid)
+
+        # Dealer: 11.000, 11.100 and the inferred 11.200 (it says private). Private: 11.300, 11.400.
+        self.assertEqual({k: after["price_ref"][k] for k in ("dealer_n", "dealer_median", "private_n", "private_median")},
+                         {"dealer_n": 3, "dealer_median": 11_100.0, "private_n": 2, "private_median": 11_350.0})
+        for key in ("median", "p25", "p75", "median_km", "n", "diff_pct", "level_used"):
+            self.assertEqual(after["price_ref"][key], before["price_ref"][key], key)
+        for col in ("score", "level", "score_breakdown", "match_reasons", "scoring_version"):
+            self.assertEqual(after[col], before[col], col)
+
     async def test_explain_match_renders_reasons_breakdown_flags_and_questions(self):
         lid = await self.listing(price=10_300, price_usd=10_300)
         for p in (11_000, 11_100, 11_200, 11_300, 11_400):
