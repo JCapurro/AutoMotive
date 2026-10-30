@@ -11,6 +11,7 @@ from psycopg import AsyncConnection
 from psycopg.types.json import Jsonb
 
 from db.pool import connection
+from normalization.seller import seller_key
 
 
 Key = tuple[str, str]
@@ -24,6 +25,9 @@ COLUMNS = ("source", "external_id", "url", "title", "description", "make", "mode
            "price_source", "description_facts")
 _JSON = {"images", "attributes", "description_facts"}
 _NUMERIC = ("price", "price_usd", "price_published")
+# F-02: written next to seller_name, from the value merge() resolved (an empty
+# incoming name never erases it). Not in COLUMNS: the pipeline never sets it.
+_KEY_COLUMN = "seller_key"
 
 
 def _param(column: str, value: Any) -> Any:
@@ -55,13 +59,17 @@ async def insert_listing(cx: AsyncConnection, row: dict[str, Any], *,
     """Insert a new listing. Returns the stored row, or None if another
     transaction inserted the same (source, external_id) first."""
     cols = [c for c in COLUMNS if c in row]
+    params = [_param(c, row[c]) for c in cols]
+    if "seller_name" in row:
+        cols.append(_KEY_COLUMN)
+        params.append(seller_key(row["seller_name"]))
     stamps = ", enriched_at, detail_checked_at" if detail else ""
     stamp_values = ", now(), now()" if detail else ""
     stored = await (await cx.execute(
         f"INSERT INTO listings ({', '.join(cols)}{stamps}) "
         f"VALUES ({', '.join(['%s'] * len(cols))}{stamp_values}) "
         "ON CONFLICT (source, external_id) DO NOTHING RETURNING *",
-        [_param(c, row[c]) for c in cols])).fetchone()
+        params)).fetchone()
     return _pythonic(stored) if stored else None
 
 
@@ -71,12 +79,15 @@ async def update_listing(cx: AsyncConnection, listing_id: int, values: dict[str,
     `seen=False` (tools/reprocess.py): a stored page read again is no sighting."""
     cols = [c for c in COLUMNS if c in values and c not in ("source", "external_id")]
     sets = [f"{c} = %s" for c in cols]
+    params = [_param(c, values[c]) for c in cols]
+    if "seller_name" in values:
+        sets.append(f"{_KEY_COLUMN} = %s")
+        params.append(seller_key(values["seller_name"]))
     if seen:
         sets += ["last_seen_at = now()", "status = 'active'"]
     if detail and seen:
         sets += ["enriched_at = coalesce(enriched_at, now())", "detail_checked_at = now()"]
-    await cx.execute(f"UPDATE listings SET {', '.join(sets)} WHERE id = %s",
-                     [*(_param(c, values[c]) for c in cols), listing_id])
+    await cx.execute(f"UPDATE listings SET {', '.join(sets)} WHERE id = %s", [*params, listing_id])
 
 
 async def insert_snapshot(cx: AsyncConnection, listing_id: int, row: dict[str, Any],

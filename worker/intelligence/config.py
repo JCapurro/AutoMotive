@@ -84,3 +84,25 @@ class IntelligenceConfig:
         import db
         keys = ("score_weights", "level_thresholds", "comparables", "score_curves", "red_flags")
         return cls.from_app_config({k: await db.get_config(k) for k in keys})
+
+
+# F-02 (docs/superpowers/specs/2026-10-30-f02-vendedor-design.md): the seller
+# classification job. Same bounds as the /admin/config validator; a missing or
+# bad value falls back to its default, key by key. `enabled` has no effect until
+# step 2 (dealer_inferred).
+DEFAULT_SELLER_CLASSIFICATION = {"enabled": True, "min_listings": 6, "window_days": 30}
+_SELLER_BOUNDS = {"min_listings": (2, 100), "window_days": (1, 180)}
+
+
+def seller_classification(raw: Any) -> dict[str, Any]:
+    """app_config.seller_classification as the worker uses it."""
+    out = dict(DEFAULT_SELLER_CLASSIFICATION)
+    if not isinstance(raw, Mapping):
+        return out
+    if isinstance(raw.get("enabled"), bool):
+        out["enabled"] = raw["enabled"]
+    for key, (lo, hi) in _SELLER_BOUNDS.items():
+        value = raw.get(key)
+        if isinstance(value, int) and not isinstance(value, bool) and lo <= value <= hi:
+            out[key] = value
+    return out

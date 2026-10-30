@@ -125,6 +125,21 @@ test("F6: el admin responde «¿por qué se envió esta alerta?» en un clic", a
     await expect(page.getByText("La publicación no tiene descripción.")).toBeVisible();
     await expectNoHorizontalScroll(page);
   });
+
+  await test.step("Fuentes: vendedor por fuente (F-02)", async () => {
+    // The fresh deal above is an active mercadolibre listing; a finished write run gives «Calculado».
+    await query(`insert into public.seller_classification_runs (trigger, mode, status, finished_at)
+                 values ('cli', 'write', 'ok', now())`);
+    await page.goto("/admin/sources");
+    await expect(page.getByRole("heading", { name: "Vendedor por fuente" })).toBeVisible();
+    await expect(page.getByText(/Calculado: \d/)).toBeVisible();
+    const table = page.getByRole("table").filter({ has: page.getByRole("columnheader", { name: "% sin clave" }) });
+    for (const header of ["Activos", "% sin tipo", "% sin nombre", "Sobre el umbral"]) {
+      await expect(table.getByRole("columnheader", { name: header, exact: true })).toBeVisible();
+    }
+    await expect(table.getByRole("row").filter({ has: page.getByRole("cell", { name: "mercadolibre", exact: true }) })).toHaveCount(1);
+    await expectNoHorizontalScroll(page);
+  });
 });
 
 test("F6: «Ver planes» → Particular → lista de espera", async ({ page }, testInfo) => {

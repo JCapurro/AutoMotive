@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { SourceHealthTable } from "@/components/admin/sources";
+import { SellerCoverageTable, SourceHealthTable } from "@/components/admin/sources";
 import { EmptyRow, PageHeader, Pill, Section, Table, Td, Th } from "@/components/admin/ui";
 import { count, when } from "@/lib/admin-format";
 import { requireAdmin } from "@/lib/admin";
@@ -16,12 +16,17 @@ export default async function SourcesPage({ searchParams }: PageProps<"/admin/so
   const admin = createAdminClient();
   let runsQuery = admin.from("collector_runs").select("*").order("started_at", { ascending: false }).limit(100);
   if (filter) runsQuery = runsQuery.eq("source", filter);
-  const [{ data: health, error: healthError }, { data: runs }, { data: cfg }, { data: beat }] = await Promise.all([
+  const [{ data: health, error: healthError }, { data: runs }, { data: cfg }, { data: beat }, { data: sellers }, { data: sellerRun }] = await Promise.all([
     admin.from("admin_source_health").select("*").order("priority"),
     runsQuery,
     admin.from("app_config").select("value").eq("key", "collector_failure_alert_after").maybeSingle(),
     admin.from("worker_heartbeat").select("started_at, beat_at, host").maybeSingle(),
+    admin.from("admin_seller_coverage").select("*").order("source"),
+    // «Calculado»: the last run that wrote, not the last value that changed.
+    admin.from("seller_classification_runs").select("finished_at").eq("status", "ok").eq("mode", "write")
+      .order("finished_at", { ascending: false }).limit(1).maybeSingle(),
   ]);
+  const threshold = sellers?.[0]?.min_listings ?? 6;
   const alertAfter = Number(cfg?.value ?? 3);
 
   return (
@@ -34,6 +39,13 @@ export default async function SourcesPage({ searchParams }: PageProps<"/admin/so
       <div id="sources" className="scroll-mt-32">
         {healthError ? <p role="alert" className="rounded-lg border border-destructive p-4 text-sm text-destructive">No pudimos leer las fuentes. Recargá la página antes de modificar su configuración.</p> : <SourceHealthTable rows={health ?? []} editable alertAfter={alertAfter} />}
       </div>
+
+      <Section
+        title="Vendedor por fuente"
+        description={`Avisos activos sin tipo, nombre o clave de vendedor, y cuántos son de vendedores con ${threshold} o más autos publicados en la ventana (F-02, todavía sin efecto en el score). Calculado: ${sellerRun?.finished_at ? when(sellerRun.finished_at) : "todavía no"}.`}
+      >
+        <SellerCoverageTable rows={sellers ?? []} />
+      </Section>
 
       <Section title={filter ? `Corridas de ${filter}` : "Últimas corridas"} description="collector_runs, las 100 más recientes.">
         <Table>

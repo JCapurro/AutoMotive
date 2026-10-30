@@ -61,6 +61,14 @@ export const SourceUpdateInput = SourceValuesInput.extend({
   expected: z.object({ enabled: z.boolean(), crawl_interval_seconds: z.number().int().positive().max(MAX_CONFIG_INTEGER) }).strict(),
 }).strict();
 
+/** F-02: same bounds as worker/intelligence/config.py seller_classification. */
+export const SELLER_CLASSIFICATION_MESSAGE = "enabled debe ser true/false, min_listings un entero entre 2 y 100 y window_days entre 1 y 180.";
+export const SellerClassificationInput = z.object({
+  enabled: z.boolean(),
+  min_listings: z.number().int().min(2).max(100),
+  window_days: z.number().int().min(1).max(180),
+}).strict();
+
 export function configObject(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
@@ -89,6 +97,7 @@ export function validateConfigChange(key: string, value: unknown, current: unkno
       return "min_drop_pct tiene que ser un número entre 0 y 100.";
     }
   }
+  if (key === "seller_classification" && !SellerClassificationInput.safeParse(value).success) return SELLER_CLASSIFICATION_MESSAGE;
   if (key === "risk") {
     // PAR-02: the «Antes de señar» switch and its official links (https only).
     const parsed = RiskConfigInput.safeParse(value);
