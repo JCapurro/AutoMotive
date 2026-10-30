@@ -321,3 +321,21 @@ Uso de `dealer`: aplica cuando el aviso tiene `seller_type = 'dealer'` o es `dea
 11. **Pick-ups en CABA** (2,30 % plano): ¿se mapean con `body_type`? Las rurales y 4x4 quedan en la escala.
 12. **Actualización.** Hay que revisar la tabla DNRPA, el MRPA (cada 4 meses), el coeficiente de ARBA y las leyes impositivas 2027 (diciembre y enero). ¿Quién lo carga en `/admin/config` y cada cuánto?
 13. **Plan:** según el backlog, PAR-01 es de Particular. Confirmar si también va en Pro.
+
+## 6. Respuestas de Juan (30/10/2026): sí a todo
+
+Donde la propuesta no traía una recomendación cerrada, se eligió la opción más fiel a la regla de Juan (solo números oficiales; lo incierto, como rango explícito que llega al total):
+
+1. **k = 0,70 – 1,00** para estimar la valuación fiscal desde el precio. Es un supuesto propio y se muestra como tal.
+2. **Formularios:** se lleva el rango completo (08: 8.000 – 9.600; 12: 0 – 9.240) al total.
+3. **Informe de dominio:** línea aparte, «recomendado antes de señar», fuera del total. Se enlaza con el checklist de PAR-02.
+4. **Gestoría:** fuera del total, con el texto «Gestor opcional: sin tarifa oficial, se pacta con el gestor». No se muestra la referencia de 2024.
+5. **Sellos del resto:** techo de 3 %.
+6. **Agencias:** los rangos de arancel y sellos de agencia valen igual para `seller_type = 'dealer'` y para `dealer_inferred` («posible agencia»), usando `effectiveSeller` de F-02.
+7. **Patente CABA, autos de 25 años o más:** mínimo 0 hasta confirmar el art. 433 del Código Fiscal.
+8. Se rotula **«patente anual (valores 2026)»**.
+9. **PBA:** factor IPC 1,00 – 1,25 provisorio hasta que ARBA publique el coeficiente.
+10. **Texto:** «Costo total estimado: USD X – Y (ARS A – B)», con desplegable por concepto y «parámetros al dd/mm». Siempre «estimado», nunca «precio real». Reemplaza el aviso fijo de 8–10 %.
+11. **Pick-ups en CABA:** se mapean con `body_type` a la alícuota plana de 2,30 %.
+12. **Actualización:** Juan carga los valores en `/admin/config`. `/admin` muestra un aviso cuando `as_of` supera los 120 días (ciclo del MRPA) y en diciembre y enero (leyes impositivas nuevas).
+13. **Plan:** como dice el backlog, PAR-01 es para Particular. En Pro, los costos de transferencia llegan por PRO-02 (margen), que lee el mismo `cost_estimator`.
