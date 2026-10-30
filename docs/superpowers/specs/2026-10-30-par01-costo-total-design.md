@@ -312,7 +312,7 @@ Scores, `SCORING_VERSION`, `price_ref`, `match_cards`, `search_results`, umbrale
 
 ## Operación y rollback
 
-- **Migración** `supabase/migrations/20261124120000_par01_cost_estimator.sql` (por encima de los `2026112312xxxx` de F-02; releer `max(version)` de producción justo antes y renombrar si PRO-01, PRO-02 o F-02 sumaron otras). Contenido: `insert … on conflict (key) do nothing` de `cost_estimator`, y `plan_limits.pass.total_cost = true` y `plan_limits.free.total_cost = true`, cada uno solo si la clave no existe. Va con OK de Juan, en una transacción con el insert de su versión. `supabase/seed.sql` no se actualiza solo: su literal de `plan_limits` (`seed.sql:41-46`) se inserta con `on conflict do nothing` y las migraciones de flags anteriores no lo tocaron. Por eso se edita a mano: `"total_cost": true` dentro de los objetos `pass` y `free` del literal, más la fila `cost_estimator` con el JSON de arriba. Si no, las bases locales de pgTAP y e2e arrancan sin el flag.
+- **Migración** `supabase/migrations/20261126120000_par01_cost_estimator.sql` (por encima de los `2026112312xxxx` de F-02; releer `max(version)` de producción justo antes y renombrar si PRO-01, PRO-02 o F-02 sumaron otras). Contenido: `insert … on conflict (key) do nothing` de `cost_estimator`, y `plan_limits.pass.total_cost = true` y `plan_limits.free.total_cost = true`, cada uno solo si la clave no existe. Va con OK de Juan, en una transacción con el insert de su versión. `supabase/seed.sql` no se actualiza solo: su literal de `plan_limits` (`seed.sql:41-46`) se inserta con `on conflict do nothing` y las migraciones de flags anteriores no lo tocaron. Por eso se edita a mano: `"total_cost": true` dentro de los objetos `pass` y `free` del literal, más la fila `cost_estimator` con el JSON de arriba. Si no, las bases locales de pgTAP y e2e arrancan sin el flag.
 - **Sin cambio de score, sin bump, sin rescore.** El worker toma la config en menos de 60 s; la web, en el request siguiente.
 - **Orden de deploy:** migración → worker (`wait_idle`) → web. Una web nueva con la base vieja no muestra nada: sin `cost_estimator` no hay `as_of`.
 - **Rollback rápido:** `plan_limits.pass.total_cost = false` (y `free`) en `/admin/config` apaga ficha, tarjeta y email sin deploy. Al terminar el piloto, Juan apaga `free.total_cost` con el mismo toggle.
@@ -330,3 +330,14 @@ Respondidas el 30/10 («sí a todo» sobre la revisión 1):
 Abierta:
 
 1. **Dos umbrales operativos en la config.** (a) `buyer_zone.max_locality_km`: a qué distancia de la localidad argentina más cercana una zona deja de tener jurisdicción. Recomiendo **80 km**: corta Montevideo (106,8), Santiago de Chile (91,3), Punta del Este (212,1) y Bolivia, y deja dentro los puntos reales de Santa Cruz (hueco máximo entre localidades: 127,7 km, o sea unos 65 km a la más cercana). (b) `fx.max_age_days`: antigüedad máxima de la cotización para avisos en USD. Recomiendo **3 días**, que cubren un fin de semana sin ingesta; después se muestra «sin dólar del día». Si preferís no poner un tope, el detalle igual dice «dólar blue del dd/mm».
+
+## Respuestas de Juan a la revisión 2 (30/10/2026): sí a todo
+
+1. **Free** tiene el flag `total_cost` durante el piloto (toggle en `/admin/config`, sin deploy).
+2. El aviso fijo de 8–10 % se **quita para todos**; Pro recupera los costos de transferencia con PRO-02.
+3. **Pick-ups en CABA:** el mínimo de ARS 13.300 y el factor Subte también aplican a la alícuota plana de 2,30 %.
+4. **Informe de dominio:** 4 MRPA (ARS 4.040 – 4.360), en línea aparte, fuera del total.
+5. `buyer_zone.max_locality_km` = **80**.
+6. `fx.max_age_days` = **3**.
+
+La migración pasa a `20261126120000`, porque F-02 ocupó de 20261123120000 a 20261125120000 (ya aplicadas en producción).
