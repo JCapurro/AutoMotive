@@ -229,10 +229,10 @@ Files: `web/e2e/support/db.ts`, `web/e2e/total-cost.spec.ts`.
 
 ## Task 10: verificación y cierre
 
-- [ ] Todos los comandos verdes respecto de la línea base; typecheck y eslint de los archivos tocados.
-- [ ] Revisión de copy: «estimado» siempre presente; ningún término prohibido; las fuentes de la ficha coinciden con la config.
-- [ ] Actualizar `docs/BACKLOG_PRODUCTO_2026-10.md`: PAR-01 con valores sembrados en lugar de null (decisión de Juan del 30/10), orden por costo total fuera de v1 y `results_sorted_total_cost` reservado.
-- [ ] Commit (sin push desde esta sesión).
+- [x] Todos los comandos verdes respecto de la línea base; typecheck y eslint de los archivos tocados.
+- [x] Revisión de copy: «estimado» siempre presente; ningún término prohibido; las fuentes de la ficha coinciden con la config.
+- [x] Actualizar `docs/BACKLOG_PRODUCTO_2026-10.md`: PAR-01 con valores sembrados en lugar de null (decisión de Juan del 30/10), orden por costo total fuera de v1 y `results_sorted_total_cost` reservado.
+- [x] Commit (sin push desde esta sesión).
 - [ ] **Parar:** Juan aplica la migración (releyendo `max(version)`), reinicia el worker con `wait_idle`, despliega la web y revisa `/admin/config`.
 
 ## Rollback

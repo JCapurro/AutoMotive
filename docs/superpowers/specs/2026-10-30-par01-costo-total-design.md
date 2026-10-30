@@ -341,3 +341,12 @@ Abierta:
 6. `fx.max_age_days` = **3**.
 
 La migración pasa a `20261126120000`, porque F-02 ocupó de 20261123120000 a 20261125120000 (ya aplicadas en producción).
+
+## Notas de implementación (30/10/2026)
+
+- **`listings.fx_rate` no existe.** La columna está en `listing_snapshots` (el worker la calcula como `price / price_usd`, `db/repos/listings.py:insert_snapshot`). Para no tocar el esquema, el armado de la entrada (los dos lados) toma `R = price / price_usd` de la misma fila del aviso en ARS: es el dólar con el que se calculó `price_usd`, sin consulta extra. Los casos de armado del JSON dorado lo fijan; la nota de `cost_estimator.fx` lo dice.
+- **Totales del diseño con el detalle ya redondeado.** En los casos 10, 18 y 26 el texto de arriba suma los términos redondeados a $100 (21.324.900, 20.218.900, 21.517.592,5). Los vectores usan los crudos (21.324.840, 20.218.840, 21.517.532,5); las líneas visibles no cambian.
+- **`build_input` recibe `today`** (día de Argentina) para aplicar `fx.max_age_days`; la calculadora sigue sin reloj.
+- **Validación:** `domain_report.in_total` y `gestoria.in_total` tienen que ser `false` y `gestoria.official_value`, `null` (v1 no los suma ni los muestra como monto). El JSON dorado tiene además `config_cases` con cada regla del parser tolerante.
+- **Componente de la ficha:** la prueba vive en `web/lib/cost-estimate.test.ts`, porque vitest solo corre `lib/**/*.test.ts`.
+
