@@ -12,6 +12,7 @@ from normalization.fx import FxQuote
 from normalization.listing import Target, fingerprint, normalize_listing, price_usd
 from normalization.vehicle import CatalogModel, resolve_vehicle
 from pipeline.crawl import TargetSpec, derive_targets, retry_seconds, scraper_filters
+from normalization.description_facts import Amount, DescriptionFacts, resolve_price
 from pipeline.ingest import merge, price_drop_pct, published_partial
 
 CATALOG = [
@@ -291,6 +292,35 @@ class PublishedPartialTests(unittest.TestCase):
                     {"price_partial": False, "description_facts": {}}):
             with self.subTest(row):
                 self.assertFalse(published_partial(row))
+
+    def test_a_total_from_the_description_above_the_published_number(self):
+        # No word for it: resolve_price read USD 5.000 as a down payment only
+        # because the text prices the car at USD 15.000 (way above).
+        facts = DescriptionFacts(amounts=[Amount("cash", 15_000.0, "USD", "USD 15.000 de contado")])
+        for pub in (5_000.0, 4_000.0):
+            res = resolve_price(pub, "USD", partial_reason=None, facts=facts, usd_rate=1_000.0)
+            row = {"price_published": pub, "price_published_currency": "USD", "price": res.price,
+                   "currency": res.currency, "price_source": res.source, "price_partial": res.partial,
+                   "description_facts": {"price_check": res.check()}}
+            with self.subTest(pub):
+                self.assertEqual((res.price, res.source, res.published_kind), (15_000.0, "description", None))
+                self.assertTrue(published_partial(row))
+        # Across currencies, at the incoming rate when the row can't tell its own.
+        row = {"price_published": 5_000_000.0, "price_published_currency": "ARS", "price": 15_000.0,
+               "currency": "USD", "price_usd": 15_000.0, "price_source": "description"}
+        self.assertFalse(published_partial(row))
+        self.assertTrue(published_partial(row, usd_rate=1_000.0))
+
+    def test_a_cheaper_cash_price_from_the_description_is_no_partial(self):
+        # The published number is the list price: its drops are drops.
+        for row in ({"price_published": 10_000.0, "price_published_currency": "USD", "price": 9_500.0,
+                     "currency": "USD", "price_source": "description"},
+                    {"price_published": 12_000_000.0, "price_published_currency": "ARS", "price": 9_500.0,
+                     "currency": "USD", "price_usd": 9_500.0, "price_source": "description"},
+                    {"price_published": 10_000.0, "price_published_currency": "USD", "price": 15_000.0,
+                     "currency": "USD", "price_source": "published"}):
+            with self.subTest(row):
+                self.assertFalse(published_partial(row, usd_rate=1_000.0))
 
 
 class CrawlTargetTests(unittest.TestCase):

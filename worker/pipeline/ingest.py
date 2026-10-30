@@ -287,15 +287,38 @@ def published_view(row: dict[str, Any]) -> dict[str, Any]:
     return {**row, "price": pub, "currency": cur, "price_usd": pub_usd}
 
 
-def published_partial(row: dict[str, Any], partial_reason: str | None = None) -> bool:
+def total_above_published(row: dict[str, Any], usd_rate: float | None = None) -> bool:
+    """The effective price is a total from the description above the published
+    number. resolve_price only goes up from the published price when it took
+    that number for a down payment or an installment (a partial with the total
+    in the text, or a total far above it with no word for it); a cash price
+    from the text always lies below. `usd_rate` stands in when the row can't
+    tell its own (a USD price over an ARS published one)."""
+    if row.get("price_source") != "description":
+        return False
+    pub, pub_cur = _published(row)
+    price, cur = row.get("price"), row.get("currency")
+    if not pub or not price:
+        return False
+    if pub_cur == cur:
+        return float(price) > float(pub)
+    rate = _usd_rate(row) or usd_rate
+    pub_usd, price_usd = _to_usd(pub, pub_cur, rate), _to_usd(price, cur, rate)
+    return pub_usd is not None and price_usd is not None and price_usd > pub_usd
+
+
+def published_partial(row: dict[str, Any], partial_reason: str | None = None, *,
+                      usd_rate: float | None = None) -> bool:
     """The published price is a down payment or an installment, not a price
     (PAR-03): the description says so (price_check.published_kind), it stands
-    as partial (price_partial), or the title or the page said so
+    as partial (price_partial), the title or the page said so
     (`partial_reason`, keyword_partial's; only the incoming row has it) and the
-    description doesn't call it a total. Lowering it is no price drop."""
+    description doesn't call it a total, or the price we show is a total above
+    it (total_above_published). Lowering it is no price drop."""
     kind = ((row.get("description_facts") or {}).get("price_check") or {}).get("published_kind")
     return kind in PARTIAL_KINDS or bool(row.get("price_partial")) \
-        or (bool(partial_reason) and kind not in TOTAL_KINDS)
+        or (bool(partial_reason) and kind not in TOTAL_KINDS) \
+        or total_above_published(row, usd_rate)
 
 
 def price_drop_pct(old: dict[str, Any], new: dict[str, Any]) -> float | None:
@@ -378,7 +401,9 @@ async def _on_update(cx, old: dict[str, Any], row: dict[str, Any], result: Inges
                 old_currency=before.get("currency"), repost_of=old.get("probable_repost_of"))
     result.events.append(ListingEvent("listing_updated", **base))
     # A lower down payment or installment is no price drop: no event, no alert.
-    partial = published_partial(old) or published_partial(values, row.get("published_partial_reason"))
+    rate = _usd_rate(row) or _usd_rate(old)
+    partial = published_partial(old, usd_rate=rate) \
+        or published_partial(values, row.get("published_partial_reason"), usd_rate=rate)
     if "price" in changes and not partial and (drop := price_drop_pct(before, after)) is not None \
             and drop >= config.price_drop_min_pct:
         result.events.append(ListingEvent("price_drop", drop_pct=drop, **base))

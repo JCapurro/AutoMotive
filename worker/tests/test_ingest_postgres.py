@@ -1928,6 +1928,28 @@ class DescriptionFactsTests(IngestCase):
         lower = await ingest([card("1", precio=500_000.0, **inst)], geocode=None)
         self.assertEqual([e.kind for e in lower.events], ["listing_updated"])
 
+    async def test_a_lower_number_far_under_the_total_is_no_price_drop(self):
+        # No "anticipo" anywhere: the text prices the car at well over the
+        # published number, which resolve_price then takes for a down payment.
+        way = dict(moneda="USD", descripcion="Ford Fiesta Titanium. USD 15.000 de contado.")
+        await ingest([card("1", precio=5_000.0, **way)], geocode=None)
+        row = await self.listing("1")
+        self.assertEqual((float(row["price"]), row["price_source"], row["price_partial"]),
+                         (15_000.0, "description", False))
+        self.assertIsNone(row["description_facts"]["price_check"]["published_kind"])
+
+        lower = await ingest([card("1", precio=4_000.0, **way)], geocode=None)        # -20%
+        self.assertEqual([e.kind for e in lower.events], ["listing_updated"])
+        self.assertEqual(float((await self.listing("1"))["price"]), 15_000.0)
+
+    async def test_a_lower_list_price_over_a_cash_one_is_still_a_drop(self):
+        # The published number is a real price (the cash one is below it): it counts.
+        cash = dict(moneda="USD", descripcion="Ford Fiesta Titanium. USD 9.500 de contado.")
+        await ingest([card("1", precio=11_000.0, **cash)], geocode=None)
+        self.assertEqual((await self.listing("1"))["price_source"], "description")
+        lower = await ingest([card("1", precio=10_000.0, **cash)], geocode=None)
+        self.assertEqual([e.kind for e in lower.events], ["listing_updated", "price_drop"])
+
     async def test_the_raw_page_is_kept_even_when_the_parser_fails(self):
         await ingest([card("1")], geocode=None)
         await db.mark_seen(await self.fiesta_alert(), [card("1").to_dict()], backfill=False)
