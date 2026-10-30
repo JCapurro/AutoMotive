@@ -90,6 +90,10 @@ async function riskEvents(email: string, listingId: number): Promise<string[]> {
 async function expectViewedOnlyOnScreen(page: Page, email: string, listingId: number) {
   const block = page.getByTestId("risk-checklist");
   await expect(block).toHaveAttribute("open", "");
+  // The page streams in under app/app/loading.tsx: until React reveals the
+  // segment, the block sits inside a hidden <div id="S:N"> and measures 0x0 at
+  // top 0. toBeVisible ignores the viewport, so this only waits for the reveal.
+  await expect(block).toBeVisible();
   const below = await block.evaluate((node) => node.getBoundingClientRect().top - window.innerHeight);
   expect(below, "the block has to start below the fold for this check").toBeGreaterThan(0);
   // What fired on mount would have been recorded by now.

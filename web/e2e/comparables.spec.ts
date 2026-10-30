@@ -50,6 +50,14 @@ test("la ficha compara contra el mismo pool que comparables()", async ({ page },
   );
   await seedConfirmationComparables(run);
 
+  // The page shows only 4 picks, so the UI checks below pass vacuously when
+  // other specs' Fiestas are dearer: check the pool itself, order-independent.
+  const pool = await query<{ external_id: string }>(
+    `select external_id from public.comparable_pool($1) where external_id = any($2)`,
+    [target.id, [`${E2E_LISTING_PREFIX}unconfirmed-${run}`, `${E2E_LISTING_PREFIX}gone-${run}`]],
+  );
+  expect(pool.map((row) => row.external_id)).toEqual([`${E2E_LISTING_PREFIX}gone-${run}`]);
+
   await page.goto(`/app/listings/${target.id}`);
   const analysis = page.getByTestId("price-analysis");
   await expect(analysis.getByText("Algunos autos parecidos")).toBeVisible();

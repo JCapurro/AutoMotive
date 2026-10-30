@@ -12,9 +12,11 @@ update public.profiles set created_at = now() - interval '10 days'
  where id = '33333333-3333-3333-3333-333333333333';
 
 -- A has two searches of the same model, B one. A made-up model keeps other data out.
+-- A's second one differs in year_min: two identical active searches are refused
+-- (20261101120000_unique_active_search.sql).
 insert into public.search_profiles (id, user_id, name, filters, bootstrapped_at) overriding system value values
   (9101, '33333333-3333-3333-3333-333333333333', 'Uno A',  '{"make": "Pgtap", "model": "Uno"}', now()),
-  (9102, '33333333-3333-3333-3333-333333333333', 'Uno A2', '{"make": "Pgtap", "model": "Uno"}', now()),
+  (9102, '33333333-3333-3333-3333-333333333333', 'Uno A2', '{"make": "Pgtap", "model": "Uno", "year_min": 2000}', now()),
   (9103, '44444444-4444-4444-4444-444444444444', 'Uno B',  '{"make": "Pgtap", "model": "Uno"}', now());
 
 insert into public.listings (id, source, external_id, url, title, make, model, year, price, currency,

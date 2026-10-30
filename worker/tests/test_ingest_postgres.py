@@ -1655,6 +1655,14 @@ class TelegramAlertsTests(IngestCase):
     one alert per new match at or above notify_min_level (good by default),
     nothing twice."""
 
+    async def fiesta_alert(self, user: int = TG_USER, **filters) -> int:
+        """Notified on Telegram: search_profiles.channels defaults to email
+        (20261011120000), and the Telegram account has none."""
+        aid = await super().fiesta_alert(user, **filters)
+        async with db.connection() as cx:
+            await cx.execute("UPDATE search_profiles SET channels = '{telegram}' WHERE id = %s", (aid,))
+        return aid
+
     async def test_first_target_run_is_silent_then_new_opportunities_alert_once(self):
         aid = await self.fiesta_alert()
         # Six comparables around USD 12.000 give a market median. Distinct km, or

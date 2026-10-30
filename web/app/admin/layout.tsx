@@ -6,6 +6,9 @@ import { Logo } from "@/components/logo";
 import { requireAdmin } from "@/lib/admin";
 
 export const metadata: Metadata = { title: { default: "Admin", template: "%s · Admin · Ese Auto" }, robots: { index: false } };
+// Never prerender: the pages read live data with the service role, and at build
+// time a slow query (admin_score_histogram) blew the 60 s limit and failed the deploy.
+export const dynamic = "force-dynamic";
 
 // Backoffice (sección 10): role = 'admin' checked by the proxy and here; the
 // pages read with the service role, server-side only.
