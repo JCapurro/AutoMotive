@@ -33,15 +33,30 @@ class PriceRef:
     p75: float | None = None
     median_km: float | None = None
     diff_pct: float | None = None     # % below the median (positive = cheaper)
+    # F-02 paso 3 (migration 20261125120000): the same pool and level split by
+    # seller. dealer = seller_type 'dealer' or dealer_inferred; private =
+    # 'private' and not inferred; neither when unknown, so dealer_n + private_n
+    # <= n. Data for PRO-02 only: nothing in the score reads them. None on a
+    # price_ref stored before step 3 (seven keys).
+    dealer_median: float | None = None
+    dealer_n: int | None = None
+    private_median: float | None = None
+    private_n: int | None = None
+
+    _BY_SELLER = ("dealer_median", "dealer_n", "private_median", "private_n")
 
     def enough(self, min_n: int) -> bool:
         return self.n >= min_n and bool(self.median)
 
     def to_json(self) -> dict[str, Any]:
         out = asdict(self)
-        for k in ("median", "p25", "p75", "median_km", "diff_pct"):
+        for k in ("median", "p25", "p75", "median_km", "diff_pct", "dealer_median", "private_median"):
             if out[k] is not None:
                 out[k] = round(float(out[k]), 2)
+        if self.dealer_n is None and self.private_n is None:
+            # Read from a price_ref without them: write back the same seven keys.
+            for k in self._BY_SELLER:
+                del out[k]
         return out
 
     @classmethod
@@ -50,9 +65,12 @@ class PriceRef:
             return None
         def num(k):
             return float(data[k]) if data.get(k) is not None else None
+        def count(k):
+            return int(data[k]) if data.get(k) is not None else None
         return cls(n=int(data.get("n") or 0), level_used=data["level_used"], median=num("median"),
                    p25=num("p25"), p75=num("p75"), median_km=num("median_km"),
-                   diff_pct=num("diff_pct"))
+                   diff_pct=num("diff_pct"), dealer_median=num("dealer_median"), dealer_n=count("dealer_n"),
+                   private_median=num("private_median"), private_n=count("private_n"))
 
 
 def diff_pct(price_usd: float | None, median: float | None) -> float | None:

@@ -20,6 +20,15 @@ export type PriceRef = {
   p75: number | null;
   median_km: number | null;
   diff_pct: number | null;
+  /**
+   * F-02 paso 3: the same pool and level split by seller (dealer = dealer or
+   * «posible agencia»; private = private and not inferred). Missing on a
+   * price_ref stored before it. Data for PRO-02; nothing shows them yet.
+   */
+  dealer_median?: number | null;
+  dealer_n?: number;
+  private_median?: number | null;
+  private_n?: number;
 };
 
 export type RedFlag = { id: string; text: string; severity: "info" | "warning" };

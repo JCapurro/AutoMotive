@@ -409,6 +409,56 @@ class QuestionTextsTests(unittest.TestCase):
         self.assertIn(copy.QUESTION["owners"], self.texts([flag]))
 
 
+class PriceRefBySellerTests(unittest.TestCase):
+    """F-02 paso 3: comparables() adds dealer/private n and median; nothing scores them."""
+
+    SQL_V2 = {"n": 11, "p25": 9750.00, "p75": 13500.00, "median": 11000.00, "diff_pct": 9.09,
+              "median_km": 100000, "level_used": "trim_transmission",
+              "dealer_n": 5, "private_n": 4, "dealer_median": 12000.00, "private_median": 10000.00}
+    OLD_KEYS = ("n", "p25", "p75", "median", "diff_pct", "median_km", "level_used")
+
+    def test_reads_the_four_new_keys(self):
+        ref = PriceRef.from_json(self.SQL_V2)
+        self.assertEqual((ref.dealer_n, ref.dealer_median, ref.private_n, ref.private_median),
+                         (5, 12_000.0, 4, 10_000.0))
+        self.assertIsInstance(ref.dealer_n, int)
+        self.assertEqual(ref.to_json(), self.SQL_V2)
+
+    def test_a_ref_from_before_step_3_has_none_and_round_trips_with_its_seven_keys(self):
+        old = {k: self.SQL_V2[k] for k in self.OLD_KEYS}
+        ref = PriceRef.from_json(old)
+        self.assertEqual((ref.dealer_n, ref.dealer_median, ref.private_n, ref.private_median),
+                         (None, None, None, None))
+        self.assertEqual(ref.to_json(), old)
+
+    def test_no_dealers_keeps_n_zero_and_a_null_median(self):
+        data = dict(self.SQL_V2, dealer_n=0, dealer_median=None)
+        ref = PriceRef.from_json(data)
+        self.assertEqual((ref.dealer_n, ref.dealer_median), (0, None))
+        self.assertEqual(ref.to_json(), data)
+
+    def test_to_json_rounds_the_medians_to_two_decimals(self):
+        ref = PriceRef(n=11, level_used="model", median=11_000.0, dealer_n=5, dealer_median=12_000.456,
+                       private_n=4, private_median=9_999.994)
+        out = ref.to_json()
+        self.assertEqual((out["dealer_median"], out["private_median"]), (12_000.46, 9_999.99))
+        self.assertEqual((out["dealer_n"], out["private_n"]), (5, 4))
+
+    def test_the_score_does_not_read_them(self):
+        old = PriceRef.from_json({k: self.SQL_V2[k] for k in self.OLD_KEYS})
+        new = PriceRef.from_json(self.SQL_V2)
+        far = PriceRef.from_json(dict(self.SQL_V2, dealer_n=40, dealer_median=1.0, private_n=0, private_median=None))
+        listing = fiesta_listing(price_usd=10_000.0, price=10_000.0)
+        rows = []
+        for ref in (old, new, far):
+            _, _, ev = assess(listing, fiesta_profile(), price_ref=ref, cfg=CFG, now=NOW)
+            row = ev.row()
+            row.pop("price_ref")
+            rows.append(row)
+        self.assertEqual(rows[0], rows[1])
+        self.assertEqual(rows[0], rows[2])
+
+
 class ConfigTests(unittest.TestCase):
     def test_partial_app_config_keeps_the_defaults(self):
         cfg = IntelligenceConfig.from_app_config({
