@@ -13,7 +13,7 @@ import { z } from "zod";
 export const RISK_TITLE = "Antes de señar";
 export const RISK_HINT = "Controles para hacer vos antes de dejar una seña.";
 export const RISK_HEADER = "Son controles que conviene hacer vos. Ese Auto no verificó nada de esta publicación.";
-/** Draft, to review in the PR: shown when the listing has much_cheaper or partial_price_suspect. */
+/** Approved by Juan (2026-10-30). Shown when the listing has much_cheaper or partial_price_suspect. */
 export const RISK_EMPHASIS = "Por el precio de esta publicación, conviene hacer todos estos controles antes de señar.";
 export const RISK_COPY_LABEL = "Copiar checklist";
 export const RISK_OFFICIAL_LABEL = "Ver sitio oficial";
