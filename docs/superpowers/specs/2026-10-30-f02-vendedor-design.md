@@ -188,3 +188,10 @@ Requiere el paso 2. Migración `<versión>_f02_price_ref_by_seller.sql` (versió
 2. **Cambio de versión del puntaje en el paso 2.** El paso 2 re-puntúa (cambia la preferencia de vendedor). Aprobaste un cambio para PRO-02 y la regla es uno por deploy. **Recomiendo** sacar el paso 2 junto con PRO-02 con un único cambio compartido; si el paso 2 sale antes, necesito tu OK para un cambio propio.
 3. **«Posible agencia» aunque el aviso diga particular.** En la práctica solo pasa en Facebook (marca todo como particular), y en avisos de Rosario Garage donde el listado mostró el nombre de una agencia y el detalle dijo «dueño directo». En deRuedas, Rosario Garage (detalle) y Mercado Libre los particulares no traen nombre, así que nunca se marcan. **Recomiendo** que la marca gane igual, y agregar en la ficha «; la publicación dice particular».
 4. **Textos propuestos.** Pista en el formulario de búsqueda «Incluye posibles agencias.» y la ayuda de `/admin/config` de la sección Paso 2. **Recomiendo** aprobarlos tal cual.
+
+### Respuestas de Juan (30/10/2026): sí a todo
+
+1. Ventana: avisos publicados (`coalesce(published_at, first_seen_at)`) en los últimos 30 días y todavía activos.
+2. El paso 2 sale junto con PRO-02, con un único cambio de `SCORING_VERSION` compartido. El paso 2 no se despliega solo.
+3. «Posible agencia» gana aunque la publicación diga particular, y la ficha agrega «; la publicación dice particular».
+4. Textos aprobados tal cual: «Incluye posibles agencias.» en el formulario y la ayuda de `/admin/config`.
