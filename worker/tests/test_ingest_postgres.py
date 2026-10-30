@@ -1928,6 +1928,14 @@ class DescriptionFactsTests(IngestCase):
         lower = await ingest([card("1", precio=500_000.0, **inst)], geocode=None)
         self.assertEqual([e.kind for e in lower.events], ["listing_updated"])
 
+    async def set_rate(self, rate: float) -> None:
+        """Another day's quote: today's stored one moves."""
+        async with db.connection() as cx:
+            await cx.execute("UPDATE fx_rates SET rate = %s", (rate,))
+
+    async def check(self, external_id: str) -> dict:
+        return (await self.listing(external_id))["description_facts"]["price_check"]
+
     async def test_a_lower_number_far_under_the_total_is_no_price_drop(self):
         # No "anticipo" anywhere: the text prices the car at well over the
         # published number, which resolve_price then takes for a down payment.
@@ -1937,10 +1945,28 @@ class DescriptionFactsTests(IngestCase):
         self.assertEqual((float(row["price"]), row["price_source"], row["price_partial"]),
                          (15_000.0, "description", False))
         self.assertIsNone(row["description_facts"]["price_check"]["published_kind"])
+        self.assertIs(row["description_facts"]["price_check"]["published_partial"], True)
 
         lower = await ingest([card("1", precio=4_000.0, **way)], geocode=None)        # -20%
         self.assertEqual([e.kind for e in lower.events], ["listing_updated"])
         self.assertEqual(float((await self.listing("1"))["price"]), 15_000.0)
+
+    async def test_a_lower_peso_down_payment_under_a_dollar_total_is_no_price_drop(self):
+        # F3: ARS 5.000.000 published, "USD 15.000 de contado" (way above at
+        # 1000). Snapshots keep the published pesos without a dollar value.
+        way = dict(moneda="ARS", descripcion="Ford Fiesta Titanium. USD 15.000 de contado.")
+        await ingest([card("1", precio=5_000_000.0, **way)], geocode=None)
+        row = await self.listing("1")
+        self.assertEqual((float(row["price"]), row["currency"], row["price_source"], row["price_partial"]),
+                         (15_000.0, "USD", "description", False))
+        self.assertEqual((await self.check("1"))["published_partial"], True)
+        await self.set_rate(1_060.0)
+        lower = await ingest([card("1", precio=4_000_000.0, **way)], geocode=None)    # -20%
+        self.assertEqual([e.kind for e in lower.events], ["listing_updated"])
+        self.assertEqual((await self.check("1"))["published_partial"], True)
+        snaps = await self.rows("SELECT price, currency, price_usd FROM listing_snapshots ORDER BY id")
+        self.assertEqual([(float(s["price"]), s["currency"], s["price_usd"]) for s in snaps],
+                         [(5_000_000.0, "ARS", None), (4_000_000.0, "ARS", None)])
 
     async def test_a_lower_list_price_over_a_cash_one_is_still_a_drop(self):
         # The published number is a real price (the cash one is below it): it counts.
@@ -1949,6 +1975,39 @@ class DescriptionFactsTests(IngestCase):
         self.assertEqual((await self.listing("1"))["price_source"], "description")
         lower = await ingest([card("1", precio=10_000.0, **cash)], geocode=None)
         self.assertEqual([e.kind for e in lower.events], ["listing_updated", "price_drop"])
+
+    async def test_a_peso_list_price_over_a_dollar_cash_one_drops_after_the_dollar_moves(self):
+        # F1: day 1 at 1000, ARS 20.000.000 published, "USD 19.000 de contado".
+        # At 1060 the published falls 10%: a drop, whatever the dollar did.
+        cash = dict(moneda="ARS", descripcion="Ford Fiesta Titanium. USD 19.000 de contado.")
+        await ingest([card("1", precio=20_000_000.0, **cash)], geocode=None)
+        row = await self.listing("1")
+        self.assertEqual((float(row["price"]), row["currency"], row["price_source"]), (19_000.0, "USD", "description"))
+        self.assertIs((await self.check("1"))["published_partial"], False)
+        await self.set_rate(1_060.0)
+        lower = await ingest([card("1", precio=18_000_000.0, **cash)], geocode=None)
+        self.assertEqual([e.kind for e in lower.events], ["listing_updated", "price_drop"])
+        self.assertEqual(lower.events[1].drop_pct, 10.0)
+        self.assertIs((await self.check("1"))["published_partial"], False)
+
+    async def test_a_dollar_list_price_over_a_peso_cash_one_drops_after_the_dollar_moves(self):
+        # F2: day 1 at 1000, USD 10.000 published, cash "$ 9.500.000" (price_usd
+        # frozen at 9.500). At 1100 or 1200 the published falls to USD 9.000.
+        cash = dict(moneda="USD", descripcion="Ford Fiesta Titanium. $ 9.500.000 de contado.")
+        for ext, rate in (("1", 1_100.0), ("2", 1_200.0)):
+            with self.subTest(rate):
+                await self.set_rate(1_000.0)
+                await ingest([card(ext, precio=10_000.0, **cash)], geocode=None)
+                row = await self.listing(ext)
+                self.assertEqual((float(row["price"]), row["currency"], row["price_source"], float(row["price_usd"])),
+                                 (9_500_000.0, "ARS", "description", 9_500.0))
+                self.assertIs((await self.check(ext))["published_partial"], False)
+                await self.set_rate(rate)
+                lower = await ingest([card(ext, precio=9_000.0, **cash)], geocode=None)
+                self.assertEqual([e.kind for e in lower.events], ["listing_updated", "price_drop"])
+                self.assertEqual(lower.events[1].drop_pct, 10.0)
+                row = await self.listing(ext)
+                self.assertEqual((row["price_partial"], (await self.check(ext))["published_partial"]), (False, False))
 
     async def test_the_raw_page_is_kept_even_when_the_parser_fails(self):
         await ingest([card("1")], geocode=None)

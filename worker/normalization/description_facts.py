@@ -440,12 +440,18 @@ class PriceResolution:
     published_kind: str | None = None
     mismatch: Amount | None = None   # a total the text gives that disagrees with the published one
     effective_kind: str | None = None  # what the effective price is: cash | list | generic | …
+    # The published number is a down payment or an installment, not a price,
+    # whatever the price shown (PAR-03: its drops are no price drops).
+    published_partial: bool = False
 
     def check(self) -> dict[str, Any]:
         """What resolve_price() concluded, stored in description_facts.price_check.
-        The web and the notifications say "de contado" when effective_kind is cash."""
+        The web and the notifications say "de contado" when effective_kind is cash.
+        published_partial is decided here, at the rate of the day, and never
+        re-derived later by comparing prices (ingest.published_partial, the web's
+        publishedIsPartial)."""
         return {"published_kind": self.published_kind, "effective_kind": self.effective_kind,
-                "source": self.source,
+                "source": self.source, "published_partial": self.published_partial,
                 "mismatch": ({"amount": self.mismatch.amount, "currency": self.mismatch.currency}
                              if self.mismatch else None)}
 
@@ -471,7 +477,8 @@ def resolve_price(published: float | None, currency: str | None, *,
     or an installment (price_check.keyword_partial, Autocosmos' blocks).
     `usd_rate`: ARS per USD, to compare amounts in different currencies.
     """
-    as_published = PriceResolution(published, currency, "published", bool(partial_reason), partial_reason)
+    as_published = PriceResolution(published, currency, "published", bool(partial_reason), partial_reason,
+                                   published_partial=bool(partial_reason))
     if not published or not currency or facts is None:
         return as_published
     pub_usd = _usd(published, currency, usd_rate)
@@ -488,8 +495,9 @@ def resolve_price(published: float | None, currency: str | None, *,
     kind = facts.published_is or next((a.kind for a in facts.amounts if same(a)), None)
     comparable = [a for a in facts.amounts if usd(a) is not None and pub_usd is not None]
 
-    def from_text(a: Amount) -> PriceResolution:
-        return PriceResolution(a.amount, a.currency, "description", False, None, kind, effective_kind=a.kind)
+    def from_text(a: Amount, *, published_partial: bool = False) -> PriceResolution:
+        return PriceResolution(a.amount, a.currency, "description", False, None, kind, effective_kind=a.kind,
+                               published_partial=published_partial)
 
     def cheaper_cash() -> Amount | None:
         # A cash price below the published one, within reason: the published
@@ -504,12 +512,14 @@ def resolve_price(published: float | None, currency: str | None, *,
         above = [a for a in comparable if a.kind in TOTAL_KINDS and not same(a) and usd(a) > pub_usd]
         cash = [a for a in above if a.kind == "cash"]
         if cash or above:
-            return from_text(min(cash, key=usd) if cash else max(above, key=usd))
+            return from_text(min(cash, key=usd) if cash else max(above, key=usd), published_partial=True)
         if kind not in PARTIAL_KINDS and (c := cheaper_cash()):
-            # Only the title said "cuotas"; the text prices it cash below the published number.
+            # Only the title said "cuotas"; the text prices it cash below the
+            # published number, which then is the list price.
             return from_text(c)
         reason = partial_reason or f"descripción: {_KIND_WORDS.get(kind, kind)}"
-        return PriceResolution(published, currency, "published", True, reason, kind, effective_kind=kind)
+        return PriceResolution(published, currency, "published", True, reason, kind, effective_kind=kind,
+                               published_partial=True)
 
     if kind != "cash" and (c := cheaper_cash()):
         return from_text(c)
@@ -520,7 +530,7 @@ def resolve_price(published: float | None, currency: str | None, *,
                      and usd(a) >= DOWN_PAYMENT_RATIO * pub_usd]
         if way_above:
             cash = [a for a in way_above if a.kind == "cash"]
-            return from_text(min(cash or way_above, key=usd))
+            return from_text(min(cash or way_above, key=usd), published_partial=True)
     # The published number stands. When the text states it's a total, that
     # also clears a partial suspicion from the title. A cash or plain price in
     # the text that isn't the published one (the description may be outdated)
@@ -528,7 +538,8 @@ def resolve_price(published: float | None, currency: str | None, *,
     partial = as_published.partial and kind not in TOTAL_KINDS
     mismatch = next((a for a in comparable if a.kind in ("cash", "generic") and not same(a)), None)
     return PriceResolution(published, currency, "published", partial,
-                           partial_reason if partial else None, kind, mismatch, effective_kind=kind)
+                           partial_reason if partial else None, kind, mismatch, effective_kind=kind,
+                           published_partial=partial)
 
 
 def from_llm(llm: Any, rules: DescriptionFacts | None, *, llm_at: str,

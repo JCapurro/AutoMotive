@@ -346,8 +346,10 @@ export async function seedPriceTracks(
     price: 4_000,
     prices: [[10, 5_000]],
   });
-  // A total far above the published number with no word for it: the worker
-  // took that number for a down payment (published_kind stays null).
+  // F3's shape: ARS 5.000.000 → 4.000.000 published, "USD 15.000 de contado"
+  // in the text, far above it with no word for it. The worker took the
+  // published number for a down payment (published_kind stays null, the flag
+  // says so) and its snapshots keep the pesos without a dollar value.
   const way = await insertListing(`${E2E_LISTING_PREFIX}tracks-way-${run}`, {
     key: "tracks-way",
     year: 2016,
@@ -355,18 +357,71 @@ export async function seedPriceTracks(
     price: 4_000,
     prices: [[10, 5_000]],
   });
-  for (const [id, price, published, kind] of [
-    [cash, 9_500, 10_500, "list"],
-    [down, 15_000, 4_000, "down_payment"],
-    [way, 15_000, 4_000, null],
+  await query(
+    `update public.listing_snapshots set price = price * 1000, currency = 'ARS', price_usd = null, fx_rate = null
+      where listing_id = $1`,
+    [way],
+  );
+  // What worker/normalization/listing.normalize_listing writes for these texts
+  // (description_facts.to_json, price_check from resolve_price).
+  const usd = (kind: string, amount: number, text: string) => ({ kind, amount, currency: "USD", text });
+  for (const [id, price, published, publishedCurrency, text, amounts, kind, partial] of [
+    [
+      cash,
+      9_500,
+      10_500,
+      "USD",
+      "\nPRECIO DE CONTADO U$S 9.500\nPRECIO DE LISTA/PERMUTA U$S 10.500",
+      [usd("cash", 9_500, "n mecanica. / precio de contado u$s 9.500 / precio de l"), usd("list", 10_500, "9.500 / precio de lista/permuta u$s 10.500")],
+      "list",
+      false,
+    ],
+    [
+      down,
+      15_000,
+      4_000,
+      "USD",
+      " Anticipo USD 4.000. Precio final USD 15.000 de contado.",
+      [
+        usd("down_payment", 4_000, "o revision mecanica. anticipo usd 4.000. precio fin"),
+        usd("cash", 15_000, "icipo usd 4.000. precio final usd 15.000 de contado."),
+      ],
+      "down_payment",
+      true,
+    ],
+    [way, 15_000, 4_000_000, "ARS", " USD 15.000 de contado.", [usd("cash", 15_000, "ia, acepto revision mecanica. usd 15.000 de contado.")], null, true],
   ] as const) {
+    const facts = {
+      amounts,
+      published_is: null,
+      financing: {
+        offered: kind === "down_payment",
+        down_payment: kind === "down_payment" ? { amount: published, currency: publishedCurrency } : null,
+        installment: null,
+        min_down_payment_pct: null,
+        max_financed_pct: null,
+        max_installments: null,
+      },
+      mileage_km: null,
+      year: null,
+      transmission: null,
+      fuel: null,
+      gnc: false,
+      ambiguous: false,
+      source: "rules",
+      llm_at: null,
+      price_check: { published_kind: kind, effective_kind: "cash", source: "description", published_partial: partial, mismatch: null },
+      claims: {},
+      evidence: [],
+      input_hash: null,
+      v: 2,
+    };
     await query(
-      `update public.listings set price = $2, price_usd = $2, price_source = 'description', price_published = $3,
-              price_published_currency = 'USD',
-              description_facts = jsonb_build_object('price_check',
-                jsonb_build_object('published_kind', $4::text, 'effective_kind', 'cash', 'source', 'description'))
+      `update public.listings set price = $2, currency = 'USD', price_usd = $2, price_source = 'description',
+              price_published = $3, price_published_currency = $4, price_partial = false, price_partial_reason = null,
+              description = $5, description_facts = $6::jsonb
         where id = $1`,
-      [id, price, published, kind],
+      [id, price, published, publishedCurrency, LONG_DESCRIPTION + text, JSON.stringify(facts)],
     );
   }
   const [profile] = await query<{ id: number }>(
