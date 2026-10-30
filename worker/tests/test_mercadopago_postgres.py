@@ -174,12 +174,13 @@ class MercadoPagoTests(PostgresTestCase):
         return (await self.rows("SELECT plan::text AS plan, plan_expires_at FROM profiles WHERE id=%s", self.user))[0]
 
     async def paused_search(self, name, paused_hours_ago):
-        """A search the expiry paused, with its search_paused_by_plan event."""
+        """A search the expiry paused, with its search_paused_by_plan event. Its
+        model is its name: identical active searches are refused (20261101120000)."""
         async with db.connection() as cx:
             await cx.execute("SET LOCAL session_replication_role = replica")
             [row] = await (await cx.execute(
-                "INSERT INTO search_profiles (user_id, name, filters, enabled) VALUES (%s, %s, '{\"make\":\"Ford\",\"model\":\"Fiesta\"}', false) RETURNING id",
-                (self.user, name))).fetchall()
+                "INSERT INTO search_profiles (user_id, name, filters, enabled) VALUES (%s, %s, %s, false) RETURNING id",
+                (self.user, name, Jsonb({"make": "Pgtap", "model": name})))).fetchall()
             await cx.execute("INSERT INTO events (user_id, name, props, created_at) VALUES (%s, 'search_paused_by_plan', %s, now() - make_interval(hours => %s))",
                              (self.user, Jsonb({"search_profile_id": row['id']}), paused_hours_ago))
         return row['id']
