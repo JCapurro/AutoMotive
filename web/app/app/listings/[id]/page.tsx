@@ -3,8 +3,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { CostEstimate } from "@/components/app/cost-estimate";
 import { ListingActions } from "@/components/app/listing-actions";
-import { DealerFeesNotice } from "@/components/app/dealer-fees-notice";
 import { ListingGallery } from "@/components/app/listing-gallery";
 import { ListingTracking } from "@/components/app/listing-tracking";
 import { DescriptionPriceContext, SellerDescription } from "@/components/app/description-insights";
@@ -15,6 +15,7 @@ import { SellerQuestions } from "@/components/app/seller-questions";
 import { ViewTracker } from "@/components/app/view-tracker";
 import { requireUser } from "@/lib/auth";
 import { type WebConfig, webConfig } from "@/lib/config";
+import { costEstimateFor } from "@/lib/cost-estimate-data";
 import {
   BASE_SELLER_QUESTIONS,
   BODY_TYPE,
@@ -46,7 +47,7 @@ type Supabase = Awaited<ReturnType<typeof createClient>>;
 type Similar = { id: number; name: string; mileage: string | null; source: string; usd: number };
 
 export default async function ListingPage({ params, searchParams }: PageProps<"/app/listings/[id]">) {
-  await requireUser();
+  const user = await requireUser();
   const { id } = await params;
   if (!/^\d+$/.test(id)) notFound();
   const listingId = Number(id);
@@ -103,7 +104,11 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
   const trackNote = trackingNote(listing, track?.first_at ?? snapshots?.[0]?.observed_at);
   // A down payment or an installment that moved is no price history (PAR-03).
   const showHistory = history.length >= 2 && !publishedIsPartial(listing);
-  const similar = gone ? [] : await similarListings(supabase, listing, priceRef);
+  const [similar, cost] = await Promise.all([
+    gone ? Promise.resolve([]) : similarListings(supabase, listing, priceRef),
+    // PAR-01: with the plan's total_cost flag, the jurisdiction of the best match's search.
+    gone ? Promise.resolve(null) : costEstimateFor(supabase, user.id, listing, best?.search_profile_id ?? null),
+  ]);
   const back = best ? `/app/searches/${best.search_profile_id}` : "/app";
 
   return (
@@ -177,7 +182,7 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
               ) : null}
             </span>
           ) : null}
-          <DealerFeesNotice sellerType={listing.seller_type} dealerInferred={listing.dealer_inferred} />
+          <CostEstimate listingId={listingId} view={cost} />
         </Fact>
         <Fact label="Kilometraje">{km(listing.mileage_km) ?? "No informado"}</Fact>
         <Fact label="Año">{listing.year ?? "No informado"}</Fact>

@@ -8,8 +8,9 @@ import { magicLink } from "./support/mail";
  * F-02 paso 2 (docs/superpowers/specs/2026-10-30-f02-vendedor-design.md): a
  * listing the worker marked «posible agencia» (dealer_inferred, seeded with
  * seller_listing_count = 7; the test does not expect N to change) says so in
- * «Vendedor», adds that the listing itself says «particular», and gets the
- * dealer fees notice; a plain private seller gets neither. Desktop and phone.
+ * «Vendedor» and adds that the listing itself says «particular»; a plain
+ * private seller does not. PAR-01 removed the fixed «8–10 %» dealer fees
+ * notice for everyone (e2e/total-cost.spec.ts). Desktop and phone.
  */
 
 async function signIn(page: Page, email: string) {
@@ -30,7 +31,7 @@ async function expectNoHorizontalScroll(page: Page) {
   expect(overflow, `horizontal overflow on ${page.url()}`).toBeLessThanOrEqual(0);
 }
 
-test("la ficha marca «posible agencia» con el motivo y el aviso de gastos", async ({ page }, testInfo) => {
+test("la ficha marca «posible agencia» con el motivo y sin el aviso fijo de gastos", async ({ page }, testInfo) => {
   const run = `${testInfo.project.name}-${Date.now()}`;
   const email = `seller-${run}@${E2E_EMAIL_DOMAIN}`;
   await signIn(page, email);
@@ -40,7 +41,8 @@ test("la ficha marca «posible agencia» con el motivo y el aviso de gastos", as
   await expect(
     page.getByText("Posible agencia (publica 7 autos); la publicación dice particular, Autos del Parque", { exact: true }),
   ).toBeVisible();
-  await expect(page.getByTestId("dealer-fees-notice")).toBeVisible();
+  await expect(page.getByTestId("dealer-fees-notice")).toHaveCount(0);
+  await expect(page.getByText(/8\s*[–-]\s*10\s*%/)).toHaveCount(0);
   await expectNoHorizontalScroll(page);
 
   await page.goto(`/app/listings/${ids.private}`);

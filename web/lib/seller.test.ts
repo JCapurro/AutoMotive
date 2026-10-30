@@ -1,8 +1,5 @@
-import { createElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { DealerFeesNotice } from "@/components/app/dealer-fees-notice";
 import { SELLER_FORM_HINT, SELLER_INFERRED } from "./copy";
 import { effectiveSeller, sellerLabel } from "./seller";
 
@@ -50,22 +47,9 @@ describe("sellerLabel", () => {
   });
 });
 
-describe("DealerFeesNotice", () => {
-  const html = (props: { sellerType?: string | null; dealerInferred?: boolean | null }) =>
-    renderToStaticMarkup(createElement(DealerFeesNotice, props));
-
-  it("shows for a dealer and for a «posible agencia»", () => {
-    expect(html({ sellerType: "dealer" })).toContain('data-testid="dealer-fees-notice"');
-    expect(html({ sellerType: "private", dealerInferred: true })).toContain('data-testid="dealer-fees-notice"');
-    expect(html({ sellerType: null, dealerInferred: true })).toContain('data-testid="dealer-fees-notice"');
-  });
-
-  it("does not show for a private seller or an unknown one", () => {
-    expect(html({ sellerType: "private", dealerInferred: false })).toBe("");
-    expect(html({ sellerType: null })).toBe("");
-    expect(html({})).toBe("");
-  });
-});
+// PAR-01 removed the fixed «8–10 %» DealerFeesNotice for everyone: the
+// total cost estimate (lib/cost-estimate.test.ts) treats a «posible agencia»
+// as a dealer through effectiveSeller.
 
 // That search-form.tsx shows it (data-testid=seller-type-hint) is e2e/seller.spec.ts.
 it("the dealer preference hint is the approved copy", () => {

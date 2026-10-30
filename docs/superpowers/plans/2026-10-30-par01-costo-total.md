@@ -184,7 +184,7 @@ Files: `worker/db/repos/notifications.py`, `worker/db/repos/fx.py`, `worker/noti
 
 Files: `web/components/app/cost-estimate.tsx`, `web/components/app/cost-estimate.test.tsx`, `web/lib/cost-estimate-data.ts`, `web/app/app/listings/[id]/page.tsx`, `web/app/app/listings/actions.ts`, `web/lib/listing-actions.test.ts`, `web/components/app/dealer-fees-notice.tsx` (se borra).
 
-- [ ] Tests que fallen (`renderToStaticMarkup`):
+- [x] Tests que fallen (`renderToStaticMarkup`):
   - línea completa;
   - variantes «(sin patente)», «(sin sellos ni patente)», AMBA, resto, varias zonas, «posible agencia», vendedor sin informar, «sin dólar del día» (ARS) y «no se puede estimar» (USD);
   - rótulo «Precio de contado» o «Precio publicado» según `isCashPrice`, como la ficha; aviso en USD con «USD 15.000 = ARS 19.500.000» y «dólar blue del 29/10»;
@@ -193,8 +193,8 @@ Files: `web/components/app/cost-estimate.tsx`, `web/components/app/cost-estimate
   - «parámetros al 30/10» y la fuente por término;
   - sin estimación no se renderiza nada;
   - ningún texto contiene «8–10» ni «precio real».
-- [ ] Test de la acción: `trackTotalCostExpanded` valida con zod y llama a `track` con `total_cost_expanded` y `{listing_id, jurisdiction, missing}`.
-- [ ] Implementar `cost-estimate-data.ts` (`server-only`):
+- [x] Test de la acción: `trackTotalCostExpanded` valida con zod y llama a `track` con `total_cost_expanded` y `{listing_id, jurisdiction, missing}`.
+- [x] Implementar `cost-estimate-data.ts` (`server-only`):
   - `my_plan_feature('total_cost')`, `webConfig`, `latestFx()` (cliente admin, `cache()`, blue más reciente y si no la oficial), las zonas de la búsqueda `best` (origen más `extra_locations`) o `profiles.default_origin_*`, y `buildCostInput` sobre la fila que ya lee la página;
   - el componente, con `<details>` y un hijo cliente para el evento;
   - el reemplazo en `page.tsx:180` y el borrado de `DealerFeesNotice`.
@@ -203,29 +203,29 @@ Files: `web/components/app/cost-estimate.tsx`, `web/components/app/cost-estimate
 
 Files: `web/components/app/listing-card.tsx`, `web/lib/listing-card.test.ts`, `web/app/app/searches/[id]/page.tsx`, `web/app/app/page.tsx`, `web/app/app/saved/page.tsx`, `web/lib/cost-estimate-data.ts`.
 
-- [ ] Tests que fallen:
+- [x] Tests que fallen:
   - la tarjeta con prop `costLine` muestra `cost-estimate-line`; sin la prop, el markup actual queda igual;
   - `costLinesFor(cards)`: una sola consulta a `listings` por página con `price, currency, price_usd, fx_rate, price_partial, description_facts, seller_type, dealer_inferred, year, body_type`, y zonas por `search_profile_id` distinto; sin el flag, cero consultas;
   - una tarjeta de un aviso parcial (`price_partial` o `price_check.published_partial`) no tiene línea, igual que la ficha;
   - una tarjeta sin `search_profile_id` (inicio o guardados) usa `profiles.default_origin_*`; sin origen, la línea dice «(sin sellos ni patente)».
-- [ ] Implementar `costLinesFor` (sobre `buildCostInput`, sin reimplementar la regla de parcial ni el vendedor) y pasar `costLine` desde las tres páginas.
+- [x] Implementar `costLinesFor` (sobre `buildCostInput`, sin reimplementar la regla de parcial ni el vendedor) y pasar `costLine` desde las tres páginas.
 
 ## Task 9: e2e
 
 Files: `web/e2e/support/db.ts`, `web/e2e/total-cost.spec.ts`.
 
-- [ ] Ampliar `Seed`:
+- [x] Ampliar `Seed`:
   - `cost_estimator` (el JSON del diseño), `plan_limits.pass.total_cost` y el plan del usuario;
   - un aviso en ARS de 20.000.000 con `fx_rate` 1300, modelo 2017, carrocería `sedan`, particular;
   - búsqueda con origen «Palermo, CABA».
-- [ ] Spec a 375 px:
+- [x] Spec a 375 px:
   - la ficha muestra «Costo total estimado: USD 16.290 – 16.560 (ARS 21.188.000 – 21.518.000)»;
   - «Ver detalle» abre el desglose y deja una fila `total_cost_expanded` en `events`;
   - la tarjeta de resultados muestra la línea;
   - `document.documentElement.scrollWidth <= 375` en la ficha y en resultados;
   - con un usuario `pro` (sin el flag) no hay línea ni texto «8–10»; con uno `free` sí hay línea (piloto);
   - un aviso de agencia ya no muestra `dealer-fees-notice`.
-- [ ] `acceptance.spec.ts`, `seller.spec.ts` (si F-02 está) y `comparables.spec.ts` sin regresiones.
+- [x] `acceptance.spec.ts`, `seller.spec.ts` (si F-02 está) y `comparables.spec.ts` sin regresiones.
 
 ## Task 10: verificación y cierre
 

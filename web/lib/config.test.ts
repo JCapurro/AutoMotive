@@ -41,3 +41,17 @@ it("falls back to 500 on a malformed or non-positive limit", async () => {
     expect((await webConfig()).listingTracking).toEqual({ noteMaxChars: 500 });
   }
 });
+
+// PAR-01: the cost estimator's parameters, parsed tolerantly.
+it("reads app_config.cost_estimator: null without the row or a valid as_of, partial blocks as they are", async () => {
+  expect(mock.keys).toEqual([]);
+  expect((await webConfig()).costEstimator).toBeNull();
+  expect(mock.keys).toContain("cost_estimator");
+  mock.rows = [{ key: "cost_estimator", value: { as_of: "30/10/2026", fx: { max_age_days: 3, source: "x", as_of: "2026-10-30" } } }];
+  expect((await webConfig()).costEstimator).toBeNull();
+  mock.rows = [{ key: "cost_estimator", value: { as_of: "2026-10-30", fx: { max_age_days: 3, source: "x", as_of: "2026-10-30" }, dnrpa: { source: "x" } } }];
+  const cfg = (await webConfig()).costEstimator;
+  expect(cfg?.as_of).toBe("2026-10-30");
+  expect(cfg?.blocks.fx).toEqual({ max_age_days: 3, source: "x", as_of: "2026-10-30" });
+  expect(cfg?.blocks.dnrpa).toBeNull();
+});

@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
 import { Pool } from "pg";
 
 import { DATABASE_URL, E2E_EMAIL_DOMAIN, E2E_LISTING_PREFIX } from "./env";
@@ -505,4 +508,77 @@ export async function seedPriceTracks(
     way: Number(way),
     down: Number(down),
   };
+}
+
+/**
+ * PAR-01 (total-cost.spec.ts): app_config.cost_estimator as the migration
+ * seeds it (the golden file's config), the total_cost flag of Particular and
+ * the free plan, a user's plan, and two ARS listings of 20.000.000 at the
+ * dollar 1.300 of their price_usd (2017 sedans, a private seller and a
+ * dealer), matched by a search centered on «Palermo, CABA».
+ */
+export async function seedTotalCost(
+  email: string,
+  run: string,
+  plan: "free" | "pass" | "pro",
+): Promise<{ profileId: number; private: number; dealer: number }> {
+  const golden = JSON.parse(
+    readFileSync(path.resolve(__dirname, "../../../worker/tests/fixtures/cost_estimator/golden.json"), "utf-8"),
+  ) as { config: unknown };
+  await query(
+    `insert into public.app_config (key, value) values ('cost_estimator', $1::jsonb)
+     on conflict (key) do update set value = excluded.value`,
+    [JSON.stringify(golden.config)],
+  );
+  await query(
+    `update public.app_config
+        set value = jsonb_set(jsonb_set(value, '{pass,total_cost}', 'true'), '{free,total_cost}', 'true')
+      where key = 'plan_limits'`,
+  );
+  await query(
+    `update public.profiles
+        set plan = $2::public.user_plan, plan_expires_at = case when $2 = 'free' then null else now() + interval '20 days' end
+      where email = $1`,
+    [email, plan],
+  );
+  const insert = async (key: string, sellerType: "private" | "dealer") => {
+    const externalId = `${E2E_LISTING_PREFIX}total-cost-${key}-${run}`;
+    const [row] = await query<{ id: number }>(
+      `insert into public.listings
+         (source, external_id, url, title, description, make, model, trim, year, price, currency, price_usd,
+          mileage_km, transmission, fuel, location_text, lat, lon, seller_type, published_at, first_seen_at,
+          last_seen_at, fingerprint, body_type, status)
+       values ('mercadolibre', $1, $2, 'Toyota Corolla XEI 2017', $3, 'Toyota', 'Corolla', 'XEI', 2017, 20000000, 'ARS',
+               15384.62, 90000, 'manual', 'nafta', 'Palermo, CABA', -34.5875, -58.42, $4, now() - interval '2 days',
+               now() - interval '2 days', now(), $1, 'sedan', 'active')
+       returning id`,
+      [externalId, `https://example.test/${externalId}`, LONG_DESCRIPTION, sellerType],
+    );
+    await query(
+      `insert into public.listing_snapshots (listing_id, observed_at, price, currency, price_usd, fx_rate, mileage_km,
+                                             attrs_hash, change_kind)
+       values ($1, now() - interval '2 days', 20000000, 'ARS', 15384.62, 1300, 90000, 'h0', 'new')`,
+      [row.id],
+    );
+    return Number(row.id); // bigint: pg returns it as a string
+  };
+  const priv = await insert("private", "private");
+  const dealer = await insert("dealer", "dealer");
+  const [profile] = await query<{ id: number }>(
+    `insert into public.search_profiles (user_id, name, filters, notification_frequency, bootstrapped_at,
+                                         origin_lat, origin_lon, radius_km)
+     select id, 'Corolla en Palermo', '{"make": "Toyota", "model": "Corolla", "location_label": "Palermo, CABA"}', 'daily', now(),
+            -34.5875, -58.42, 20
+       from public.profiles where email = $1
+     returning id`,
+    [email],
+  );
+  for (const [id, score] of [[priv, 80], [dealer, 75]]) {
+    await query(
+      `insert into public.matches (search_profile_id, listing_id, score, level, score_breakdown, match_reasons, red_flags, scoring_version)
+       values ($1, $2, $3, 'good', '{}', '{}', '[]', 'e2e')`,
+      [profile.id, id, score],
+    );
+  }
+  return { profileId: Number(profile.id), private: priv, dealer };
 }

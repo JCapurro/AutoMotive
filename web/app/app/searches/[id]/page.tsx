@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth";
 import { webConfig } from "@/lib/config";
+import { costLinesFor } from "@/lib/cost-estimate-data";
 import { FOLLOW_EMPTY, FOLLOW_LABEL } from "@/lib/copy";
 import { fetchPriceTracks } from "@/lib/price-track";
 import { accessDate, freeResultQuota, includesImmediateAlerts, type PlanLimits, visibleResults } from "@/lib/pro";
@@ -113,10 +114,14 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
   const more = rows.length > reach && reach === PAGE_SIZE * page;
   const shown = rows.slice(0, reach);
   // PAR-03: the drops of the listings on this page only, in one call; on error, no drop line.
-  const tracks = await fetchPriceTracks(
-    (fn, args) => supabase.rpc(fn, args),
-    shown.map((card) => card.listing_id).filter((lid): lid is number => lid != null),
-  );
+  // PAR-01: the total cost line, with the plan's flag only (one listings query for the page).
+  const [tracks, costLines] = await Promise.all([
+    fetchPriceTracks(
+      (fn, args) => supabase.rpc(fn, args),
+      shown.map((card) => card.listing_id).filter((lid): lid is number => lid != null),
+    ),
+    costLinesFor(supabase, user.id, shown),
+  ]);
   const href = (next: Partial<{ f: Filter; s: Sort; p: number }>) => {
     const qs = new URLSearchParams({ f: next.f ?? filter, s: next.s ?? sort });
     if (next.p && next.p > 1) qs.set("p", String(next.p));
@@ -190,7 +195,12 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
       {shown.length ? (
         <div className={LISTING_ROWS} data-testid="results">
           {shown.map((card) => (
-            <ListingCard key={card.listing_id} card={card} track={card.listing_id != null ? tracks.get(card.listing_id) : null} />
+            <ListingCard
+              key={card.listing_id}
+              card={card}
+              track={card.listing_id != null ? tracks.get(card.listing_id) : null}
+              costLine={card.listing_id != null ? costLines.get(card.listing_id) : null}
+            />
           ))}
         </div>
       ) : needsPreparation ? null : (

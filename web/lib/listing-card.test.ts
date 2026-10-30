@@ -57,3 +57,13 @@ it("hides the drops next to a price read from the description (PAR-03)", () => {
   const down = { ...card, price: 15000, price_kind: "cash", price_source: "description" };
   expect(renderToStaticMarkup(createElement(ListingCard, { card: down, track: pesos }))).not.toContain("card-price-track");
 });
+
+// PAR-01: the total cost header, one line under the price, only when the page passes it.
+it("shows the total cost line only when given, and leaves the card as it was otherwise", () => {
+  const text = "Costo total estimado: USD 16.290 – 16.560 (ARS 21.188.000 – 21.518.000)";
+  const html = renderToStaticMarkup(createElement(ListingCard, { card, costLine: text }));
+  expect(html).toMatch(/<p[^>]*data-testid="cost-estimate-line"[^>]*>Costo total estimado: USD 16\.290 – 16\.560 \(ARS 21\.188\.000 – 21\.518\.000\)<\/p>/);
+  const plain = renderToStaticMarkup(createElement(ListingCard, { card }));
+  expect(plain).not.toContain("cost-estimate-line");
+  for (const costLine of [null, undefined, ""]) expect(renderToStaticMarkup(createElement(ListingCard, { card, costLine }))).toBe(plain);
+});

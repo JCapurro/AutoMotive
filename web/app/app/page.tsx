@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth";
 import type { ProCtaState } from "@/lib/pro";
 import { describeVehicle, filterParts } from "@/lib/search";
+import { costLinesFor } from "@/lib/cost-estimate-data";
 import { createClient } from "@/lib/supabase/server";
 import type { Filters } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -18,7 +19,7 @@ export const metadata: Metadata = { title: "Inicio" };
 
 // §28: "Mis búsquedas" cards and "Oportunidades recientes" by score, then detection date.
 export default async function Dashboard() {
-  await requireUser();
+  const user = await requireUser();
   const supabase = await createClient();
   const [{ data: searches }, { data: opportunities }, { data: cta }] = await Promise.all([
     supabase.rpc("dashboard_summary"),
@@ -27,7 +28,11 @@ export default async function Dashboard() {
   ]);
   // §52: "Ver planes" after real activity or a plan limit.
   const pro = (cta ?? null) as ProCtaState | null;
-  const { data: radii } = await supabase.from("search_profiles").select("id, radius_km");
+  const [{ data: radii }, costLines] = await Promise.all([
+    supabase.from("search_profiles").select("id, radius_km"),
+    // PAR-01: the total cost line of each opportunity, with its own search's zones.
+    costLinesFor(supabase, user.id, opportunities ?? []),
+  ]);
   const radius = new Map((radii ?? []).map((r) => [r.id, r.radius_km]));
   const hasPending = searches?.some((s) => s.enabled && s.pending) ?? false;
 
@@ -145,7 +150,7 @@ export default async function Dashboard() {
         {opportunities?.length ? (
           <div className={cn(LISTING_ROWS, "mt-4")}>
             {opportunities.map((card) => (
-              <ListingCard key={card.listing_id} card={card} showProfile />
+              <ListingCard key={card.listing_id} card={card} showProfile costLine={card.listing_id != null ? costLines.get(card.listing_id) : null} />
             ))}
           </div>
         ) : (
