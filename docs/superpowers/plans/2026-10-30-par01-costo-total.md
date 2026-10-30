@@ -35,19 +35,19 @@ Antes de empezar se anota la línea base de pgTAP y de `-m db`. Criterio: nada n
 
 ## Task 0: preparación
 
-- [ ] Leer `web/CLAUDE.md` → `AGENTS.md` y la doc de Next 16 en `web/node_modules/next/dist/docs/`.
-- [ ] Mergear la rama de F-02 y anotar si el paso 2 está (`grep -rn effectiveSeller web/lib`).
-- [ ] Correr y anotar la línea base.
-- [ ] En `automotive_test`, contar los avisos en ARS cuyo `fx_rate` no coincide con ninguna fila de `fx_rates` de su día (posible fallback de 1100). Si hay casos, consultar a Juan antes de la Task 6.
-- [ ] Confirmar que `web/lib/data/argentina-locations.json` y `worker/normalization/data/ar_localities.json` son iguales.
-- [ ] Confirmar que `rows_for_scoring` (`SELECT l.*`, `worker/db/repos/listings.py:307`) trae `price_partial`, `description_facts`, `body_type` y `dealer_inferred` (este último, después de F-02).
+- [x] Leer `web/CLAUDE.md` → `AGENTS.md` y la doc de Next 16 en `web/node_modules/next/dist/docs/`.
+- [x] Mergear la rama de F-02 y anotar si el paso 2 está (`grep -rn effectiveSeller web/lib`).
+- [x] Correr y anotar la línea base.
+- [x] En `automotive_test`, contar los avisos en ARS cuyo `fx_rate` no coincide con ninguna fila de `fx_rates` de su día (posible fallback de 1100). Si hay casos, consultar a Juan antes de la Task 6.
+- [x] Confirmar que `web/lib/data/argentina-locations.json` y `worker/normalization/data/ar_localities.json` son iguales.
+- [x] Confirmar que `rows_for_scoring` (`SELECT l.*`, `worker/db/repos/listings.py:307`) trae `price_partial`, `description_facts`, `body_type` y `dealer_inferred` (este último, después de F-02).
 
 ## Task 1: pgTAP y migración
 
 Files: `supabase/tests/par01_cost_estimator_test.sql`, `supabase/migrations/20261126120000_par01_cost_estimator.sql`, `supabase/seed.sql`.
 
-- [ ] Releer `max(version)`. Usar `20261126120000` (F-02 ocupó 20261123–25) si sigue por encima de lo que sumaron F-02, PRO-01 y PRO-02; si no, renombrar.
-- [ ] Escribir primero el test que falle (formato de `par02_risk_config_test.sql`):
+- [x] Releer `max(version)`. Usar `20261126120000` (F-02 ocupó 20261123–25) si sigue por encima de lo que sumaron F-02, PRO-01 y PRO-02; si no, renombrar.
+- [x] Escribir primero el test que falle (formato de `par02_risk_config_test.sql`):
   - existe la fila `cost_estimator`, con `as_of` = `2026-10-30` y `status` = `aprobado`;
   - cada bloque de la lista del diseño tiene `source` no vacío y `as_of` con formato de fecha;
   - valores de control: `dnrpa.min_mrpa` = 32, `patente.caba.brackets[2].fixed` = 507150, `patente.ba.ipc_factor.max` = 1.25, `stamp_tax_pct.rest.private.max` = 3.0, `domain_report.in_total` = false, `gestoria.official_value` null;
@@ -56,7 +56,7 @@ Files: `supabase/tests/par01_cost_estimator_test.sql`, `supabase/migrations/2026
   - `plan_feature` da true para un usuario `pass` y uno `free`, false para `pro`, y true para un admin;
   - `fx.max_age_days` y `buyer_zone.max_locality_km` con los valores que confirme Juan;
   - `anon` y `authenticated` no tienen acceso a `app_config`.
-- [ ] Escribir la migración (JSON exacto del diseño). En `seed.sql`, editar a mano el literal de `plan_limits` (`seed.sql:41-46`): `"total_cost": true` dentro de `pass` y de `free`, porque se inserta con `on conflict do nothing` y ninguna migración lo actualiza. Sumar también la fila `cost_estimator`. Un test pgTAP corre sobre la base sembrada y verifica las dos cosas. Aplicar en local, correr `python -m tools.test_db` y pgTAP verde respecto de la línea base.
+- [x] Escribir la migración (JSON exacto del diseño). En `seed.sql`, editar a mano el literal de `plan_limits` (`seed.sql:41-46`): `"total_cost": true` dentro de `pass` y de `free`, porque se inserta con `on conflict do nothing` y ninguna migración lo actualiza. Sumar también la fila `cost_estimator`. Un test pgTAP corre sobre la base sembrada y verifica las dos cosas. Aplicar en local, correr `python -m tools.test_db` y pgTAP verde respecto de la línea base.
 
 ## Task 2: vectores dorados
 
