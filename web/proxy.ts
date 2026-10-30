@@ -63,5 +63,9 @@ function redirectWith(url: URL, from: NextResponse) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)"],
+  // Skips what never reads the session: assets, crawler files, the OG image and the
+  // Mercado Pago webhook/cron (each proxy run is an invocation plus a Supabase check).
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|opengraph-image|api/mercadopago/|.*\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+  ],
 };
