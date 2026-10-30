@@ -11,6 +11,7 @@ from psycopg import AsyncConnection
 from psycopg.types.json import Jsonb
 
 from db.pool import connection
+from db.repos.profiles import LIVE_SEARCHES
 from normalization.seller import seller_key
 
 
@@ -378,13 +379,6 @@ _BAND_ROW = (
     "                 AND l.year <= (t.query->>'year_max')::numeric + (t.query->>'year_band')::numeric)))")
 
 
-# The searches whose matches count, computed once per query: per match row,
-# search_access_active() (plan limits, access, profile count) made the queues
-# below take tens of seconds on production.
-_LIVE_SEARCHES = ("WITH live AS MATERIALIZED ("
-                  "  SELECT id FROM search_profiles WHERE public.search_access_active(id)) ")
-
-
 async def enrichment_queue(*, per_source: int, max_age_days: int) -> list[dict]:
     """Listings to read the detail page of (sección 5.5), per source newest
     first: the ones with a live (non-backfill) match, then backfill matches,
@@ -397,7 +391,7 @@ async def enrichment_queue(*, per_source: int, max_age_days: int) -> list[dict]:
     are wanted, and they never take its daily budget."""
     async with connection() as cx:
         return await (await cx.execute(
-            _LIVE_SEARCHES + "SELECT * FROM ("
+            LIVE_SEARCHES + "SELECT * FROM ("
             "  SELECT l.id, l.source, l.external_id, l.url, l.make, l.model, "
             "         count(m.listing_id) = 0 AND NOT l.price_partial AS band, "
             "         row_number() OVER (PARTITION BY l.source "
@@ -440,7 +434,7 @@ async def matched_recheck_queue(*, unseen_hours: int, recheck_hours: int, max_ag
     checked longest ago first; enrichment_queue takes the never enriched."""
     async with connection() as cx:
         return await (await cx.execute(
-            _LIVE_SEARCHES + "SELECT * FROM ("
+            LIVE_SEARCHES + "SELECT * FROM ("
             "  SELECT l.id, l.source, l.external_id, l.url, l.make, l.model, l.published_at, "
             "         l.first_seen_at, "
             "         row_number() OVER (PARTITION BY l.source "
