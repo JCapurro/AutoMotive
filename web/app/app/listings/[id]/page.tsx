@@ -8,7 +8,8 @@ import { DealerFeesNotice } from "@/components/app/dealer-fees-notice";
 import { ListingGallery } from "@/components/app/listing-gallery";
 import { ListingTracking } from "@/components/app/listing-tracking";
 import { DescriptionPriceContext, SellerDescription } from "@/components/app/description-insights";
-import { type PricePoint, PriceHistory } from "@/components/app/price-history";
+import { type PricePoint, PriceChange, PriceHistory } from "@/components/app/price-history";
+import { PriceHistoryDetails } from "@/components/app/price-history-details";
 import { SellerQuestions } from "@/components/app/seller-questions";
 import { ViewTracker } from "@/components/app/view-tracker";
 import { requireUser } from "@/lib/auth";
@@ -23,12 +24,14 @@ import {
   isBodyType,
   LEVEL,
   type Level,
+  PRICE_TRACK,
   REASON_NAME,
   REASON_OK,
   SELLER,
   TRANSMISSION,
 } from "@/lib/copy";
-import { ageLine, imageUrls, km, money, number, pct, vehicle } from "@/lib/format";
+import { ageLine, daysSince, imageUrls, km, money, number, pct, vehicle } from "@/lib/format";
+import { fetchPriceTracks, summaryLine, trackingNote } from "@/lib/price-track";
 import { financingOffered, financingTerms, isCashPrice, publishedKind } from "@/lib/price";
 import { createClient } from "@/lib/supabase/server";
 import type { Component, Listing, PriceRef, Reason, RedFlag } from "@/lib/types";
@@ -56,6 +59,7 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
     { data: snapshots },
     { data: notification },
     cfg,
+    tracks,
   ] = await Promise.all([
     supabase.from("listings").select("*, sources(name)").eq("id", listingId).maybeSingle(),
     supabase
@@ -73,6 +77,8 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
       .order("observed_at"),
     n ? supabase.from("notifications").select("id").eq("id", n).maybeSingle() : Promise.resolve({ data: null }),
     webConfig(),
+    // PAR-03: the drops as listing_price_tracks counts them (the one definition, shared with the emails).
+    fetchPriceTracks((fn, args) => supabase.rpc(fn, args), [listingId]),
   ]);
   if (!listing) notFound();
 
@@ -90,6 +96,9 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
   const name = vehicle(listing);
   const sourceName = listing.sources?.name ?? listing.source;
   const history = priceHistory(snapshots ?? []);
+  const track = tracks.get(listingId) ?? null;
+  const summary = summaryLine(track);
+  const trackNote = trackingNote(listing, track?.first_at ?? snapshots?.[0]?.observed_at);
   const similar = gone ? [] : await similarListings(supabase, listing, priceRef);
   const back = best ? `/app/searches/${best.search_profile_id}` : "/app";
 
@@ -119,6 +128,11 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
             {ageLine(listing) ? <span>{ageLine(listing)}</span> : null}
             {listing.probable_repost_of ? <span>Re-publicada</span> : null}
           </p>
+          {!listing.published_at && history.length < 2 ? (
+            <p data-testid="detected-note" className="mt-1 text-[13px] text-muted-foreground">
+              {PRICE_TRACK.detected}
+            </p>
+          ) : null}
         </div>
         {best && !gone ? (
           <div className="flex items-center gap-3.5">
@@ -272,8 +286,26 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
 
           {history.length >= 2 ? (
             <Section title="Histórico de precios" hint="Cada cambio de precio publicado que detectamos.">
-              <div className="mt-3">
-                <PriceHistory points={history} />
+              <div className="mt-3 space-y-2">
+                {summary ? (
+                  <p data-testid="price-track-summary" className="text-[15px] font-semibold">
+                    <span className="mark">{summary}</span>
+                  </p>
+                ) : (
+                  <PriceChange points={history} />
+                )}
+                {trackNote ? (
+                  <p data-testid="price-track-note" className="text-sm text-muted-foreground">
+                    {trackNote}
+                  </p>
+                ) : null}
+                <PriceHistoryDetails
+                  listingId={listingId}
+                  drops={track?.drops ?? 0}
+                  days={daysSince(track?.first_at ?? history[0].at)}
+                >
+                  <PriceHistory points={history} />
+                </PriceHistoryDetails>
               </div>
             </Section>
           ) : null}

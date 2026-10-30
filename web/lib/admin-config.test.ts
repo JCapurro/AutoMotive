@@ -32,6 +32,15 @@ describe("guided config validators", () => {
     // Restoring an old price with the current version is validated like any other edit.
     expect(validateConfigChange("pro_offer", DEFAULT_PRO_OFFER, changed)).toMatch(/versión/);
   });
+  it("keeps price_track.min_drop_pct a percentage (PAR-03)", () => {
+    const current = { min_drop_pct: 1 };
+    expect(validateConfigChange("price_track", { min_drop_pct: 0.5 }, current)).toBeNull();
+    expect(validateConfigChange("price_track", { min_drop_pct: 0 }, current)).toBeNull();
+    for (const min_drop_pct of [-1, 101, "1", null]) {
+      expect(validateConfigChange("price_track", { min_drop_pct }, current)).toMatch(/min_drop_pct/);
+    }
+    expect(validateConfigChange("price_track", {}, current)).toMatch(/min_drop_pct/);
+  });
   it("fits the numeric(12,2) payment ledger", () => {
     expect(AdminOfferInput.safeParse({ ...DEFAULT_PRO_OFFER, pass_30: { ...DEFAULT_PRO_OFFER.pass_30, amount: MAX_OFFER_ARS } }).success).toBe(true);
     expect(AdminOfferInput.safeParse({ ...DEFAULT_PRO_OFFER, pass_30: { ...DEFAULT_PRO_OFFER.pass_30, amount: MAX_OFFER_ARS + 1 } }).success).toBe(false);

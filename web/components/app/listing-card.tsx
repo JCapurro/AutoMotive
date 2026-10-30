@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { BODY_TYPE, isBodyType } from "@/lib/copy";
 import { ageLine, firstImage, km, money, vehicle } from "@/lib/format";
+import { type PriceTrack, trackLine } from "@/lib/price-track";
 import type { MatchCard } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -19,6 +20,7 @@ export function ListingCard({
   card,
   showProfile = false,
   footer,
+  track,
 }: {
   card: Pick<
     MatchCard,
@@ -49,11 +51,14 @@ export function ListingCard({
     };
   showProfile?: boolean;
   footer?: React.ReactNode;
+  /** PAR-03: the listing's drops since we first saw it (listing_price_tracks); a line only with a net drop. */
+  track?: PriceTrack | null;
 }) {
   const image = firstImage(card.images);
   const name = vehicle(card);
   const gone = card.listing_status === "gone";
   const mileage = km(card.mileage_km);
+  const drops = trackLine(track);
 
   return (
     <article
@@ -121,6 +126,12 @@ export function ListingCard({
           {showProfile && card.profile_name ? <span>«{card.profile_name}»</span> : null}
         </p>
       </div>
+
+      {drops ? (
+        <p data-testid="card-price-track" className="col-span-full min-w-0 text-[13px] break-words text-muted-foreground sm:col-start-2">
+          {drops}
+        </p>
+      ) : null}
 
       {card.note ? (
         <p data-testid="card-note" className="col-span-full truncate text-[13px] text-muted-foreground sm:col-start-2" title={card.note}>

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 
 import httpx
 import pytest
@@ -19,6 +20,7 @@ from db.repos import config as app_config
 from db.repos import matches as matches_repo
 from db.repos import notifications as repo
 from db.repos.listings import rows_for_scoring
+from notifications import service, templates
 from notifications.channels.email import ResendEmailChannel
 from notifications.channels.telegram import TelegramChannel
 from notifications.channels.web import WebChannel
@@ -470,3 +472,61 @@ class TelegramActionTests(NotificationsCase):
         await repo.apply_telegram_action(n["id"], TG_USER, "discarded")
         await self.notifier.on_listing_events([self.drop(n["listing_id"])])
         self.assertEqual([r["kind"] for r in await self.notifications("telegram")], ["opportunity"])
+
+
+class PriceTrackTests(NotificationsCase):
+    """PAR-03: the drops come from public.listing_price_tracks() (migration 20261121120000)."""
+
+    async def snapshots(self, listing_id: int, *points: tuple[int, float, str, float, float | None]) -> None:
+        """(days ago, price, currency, price_usd, fx_rate), oldest first."""
+        async with db.connection() as cx:
+            for days, price, currency, usd, fx in points:
+                await cx.execute(
+                    "INSERT INTO listing_snapshots (listing_id, observed_at, price, currency, price_usd, fx_rate, "
+                    "  attrs_hash, change_kind) VALUES (%s, now() - make_interval(days => %s), %s, %s, %s, %s, 'h', %s)",
+                    (listing_id, days, price, currency, usd, fx, "new" if days == points[0][0] else "price"))
+
+    async def test_the_repo_reads_the_function(self):
+        usd = await self.listing(price=9_000, price_usd=9_000)
+        ars = await self.listing(price=10_800_000, currency="ARS", price_usd=7_200)
+        bare = await self.listing()
+        await self.snapshots(usd, (10, 10_000, "USD", 10_000, None), (6, 9_500, "USD", 9_500, None),
+                             (2, 9_000, "USD", 9_000, None))
+        await self.snapshots(ars, (10, 12_000_000, "ARS", 10_000, 1_200), (5, 10_800_000, "ARS", 7_200, 1_500))
+        tracks = await repo.price_tracks([usd, ars, bare, usd])
+        self.assertEqual(set(tracks), {usd, ars})
+        self.assertEqual((tracks[usd]["drops"], float(tracks[usd]["cum_pct"]), float(tracks[usd]["cum_usd"])),
+                         (2, 10.0, 1_000.0))
+        self.assertEqual((tracks[ars]["drops"], float(tracks[ars]["cum_pct"]), float(tracks[ars]["cum_usd"])),
+                         (1, 10.0, 800.0))
+        self.assertEqual(await repo.price_tracks([]), {})
+
+    async def test_halves_come_rounded_as_the_web_shows_them(self):
+        # 40.008 → 37.507,50: USD 2.500,50, exactly 6,25 %. The function rounds both
+        # (web/e2e/price-tracks.spec.ts checks the same listing on the card and the page).
+        halves = await self.listing(price=37_507.5, price_usd=37_507.5)
+        await self.snapshots(halves, (7, 40_008, "USD", 40_008, None), (1, 37_507.5, "USD", 37_507.5, None))
+        track = (await repo.price_tracks([halves]))[halves]
+        self.assertEqual((track["cum_pct"], track["cum_usd"]), (Decimal("6.3"), Decimal("2501")))
+        self.assertEqual(templates.price_track_line(service.price_track_payload(track)),
+                         "Bajó 1 vez desde que la vimos: -USD 2.501 (-6,3%).")
+
+    async def test_an_opportunity_carries_its_drops_and_the_digest_recomputes_them(self):
+        deal = await self.listing(price=9_000, price_usd=9_000)
+        await self.snapshots(deal, (10, 10_000, "USD", 10_000, None), (3, 9_000, "USD", 9_000, None))
+        await self.matched(await self.match(self.profile, deal, "high", 90))
+        [row] = [r for r in await self.notifications("email") if r["kind"] == "opportunity"]
+        self.assertEqual(row["payload"]["price_track"]["drops"], 1)
+        self.assertEqual(row["payload"]["price_track"]["cum_usd"], 1_000.0)
+        await self.notifier.deliver()
+        [mail] = [m for m in self.emails if m["subject"].startswith("🔥")]
+        self.assertIn("Bajó 1 vez desde que la vimos: -USD 1.000 (-10,0%).", mail["text"])
+
+        # A daily search: the digest reads the drops again when it is built.
+        pid = await self.alert(user=5, email=None, channels=("telegram",), frequency="daily")
+        await self.matched(await self.match(pid, deal, "high", 90))
+        await self.snapshots(deal, (1, 8_500, "USD", 8_500, None))
+        await run_digest(self.notifier)
+        [digest] = [r for r in await self.notifications("telegram") if r["kind"] == "digest"]
+        [item] = digest["payload"]["items"]
+        self.assertEqual((item["price_track"]["drops"], item["price_track"]["cum_usd"]), (2, 1_500.0))

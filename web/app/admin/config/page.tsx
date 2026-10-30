@@ -27,6 +27,8 @@ const HINTS: Record<string, string> = {
   listing_tracking: "Seguimiento de publicaciones (X-01). note_max_chars: largo máximo de la nota por publicación (500).",
   digest_hour: "Hora del digest diario (ART).",
   price_drop_min_pct: "Baja mínima para alertar «Bajó de precio».",
+  price_track:
+    "Bajas de precio por aviso (PAR-03). min_drop_pct: baja mínima en % para contarla en tarjeta, ficha y emails (distinta de price_drop_min_pct, que decide si se avisa).",
   llm_limits: "Jobs del LLM por usuario y hora.",
   email_only_signup: "Búsqueda gratis solo con email (docs/AUTENTICACION.md). enabled (con false, el pop-up de la portada avisa que por ahora no se pueden crear búsquedas nuevas), per_ip_hour y per_day (cuentas nuevas), links_per_user_hour y links_per_ip_hour (links para entrar), lookups_per_ip_hour (búsquedas de cuenta) y alert_sessions_per_user_hour (sesiones por cuenta y hora que pueden iniciar los links firmados de los emails; sin la clave, 10; 0 las apaga).",
 };

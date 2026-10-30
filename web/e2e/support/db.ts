@@ -274,3 +274,73 @@ export async function insertFreshDeal(run: string): Promise<number> {
     publishedDaysAgo: 0,
   });
 }
+
+/**
+ * PAR-03 (price-tracks.spec.ts): four Fiestas matched by a fresh search of the
+ * given user. drops: 11.000 → 10.500 → 10.000, published 8 days before we saw
+ * it; rise: 11.000 → 11.500; flat: one price; detected: no published_at,
+ * 10.500 → 10.000; halves: 40.008 → 37.507,50, a fall of USD 2.500,50 that is
+ * exactly 6,25 % (the worker and the web must both print 6,3 % and 2.501).
+ */
+export async function seedPriceTracks(
+  email: string,
+  run: string,
+): Promise<{ profileId: number; drops: number; rise: number; flat: number; detected: number; halves: number }> {
+  const drops = await insertListing(`${E2E_LISTING_PREFIX}tracks-drops-${run}`, {
+    key: "tracks-drops",
+    year: 2017,
+    km: 101_000,
+    price: 10_000,
+    publishedDaysAgo: 20,
+    prices: [
+      [12, 11_000],
+      [6, 10_500],
+    ],
+  });
+  const rise = await insertListing(`${E2E_LISTING_PREFIX}tracks-rise-${run}`, {
+    key: "tracks-rise",
+    year: 2016,
+    km: 121_000,
+    price: 11_500,
+    prices: [[8, 11_000]],
+  });
+  const flat = await insertListing(`${E2E_LISTING_PREFIX}tracks-flat-${run}`, { key: "tracks-flat", year: 2018, km: 95_000, price: 9_800 });
+  const detected = await insertListing(`${E2E_LISTING_PREFIX}tracks-detected-${run}`, {
+    key: "tracks-detected",
+    year: 2015,
+    km: 140_000,
+    price: 10_000,
+    prices: [[5, 10_500]],
+  });
+  const halves = await insertListing(`${E2E_LISTING_PREFIX}tracks-halves-${run}`, {
+    key: "tracks-halves",
+    year: 2019,
+    km: 80_000,
+    price: 37_507.5,
+    prices: [[7, 40_008]],
+  });
+  await query(`update public.listings set published_at = null where id = $1`, [detected]);
+  const [profile] = await query<{ id: number }>(
+    `insert into public.search_profiles (user_id, name, filters, notification_frequency, bootstrapped_at)
+     select id, 'Fiesta bajas', '{"make": "Ford", "model": "Fiesta"}', 'daily', now()
+       from public.profiles where email = $1
+     returning id`,
+    [email],
+  );
+  for (const [listing, score] of [[drops, 80], [rise, 70], [flat, 60], [detected, 50], [halves, 40]]) {
+    await query(
+      `insert into public.matches (search_profile_id, listing_id, score, level, score_breakdown, match_reasons, red_flags, scoring_version)
+       values ($1, $2, $3, 'good', '{}', '{}', '[]', 'e2e')`,
+      [profile.id, listing, score],
+    );
+  }
+  // pg returns bigint ids as strings.
+  return {
+    profileId: Number(profile.id),
+    drops: Number(drops),
+    rise: Number(rise),
+    flat: Number(flat),
+    detected: Number(detected),
+    halves: Number(halves),
+  };
+}

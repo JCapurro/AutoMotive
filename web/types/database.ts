@@ -1140,6 +1140,11 @@ isOneToOne: false
 "link_telegram":
 { Args: { "p_chat_id": number,"p_code": string,"p_telegram_user_id": number }; Returns: string
                            },
+"listing_price_tracks":
+{ Args: { "p_listing_ids": (number)[] }; Returns: {
+              "cum_pct": number | null,"cum_usd": number | null,"drops": number,"first_at": string,"first_currency": string,"first_price": number,"last_currency": string,"last_drop_at": string | null,"last_price": number,"listing_id": number,"rises": number
+            }[]
+                           },
 "my_plan_feature":
 { Args: { "p_feature": string }; Returns: boolean
                            },

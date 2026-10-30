@@ -134,6 +134,16 @@ RED_FLAG = {
 }
 
 # ---------------------------------------------------------------------------
+# PAR-03: a listing's price drops since Ese Auto first saw it (its first
+# snapshot, not its publication), in the opportunity email and the digest.
+# {amount} is "USD 1.500" or "$ 1.200.000"; {about} is "" or PRICE_TRACK_ABOUT_USD.
+# ---------------------------------------------------------------------------
+
+PRICE_TRACK = "Bajó {n} {times} desde que la vimos: -{amount} (-{pct}%){about}."
+PRICE_TRACK_TIMES = ("vez", "veces")
+PRICE_TRACK_ABOUT_USD = ", unos {usd}"
+
+# ---------------------------------------------------------------------------
 # Seller questions (§25). The web only copies the text; nobody is contacted.
 # ---------------------------------------------------------------------------
 
