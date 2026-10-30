@@ -294,6 +294,7 @@ export async function seedPriceTracks(
   halves: number;
   cash: number;
   down: number;
+  way: number;
 }> {
   const drops = await insertListing(`${E2E_LISTING_PREFIX}tracks-drops-${run}`, {
     key: "tracks-drops",
@@ -345,9 +346,19 @@ export async function seedPriceTracks(
     price: 4_000,
     prices: [[10, 5_000]],
   });
+  // A total far above the published number with no word for it: the worker
+  // took that number for a down payment (published_kind stays null).
+  const way = await insertListing(`${E2E_LISTING_PREFIX}tracks-way-${run}`, {
+    key: "tracks-way",
+    year: 2016,
+    km: 95_000,
+    price: 4_000,
+    prices: [[10, 5_000]],
+  });
   for (const [id, price, published, kind] of [
     [cash, 9_500, 10_500, "list"],
     [down, 15_000, 4_000, "down_payment"],
+    [way, 15_000, 4_000, null],
   ] as const) {
     await query(
       `update public.listings set price = $2, price_usd = $2, price_source = 'description', price_published = $3,
@@ -365,7 +376,7 @@ export async function seedPriceTracks(
      returning id`,
     [email],
   );
-  for (const [listing, score] of [[drops, 80], [rise, 70], [flat, 60], [detected, 50], [halves, 40], [cash, 30], [down, 20]]) {
+  for (const [listing, score] of [[drops, 80], [rise, 70], [flat, 60], [detected, 50], [halves, 40], [cash, 30], [down, 20], [way, 10]]) {
     await query(
       `insert into public.matches (search_profile_id, listing_id, score, level, score_breakdown, match_reasons, red_flags, scoring_version)
        values ($1, $2, $3, 'good', '{}', '{}', '[]', 'e2e')`,
@@ -381,6 +392,7 @@ export async function seedPriceTracks(
     detected: Number(detected),
     halves: Number(halves),
     cash: Number(cash),
+    way: Number(way),
     down: Number(down),
   };
 }

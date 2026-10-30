@@ -33,7 +33,7 @@ import {
 } from "@/lib/copy";
 import { ageLine, daysSince, imageUrls, km, money, number, pct, vehicle } from "@/lib/format";
 import { fetchPriceTracks, summaryLine, trackingNote } from "@/lib/price-track";
-import { financingOffered, financingTerms, isCashPrice, publishedIsPartial, publishedKind } from "@/lib/price";
+import { financingOffered, financingTerms, isCashPrice, publishedIsPartial, publishedKind, snapshotUsdRate } from "@/lib/price";
 import { emphasize, RISK_HINT, RISK_TITLE } from "@/lib/risk-checklist";
 import { createClient } from "@/lib/supabase/server";
 import type { Component, Listing, PriceRef, Reason, RedFlag } from "@/lib/types";
@@ -102,7 +102,7 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
   const summary = summaryLine(track);
   const trackNote = trackingNote(listing, track?.first_at ?? snapshots?.[0]?.observed_at);
   // A down payment or an installment that moved is no price history (PAR-03).
-  const showHistory = history.length >= 2 && !publishedIsPartial(listing);
+  const showHistory = history.length >= 2 && !publishedIsPartial(listing, snapshotUsdRate(snapshots ?? []));
   const similar = gone ? [] : await similarListings(supabase, listing, priceRef);
   const back = best ? `/app/searches/${best.search_profile_id}` : "/app";
 

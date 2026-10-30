@@ -40,14 +40,53 @@ export function publishedKind(raw: unknown): string | null {
   return kind ? (PUBLISHED_KIND[kind] ?? null) : null;
 }
 
+type PricedListing = {
+  description_facts: unknown;
+  price_partial?: boolean | null;
+  price_source?: string | null;
+  price?: number | null;
+  currency?: string | null;
+  price_usd?: number | null;
+  price_published?: number | null;
+  price_published_currency?: string | null;
+};
+
+/**
+ * The price shown is a total from the description above the published number.
+ * The worker only goes up from the published price when it took that number
+ * for a down payment or an installment (a cash price from the text lies
+ * below): as worker/pipeline/ingest.total_above_published. Across currencies,
+ * at the rate the stored ARS price implies, else `usdRate` (ARS per USD, as
+ * a snapshot's ARS price implies it); without one, unknown (false).
+ */
+export function totalAbovePublished(listing: PricedListing, usdRate?: number | null): boolean {
+  const { price, currency, price_usd: usd, price_published: pub } = listing;
+  if (listing.price_source !== "description" || !price || !pub) return false;
+  const pubCurrency = listing.price_published_currency ?? currency;
+  if (pubCurrency === currency) return Number(price) > Number(pub);
+  if (!usd) return false;
+  const rate = currency === "ARS" ? Number(price) / Number(usd) : usdRate || null;
+  const pubUsd = pubCurrency === "USD" ? Number(pub) : pubCurrency === "ARS" && rate ? Number(pub) / rate : null;
+  return pubUsd != null && Number(usd) > pubUsd;
+}
+
 /**
  * PAR-03: the published price is a down payment or an installment, not a
- * price (the description calls it so, or it stands as partial): its drops
- * are no price drops. As worker/pipeline/ingest.published_partial.
+ * price (the description calls it so, it stands as partial, or the price
+ * shown is a total above it): its drops are no price drops. As
+ * worker/pipeline/ingest.published_partial.
  */
-export function publishedIsPartial(listing: { description_facts: unknown; price_partial?: boolean | null }): boolean {
+export function publishedIsPartial(listing: PricedListing, usdRate?: number | null): boolean {
   const kind = facts(listing.description_facts).price_check?.published_kind;
-  return kind === "down_payment" || kind === "installment" || Boolean(listing.price_partial);
+  return (
+    kind === "down_payment" || kind === "installment" || Boolean(listing.price_partial) || totalAbovePublished(listing, usdRate)
+  );
+}
+
+/** ARS per USD as the latest snapshot in pesos with a dollar value implies it (snapshots store the published price). */
+export function snapshotUsdRate(snapshots: { currency: string | null; price: number | null; price_usd: number | null }[]): number | null {
+  const s = [...snapshots].reverse().find((x) => x.currency === "ARS" && x.price && x.price_usd);
+  return s ? Number(s.price) / Number(s.price_usd) : null;
 }
 
 export function financingOffered(raw: unknown): boolean {

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { FORBIDDEN_TERMS, PRICE_TRACK } from "./copy";
 import { dayMonth } from "./format";
-import { publishedIsPartial } from "./price";
+import { publishedIsPartial, snapshotUsdRate } from "./price";
 import { cardTrackLine, fetchPriceTracks, hasNetDrop, type PriceTrack, summaryLine, trackingNote, trackLine } from "./price-track";
 
 function track(over: Partial<PriceTrack> = {}): PriceTrack {
@@ -84,6 +84,36 @@ describe("publishedIsPartial (PAR-03, opción B)", () => {
     for (const kind of ["list", "cash", "generic", null]) expect(publishedIsPartial({ description_facts: facts(kind), price_partial: false })).toBe(false);
     expect(publishedIsPartial({ description_facts: {} })).toBe(false);
     expect(publishedIsPartial({ description_facts: null, price_partial: null })).toBe(false);
+  });
+
+  it("is a down payment when the price shown is a total above it, with no word for it", () => {
+    // "USD 15.000 de contado" over a published USD 4.000, or the title's
+    // "anticipo" with the total in the text: published_kind stays null.
+    const usd = { description_facts: facts(null), price_partial: false, price_source: "description" };
+    expect(publishedIsPartial({ ...usd, price: 15_000, currency: "USD", price_usd: 15_000, price_published: 4_000, price_published_currency: "USD" })).toBe(true);
+    expect(publishedIsPartial({ ...usd, price: 15_000_000, currency: "ARS", price_usd: 15_000, price_published: 4_000_000, price_published_currency: "ARS" })).toBe(true);
+    // A total in pesos over a down payment in dollars: at the rate the pesos imply.
+    expect(publishedIsPartial({ ...usd, price: 15_000_000, currency: "ARS", price_usd: 15_000, price_published: 4_000, price_published_currency: "USD" })).toBe(true);
+  });
+
+  it("is a price when the price shown is a cash one below it, or the published one", () => {
+    const base = { description_facts: facts("list"), price_partial: false };
+    expect(publishedIsPartial({ ...base, price_source: "description", price: 9_500, currency: "USD", price_usd: 9_500, price_published: 11_000, price_published_currency: "USD" })).toBe(false);
+    expect(publishedIsPartial({ ...base, price_source: "description", price: 9_500_000, currency: "ARS", price_usd: 9_500, price_published: 11_000, price_published_currency: "USD" })).toBe(false);
+    expect(publishedIsPartial({ ...base, price_source: "published", price: 15_000, currency: "USD", price_usd: 15_000, price_published: 4_000, price_published_currency: "USD" })).toBe(false);
+  });
+
+  it("compares USD shown over pesos published at a snapshot's rate", () => {
+    const row = { description_facts: facts(null), price_source: "description", price: 15_000, currency: "USD", price_usd: 15_000, price_published: 4_000_000, price_published_currency: "ARS" };
+    expect(publishedIsPartial(row)).toBe(false); // no rate on the row: unknown, stays a price
+    const rate = snapshotUsdRate([
+      { currency: "ARS", price: 5_000_000, price_usd: 5_000 },
+      { currency: "USD", price: 4_000, price_usd: 4_000 },
+    ]);
+    expect(rate).toBe(1_000);
+    expect(publishedIsPartial(row, rate)).toBe(true);
+    expect(publishedIsPartial({ ...row, price_published: 20_000_000 }, rate)).toBe(false);
+    expect(snapshotUsdRate([{ currency: "USD", price: 4_000, price_usd: 4_000 }])).toBeNull();
   });
 });
 

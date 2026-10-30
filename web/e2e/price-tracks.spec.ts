@@ -68,6 +68,7 @@ test("bajas de precio: tarjeta, ficha y price_history_expanded", async ({ page }
     await expect(card(seeded.cash).getByTestId("card-price-track")).toHaveCount(0);
     await expect(card(seeded.down)).toContainText("USD 15.000");
     await expect(card(seeded.down).getByTestId("card-price-track")).toHaveCount(0);
+    await expect(card(seeded.way).getByTestId("card-price-track")).toHaveCount(0);
     const line = await card(seeded.drops).getByTestId("card-price-track").boundingBox();
     const viewport = page.viewportSize();
     expect(line && viewport && line.x + line.width <= viewport.width).toBeTruthy();
@@ -135,6 +136,10 @@ test("bajas de precio: tarjeta, ficha y price_history_expanded", async ({ page }
     await page.goto(`/app/listings/${seeded.down}`);
     await expect(page.getByTestId("price")).toHaveText("USD 15.000");
     await expect(page.getByText("Publicado USD 4.000 (anticipo): el precio sale de la descripción")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Histórico de precios" })).toHaveCount(0);
+    await expect(page.getByTestId("price-track-summary")).toHaveCount(0);
+    await page.goto(`/app/listings/${seeded.way}`);
+    await expect(page.getByTestId("price")).toHaveText("USD 15.000");
     await expect(page.getByRole("heading", { name: "Histórico de precios" })).toHaveCount(0);
     await expect(page.getByTestId("price-track-summary")).toHaveCount(0);
     await expectNoHorizontalScroll(page);
