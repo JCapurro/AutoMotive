@@ -16,7 +16,12 @@ type Facts = {
     max_financed_pct?: number | null;
     max_installments?: number | null;
   };
-  price_check?: { published_kind?: string | null; effective_kind?: string | null; source?: string | null };
+  price_check?: {
+    published_kind?: string | null;
+    effective_kind?: string | null;
+    source?: string | null;
+    published_partial?: boolean | null;
+  };
 };
 
 /** What the published price is, as the description calls it. */
@@ -38,6 +43,19 @@ export function isCashPrice(raw: unknown): boolean {
 export function publishedKind(raw: unknown): string | null {
   const kind = facts(raw).price_check?.published_kind;
   return kind ? (PUBLISHED_KIND[kind] ?? null) : null;
+}
+
+/**
+ * PAR-03: the published price is a down payment or an installment, not a
+ * price: its drops are no price drops. As worker/pipeline/ingest.published_partial,
+ * it reads what the worker's resolve_price decided (price_check.published_partial,
+ * at that day's rate) and never compares prices again. Rows stored before that
+ * flag only count the explicit kinds and price_partial.
+ */
+export function publishedIsPartial(listing: { description_facts: unknown; price_partial?: boolean | null }): boolean {
+  const check = facts(listing.description_facts).price_check;
+  const kind = check?.published_kind;
+  return check?.published_partial === true || kind === "down_payment" || kind === "installment" || Boolean(listing.price_partial);
 }
 
 export function financingOffered(raw: unknown): boolean {

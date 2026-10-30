@@ -3,7 +3,7 @@ import Link from "next/link";
 
 import { BODY_TYPE, isBodyType } from "@/lib/copy";
 import { ageLine, firstImage, km, money, vehicle } from "@/lib/format";
-import { type PriceTrack, trackLine } from "@/lib/price-track";
+import { cardTrackLine, type PriceTrack } from "@/lib/price-track";
 import type { MatchCard } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -45,20 +45,20 @@ export function ListingCard({
     | "listing_status"
     | "probable_repost_of"
   > &
-    Partial<Pick<MatchCard, "price_kind" | "financing_offered" | "price_usd" | "body_type">> & {
+    Partial<Pick<MatchCard, "price_kind" | "financing_offered" | "price_usd" | "body_type" | "price_source">> & {
       /** X-01: the user's private note, shown on one line. */
       note?: string | null;
     };
   showProfile?: boolean;
   footer?: React.ReactNode;
-  /** PAR-03: the listing's drops since we first saw it (listing_price_tracks); a line only with a net drop. */
+  /** PAR-03: the listing's drops since we first saw it (listing_price_tracks); a line only with a net drop of the price shown. */
   track?: PriceTrack | null;
 }) {
   const image = firstImage(card.images);
   const name = vehicle(card);
   const gone = card.listing_status === "gone";
   const mileage = km(card.mileage_km);
-  const drops = trackLine(track);
+  const drops = cardTrackLine(track, card);
 
   return (
     <article

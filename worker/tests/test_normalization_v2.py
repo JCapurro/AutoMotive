@@ -12,7 +12,8 @@ from normalization.fx import FxQuote
 from normalization.listing import Target, fingerprint, normalize_listing, price_usd
 from normalization.vehicle import CatalogModel, resolve_vehicle
 from pipeline.crawl import TargetSpec, derive_targets, retry_seconds, scraper_filters
-from pipeline.ingest import merge, price_drop_pct
+from normalization.description_facts import Amount, DescriptionFacts, resolve_price
+from pipeline.ingest import merge, price_drop_pct, published_partial
 
 CATALOG = [
     CatalogModel("Ford", "Fiesta", ("fiesta kinetic", "fiesta kinetic design"), ("S", "SE", "SEL", "Titanium", "ST"), None, 2019),
@@ -263,6 +264,99 @@ class MergeTests(unittest.TestCase):
         # Currency changed: compared in USD.
         self.assertEqual(price_drop_pct({"price": 11_000_000, "currency": "ARS", "price_usd": 10_000},
                                         {"price": 9_000, "currency": "USD", "price_usd": 9_000}), 10.0)
+
+
+class PublishedPartialTests(unittest.TestCase):
+    """PAR-03, opción B: a down payment or an installment that falls is no price drop."""
+
+    @staticmethod
+    def facts(kind):
+        return {"price_check": {"published_kind": kind, "effective_kind": "cash", "source": "description"}}
+
+    def test_the_description_calls_it_a_down_payment_or_an_installment(self):
+        for kind in ("down_payment", "installment"):
+            with self.subTest(kind):
+                self.assertTrue(published_partial({"description_facts": self.facts(kind)}))
+
+    def test_a_partial_price_that_stands(self):
+        self.assertTrue(published_partial({"price_partial": True, "description_facts": None}))
+
+    def test_the_flag_resolve_price_stored(self):
+        check = {"published_kind": None, "effective_kind": "cash", "source": "description"}
+        self.assertTrue(published_partial({"description_facts": {"price_check": {**check, "published_partial": True}}}))
+        self.assertFalse(published_partial({"description_facts": {"price_check": {**check, "published_partial": False}}}))
+
+    def test_a_price_otherwise(self):
+        for row in ({}, {"description_facts": self.facts("list")}, {"description_facts": self.facts(None)},
+                    {"price_partial": False, "description_facts": {}}):
+            with self.subTest(row):
+                self.assertFalse(published_partial(row))
+
+    def test_rows_stored_before_the_flag_are_never_re_derived(self):
+        # A total from the text above the published number, without the flag:
+        # only the explicit kinds count, prices are not compared again.
+        for row in ({"price_published": 5_000.0, "price_published_currency": "USD", "price": 15_000.0,
+                     "currency": "USD", "price_source": "description", "description_facts": self.facts(None)},
+                    {"price_published": 5_000_000.0, "price_published_currency": "ARS", "price": 15_000.0,
+                     "currency": "USD", "price_usd": 15_000.0, "price_source": "description",
+                     "description_facts": self.facts(None)}):
+            with self.subTest(row):
+                self.assertFalse(published_partial(row))
+
+
+class ResolvePricePublishedPartialTests(unittest.TestCase):
+    """resolve_price decides whether the published number is a down payment or an
+    installment, at the rate of the day, and stores it in price_check.published_partial."""
+
+    @staticmethod
+    def resolve(pub, cur, *amounts, rate=1_000.0, partial_reason=None, published_is=None):
+        facts = DescriptionFacts(amounts=[Amount(k, a, c, "") for k, a, c in amounts], published_is=published_is)
+        return resolve_price(pub, cur, partial_reason=partial_reason, facts=facts, usd_rate=rate)
+
+    def test_the_description_calls_it_a_down_payment_or_an_installment(self):
+        for kind in ("down_payment", "installment"):
+            with self.subTest(kind):
+                res = self.resolve(4_000.0, "USD", ("cash", 15_000.0, "USD"), published_is=kind)
+                self.assertEqual((res.source, res.published_kind), ("description", kind))
+                self.assertIs(res.check()["published_partial"], True)
+                alone = self.resolve(4_000.0, "USD", published_is=kind)
+                self.assertEqual((alone.source, alone.partial, alone.check()["published_partial"]),
+                                 ("published", True, True))
+
+    def test_the_title_keyword_with_a_total_in_the_text(self):
+        res = self.resolve(4_000.0, "USD", ("cash", 15_000.0, "USD"), partial_reason="título: anticipo")
+        self.assertEqual((res.price, res.source, res.partial, res.published_kind), (15_000.0, "description", False, None))
+        self.assertIs(res.check()["published_partial"], True)
+        # ...unless the text calls the published number a total.
+        for kind in ("cash", "list", "generic"):
+            with self.subTest(kind):
+                res = self.resolve(4_000.0, "USD", (kind, 4_000.0, "USD"), partial_reason="título: cuotas")
+                self.assertIs(res.check()["published_partial"], False)
+
+    def test_a_total_way_above_with_no_word_for_it(self):
+        # F3's shape: ARS published, "USD 15.000 de contado" at 1000 ARS/USD.
+        for pub in (5_000_000.0, 4_000_000.0):
+            with self.subTest(pub):
+                res = self.resolve(pub, "ARS", ("cash", 15_000.0, "USD"))
+                self.assertEqual((res.price, res.currency, res.source, res.partial, res.published_kind),
+                                 (15_000.0, "USD", "description", False, None))
+                self.assertIs(res.check()["published_partial"], True)
+
+    def test_a_cheaper_cash_price_is_no_partial_at_any_later_rate(self):
+        # F1: ARS 20.000.000 published, "USD 19.000 de contado"; at 1060 ARS 18.000.000.
+        f1 = ("cash", 19_000.0, "USD")
+        day1 = self.resolve(20_000_000.0, "ARS", f1, rate=1_000.0)
+        self.assertEqual((day1.price, day1.source), (19_000.0, "description"))
+        later = self.resolve(18_000_000.0, "ARS", f1, rate=1_060.0)
+        self.assertEqual(later.source, "published")
+        # F2: USD 10.000 published, cash "$ 9.500.000"; at 1100/1200 USD 9.000.
+        f2 = ("cash", 9_500_000.0, "ARS")
+        day1_f2 = self.resolve(10_000.0, "USD", f2, rate=1_000.0)
+        self.assertEqual((day1_f2.price, day1_f2.source), (9_500_000.0, "description"))
+        for res in (day1, later, day1_f2, self.resolve(9_000.0, "USD", f2, rate=1_100.0),
+                    self.resolve(9_000.0, "USD", f2, rate=1_200.0)):
+            with self.subTest(res):
+                self.assertIs(res.check()["published_partial"], False)
 
 
 class CrawlTargetTests(unittest.TestCase):

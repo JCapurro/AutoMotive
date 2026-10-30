@@ -41,6 +41,8 @@ async function expectNoHorizontalScroll(page: Page) {
 
 /** Main navigation: the bottom tab bar on a phone, the header on desktop. */
 async function navigate(page: Page, name: "Inicio" | "Guardados" | "Ajustes") {
+  // The tab bar slides away while scrolling down and comes back near the top.
+  if (mobile(page)) await page.evaluate(() => window.scrollTo(0, 0));
   const nav = page.getByRole("navigation", { name: "Principal" }).filter({ visible: true });
   await nav.getByRole("link", { name, exact: false }).first().click();
 }
@@ -82,7 +84,11 @@ test("F4: búsqueda gratis con el email, backfill, alerta, guardar y guardados",
     await expectNoHorizontalScroll(page);
     await panel.getByLabel("Marca").selectOption("Ford");
     await panel.getByLabel("Modelo").selectOption("Fiesta");
-    await panel.getByLabel(/^Versiones/).selectOption("Titanium");
+    // «Versiones» is a checkbox menu (several versions in one go), not a <select>.
+    await panel.getByLabel(/^Versiones/).click();
+    await page.getByRole("menuitemcheckbox", { name: "Titanium" }).click();
+    await page.keyboard.press("Escape");
+    await expect(panel.getByRole("list", { name: "Versiones seleccionadas" })).toContainText("Titanium");
     await panel.getByLabel("Año desde").selectOption("2016");
     await panel.getByLabel("Año hasta").selectOption("2018");
     await panel.getByLabel("Precio máximo").fill("11500");
@@ -146,13 +152,19 @@ test("F4: búsqueda gratis con el email, backfill, alerta, guardar y guardados",
     expect(prices).toEqual([...prices].sort((a, b) => a - b));
 
     // The full detail (§23) of a backfilled listing, with its price history (§31).
-    await page.getByTestId("listing-card").filter({ hasText: "Vicente López" }).getByRole("link").click();
+    // By id: other specs (tracking) leave Fiestas in Vicente López that also match this search.
+    const [target] = await query<{ id: number }>(`select id from public.listings where external_id = $1`, [
+      `${E2E_LISTING_PREFIX}target`,
+    ]);
+    await page.locator(`[data-testid="listing-card"] a[href="/app/listings/${target.id}"]`).click();
     await expect(page).toHaveURL(/\/app\/listings\/\d+/);
     await expect(page.getByRole("heading", { name: "¿Por qué apareció?" })).toBeVisible();
     await expect(page.getByTestId("match-reasons")).toContainText("Dentro del presupuesto");
     await expect(page.getByTestId("match-reasons")).toContainText("Caja manual");
     await expect(page.getByTestId("price-analysis")).toContainText("debajo del mercado observado");
     await expect(page.getByRole("heading", { name: "Histórico de precios" })).toBeVisible();
+    // PAR-03: the dated list starts closed, under its toggle.
+    await page.getByTestId("price-history-details").locator("summary").click();
     await expect(page.getByRole("list", { name: "Histórico de precios" })).toContainText("USD 11.800");
     await expect(page.getByTestId("red-flags")).toContainText("conviene verificar");
     await page.getByRole("button", { name: "¿Qué le pregunto al vendedor?" }).click();
@@ -211,7 +223,8 @@ test("F4: búsqueda gratis con el email, backfill, alerta, guardar y guardados",
     await test.step("mobile: navegación inferior a 375 px", async () => {
       expect(page.viewportSize()?.width).toBe(375);
       const tabs = page.getByRole("navigation", { name: "Principal" }).filter({ visible: true });
-      await expect(tabs.getByRole("link")).toHaveCount(3);
+      // Inicio, Guardados, «Nueva» in the middle, Ajustes.
+      await expect(tabs.getByRole("link")).toHaveCount(4);
       for (const name of ["Inicio", "Guardados", "Ajustes"] as const) {
         await navigate(page, name);
         await expect(tabs.getByRole("link", { name }).first()).toHaveAttribute("aria-current", "page");

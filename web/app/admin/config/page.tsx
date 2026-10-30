@@ -30,6 +30,8 @@ const HINTS: Record<string, string> = {
   price_track:
     "Bajas de precio por aviso (PAR-03). min_drop_pct: baja mínima en % para contarla en tarjeta, ficha y emails (distinta de price_drop_min_pct, que decide si se avisa).",
   llm_limits: "Jobs del LLM por usuario y hora.",
+  red_flags: "Señales «Conviene verificar» (sección 6). much_cheaper_pct: desde cuánto % debajo de publicaciones comparables sale la señal de precio; much_cheaper_verify_pct (PAR-02, 35): desde ahí el texto pide verificar todo antes de señar; anticipo_pct: desde ahí pide verificar que el precio no sea un anticipo. Tiene que valer much_cheaper_pct < much_cheaper_verify_pct <= anticipo_pct. Solo cambia el texto, no el score ni las alertas; los matches lo toman en el próximo rescore.",
+  risk: "Checklist «Antes de señar» de la ficha (PAR-02). checklist_enabled: con false el bloque desaparece sin deploy. links: los links oficiales (dnrpa, vtv, form_08, y listas patentes e infracciones por jurisdicción), cada uno {\"label\": \"...\", \"url\": \"https://...\"} o null; solo https://, sin usuario ni contraseña, hasta 300 caracteres. Sin links el bloque se muestra sin ellos.",
   email_only_signup: "Búsqueda gratis solo con email (docs/AUTENTICACION.md). enabled (con false, el pop-up de la portada avisa que por ahora no se pueden crear búsquedas nuevas), per_ip_hour y per_day (cuentas nuevas), links_per_user_hour y links_per_ip_hour (links para entrar), lookups_per_ip_hour (búsquedas de cuenta) y alert_sessions_per_user_hour (sesiones por cuenta y hora que pueden iniciar los links firmados de los emails; sin la clave, 10; 0 las apaga).",
 };
 

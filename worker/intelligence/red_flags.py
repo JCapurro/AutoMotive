@@ -49,6 +49,27 @@ def _age_years(listing: Mapping[str, Any], now: datetime) -> int | None:
     return max(1, now.year - int(year))
 
 
+def _shown_pct(diff_pct: float) -> str:
+    """The percentage as the much_cheaper text prints it."""
+    return f"{diff_pct:.0f}"
+
+
+def _much_cheaper_text_key(diff_pct: float, rules: Mapping[str, Any]) -> str:
+    """Which text the much_cheaper flag carries (PAR-02). The middle band only
+    exists when much_cheaper_pct < much_cheaper_verify_pct <= anticipo_pct;
+    otherwise the two original bands apply. Id and severity never change.
+    The band is chosen from the percentage the text shows, so the same shown
+    number always carries the same text (34.6 reads 35% and gets the 35 band)."""
+    shown = float(_shown_pct(diff_pct))
+    if shown >= rules["anticipo_pct"]:
+        return "much_cheaper_anticipo"
+    verify = rules.get("much_cheaper_verify_pct")
+    coherent = verify is not None and rules["much_cheaper_pct"] < verify <= rules["anticipo_pct"]
+    if coherent and shown >= verify:
+        return "much_cheaper_verify"
+    return "much_cheaper"
+
+
 def red_flags(listing: Mapping[str, Any], *, diff_pct: float | None, guard: str | None,
               timing_belt: bool | None, cfg: IntelligenceConfig, now: datetime) -> list[RedFlag]:
     """`diff_pct`: % below the comparables' median (None without enough of them).
@@ -79,8 +100,8 @@ def red_flags(listing: Mapping[str, Any], *, diff_pct: float | None, guard: str 
             flags.append(RedFlag("vtv_pending", copy.RED_FLAG["vtv_pending"], "info"))
 
     if diff_pct is not None and diff_pct >= rules["much_cheaper_pct"]:
-        key = "much_cheaper_anticipo" if diff_pct >= rules["anticipo_pct"] else "much_cheaper"
-        flags.append(RedFlag("much_cheaper", copy.RED_FLAG[key].format(pct=f"{diff_pct:.0f}"), "warning"))
+        key = _much_cheaper_text_key(diff_pct, rules)
+        flags.append(RedFlag("much_cheaper", copy.RED_FLAG[key].format(pct=_shown_pct(diff_pct)), "warning"))
 
     km, age = listing.get("mileage_km"), _age_years(listing, now)
     if km is not None and age is not None and km / age < rules["min_km_per_year"]:

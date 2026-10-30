@@ -164,6 +164,21 @@ export async function trackSellerQuestions(listingId: number, action: "generated
   await track(supabase, user.id, `seller_questions_${action}`, { listing_id: listingId });
 }
 
+const RiskChecklistEvent = z.object({ listingId: z.number().int().positive(), action: z.enum(["viewed", "copied"]) });
+
+/**
+ * PAR-02: the «Antes de señar» checklist was seen or copied
+ * (risk_checklist_viewed / _copied). Only to the events table, never to Pixel
+ * or GA; RLS lets each user record only their own events.
+ */
+export async function trackRiskChecklist(listingId: number, action: "viewed" | "copied") {
+  const parsed = RiskChecklistEvent.safeParse({ listingId, action });
+  if (!parsed.success) return;
+  const user = await requireUser();
+  const supabase = await createClient();
+  await track(supabase, user.id, `risk_checklist_${parsed.data.action}`, { listing_id: parsed.data.listingId });
+}
+
 /** PAR-03: the listing page's price history was opened (once per view, components/app/price-history-details.tsx). */
 export async function trackPriceHistoryExpanded(listingId: number, drops: number, days: number) {
   const user = await requireUser();

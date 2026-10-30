@@ -1,7 +1,9 @@
 from datetime import datetime, timezone
 import json
+import os
 from pathlib import Path
 import re
+import sys
 from uuid import UUID
 
 from repairbot import prompt, state as st
@@ -60,7 +62,9 @@ def test_every_command_the_policy_teaches_passes_the_guard(tmp_path):
     repo = tmp_path / 'repo'
     (repo / 'worker' / 'tests').mkdir(parents=True)
     (repo / 'worker' / 'collectors').mkdir()
-    python = Path(r'C:\Users\Juan\AppData\Local\Programs\Python\Python312\python.exe')
+    # The production path on Windows; elsewhere a real interpreter, as test_real_paths.
+    python = Path(r'C:\Users\Juan\AppData\Local\Programs\Python\Python312\python.exe') if os.name == 'nt' \
+        else Path(sys.executable)
     settings = Settings(**{**SETTINGS.__dict__, 'repo': repo, 'python': python})
     commands = re.findall(r'`(cd [^`]+)`', prompt.system_prompt(settings))
     assert len(commands) == 6   # pytest, py_compile, repro_target, vps status / logs / probe

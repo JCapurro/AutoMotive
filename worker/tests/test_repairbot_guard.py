@@ -518,7 +518,8 @@ def test_hook_takes_the_writable_paths_from_its_arguments(clone):
     b'', b'no es json', b'[1, 2]', b'"Bash"', b'\xff\xfe',
     {'tool_input': {'command': 'ls'}},                                               # no tool
     {'tool_name': 'Bash'},                                                           # no input
-    {'tool_name': 'Bash', 'tool_input': {'command': 'ls'}, 'cwd': 'C:/Users'},        # elsewhere
+    {'tool_name': 'Bash', 'tool_input': {'command': 'ls'},                            # elsewhere
+     'cwd': 'C:/Users' if os.name == 'nt' else '/usr'},
     {'tool_name': 'Bash', 'tool_input': {'command': 'ls'}, 'hook_event_name': 'PostToolUse'},
     {'tool_name': 'WebFetch', 'tool_input': {'url': 'http://example.com'}},
 ])

@@ -127,3 +127,26 @@ Pendiente de resolver antes de PAR-04: `20261107130000_timing_chain_catalog.sql`
 - [ ] Juan aprueba el reordenamiento (Fase 0 en paralelo, X-01 y PAR-02 tramo 1 en la Fase 1, PRO-04 antes de PRO-03).
 - [ ] Juan elige el primer ítem y se abre su diseño en `docs/superpowers/specs/`.
 - [ ] Juan responde las decisiones de la Fase 0/1.
+
+## 7. Estado de la Fase 0 y la Fase 1 (30/10/2026)
+
+Código: H-01 (#50), X-01 (#51), F-03 fase 0 (#52) y PAR-03 por aviso (#53) en `main`. PAR-02 tramo 1, la corrección de PAR-03 para avisos de contado o anticipo (opción B), el e2e de aceptación, las migraciones aplicables desde cero y Privacidad de notas en #56. Tests de base al día en #57.
+
+Producción: el 30/10 `max(version)` era `20261118130000`. Con OK de Juan se aplicaron el mismo día, en este orden, cada una en una transacción con el insert de su versión exacta (ahora `max(version)` = `20261122120100`; funciones, vistas, tablas y config verificadas por md5 contra la base local):
+
+1. `20261027145911_admin_config_audit.sql`: nunca se aplicó; sin ella `/admin/config` no puede guardar (`admin_update_setting` no existe). Es independiente de las posteriores.
+2. `20261119110000_f03_market_stats.sql`
+3. `20261119120000_x01_tracking.sql`
+4. `20261119130000_x01_outcome_metric.sql`
+5. `20261121120000_par03_price_tracks.sql`
+6. `20261122120000_par02_risk_config.sql`
+7. `20261122120100_par02_decision_metrics_checklist.sql`
+
+`risk.links` quedó cargado (auditoría #1). Falta: desplegar el worker en el VPS con el código de `main` (`wait_idle` antes de reiniciar). La web de `main` ya tolera la base vieja: sin las migraciones, X-01 cae a «Todos», PAR-03 no muestra bajas y el checklist se ve sin links.
+
+## 8. Decisiones de Juan para la Fase 2 (30/10/2026)
+
+- **F-02:** un vendedor con **6 o más avisos activos en 30 días** (misma fuente y mismo vendedor) se marca `dealer_inferred`, con el texto «posible agencia» y el motivo visible (cantidad de avisos). Cuenta como agencia en filtros y en el aviso de gastos (confirmado por Juan).
+- **PRO-01:** el filtro estricto por tipo de vendedor es **solo Pro**; el plan Particular conserva la preferencia blanda. Mensaje listo para copiar: corto, de vos, cordial y directo (3–4 líneas con las preguntas del aviso); plantilla editable en Ajustes; nunca se envía solo.
+- **PRO-02:** acondicionamiento **5 % con mínimo USD 300**; umbral por margen con mínimo **USD 500**; OK al bump de `SCORING_VERSION` (un rescore, sin reenviar alertas). Todo **solo Pro**.
+- **PAR-01:** solo números reales, basados en documentación oficial, con fecha y fuente. Si un valor no se conoce con certeza, se propone un **rango**, se dice explícitamente y el rango se lleva al cálculo final (el costo total se muestra como rango). El cálculo **reemplaza** el aviso fijo «8–10 %».

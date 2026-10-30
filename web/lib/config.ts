@@ -4,6 +4,7 @@ import { cache } from "react";
 
 import { listingTrackingConfig } from "@/lib/listing-tracking";
 import { type PlanLimitsConfig, planLimits, type ProOffer, proOffer } from "@/lib/pro";
+import { type RiskConfig, riskConfig } from "@/lib/risk-checklist";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { paymentsEnabled } from "@/lib/mercadopago-server";
 
@@ -25,6 +26,8 @@ export type WebConfig = {
   emailOnlySignup: EmailOnlySignup;
   /** app_config.listing_tracking (X-01): the private note's length limit. */
   listingTracking: { noteMaxChars: number };
+  /** app_config.risk (PAR-02): the «Antes de señar» checklist switch and its official links (none until Juan loads them). */
+  risk: RiskConfig;
 };
 
 export type EmailOnlySignup = {
@@ -60,7 +63,7 @@ export const webConfig = cache(async (): Promise<WebConfig> => {
   const { data } = await createAdminClient()
     .from("app_config")
     .select("key, value")
-    .in("key", ["comparables", "watchlist_stale_days", "pro_offer", "commercial_pilot", "plan_limits", "alerts_max_per_user_day", "email_only_signup", "listing_tracking"]);
+    .in("key", ["comparables", "watchlist_stale_days", "pro_offer", "commercial_pilot", "plan_limits", "alerts_max_per_user_day", "email_only_signup", "listing_tracking", "risk"]);
   const values = Object.fromEntries((data ?? []).map((row) => [row.key, row.value]));
   const comparables = (values.comparables ?? {}) as { min_n?: number; year_tol?: number; km_tol_pct?: number; max_age_days?: number };
   return {
@@ -77,5 +80,6 @@ export const webConfig = cache(async (): Promise<WebConfig> => {
     automaticPayments: paymentsEnabled() && (values.commercial_pilot as { enabled?: boolean } | undefined)?.enabled === true,
     emailOnlySignup: emailOnlySignup(values.email_only_signup),
     listingTracking: listingTrackingConfig(values.listing_tracking),
+    risk: riskConfig(values.risk),
   };
 });

@@ -71,6 +71,8 @@ Criterios de aceptación:
 
 ### F-03 · Agregados de mercado (`market_stats`)
 
+**Estado al 30/10:** Fase 0 en `main` (PR #52), apagada. Migración aplicada en producción el 30/10; el job sigue apagado.
+
 No hay estadísticas agregadas: `first_seen_at`, `last_seen_at`, `last_full_seen_at` y `status = gone` existen pero nadie los resume. Solo las fuentes con lectura completa (`confirm_sources`: autocity, carone, deruedas, gruporandazzo, mardelusados, rosariogarage, mercadolibre) confirman que un aviso dejó de publicarse; Facebook, V6, Kavak y Autocosmos no, y la watchlist solo revisa guardados.
 
 Reutilizar el loop nocturno (rescore y retención), `listing_snapshots`, `crawl_targets`, `search_profiles`.
@@ -120,6 +122,8 @@ Criterios de aceptación:
 
 ### PAR-02 · Señales de riesgo y checklist antes de señar
 
+**Estado al 30/10:** tramo 1 (checklist «Antes de señar» y copy de `much_cheaper`) en PR #56, con textos aprobados por Juan. Migraciones aplicadas en producción y links oficiales cargados en `risk.links` el 30/10; falta mergear #56. El resto (pHash, duplicados, `private_many_listings`) va en la Fase 3.
+
 Dolor: seña por transferencia, fotos robadas, «particular» que es revendedor, vendedor que no es el titular.
 
 Qué existe: `red_flags.py` ya cubre precio demasiado bajo (`much_cheaper` ≥25%, guardas 50/65% y anticipos), inconsistencias descripción/ficha, repost dentro de la misma fuente (`probable_repost_of` exige mismo vendedor y ubicación). No hay hashes de fotos (solo URLs), no hay conteo de avisos por vendedor, no hay dedupe entre fuentes. Política vigente: Ese Auto no contacta vendedores y no promete «detección certificada de deuda» ([BACKLOG_COMERCIAL](BACKLOG_COMERCIAL.md)).
@@ -138,6 +142,8 @@ Criterios de aceptación:
 - Tests: fixtures con fotos iguales en dos fuentes; vendedor con 6 avisos; snapshot de ficha y email; lint de copy.
 
 ### PAR-03 · Días publicado, bajas y comportamiento del modelo
+
+**Estado al 30/10:** por aviso en `main` (PR #53); avisos con precio de contado o anticipo corregidos en PR #56 (opción B). Migración aplicada en producción el 30/10; falta mergear #56 y desplegar el worker. El bloque del modelo va en la Fase 3.
 
 Dolor: no sabe cuánto ofertar ni si conviene esperar.
 
@@ -283,9 +289,11 @@ Criterios de aceptación:
 
 `user_listing_interactions.status` ya tiene `new | seen | interested | discarded | contacted | visit_scheduled | purchased`, `rejection_reason` y `note`; la UI solo ofrece Guardar y Descartar, y el selector de estado se retiró. Las agencias llevan esto en WhatsApp y una planilla. Para Pro: devolver el selector con `contacted`, `visit_scheduled`, `purchased`, campo de nota y filtro por estado en resultados y guardados. `listing_status_changed` ya existe como evento. Tamaño S. Exportación CSV **no**: Juan la retiró el 15/10 (`20261027120000_remove_csv_export.sql`) y sigue en reserva hasta que un Pro la pida.
 
-**Estado al 29/10:** implementado en la rama `claude/x01-seguimiento` (sin mergear, sin desplegar). (a) web: 59b3158, e4608f0, ca8951f, b6593b7; (b) migración `20261119120000_x01_tracking.sql` y resultados: 959fd74, 035fed7; criterio 5 sin «Contactado» (`20261119130000_x01_outcome_metric.sql`): 11c2aee. Ninguna migración aplicada (ni en local: el stack local no estaba disponible, así que pgTAP y Playwright no corrieron). Plan: [2026-10-29-x01-seguimiento](superpowers/plans/2026-10-29-x01-seguimiento.md).
+**Estado al 30/10:** en `main` (PR #51). Migraciones aplicadas en producción el 30/10. Texto de Privacidad sobre las notas en PR #56. Plan: [2026-10-29-x01-seguimiento](superpowers/plans/2026-10-29-x01-seguimiento.md).
 
 ### H-01 · El email no trae las preguntas
+
+**Estado al 30/10:** en `main` (PR #50).
 
 La landing promete «por email, con el precio comparado y las preguntas para hacerle al vendedor»; el email de oportunidad solo lleva a la ficha. Sumar las 3 primeras preguntas de `matches.seller_questions` al email (`email_html.py`, `templates.py`, snapshot nuevo) o corregir la landing. Tamaño S; conviene resolverlo antes de PAR-04 y PRO-01, que amplían ese bloque.
 

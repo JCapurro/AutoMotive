@@ -25,7 +25,8 @@ import db
 from db.repos import listings as listings_repo
 from db.repos import notifications as repo
 from db.repos.runs import log_error
-from notifications.service import AR, Notifier, _min_n, deliverable, payload, price_track_payload
+from notifications.service import (AR, Notifier, _min_n, deliverable, payload, price_track_payload,
+                                   shows_published_price)
 from pipeline.rescore import seconds_until
 
 
@@ -70,12 +71,14 @@ def build_items(pending: list[dict[str, Any]], top: list[dict[str, Any]], top_n:
 async def add_price_tracks(items: list[dict[str, Any]]) -> None:
     """PAR-03: each new listing's drops as they are now (one query for the
     digest), not the value frozen when its alert was created hours ago."""
-    ids = list(dict.fromkeys(i["listing_id"] for i in items if i["section"] == "matches"))
+    # Not when the price shown was read from the description (service.shows_published_price).
+    items = [i for i in items if i["section"] == "matches" and shows_published_price(i.get("listing"))]
+    ids = list(dict.fromkeys(i["listing_id"] for i in items))
     if not ids:
         return
     tracks = await repo.price_tracks(ids)
     for item in items:
-        if item["section"] == "matches" and (track := price_track_payload(tracks.get(item["listing_id"]))):
+        if track := price_track_payload(tracks.get(item["listing_id"])):
             item["price_track"] = track
 
 

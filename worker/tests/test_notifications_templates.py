@@ -10,8 +10,9 @@ import unittest
 from datetime import timedelta
 from pathlib import Path
 
-from intelligence.copy import FORBIDDEN_TERMS
-from notification_fixtures import CASES, FIESTA, LINKS, NEW_MATCH, NOW, OPPORTUNITY, notification
+from intelligence.copy import FORBIDDEN_TERMS, RED_FLAG
+from notification_fixtures import (CASES, FIESTA, LINKS, NEW_MATCH, NOW, OPPORTUNITY, OPPORTUNITY_MUCH_CHEAPER,
+                                   notification)
 from notifications import templates
 from notifications.channels.base import Notification
 from notifications.links import Links
@@ -109,6 +110,25 @@ class PRDCopyTests(unittest.TestCase):
         self.assertEqual(templates.ago_long(NOW - timedelta(minutes=59), NOW), "59 minutos")
         self.assertEqual(templates.ago_long(NOW - timedelta(hours=1), NOW), "1 hora")
         self.assertEqual(templates.ago_long(NOW - timedelta(days=3), NOW), "3 días")
+
+
+class MuchCheaperVerifyTests(unittest.TestCase):
+    """PAR-02: the [35, 50) much_cheaper text reaches every channel and passes the copy lint."""
+
+    TEXT = RED_FLAG["much_cheaper_verify"].format(pct="40")
+
+    def test_it_reaches_telegram_and_both_email_bodies(self):
+        tg = templates.telegram(OPPORTUNITY_MUCH_CHEAPER, LINKS, NOW).text
+        mail = templates.email(OPPORTUNITY_MUCH_CHEAPER, LINKS, NOW)
+        self.assertIn(f"⚠️ {self.TEXT}", tg)
+        self.assertIn(self.TEXT, mail.text)
+        self.assertIn(self.TEXT, mail.html)
+
+    def test_no_forbidden_terms(self):
+        text = normalize_text(self.TEXT)
+        for term in FORBIDDEN_TERMS:
+            with self.subTest(term):
+                self.assertNotRegex(text, rf"\b{normalize_text(term)}\b")
 
 
 class CopyLintTests(unittest.TestCase):

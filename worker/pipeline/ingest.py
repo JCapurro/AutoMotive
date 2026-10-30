@@ -36,7 +36,7 @@ from db.repos import listings as repo
 from db.repos.catalog import load_models
 from db.repos.fx import quote_for_today
 from db.repos.runs import log_error
-from normalization.description_facts import DescriptionFacts, resolve_price
+from normalization.description_facts import PARTIAL_KINDS, DescriptionFacts, resolve_price
 from normalization.geo import SOURCE_DEFAULT_LOCATIONS, geocode_location
 from normalization.listing import Target, attrs_hash, fingerprint, normalize_listing
 
@@ -287,6 +287,17 @@ def published_view(row: dict[str, Any]) -> dict[str, Any]:
     return {**row, "price": pub, "currency": cur, "price_usd": pub_usd}
 
 
+def published_partial(row: dict[str, Any]) -> bool:
+    """The published price is a down payment or an installment, not a price
+    (PAR-03): resolve_price said so when it resolved the row
+    (price_check.published_partial, at that day's rate), or, on rows stored
+    before that flag, the description calls it so (published_kind) or it
+    stands as partial (price_partial). Lowering it is no price drop."""
+    check = (row.get("description_facts") or {}).get("price_check") or {}
+    return bool(check.get("published_partial")) or check.get("published_kind") in PARTIAL_KINDS \
+        or bool(row.get("price_partial"))
+
+
 def price_drop_pct(old: dict[str, Any], new: dict[str, Any]) -> float | None:
     """How much the price fell, in %. In the listing's own currency when it
     didn't change (an ARS price that stays put is not a drop just because the
@@ -366,7 +377,10 @@ async def _on_update(cx, old: dict[str, Any], row: dict[str, Any], result: Inges
                 new_price=after.get("price"), currency=after.get("currency"),
                 old_currency=before.get("currency"), repost_of=old.get("probable_repost_of"))
     result.events.append(ListingEvent("listing_updated", **base))
-    if "price" in changes and (drop := price_drop_pct(before, after)) is not None \
+    # A lower down payment or installment is no price drop: no event, no alert.
+    # The old row as stored, the new one as merge() just resolved it.
+    partial = published_partial(old) or published_partial(values)
+    if "price" in changes and not partial and (drop := price_drop_pct(before, after)) is not None \
             and drop >= config.price_drop_min_pct:
         result.events.append(ListingEvent("price_drop", drop_pct=drop, **base))
 

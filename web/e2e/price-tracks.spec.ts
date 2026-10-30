@@ -63,6 +63,12 @@ test("bajas de precio: tarjeta, ficha y price_history_expanded", async ({ page }
     await expect(card(seeded.rise)).toBeVisible();
     await expect(card(seeded.rise).getByTestId("card-price-track")).toHaveCount(0);
     await expect(card(seeded.flat).getByTestId("card-price-track")).toHaveCount(0);
+    // The price shown comes from the description: the published drops are of another number.
+    await expect(card(seeded.cash)).toContainText("USD 9.500");
+    await expect(card(seeded.cash).getByTestId("card-price-track")).toHaveCount(0);
+    await expect(card(seeded.down)).toContainText("USD 15.000");
+    await expect(card(seeded.down).getByTestId("card-price-track")).toHaveCount(0);
+    await expect(card(seeded.way).getByTestId("card-price-track")).toHaveCount(0);
     const line = await card(seeded.drops).getByTestId("card-price-track").boundingBox();
     const viewport = page.viewportSize();
     expect(line && viewport && line.x + line.width <= viewport.width).toBeTruthy();
@@ -121,5 +127,21 @@ test("bajas de precio: tarjeta, ficha y price_history_expanded", async ({ page }
     await expect(page.locator("h1")).toBeVisible();
     await expect(page.getByRole("heading", { name: "Histórico de precios" })).toHaveCount(0);
     await expect(page.getByTestId("detected-note")).toHaveCount(0);
+  });
+
+  await test.step("un precio de contado fijo conserva el histórico del publicado; un anticipo no tiene", async () => {
+    await page.goto(`/app/listings/${seeded.cash}`);
+    await expect(page.getByTestId("price")).toHaveText("USD 9.500");
+    await expect(page.getByTestId("price-track-summary")).toContainText("1 baja · -USD 500 (-4,5%) desde el ");
+    await page.goto(`/app/listings/${seeded.down}`);
+    await expect(page.getByTestId("price")).toHaveText("USD 15.000");
+    await expect(page.getByText("Publicado USD 4.000 (anticipo): el precio sale de la descripción")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Histórico de precios" })).toHaveCount(0);
+    await expect(page.getByTestId("price-track-summary")).toHaveCount(0);
+    await page.goto(`/app/listings/${seeded.way}`);
+    await expect(page.getByTestId("price")).toHaveText("USD 15.000");
+    await expect(page.getByRole("heading", { name: "Histórico de precios" })).toHaveCount(0);
+    await expect(page.getByTestId("price-track-summary")).toHaveCount(0);
+    await expectNoHorizontalScroll(page);
   });
 });

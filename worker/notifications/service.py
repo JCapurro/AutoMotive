@@ -90,6 +90,9 @@ def listing_payload(row: Mapping[str, Any]) -> dict[str, Any]:
         out["price_kind"] = "cash"
     if (facts.get("financing") or {}).get("offered"):
         out["financing"] = True
+    if row.get("price_source") == "description":
+        # The price above isn't the published one: no PAR-03 drop line (digest).
+        out["price_source"] = "description"
     return out
 
 
@@ -121,6 +124,13 @@ def price_track_payload(row: Mapping[str, Any] | None) -> dict[str, Any] | None:
     if ars:
         out["cum_ars"] = float(row["first_price"] - row["last_price"])
     return out
+
+
+def shows_published_price(row: Mapping[str, Any] | None) -> bool:
+    """PAR-03: the alert shows the listing's effective price, the drops are of
+    the published one; told together only when they are the same number (a
+    price read from the description, a cash price say, is not)."""
+    return bool(row) and row.get("price_source") != "description"
 
 
 def payload(listing: Mapping[str, Any], match: Mapping[str, Any] | None, *, min_n: int,
@@ -169,7 +179,8 @@ class Notifier:
         states = await repo.interactions(pairs)
         # PAR-03: the drops go only in the opportunity email (engine.classify:
         # level high and not a repost), read once for the batch.
-        opportunity_ids = list(dict.fromkeys(c.listing_id for c in candidates if _opportunity(c)))
+        # Not for a price read from the description: its drops are of another number.
+        opportunity_ids = list(dict.fromkeys(c.listing_id for c in candidates if _with_track(c, rows.get(c.listing_id))))
         tracks = await repo.price_tracks(opportunity_ids) if opportunity_ids else {}
         min_n = await _min_n()
         events = []
@@ -182,7 +193,7 @@ class Notifier:
             ev = c.evaluation
             questions = question_texts(listing, ev.get("red_flags") or [], timing_belt=listing.get("timing_belt"),
                                        now=now or datetime.now(timezone.utc))
-            track = price_track_payload(tracks.get(c.listing_id)) if _opportunity(c) else None
+            track = price_track_payload(tracks.get(c.listing_id)) if _with_track(c, listing) else None
             events.append(Event(
                 MATCH, c.listing_id, self._audience(a), level=ev["level"], score=ev["score"],
                 match_id=c.match_id, repost=c.repost, saved=bool(state.get("saved")),
@@ -252,6 +263,12 @@ class Notifier:
 def _opportunity(c: MatchCandidate) -> bool:
     """The match would be an opportunity alert (engine.classify), not a new_match."""
     return c.evaluation.get("level") == "high" and not c.repost
+
+
+def _with_track(c: MatchCandidate, listing: Mapping[str, Any] | None) -> bool:
+    """PAR-03: the alert tells the listing's drops (an opportunity whose price
+    shown is the published one)."""
+    return _opportunity(c) and shows_published_price(listing)
 
 
 def _num(value: Any) -> float | None:

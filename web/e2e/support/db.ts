@@ -219,10 +219,12 @@ export async function seedConfirmationComparables(run: string): Promise<void> {
     status: "gone",
   });
   await query(
-    `insert into public.crawl_targets (source, make, model, query, last_run_at, first_run_done)
-     values ('autocity', null, null, '{"inventory": true}', now() - interval '1 hour', true)
+    // last_full_read_at is what listing_unconfirmed() reads as evidence of a full read.
+    `insert into public.crawl_targets (source, make, model, query, last_run_at, last_full_read_at, first_run_done)
+     values ('autocity', null, null, '{"inventory": true}', now() - interval '1 hour', now() - interval '1 hour', true)
      on conflict on constraint crawl_targets_unique do update
-       set last_run_at = excluded.last_run_at, query = crawl_targets.query || '{"inventory": true}'`,
+       set last_run_at = excluded.last_run_at, last_full_read_at = excluded.last_full_read_at,
+           query = crawl_targets.query || '{"inventory": true}'`,
   );
 }
 
@@ -285,7 +287,17 @@ export async function insertFreshDeal(run: string): Promise<number> {
 export async function seedPriceTracks(
   email: string,
   run: string,
-): Promise<{ profileId: number; drops: number; rise: number; flat: number; detected: number; halves: number }> {
+): Promise<{
+  profileId: number;
+  drops: number;
+  rise: number;
+  flat: number;
+  detected: number;
+  halves: number;
+  cash: number;
+  down: number;
+  way: number;
+}> {
   const drops = await insertListing(`${E2E_LISTING_PREFIX}tracks-drops-${run}`, {
     key: "tracks-drops",
     year: 2017,
@@ -320,6 +332,100 @@ export async function seedPriceTracks(
     prices: [[7, 40_008]],
   });
   await query(`update public.listings set published_at = null where id = $1`, [detected]);
+  // The price shown comes from the description: a fixed cash price while the
+  // published (list) price fell, and a total behind a lower down payment.
+  const cash = await insertListing(`${E2E_LISTING_PREFIX}tracks-cash-${run}`, {
+    key: "tracks-cash",
+    year: 2017,
+    km: 99_000,
+    price: 10_500,
+    prices: [[10, 11_000]],
+  });
+  const down = await insertListing(`${E2E_LISTING_PREFIX}tracks-down-${run}`, {
+    key: "tracks-down",
+    year: 2018,
+    km: 90_000,
+    price: 4_000,
+    prices: [[10, 5_000]],
+  });
+  // F3's shape: ARS 5.000.000 → 4.000.000 published, "USD 15.000 de contado"
+  // in the text, far above it with no word for it. The worker took the
+  // published number for a down payment (published_kind stays null, the flag
+  // says so) and its snapshots keep the pesos without a dollar value.
+  const way = await insertListing(`${E2E_LISTING_PREFIX}tracks-way-${run}`, {
+    key: "tracks-way",
+    year: 2016,
+    km: 95_000,
+    price: 4_000,
+    prices: [[10, 5_000]],
+  });
+  await query(
+    `update public.listing_snapshots set price = price * 1000, currency = 'ARS', price_usd = null, fx_rate = null
+      where listing_id = $1`,
+    [way],
+  );
+  // What worker/normalization/listing.normalize_listing writes for these texts
+  // (description_facts.to_json, price_check from resolve_price).
+  const usd = (kind: string, amount: number, text: string) => ({ kind, amount, currency: "USD", text });
+  for (const [id, price, published, publishedCurrency, text, amounts, kind, partial] of [
+    [
+      cash,
+      9_500,
+      10_500,
+      "USD",
+      "\nPRECIO DE CONTADO U$S 9.500\nPRECIO DE LISTA/PERMUTA U$S 10.500",
+      [usd("cash", 9_500, "n mecanica. / precio de contado u$s 9.500 / precio de l"), usd("list", 10_500, "9.500 / precio de lista/permuta u$s 10.500")],
+      "list",
+      false,
+    ],
+    [
+      down,
+      15_000,
+      4_000,
+      "USD",
+      " Anticipo USD 4.000. Precio final USD 15.000 de contado.",
+      [
+        usd("down_payment", 4_000, "o revision mecanica. anticipo usd 4.000. precio fin"),
+        usd("cash", 15_000, "icipo usd 4.000. precio final usd 15.000 de contado."),
+      ],
+      "down_payment",
+      true,
+    ],
+    [way, 15_000, 4_000_000, "ARS", " USD 15.000 de contado.", [usd("cash", 15_000, "ia, acepto revision mecanica. usd 15.000 de contado.")], null, true],
+  ] as const) {
+    const facts = {
+      amounts,
+      published_is: null,
+      financing: {
+        offered: kind === "down_payment",
+        down_payment: kind === "down_payment" ? { amount: published, currency: publishedCurrency } : null,
+        installment: null,
+        min_down_payment_pct: null,
+        max_financed_pct: null,
+        max_installments: null,
+      },
+      mileage_km: null,
+      year: null,
+      transmission: null,
+      fuel: null,
+      gnc: false,
+      ambiguous: false,
+      source: "rules",
+      llm_at: null,
+      price_check: { published_kind: kind, effective_kind: "cash", source: "description", published_partial: partial, mismatch: null },
+      claims: {},
+      evidence: [],
+      input_hash: null,
+      v: 2,
+    };
+    await query(
+      `update public.listings set price = $2, currency = 'USD', price_usd = $2, price_source = 'description',
+              price_published = $3, price_published_currency = $4, price_partial = false, price_partial_reason = null,
+              description = $5, description_facts = $6::jsonb
+        where id = $1`,
+      [id, price, published, publishedCurrency, LONG_DESCRIPTION + text, JSON.stringify(facts)],
+    );
+  }
   const [profile] = await query<{ id: number }>(
     `insert into public.search_profiles (user_id, name, filters, notification_frequency, bootstrapped_at)
      select id, 'Fiesta bajas', '{"make": "Ford", "model": "Fiesta"}', 'daily', now()
@@ -327,7 +433,7 @@ export async function seedPriceTracks(
      returning id`,
     [email],
   );
-  for (const [listing, score] of [[drops, 80], [rise, 70], [flat, 60], [detected, 50], [halves, 40]]) {
+  for (const [listing, score] of [[drops, 80], [rise, 70], [flat, 60], [detected, 50], [halves, 40], [cash, 30], [down, 20], [way, 10]]) {
     await query(
       `insert into public.matches (search_profile_id, listing_id, score, level, score_breakdown, match_reasons, red_flags, scoring_version)
        values ($1, $2, $3, 'good', '{}', '{}', '[]', 'e2e')`,
@@ -342,5 +448,8 @@ export async function seedPriceTracks(
     flat: Number(flat),
     detected: Number(detected),
     halves: Number(halves),
+    cash: Number(cash),
+    way: Number(way),
+    down: Number(down),
   };
 }

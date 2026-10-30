@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import { FORBIDDEN_TERMS, PRICE_TRACK } from "./copy";
 import { dayMonth } from "./format";
-import { fetchPriceTracks, hasNetDrop, type PriceTrack, summaryLine, trackingNote, trackLine } from "./price-track";
+import { publishedIsPartial } from "./price";
+import { cardTrackLine, fetchPriceTracks, hasNetDrop, type PriceTrack, summaryLine, trackingNote, trackLine } from "./price-track";
 
 function track(over: Partial<PriceTrack> = {}): PriceTrack {
   return {
@@ -52,6 +53,60 @@ describe("trackLine (PAR-03)", () => {
       expect(trackLine(t)).toBeNull();
     }
     expect(hasNetDrop(track({ drops: 2, rises: 1, cum_pct: -3 }))).toBe(false);
+  });
+});
+
+describe("cardTrackLine (PAR-03, opción B)", () => {
+  it("keeps the line when the card shows the published price", () => {
+    const t = track({ first_price: 14_000, last_price: 13_500, cum_pct: 3.57, cum_usd: 500 });
+    const line = "Bajó 1 vez desde que la vimos: -USD 500 (-3,6%).";
+    for (const price_source of ["published", null, undefined]) expect(cardTrackLine(t, { price_source })).toBe(line);
+  });
+
+  it("says nothing when the price shown was read from the description", () => {
+    // A fixed cash price next to published drops, or the total behind a lower
+    // down payment (in pesos next to a price in dollars): neither is what changed.
+    expect(cardTrackLine(track({ drops: 2 }), { price_source: "description" })).toBeNull();
+    expect(cardTrackLine(ars({ drops: 2 }), { price_source: "description" })).toBeNull();
+  });
+});
+
+describe("publishedIsPartial (PAR-03, opción B)", () => {
+  const facts = (published_kind: string | null) => ({ price_check: { published_kind, effective_kind: "cash", source: "description" } });
+
+  it("is a down payment or an installment as the description calls it, or a partial price", () => {
+    expect(publishedIsPartial({ description_facts: facts("down_payment") })).toBe(true);
+    expect(publishedIsPartial({ description_facts: facts("installment"), price_partial: false })).toBe(true);
+    expect(publishedIsPartial({ description_facts: null, price_partial: true })).toBe(true);
+  });
+
+  it("is a price otherwise: a list or cash price, or nothing said", () => {
+    for (const kind of ["list", "cash", "generic", null]) expect(publishedIsPartial({ description_facts: facts(kind), price_partial: false })).toBe(false);
+    expect(publishedIsPartial({ description_facts: {} })).toBe(false);
+    expect(publishedIsPartial({ description_facts: null, price_partial: null })).toBe(false);
+  });
+
+  it("is what the worker decided when it resolved the price (price_check.published_partial)", () => {
+    const check = (published_partial: boolean, published_kind: string | null = null) => ({
+      price_check: { published_kind, effective_kind: "cash", source: "description", published_partial },
+    });
+    // F3: ARS 5.000.000 published under "USD 15.000 de contado" (way above): no
+    // word for it, the worker flags it. No rate needed, none re-derived.
+    const way = { price_source: "description", price: 15_000, currency: "USD", price_usd: 15_000, price_published: 4_000_000, price_published_currency: "ARS" };
+    expect(publishedIsPartial({ ...way, description_facts: check(true), price_partial: false })).toBe(true);
+    // F1/F2: a cheaper cash price from the text (USD 19.000 under ARS 18.000.000
+    // at a later rate, or $ 9.500.000 with a frozen price_usd over USD 9.000):
+    // the flag says price, whatever the numbers look like now.
+    const f1 = { price_source: "description", price: 19_000, currency: "USD", price_usd: 19_000, price_published: 18_000_000, price_published_currency: "ARS" };
+    const f2 = { price_source: "description", price: 9_500_000, currency: "ARS", price_usd: 9_500, price_published: 9_000, price_published_currency: "USD" };
+    for (const row of [f1, f2]) expect(publishedIsPartial({ ...row, description_facts: check(false), price_partial: false })).toBe(false);
+  });
+
+  it("only counts the explicit kinds on rows stored before the flag", () => {
+    // A total above the published number without the flag is not re-derived.
+    const row = { price_source: "description", price: 15_000, currency: "USD", price_usd: 15_000, price_published: 4_000, price_published_currency: "USD" };
+    expect(publishedIsPartial({ ...row, description_facts: facts(null), price_partial: false })).toBe(false);
+    expect(publishedIsPartial({ ...row, description_facts: facts("down_payment"), price_partial: false })).toBe(true);
   });
 });
 

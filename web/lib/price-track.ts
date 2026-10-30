@@ -51,6 +51,18 @@ export function trackLine(track: PriceTrack | null | undefined): string | null {
 }
 
 /**
+ * The card: the line only when the price it shows is the published one. The
+ * drops are of the published price; one read from the description (a cash
+ * price, the total behind a down payment) is another number.
+ */
+export function cardTrackLine(
+  track: PriceTrack | null | undefined,
+  card: { price_source?: string | null },
+): string | null {
+  return card.price_source === "description" ? null : trackLine(track);
+}
+
+/**
  * The listing page: "2 bajas · -USD 1.500 (-6,3%) desde el 20/09"; null
  * without a net drop. Always in dollars (cum_usd), pesos included: the
  * approved copy has only the USD form (the card tells pesos in pesos).
