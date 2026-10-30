@@ -107,7 +107,8 @@ export function ListingCard({
         </p>
       ) : null}
 
-      <p className="flex min-w-0 flex-wrap gap-x-3.5 text-[13px] text-muted-foreground">
+      {/* col-start-2: with a cost line this is the grid's fourth row, past the photo's row-span-3. */}
+      <p data-testid="card-meta" className="col-start-2 flex min-w-0 flex-wrap gap-x-3.5 text-[13px] text-muted-foreground">
         {mileage ? <span>{mileage}</span> : null}
         {isBodyType(card.body_type) ? <span>{BODY_TYPE[card.body_type]}</span> : null}
         {card.location_text ? (

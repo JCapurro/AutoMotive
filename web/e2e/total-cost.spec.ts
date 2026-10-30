@@ -83,6 +83,14 @@ test("Particular: ficha con detalle, tarjeta y total_cost_expanded", async ({ pa
     const card = page.getByTestId("listing-card").filter({ has: page.getByRole("link", { name: /Corolla/ }) }).first();
     await expect(page.getByTestId("cost-estimate-line").first()).toHaveText(LINE);
     await expect(card).toBeVisible();
+    // The km line stays under the price, in the text column, not under the photo.
+    const price = await card.locator("p.type-figure").boundingBox();
+    const cost = await card.getByTestId("cost-estimate-line").boundingBox();
+    const meta = await card.getByTestId("card-meta").boundingBox();
+    expect(price && cost && meta).toBeTruthy();
+    expect(Math.abs(meta!.x - price!.x)).toBeLessThan(1);
+    expect(Math.abs(cost!.x - price!.x)).toBeLessThan(1);
+    expect(meta!.y).toBeGreaterThan(cost!.y);
     await expectNoHorizontalScroll(page);
   });
 
