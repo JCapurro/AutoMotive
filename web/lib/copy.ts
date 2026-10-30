@@ -239,8 +239,6 @@ export const NOTIFICATION_TITLE: Record<string, string> = {
 // stored questions yet (rows scored before F4 get them on the next re-score).
 export const BASE_SELLER_QUESTIONS = "Hola, ¿cómo estás? ¿Lo seguís teniendo? ¿Sos titular?";
 
-// PAR-03: a listing's price drops since we first saw it (its first snapshot,
-// not its publication). Same wording as worker/intelligence/copy.py.
 // PAR-01: the total cost estimate (lib/cost-estimator.ts returns codes). The
 // header lines are the worker's (worker/intelligence/copy.py TOTAL_COST).
 export const COST_ESTIMATE = {
@@ -309,6 +307,8 @@ export const COST_ESTIMATE = {
   },
 } as const;
 
+// PAR-03: a listing's price drops since we first saw it (its first snapshot,
+// not its publication). Same wording as worker/intelligence/copy.py.
 export const PRICE_TRACK = {
   line: "Bajó {n} {times} desde que la vimos: -{amount} (-{pct}){about}.",
   times: ["vez", "veces"],
