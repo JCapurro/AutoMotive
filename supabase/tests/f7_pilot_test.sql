@@ -12,9 +12,10 @@ insert into auth.users (instance_id, id, aud, role, email, created_at, updated_a
 update public.profiles set created_at = now() - interval '12 days', default_channels = '{telegram,email,web}'
  where id = '77777777-7777-7777-7777-777777777777';
 
+-- A2 differs in year_min: two identical active searches are refused (20261101120000).
 insert into public.search_profiles (id, user_id, name, filters, channels) overriding system value values
   (9701, '77777777-7777-7777-7777-777777777777', 'A1', '{"make": "Pgtap", "model": "Siete"}', '{telegram,email,web}'),
-  (9702, '77777777-7777-7777-7777-777777777777', 'A2', '{"make": "Pgtap", "model": "Siete"}', '{email,web}'),
+  (9702, '77777777-7777-7777-7777-777777777777', 'A2', '{"make": "Pgtap", "model": "Siete", "year_min": 2000}', '{email,web}'),
   (9703, '88888888-8888-8888-8888-888888888888', 'B1', '{"make": "Pgtap", "model": "Siete"}', '{email,web}');
 
 -- Listings for the retention: old ones in every situation, and a recent one.
