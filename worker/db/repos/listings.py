@@ -252,21 +252,13 @@ async def stored_description(listing_id: int) -> dict[str, Any] | None:
             (listing_id,))).fetchone()
 
 
-async def llm_facts_last_day() -> int:
-    """Descriptions the LLM read in the last 24 h (app_config.description_facts.llm_daily_cap)."""
-    async with connection() as cx:
-        row = await (await cx.execute(
-            "SELECT count(*) AS n FROM listings "
-            " WHERE description_facts ->> 'source' = 'llm' "
-            "   AND (description_facts ->> 'llm_at')::timestamptz > now() - interval '1 day'")).fetchone()
-    return int(row["n"])
-
-
 async def reserve_description_run(listing_id: int, input_hash: str, daily_cap: int) -> int | None:
     """Atomic rolling-24h budget, shared across sources/passes; failed attempts also count.
 
     At most one attempt for the same listing/text/version in 24h. The transaction
     ends before network I/O; the reservation remains counted if a process dies.
+    Every worker waits on the lock, so it only covers the ledger's indexed reads
+    (no scan of listings).
     """
     if daily_cap <= 0:
         return None
@@ -276,13 +268,7 @@ async def reserve_description_run(listing_id: int, input_hash: str, daily_cap: i
             count = await (await cx.execute(
                 "SELECT count(*) AS n FROM description_llm_runs "
                 "WHERE started_at > now() - interval '1 day'")).fetchone()
-            # Honor legacy successful analyses until their first rolling window expires.
-            legacy = await (await cx.execute(
-                "SELECT count(*) AS n FROM listings WHERE description_facts ->> 'source' = 'llm' "
-                "AND (description_facts ->> 'llm_at')::timestamptz > now() - interval '1 day' "
-                "AND NOT EXISTS (SELECT 1 FROM description_llm_runs r WHERE r.listing_id = listings.id "
-                "AND r.started_at > now() - interval '1 day')")).fetchone()
-            if int(count["n"]) + int(legacy["n"]) >= daily_cap:
+            if int(count["n"]) >= daily_cap:
                 return None
             duplicate = await (await cx.execute(
                 "SELECT id FROM description_llm_runs WHERE listing_id = %s AND input_hash = %s "
@@ -392,6 +378,13 @@ _BAND_ROW = (
     "                 AND l.year <= (t.query->>'year_max')::numeric + (t.query->>'year_band')::numeric)))")
 
 
+# The searches whose matches count, computed once per query: per match row,
+# search_access_active() (plan limits, access, profile count) made the queues
+# below take tens of seconds on production.
+_LIVE_SEARCHES = ("WITH live AS MATERIALIZED ("
+                  "  SELECT id FROM search_profiles WHERE public.search_access_active(id)) ")
+
+
 async def enrichment_queue(*, per_source: int, max_age_days: int) -> list[dict]:
     """Listings to read the detail page of (sección 5.5), per source newest
     first: the ones with a live (non-backfill) match, then backfill matches,
@@ -404,13 +397,13 @@ async def enrichment_queue(*, per_source: int, max_age_days: int) -> list[dict]:
     are wanted, and they never take its daily budget."""
     async with connection() as cx:
         return await (await cx.execute(
-            "SELECT * FROM ("
+            _LIVE_SEARCHES + "SELECT * FROM ("
             "  SELECT l.id, l.source, l.external_id, l.url, l.make, l.model, "
             "         count(m.listing_id) = 0 AND NOT l.price_partial AS band, "
             "         row_number() OVER (PARTITION BY l.source "
             "           ORDER BY coalesce(bool_or(NOT m.is_backfill), false) DESC, "
             "                    count(m.listing_id) > 0 DESC, l.first_seen_at DESC) AS n "
-            "    FROM listings l LEFT JOIN matches m ON m.listing_id = l.id AND public.search_access_active(m.search_profile_id) "
+            "    FROM listings l LEFT JOIN (matches m JOIN live ON live.id = m.search_profile_id) ON m.listing_id = l.id "
             "   WHERE l.enriched_at IS NULL AND l.status = 'active' "
             "     AND l.last_seen_at >= now() - make_interval(days => %s) "
             f"    AND (l.detail_checked_at IS NULL OR l.detail_checked_at < now() - interval '{_DETAIL_RETRY}') "
@@ -447,7 +440,7 @@ async def matched_recheck_queue(*, unseen_hours: int, recheck_hours: int, max_ag
     checked longest ago first; enrichment_queue takes the never enriched."""
     async with connection() as cx:
         return await (await cx.execute(
-            "SELECT * FROM ("
+            _LIVE_SEARCHES + "SELECT * FROM ("
             "  SELECT l.id, l.source, l.external_id, l.url, l.make, l.model, l.published_at, "
             "         l.first_seen_at, "
             "         row_number() OVER (PARTITION BY l.source "
@@ -458,8 +451,7 @@ async def matched_recheck_queue(*, unseen_hours: int, recheck_hours: int, max_ag
             "     AND (l.detail_checked_at IS NULL "
             "          OR l.detail_checked_at < now() - make_interval(hours => %s)) "
             "     AND l.first_seen_at >= now() - make_interval(days => %s) "
-            "     AND EXISTS (SELECT 1 FROM matches m "
-            "                  WHERE m.listing_id = l.id AND m.level <> 'low' "
-            "                    AND public.search_access_active(m.search_profile_id))) q "
+            "     AND EXISTS (SELECT 1 FROM matches m JOIN live ON live.id = m.search_profile_id "
+            "                  WHERE m.listing_id = l.id AND m.level <> 'low')) q "
             "WHERE n <= %s ORDER BY source, n",
             (unseen_hours, recheck_hours, max_age_days, per_source))).fetchall()
