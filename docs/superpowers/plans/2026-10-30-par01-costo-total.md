@@ -160,21 +160,21 @@ Files: `web/lib/config.ts`, `web/lib/config.test.ts`, `web/lib/admin-config.ts`,
 
 Files: `worker/db/repos/notifications.py`, `worker/db/repos/fx.py`, `worker/notifications/service.py`, `worker/notifications/templates.py`, `worker/tests/test_notifications_total_cost.py`, `worker/tests/notification_fixtures.py`, `worker/tests/snapshots/notifications/*.txt`, `worker/tests/test_notifications_postgres.py` (o el archivo `-m db` vigente de audiencias).
 
-- [ ] Offline, tests que fallen:
+- [x] Offline, tests que fallen:
   - `total_cost_line(None)` da `None`; con payload da la línea exacta; con `missing` usa `missing_suffix`: `[patente]` → «(sin patente)», `[sellos, patente]` (sin jurisdicción) → «(sin sellos ni patente)», `[formularios]` → «(sin formularios)»; `[fx]` en un aviso en ARS → «(sin dólar del día)» al final; `[fx]` en un aviso en USD → «sin dólar del día, no se puede estimar»;
   - `on_matches` con audiencia sin flag no agrega la clave; con flag la agrega solo a oportunidades (no a `new_match`), con la jurisdicción de esa búsqueda (origen más `extra_locations`);
   - `on_matches` con `cost_estimator` ausente, y con `cost_estimator` sin `as_of` válido, no agrega la clave aunque la audiencia tenga el flag, y el email sale sin la línea (el caso «sin parámetros cargados» del backlog);
   - `on_matches` con un aviso parcial (`price_partial` o `price_check.published_partial`) no agrega la clave;
   - un aviso en USD con la última cotización guardada más vieja que `fx.max_age_days` guarda `missing: [fx]` y totales null (nunca el fallback);
   - lint de copy sobre los casos nuevos.
-- [ ] Snapshots:
+- [x] Snapshots:
   - casos nuevos `opportunity_total_cost` (CABA, completo, «con parámetros»), `opportunity_total_cost_missing` (sin jurisdicción, «(sin sellos ni patente)») y `opportunity_total_cost_no_config` (flag prendido y sin `cost_estimator`: idéntico a `opportunity.txt`);
   - los snapshots existentes (`opportunity*.txt` y el resto) quedan idénticos byte a byte; se verifica con `git diff --exit-code` sobre ellos;
   - `PRDCopyTests` sin cambios.
-- [ ] `-m db`, tests que fallen:
+- [x] `-m db`, tests que fallen:
   - `profile_audiences` devuelve `total_cost` (true para `pass`, false para `free`), `origin_lat`, `origin_lon` y `location_label`;
   - `fx.latest_stored(cx)` devuelve la fila blue más reciente aunque haya una oficial más nueva, la oficial más reciente si no hay blue, o `None` sin filas, sin llamar a la red. Devuelve `{rate, kind, date}`; el filtro por `fx.max_age_days` lo aplica `build_input`.
-- [ ] Implementar:
+- [x] Implementar:
   - columnas de audiencia: `public.plan_feature(sp.user_id, 'total_cost')` como `_THRESHOLD`, `sp.origin_lat`, `sp.origin_lon`, `sp.filters->>'location_label'` y `sp.filters->'extra_locations'`;
   - `latest_stored`;
   - en `on_matches`, una lectura de config y de cotización por lote, y `build_input(row, zones, fx_latest, cfg)` sobre la fila de `rows_for_scoring` (la misma regla de parcial que la ingesta y el mismo vendedor efectivo);

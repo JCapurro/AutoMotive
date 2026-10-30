@@ -27,6 +27,7 @@ from html import escape
 from typing import Any, Mapping
 
 from intelligence import copy
+from intelligence import cost_estimator
 from notifications.channels.base import Notification
 from notifications.email_html import render as render_email_html
 from notifications.links import Links
@@ -126,6 +127,25 @@ def price_track_line(track: Mapping[str, Any] | None) -> str | None:
         return None
     return copy.PRICE_TRACK.format(n=drops, times=copy.PRICE_TRACK_TIMES[drops != 1], amount=amount,
                                    pct=pct(float(cum_pct)), about=about)
+
+
+def total_cost_line(cost: Mapping[str, Any] | None) -> str | None:
+    """PAR-01: "Costo total estimado: USD 16.290 – 16.560 (ARS 21.188.000 –
+    21.518.000). Parámetros al 30/10." from payload["total_cost"]
+    (cost_estimator.email_payload: totals already rounded, frozen when the
+    row was created). None without it: an old payload, or a plan without
+    total_cost. Missing terms go in the header's "(sin …)"; a USD listing
+    without a dollar says it cannot be estimated."""
+    if not cost:
+        return None
+    def pair(lo: str, hi: str) -> dict[str, Any] | None:
+        return {"min": cost[lo], "max": cost[hi]} if cost.get(lo) is not None and cost.get(hi) is not None else None
+    ars, usd = pair("ars_min", "ars_max"), pair("usd_min", "usd_max")
+    line = cost_estimator.headline(ars, usd, cost.get("missing") or [])
+    as_of = cost.get("as_of")
+    if ars is None or not isinstance(as_of, str):
+        return copy.TOTAL_COST["email_no_fx"].format(line=line)
+    return copy.TOTAL_COST["email"].format(line=line, date=cost_estimator.day_month(as_of))
 
 
 def km(listing: Mapping[str, Any]) -> str | None:
@@ -238,6 +258,8 @@ def content(n: Notification, links: Links, now: datetime, *, owner: str | None =
                 c.lines.append(age)
             if track := price_track_line(p.get("price_track")):
                 c.lines.append(track)
+            if cost := total_cost_line(p.get("total_cost")):
+                c.lines.append(cost)
         else:
             if p.get("repost"):
                 c.lines.insert(0, REPOST)
