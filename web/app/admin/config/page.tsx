@@ -3,15 +3,18 @@ import type { Metadata } from "next";
 import { ConfigEditor } from "@/components/admin/config-editor";
 import { PageHeader } from "@/components/admin/ui";
 import { requireAdmin } from "@/lib/admin";
+import { costReviewItem, costReviewState } from "@/lib/admin-dashboard";
 import { when } from "@/lib/admin-format";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const metadata: Metadata = { title: "Configuración" };
-const NAMES: Record<string, string> = { pro_offer: "Precios y oferta", plan_limits: "Límites por plan", lifecycle_emails: "Emails del plan" };
+const NAMES: Record<string, string> = { pro_offer: "Precios y oferta", plan_limits: "Límites por plan", lifecycle_emails: "Emails del plan", cost_estimator: "Costo total (PAR-01)" };
+// Keys with a guided form: their hint lives in the form.
+const GUIDED = new Set(["pro_offer", "plan_limits", "lifecycle_emails"]);
 
 // What each app_config key rules (Apéndice A). Unknown keys still show up.
 const HINTS: Record<string, string> = {
-  plan_limits: "Límites por plan: max_profiles (búsquedas activas), max_visible_results (resultados por búsqueda; sin valor = todos) e immediate_alerts_per_day (avisos inmediatos por día, hora argentina; el resto va al resumen). Funciones: threshold_alerts (umbral de oportunidad por búsqueda) y model_less_search (búsqueda por carrocería, sin modelo; los admins la tienen siempre), true para darlas. La web muestra estos mismos valores. Con enforced = false solo se mide plan_limit_hit; con true se aplican.",
+  plan_limits: "Límites por plan: max_profiles (búsquedas activas), max_visible_results (resultados por búsqueda; sin valor = todos) e immediate_alerts_per_day (avisos inmediatos por día, hora argentina; el resto va al resumen). Funciones: threshold_alerts (umbral de oportunidad por búsqueda), model_less_search (búsqueda por carrocería, sin modelo; los admins la tienen siempre) y total_cost (costo total estimado de PAR-01 en ficha, tarjetas y email de oportunidad; con false se apaga sin deploy), true para darlas. La web muestra estos mismos valores. Con enforced = false solo se mide plan_limit_hit; con true se aplican.",
   body_type_targets: "Rastreo de las búsquedas por carrocería, sin modelo (docs/CARROCERIA.md): sources (las fuentes con un target por carrocería; además cada collector declara las carrocerías que sabe buscar) e interval_seconds (cada cuántos segundos corre cada uno).",
   validation_criteria: "Umbrales de los 6 criterios del §53 (v_validation_criteria) y el objetivo de activación.",
   pro_cta: "Cuándo se ofrece ver planes: alertas clickeadas o límites alcanzados (§52).",
@@ -30,12 +33,25 @@ const HINTS: Record<string, string> = {
   price_track:
     "Bajas de precio por aviso (PAR-03). min_drop_pct: baja mínima en % para contarla en tarjeta, ficha y emails (distinta de price_drop_min_pct, que decide si se avisa).",
   llm_limits: "Jobs del LLM por usuario y hora.",
+  cost_estimator:
+    "Parámetros del costo total estimado (PAR-01). Cada bloque necesita source y as_of. as_of de la raíz: fecha en que revisaste todo; se muestra como «parámetros al dd/mm». Porcentajes en %, montos en ARS, rangos {min, max}. Sin un bloque válido, ese concepto se muestra como faltante.",
   red_flags: "Señales «Conviene verificar» (sección 6). much_cheaper_pct: desde cuánto % debajo de publicaciones comparables sale la señal de precio; much_cheaper_verify_pct (PAR-02, 35): desde ahí el texto pide verificar todo antes de señar; anticipo_pct: desde ahí pide verificar que el precio no sea un anticipo. Tiene que valer much_cheaper_pct < much_cheaper_verify_pct <= anticipo_pct. Solo cambia el texto, no el score ni las alertas; los matches lo toman en el próximo rescore.",
   risk: "Checklist «Antes de señar» de la ficha (PAR-02). checklist_enabled: con false el bloque desaparece sin deploy. links: los links oficiales (dnrpa, vtv, form_08, y listas patentes e infracciones por jurisdicción), cada uno {\"label\": \"...\", \"url\": \"https://...\"} o null; solo https://, sin usuario ni contraseña, hasta 300 caracteres. Sin links el bloque se muestra sin ellos.",
   seller_classification:
     "Vendedor v2 (F-02). enabled: prende la inferencia «posible agencia». min_listings: avisos del mismo vendedor y fuente (6). window_days: ventana en días (30). Se aplica en la ingesta y en el nocturno.",
   email_only_signup: "Búsqueda gratis solo con email (docs/AUTENTICACION.md). enabled (con false, el pop-up de la portada avisa que por ahora no se pueden crear búsquedas nuevas), per_ip_hour y per_day (cuentas nuevas), links_per_user_hour y links_per_ip_hour (links para entrar), lookups_per_ip_hour (búsquedas de cuenta) y alert_sessions_per_user_hour (sesiones por cuenta y hora que pueden iniciar los links firmados de los emails; sin la clave, 10; 0 las apaga).",
 };
+
+/** PAR-01: the same review notice as the dashboard, on the key's card. */
+function CostReviewNotice({ value }: { value: unknown }) {
+  const item = costReviewItem(costReviewState(value));
+  if (!item) return null;
+  return (
+    <p role="status" data-testid="cost-estimator-review" className="rounded-md bg-muted p-3 text-sm">
+      <b>{item.title}.</b> {item.detail}
+    </p>
+  );
+}
 
 // sección 10, "Config": business rules, editable without a deploy.
 export default async function ConfigPage() {
@@ -58,7 +74,8 @@ export default async function ConfigPage() {
               <h2 className="text-base font-semibold">{NAMES[row.key] ?? row.key}</h2>
               <span className="text-xs text-muted-foreground">{when(row.updated_at)}</span>
             </div>
-            {HINTS[row.key] && !(row.key in NAMES) ? <p className="text-xs text-muted-foreground">{HINTS[row.key]}</p> : null}
+            {HINTS[row.key] && !GUIDED.has(row.key) ? <p className="text-xs text-muted-foreground">{HINTS[row.key]}</p> : null}
+            {row.key === "cost_estimator" ? <CostReviewNotice value={row.value} /> : null}
             {row.key === "commercial_pilot" ? <p className="text-sm">Administrar desde <a className="underline" href="/admin/billing">Cobros</a>.</p> : <ConfigEditor configKey={row.key} value={row.value} history={(history ?? []).filter((entry) => entry.target_type === "app_config" && entry.target_key === row.key).slice(0, 5)} />}
           </li>
         ))}

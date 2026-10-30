@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+import { type CostReview, costEstimatorReview, parseCostEstimator } from "@/lib/cost-estimator";
+import { isoDayMonth } from "@/lib/format";
+
 export const DASHBOARD_DAYS = [7, 30, 90] as const;
 export type DashboardDays = (typeof DASHBOARD_DAYS)[number];
 export type DashboardPeriod = { days: DashboardDays; start: string; end: string; previousStart: string; asOf: string };
@@ -59,4 +62,36 @@ export const dashboardLlmSchema = z.array(z.object({ day: timestamp, provider: z
 export type DashboardLlmHealth = z.infer<typeof dashboardLlmSchema>[number];
 export type DashboardSection<T> = { data: T | null; error: string | null };
 export type DashboardData = { period: DashboardPeriod; metrics: DashboardSection<DashboardSnapshot>;
-  sources: DashboardSection<DashboardSourceHealth[]>; llm: DashboardSection<DashboardLlmHealth[]> };
+  sources: DashboardSection<DashboardSourceHealth[]>; llm: DashboardSection<DashboardLlmHealth[]>;
+  /** PAR-01: whether app_config.cost_estimator needs a review (null: not read). */
+  costReview?: CostReviewState | null };
+
+// ---------------------------------------------------------------------------
+// PAR-01: the cost estimator's review notice (/admin and /admin/config)
+// ---------------------------------------------------------------------------
+
+export type CostReviewState = { status: CostReview; asOf: string | null; maxAgeDays: number | null; months: number[] };
+
+const AR_DAY = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Argentina/Buenos_Aires", year: "numeric", month: "2-digit", day: "2-digit" });
+const MONTHS = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+
+/** The review state of the raw app_config.cost_estimator value on Argentina's day of `now`. */
+export function costReviewState(raw: unknown, now: Date = new Date()): CostReviewState {
+  const cfg = parseCostEstimator(raw);
+  const review = cfg?.blocks.review ?? null;
+  return { status: costEstimatorReview(cfg, AR_DAY.format(now)), asOf: cfg?.as_of ?? null,
+    maxAgeDays: review?.max_age_days ?? null, months: review?.months ?? [] };
+}
+
+/** The attention item, or null when nothing is due. */
+export function costReviewItem(state: CostReviewState | null | undefined): { title: string; detail: string; href: string; action: string } | null {
+  if (!state?.status) return null;
+  const href = "/admin/config#cost_estimator", action = "Revisar parámetros";
+  if (state.status === "stale" && state.asOf) {
+    return { title: `Costo total: parámetros al ${isoDayMonth(state.asOf)}, más de ${state.maxAgeDays} días`, detail: "Revisá MRPA, aranceles, sellos y patentes y actualizá as_of.", href, action };
+  }
+  if (state.status === "due") {
+    return { title: `Costo total: ${state.months.map((m) => MONTHS[m - 1]).join("/")}, revisar leyes impositivas y MRPA`, detail: `Parámetros al ${state.asOf ? isoDayMonth(state.asOf) : "—"}. Cuando los revises, actualizá as_of.`, href, action };
+  }
+  return { title: "Costo total: sin parámetros válidos", detail: "Falta cost_estimator, su as_of o su bloque review: la ficha, las tarjetas y los emails no muestran el costo total.", href, action };
+}

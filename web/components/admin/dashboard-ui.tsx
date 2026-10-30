@@ -3,6 +3,7 @@ import Link from "next/link";
 import { EmptyRow, PageHeader, Section, Table, Td, TextLink, Th } from "@/components/admin/ui";
 import { count, percent, when } from "@/lib/admin-format";
 import {
+  costReviewItem,
   DASHBOARD_DAYS,
   metricChange,
   metricRate,
@@ -182,6 +183,8 @@ export function DashboardAttention({ data }: { data: DashboardData }) {
   if (state?.searchesWithoutValue24h) pending.push({ title: `${count(state.searchesWithoutValue24h)} búsquedas con más de 24 h sin resultados buenos actuales`, detail: "Búsquedas habilitadas sin ningún resultado bueno u oportunidad al consultar. El logro histórico de primer valor se mide por separado.", href: "/admin/searches", action: "Revisar búsquedas" });
   if (state?.failedNotifications) pending.push({ title: `${count(state.failedNotifications)} notificaciones fallidas`, detail: "Revisá el motivo y la configuración de entrega.", href: "/admin/notifications?status=failed", action: "Ver fallas" });
   if (state?.checkoutSyncErrors) pending.push({ title: `${count(state.checkoutSyncErrors)} ${state.checkoutSyncErrors === 1 ? "pago con error" : "pagos con error"} de sincronización`, detail: "Verificá el estado del proveedor antes de intervenir.", href: "/admin/billing", action: "Revisar cobros" });
+  const cost = costReviewItem(data.costReview);
+  if (cost) pending.push(cost);
   return (
     <Section title="Qué necesita atención" description="Estado actual al consultar. Estos pendientes no son una comparación histórica del período.">
       {data.metrics.error || !data.metrics.data ? <DashboardUnavailable title="Pendientes de búsquedas, alertas y cobros sin verificar" error={data.metrics.error} /> : null}
@@ -192,6 +195,7 @@ export function DashboardAttention({ data }: { data: DashboardData }) {
         <TextLink href="/admin/config#pro_offer">Oferta Particular</TextLink>
         <TextLink href="/admin/config#plan_limits">Límites de planes</TextLink>
         <TextLink href="/admin/config#lifecycle_emails">Emails automáticos</TextLink>
+        <TextLink href="/admin/config#cost_estimator">Costo total</TextLink>
         <TextLink href="/admin/sources#sources">Fuentes</TextLink>
       </div>
     </Section>

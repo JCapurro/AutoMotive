@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { costEstimatorProblem } from "@/lib/cost-estimator";
 import { proOffer } from "@/lib/pro";
 import { RiskConfigInput } from "@/lib/risk-checklist";
 
@@ -18,6 +19,7 @@ const plan = z.object({
   immediate_alerts_per_day: count.optional(), immediate_alerts: z.boolean().optional(),
   threshold_alerts: z.boolean().optional(), model_less_search: z.boolean().optional(),
   max_locations: positiveCount.nullable().optional(),
+  total_cost: z.boolean().optional(),
 }).passthrough();
 export const AdminPlanLimitsInput = z.object({ enforced: z.boolean().optional(), free: plan.optional(), pass: plan.optional(), pro: plan.optional() }).passthrough();
 
@@ -98,6 +100,8 @@ export function validateConfigChange(key: string, value: unknown, current: unkno
     }
   }
   if (key === "seller_classification" && !SellerClassificationInput.safeParse(value).success) return SELLER_CLASSIFICATION_MESSAGE;
+  // PAR-01: every block with source and as_of, valid ranges and scales (lib/cost-estimator.ts, the parser's own rules).
+  if (key === "cost_estimator") return costEstimatorProblem(value);
   if (key === "risk") {
     // PAR-02: the «Antes de señar» switch and its official links (https only).
     const parsed = RiskConfigInput.safeParse(value);
@@ -136,7 +140,7 @@ export function configFieldLabel(key: string, path: string): string {
   if (key === "plan_limits") {
     const [tier, field] = path.split(".");
     const planName = ({ free: "Prueba gratis", pass: "Particular", pro: "Pro" } as Record<string, string>)[tier];
-    const fieldName = ({ max_profiles: "búsquedas activas", max_visible_results: "resultados por búsqueda", max_total_results: "resultados acumulados durante la prueba", immediate_alerts_per_day: "avisos inmediatos por día", max_locations: "zonas por búsqueda", threshold_alerts: "umbral de oportunidad", model_less_search: "búsqueda sin modelo" } as Record<string, string>)[field];
+    const fieldName = ({ max_profiles: "búsquedas activas", max_visible_results: "resultados por búsqueda", max_total_results: "resultados acumulados durante la prueba", immediate_alerts_per_day: "avisos inmediatos por día", max_locations: "zonas por búsqueda", threshold_alerts: "umbral de oportunidad", model_less_search: "búsqueda sin modelo", total_cost: "costo total estimado" } as Record<string, string>)[field];
     if (planName) return fieldName ? `${planName}: ${fieldName}` : planName + (field ? `: ${field}` : "");
   }
   if (key === "risk") {

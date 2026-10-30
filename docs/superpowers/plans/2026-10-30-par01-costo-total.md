@@ -15,7 +15,7 @@
 
 **Respondido por Juan (30/10, «sí a todo»):** Free prendido durante el piloto, aviso de agencia borrado para todos, mínimo y Subte también en pick-ups de CABA, informe de dominio con 4 MRPA.
 
-**Pendiente de Juan:** la pregunta 1 del diseño, `buyer_zone.max_locality_km` (recomendado 80) y `fx.max_age_days` (recomendado 3). Bloquea solo la Task 1; las demás tareas leen los valores de la config.
+**Respondido por Juan (revisión 2, 30/10):** `buyer_zone.max_locality_km` = 80 y `fx.max_age_days` = 3.
 
 **Tareas de Juan (no las hago):** OK para la migración en producción; OK para reiniciar el worker (`wait_idle`) y para Vercel; revisar los valores en `/admin/config` después de aplicar.
 
@@ -145,12 +145,12 @@ Files: `web/lib/cost-estimator.ts`, `web/lib/cost-estimator.test.ts`, `web/lib/b
 
 Files: `web/lib/config.ts`, `web/lib/config.test.ts`, `web/lib/admin-config.ts`, `web/lib/admin-config.test.ts`, `web/components/admin/config-forms.tsx`, `web/app/admin/config/page.tsx`, `web/lib/admin-dashboard-data.ts`, `web/lib/admin-dashboard.ts`, `web/components/admin/dashboard-ui.tsx`, tests de admin-dashboard.
 
-- [ ] Tests que fallen:
+- [x] Tests que fallen:
   - `webConfig().costEstimator`: `null` sin fila, `null` si la fila es inválida, y bloques parciales tal cual;
   - `validateConfigChange("cost_estimator", …)`: acepta el JSON del diseño y rechaza cada regla con su mensaje (`cost_estimator.<ruta>: …`);
   - `plan_limits` acepta `total_cost` booleano y rechaza un string;
   - `DashboardAttention`: muestra el ítem con `as_of` de hace 121 días y en diciembre con `as_of` de octubre; no lo muestra a los 120 días en octubre ni con `as_of` 2026-12-05 el 2026-12-20.
-- [ ] Implementar:
+- [x] Implementar:
   - `WebConfig.costEstimator`, con la clave en el `.in()` (`config.ts:66`);
   - la rama del validador, con `total_cost` en el schema de `plan_limits` (`admin-config.ts:19,130`) y su toggle en `config-forms.tsx`;
   - `NAMES` y `HINTS` del diseño;
