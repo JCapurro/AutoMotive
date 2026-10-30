@@ -12,7 +12,7 @@ from normalization.fx import FxQuote
 from normalization.listing import Target, fingerprint, normalize_listing, price_usd
 from normalization.vehicle import CatalogModel, resolve_vehicle
 from pipeline.crawl import TargetSpec, derive_targets, retry_seconds, scraper_filters
-from pipeline.ingest import merge, price_drop_pct
+from pipeline.ingest import merge, price_drop_pct, published_partial
 
 CATALOG = [
     CatalogModel("Ford", "Fiesta", ("fiesta kinetic", "fiesta kinetic design"), ("S", "SE", "SEL", "Titanium", "ST"), None, 2019),
@@ -263,6 +263,34 @@ class MergeTests(unittest.TestCase):
         # Currency changed: compared in USD.
         self.assertEqual(price_drop_pct({"price": 11_000_000, "currency": "ARS", "price_usd": 10_000},
                                         {"price": 9_000, "currency": "USD", "price_usd": 9_000}), 10.0)
+
+
+class PublishedPartialTests(unittest.TestCase):
+    """PAR-03, opción B: a down payment or an installment that falls is no price drop."""
+
+    @staticmethod
+    def facts(kind):
+        return {"price_check": {"published_kind": kind, "effective_kind": "cash", "source": "description"}}
+
+    def test_the_description_calls_it_a_down_payment_or_an_installment(self):
+        for kind in ("down_payment", "installment"):
+            with self.subTest(kind):
+                self.assertTrue(published_partial({"description_facts": self.facts(kind)}))
+
+    def test_a_partial_price_that_stands(self):
+        self.assertTrue(published_partial({"price_partial": True, "description_facts": None}))
+
+    def test_the_title_said_so_unless_the_description_calls_it_a_total(self):
+        self.assertTrue(published_partial({"description_facts": self.facts(None)}, "título: cuotas"))
+        for kind in ("cash", "list", "generic"):
+            with self.subTest(kind):
+                self.assertFalse(published_partial({"description_facts": self.facts(kind)}, "título: cuotas"))
+
+    def test_a_price_otherwise(self):
+        for row in ({}, {"description_facts": self.facts("list")}, {"description_facts": self.facts(None)},
+                    {"price_partial": False, "description_facts": {}}):
+            with self.subTest(row):
+                self.assertFalse(published_partial(row))
 
 
 class CrawlTargetTests(unittest.TestCase):

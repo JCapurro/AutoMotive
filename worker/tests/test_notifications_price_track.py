@@ -168,6 +168,69 @@ class OnMatchesPayloadTests(unittest.IsolatedAsyncioTestCase):
         calls.assert_not_awaited()
 
 
+class DescriptionPriceTests(unittest.IsolatedAsyncioTestCase):
+    """Opción B: the email shows the effective price; the drops are of the
+    published one. A price read from the description gets no drop line."""
+
+    async def payloads(self, rows, tracks):
+        audience = {7: {"user_id": "u1", "profile_name": "Fiesta", "channels": ["email"], "email": "a@b.test"}}
+        notifier = service.Notifier({})
+        candidates = [OnMatchesPayloadTests.cand(i) for i in rows]
+        with patch.object(service.repo, "profile_audiences", AsyncMock(return_value=audience)), \
+             patch.object(service.repo, "interactions", AsyncMock(return_value={})), \
+             patch.object(service.repo, "price_tracks", AsyncMock(return_value=tracks)) as price_tracks, \
+             patch.object(service, "_min_n", AsyncMock(return_value=5)), \
+             patch.object(notifier, "_commit", AsyncMock(return_value=[])) as commit:
+            await notifier.on_matches(candidates, rows, now=NOW)
+        return {e.listing_id: e.payload for e in commit.await_args.args[0]}, price_tracks
+
+    @staticmethod
+    def listing(listing_id, **kw):
+        return {**FIESTA, "id": listing_id, "year": 2025, "transmission": "manual", "price_partial": False,
+                "timing_belt": False, "description": "x" * 200, "description_facts": {}, **kw}
+
+    async def test_the_opportunity_email_skips_a_price_from_the_description(self):
+        cash = self.listing(501, price=9_500.0, price_source="description",
+                            description_facts={"price_check": {"published_kind": "list", "effective_kind": "cash",
+                                                               "source": "description"}})
+        rows = {501: cash, 502: self.listing(502, price=13_500.0, price_source="published")}
+        payloads, calls = await self.payloads(rows, {501: row(), 502: row(502)})
+        calls.assert_awaited_once_with([502])                # 501 isn't even asked for
+        self.assertNotIn("price_track", payloads[501])
+        self.assertEqual(payloads[502]["price_track"], service.price_track_payload(row(502)))
+        self.assertEqual(payloads[501]["listing"]["price_source"], "description")
+        self.assertNotIn("price_source", payloads[502]["listing"])   # payloads stay as before
+        text = templates.email(notification("opportunity", payloads[501]), LINKS, NOW).text
+        self.assertIn("USD 9.500 de contado", text)
+        self.assertNotIn("desde que la vimos", text)
+
+    async def test_the_common_case_reads_as_today(self):
+        r = row(drops=1, first_price=Decimal("14000"), last_price=Decimal("13500"),
+                cum_pct=Decimal("3.6"), cum_usd=Decimal("500"))
+        payloads, _ = await self.payloads({501: self.listing(501, price=13_500.0, price_source="published")}, {501: r})
+        text = templates.email(notification("opportunity", payloads[501]), LINKS, NOW).text
+        self.assertIn("Bajó 1 vez desde que la vimos: -USD 500 (-3,6%).", text.splitlines())
+
+    async def test_the_digest_skips_a_price_from_the_description(self):
+        items = [{"section": "matches", "listing_id": 501, "kind": "match",
+                  "listing": {**FIESTA, "price_source": "description"}, "match": {"score": 90, "level": "high"}},
+                 {"section": "matches", "listing_id": 502, "kind": "match", "listing": FIESTA,
+                  "match": {"score": 80, "level": "high"}}]
+        with patch.object(digest.repo, "price_tracks", AsyncMock(return_value={501: row(), 502: row(502)})) as calls:
+            await digest.add_price_tracks(items)
+        calls.assert_awaited_once_with([502])
+        self.assertNotIn("price_track", items[0])
+        self.assertEqual(items[1]["price_track"], service.price_track_payload(row(502)))
+
+    async def test_only_description_prices_mark_the_payload(self):
+        for source, marked in (("description", True), ("published", False), (None, False)):
+            with self.subTest(source):
+                self.assertEqual("price_source" in service.listing_payload(self.listing(1, price_source=source)), marked)
+        self.assertFalse(service.shows_published_price(None))
+        self.assertFalse(service.shows_published_price({"price_source": "description"}))
+        self.assertTrue(service.shows_published_price({"price_source": "published"}))
+
+
 class DigestTemplateTests(unittest.TestCase):
     def test_matches_get_the_age_and_the_drop(self):
         title, matches = templates.content(DIGEST, LINKS, NOW).sections[0]

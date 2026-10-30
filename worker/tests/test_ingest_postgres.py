@@ -1904,6 +1904,30 @@ class DescriptionFactsTests(IngestCase):
         [snap] = await self.rows("SELECT price FROM listing_snapshots ORDER BY id DESC LIMIT 1")
         self.assertEqual(float(snap["price"]), 11_000.0)
 
+    async def test_a_lower_down_payment_is_no_price_drop(self):
+        # PAR-03, opción B: the description gives the total; the published
+        # number is the down payment. Lowering it is no drop: no event, no alert.
+        text = "Precio final $15.000.000. Retirá con $5.000.000 y cuotas fijas."
+        down = dict(titulo="Ford Fiesta Titanium retirá con $5.000.000 y cuotas", moneda="ARS", descripcion=text)
+        await ingest([card("1", precio=5_000_000.0, **down)], geocode=None)
+        row = await self.listing("1")
+        self.assertEqual((row["price_source"], row["description_facts"]["price_check"]["published_kind"]),
+                         ("description", "down_payment"))
+
+        lower = await ingest([card("1", precio=4_000_000.0, **down)], geocode=None)     # -20%
+        self.assertEqual([e.kind for e in lower.events], ["listing_updated"])
+        self.assertEqual((lower.events[0].old_price, lower.events[0].new_price), (5_000_000.0, 4_000_000.0))
+        self.assertEqual(float((await self.listing("1"))["price"]), 15_000_000.0)
+        self.assertEqual(await self.snapshots("1"), ["new", "price"])       # the snapshot is still kept
+
+    async def test_a_lower_installment_is_no_price_drop(self):
+        # An installment that stands as the price (no total in the text): price_partial.
+        inst = dict(titulo="Ford Fiesta Titanium cuotas de $600.000", moneda="ARS")
+        await ingest([card("1", precio=600_000.0, **inst)], geocode=None)
+        self.assertTrue((await self.listing("1"))["price_partial"])
+        lower = await ingest([card("1", precio=500_000.0, **inst)], geocode=None)
+        self.assertEqual([e.kind for e in lower.events], ["listing_updated"])
+
     async def test_the_raw_page_is_kept_even_when_the_parser_fails(self):
         await ingest([card("1")], geocode=None)
         await db.mark_seen(await self.fiesta_alert(), [card("1").to_dict()], backfill=False)
