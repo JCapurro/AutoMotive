@@ -1,5 +1,5 @@
 """
-Seller classification by hand (F-02 paso 1,
+Seller classification by hand (F-02 pasos 1 y 2,
 docs/superpowers/specs/2026-10-30-f02-vendedor-design.md).
 
     python -m tools.seller_classification --backfill-keys
@@ -11,8 +11,10 @@ listing (active and gone), 1.000 ids per transaction; run it once after the
 migration. --dry-run writes no listing and prints, per source: active
 listings, seller groups, listings over app_config.seller_classification.min_listings
 and the 10 biggest groups with their raw names (to review the stoplist in
-normalization/seller.py). --write writes seller_listing_count, as the worker
-does at startup and at the nightly anchor slot. Both record the run in
+normalization/seller.py). --write writes seller_listing_count and
+dealer_inferred («posible agencia») and re-scores the matches of the listings
+whose inference changed, as the worker does at startup and at the nightly
+anchor slot. Both record the run in
 seller_classification_runs. Run from worker/.
 """
 from __future__ import annotations
@@ -47,7 +49,7 @@ async def main(argv: list[str]) -> int:
     what = ap.add_mutually_exclusive_group(required=True)
     what.add_argument("--backfill-keys", action="store_true", help="recalcular seller_key de todos los avisos")
     what.add_argument("--dry-run", action="store_true", help="calcular e imprimir el informe, sin escribir avisos")
-    what.add_argument("--write", action="store_true", help="escribir seller_listing_count")
+    what.add_argument("--write", action="store_true", help="escribir seller_listing_count y dealer_inferred")
     args = ap.parse_args(argv)
 
     await db.open_pool()
@@ -66,11 +68,13 @@ async def main(argv: list[str]) -> int:
 
     if args.dry_run:
         print("\n".join(report_lines(result)))
-        print(f"\nactivos leídos {result['rows_read']}; se escribirían {result['would_write']} filas "
+        print(f"\nactivos leídos {result['rows_read']}; se escribirían {result['would_write']} filas, "
+              f"{result['inferred_changed']} cambiarían de «posible agencia» "
               "(simulación: no se escribió ningún aviso; si faltan claves, correr antes --backfill-keys)")
     else:
         print(f"activos leídos {result['rows_read']}; filas escritas {result['rows_written']}; "
-              f"claves completadas {result['keys_filled']}")
+              f"claves completadas {result['keys_filled']}; «posible agencia» cambió en "
+              f"{result['inferred_changed']}; matches re-puntuados {result['rescored']}")
     return 0
 
 

@@ -47,9 +47,9 @@ Orden estricto en `email_html.py`/`templates.py`: H-01 → PAR-03.
 | Orden | Ítem | Entrega |
 |---|---|---|
 | 1 | F-02 | (1) Vista `seller_listing_count` + métrica admin de % null por fuente, sin cambio visible. (2) `dealer_inferred` en atributo aparte («posible agencia»). (3) `price_ref` con medianas por tipo. Cada paso se puede frenar |
-| 2 | PRO-01 (sin push) | `contact_template` + mensaje listo en ficha; filtro duro `seller_types` (Pro) con «no informado» explícito; bloque en el email |
-| 3 | PRO-02 | (a) `margin_ref` + copy en ficha; (b) tarjeta, email Pro y orden por margen; (c) umbral en USD (toca el camino de emails inmediatos) |
-| 4 | PAR-01 | Migración con parámetros en null → Juan los carga → módulo de cálculo con resultado parcial → ficha, tarjeta y email. **Sin orden por costo total en v1** |
+| 2 | PRO-01 (sin push) | `contact_template` + mensaje listo en ficha; filtro duro `seller_types` (Pro) con «no informado» explícito; bloque en el email. **El filtro lee el vendedor con `effective_seller` (worker, `intelligence/seller.py`) y `effectiveSeller` (web, `lib/seller.ts`), nunca `seller_type` solo** (F-02 paso 2) |
+| 3 | PRO-02 | (a) `margin_ref` + copy en ficha; (b) tarjeta, email Pro y orden por margen; (c) umbral en USD (toca el camino de emails inmediatos). **Sale en el mismo deploy que F-02 paso 2 y reutiliza su `SCORING_VERSION` (`f2-v5-seller-margin`): no hace otro bump** (Juan, 30/10/2026) |
+| 4 | PAR-01 | Migración con parámetros en null → Juan los carga → módulo de cálculo con resultado parcial → ficha, tarjeta y email. **Sin orden por costo total en v1**. Reemplaza `DealerFeesNotice` decidiendo «agencia» con `effectiveSeller` (F-02 paso 2) |
 
 Un solo bump de `SCORING_VERSION` por deploy (un único rescore masivo; evita mails duplicados).
 

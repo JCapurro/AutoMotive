@@ -1,7 +1,8 @@
--- F-02 paso 1 (migration 20261123120000_f02_seller_count.sql,
--- docs/superpowers/specs/2026-10-30-f02-vendedor-design.md): the seller key and
--- count columns, their partial index, the runs table, the config row and the
--- admin_seller_coverage view. The job is tested in
+-- F-02 paso 1 (migration 20261123120000_f02_seller_count.sql) and paso 2
+-- (20261124120000_f02_dealer_inferred.sql),
+-- docs/superpowers/specs/2026-10-30-f02-vendedor-design.md: the seller key and
+-- count columns, their partial index, the runs table, the config row, the
+-- dealer_inferred column and the admin_seller_coverage view. The job is tested in
 -- worker/tests/test_seller_classification_postgres.py.
 -- Run with: supabase test db
 begin;
@@ -15,7 +16,11 @@ select col_is_null('public', 'listings', 'seller_key', 'seller_key is nullable')
 select has_column('public', 'listings', 'seller_listing_count', 'listings.seller_listing_count exists');
 select col_type_is('public', 'listings', 'seller_listing_count', 'integer', 'seller_listing_count is integer');
 select col_is_null('public', 'listings', 'seller_listing_count', 'seller_listing_count is nullable');
-select hasnt_column('public', 'listings', 'dealer_inferred', 'no dealer_inferred in step 1');
+-- Step 2: dealer_inferred («posible agencia»), apart from seller_type.
+select has_column('public', 'listings', 'dealer_inferred', 'listings.dealer_inferred exists');
+select col_type_is('public', 'listings', 'dealer_inferred', 'boolean', 'dealer_inferred is boolean');
+select col_not_null('public', 'listings', 'dealer_inferred', 'dealer_inferred is not null');
+select col_default_is('public', 'listings', 'dealer_inferred', 'false', 'dealer_inferred defaults to false');
 
 select has_index('public', 'listings', 'listings_seller_key_idx', array['source', 'seller_key'],
                  'listings_seller_key_idx on (source, seller_key)');
@@ -117,6 +122,24 @@ select is((select min_listings from public.admin_seller_coverage where source = 
 delete from public.app_config where key = 'seller_classification';
 select is((select over_threshold::int || '/' || min_listings from public.admin_seller_coverage where source = 'f02test'),
           '1/6', 'no config row -> 6');
+
+-- Step 2: the view keeps the step-1 columns in order and adds two at the end.
+select is((select array_agg(column_name::text order by ordinal_position)
+             from information_schema.columns
+            where table_schema = 'public' and table_name = 'admin_seller_coverage'),
+          array['source', 'active', 'seller_type_null', 'seller_type_null_pct', 'seller_name_null',
+                'seller_name_null_pct', 'seller_key_null', 'seller_key_null_pct', 'over_threshold',
+                'min_listings', 'dealer_inferred', 'seller_unknown_pct'],
+          'admin_seller_coverage: step-1 columns in order, then dealer_inferred and seller_unknown_pct');
+select results_eq(
+  $$select dealer_inferred::int, seller_unknown_pct from public.admin_seller_coverage where source = 'f02test'$$,
+  $$values (0, 25.0::numeric)$$,
+  'nothing inferred: unknown = the active ones without a seller type');
+update public.listings set dealer_inferred = true where source = 'f02test' and external_id in ('a1', 'a2', 'g1');
+select results_eq(
+  $$select dealer_inferred::int, seller_unknown_pct from public.admin_seller_coverage where source = 'f02test'$$,
+  $$values (2, 0.0::numeric)$$,
+  'an inferred listing without a type is no longer unknown; a gone one is not counted');
 
 -- ---------------------------------------------------------------- access: service role only
 set local role anon;

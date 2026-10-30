@@ -9,8 +9,10 @@
 
 Before the startup pass and the one at rescore.hour, the seller
 classification (F-02, pipeline/seller_classification.py) refreshes
-listings.seller_listing_count, so a rescore sees today's counts. A failure
-there is logged and the rescore runs anyway.
+listings.seller_listing_count and dealer_inferred («posible agencia») and
+re-scores the matches of the listings whose inference flipped, so a rescore
+(and the one of a SCORING_VERSION bump) sees today's counts. A failure there is
+logged and the rescore runs anyway.
 
 The pass at rescore.hour also runs the retention (pipeline/retention.py).
 

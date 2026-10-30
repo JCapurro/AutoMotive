@@ -65,6 +65,8 @@ REASON = {
     "trim_other": "{trim}, se prefiere {wanted}",
     "seller_ok": "vendedor {kind}",
     "seller_other": "vendedor {kind}, se prefiere {wanted}",
+    # F-02: why a seller is a «posible agencia» (intelligence/seller.py).
+    "seller_inferred": "publica {n} autos",
     "color_ok": "color {color}",
     "color_other": "color {color}, se prefiere {wanted}",
 }
@@ -72,6 +74,8 @@ TRANSMISSION = {"manual": "manual", "automatic": "automática"}
 # Sedán, Hatchback, SUV, Pick-up…: the one list of normalization/body_type.py.
 BODY_TYPE = dict(body_type.LABELS)
 SELLER = {"private": "particular", "dealer": "concesionaria"}
+# F-02: a seller with min_listings or more cars in the same source (dealer_inferred).
+SELLER_INFERRED = "posible agencia"
 UNKNOWN_BADGE = "❔ no informado"
 
 # ---------------------------------------------------------------------------

@@ -81,7 +81,7 @@ export function SourceHealthTable({ rows, editable, alertAfter = 3 }: { rows: So
   );
 }
 
-/** F-02 paso 1, admin_seller_coverage: per source, the active listings without a seller type, name or key, and how many are over app_config.seller_classification.min_listings. */
+/** F-02, admin_seller_coverage: per source, the active listings without a seller type, name or key, how many are over app_config.seller_classification.min_listings, how many are a «posible agencia» (dealer_inferred) and how many still have no seller at all. */
 export function SellerCoverageTable({ rows }: { rows: SellerCoverage[] }) {
   return (
     <Table>
@@ -93,6 +93,8 @@ export function SellerCoverageTable({ rows }: { rows: SellerCoverage[] }) {
           <Th numeric>% sin nombre</Th>
           <Th numeric>% sin clave</Th>
           <Th numeric>Sobre el umbral</Th>
+          <Th numeric>Posible agencia</Th>
+          <Th numeric>% sin vendedor</Th>
         </tr>
       </thead>
       <tbody>
@@ -104,9 +106,11 @@ export function SellerCoverageTable({ rows }: { rows: SellerCoverage[] }) {
             <Td numeric>{percent(r.seller_name_null_pct)}</Td>
             <Td numeric>{percent(r.seller_key_null_pct)}</Td>
             <Td numeric>{count(r.over_threshold)}</Td>
+            <Td numeric>{count(r.dealer_inferred)}</Td>
+            <Td numeric>{percent(r.seller_unknown_pct)}</Td>
           </tr>
         ))}
-        {!rows.length ? <EmptyRow colSpan={6} /> : null}
+        {!rows.length ? <EmptyRow colSpan={8} /> : null}
       </tbody>
     </Table>
   );

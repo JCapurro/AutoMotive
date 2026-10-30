@@ -42,7 +42,7 @@ export default async function SourcesPage({ searchParams }: PageProps<"/admin/so
 
       <Section
         title="Vendedor por fuente"
-        description={`Avisos activos sin tipo, nombre o clave de vendedor, y cuántos son de vendedores con ${threshold} o más autos publicados en la ventana (F-02, todavía sin efecto en el score). Calculado: ${sellerRun?.finished_at ? when(sellerRun.finished_at) : "todavía no"}.`}
+        description={`Avisos activos sin tipo, nombre o clave de vendedor, cuántos son de vendedores con ${threshold} o más autos publicados en la ventana, cuántos quedaron como «posible agencia» y qué parte no tiene vendedor ni inferencia (F-02). Calculado: ${sellerRun?.finished_at ? when(sellerRun.finished_at) : "todavía no"}.`}
       >
         <SellerCoverageTable rows={sellers ?? []} />
       </Section>

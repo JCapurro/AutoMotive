@@ -134,7 +134,7 @@ test("F6: el admin responde «¿por qué se envió esta alerta?» en un clic", a
     await expect(page.getByRole("heading", { name: "Vendedor por fuente" })).toBeVisible();
     await expect(page.getByText(/Calculado: \d/)).toBeVisible();
     const table = page.getByRole("table").filter({ has: page.getByRole("columnheader", { name: "% sin clave" }) });
-    for (const header of ["Activos", "% sin tipo", "% sin nombre", "Sobre el umbral"]) {
+    for (const header of ["Activos", "% sin tipo", "% sin nombre", "Sobre el umbral", "Posible agencia", "% sin vendedor"]) {
       await expect(table.getByRole("columnheader", { name: header, exact: true })).toBeVisible();
     }
     await expect(table.getByRole("row").filter({ has: page.getByRole("cell", { name: "mercadolibre", exact: true }) })).toHaveCount(1);

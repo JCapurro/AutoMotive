@@ -10,15 +10,25 @@ window; a group with nothing in the window gets null. A probable repost is left
 out only while its original is itself counted in the same group (active, same
 key, in the window): it never takes away the only live copy of a car.
 
-Who writes it, and which count wins: in step 1 only the startup, nightly and
-CLI runs (pipeline/seller_classification.py) write counts, over every group.
-When step 2 also counts the groups an ingest touched, that count can differ
-from the nightly one, because news.classify may set probable_repost_of after
-the ingest commit (NEWS_LINK_REPOST); the next full run is authoritative and
-overwrites it. Nothing reads the count in step 1, so there is nothing to flap.
+Step 2: the same statement writes listings.dealer_inferred («posible
+agencia»): `enabled and count >= min_listings and seller_type is distinct from
+'dealer'` (app_config.seller_classification). It also applies when the source
+says 'private' (Juan, 30/10/2026) and never marks a listing the source already
+calls a dealer. A row whose group falls out of the window or that lost its key
+goes back to null / false. Gone listings keep their last values, except that
+with enabled = false every row goes to false (clear_inferred), so the
+comparables pool forgets the inference too.
+
+Who writes it, and which count wins: the startup, nightly and CLI runs
+(pipeline/seller_classification.py) over every group, and the ingest over the
+groups it touched (pipeline/ingest.py, before scoring). The ingest count can
+differ from the nightly one, because news.classify may set probable_repost_of
+after the ingest commit (NEWS_LINK_REPOST); the next full run is authoritative
+and overwrites it.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from typing import Any, Sequence
 
 from psycopg import AsyncConnection
@@ -44,19 +54,29 @@ WITH grp AS (
    GROUP BY l.seller_key)
 """
 
-_TARGET = """,
+# The rule (design, decision 5). `g.n` is null for a group with nothing in the window.
+_INFERRED = ("(%(enabled)s AND coalesce(g.n >= %(min_listings)s, false) "
+             "AND l.seller_type IS DISTINCT FROM 'dealer')")
+
+_TARGET = f""",
 target AS (
-  SELECT l.id, g.n
+  SELECT l.id, g.n, {_INFERRED} AS inferred, l.dealer_inferred AS was, l.seller_listing_count AS was_n
     FROM listings l LEFT JOIN grp g ON g.seller_key = l.seller_key
    WHERE l.source = %(source)s AND l.status = 'active' AND l.seller_key = ANY(%(keys)s)
-     AND l.seller_listing_count IS DISTINCT FROM g.n
-   ORDER BY l.id {lock})
+     AND (l.seller_listing_count, l.dealer_inferred) IS DISTINCT FROM (g.n, {_INFERRED})
+   ORDER BY l.id {{lock}})
 """
 
+# flipped: dealer_inferred changed. recount: still inferred with another count;
+# the match reason carries N («publica N autos»), so it is re-scored too.
+_CHANGES = ("t.was IS DISTINCT FROM t.inferred AS flipped, "
+            "(t.was AND t.inferred AND t.was_n IS DISTINCT FROM t.n) AS recount")
+
 _WRITE = (_GROUPS.format(keys="l.seller_key = ANY(%(keys)s)") + _TARGET.format(lock="FOR UPDATE OF l")
-          + "UPDATE listings SET seller_listing_count = t.n FROM target t WHERE listings.id = t.id")
+          + "UPDATE listings SET seller_listing_count = t.n, dealer_inferred = t.inferred FROM target t "
+            f"WHERE listings.id = t.id RETURNING listings.id, {_CHANGES}")
 _WOULD_WRITE = (_GROUPS.format(keys="l.seller_key = ANY(%(keys)s)") + _TARGET.format(lock="")
-                + "SELECT count(*)::int AS n FROM target")
+                + f"SELECT t.id, {_CHANGES} FROM target t")
 
 _REPORT = _GROUPS.format(keys="l.seller_key IS NOT NULL") + """
 SELECT l.seller_key, g.n, count(*)::int AS active,
@@ -67,10 +87,36 @@ SELECT l.seller_key, g.n, count(*)::int AS active,
 """
 
 _STALE = """
-SELECT id FROM listings
- WHERE source = %(source)s AND status = 'active' AND seller_key IS NULL AND seller_listing_count IS NOT NULL
+SELECT id, dealer_inferred AS was FROM listings
+ WHERE source = %(source)s AND status = 'active' AND seller_key IS NULL
+   AND (seller_listing_count IS NOT NULL OR dealer_inferred)
  ORDER BY id
 """
+
+
+@dataclass
+class Written:
+    """Rows a write changed (or would, in a dry run); among them, the ids
+    whose dealer_inferred flipped, and the ids still inferred whose count
+    changed. The matches of both are re-scored (`rescore`)."""
+    rows: int = 0
+    flipped: list[int] = field(default_factory=list)
+    recounted: list[int] = field(default_factory=list)
+
+    def add(self, other: "Written") -> "Written":
+        self.rows += other.rows
+        self.flipped += other.flipped
+        self.recounted += other.recounted
+        return self
+
+    @property
+    def rescore(self) -> list[int]:
+        return self.flipped + self.recounted
+
+
+def _written(rows: list[dict[str, Any]]) -> Written:
+    return Written(len(rows), [r["id"] for r in rows if r["flipped"]],
+                   [r["id"] for r in rows if r.get("recount")])
 
 
 async def sources(cx: AsyncConnection) -> list[str]:
@@ -96,26 +142,56 @@ async def group_keys(cx: AsyncConnection, source: str) -> list[str]:
 
 
 async def write_groups(cx: AsyncConnection, source: str, keys: Sequence[str], cfg: dict[str, Any], *,
-                       dry_run: bool = False) -> int:
-    """Write the count of these groups on their active rows; only the rows
-    whose value changes, locked in id order. Returns the rows written (or that
-    would be, with dry_run)."""
+                       dry_run: bool = False) -> Written:
+    """Write the count and dealer_inferred of these groups on their active
+    rows; only the rows whose values change, locked in id order."""
     if not keys:
-        return 0
-    params = {"source": source, "keys": list(keys), "window": int(cfg["window_days"])}
-    if dry_run:
-        return (await (await cx.execute(_WOULD_WRITE, params)).fetchone())["n"]
-    return (await cx.execute(_WRITE, params)).rowcount
+        return Written()
+    params = {"source": source, "keys": list(keys), "window": int(cfg["window_days"]),
+              "enabled": bool(cfg["enabled"]), "min_listings": int(cfg["min_listings"])}
+    return _written(await (await cx.execute(_WOULD_WRITE if dry_run else _WRITE, params)).fetchall())
 
 
-async def clear_stale(cx: AsyncConnection, source: str, *, dry_run: bool = False) -> int:
-    """Active rows that lost their key keep no count. (A group with nothing in
-    the window gets null from write_groups.)"""
+async def clear_stale(cx: AsyncConnection, source: str, *, dry_run: bool = False) -> Written:
+    """Active rows that lost their key keep no count and no inference. (A
+    group with nothing in the window gets null / false from write_groups.)"""
     if dry_run:
-        return len(await (await cx.execute(_STALE, {"source": source})).fetchall())
-    return (await cx.execute(
-        f"UPDATE listings SET seller_listing_count = NULL WHERE id IN ({_STALE} FOR UPDATE)",
-        {"source": source})).rowcount
+        rows = await (await cx.execute(_STALE, {"source": source})).fetchall()
+        return Written(len(rows), [r["id"] for r in rows if r["was"]])
+    return _written(await (await cx.execute(
+        f"WITH stale AS ({_STALE} FOR UPDATE) "
+        "UPDATE listings l SET seller_listing_count = NULL, dealer_inferred = false FROM stale s "
+        " WHERE l.id = s.id RETURNING l.id, s.was AS flipped",
+        {"source": source})).fetchall())
+
+
+async def clear_listings(cx: AsyncConnection, ids: Sequence[int]) -> Written:
+    """These listings, if they have no key now, keep no count and no inference
+    (the ingest, for a listing whose name became generic or empty)."""
+    if not ids:
+        return Written()
+    return _written(await (await cx.execute(
+        "WITH stale AS (SELECT id, dealer_inferred AS was FROM listings "
+        "                WHERE id = ANY(%s) AND seller_key IS NULL "
+        "                  AND (seller_listing_count IS NOT NULL OR dealer_inferred) ORDER BY id FOR UPDATE) "
+        "UPDATE listings l SET seller_listing_count = NULL, dealer_inferred = false FROM stale s "
+        " WHERE l.id = s.id RETURNING l.id, s.was AS flipped", (list(ids),))).fetchall())
+
+
+async def clear_inferred(cx: AsyncConnection, *, limit: int = KEY_BATCH, dry_run: bool = False) -> Written:
+    """enabled = false: one batch of listings (active or gone) still marked,
+    by id, back to false. Call until it writes nothing. The dry run counts
+    only the rows that are not active: write_groups and clear_stale already
+    counted the active ones, which the real run writes once, not twice."""
+    select = "SELECT id FROM listings WHERE dealer_inferred ORDER BY id"
+    if dry_run:
+        rows = await (await cx.execute(
+            "SELECT id FROM listings WHERE dealer_inferred AND status <> 'active' ORDER BY id")).fetchall()
+        return Written(len(rows), [r["id"] for r in rows])
+    rows = await (await cx.execute(
+        f"UPDATE listings SET dealer_inferred = false WHERE id IN ({select} LIMIT %s FOR UPDATE) RETURNING id",
+        (limit,))).fetchall()
+    return Written(len(rows), [r["id"] for r in rows])
 
 
 async def report_groups(cx: AsyncConnection, source: str, cfg: dict[str, Any]) -> list[dict[str, Any]]:
@@ -159,8 +235,9 @@ async def start_run(cx: AsyncConnection, trigger: str, mode: str, params: dict[s
 
 
 async def finish_run(cx: AsyncConnection, run_id: int, *, status: str, rows_read: int | None = None,
-                     rows_written: int | None = None, error: str | None = None) -> None:
+                     rows_written: int | None = None, inferred_changed: int | None = None,
+                     error: str | None = None) -> None:
     await cx.execute(
         "UPDATE seller_classification_runs SET status = %s, finished_at = now(), rows_read = %s, "
-        "  rows_written = %s, error = %s WHERE id = %s",
-        (status, rows_read, rows_written, error, run_id))
+        "  rows_written = %s, inferred_changed = %s, error = %s WHERE id = %s",
+        (status, rows_read, rows_written, inferred_changed, error, run_id))

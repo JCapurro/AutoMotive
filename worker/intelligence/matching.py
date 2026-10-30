@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from typing import Any, Literal, Mapping
 
 from intelligence import copy
+from intelligence.seller import effective_seller, seller_kind
 from normalization.geo import haversine_km
 from normalization.normalize import normalize_brand, normalize_text
 
@@ -346,8 +347,9 @@ def _preferences(listing, profile, fx_rate) -> dict[str, Reason]:
                                      f"{copy.money(value, currency)} / {copy.money(target, currency)}"))
 
     if seller := p.get("seller_type"):
-        have = listing.get("seller_type")
-        kind, want = copy.SELLER.get(have or "", have), copy.SELLER.get(seller, seller)
+        # F-02: a «posible agencia» counts as a dealer (intelligence/seller.py).
+        have = effective_seller(listing)
+        kind, want = seller_kind(listing), copy.SELLER.get(seller, seller)
         out["seller_type"] = (_soft(UNKNOWN, copy.NOT_INFORMED) if not have else
                               _soft(OK, copy.REASON["seller_ok"].format(kind=kind)) if have == seller else
                               _soft(FAIL, copy.REASON["seller_other"].format(kind=kind, wanted=want)))

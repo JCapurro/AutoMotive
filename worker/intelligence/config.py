@@ -15,7 +15,11 @@ from normalization.price_check import ALMOST_CERTAIN_BELOW_MEDIAN_PCT, SUSPICIOU
 
 # Bump when matching or scoring logic changes: every match is re-scored (sección 6.1).
 # f2-v2: matches also store seller_questions (F4), so the old rows get them.
-SCORING_VERSION = "f2-v4-publication-or-first-seen"
+# f2-v5-seller-margin: F-02 paso 2 (a «posible agencia» counts as a dealer in the
+# seller preference) and PRO-02 (margin) share this one bump and ship in the
+# same deploy (Juan, 30/10/2026; one bump per deploy). PRO-02 reuses it: it
+# must not bump again, and F-02 paso 2 is not deployed alone.
+SCORING_VERSION = "f2-v5-seller-margin"
 
 COMPONENTS = ("price", "match", "km", "trim", "recency", "completeness")
 
@@ -88,8 +92,8 @@ class IntelligenceConfig:
 
 # F-02 (docs/superpowers/specs/2026-10-30-f02-vendedor-design.md): the seller
 # classification job. Same bounds as the /admin/config validator; a missing or
-# bad value falls back to its default, key by key. `enabled` has no effect until
-# step 2 (dealer_inferred).
+# bad value falls back to its default, key by key. `enabled` false turns the
+# «posible agencia» inference (dealer_inferred, step 2) off everywhere.
 DEFAULT_SELLER_CLASSIFICATION = {"enabled": True, "min_listings": 6, "window_days": 30}
 _SELLER_BOUNDS = {"min_listings": (2, 100), "window_days": (1, 180)}
 

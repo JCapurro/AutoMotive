@@ -114,6 +114,10 @@ export const MIN_LEVEL_OPTIONS: { value: Level; label: string }[] = [
 
 export const TRANSMISSION: Record<string, string> = { manual: "Manual", automatic: "Automática" };
 export const SELLER: Record<string, string> = { private: "Particular", dealer: "Concesionaria" };
+/** F-02: listings.dealer_inferred, a seller with many cars in the same source (lib/seller.ts). */
+export const SELLER_INFERRED = "Posible agencia";
+/** F-02: under the search form's «Vendedor» when it prefers a dealer. */
+export const SELLER_FORM_HINT = "Incluye posibles agencias.";
 export const FUEL: Record<string, string> = {
   nafta: "Nafta",
   diesel: "Diésel",
