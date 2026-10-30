@@ -71,7 +71,7 @@ Criterios de aceptación:
 
 ### F-03 · Agregados de mercado (`market_stats`)
 
-**Estado al 30/10:** Fase 0 en `main` (PR #52), apagada. Migración `20261119110000_f03_market_stats.sql` pendiente en producción (al 30/10 prod está en `20261118130000`).
+**Estado al 30/10:** Fase 0 en `main` (PR #52), apagada. Migración aplicada en producción el 30/10; el job sigue apagado.
 
 No hay estadísticas agregadas: `first_seen_at`, `last_seen_at`, `last_full_seen_at` y `status = gone` existen pero nadie los resume. Solo las fuentes con lectura completa (`confirm_sources`: autocity, carone, deruedas, gruporandazzo, mardelusados, rosariogarage, mercadolibre) confirman que un aviso dejó de publicarse; Facebook, V6, Kavak y Autocosmos no, y la watchlist solo revisa guardados.
 
@@ -122,7 +122,7 @@ Criterios de aceptación:
 
 ### PAR-02 · Señales de riesgo y checklist antes de señar
 
-**Estado al 30/10:** tramo 1 (checklist «Antes de señar» y copy de `much_cheaper`) en PR #56, con textos aprobados por Juan. Faltan los links oficiales en `risk.links`. Migraciones `20261122120000_par02_risk_config.sql` y `20261122120100_par02_decision_metrics_checklist.sql` pendientes en producción. El resto (pHash, duplicados, `private_many_listings`) va en la Fase 3.
+**Estado al 30/10:** tramo 1 (checklist «Antes de señar» y copy de `much_cheaper`) en PR #56, con textos aprobados por Juan. Migraciones aplicadas en producción y links oficiales cargados en `risk.links` el 30/10; falta mergear #56. El resto (pHash, duplicados, `private_many_listings`) va en la Fase 3.
 
 Dolor: seña por transferencia, fotos robadas, «particular» que es revendedor, vendedor que no es el titular.
 
@@ -143,7 +143,7 @@ Criterios de aceptación:
 
 ### PAR-03 · Días publicado, bajas y comportamiento del modelo
 
-**Estado al 30/10:** por aviso en `main` (PR #53); avisos con precio de contado o anticipo corregidos en PR #56 (opción B). Migración `20261121120000_par03_price_tracks.sql` pendiente en producción: hasta aplicarla, la web no muestra las bajas. El bloque del modelo va en la Fase 3.
+**Estado al 30/10:** por aviso en `main` (PR #53); avisos con precio de contado o anticipo corregidos en PR #56 (opción B). Migración aplicada en producción el 30/10; falta mergear #56 y desplegar el worker. El bloque del modelo va en la Fase 3.
 
 Dolor: no sabe cuánto ofertar ni si conviene esperar.
 
@@ -289,7 +289,7 @@ Criterios de aceptación:
 
 `user_listing_interactions.status` ya tiene `new | seen | interested | discarded | contacted | visit_scheduled | purchased`, `rejection_reason` y `note`; la UI solo ofrece Guardar y Descartar, y el selector de estado se retiró. Las agencias llevan esto en WhatsApp y una planilla. Para Pro: devolver el selector con `contacted`, `visit_scheduled`, `purchased`, campo de nota y filtro por estado en resultados y guardados. `listing_status_changed` ya existe como evento. Tamaño S. Exportación CSV **no**: Juan la retiró el 15/10 (`20261027120000_remove_csv_export.sql`) y sigue en reserva hasta que un Pro la pida.
 
-**Estado al 30/10:** en `main` (PR #51). Migraciones `20261119120000_x01_tracking.sql` y `20261119130000_x01_outcome_metric.sql` pendientes en producción: hasta aplicarlas, los filtros por estado muestran «Todos». Texto de Privacidad sobre las notas en PR #56. Plan: [2026-10-29-x01-seguimiento](superpowers/plans/2026-10-29-x01-seguimiento.md).
+**Estado al 30/10:** en `main` (PR #51). Migraciones aplicadas en producción el 30/10. Texto de Privacidad sobre las notas en PR #56. Plan: [2026-10-29-x01-seguimiento](superpowers/plans/2026-10-29-x01-seguimiento.md).
 
 ### H-01 · El email no trae las preguntas
 

@@ -28,9 +28,9 @@ Implementar el backlog de producto por fases según `docs/PLAN_FASES_BACKLOG_PRO
 - La decisión «el publicado es parcial» la toma `resolve_price` y queda guardada en `description_facts.price_check.published_partial`. No se reconstruye después comparando monedas: con cotizaciones distintas, eso silenciaba bajas reales.
 - Avisos guardados antes del deploy, sin ese campo: cuentan solo `published_kind` (down_payment/installment) y `price_partial`.
 
-## Producción (leído el 30/10 con OK de Juan)
+## Producción (30/10, con OK de Juan)
 
-`max(version)` = `20261118130000`. Faltan, en este orden, cada una en una transacción con el insert de su versión exacta en `supabase_migrations.schema_migrations`:
+Aplicadas el 30/10 (antes `max(version)` = `20261118130000`, ahora `20261122120100`; verificadas por md5 contra la base local), en este orden, cada una en una transacción con el insert de su versión exacta en `supabase_migrations.schema_migrations`:
 
 1. `20261027145911_admin_config_audit` (nunca se aplicó: sin ella `/admin/config` no guarda)
 2. `20261119110000_f03_market_stats`
@@ -40,9 +40,9 @@ Implementar el backlog de producto por fases según `docs/PLAN_FASES_BACKLOG_PRO
 6. `20261122120000_par02_risk_config`
 7. `20261122120100_par02_decision_metrics_checklist`
 
-Después: worker en el VPS (`wait_idle` antes de reiniciar) y cargar `risk.links` en `/admin/config`. La web de `main` ya tolera la base vieja: X-01 cae a «Todos», PAR-03 no muestra bajas y el checklist se ve sin links. Aplicar migraciones necesita un OK explícito de Juan (leer sí lo tiene).
+`risk.links` cargado (auditoría #1). Falta: worker en el VPS con el código de `main` (`wait_idle` antes de reiniciar). La web de `main` ya tolera la base vieja: X-01 cae a «Todos», PAR-03 no muestra bajas y el checklist se ve sin links. 
 
-### Links oficiales propuestos para `risk.links` (falta la aprobación de Juan)
+### Links oficiales cargados en `risk.links` (aprobados por Juan el 30/10)
 ```json
 {
   "dnrpa": {"label": "Informe de dominio (DNRPA)", "url": "https://www.argentina.gob.ar/servicio/solicitar-un-informe-de-dominio-del-automotor"},
@@ -62,9 +62,8 @@ Todas respondieron 200 el 30/10. `vtv` acepta un solo link: va el de Provincia; 
 
 ## Próximos pasos
 1. Juan: mergear #57 y #56 (en cualquier orden; los dos tienen merge limpio con `main`).
-2. Juan: OK para aplicar las 7 migraciones en producción, en el orden de arriba.
-3. Juan: aprobar los links y cargarlos (requiere la migración 1).
-4. Fase 2: decisiones de Juan listadas en la sección 5 del plan («Antes de la Fase 2»).
+2. Juan: desplegar el worker en el VPS.
+3. Fase 2: decisiones tomadas (sección 8 del plan). F-02 en la rama `claude/f02-vendedor`; costos oficiales de PAR-01 en investigación.
 
 ## Reglas operativas que no están en el código
 - Sin cambios en producción sin OK explícito de Juan. Migración manual en prod = transacción + insert de la versión exacta.
