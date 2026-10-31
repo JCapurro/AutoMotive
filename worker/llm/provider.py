@@ -17,7 +17,7 @@ from collections.abc import Sequence
 from typing import Protocol, runtime_checkable
 
 import config
-from llm.schemas import ListingFacts, SearchDraft
+from llm.schemas import ListingFacts, LowResultsExplanation, SearchDraft
 from normalization.vehicle import CatalogModel
 
 
@@ -48,6 +48,11 @@ class LLMProvider(Protocol):
 
     async def polish_questions(self, questions: list[str], context: dict) -> str:
         """Optional: the seller questions (sección 6.6) as one friendly message."""
+        ...
+
+    async def explain_low_results(self, context: dict) -> LowResultsExplanation:
+        """Optional: why a search brings few results, from its filter funnel
+        (intelligence/low_results.py). The worker falls back to a fixed text."""
         ...
 
 

@@ -49,3 +49,7 @@ def polish_questions_user(questions: list[str], context: dict) -> str:
     lines = "\n".join(f"- {q}" for q in questions)
     return (f"<preguntas>\n{lines}\n</preguntas>\n"
             f"<contexto>\n{json.dumps(context, ensure_ascii=False)}\n</contexto>")
+
+
+def low_results_user(context: dict) -> str:
+    return f"<datos>\n{json.dumps(context, ensure_ascii=False, default=str)}\n</datos>"

@@ -13,7 +13,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from llm.provider import LLMError
-from llm.schemas import ListingFacts, SearchDraft
+from llm.schemas import ListingFacts, LowResultsExplanation, SearchDraft
 from normalization.vehicle import CatalogModel
 
 
@@ -35,4 +35,7 @@ class LocalProvider:
         raise self._unavailable()
 
     async def polish_questions(self, questions: list[str], context: dict) -> str:
+        raise self._unavailable()
+
+    async def explain_low_results(self, context: dict) -> LowResultsExplanation:
         raise self._unavailable()

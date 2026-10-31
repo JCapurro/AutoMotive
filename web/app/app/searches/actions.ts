@@ -411,6 +411,14 @@ export async function setSearchFrequency(id: number, frequency: Frequency): Prom
   refresh();
 }
 
+/** Hides the "¿Por qué hay pocos resultados?" card (search_diagnoses, RLS: own row, dismissed_at only). */
+export async function dismissDiagnosis(id: number): Promise<void> {
+  await requireUser();
+  const supabase = await createClient();
+  await supabase.from("search_diagnoses").update({ dismissed_at: new Date().toISOString() }).eq("search_profile_id", id);
+  refresh();
+}
+
 export async function deleteSearch(id: number): Promise<void> {
   const user = await requireUser();
   const supabase = await createClient();

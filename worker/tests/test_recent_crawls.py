@@ -196,6 +196,25 @@ class MercadoLibreWindowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((second.complete, second.unknown_dates), (True, 0))
         self.assertEqual(detail.await_count, 3)          # MLA1 and MLA2 once, MLA3 on the second scan
 
+    async def test_a_scan_stops_dating_ads_when_its_time_runs_out(self):
+        """Tracker 2014+ (31/10/2026): a first run dating 200 ads outlived the
+        collector's timeout and kept nothing. It ends at the date fetch limit."""
+        clock = MagicMock()
+        clock.monotonic.return_value = 0.0
+
+        async def read(_self, _listing):
+            clock.monotonic.return_value += 700.0
+            return NOW - DAY
+
+        page = (f"{BASE}/ford/fiesta/_NoIndex_True", card("1") + card("2") + card("3"), 200)
+        with patch.object(ml.MercadoLibreScraper, "_publication_date", autospec=True, side_effect=read) as detail, \
+                patch.object(ml, "time", clock), patch.object(ml, "DATE_FETCH_SECONDS", 1200), \
+                patch.object(ml.config, "RECENT_ML_DETAIL_SECONDS", 0):
+            results, _ = await self.search([page], page_size=48)
+        self.assertEqual((results.complete, results.reason, results.unknown_dates), (False, ml.DATE_FETCH_LIMIT, 1))
+        self.assertEqual([l.listing_id for l in results], ["MLA1", "MLA2"])
+        self.assertEqual(detail.await_count, 2)
+
     async def test_today_s_results_are_kept_without_reading_each_ad(self):
         """The ad's page says "hace 1 día" for an ad Mercado Libre lists as published today."""
         detail = AsyncMock(return_value=NOW - DAY)
