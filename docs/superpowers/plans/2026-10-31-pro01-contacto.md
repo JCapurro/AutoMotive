@@ -10,6 +10,8 @@
 
 **Dependencias:** `main` en `28e439d` (F-02 y PAR-01). Sin bump de `SCORING_VERSION`; si una tarea parece necesitarlo, **parar y avisar** (el único bump, `f2-v5-seller-margin`, ya está desplegado y lo reutiliza PRO-02).
 
+**Estado:** implementado (ver Notas de implementación del diseño); las preguntas del diseño se tomaron con su recomendación, asumido, a confirmar por Juan.
+
 **Tareas de Juan (no las hago):** responder las preguntas del diseño; pasar `seller_unknown_pct` por fuente de `/admin/sources` antes de desplegar el paso 1; OK para cada migración en producción, para reiniciar el worker (`wait_idle`) y para Vercel.
 
 ## Comandos
