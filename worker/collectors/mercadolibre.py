@@ -22,6 +22,7 @@ import json
 import logging
 import random
 import re
+import time
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -95,6 +96,11 @@ _dates: dict[str, int | None] = {}
 # A scan that ran out of date fetches: a long window (a first run) ends
 # incomplete until the ads it read cover it (tools/platform_health.py).
 DATE_FETCH_LIMIT = "mercadolibre: date fetch limit reached"
+# A scan stops dating ads after this long, as at the fetch limit: 200 ads at
+# RECENT_ML_DETAIL_SECONDS apart outlived COLLECTOR_TIMEOUT_SECONDS (Tracker
+# 2014+, 31/10/2026), and a cancelled scan keeps nothing. The pages after it
+# still run, within the health check's 30 minutes.
+DATE_FETCH_SECONDS = 20 * 60
 
 # Mercado Libre's VEHICLE_BODY_TYPE values (category MLA1744, 15/10/2026),
 # most listed first. normalization/body_type.py maps each one to its code:
@@ -525,6 +531,7 @@ class MercadoLibreScraper(BaseScraper):
         today = _recency.one_request_read(self.name, filters, window)
         fetched = 0
         pages = 0
+        dating_ends = time.monotonic() + DATE_FETCH_SECONDS
         try:
             while True:
                 if pages >= config.RECENT_ML_MAX_PAGES:
@@ -553,7 +560,8 @@ class MercadoLibreScraper(BaseScraper):
                         continue
                     if listing.published_at is None and listing.listing_id in _dates:
                         listing.published_at = _dates[listing.listing_id]
-                    elif listing.published_at is None and fetched >= config.RECENT_ML_MAX_DATE_FETCHES:
+                    elif listing.published_at is None and (fetched >= config.RECENT_ML_MAX_DATE_FETCHES
+                                                           or time.monotonic() >= dating_ends):
                         results.complete, results.reason = False, DATE_FETCH_LIMIT
                     elif listing.published_at is None:
                         fetched += 1
