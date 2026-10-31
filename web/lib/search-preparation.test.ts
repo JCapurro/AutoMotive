@@ -15,6 +15,8 @@ vi.mock("@/lib/auth", () => ({ requireUser: vi.fn().mockResolvedValue({ id: "use
 vi.mock("@/lib/config", () => ({ webConfig: vi.fn() }));
 vi.mock("@/components/app/free-result-limit", () => ({ FreeResultLimit: () => null }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }), notFound: () => { throw Error("not-found"); } }));
+// The low-results bot imports the searches' server actions, which are server-only.
+vi.mock("@/components/app/low-results-notice", () => ({ LowResultsNotice: () => null }));
 vi.mock("@/components/app/search-actions", () => ({ FrequencySelect: () => null, PauseButton: () => null }));
 vi.mock("@/components/app/sort-select", () => ({ SortSelect: () => null }));
 vi.mock("@/components/app/pro-cta", () => ({ ProBanner: () => null, VisibleResultsReport: () => null }));
