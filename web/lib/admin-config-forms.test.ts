@@ -17,3 +17,14 @@ it("shows the web's effective defaults for absent plans without adding untouched
   expect(onChange).not.toHaveBeenCalled();
   expect(value).toEqual({ enforced: false });
 });
+
+// PAR-01: plan_limits.<plan>.total_cost, a toggle per plan.
+it("toggles the total cost estimate per plan, off when the key is absent", () => {
+  const value = { enforced: false, free: { total_cost: true }, pass: { total_cost: true }, pro: { max_profiles: 20 } };
+  const html = renderToStaticMarkup(createElement(LimitsForm, { value, onChange: vi.fn() }));
+  const part = (from: string, to?: string) => html.slice(html.indexOf(from), to ? html.indexOf(to) : undefined);
+  expect(part(">Particular</legend>", ">Pro</legend>")).toMatch(/<input type="checkbox"[^>]*checked=""[^>]*\/><span>Costo total estimado \(PAR-01\)/);
+  expect(part(">Prueba gratis</legend>", ">Particular</legend>")).toMatch(/<input type="checkbox"[^>]*checked=""[^>]*\/><span>Costo total estimado \(PAR-01\)/);
+  const pro = part(">Pro</legend>");
+  expect(pro).toMatch(/<input type="checkbox"(?![^>]*checked)[^>]*\/><span>Costo total estimado \(PAR-01\)/);
+});

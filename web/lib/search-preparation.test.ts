@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({ profile: {} as Record<string, unknown>, results: [] as Record<string, unknown>[],
   collectionState: "done" as "done" | "loading" | "waiting" | "failed" | "unknown" }));
+// PAR-01: the cards' total cost line has its own tests (lib/cost-estimate.test.ts).
+vi.mock("@/lib/cost-estimate-data", () => ({ costLinesFor: async () => new Map() }));
 vi.mock("@/lib/search-collection-server", () => ({ loadSearchCollection: async (profile: { enabled: boolean }, _userId: string,
   sources: { id: string; name: string; enabled: boolean }[]) => sources.map((source) => ({
     ...source, collectionState: profile.enabled ? state.collectionState : "paused",

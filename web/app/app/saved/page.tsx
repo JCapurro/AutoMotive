@@ -6,6 +6,7 @@ import { LISTING_ROWS, ListingCard } from "@/components/app/listing-card";
 import { ListingStatusSelect } from "@/components/app/listing-status-select";
 import { requireUser } from "@/lib/auth";
 import { webConfig } from "@/lib/config";
+import { costLinesFor } from "@/lib/cost-estimate-data";
 import { FOLLOW_EMPTY, FOLLOW_FILTERS, FOLLOW_LABEL, type FollowFilter, type InteractionStatus, type Level } from "@/lib/copy";
 import { daysSince, dayMonth, money, pct } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
@@ -26,7 +27,7 @@ type Snapshot = { observed_at: string; price: number | null; currency: string | 
  * a compact status select.
  */
 export default async function SavedPage({ searchParams }: PageProps<"/app/saved">) {
-  await requireUser();
+  const user = await requireUser();
   const query = await searchParams;
   const filter: FollowFilter | null =
     typeof query.e === "string" && (FOLLOW_FILTERS as readonly string[]).includes(query.e) ? (query.e as FollowFilter) : null;
@@ -118,6 +119,12 @@ export default async function SavedPage({ searchParams }: PageProps<"/app/saved"
       bestMatch.set(m.listing_id, { score: m.score, level: m.level, profile: m.search_profiles?.name ?? null, profileId: m.search_profile_id });
     }
   }
+  // PAR-01: the best match's search, or the account's default place for a listing without one.
+  const costLines = await costLinesFor(
+    supabase,
+    user.id,
+    ids.map((id) => ({ listing_id: id, search_profile_id: bestMatch.get(id)?.profileId ?? null })),
+  );
 
   return (
     <div className="space-y-4">
@@ -142,6 +149,7 @@ export default async function SavedPage({ searchParams }: PageProps<"/app/saved"
                 profile_name: m?.profile ?? null,
                 note: i.note,
               }}
+              costLine={costLines.get(l.id)}
               footer={
                 <>
                   {/* Above the card's stretched link, so picking a status doesn't open the detail. */}

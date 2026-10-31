@@ -16,8 +16,10 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable, Mapping
 
 import db
+from db.repos import fx as fx_repo
 from db.repos import listings as listings_repo
 from db.repos import notifications as repo
+from intelligence import cost_estimator
 from intelligence.config import DEFAULT_COMPARABLES
 from intelligence.seller_questions import question_texts
 from notifications import dispatch
@@ -143,6 +145,32 @@ def payload(listing: Mapping[str, Any], match: Mapping[str, Any] | None, *, min_
     return out
 
 
+async def _cost_config() -> dict[str, Any] | None:
+    """PAR-01: app_config.cost_estimator, parsed (None without a valid as_of)."""
+    return cost_estimator.parse_config(await db.get_config("cost_estimator"))
+
+
+async def _latest_fx() -> dict[str, Any] | None:
+    async with db.connection() as cx:
+        return await fx_repo.latest_stored(cx)
+
+
+def total_cost_payload(listing: Mapping[str, Any], audience: Mapping[str, Any], cfg: Mapping[str, Any] | None,
+                       fx_latest: Mapping[str, Any] | None, now: datetime) -> dict[str, Any] | None:
+    """PAR-01: what an opportunity alert keeps of the total cost estimate, for
+    the search's own zones (origin plus extra_locations). The same rules as the
+    web's cards: cost_estimator.build_input on the listing row (partial
+    price, effective seller, the dollar of price_usd or the latest stored quote)."""
+    zones = cost_estimator.search_zones({"lat": audience.get("origin_lat"), "lon": audience.get("origin_lon"),
+                                         "label": audience.get("location_label"),
+                                         "extra_locations": audience.get("extra_locations")})
+    built = cost_estimator.build_input(listing, zones, fx_latest, cfg, now.astimezone(AR).date())
+    if built is None:
+        return None
+    est = cost_estimator.estimate(built["listing"], built["jurisdiction"], built["seller"], built["fx_latest"], cfg)
+    return cost_estimator.email_payload(est) if est else None
+
+
 async def _min_n() -> int:
     cfg = await db.get_config("comparables", {}) or {}
     return int(cfg.get("min_n", DEFAULT_COMPARABLES["min_n"]))
@@ -182,6 +210,13 @@ class Notifier:
         # Not for a price read from the description: its drops are of another number.
         opportunity_ids = list(dict.fromkeys(c.listing_id for c in candidates if _with_track(c, rows.get(c.listing_id))))
         tracks = await repo.price_tracks(opportunity_ids) if opportunity_ids else {}
+        # PAR-01: the total cost goes only in opportunities whose plan has it;
+        # the config and the quote are read once for the batch.
+        costed = [c for c in candidates if _opportunity(c) and (audiences.get(c.profile_id) or {}).get("total_cost")]
+        cost_cfg = await _cost_config() if costed else None
+        fx_latest = None
+        if cost_cfg and any((rows.get(c.listing_id) or {}).get("currency") == "USD" for c in costed):
+            fx_latest = await _latest_fx()
         min_n = await _min_n()
         events = []
         for c in candidates:
@@ -194,12 +229,14 @@ class Notifier:
             questions = question_texts(listing, ev.get("red_flags") or [], timing_belt=listing.get("timing_belt"),
                                        now=now or datetime.now(timezone.utc))
             track = price_track_payload(tracks.get(c.listing_id)) if _with_track(c, listing) else None
+            cost = (total_cost_payload(listing, a, cost_cfg, fx_latest, now or datetime.now(timezone.utc))
+                    if cost_cfg and _opportunity(c) and a.get("total_cost") else None)
             events.append(Event(
                 MATCH, c.listing_id, self._audience(a), level=ev["level"], score=ev["score"],
                 match_id=c.match_id, repost=c.repost, saved=bool(state.get("saved")),
                 status=state.get("status"),
                 payload=payload(listing, ev, min_n=min_n, profile_name=a["profile_name"],
-                                questions=questions or None, price_track=track)))
+                                questions=questions or None, price_track=track, total_cost=cost)))
         return await self._commit(events, now=now)
 
     async def on_listing_events(self, listing_events: Iterable[Any], *, now: datetime | None = None,

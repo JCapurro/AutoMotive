@@ -3,8 +3,8 @@ import "server-only";
 import { z } from "zod";
 
 import { requireAdmin } from "@/lib/admin";
-import { dashboardLlmSchema, dashboardSnapshotSchema, dashboardSourcesSchema, getDashboardPeriod,
-  type DashboardData, type DashboardSection } from "@/lib/admin-dashboard";
+import { costReviewState, type CostReviewState, dashboardLlmSchema, dashboardSnapshotSchema, dashboardSourcesSchema,
+  getDashboardPeriod, type DashboardData, type DashboardSection } from "@/lib/admin-dashboard";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type PageResult<T> = { data: T[] | null; error: unknown; count?: number | null };
@@ -75,5 +75,16 @@ export async function loadAdminDashboard(raw?: string | string[], now = new Date
       .gte("day", `${period.start.slice(0, 10)}T00:00:00Z`).lt("day", `${period.end.slice(0, 10)}T00:00:00Z`)
       .order("day", { ascending: false }).order("provider").order("kind").range(from, to)), dashboardLlmSchema, "los trabajos de IA"),
   ]);
-  return { period, metrics, sources, llm };
+  return { period, metrics, sources, llm, costReview: await costReview(admin, now) };
+}
+
+/** PAR-01: the cost estimator's review state; null when it cannot be read (the rest of the dashboard still loads). */
+async function costReview(admin: ReturnType<typeof createAdminClient>, now: Date): Promise<CostReviewState | null> {
+  try {
+    const { data, error } = await admin.from("app_config").select("value").eq("key", "cost_estimator").maybeSingle();
+    if (error) return null;
+    return costReviewState(data?.value ?? null, now);
+  } catch {
+    return null;
+  }
 }

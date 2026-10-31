@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { ageLine, imageUrls, km, money, pct, vehicle } from "./format";
+import { ageLine, ceilTo, floorTo, formatArsRange, formatRange, formatUsdRange, imageUrls, isoDayMonth, km, money, pct, thousands, vehicle } from "./format";
 
 const NOW = new Date("2026-09-28T12:00:00Z");
 
@@ -32,5 +32,33 @@ describe("format", () => {
       "https://a/1.jpg",
       "https://a/2.jpg",
     ]);
+  });
+});
+
+// PAR-01: the same outward rounding and thousands as worker/intelligence/cost_estimator.py.
+describe("cost ranges", () => {
+  it("rounds outward with the one-cent margin", () => {
+    expect(floorTo(321999.99999999994, 100)).toBe(322000);
+    expect(ceilTo(506000.00000000006, 100)).toBe(506000);
+    expect(floorTo(321999.98, 100)).toBe(321900);
+    expect(ceilTo(506000.02, 100)).toBe(506100);
+    expect(floorTo(21188950, 1000)).toBe(21188000);
+    expect(ceilTo(21517532.5, 1000)).toBe(21518000);
+  });
+
+  it("groups thousands by hand", () => {
+    expect([0, 950, 16290, 110619000].map(thousands)).toEqual(["0", "950", "16.290", "110.619.000"]);
+  });
+
+  it("prints ranges and collapses equal ends", () => {
+    expect(formatRange(16290, 16560, "USD")).toBe("USD 16.290 – 16.560");
+    expect(formatRange(20208000, 20208000, "ARS")).toBe("ARS 20.208.000");
+    expect(formatArsRange(21188950, 21517532.5)).toBe("ARS 21.188.000 – 21.518.000");
+    expect(formatUsdRange(21188950 / 1300, 21517532.5 / 1300)).toBe("USD 16.290 – 16.560");
+  });
+
+  it("reads an as_of as dd/mm without a time zone", () => {
+    expect(isoDayMonth("2026-10-30")).toBe("30/10");
+    expect(isoDayMonth("2026-01-05")).toBe("05/01");
   });
 });

@@ -93,3 +93,50 @@ export function imageUrls(images: unknown): string[] {
     .map((img) => (typeof img === "string" ? img : img && typeof img === "object" && "url" in img ? String(img.url) : null))
     .filter((url): url is string => Boolean(url) && /^https?:\/\//.test(url as string));
 }
+
+/**
+ * PAR-01: amounts shown as ranges, rounded outward so a range never shrinks.
+ * The same arithmetic as worker/intelligence/cost_estimator.py: floor/ceil
+ * with a one-cent margin (EPS), never Math.round, and thousands grouped by
+ * hand (no Intl), so both sides print the same string.
+ */
+export const ROUNDING_EPS = 0.01;
+
+export function floorTo(x: number, step: number): number {
+  return step * Math.floor((x + ROUNDING_EPS) / step);
+}
+
+export function ceilTo(x: number, step: number): number {
+  return step * Math.ceil((x - ROUNDING_EPS) / step);
+}
+
+/** 16290 -> "16.290" */
+export function thousands(n: number): string {
+  let digits = String(Math.trunc(n));
+  const groups: string[] = [];
+  while (digits.length > 3) {
+    groups.unshift(digits.slice(-3));
+    digits = digits.slice(0, -3);
+  }
+  return [digits, ...groups].join(".");
+}
+
+/** "USD 16.290 – 16.560", or one number when both ends are equal. */
+export function formatRange(min: number, max: number, currency: string): string {
+  return min === max ? `${currency} ${thousands(min)}` : `${currency} ${thousands(min)} – ${thousands(max)}`;
+}
+
+/** Totals in pesos: to $1.000, outward. */
+export function formatArsRange(min: number, max: number): string {
+  return formatRange(floorTo(min, 1000), ceilTo(max, 1000), "ARS");
+}
+
+/** Totals in dollars: to 10, outward. */
+export function formatUsdRange(min: number, max: number): string {
+  return formatRange(floorTo(min, 10), ceilTo(max, 10), "USD");
+}
+
+/** "2026-10-30" -> "30/10", without a time zone. */
+export function isoDayMonth(iso: string): string {
+  return `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+}

@@ -21,6 +21,7 @@ export function ListingCard({
   showProfile = false,
   footer,
   track,
+  costLine,
 }: {
   card: Pick<
     MatchCard,
@@ -53,6 +54,8 @@ export function ListingCard({
   footer?: React.ReactNode;
   /** PAR-03: the listing's drops since we first saw it (listing_price_tracks); a line only with a net drop of the price shown. */
   track?: PriceTrack | null;
+  /** PAR-01: the total cost estimate's header (lib/cost-estimate-data.ts costLinesFor), only with the plan's flag. */
+  costLine?: string | null;
 }) {
   const image = firstImage(card.images);
   const name = vehicle(card);
@@ -98,7 +101,14 @@ export function ListingCard({
         ) : null}
       </p>
 
-      <p className="flex min-w-0 flex-wrap gap-x-3.5 text-[13px] text-muted-foreground">
+      {costLine ? (
+        <p data-testid="cost-estimate-line" className="col-start-2 min-w-0 text-[13px] break-words text-muted-foreground">
+          {costLine}
+        </p>
+      ) : null}
+
+      {/* col-start-2: with a cost line this is the grid's fourth row, past the photo's row-span-3. */}
+      <p data-testid="card-meta" className="col-start-2 flex min-w-0 flex-wrap gap-x-3.5 text-[13px] text-muted-foreground">
         {mileage ? <span>{mileage}</span> : null}
         {isBodyType(card.body_type) ? <span>{BODY_TYPE[card.body_type]}</span> : null}
         {card.location_text ? (

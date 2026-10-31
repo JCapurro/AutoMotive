@@ -34,3 +34,18 @@ async def quote_for_today(cx: AsyncConnection) -> FxQuote:
             "ON CONFLICT (date, kind) DO NOTHING",
             (day, quote.kind, quote.rate, quote.source))
     return quote
+
+
+async def latest_stored(cx: AsyncConnection) -> dict | None:
+    """PAR-01: the latest stored quote, {rate, kind, date}: the most recent
+    blue row, else the most recent oficial one (never "date desc, blue
+    first", which lets today's oficial beat yesterday's blue). No network and
+    never the hardcoded fallback; the age limit (cost_estimator.fx.max_age_days)
+    is cost_estimator.build_input's."""
+    for kind in ("blue", "oficial"):
+        row = await (await cx.execute(
+            "SELECT rate, kind, date FROM fx_rates WHERE kind = %s ORDER BY date DESC LIMIT 1", (kind,))).fetchone()
+        if row and row["rate"] and float(row["rate"]) > 0:
+            return {"rate": float(row["rate"]), "kind": row["kind"], "date": row["date"].isoformat()}
+    return None
+

@@ -189,3 +189,18 @@ export async function trackPriceHistoryExpanded(listingId: number, drops: number
   const supabase = await createClient();
   await track(supabase, user.id, "price_history_expanded", { listing_id: listingId, drops, days });
 }
+
+/** PAR-01: opening the total cost breakdown (once per view). Props: the jurisdiction used and how many terms were missing. */
+export async function trackTotalCostExpanded(listingId: number, jurisdiction: string[] | null, missing: number) {
+  const user = await requireUser();
+  const parsed = z
+    .object({
+      listingId: z.number().int().positive(),
+      jurisdiction: z.array(z.enum(["caba", "ba", "rest"])).max(3).nullable(),
+      missing: z.number().int().min(0).max(4),
+    })
+    .safeParse({ listingId, jurisdiction, missing });
+  if (!parsed.success) return;
+  const supabase = await createClient();
+  await track(supabase, user.id, "total_cost_expanded", { listing_id: listingId, jurisdiction, missing });
+}

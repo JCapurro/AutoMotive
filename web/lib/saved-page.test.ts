@@ -7,6 +7,8 @@ const state = vi.hoisted(() => ({
   interactions: [] as Record<string, unknown>[],
   listings: [] as Record<string, unknown>[],
 }));
+// PAR-01: the cards' total cost line has its own tests (lib/cost-estimate.test.ts).
+vi.mock("@/lib/cost-estimate-data", () => ({ costLinesFor: async () => new Map() }));
 vi.mock("@/lib/auth", () => ({ requireUser: async () => ({ id: "account" }) }));
 vi.mock("@/lib/config", () => ({ webConfig: async () => ({ watchlistStaleDays: 30 }) }));
 vi.mock("@/app/app/listings/actions", () => ({ setStatus: vi.fn(), setSaved: vi.fn(), recordPurchase: vi.fn(), setNote: vi.fn() }));

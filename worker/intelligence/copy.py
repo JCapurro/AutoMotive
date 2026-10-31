@@ -185,3 +185,20 @@ QUESTION = {
     "km_confirm": "¿Cuántos km tiene? La publicación y la descripción no coinciden.",
     "trim": "¿Qué versión es?",
 }
+
+# ---------------------------------------------------------------------------
+# PAR-01: the total cost estimate (intelligence/cost_estimator.py returns
+# codes; these are the words). The same text as web/lib/copy.ts COST_ESTIMATE.
+# {suffix} is "" or SUFFIX; {usd} and {ars} are "USD 16.290 – 16.560".
+# ---------------------------------------------------------------------------
+
+TOTAL_COST = {
+    "line": "Costo total estimado{suffix}: {usd} ({ars})",
+    "line_no_usd": "Costo total estimado{suffix}: {ars} (sin dólar del día)",
+    "line_no_fx": "Costo total estimado: sin dólar del día, no se puede estimar",
+    "suffix": " (sin {items})",
+    "last": " ni ",
+    "email": "{line}. Parámetros al {date}.",
+    "email_no_fx": "{line}.",
+    "names": {"arancel": "arancel", "sellos": "sellos", "formularios": "formularios", "patente": "patente"},
+}

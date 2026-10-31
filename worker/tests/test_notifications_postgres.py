@@ -530,3 +530,66 @@ class PriceTrackTests(NotificationsCase):
         [digest] = [r for r in await self.notifications("telegram") if r["kind"] == "digest"]
         [item] = digest["payload"]["items"]
         self.assertEqual((item["price_track"]["drops"], item["price_track"]["cum_usd"]), (2, 1_500.0))
+
+
+class TotalCostTests(NotificationsCase):
+    """PAR-01: the audience brings the plan's total_cost flag and the search's
+    zones; fx.latest_stored reads the stored quote (blue first) without the
+    network; an opportunity of a Particular user carries payload['total_cost']."""
+
+    async def plan(self, plan: str) -> None:
+        async with db.connection() as cx:
+            await cx.execute("UPDATE profiles SET plan = %s, plan_expires_at = now() + interval '20 days' WHERE id = %s",
+                             (plan, self.user))
+            await cx.execute("UPDATE search_profiles SET origin_lat = -34.5875, origin_lon = -58.42, radius_km = 20, "
+                             "  filters = filters || %s WHERE id = %s",
+                             (Jsonb({"location_label": "Palermo, CABA",
+                                     "extra_locations": [{"label": "Córdoba", "lat": -31.4201, "lon": -64.1888,
+                                                          "radius_km": 40}]}), self.profile))
+
+    async def test_audiences_carry_the_flag_and_the_zones(self):
+        await self.plan("pass")
+        a = (await repo.profile_audiences([self.profile]))[self.profile]
+        self.assertIs(a["total_cost"], True)
+        self.assertEqual((a["origin_lat"], a["origin_lon"], a["location_label"]), (-34.5875, -58.42, "Palermo, CABA"))
+        self.assertEqual(a["extra_locations"], [{"label": "Córdoba", "lat": -31.4201, "lon": -64.1888, "radius_km": 40}])
+        await self.plan("pro")
+        self.assertIs((await repo.profile_audiences([self.profile]))[self.profile]["total_cost"], False)
+        # The free plan has it during the pilot; the toggle takes it away without a deploy.
+        async with db.connection() as cx:
+            await cx.execute("UPDATE profiles SET plan = 'free', plan_expires_at = NULL WHERE id = %s", (self.user,))
+        self.assertIs((await repo.profile_audiences([self.profile]))[self.profile]["total_cost"], True)
+        [limits] = await self.rows("SELECT value FROM app_config WHERE key = 'plan_limits'")
+        await self.set_config("plan_limits", {**limits["value"], "free": {**limits["value"]["free"], "total_cost": False}})
+        self.assertIs((await repo.profile_audiences([self.profile]))[self.profile]["total_cost"], False)
+
+    async def test_latest_stored_prefers_blue_without_the_network(self):
+        from db.repos import fx as fx_repo
+        async with db.connection() as cx:
+            self.assertIsNone(await fx_repo.latest_stored(cx))
+            await cx.execute("INSERT INTO fx_rates (date, kind, rate, source) VALUES "
+                             " (current_date - 1, 'blue', 1300, 't'), (current_date, 'oficial', 1000, 't'), "
+                             " (current_date - 5, 'blue', 1200, 't')")
+            got = await fx_repo.latest_stored(cx)
+            self.assertEqual((got["rate"], got["kind"]), (1300.0, "blue"))
+            self.assertIsInstance(got["date"], str)
+            await cx.execute("DELETE FROM fx_rates WHERE kind = 'blue'")
+            self.assertEqual((await fx_repo.latest_stored(cx))["kind"], "oficial")
+
+    async def test_an_opportunity_of_a_particular_user_carries_the_estimate(self):
+        await self.plan("pass")
+        # Golden case 28 (CABA and the rest of the country): ARS 20.000.000, its price_usd at 1.300.
+        deal = await self.listing(price=20_000_000, currency="ARS", price_usd=15_384.62, body_type="sedan",
+                                  seller_type="private")
+        other = await self.listing(price=20_000_000, currency="ARS", price_usd=15_384.62, body_type="sedan")
+        await self.matched(await self.match(self.profile, deal, "high", 90),
+                           await self.match(self.profile, other, "good", 75))
+        rows = {r["listing_id"]: r for r in await self.notifications("email")}
+        self.assertEqual(rows[deal]["payload"]["total_cost"],
+                         {"ars_min": 20527000, "ars_max": 21518000, "usd_min": 15790, "usd_max": 16560, "missing": [],
+                          "jurisdiction": ["caba", "rest"], "as_of": "2026-10-30"})
+        self.assertNotIn("total_cost", rows[other]["payload"])
+        await self.notifier.deliver()
+        [mail] = [m for m in self.emails if m["subject"].startswith("🔥")]
+        self.assertIn("Costo total estimado: USD 15.790 – 16.560 (ARS 20.527.000 – 21.518.000). Parámetros al 30/10.",
+                      mail["text"].splitlines())

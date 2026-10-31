@@ -114,3 +114,21 @@ describe("privileged dashboard loader", () => {
     expect(result.llm).toEqual({ data: [], error: null });
   });
 });
+
+// PAR-01: the cost estimator's review state, read with the service client.
+describe("cost estimator review", () => {
+  it("reads app_config.cost_estimator and survives a failed read", async () => {
+    mocks.from.mockImplementation((table: string) => {
+      const query = { select: () => query, order: () => query, gte: () => query, lt: () => query, eq: () => query,
+        range: async () => ({ data: [], error: null }),
+        maybeSingle: async () => (table === "app_config"
+          ? { data: { value: { as_of: "2026-06-01", review: { max_age_days: 120, months: [12, 1], source: "x", as_of: "2026-10-30" } } }, error: null }
+          : { data: null, error: null }) };
+      return query;
+    });
+    const data = await loadAdminDashboard("7", new Date("2026-10-27T12:00:00Z"));
+    expect(data.costReview).toEqual({ status: "stale", asOf: "2026-06-01", maxAgeDays: 120, months: [12, 1] });
+    mocks.from.mockImplementation(() => { throw new Error("down"); });
+    expect((await loadAdminDashboard("7", new Date("2026-10-27T12:00:00Z"))).costReview).toBeNull();
+  });
+});
