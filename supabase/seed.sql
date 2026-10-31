@@ -68,7 +68,7 @@ insert into public.app_config (key, value) values
   ('pro_offer',                     '{"pro_monthly": {"price_usd": 15}, "pass_30": {"price_usd": 12}, "pass_90": {"price_usd": 25}}'),
   ('retention',                     '{"listing_days": 180}'),
   ('body_type_targets',             '{"sources": ["mercadolibre", "kavak"], "interval_seconds": 1800}'),
-  -- PAR-01: the same row as migration 20261126120000_par01_cost_estimator.
+  -- PAR-01: the same row as migration 20261127120000_par01_cost_estimator.
   ('cost_estimator', '{
      "as_of": "2026-10-30",
      "status": "aprobado",

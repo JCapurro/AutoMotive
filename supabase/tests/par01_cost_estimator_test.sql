@@ -1,5 +1,5 @@
 -- PAR-01: app_config.cost_estimator and plan_limits.{pass,free}.total_cost
--- (migration 20261126120000_par01_cost_estimator). The re-run below repeats
+-- (migration 20261127120000_par01_cost_estimator). The re-run below repeats
 -- the migration's statements to check they are idempotent.
 begin;
 select no_plan();

@@ -44,9 +44,9 @@ Antes de empezar se anota la línea base de pgTAP y de `-m db`. Criterio: nada n
 
 ## Task 1: pgTAP y migración
 
-Files: `supabase/tests/par01_cost_estimator_test.sql`, `supabase/migrations/20261126120000_par01_cost_estimator.sql`, `supabase/seed.sql`.
+Files: `supabase/tests/par01_cost_estimator_test.sql`, `supabase/migrations/20261127120000_par01_cost_estimator.sql`, `supabase/seed.sql`.
 
-- [x] Releer `max(version)`. Usar `20261126120000` (F-02 ocupó 20261123–25) si sigue por encima de lo que sumaron F-02, PRO-01 y PRO-02; si no, renombrar.
+- [x] Releer `max(version)`. Usar `20261127120000` (F-02 ocupó 20261123–25 y el bot de pocos resultados 20261126) si sigue por encima de lo que sumaron F-02, PRO-01 y PRO-02; si no, renombrar.
 - [x] Escribir primero el test que falle (formato de `par02_risk_config_test.sql`):
   - existe la fila `cost_estimator`, con `as_of` = `2026-10-30` y `status` = `aprobado`;
   - cada bloque de la lista del diseño tiene `source` no vacío y `as_of` con formato de fecha;

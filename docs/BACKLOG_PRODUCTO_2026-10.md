@@ -105,7 +105,7 @@ Criterios de aceptación:
 
 ### PAR-01 · Costo total estimado
 
-**Estado al 30/10:** implementado en la rama `claude/par01-costo-total` ([diseño](superpowers/specs/2026-10-30-par01-costo-total-design.md), [plan](superpowers/plans/2026-10-30-par01-costo-total.md)), sin aplicar en producción. Por decisión de Juan del 30/10, la migración `20261126120000_par01_cost_estimator` **siembra los valores aprobados** (con fuente y fecha por bloque) en lugar de dejarlos en null. El orden «por costo total» queda fuera de v1 y `results_sorted_total_cost` queda reservado (no se emite). El aviso fijo de 8–10 % se borró para todos.
+**Estado al 30/10:** implementado en la rama `claude/par01-costo-total` ([diseño](superpowers/specs/2026-10-30-par01-costo-total-design.md), [plan](superpowers/plans/2026-10-30-par01-costo-total.md)), sin aplicar en producción. Por decisión de Juan del 30/10, la migración `20261127120000_par01_cost_estimator` **siembra los valores aprobados** (con fuente y fecha por bloque) en lugar de dejarlos en null. El orden «por costo total» queda fuera de v1 y `results_sorted_total_cost` queda reservado (no se emite). El aviso fijo de 8–10 % se borró para todos.
 
 Dolor: el precio publicado no es lo que paga. Transferencia, patente según jurisdicción y dólar cambian el orden entre dos autos parecidos.
 
