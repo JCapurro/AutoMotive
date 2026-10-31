@@ -6,16 +6,16 @@
  * The server action counts each variant (relaxSuggestions); the form applies
  * the chosen change to its fields.
  */
-import { BODY_TYPE, bodyTypeCodes } from "@/lib/copy";
+import { BODY_TYPE, SELLER_STRICT, bodyTypeCodes } from "@/lib/copy";
 import { money, number } from "@/lib/format";
 import { type SearchValues, isModelLess, selectedTrims } from "@/lib/search-form";
 
 /** The fields a suggestion changes, as the form holds them (location null = toda la Argentina). */
 export type RelaxChange = Partial<
-  Pick<SearchValues, "trim_strict" | "year_min" | "year_max" | "price_max" | "km_max" | "transmission" | "fuel" | "body_types" | "location">
+  Pick<SearchValues, "trim_strict" | "seller_strict" | "year_min" | "year_max" | "price_max" | "km_max" | "transmission" | "fuel" | "body_types" | "location">
 >;
 
-export type RelaxKey = "trims" | "years" | "price" | "km" | "location" | "transmission" | "fuel" | "body_types";
+export type RelaxKey = "trims" | "years" | "price" | "km" | "location" | "transmission" | "fuel" | "body_types" | "seller";
 
 export type Relaxation = { key: RelaxKey; label: string; change: RelaxChange };
 export type RelaxSuggestion = Relaxation & { count: number };
@@ -73,6 +73,8 @@ export function relaxVariants(v: SearchValues, thisYear = new Date().getFullYear
   if (v.location) out.push({ key: "location", label: "Toda la Argentina", change: { location: null } });
   if (v.transmission) out.push({ key: "transmission", label: "Manual o automática", change: { transmission: "" } });
   if (v.fuel) out.push({ key: "fuel", label: "Cualquier combustible", change: { fuel: "" } });
+  // PRO-01: the strict seller filter (preview_search applies it for Pro); the type stays as the preference.
+  if (v.seller_strict && v.seller_type) out.push({ key: "seller", label: SELLER_STRICT.relax, change: { seller_strict: false } });
   const bodyTypes = bodyTypeCodes(v.body_types);
   if (bodyTypes.length) {
     const label = bodyTypes.length === 1 ? `No solo ${BODY_TYPE[bodyTypes[0]]}` : "Cualquier carrocería";

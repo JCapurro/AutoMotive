@@ -65,6 +65,8 @@ REASON = {
     "trim_other": "{trim}, se prefiere {wanted}",
     "seller_ok": "vendedor {kind}",
     "seller_other": "vendedor {kind}, se prefiere {wanted}",
+    # PRO-01: the strict seller filter (Pro).
+    "seller_only_other": "vendedor {kind}, se busca solo {wanted}",
     # F-02: why a seller is a «posible agencia» (intelligence/seller.py).
     "seller_inferred": "publica {n} autos",
     "color_ok": "color {color}",
@@ -76,6 +78,8 @@ BODY_TYPE = dict(body_type.LABELS)
 SELLER = {"private": "particular", "dealer": "concesionaria"}
 # F-02: a seller with min_listings or more cars in the same source (dealer_inferred).
 SELLER_INFERRED = "posible agencia"
+# PRO-01: what a strict seller filter keeps («se busca solo particulares»).
+SELLER_ONLY = {"private": "particulares", "dealer": "agencias"}
 UNKNOWN_BADGE = "❔ no informado"
 
 # ---------------------------------------------------------------------------
@@ -106,7 +110,7 @@ EXPLAIN = {
 # Hard-filter names in "transmisión no informada".
 FILTER_NAMES = {"model": "modelo", "year": "año", "price": "precio", "km": "km",
                 "transmission": "transmisión", "fuel": "combustible", "body_type": "carrocería",
-                "location": "ubicación", "trim": "versión"}
+                "location": "ubicación", "trim": "versión", "seller": "vendedor"}
 
 LEVEL_LABEL = {"high": "🔥 Alta oportunidad", "good": "🟢 Buena coincidencia",
                "match": "🟡 Coincidencia", "low": "⚪ Baja prioridad"}

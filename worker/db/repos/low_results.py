@@ -6,6 +6,7 @@ from typing import Any
 from psycopg.types.json import Jsonb
 
 from db.pool import connection
+from db.repos.profiles import SELLER_FILTER
 
 # What a search shows today, whatever the level: matches of active listings
 # the user didn't discard (search_result_counts' «Todos» minus the gone ones).
@@ -23,7 +24,7 @@ async def candidates(*, max_results: int, min_age_hours: float) -> list[dict[str
         return await (await cx.execute(
             "SELECT * FROM ("
             " SELECT sp.id, sp.user_id::text AS user_id, sp.name, sp.filters, sp.preferences, "
-            "        sp.origin_lat, sp.origin_lon, sp.radius_km, sp.channels, "
+            "        sp.origin_lat, sp.origin_lon, sp.radius_km, sp.channels, " + SELLER_FILTER + ", "
             "        p.telegram_chat_id, p.email, p.email_unsubscribe_token::text AS unsubscribe_token, "
             "        " + _RESULTS + " AS result_count, "
             "        d.fingerprint, d.created_at AS diagnosed_at, d.notified_fingerprint "

@@ -23,10 +23,21 @@ from db.pool import connection
 from db.repos.catalog import resolve_make_model
 
 
+# PRO-01: whether the strict seller filter (filters.seller_types) applies,
+# plan_feature('seller_filter'). It is asked only of the searches that have the
+# key: plan_feature calls plan_limits_for, which counts the user's searches,
+# and one call per row is the pattern of the 2026-10-30 outage (see
+# LIVE_SEARCHES). Without the flag matching reads the stored type as a soft
+# preference (intelligence/matching.py); a downgrade or a write by API is
+# covered here, on every read.
+SELLER_FILTER = ("CASE WHEN sp.filters ? 'seller_types' "
+                 "THEN public.plan_feature(sp.user_id, 'seller_filter') ELSE false END AS seller_filter")
+
 _SELECT = """
 SELECT sp.id, sp.name, sp.filters, sp.preferences, sp.origin_lat, sp.origin_lon,
        sp.radius_km, sp.enabled, sp.created_at, sp.bootstrapped_at, sp.rematch_requested_at,
-       sp.notify_min_level, p.telegram_user_id, p.telegram_chat_id
+       sp.notify_min_level, p.telegram_user_id, p.telegram_chat_id,
+       """ + SELLER_FILTER + """
   FROM search_profiles sp
   JOIN profiles p ON p.id = sp.user_id
 """
@@ -72,6 +83,7 @@ def _to_alert(r: dict) -> dict[str, Any]:
             "origin_lon": r["origin_lon"],
             "radius_km": r["radius_km"],
             "notify_min_level": r["notify_min_level"],
+            "seller_filter": bool(r.get("seller_filter")),
         },
     }
 

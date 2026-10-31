@@ -291,6 +291,41 @@ def _source(listing, f) -> Reason | None:
     return Reason(FAIL, copy.REASON["source_other"].format(source=listing.get("source")))
 
 
+# PRO-01: filters.seller_types, the strict seller filter (Pro). A
+# «posible agencia» counts as a dealer (intelligence/seller.py, F-02).
+SELLER_TYPES = ("private", "dealer")
+
+
+def seller_types(f: Mapping[str, Any]) -> list[str]:
+    """The valid values of filters.seller_types; anything else (a string, an
+    unknown type, a write by API) is none. search_filters_problem rejects it too."""
+    wanted = f.get("seller_types")
+    if not isinstance(wanted, list):
+        return []
+    return [t for t in wanted if isinstance(t, str) and t in SELLER_TYPES]
+
+
+def strict_seller(profile: Mapping[str, Any]) -> bool:
+    """The hard seller check runs only for a plan with plan_feature('seller_filter'):
+    db/repos/profiles.py reads it into profile["seller_filter"]. Without it the
+    stored type is a soft preference (_preferences)."""
+    return bool(profile.get("seller_filter")) and bool(seller_types(profile.get("filters") or {}))
+
+
+def _seller(listing, profile) -> Reason | None:
+    if not strict_seller(profile):
+        return None
+    wanted = seller_types(profile.get("filters") or {})
+    have = effective_seller(listing)
+    if not have:
+        return Reason(UNKNOWN, copy.NOT_INFORMED)
+    kind = seller_kind(listing)
+    if have in wanted:
+        return Reason(OK, copy.REASON["seller_ok"].format(kind=kind))
+    names = " o ".join(copy.SELLER_ONLY.get(t, t) for t in wanted)
+    return Reason(FAIL, copy.REASON["seller_only_other"].format(kind=kind, wanted=names))
+
+
 def trim_matches(trim: str | None, wanted: str) -> bool:
     """"1.6 Titanium" is a Titanium: every word of the wanted trim is in it."""
     have = set(normalize_text(trim).replace("!", "").split())
@@ -346,7 +381,11 @@ def _preferences(listing, profile, fx_rate) -> dict[str, Reason]:
                                _soft(OK if value <= target else FAIL,
                                      f"{copy.money(value, currency)} / {copy.money(target, currency)}"))
 
-    if seller := p.get("seller_type"):
+    # PRO-01: with the hard check active the soft one is left out (no double
+    # count); without the plan feature the stored type is the soft preference.
+    stored = seller_types(profile.get("filters") or {})
+    seller = None if strict_seller(profile) else (p.get("seller_type") or (stored[0] if stored else None))
+    if seller:
         # F-02: a «posible agencia» counts as a dealer (intelligence/seller.py).
         have = effective_seller(listing)
         kind, want = seller_kind(listing), copy.SELLER.get(seller, seller)
@@ -385,6 +424,7 @@ def evaluate(listing: Mapping[str, Any], profile: Mapping[str, Any], *,
         "body_type": _body_type(listing, f),
         "location": _location(listing, profile),
         "source": _source(listing, f),
+        "seller": _seller(listing, profile),
         "trim": _trim(listing, profile),
     }
     result = MatchResult({k: r for k, r in checks.items() if r is not None})

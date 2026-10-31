@@ -1,8 +1,9 @@
-import { Banknote, CalendarDays, CarFront, Check, ChevronDown, Gauge, Loader2, MapPin, Settings2, type LucideIcon } from "lucide-react";
+import { Banknote, CalendarDays, CarFront, Check, ChevronDown, Gauge, Loader2, MapPin, Settings2, Store, type LucideIcon } from "lucide-react";
 
-import { FUEL, SELLER, TRANSMISSION, bodyTypesText } from "@/lib/copy";
+import { FUEL, SELLER, SELLER_STRICT, TRANSMISSION, bodyTypesText } from "@/lib/copy";
 import { number } from "@/lib/format";
 import type { SearchSource } from "@/lib/search-collection";
+import { storedSellerTypes } from "@/lib/search-form";
 import type { Filters, Preferences } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -14,6 +15,8 @@ type Props = {
   radiusKm: number | null;
   hasLocation: boolean;
   sources: SearchSource[] | null;
+  /** The plan applies the strict seller filter (Pro, PRO-01); without it a stored one is a preference. */
+  sellerFilter?: boolean;
 };
 
 function range(min: number | undefined, max: number | undefined, format: (value: number) => string) {
@@ -28,7 +31,7 @@ function currency(amount: number, explicit?: string) {
   return explicit || (amount >= 1_000_000 ? "ARS" : "USD");
 }
 
-export function SearchCriteriaSummary({ name, filters: f, preferences: p, radiusKm, hasLocation, sources }: Props) {
+export function SearchCriteriaSummary({ name, filters: f, preferences: p, radiusKm, hasLocation, sources, sellerFilter = false }: Props) {
   const main: Fact[] = [];
   const extra: Fact[] = [];
   const vehicle = [f.make, f.model].filter(Boolean).join(" ");
@@ -56,6 +59,13 @@ export function SearchCriteriaSummary({ name, filters: f, preferences: p, radius
       ...(f.extra_locations ?? []).map((z) => `${z.label} · ${number(z.radius_km)} km`)];
     main.push({ label: zones.length > 1 ? "Zonas" : "Zona", value: zones.join(" / "), icon: MapPin });
   }
+  // PRO-01: the strict seller filter is a main fact while the grid has room (6); a downgraded one says it's a preference.
+  const [strictSeller] = storedSellerTypes(f);
+  if (strictSeller) {
+    const fact = { label: "Vendedor", value: sellerFilter ? SELLER_STRICT.summary[strictSeller] : SELLER_STRICT.downgraded[strictSeller], icon: Store };
+    if (main.length < 6) main.push(fact);
+    else extra.push(fact);
+  }
 
   if (f.fuel) extra.push({ label: "Combustible", value: FUEL[f.fuel] ?? f.fuel });
   if (vehicle && bodyTypes) extra.push({ label: "Carrocería", value: bodyTypes });
@@ -63,7 +73,7 @@ export function SearchCriteriaSummary({ name, filters: f, preferences: p, radius
   if (strictTrims.length) extra.push({ label: "Versión", value: strictTrims.join(", ") });
   const preferredTrims = [...new Set([...(strictTrims.length ? [] : f.trims ?? []), ...(p.preferred_trims ?? [])])];
   if (preferredTrims.length) extra.push({ label: "Versión preferida", value: preferredTrims.join(", ") });
-  if (p.seller_type) extra.push({ label: "Vendedor preferido", value: SELLER[p.seller_type] ?? p.seller_type });
+  if (p.seller_type && !strictSeller) extra.push({ label: "Vendedor preferido", value: SELLER[p.seller_type] ?? p.seller_type });
   if (p.colors?.length) extra.push({ label: "Colores preferidos", value: p.colors.join(", ") });
   if (p.km_target != null) extra.push({ label: "Kilometraje preferido", value: `${number(p.km_target)} km` });
   if (p.price_target != null) {

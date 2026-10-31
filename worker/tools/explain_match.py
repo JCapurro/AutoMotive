@@ -61,7 +61,9 @@ def explain(listing: dict, profile: dict, scorer: Scorer) -> dict[str, Any]:
                                                 "model", "trim", "year", "price", "currency",
                                                 "price_usd", "mileage_km", "transmission", "body_type")},
         "profile": {"id": profile["id"], "filters": profile["filters"],
-                    "preferences": profile["preferences"]},
+                    "preferences": profile["preferences"],
+                    # PRO-01: whether filters.seller_types is a hard filter (the plan's).
+                    "seller_filter": bool(profile.get("seller_filter"))},
         "is_match": result.is_match and not score.excluded,
         "failed": result.failed,
         "excluded": score.excluded,

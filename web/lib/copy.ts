@@ -118,6 +118,26 @@ export const SELLER: Record<string, string> = { private: "Particular", dealer: "
 export const SELLER_INFERRED = "Posible agencia";
 /** F-02: under the search form's «Vendedor» when it prefers a dealer. */
 export const SELLER_FORM_HINT = "Incluye posibles agencias.";
+/**
+ * PRO-01: the strict seller filter (filters.seller_types, Pro). The options
+ * Pro sees, the check, its hint, the summary row and what a plan without it
+ * reads (the stored type works as the preference there).
+ */
+export const SELLER_STRICT = {
+  option: { private: "Particulares", dealer: "Agencias (incluye posibles agencias)" },
+  check: "Solo este tipo de vendedor",
+  hint: "Descartamos los otros. Si la publicación no dice quién vende, el aviso pasa con menos puntaje.",
+  summary: { private: "Solo particulares", dealer: "Solo agencias (incluye posibles agencias)" },
+  proOnly: "Filtro estricto: solo Pro. En tu plan se usa como preferencia.",
+  remove: "Quitar filtro estricto",
+  downgraded: { private: "Particulares (preferido; filtro estricto solo Pro)", dealer: "Agencias (preferido; filtro estricto solo Pro)" },
+  assisted: {
+    private: "Solo particulares (filtro estricto). Podés cambiarlo editando la búsqueda.",
+    dealer: "Solo agencias, incluye posibles agencias (filtro estricto). Podés cambiarlo editando la búsqueda.",
+  },
+  relax: "Cualquier vendedor",
+  required: "Elegí el tipo de vendedor.",
+} as const;
 export const FUEL: Record<string, string> = {
   nafta: "Nafta",
   diesel: "Diésel",
@@ -173,6 +193,7 @@ export const REASON_OK: Record<string, string> = {
   location: "Zona compatible",
   source: "Fuente elegida",
   trim: "Versión buscada",
+  seller: "Tipo de vendedor buscado",
   km_target: "Km por debajo del objetivo",
   price_target: "Precio por debajo del objetivo",
   seller_type: "Tipo de vendedor preferido",
@@ -190,6 +211,7 @@ export const REASON_NAME: Record<string, string> = {
   location: "Ubicación",
   source: "Fuente",
   trim: "Versión",
+  seller: "Vendedor",
   km_target: "Km objetivo",
   price_target: "Precio objetivo",
   seller_type: "Vendedor",
