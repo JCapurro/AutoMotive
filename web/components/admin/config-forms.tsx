@@ -54,6 +54,8 @@ export function LimitsForm({ value, onChange }: FormProps) {
         <Toggle label="Umbral de oportunidad por búsqueda" checked={caps.thresholdAlerts} inherited={!("threshold_alerts" in current)} onChange={(checked) => onChange(put(raw, [tier, "threshold_alerts"], checked))} />
         <Toggle label="Buscar por carrocería sin modelo" checked={caps.modelLessSearch} inherited={!("model_less_search" in current)} onChange={(checked) => onChange(put(raw, [tier, "model_less_search"], checked))} />
         <Toggle label="Costo total estimado (PAR-01)" checked={current.total_cost === true} inherited={!("total_cost" in current)} onChange={(checked) => onChange(put(raw, [tier, "total_cost"], checked))} />
+        <Toggle label="Filtro estricto de vendedor (PRO-01)" checked={current.seller_filter === true} inherited={!("seller_filter" in current)} onChange={(checked) => onChange(put(raw, [tier, "seller_filter"], checked))} />
+        <Toggle label="Mensaje listo en el email de oportunidad (PRO-01)" checked={current.contact_email === true} inherited={!("contact_email" in current)} onChange={(checked) => onChange(put(raw, [tier, "contact_email"], checked))} />
       </fieldset>;
     })}</div>
     <p className="text-xs text-muted-foreground">La web usa los cambios en la próxima lectura y el worker al renovar su caché (aproximadamente un minuto). No elimina búsquedas existentes. Los avisos que superan el tope diario van al resumen; el umbral de oportunidad puede exceptuar ese tope.</p>

@@ -83,3 +83,14 @@ describe("bestSuggestions", () => {
     expect(bestSuggestions([s("trims", 3), s("years", 2), s("price", 1), s("km", 9)])).toHaveLength(3);
   });
 });
+
+describe("PRO-01: the strict seller filter", () => {
+  it("offers «Cualquier vendedor» only for a strict seller filter", () => {
+    const strict = relaxVariants(search({ make: "Ford", model: "Fiesta", seller_type: "private", seller_strict: true }), 2026);
+    expect(strict).toEqual([{ key: "seller", label: "Cualquier vendedor", change: { seller_strict: false } }]);
+    expect(keys({ make: "Ford", model: "Fiesta", seller_type: "private" })).toEqual([]);
+    // Applied, the type stays as the preference.
+    const applied = applyRelax(search({ make: "Ford", model: "Fiesta", seller_type: "private", seller_strict: true }), strict[0].change);
+    expect([applied.seller_type, applied.seller_strict]).toEqual(["private", false]);
+  });
+});

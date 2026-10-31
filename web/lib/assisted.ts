@@ -9,7 +9,7 @@ import { z } from "zod";
 
 import { cityById, cityFromText, provinceCapital } from "@/lib/argentina-locations";
 
-import { bodyTypeCodes, bodyTypesText } from "@/lib/copy";
+import { SELLER_STRICT, bodyTypeCodes, bodyTypesText } from "@/lib/copy";
 import { AMBA, PLACES, type Place } from "@/lib/locations";
 import { inWords } from "@/lib/pro";
 import { type SearchValues, isModelLess } from "@/lib/search-form";
@@ -188,9 +188,14 @@ export function draftToValues(
   base: SearchValues,
   modelLessSearch = true,
   maxLocations: number | null = null,
+  sellerFilter = false,
 ): { values: SearchValues; notes: string[] } {
   const v = draft.values;
   let notes = [...draft.notes];
+  // PRO-01 (asumido, a confirmar por Juan): for Pro «particular» / «sin
+  // agencias» is the strict filter, said in a note since the autosave doesn't ask.
+  const sellerStrict = sellerFilter && v.seller_type !== "";
+  if (sellerStrict) notes = [...notes, SELLER_STRICT.assisted[v.seller_type as "private" | "dealer"]];
   if (!modelLessSearch && !v.make.trim() && !v.model.trim() && bodyTypeCodes(v.body_types).length) {
     notes = [...notes.filter((n) => !n.includes("sin elegir modelo")), MODEL_LESS_DRAFT_NOTE];
   }
@@ -246,6 +251,7 @@ export function draftToValues(
       km_target: v.km_target,
       price_target: v.price_target,
       seller_type: v.seller_type,
+      seller_strict: sellerStrict,
     },
     notes,
   };

@@ -297,12 +297,13 @@ async def mark_detail_checked(listing_ids: Iterable[int]) -> None:
 
 async def rows_for_scoring(cx: AsyncConnection, ids: Iterable[int]) -> dict[int, dict[str, Any]]:
     """Listings by id as intelligence/ reads them, with the catalog's
-    timing_belt for their model (red flag no_timing_belt, sección 6.5)."""
+    timing_belt for their model (red flag no_timing_belt, sección 6.5) and
+    its spelling of the model (catalog_model, PRO-01's ready-to-send message)."""
     ids = list(dict.fromkeys(ids))
     if not ids:
         return {}
     rows = await (await cx.execute(
-        "SELECT l.*, vc.timing_belt FROM listings l "
+        "SELECT l.*, vc.timing_belt, vc.model AS catalog_model FROM listings l "
         "  LEFT JOIN vehicle_catalog vc ON lower(vc.make) = lower(l.make) "
         "        AND lower(vc.model) = lower(l.model) AND vc.trim IS NULL "
         " WHERE l.id = ANY(%s)", (ids,))).fetchall()

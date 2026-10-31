@@ -54,7 +54,15 @@ export type Filters = {
   location_label?: string;
   /** Places added to the search's own (origin_*, radius_km): a listing in any of them qualifies. */
   extra_locations?: SearchPlace[];
+  /**
+   * PRO-01: the strict seller filter, one type. A hard filter only with
+   * plan_feature('seller_filter') (Pro); otherwise the worker reads it as the
+   * soft seller preference. ["dealer"] includes «posibles agencias».
+   */
+  seller_types?: SellerType[];
 };
+
+export type SellerType = "private" | "dealer";
 
 /** A place a search looks around: the center and how far, in km. */
 export type SearchPlace = { label: string; lat: number; lon: number; radius_km: number };

@@ -94,7 +94,7 @@ async def mark_seen(alert_id: int, items: Iterable[dict], *, backfill: bool = Fa
 
 
 _EVALUATED = ("score", "level", "score_breakdown", "match_reasons", "price_ref", "red_flags",
-              "seller_questions", "scoring_version")
+              "seller_questions", "contact_questions", "scoring_version")
 
 
 async def upsert_scored(cx: AsyncConnection, profile_id: int,
@@ -106,7 +106,7 @@ async def upsert_scored(cx: AsyncConnection, profile_id: int,
         return {}
     inserted: dict[int, int] = {}
     for listing_id, row in rows:
-        # seller_questions is optional (rows built before F4 stored it).
+        # seller_questions and contact_questions are optional (rows built before F4 / PRO-01).
         values = [Jsonb(row[c]) if c in ("score_breakdown", "match_reasons", "red_flags")
                   or (c == "price_ref" and row[c] is not None) else row.get(c) for c in _EVALUATED]
         rec = await (await cx.execute(

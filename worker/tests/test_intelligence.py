@@ -483,3 +483,69 @@ class ConfigTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SellerPreferencePinTests(unittest.TestCase):
+    """PRO-01: the scores of today's seller preference, fixed against the code
+    before the strict filter existed. They must not change (no SCORING_VERSION
+    bump): a search without filters.seller_types scores exactly as before."""
+
+    LISTINGS = {
+        "none": {},
+        "private": {"seller_type": "private"},
+        "dealer": {"seller_type": "dealer"},
+        "inferred": {"seller_type": "private", "dealer_inferred": True, "seller_listing_count": 6},
+    }
+    UNKNOWN = {"result": "unknown", "detail": "la publicación no lo informa", "kind": "soft"}
+    # (preference, listing) → (score, level, c_match, c_completeness, match explanation, seller_type reason)
+    PINNED = {
+        (None, "none"): (89, "high", 1.0, 0.7, "cumple 2/2 preferencias", None),
+        (None, "private"): (90, "high", 1.0, 0.8, "cumple 2/2 preferencias", None),
+        (None, "dealer"): (90, "high", 1.0, 0.8, "cumple 2/2 preferencias", None),
+        (None, "inferred"): (90, "high", 1.0, 0.8, "cumple 2/2 preferencias", None),
+        ("private", "none"): (81, "good", 0.6667, 0.7, "cumple 2/3 preferencias", UNKNOWN),
+        ("private", "private"): (90, "high", 1.0, 0.8, "cumple 3/3 preferencias",
+                                 {"result": "ok", "detail": "vendedor particular", "kind": "soft"}),
+        ("private", "dealer"): (82, "good", 0.6667, 0.8, "cumple 2/3 preferencias",
+                                {"result": "fail", "detail": "vendedor concesionaria, se prefiere particular",
+                                 "kind": "soft"}),
+        ("private", "inferred"): (82, "good", 0.6667, 0.8, "cumple 2/3 preferencias",
+                                  {"result": "fail",
+                                   "detail": "vendedor posible agencia (publica 6 autos), se prefiere particular",
+                                   "kind": "soft"}),
+        ("dealer", "none"): (81, "good", 0.6667, 0.7, "cumple 2/3 preferencias", UNKNOWN),
+        ("dealer", "private"): (82, "good", 0.6667, 0.8, "cumple 2/3 preferencias",
+                                {"result": "fail", "detail": "vendedor particular, se prefiere concesionaria",
+                                 "kind": "soft"}),
+        ("dealer", "dealer"): (90, "high", 1.0, 0.8, "cumple 3/3 preferencias",
+                               {"result": "ok", "detail": "vendedor concesionaria", "kind": "soft"}),
+        ("dealer", "inferred"): (90, "high", 1.0, 0.8, "cumple 3/3 preferencias",
+                                 {"result": "ok", "detail": "vendedor posible agencia (publica 6 autos)",
+                                  "kind": "soft"}),
+    }
+
+    def _evaluate(self, pref, name, profile=None):
+        p = profile or fiesta_profile()
+        if pref:
+            p["preferences"]["seller_type"] = pref
+        return evaluate(fiesta_listing(**self.LISTINGS[name]), p, price_ref=MARKET, cfg=CFG, now=NOW, fx_rate=FX)
+
+    def test_seller_preference_scores_are_pinned(self):
+        for (pref, name), (score, level, c_match, c_comp, explanation, reason) in self.PINNED.items():
+            with self.subTest(pref=pref, listing=name):
+                ev = self._evaluate(pref, name)
+                b = ev.row()["score_breakdown"]
+                reasons = ev.row()["match_reasons"]
+                self.assertEqual(ev.score.score, score)
+                self.assertEqual(ev.level, level)
+                self.assertAlmostEqual(b["match"]["c"], c_match, places=4)
+                self.assertAlmostEqual(b["price"]["c"], 0.9018, places=4)
+                self.assertAlmostEqual(b["km"]["c"], 0.63, places=4)
+                self.assertEqual(b["trim"]["c"], 1.0)
+                self.assertAlmostEqual(b["recency"]["c"], 0.9981, places=4)
+                self.assertEqual(b["completeness"]["c"], c_comp)
+                self.assertEqual(b["match"]["explanation"], explanation)
+                self.assertEqual(reasons.get("seller_type"), reason)
+                self.assertEqual(set(reasons), {"model", "year", "price", "km", "transmission", "location",
+                                                "trim", "km_target", "price_target"}
+                                 | ({"seller_type"} if pref else set()))

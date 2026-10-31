@@ -32,7 +32,9 @@ MARKET_DAYS = 30
 
 
 def _profile(row: Mapping[str, Any]) -> dict[str, Any]:
-    return {k: row.get(k) for k in ("id", "filters", "preferences", "origin_lat", "origin_lon", "radius_km")}
+    return {k: row.get(k) for k in ("id", "filters", "preferences", "origin_lat", "origin_lon", "radius_km",
+                                     # PRO-01: plan_feature('seller_filter'), read by db/repos/low_results.py.
+                                     "seller_filter")}
 
 
 def due(row: Mapping[str, Any], fingerprint: str, cfg: Mapping[str, Any], now: datetime) -> bool:

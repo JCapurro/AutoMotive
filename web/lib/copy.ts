@@ -118,6 +118,26 @@ export const SELLER: Record<string, string> = { private: "Particular", dealer: "
 export const SELLER_INFERRED = "Posible agencia";
 /** F-02: under the search form's «Vendedor» when it prefers a dealer. */
 export const SELLER_FORM_HINT = "Incluye posibles agencias.";
+/**
+ * PRO-01: the strict seller filter (filters.seller_types, Pro). The options
+ * Pro sees, the check, its hint, the summary row and what a plan without it
+ * reads (the stored type works as the preference there).
+ */
+export const SELLER_STRICT = {
+  option: { private: "Particulares", dealer: "Agencias (incluye posibles agencias)" },
+  check: "Solo este tipo de vendedor",
+  hint: "Descartamos los otros. Si la publicación no dice quién vende, el aviso pasa con menos puntaje.",
+  summary: { private: "Solo particulares", dealer: "Solo agencias (incluye posibles agencias)" },
+  proOnly: "Filtro estricto: solo Pro. En tu plan se usa como preferencia.",
+  remove: "Quitar filtro estricto",
+  downgraded: { private: "Particulares (preferido; filtro estricto solo Pro)", dealer: "Agencias (preferido; filtro estricto solo Pro)" },
+  assisted: {
+    private: "Solo particulares (filtro estricto). Podés cambiarlo editando la búsqueda.",
+    dealer: "Solo agencias, incluye posibles agencias (filtro estricto). Podés cambiarlo editando la búsqueda.",
+  },
+  relax: "Cualquier vendedor",
+  required: "Elegí el tipo de vendedor.",
+} as const;
 export const FUEL: Record<string, string> = {
   nafta: "Nafta",
   diesel: "Diésel",
@@ -173,6 +193,7 @@ export const REASON_OK: Record<string, string> = {
   location: "Zona compatible",
   source: "Fuente elegida",
   trim: "Versión buscada",
+  seller: "Tipo de vendedor buscado",
   km_target: "Km por debajo del objetivo",
   price_target: "Precio por debajo del objetivo",
   seller_type: "Tipo de vendedor preferido",
@@ -190,6 +211,7 @@ export const REASON_NAME: Record<string, string> = {
   location: "Ubicación",
   source: "Fuente",
   trim: "Versión",
+  seller: "Vendedor",
   km_target: "Km objetivo",
   price_target: "Precio objetivo",
   seller_type: "Vendedor",
@@ -238,6 +260,90 @@ export const NOTIFICATION_TITLE: Record<string, string> = {
 // §25: the part every message starts with, shown while a match has no
 // stored questions yet (rows scored before F4 get them on the next re-score).
 export const BASE_SELLER_QUESTIONS = "Hola, ¿cómo estás? ¿Lo seguís teniendo? ¿Sos titular?";
+
+/**
+ * PRO-01: the message for the seller, ready to copy (lib/contact-message.ts).
+ * The same texts as worker/intelligence/copy.py CONTACT_MESSAGE and QUESTION
+ * («available», «holder»). {auto} and {preguntas} are markers, replaced
+ * literally. Ese Auto never sends it.
+ */
+export const CONTACT_MESSAGE = {
+  default: "Hola, vi tu {auto} publicado.\n{preguntas}\n¿Cuándo se puede ver?",
+  auto: "auto",
+  available: "¿Lo seguís teniendo?",
+  holder: "¿Sos titular?",
+  subject: "Consulta por tu {auto}",
+  title: "Mensaje listo para mandar",
+  copy: "Copiar",
+  mail: "Abrir en tu correo",
+  copied: "Copiado. Pegalo en el chat de la publicación.",
+  copyFailed: "No pudimos copiar. Seleccioná el texto y copialo a mano.",
+  note: "Ese Auto no contacta al vendedor: vos decidís si mandarlo.",
+  send: "Mandalo desde la publicación",
+  settingsTitle: "Mensaje para vendedores",
+  field: "Tu plantilla",
+  settingsHint: "Lo armamos para cada auto y lo copiás o lo abrís en tu correo. Ese Auto no lo manda.",
+  markers: "{auto} es el modelo y el año; {preguntas}, si lo sigue teniendo y una pregunta de ese auto.",
+  preview: "Vista previa",
+  save: "Guardar",
+  reset: "Volver al mensaje sugerido",
+  saved: "Mensaje guardado.",
+  resetDone: "Volvimos al mensaje sugerido.",
+} as const;
+
+/** The idioms the copy lint lets through (the §50 landing's «vale la pena» is not about price). */
+export const ALLOWED_PHRASES = ["vale la pena"];
+
+/** Lowercase without accents (NFD without marks), as the lint reads text. */
+export function foldText(text: string): string {
+  return text.normalize("NFD").replace(/\p{Mn}/gu, "").toLowerCase();
+}
+
+/** The FORBIDDEN_TERMS in `text`, as whole words, accents folded, ALLOWED_PHRASES aside. */
+export function forbiddenTermsIn(text: string): string[] {
+  let folded = foldText(text);
+  for (const phrase of ALLOWED_PHRASES) folded = folded.split(foldText(phrase)).join(" ");
+  const terms = [...new Set(FORBIDDEN_TERMS.map(foldText))];
+  return terms.filter((t) => new RegExp(`(^|[^\\p{L}\\p{N}_])${t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^\\p{L}\\p{N}_]|$)`, "u").test(folded));
+}
+
+export const CONTACT_TEMPLATE_MAX_CHARS = 500;
+export const CONTACT_TEMPLATE_MAX_LINES = 6;
+export type ContactTemplateError = "too_long" | "too_many_lines" | "placeholder" | "forbidden" | "url" | "phone";
+/** What Ajustes says for each rule of lintContactTemplate. */
+export const CONTACT_TEMPLATE_ERROR: Record<ContactTemplateError, string> = {
+  too_long: "Usá hasta 500 caracteres.",
+  too_many_lines: "Usá hasta 6 líneas.",
+  placeholder: "Entre llaves solo van {auto} y {preguntas}.",
+  forbidden: "Evitá frases sobre cuánto debería costar el auto: no las podemos verificar.",
+  url: "Sacá links, emails y usuarios: el mensaje se manda desde la publicación.",
+  phone: "Sacá los teléfonos: el mensaje se manda desde la publicación.",
+};
+
+const MARKER = /\{(auto|preguntas)\}/g;
+const URL_LIKE = /https?:\/\/|(?<![\p{L}\p{N}_-])www\.|(?<![\p{L}\p{N}_-])wa\.me(?![\p{L}\p{N}_])|@|(?<![\p{L}\p{N}_-])[\p{L}\p{N}_-]+\.(?:com|net|org|ar|io|me|app|co|ly|info|link|site|online|store|shop)(?![\p{L}\p{N}_])/u;
+// \p{Nd}, not \d: any decimal digit (fullwidth, Arabic-Indic...), as Python's \d reads it.
+const PHONE_LIKE = /\+?\p{Nd}(?:[\s.\-()/]*\p{Nd}){6,}/u;
+
+/**
+ * PRO-01 decisión 17: the rule for profiles.contact_template, the worker's
+ * lint_contact_template twin (both fixed by worker/tests/fixtures/contact_message/lint.json).
+ * `value` is what to store (null: the default template); `error` a code, never thrown.
+ */
+export function lintContactTemplate(raw: string | null | undefined): { value: string | null; error: ContactTemplateError | null } {
+  if (raw == null) return { value: null, error: null };
+  const text = raw.replace(/\r\n?/g, "\n").trim();
+  if (!text) return { value: null, error: null };
+  if ([...text].length > CONTACT_TEMPLATE_MAX_CHARS) return { value: null, error: "too_long" };
+  if (text.split("\n").length > CONTACT_TEMPLATE_MAX_LINES) return { value: null, error: "too_many_lines" };
+  const rest = text.replace(MARKER, "");
+  if (rest.includes("{") || rest.includes("}") || /%\(?[a-z]/.test(foldText(text))) return { value: null, error: "placeholder" };
+  const folded = foldText(text);
+  if (forbiddenTermsIn(text).length) return { value: null, error: "forbidden" };
+  if (URL_LIKE.test(folded)) return { value: null, error: "url" };
+  if (PHONE_LIKE.test(folded)) return { value: null, error: "phone" };
+  return { value: text, error: null };
+}
 
 // PAR-01: the total cost estimate (lib/cost-estimator.ts returns codes). The
 // header lines are the worker's (worker/intelligence/copy.py TOTAL_COST).

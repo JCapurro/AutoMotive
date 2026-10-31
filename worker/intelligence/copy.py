@@ -13,6 +13,8 @@ from normalization import body_type
 
 # §19: "vale exactamente", "precio real", "tasación oficial" — and their stems.
 FORBIDDEN_TERMS = ("vale", "valor real", "precio real", "tasacion", "tasación", "tasado")
+# Idioms that say nothing about a price (the web's copy lint has the same one).
+ALLOWED_PHRASES = ("vale la pena",)
 
 
 def money(amount: float | None, currency: str | None) -> str:
@@ -65,6 +67,8 @@ REASON = {
     "trim_other": "{trim}, se prefiere {wanted}",
     "seller_ok": "vendedor {kind}",
     "seller_other": "vendedor {kind}, se prefiere {wanted}",
+    # PRO-01: the strict seller filter (Pro).
+    "seller_only_other": "vendedor {kind}, se busca solo {wanted}",
     # F-02: why a seller is a «posible agencia» (intelligence/seller.py).
     "seller_inferred": "publica {n} autos",
     "color_ok": "color {color}",
@@ -76,6 +80,8 @@ BODY_TYPE = dict(body_type.LABELS)
 SELLER = {"private": "particular", "dealer": "concesionaria"}
 # F-02: a seller with min_listings or more cars in the same source (dealer_inferred).
 SELLER_INFERRED = "posible agencia"
+# PRO-01: what a strict seller filter keeps («se busca solo particulares»).
+SELLER_ONLY = {"private": "particulares", "dealer": "agencias"}
 UNKNOWN_BADGE = "❔ no informado"
 
 # ---------------------------------------------------------------------------
@@ -106,7 +112,7 @@ EXPLAIN = {
 # Hard-filter names in "transmisión no informada".
 FILTER_NAMES = {"model": "modelo", "year": "año", "price": "precio", "km": "km",
                 "transmission": "transmisión", "fuel": "combustible", "body_type": "carrocería",
-                "location": "ubicación", "trim": "versión"}
+                "location": "ubicación", "trim": "versión", "seller": "vendedor"}
 
 LEVEL_LABEL = {"high": "🔥 Alta oportunidad", "good": "🟢 Buena coincidencia",
                "match": "🟡 Coincidencia", "low": "⚪ Baja prioridad"}
@@ -201,4 +207,18 @@ TOTAL_COST = {
     "email": "{line}. Parámetros al {date}.",
     "email_no_fx": "{line}.",
     "names": {"arancel": "arancel", "sellos": "sellos", "formularios": "formularios", "patente": "patente"},
+}
+
+# ---------------------------------------------------------------------------
+# PRO-01: the message for the seller, ready to copy (intelligence/contact_message.py).
+# The same text as web/lib/copy.ts CONTACT_MESSAGE. {auto} and {preguntas} are
+# markers, replaced literally (never str.format).
+# ---------------------------------------------------------------------------
+
+CONTACT_MESSAGE = {
+    "default": "Hola, vi tu {auto} publicado.\n{preguntas}\n¿Cuándo se puede ver?",
+    "auto": "auto",
+    "subject": "Consulta por tu {auto}",
+    "email_title": "Mensaje listo para mandar",
+    "email_note": "Copialo y mandalo desde la publicación. Ese Auto no contacta al vendedor.",
 }

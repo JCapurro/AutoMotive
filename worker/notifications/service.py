@@ -21,6 +21,7 @@ from db.repos import listings as listings_repo
 from db.repos import notifications as repo
 from intelligence import cost_estimator
 from intelligence.config import DEFAULT_COMPARABLES
+from intelligence import contact_message
 from intelligence.seller_questions import question_texts
 from notifications import dispatch
 from notifications.channels.base import Channel
@@ -231,12 +232,17 @@ class Notifier:
             track = price_track_payload(tracks.get(c.listing_id)) if _with_track(c, listing) else None
             cost = (total_cost_payload(listing, a, cost_cfg, fx_latest, now or datetime.now(timezone.utc))
                     if cost_cfg and _opportunity(c) and a.get("total_cost") else None)
+            # PRO-01: the ready-to-send message, already rendered (never raises), Pro's opportunities only.
+            contact = (contact_message.render(a.get("contact_template"), listing.get("catalog_model"),
+                                              listing.get("year"), questions)
+                       if _opportunity(c) and a.get("contact_email") else None)
             events.append(Event(
                 MATCH, c.listing_id, self._audience(a), level=ev["level"], score=ev["score"],
                 match_id=c.match_id, repost=c.repost, saved=bool(state.get("saved")),
                 status=state.get("status"),
                 payload=payload(listing, ev, min_n=min_n, profile_name=a["profile_name"],
-                                questions=questions or None, price_track=track, total_cost=cost)))
+                                questions=questions or None, price_track=track, total_cost=cost,
+                                contact_message=contact)))
         return await self._commit(events, now=now)
 
     async def on_listing_events(self, listing_events: Iterable[Any], *, now: datetime | None = None,
