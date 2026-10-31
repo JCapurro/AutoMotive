@@ -92,8 +92,13 @@ OPPORTUNITY_TOTAL_COST_MISSING = notification("opportunity", {**OPPORTUNITY.payl
 # email is OPPORTUNITY's byte for byte (test_notifications_total_cost.py builds it).
 OPPORTUNITY_TOTAL_COST_NO_CONFIG = notification("opportunity", dict(OPPORTUNITY.payload))
 
+# PRO-01: payload["contact_message"] (contact_message.render, Pro with contact_email).
+CONTACT_MESSAGE = "Hola, vi tu Fiesta 2017 publicado.\n¿Lo seguís teniendo?\n¿Cuántos dueños tuvo?\n¿Cuándo se puede ver?"
+OPPORTUNITY_CONTACT_MESSAGE = notification("opportunity", {**OPPORTUNITY.payload, "contact_message": CONTACT_MESSAGE})
+
 CASES = {"opportunity": OPPORTUNITY, "new_match": NEW_MATCH, "price_drop": PRICE_DROP, "digest": DIGEST,
          "opportunity_1_drop": OPPORTUNITY_1_DROP, "opportunity_3_drops": OPPORTUNITY_3_DROPS,
          "opportunity_ars": OPPORTUNITY_ARS, "opportunity_much_cheaper_verify": OPPORTUNITY_MUCH_CHEAPER,
          "opportunity_total_cost": OPPORTUNITY_TOTAL_COST, "opportunity_total_cost_missing": OPPORTUNITY_TOTAL_COST_MISSING,
-         "opportunity_total_cost_no_config": OPPORTUNITY_TOTAL_COST_NO_CONFIG}
+         "opportunity_total_cost_no_config": OPPORTUNITY_TOTAL_COST_NO_CONFIG,
+         "opportunity_contact_message": OPPORTUNITY_CONTACT_MESSAGE}

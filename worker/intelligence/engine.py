@@ -8,7 +8,7 @@ the I/O around it: loads rows, comparables and config, writes `matches`.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Mapping
 
@@ -17,7 +17,7 @@ from intelligence.config import SCORING_VERSION, IntelligenceConfig
 from intelligence.matching import MatchResult, evaluate as evaluate_filters
 from intelligence.red_flags import RedFlag, red_flags
 from intelligence.scoring import Score, score as compute_score
-from intelligence.seller_questions import seller_questions
+from intelligence.seller_questions import question_texts, seller_questions
 
 
 @dataclass
@@ -27,6 +27,8 @@ class Evaluation:
     price_ref: PriceRef | None
     red_flags: list[RedFlag]
     questions: str
+    # PRO-01: the specific questions (question_texts), for the ready-to-send message.
+    contact_questions: list[str] = field(default_factory=list)
 
     @property
     def level(self) -> str:
@@ -42,6 +44,7 @@ class Evaluation:
             "price_ref": self.price_ref.to_json() if self.price_ref else None,
             "red_flags": [f.to_json() for f in self.red_flags],
             "seller_questions": self.questions,
+            "contact_questions": self.contact_questions,
             "scoring_version": SCORING_VERSION,
         }
 
@@ -55,7 +58,8 @@ def assess(listing: Mapping[str, Any], profile: Mapping[str, Any], *,
     flags = red_flags(listing, diff_pct=s.extra.get("diff_pct"), guard=s.guard,
                       timing_belt=timing_belt, cfg=cfg, now=now)
     questions = seller_questions(listing, flags, timing_belt=timing_belt, now=now)
-    return result, s, Evaluation(result, s, price_ref, flags, questions)
+    contact = question_texts(listing, flags, timing_belt=timing_belt, now=now, limit=3)
+    return result, s, Evaluation(result, s, price_ref, flags, questions, contact)
 
 
 def evaluate(listing: Mapping[str, Any], profile: Mapping[str, Any], *,

@@ -13,6 +13,8 @@ from normalization import body_type
 
 # §19: "vale exactamente", "precio real", "tasación oficial" — and their stems.
 FORBIDDEN_TERMS = ("vale", "valor real", "precio real", "tasacion", "tasación", "tasado")
+# Idioms that say nothing about a price (the web's copy lint has the same one).
+ALLOWED_PHRASES = ("vale la pena",)
 
 
 def money(amount: float | None, currency: str | None) -> str:
@@ -205,4 +207,18 @@ TOTAL_COST = {
     "email": "{line}. Parámetros al {date}.",
     "email_no_fx": "{line}.",
     "names": {"arancel": "arancel", "sellos": "sellos", "formularios": "formularios", "patente": "patente"},
+}
+
+# ---------------------------------------------------------------------------
+# PRO-01: the message for the seller, ready to copy (intelligence/contact_message.py).
+# The same text as web/lib/copy.ts CONTACT_MESSAGE. {auto} and {preguntas} are
+# markers, replaced literally (never str.format).
+# ---------------------------------------------------------------------------
+
+CONTACT_MESSAGE = {
+    "default": "Hola, vi tu {auto} publicado.\n{preguntas}\n¿Cuándo se puede ver?",
+    "auto": "auto",
+    "subject": "Consulta por tu {auto}",
+    "email_title": "Mensaje listo para mandar",
+    "email_note": "Copialo y mandalo desde la publicación. Ese Auto no contacta al vendedor.",
 }

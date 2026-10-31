@@ -1,7 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 
 import { query } from "./support/db";
-import { E2E_EMAIL_DOMAIN } from "./support/env";
+import { E2E_EMAIL_DOMAIN, E2E_LISTING_PREFIX } from "./support/env";
 import { magicLink } from "./support/mail";
 
 /**
@@ -9,7 +9,12 @@ import { magicLink } from "./support/mail";
  * Paso 1: Pro creates «solo particulares», sees the explanation, edits it and
  * the summary changes; an account without the feature with a stored strict
  * filter (a downgrade) sees «solo Pro», clears it and the summary says it is
- * a preference no more. Desktop and phone (375 px), without horizontal scroll.
+ * a preference no more.
+ * Paso 2: the listing page shows the ready-to-send message, copies it
+ * (contact_message_copied) and opens it in the email without a recipient,
+ * with CRLF line breaks; Ajustes saves a template and refuses one with a
+ * forbidden term or a phone number. Desktop and phone (375 px), without
+ * horizontal scroll.
  */
 
 async function signIn(page: Page, email: string) {
@@ -122,4 +127,95 @@ test("sin Pro: el filtro guardado avisa «solo Pro» y se puede quitar", async (
   expect(row.filters).not.toHaveProperty("seller_types");
   expect(row.preferences).toMatchObject({ seller_type: "private" });
   expect((await sellerEvents(email)).map((e) => e.props.seller_types)).toEqual([[]]);
+});
+
+/** A Ford Fiesta 2017 listing matched by a search of `email`, with one specific question. */
+async function seedContactListing(email: string, run: string): Promise<number> {
+  const externalId = `${E2E_LISTING_PREFIX}pro01-contact-${run}`;
+  const [listing] = await query<{ id: number }>(
+    `insert into public.listings (source, external_id, url, title, make, model, trim, year, price, currency, price_usd,
+                                  mileage_km, seller_type, published_at, first_seen_at, last_seen_at, fingerprint, status)
+     values ('mercadolibre', $1, $2, 'FORD FIESTA 2017 llamá al 11 5555-5555', 'Ford', 'Fiesta', 'Titanium', 2017, 10300, 'USD',
+             10300, 112000, 'private', now() - interval '1 day', now() - interval '1 day', now(), $1, 'active')
+     returning id`,
+    [externalId, `https://example.test/${externalId}`],
+  );
+  const [profile] = await query<{ id: number }>(
+    `insert into public.search_profiles (user_id, name, filters, bootstrapped_at)
+     select id, 'Ford Fiesta', '{"make": "Ford", "model": "Fiesta"}', now() from public.profiles where email = $1
+     returning id`,
+    [email],
+  );
+  await query(
+    `insert into public.matches (search_profile_id, listing_id, score, level, score_breakdown, match_reasons, red_flags,
+                                 seller_questions, contact_questions, scoring_version)
+     values ($1, $2, 80, 'good', '{}', '{}', '[]', 'Hola, ¿cómo estás? ¿Lo seguís teniendo? ¿Sos titular? ¿Tenés historial de services?',
+             '{"¿Tenés historial de services?"}', 'e2e')`,
+    [profile.id, listing.id],
+  );
+  return Number(listing.id);
+}
+
+async function copiedEvents(email: string) {
+  return query<{ props: { listing_id: number; via: string; custom_template: boolean } }>(
+    `select e.props from public.events e join public.profiles p on p.id = e.user_id
+      where p.email = $1 and e.name = 'contact_message_copied' order by e.id`, [email]);
+}
+
+const DEFAULT_MESSAGE = "Hola, vi tu Fiesta 2017 publicado.\n¿Lo seguís teniendo?\n¿Tenés historial de services?\n¿Cuándo se puede ver?";
+
+test("mensaje listo: ficha, copiar, correo sin destinatario y plantilla en Ajustes", async ({ page, context }, testInfo) => {
+  const run = `${testInfo.project.name}-${Date.now()}`;
+  const email = `pro01-msg-${run}@${E2E_EMAIL_DOMAIN}`;
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await signIn(page, email);
+  const listingId = await seedContactListing(email, run);
+
+  await test.step("la ficha muestra el mensaje y lo copia", async () => {
+    await page.goto(`/app/listings/${listingId}`);
+    const block = page.getByTestId("contact-message-block");
+    await expect(block.getByTestId("contact-message")).toHaveText(DEFAULT_MESSAGE);
+    await expect(block).not.toContainText("5555");                       // never the title
+    await block.getByRole("button", { name: "Copiar", exact: true }).click();
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(DEFAULT_MESSAGE);
+    await expect.poll(async () => (await copiedEvents(email)).map((e) => e.props))
+      .toEqual([{ listing_id: listingId, via: "clipboard", custom_template: false }]);
+    const href = await block.getByTestId("contact-message-mailto").getAttribute("href");
+    expect(href).toMatch(/^mailto:\?subject=Consulta%20por%20tu%20Fiesta%202017&body=/);
+    expect(href).toContain("publicado.%0D%0A%C2%BFLo%20segu%C3%ADs%20teniendo%3F%0D%0A");
+    expect(href).not.toContain("+");
+    await expect(block.getByRole("link", { name: "Mandalo desde la publicación" })).toHaveAttribute("href", `/app/listings/${listingId}/out`);
+    await expectNoHorizontalScroll(page);
+  });
+
+  await test.step("Ajustes rechaza un término prohibido y un teléfono, y guarda una plantilla", async () => {
+    await page.goto("/app/settings");
+    const field = page.getByLabel("Tu plantilla");
+    const save = page.getByRole("button", { name: "Guardar", exact: true });
+    await field.fill("¿Cuánto vale tu {auto}?");
+    await expect(page.getByTestId("contact-template-error")).toHaveText("Evitá frases sobre cuánto debería costar el auto: no las podemos verificar.");
+    await expect(save).toBeDisabled();
+    await field.fill("Llamame al 11 5555-5555");
+    await expect(page.getByTestId("contact-template-error")).toHaveText("Sacá los teléfonos: el mensaje se manda desde la publicación.");
+    await expect(save).toBeDisabled();
+    await field.fill("Buenas, me interesa tu {auto}.\n{preguntas}");
+    await expect(page.getByTestId("contact-template-error")).toHaveCount(0);
+    await expect(page.getByTestId("contact-template-preview")).toHaveText("Buenas, me interesa tu Fiesta 2017.\n¿Lo seguís teniendo?\n¿Tenés historial de services?");
+    await expectNoHorizontalScroll(page);
+    await save.click();
+    await expect(page.getByText("Mensaje guardado.")).toBeVisible();
+    const [row] = await query<{ contact_template: string | null }>(`select contact_template from public.profiles where email = $1`, [email]);
+    expect(row.contact_template).toBe("Buenas, me interesa tu {auto}.\n{preguntas}");
+  });
+
+  await test.step("la ficha usa la plantilla y el correo la lleva", async () => {
+    await page.goto(`/app/listings/${listingId}`);
+    const block = page.getByTestId("contact-message-block");
+    await expect(block.getByTestId("contact-message")).toHaveText("Buenas, me interesa tu Fiesta 2017.\n¿Lo seguís teniendo?\n¿Tenés historial de services?");
+    const mail = block.getByTestId("contact-message-mailto");
+    await mail.evaluate((a) => a.addEventListener("click", (e) => e.preventDefault()));   // no mail client here
+    await mail.click();
+    await expect.poll(async () => (await copiedEvents(email)).map((e) => e.props.via)).toEqual(["clipboard", "mailto"]);
+    expect((await copiedEvents(email))[1].props.custom_template).toBe(true);
+  });
 });

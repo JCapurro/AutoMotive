@@ -9,7 +9,7 @@ from datetime import date, datetime, timedelta, timezone
 from html import escape
 from typing import TYPE_CHECKING
 
-from intelligence.copy import QUESTIONS_FOOTER, QUESTIONS_TITLE
+from intelligence.copy import CONTACT_MESSAGE, QUESTIONS_FOOTER, QUESTIONS_TITLE
 from notifications.email_assets import LOGO_CONTENT_ID
 
 if TYPE_CHECKING:
@@ -190,7 +190,16 @@ def render(c: Content, *, kind: str, now: datetime, day: str | None,
     if c.questions:
         body.append(_p(QUESTIONS_TITLE, style=f"margin-top:22px;font-size:14px;line-height:22px;font-weight:bold;color:{INK}"))
         body += [_p(f"• {q}", style=f"margin-top:6px;font-size:14px;line-height:22px;color:{MUTED}") for q in c.questions]
-        body.append(_p(QUESTIONS_FOOTER, style=f"margin-top:8px;font-size:12px;line-height:19px;color:{MUTED}"))
+        if not c.contact_message:
+            body.append(_p(QUESTIONS_FOOTER, style=f"margin-top:8px;font-size:12px;line-height:19px;color:{MUTED}"))
+    if c.contact_message:
+        # PRO-01: the message as text, escaped line by line; no mailto (the seller's address is unknown).
+        body.append(_p(CONTACT_MESSAGE["email_title"],
+                       style=f"margin-top:22px;font-size:14px;line-height:22px;font-weight:bold;color:{INK}"))
+        lines = [_p(line, style=f"font-size:14px;line-height:22px;color:{INK}")
+                 for line in c.contact_message.splitlines()]
+        body.append(f'<div style="margin-top:8px;padding:10px 12px;border-left:3px solid {MUTED}">' + "".join(lines) + "</div>")
+        body.append(_p(CONTACT_MESSAGE["email_note"], style=f"margin-top:8px;font-size:12px;line-height:19px;color:{MUTED}"))
     if c.link:
         body.append('<div style="margin-top:24px">' + _button(c.link.label, c.link.url) + '</div>')
         if detail_url:

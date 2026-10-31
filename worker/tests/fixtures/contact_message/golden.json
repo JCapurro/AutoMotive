@@ -1,0 +1,244 @@
+{
+ "_doc": "PRO-01 decisiones 14-15: render() of worker/intelligence/contact_message.py and renderContactMessage() of web/lib/contact-message.ts. Input: the stored template (null = default), the catalog model and year (never the title) and the listing's specific questions (question_texts). A template that fails the lint renders the default one.",
+ "default_template": "Hola, vi tu {auto} publicado.\n{preguntas}\n¿Cuándo se puede ver?",
+ "cases": [
+  {
+   "name": "default, no specific question",
+   "template": null,
+   "catalog_model": "Fiesta",
+   "year": 2017,
+   "questions": [],
+   "text": "Hola, vi tu Fiesta 2017 publicado.\n¿Lo seguís teniendo?\n¿Sos titular?\n¿Cuándo se puede ver?",
+   "subject": "Consulta por tu Fiesta 2017"
+  },
+  {
+   "name": "default, one question",
+   "template": null,
+   "catalog_model": "Fiesta",
+   "year": 2017,
+   "questions": [
+    "¿Tenés historial de services?"
+   ],
+   "text": "Hola, vi tu Fiesta 2017 publicado.\n¿Lo seguís teniendo?\n¿Tenés historial de services?\n¿Cuándo se puede ver?",
+   "subject": "Consulta por tu Fiesta 2017"
+  },
+  {
+   "name": "default, three questions: only the first",
+   "template": null,
+   "catalog_model": "Gol Trend",
+   "year": 2015,
+   "questions": [
+    "¿Cuántos dueños tuvo?",
+    "¿Tiene VTV vigente?",
+    "¿Qué versión es?"
+   ],
+   "text": "Hola, vi tu Gol Trend 2015 publicado.\n¿Lo seguís teniendo?\n¿Cuántos dueños tuvo?\n¿Cuándo se puede ver?",
+   "subject": "Consulta por tu Gol Trend 2015"
+  },
+  {
+   "name": "no catalog model",
+   "template": null,
+   "catalog_model": null,
+   "year": 2017,
+   "questions": [],
+   "text": "Hola, vi tu auto publicado.\n¿Lo seguís teniendo?\n¿Sos titular?\n¿Cuándo se puede ver?",
+   "subject": "Consulta por tu auto"
+  },
+  {
+   "name": "a catalog model off the pattern",
+   "template": null,
+   "catalog_model": "Fiesta <b>",
+   "year": 2017,
+   "questions": [],
+   "text": "Hola, vi tu auto publicado.\n¿Lo seguís teniendo?\n¿Sos titular?\n¿Cuándo se puede ver?",
+   "subject": "Consulta por tu auto"
+  },
+  {
+   "name": "a catalog model too long",
+   "template": null,
+   "catalog_model": "MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM",
+   "year": 2017,
+   "questions": [],
+   "text": "Hola, vi tu auto publicado.\n¿Lo seguís teniendo?\n¿Sos titular?\n¿Cuándo se puede ver?",
+   "subject": "Consulta por tu auto"
+  },
+  {
+   "name": "an unreasonable year is left out",
+   "template": null,
+   "catalog_model": "Fiesta",
+   "year": 1800,
+   "questions": [],
+   "text": "Hola, vi tu Fiesta publicado.\n¿Lo seguís teniendo?\n¿Sos titular?\n¿Cuándo se puede ver?",
+   "subject": "Consulta por tu Fiesta"
+  },
+  {
+   "name": "no year",
+   "template": null,
+   "catalog_model": "208",
+   "year": null,
+   "questions": [],
+   "text": "Hola, vi tu 208 publicado.\n¿Lo seguís teniendo?\n¿Sos titular?\n¿Cuándo se puede ver?",
+   "subject": "Consulta por tu 208"
+  },
+  {
+   "name": "the title is never used",
+   "template": null,
+   "catalog_model": "Fiesta",
+   "year": 2017,
+   "questions": [],
+   "title": "Fiesta 2017 https://estafa.example {preguntas} llamá al 11 5555-5555",
+   "text": "Hola, vi tu Fiesta 2017 publicado.\n¿Lo seguís teniendo?\n¿Sos titular?\n¿Cuándo se puede ver?",
+   "subject": "Consulta por tu Fiesta 2017"
+  },
+  {
+   "name": "inserted text is not scanned again",
+   "template": null,
+   "catalog_model": "Fiesta",
+   "year": 2017,
+   "questions": [
+    "¿{auto} o {preguntas}?"
+   ],
+   "text": "Hola, vi tu Fiesta 2017 publicado.\n¿Lo seguís teniendo?\n¿{auto} o {preguntas}?\n¿Cuándo se puede ver?",
+   "subject": "Consulta por tu Fiesta 2017"
+  },
+  {
+   "name": "own template with markers",
+   "template": "Buenas, me interesa tu {auto}.\n{preguntas}\nGracias.",
+   "catalog_model": "Corolla",
+   "year": 2019,
+   "questions": [
+    "¿Tiene VTV vigente?"
+   ],
+   "text": "Buenas, me interesa tu Corolla 2019.\n¿Lo seguís teniendo?\n¿Tiene VTV vigente?\nGracias.",
+   "subject": "Consulta por tu Corolla 2019"
+  },
+  {
+   "name": "own template without markers",
+   "template": "Hola, ¿sigue disponible? Lo puedo ver esta semana.",
+   "catalog_model": "Corolla",
+   "year": 2019,
+   "questions": [
+    "¿Tiene VTV vigente?"
+   ],
+   "text": "Hola, ¿sigue disponible? Lo puedo ver esta semana.",
+   "subject": "Consulta por tu Corolla 2019"
+  },
+  {
+   "name": "a marker twice",
+   "template": "{auto}, {auto}",
+   "catalog_model": "Ka",
+   "year": 2012,
+   "questions": [],
+   "text": "Ka 2012, Ka 2012",
+   "subject": "Consulta por tu Ka 2012"
+  },
+  {
+   "name": "hostile: loose brace → default",
+   "template": "Hola {",
+   "catalog_model": "Fiesta",
+   "year": 2017,
+   "questions": [],
+   "text": "Hola, vi tu Fiesta 2017 publicado.\n¿Lo seguís teniendo?\n¿Sos titular?\n¿Cuándo se puede ver?",
+   "subject": "Consulta por tu Fiesta 2017"
+  },
+  {
+   "name": "hostile: closing brace → default",
+   "template": "}{",
+   "catalog_model": "Fiesta",
+   "year": 2017,
+   "questions": [],
+   "text": "Hola, vi tu Fiesta 2017 publicado.\n¿Lo seguís teniendo?\n¿Sos titular?\n¿Cuándo se puede ver?",
+   "subject": "Consulta por tu Fiesta 2017"
+  },
+  {
+   "name": "hostile: unknown marker → default",
+   "template": "{x}",
+   "catalog_model": "Fiesta",
+   "year": 2017,
+   "questions": [],
+   "text": "Hola, vi tu Fiesta 2017 publicado.\n¿Lo seguís teniendo?\n¿Sos titular?\n¿Cuándo se puede ver?",
+   "subject": "Consulta por tu Fiesta 2017"
+  },
+  {
+   "name": "hostile: attribute → default",
+   "template": "{auto.__class__}",
+   "catalog_model": "Fiesta",
+   "year": 2017,
+   "questions": [],
+   "text": "Hola, vi tu Fiesta 2017 publicado.\n¿Lo seguís teniendo?\n¿Sos titular?\n¿Cuándo se puede ver?",
+   "subject": "Consulta por tu Fiesta 2017"
+  },
+  {
+   "name": "hostile: positional → default",
+   "template": "{0}",
+   "catalog_model": "Fiesta",
+   "year": 2017,
+   "questions": [],
+   "text": "Hola, vi tu Fiesta 2017 publicado.\n¿Lo seguís teniendo?\n¿Sos titular?\n¿Cuándo se puede ver?",
+   "subject": "Consulta por tu Fiesta 2017"
+  },
+  {
+   "name": "hostile: double braces → default",
+   "template": "{{auto}}",
+   "catalog_model": "Fiesta",
+   "year": 2017,
+   "questions": [],
+   "text": "Hola, vi tu Fiesta 2017 publicado.\n¿Lo seguís teniendo?\n¿Sos titular?\n¿Cuándo se puede ver?",
+   "subject": "Consulta por tu Fiesta 2017"
+  },
+  {
+   "name": "hostile: percent format → default",
+   "template": "Hola %s, {auto}",
+   "catalog_model": "Fiesta",
+   "year": 2017,
+   "questions": [],
+   "text": "Hola, vi tu Fiesta 2017 publicado.\n¿Lo seguís teniendo?\n¿Sos titular?\n¿Cuándo se puede ver?",
+   "subject": "Consulta por tu Fiesta 2017"
+  },
+  {
+   "name": "hostile: a URL → default",
+   "template": "Mirá https://x.com {auto}",
+   "catalog_model": "Fiesta",
+   "year": 2017,
+   "questions": [],
+   "text": "Hola, vi tu Fiesta 2017 publicado.\n¿Lo seguís teniendo?\n¿Sos titular?\n¿Cuándo se puede ver?",
+   "subject": "Consulta por tu Fiesta 2017"
+  },
+  {
+   "name": "hostile: a phone → default",
+   "template": "Llamame al 11 5555-5555",
+   "catalog_model": "Fiesta",
+   "year": 2017,
+   "questions": [],
+   "text": "Hola, vi tu Fiesta 2017 publicado.\n¿Lo seguís teniendo?\n¿Sos titular?\n¿Cuándo se puede ver?",
+   "subject": "Consulta por tu Fiesta 2017"
+  },
+  {
+   "name": "hostile: a forbidden term → default",
+   "template": "¿Cuánto vale tu {auto}?",
+   "catalog_model": "Fiesta",
+   "year": 2017,
+   "questions": [],
+   "text": "Hola, vi tu Fiesta 2017 publicado.\n¿Lo seguís teniendo?\n¿Sos titular?\n¿Cuándo se puede ver?",
+   "subject": "Consulta por tu Fiesta 2017"
+  },
+  {
+   "name": "hostile: 501 chars → default",
+   "template": "Hola, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "catalog_model": "Fiesta",
+   "year": 2017,
+   "questions": [],
+   "text": "Hola, vi tu Fiesta 2017 publicado.\n¿Lo seguís teniendo?\n¿Sos titular?\n¿Cuándo se puede ver?",
+   "subject": "Consulta por tu Fiesta 2017"
+  },
+  {
+   "name": "hostile: empty → default",
+   "template": "   ",
+   "catalog_model": "Fiesta",
+   "year": 2017,
+   "questions": [],
+   "text": "Hola, vi tu Fiesta 2017 publicado.\n¿Lo seguís teniendo?\n¿Sos titular?\n¿Cuándo se puede ver?",
+   "subject": "Consulta por tu Fiesta 2017"
+  }
+ ]
+}

@@ -1,0 +1,245 @@
+{
+ "_doc": "PRO-01 decisión 17: the rule of lint_contact_template (worker/intelligence/contact_message.py) and lintContactTemplate (web/lib/copy.ts). Both read these cases; `terms` must equal each side's FORBIDDEN_TERMS, folded (lowercase, no accents). error null = valid; value = what is stored (null = the default template).",
+ "terms": [
+  "precio real",
+  "tasacion",
+  "tasado",
+  "vale",
+  "valor real"
+ ],
+ "allowed": [
+  "vale la pena"
+ ],
+ "max_chars": 500,
+ "max_lines": 6,
+ "cases": [
+  {
+   "name": "null",
+   "input": null,
+   "error": null,
+   "value": null
+  },
+  {
+   "name": "empty",
+   "input": "",
+   "error": null,
+   "value": null
+  },
+  {
+   "name": "only spaces",
+   "input": "  \n ",
+   "error": null,
+   "value": null
+  },
+  {
+   "name": "default",
+   "input": "Hola, vi tu {auto} publicado.\n{preguntas}\n¿Cuándo se puede ver?",
+   "error": null,
+   "value": "Hola, vi tu {auto} publicado.\n{preguntas}\n¿Cuándo se puede ver?"
+  },
+  {
+   "name": "trimmed, CRLF",
+   "input": "  Buenas, ¿sigue disponible?\r\n{preguntas}  \n",
+   "error": null,
+   "value": "Buenas, ¿sigue disponible?\n{preguntas}"
+  },
+  {
+   "name": "500 chars",
+   "input": "Hola, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "error": null,
+   "value": "Hola, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  {
+   "name": "501 chars",
+   "input": "Hola, aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+   "error": "too_long",
+   "value": null
+  },
+  {
+   "name": "7 lines",
+   "input": "a\nb\nc\nd\ne\nf\ng",
+   "error": "too_many_lines",
+   "value": null
+  },
+  {
+   "name": "6 lines",
+   "input": "a\nb\nc\nd\ne\nf",
+   "error": null,
+   "value": "a\nb\nc\nd\ne\nf"
+  },
+  {
+   "name": "unknown marker",
+   "input": "Hola, vi tu {modelo}",
+   "error": "placeholder",
+   "value": null
+  },
+  {
+   "name": "loose brace",
+   "input": "Hola {",
+   "error": "placeholder",
+   "value": null
+  },
+  {
+   "name": "closing brace",
+   "input": "Hola }{",
+   "error": "placeholder",
+   "value": null
+  },
+  {
+   "name": "attribute",
+   "input": "Hola {auto.__class__}",
+   "error": "placeholder",
+   "value": null
+  },
+  {
+   "name": "positional",
+   "input": "Hola {0}",
+   "error": "placeholder",
+   "value": null
+  },
+  {
+   "name": "double braces",
+   "input": "Hola {{auto}}",
+   "error": "placeholder",
+   "value": null
+  },
+  {
+   "name": "percent format",
+   "input": "Hola %s",
+   "error": "placeholder",
+   "value": null
+  },
+  {
+   "name": "percent mapping",
+   "input": "Hola %(auto)s",
+   "error": "placeholder",
+   "value": null
+  },
+  {
+   "name": "a percent",
+   "input": "¿Acepta el 100% en efectivo?",
+   "error": null,
+   "value": "¿Acepta el 100% en efectivo?"
+  },
+  {
+   "name": "vale",
+   "input": "¿Cuánto vale?",
+   "error": "forbidden",
+   "value": null
+  },
+  {
+   "name": "Valor real",
+   "input": "¿Cuál es el Valor real?",
+   "error": "forbidden",
+   "value": null
+  },
+  {
+   "name": "tasación",
+   "input": "¿Tiene tasación?",
+   "error": "forbidden",
+   "value": null
+  },
+  {
+   "name": "TASACION",
+   "input": "TASACION",
+   "error": "forbidden",
+   "value": null
+  },
+  {
+   "name": "tasado",
+   "input": "¿Está tasado?",
+   "error": "forbidden",
+   "value": null
+  },
+  {
+   "name": "vale la pena",
+   "input": "Creo que vale la pena verlo.",
+   "error": null,
+   "value": "Creo que vale la pena verlo."
+  },
+  {
+   "name": "valen (another word)",
+   "input": "¿Los papeles valen para transferir?",
+   "error": null,
+   "value": "¿Los papeles valen para transferir?"
+  },
+  {
+   "name": "https",
+   "input": "Mirá https://x.com",
+   "error": "url",
+   "value": null
+  },
+  {
+   "name": "www",
+   "input": "Mirá www.x",
+   "error": "url",
+   "value": null
+  },
+  {
+   "name": "wa.me",
+   "input": "Escribime a wa.me/5491155555555",
+   "error": "url",
+   "value": null
+  },
+  {
+   "name": "bare domain",
+   "input": "Lo vi en autos.com.ar",
+   "error": "url",
+   "value": null
+  },
+  {
+   "name": "email",
+   "input": "Escribime a yo@mail.com",
+   "error": "url",
+   "value": null
+  },
+  {
+   "name": "user",
+   "input": "Buscame como @usuario",
+   "error": "url",
+   "value": null
+  },
+  {
+   "name": "phone with dash",
+   "input": "Llamame al 11 5555-5555",
+   "error": "phone",
+   "value": null
+  },
+  {
+   "name": "phone international",
+   "input": "Mi número: +54 9 11 5555 5555",
+   "error": "phone",
+   "value": null
+  },
+  {
+   "name": "phone with dots",
+   "input": "11.5555.5555",
+   "error": "phone",
+   "value": null
+  },
+  {
+   "name": "phone digits",
+   "input": "1155555555",
+   "error": "phone",
+   "value": null
+  },
+  {
+   "name": "services",
+   "input": "¿Tiene los services al día?",
+   "error": null,
+   "value": "¿Tiene los services al día?"
+  },
+  {
+   "name": "two dates",
+   "input": "Lo veo el 15 o el 16",
+   "error": null,
+   "value": "Lo veo el 15 o el 16"
+  },
+  {
+   "name": "a year",
+   "input": "¿Es 2017 o 2018?",
+   "error": null,
+   "value": "¿Es 2017 o 2018?"
+  }
+ ]
+}

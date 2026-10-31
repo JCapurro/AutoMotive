@@ -194,3 +194,48 @@ class LowResultsFlagTests(Pro01Case):
         [row] = [r for r in await low_repo.candidates(max_results=3, min_age_hours=1) if r["id"] == self.profile]
         self.assertIs(row["seller_filter"], False)
         self.assertNotEqual(lr.fingerprint(low_job._profile(row)), lr.fingerprint(profile))
+
+
+class ContactMessageDbTests(Pro01Case):
+    """Paso 2: matches.contact_questions, the audience's contact_email flag and
+    template, and the rendered message in a Pro opportunity."""
+
+    async def test_contact_questions_are_stored_with_the_match(self):
+        await self.plan("pro")
+        lid = await self.seller_listing("private", description=None, transmission=None)
+        await self.rematch()
+        m = await self.match_of(lid)
+        self.assertIsInstance(m["contact_questions"], list)
+        self.assertTrue(1 <= len(m["contact_questions"]) <= 3)
+        self.assertNotIn("¿Lo seguís teniendo?", m["contact_questions"])     # only the specific ones
+        self.assertIn(m["contact_questions"][0], m["seller_questions"])         # seller_questions unchanged
+
+    async def test_audiences_carry_the_flag_and_the_template(self):
+        from db.repos import notifications as repo
+        await self.plan("pass")
+        a = (await repo.profile_audiences([self.profile]))[self.profile]
+        self.assertIs(a["contact_email"], False)
+        self.assertIsNone(a["contact_template"])
+        await self.plan("pro")
+        async with db.connection() as cx:
+            await cx.execute("UPDATE profiles SET contact_template = %s WHERE id = %s",
+                             ("Buenas, ¿tu {auto} sigue?", self.user))
+        a = (await repo.profile_audiences([self.profile]))[self.profile]
+        self.assertIs(a["contact_email"], True)
+        self.assertEqual(a["contact_template"], "Buenas, ¿tu {auto} sigue?")
+
+    async def test_a_pro_opportunity_email_carries_the_block_and_a_bad_template_is_the_default(self):
+        await self.plan("pro")
+        async with db.connection() as cx:                     # written by API, past the web's lint
+            await cx.execute("UPDATE profiles SET contact_template = %s WHERE id = %s",
+                             ("Llamame al 11 5555-5555 {auto.__class__}", self.user))
+        deal = await self.listing(seller_type="private")
+        with self.assertLogs("contact_message", "WARNING"):
+            await self.matched(await self.match(self.profile, deal, "high", 90))
+        [row] = await self.rows("SELECT payload FROM notifications WHERE channel = 'email' AND listing_id = %s", deal)
+        text = row["payload"]["contact_message"]
+        self.assertTrue(text.startswith("Hola, vi tu Fiesta 2017 publicado.\n¿Lo seguís teniendo?\n"), text)
+        await self.notifier.deliver()
+        [mail] = [m for m in self.emails if m["subject"].startswith("🔥")]
+        self.assertIn("Mensaje listo para mandar", mail["text"])
+        self.assertNotIn("5555", mail["text"])
