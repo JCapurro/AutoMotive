@@ -20,11 +20,12 @@ function ContactMessage({ listingId, message, subject, custom, outboundHref }: {
   async function copy() {
     try {
       await navigator.clipboard.writeText(message);
-      toast.success(CONTACT_MESSAGE.copied);
     } catch {
       toast.error(CONTACT_MESSAGE.copyFailed);
+      return;
     }
-    void trackContactMessage(listingId, "clipboard", custom);
+    toast.success(CONTACT_MESSAGE.copied);
+    void trackContactMessage(listingId, "clipboard", custom);   // only when the clipboard took it
   }
   return (
     <div data-testid="contact-message-block" className="space-y-3">

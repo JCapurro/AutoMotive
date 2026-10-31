@@ -322,7 +322,8 @@ export const CONTACT_TEMPLATE_ERROR: Record<ContactTemplateError, string> = {
 
 const MARKER = /\{(auto|preguntas)\}/g;
 const URL_LIKE = /https?:\/\/|(?<![\p{L}\p{N}_-])www\.|(?<![\p{L}\p{N}_-])wa\.me(?![\p{L}\p{N}_])|@|(?<![\p{L}\p{N}_-])[\p{L}\p{N}_-]+\.(?:com|net|org|ar|io|me|app|co|ly|info|link|site|online|store|shop)(?![\p{L}\p{N}_])/u;
-const PHONE_LIKE = /\+?\d(?:[\s.\-()/]*\d){6,}/u;
+// \p{Nd}, not \d: any decimal digit (fullwidth, Arabic-Indic...), as Python's \d reads it.
+const PHONE_LIKE = /\+?\p{Nd}(?:[\s.\-()/]*\p{Nd}){6,}/u;
 
 /**
  * PRO-01 decisión 17: the rule for profiles.contact_template, the worker's

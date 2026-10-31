@@ -224,6 +224,18 @@
    "value": null
   },
   {
+   "name": "phone fullwidth digits",
+   "input": "Hola, vi tu {auto}. Llamame al １１ ５５５５ ５５５５",
+   "error": "phone",
+   "value": null
+  },
+  {
+   "name": "phone Arabic-Indic digits",
+   "input": "Hola, vi tu {auto}. ١١٥٥٥٥٥٥٥٥",
+   "error": "phone",
+   "value": null
+  },
+  {
    "name": "services",
    "input": "¿Tiene los services al día?",
    "error": null,

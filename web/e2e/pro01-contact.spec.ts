@@ -219,3 +219,23 @@ test("mensaje listo: ficha, copiar, correo sin destinatario y plantilla en Ajust
     expect((await copiedEvents(email))[1].props.custom_template).toBe(true);
   });
 });
+
+test("mensaje listo: una copia que falla no se registra como copiada", async ({ page }, testInfo) => {
+  const run = `${testInfo.project.name}-${Date.now()}`;
+  const email = `pro01-copyfail-${run}@${E2E_EMAIL_DOMAIN}`;
+  await signIn(page, email);
+  const listingId = await seedContactListing(email, run);
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: () => Promise.reject(new DOMException("denied", "NotAllowedError")) },
+    });
+  });
+
+  await page.goto(`/app/listings/${listingId}`);
+  const block = page.getByTestId("contact-message-block");
+  await block.getByRole("button", { name: "Copiar", exact: true }).click();
+  await expect(page.getByText("No pudimos copiar", { exact: false })).toBeVisible();
+  await page.waitForTimeout(2_500);
+  expect(await copiedEvents(email)).toEqual([]);
+});

@@ -34,6 +34,7 @@ _PERCENT = re.compile(r"%\(?[a-z]")
 _URL = re.compile(
     r"https?://|(?<![\w-])www\.|(?<![\w-])wa\.me(?!\w)|@"
     r"|(?<![\w-])[\w-]+\.(?:com|net|org|ar|io|me|app|co|ly|info|link|site|online|store|shop)(?!\w)")
+# \d is every Unicode decimal digit (fullwidth, Arabic-Indic...); the web uses \p{Nd}.
 _PHONE = re.compile(r"\+?\d(?:[\s.\-()/]*\d){6,}")
 _YEARS = range(1950, 2101)
 
