@@ -270,9 +270,11 @@ class MercadoLibreWindowTests(unittest.IsolatedAsyncioTestCase):
 class FacebookPage:
     """A virtualized feed: each scroll replaces, rather than appends, cards.
     `html` is the search page's first HTML; answers[n], the GraphQL answer
-    the scroll to batch n downloads."""
-    def __init__(self, batches, *, expire_after=None, body="Marketplace", html=None, answers=None):
+    the scroll to batch n downloads; the cards in `vanish` leave the page
+    while the first batch they're in is being read."""
+    def __init__(self, batches, *, expire_after=None, body="Marketplace", html=None, answers=None, vanish=()):
         self.batches, self.index = batches, 0
+        self.vanish = set(vanish)
         self.url = ""
         self.expire_after = expire_after
         self.body = body
@@ -309,7 +311,11 @@ class FacebookPage:
             a = MagicMock(inner_text=AsyncMock(return_value=(
                 "$10.000\nFord Fiesta 2016" + (f"\nHace {age} días" if age is not None else ""))))
             attributes = {"href": f"/marketplace/item/{identifier}", "aria-label": ""}
-            a.get_attribute = AsyncMock(side_effect=lambda key, values=attributes: values.get(key))
+            a.get_attribute = AsyncMock(side_effect=lambda key, values=attributes, **kwargs: values.get(key))
+            if identifier in self.vanish:
+                self.vanish.discard(identifier)
+                a.get_attribute.side_effect = fb.PlaywrightTimeoutError(
+                    f"Locator.get_attribute: Timeout {fb.CARD_READ_MS}ms exceeded.")
             a.locator.return_value.first = MagicMock(count=AsyncMock(return_value=0))
             anchors.append(a)
         return MagicMock(all=AsyncMock(return_value=anchors))
@@ -339,6 +345,14 @@ class FacebookWindowTests(unittest.IsolatedAsyncioTestCase):
         self.assertGreater(page.mouse.wheel.await_count, 3)
         self.assertIn("daysSinceListed=30", page.url)
         self.assertIn("sortBy=creation_time_descend", page.url)
+
+    async def test_a_card_gone_while_reading_does_not_end_the_scan(self):
+        # Chevrolet Prisma (2026-11-01): waiting 30 s for nth(39) ended every scan as partial.
+        page = FacebookPage([[("1", 2), ("2", 2), ("3", 2)], [("4", 2)]], vanish={"2"})
+        results = await self.search(page)
+        self.assertEqual([l.listing_id for l in results], ["1", "2", "3", "4"])
+        self.assertTrue(results.complete)
+        self.assertIsNone(results.reason)
 
     async def test_date_fetch_limit_ends_the_scan_and_the_retry_resumes(self):
         # Cards in English show no age: a first run of a popular model read
