@@ -30,6 +30,13 @@ class MercadoLibreUrlTests(unittest.TestCase):
         self.assertNotIn("listado.mercadolibre", _build_url({}))
         self.assertNotIn("_OrderId_", _build_url({"marca": "Ford", "modelo": "Fiesta"}))
 
+    def test_strips_every_accent_from_make_and_model(self):
+        # "Citroën" as /citro-n/ answered 404 (01/11/2026)
+        self.assertEqual(_build_url({"marca": "Citroën", "modelo": "Basalt", "anio_min": 2017, "anio_max": 2017}),
+                         "https://autos.mercadolibre.com.ar/citroen/basalt/_VEHICLE*YEAR_2017-2017_NoIndex_True")
+        self.assertEqual(_build_url({"marca": "Peugeot", "modelo": "Partner Patagónica"}),
+                         "https://autos.mercadolibre.com.ar/peugeot/partner-patagonica/_NoIndex_True")
+
     def test_detects_mercadolibre_account_verification_wall(self):
         self.assertTrue(
             _looks_like_login_wall(
