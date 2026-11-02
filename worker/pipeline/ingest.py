@@ -41,6 +41,7 @@ from normalization import not_vehicle
 from normalization.geo import SOURCE_DEFAULT_LOCATIONS, geocode_location
 from normalization.listing import Target, attrs_hash, doubtful_price, facebook_price, fingerprint, normalize_listing
 from normalization.seller import seller_key
+from pipeline.risk_duplicates import detect_for as detect_duplicates_for
 from pipeline.seller_classification import classify_groups
 
 
@@ -70,6 +71,10 @@ class ListingEvent:
     old_currency: str | None = None
     drop_pct: float | None = None
     repost_of: int | None = None
+
+
+# PAR-02 resto: the events that may add or remove a duplicate pair.
+_DUPLICATE_EVENTS = frozenset({"listing_new", "listing_updated", "price_drop", "listing_gone"})
 
 
 @dataclass
@@ -550,6 +555,9 @@ async def ingest(items: Iterable[Listing], *, target: Target | None = None, deta
     # it, so a new listing of a known group is a «posible agencia» from its
     # first alert. Its own short transactions; never raises.
     await classify_groups(result.seller_groups, result.seller_keyless)
+    # PAR-02 resto: the duplicate pairs of the groups this batch changed, after
+    # the seller classification (the data level reads dealer_inferred). Never raises.
+    await detect_duplicates_for([e.listing_id for e in result.events if e.kind in _DUPLICATE_EVENTS])
     # Legacy consumers (the Telegram opportunity engine) read make/model from
     # the Listing: give them the catalog's names instead of the raw ones.
     by_key = {(r["source"], r["external_id"]): r for r in rows}

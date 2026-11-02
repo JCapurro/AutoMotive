@@ -16,8 +16,10 @@ Before the startup pass and the one at rescore.hour, the seller
 classification (F-02, pipeline/seller_classification.py) refreshes
 listings.seller_listing_count and dealer_inferred («posible agencia») and
 re-scores the matches of the listings whose inference flipped, so a rescore
-(and the one of a SCORING_VERSION bump) sees today's counts. A failure there is
-logged and the rescore runs anyway.
+(and the one of a SCORING_VERSION bump) sees today's counts. Then the duplicate
+detection (PAR-02 resto, pipeline/risk_duplicates.py) rewrites
+listing_duplicates and re-scores the listings whose pairs changed. A failure
+in either is logged and the rescore runs anyway.
 
 The pass at rescore.hour also runs the retention (pipeline/retention.py).
 
@@ -42,6 +44,7 @@ from intelligence import margin
 from intelligence.config import DEFAULT_COMPARABLES, DEFAULT_RESCORE, SCORING_VERSION
 from pipeline.retention import purge_raw_pages, purge_stale_listings
 from pipeline.scoring import Scorer
+from pipeline.risk_duplicates import detect_all as detect_duplicates
 from pipeline.seller_classification import classify_sellers
 
 
@@ -139,6 +142,10 @@ async def nightly_loop(stop: asyncio.Event) -> None:
     except Exception:
         await log_error("seller_classification", "startup", traceback.format_exc())
     try:
+        await detect_duplicates("startup")
+    except Exception:
+        await log_error("risk_duplicates", "startup", traceback.format_exc())
+    try:
         await rescore_outdated()
     except Exception:
         await log_error("rescore", "outdated", traceback.format_exc())
@@ -155,6 +162,10 @@ async def nightly_loop(stop: asyncio.Event) -> None:
                 await classify_sellers("nightly")
             except Exception:
                 await log_error("seller_classification", "nightly", traceback.format_exc())
+            try:
+                await detect_duplicates("nightly")
+            except Exception:
+                await log_error("risk_duplicates", "nightly", traceback.format_exc())
         try:
             await rescore_recent()
         except Exception:
