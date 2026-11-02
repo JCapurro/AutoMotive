@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { COST_ESTIMATE, FOLLOW_EMPTY, FOLLOW_LABEL, FORBIDDEN_TERMS, TRACKING } from "./copy";
+import { COST_ESTIMATE, FOLLOW_EMPTY, FOLLOW_LABEL, FORBIDDEN_TERMS, MARGIN, TRACKING } from "./copy";
 
 const ROOT = path.resolve(__dirname, "..");
 
@@ -21,7 +21,7 @@ const ALLOWED = /vale la pena/gi;
 describe("copy lint (§19)", () => {
   it("never says a car is worth a price, nor a real price or an appraisal", () => {
     const offenders: string[] = [];
-    for (const file of [...sources(path.join(ROOT, "app")), ...sources(path.join(ROOT, "components")), path.join(ROOT, "lib", "copy.ts"), path.join(ROOT, "lib", "cost-estimator.ts")]) {
+    for (const file of [...sources(path.join(ROOT, "app")), ...sources(path.join(ROOT, "components")), path.join(ROOT, "lib", "copy.ts"), path.join(ROOT, "lib", "cost-estimator.ts"), path.join(ROOT, "lib", "margin-view.ts")]) {
       const text = readFileSync(file, "utf-8")
         .replace(ALLOWED, "")
         .replace(/FORBIDDEN_TERMS = \[[^\]]*\]/, "")
@@ -60,6 +60,25 @@ describe("copy lint (§19)", () => {
         expect(new RegExp(`(^|[^\\p{L}\\p{N}_])${term}([^\\p{L}\\p{N}_]|$)`, "iu").test(text), `${text}: ${term}`).toBe(false);
       }
       expect(text).not.toMatch(/8\s*[–-]\s*10\s*%/);
+    }
+  });
+
+  it("keeps the dealer margin (PRO-02) an estimate that promises nothing", () => {
+    const flat = (v: unknown): string[] => (typeof v === "string" ? [v] : v && typeof v === "object" ? Object.values(v).flatMap(flat) : []);
+    const texts = flat(MARGIN);
+    expect(MARGIN.line).toBe("Margen bruto estimado: {usd} (contra la mediana de {median} a la que publican las agencias este modelo, n = {n}; {costs}; sin impuestos)");
+    expect(MARGIN.published).toContain("no con precios de venta");
+    expect(MARGIN.published).toContain("estimación orientativa");
+    // docs/BACKLOG_COMERCIAL.md: never a guaranteed profit; «precios de venta» only in «no con precios de venta».
+    const extra = ["ganancia", "ganancias", "garantiz", "rentab", "asegur", "seguro que", "vas a ganar", "precio de venta"];
+    const fold = (t: string) => t.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+    for (const text of texts) {
+      for (const term of FORBIDDEN_TERMS) {
+        expect(new RegExp(`(^|[^\\p{L}\\p{N}_])${term}([^\\p{L}\\p{N}_]|$)`, "iu").test(text), `${text}: ${term}`).toBe(false);
+      }
+      const folded = fold(text).replace("no con precios de venta", "");
+      for (const term of extra) expect(folded.includes(term), `${text}: ${term}`).toBe(false);
+      expect(folded).not.toContain("precios de venta");
     }
   });
 });

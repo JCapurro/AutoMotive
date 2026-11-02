@@ -249,5 +249,19 @@ class EvaluationTests(unittest.TestCase):
         self.assertIsNone(scorer.evaluate(1, profile).row()["margin_ref"])
 
 
+class GoldenTests(unittest.TestCase):
+    """tests/fixtures/margin/golden.json: margin_ref -> payload and line, the
+    vectors web/lib/margin-view.test.ts formats too (the web prints the same line)."""
+
+    def test_the_vectors_are_the_calculator_s(self):
+        golden = json.loads((Path(__file__).parent / "fixtures" / "margin" / "golden.json").read_text(encoding="utf-8"))
+        self.assertGreaterEqual(len(golden["cases"]), 10)
+        for case in golden["cases"]:
+            with self.subTest(case["name"]):
+                self.assertEqual(margin.email_payload(case["margin_ref"]), case["payload"])
+                self.assertEqual(margin.line(case["margin_ref"]), case["line"])
+        self.assertEqual(golden["cases"][0]["margin_ref"], compute())
+
+
 if __name__ == "__main__":
     unittest.main()

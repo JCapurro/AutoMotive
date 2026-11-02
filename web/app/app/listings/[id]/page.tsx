@@ -4,6 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { CostEstimate } from "@/components/app/cost-estimate";
+import { MarginEstimate } from "@/components/app/margin-estimate";
 import { ListingActions } from "@/components/app/listing-actions";
 import { ListingGallery } from "@/components/app/listing-gallery";
 import { ListingTracking } from "@/components/app/listing-tracking";
@@ -16,6 +17,7 @@ import { ViewTracker } from "@/components/app/view-tracker";
 import { requireUser } from "@/lib/auth";
 import { type WebConfig, webConfig } from "@/lib/config";
 import { costEstimateFor } from "@/lib/cost-estimate-data";
+import { fetchMatchMargins } from "@/lib/margin-data";
 import {
   BASE_SELLER_QUESTIONS,
   BODY_TYPE,
@@ -104,11 +106,14 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
   const trackNote = trackingNote(listing, track?.first_at ?? snapshots?.[0]?.observed_at);
   // A down payment or an installment that moved is no price history (PAR-03).
   const showHistory = history.length >= 2 && !publishedIsPartial(listing);
-  const [similar, cost] = await Promise.all([
+  const [similar, cost, margins] = await Promise.all([
     gone ? Promise.resolve([]) : similarListings(supabase, listing, priceRef),
     // PAR-01: with the plan's total_cost flag, the jurisdiction of the best match's search.
     gone ? Promise.resolve(null) : costEstimateFor(supabase, user.id, listing, best?.search_profile_id ?? null),
+    // PRO-02: the best match's estimated dealer margin, only for Pro (my_match_margins is empty otherwise).
+    gone || !best ? Promise.resolve(new Map()) : fetchMatchMargins((fn, args) => supabase.rpc(fn, args), [best.id]),
   ]);
+  const margin = best ? (margins.get(best.id) ?? null) : null;
   const back = best ? `/app/searches/${best.search_profile_id}` : "/app";
 
   return (
@@ -183,6 +188,7 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
             </span>
           ) : null}
           <CostEstimate listingId={listingId} view={cost} />
+          <MarginEstimate margin={margin} />
         </Fact>
         <Fact label="Kilometraje">{km(listing.mileage_km) ?? "No informado"}</Fact>
         <Fact label="Año">{listing.year ?? "No informado"}</Fact>

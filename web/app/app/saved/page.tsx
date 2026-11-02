@@ -7,6 +7,7 @@ import { ListingStatusSelect } from "@/components/app/listing-status-select";
 import { requireUser } from "@/lib/auth";
 import { webConfig } from "@/lib/config";
 import { costLinesFor } from "@/lib/cost-estimate-data";
+import { marginAccess, marginLinesFor } from "@/lib/margin-data";
 import { FOLLOW_EMPTY, FOLLOW_FILTERS, FOLLOW_LABEL, type FollowFilter, type InteractionStatus, type Level } from "@/lib/copy";
 import { daysSince, dayMonth, money, pct } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
@@ -105,7 +106,7 @@ export default async function SavedPage({ searchParams }: PageProps<"/app/saved"
       .order("observed_at"),
     supabase
       .from("matches")
-      .select("listing_id, search_profile_id, score, level, search_profiles(name)")
+      .select("id, listing_id, search_profile_id, score, level, search_profiles(name)")
       .in("listing_id", ids)
       .order("score", { ascending: false }),
   ]);
@@ -113,18 +114,24 @@ export default async function SavedPage({ searchParams }: PageProps<"/app/saved"
   const byId = new Map((listings ?? []).map((l) => [l.id, l]));
   const history = new Map<number, Snapshot[]>();
   for (const s of snapshots ?? []) history.set(s.listing_id, [...(history.get(s.listing_id) ?? []), s]);
-  const bestMatch = new Map<number, { score: number; level: Level; profile: string | null; profileId: number }>();
+  const bestMatch = new Map<number, { id: number; score: number; level: Level; profile: string | null; profileId: number }>();
   for (const m of matches ?? []) {
     if (!bestMatch.has(m.listing_id)) {
-      bestMatch.set(m.listing_id, { score: m.score, level: m.level, profile: m.search_profiles?.name ?? null, profileId: m.search_profile_id });
+      bestMatch.set(m.listing_id, { id: m.id, score: m.score, level: m.level, profile: m.search_profiles?.name ?? null, profileId: m.search_profile_id });
     }
   }
   // PAR-01: the best match's search, or the account's default place for a listing without one.
-  const costLines = await costLinesFor(
-    supabase,
-    user.id,
-    ids.map((id) => ({ listing_id: id, search_profile_id: bestMatch.get(id)?.profileId ?? null })),
-  );
+  // PRO-02: the best match's margin, only for Pro.
+  const [costLines, marginLines] = await Promise.all([
+    costLinesFor(
+      supabase,
+      user.id,
+      ids.map((id) => ({ listing_id: id, search_profile_id: bestMatch.get(id)?.profileId ?? null })),
+    ),
+    marginAccess(supabase).then((access) =>
+      marginLinesFor(supabase, access, ids.map((id) => ({ listing_id: id, match_id: bestMatch.get(id)?.id ?? null }))),
+    ),
+  ]);
 
   return (
     <div className="space-y-4">
@@ -150,6 +157,7 @@ export default async function SavedPage({ searchParams }: PageProps<"/app/saved"
                 note: i.note,
               }}
               costLine={costLines.get(l.id)}
+              marginLine={marginLines.get(l.id)}
               footer={
                 <>
                   {/* Above the card's stretched link, so picking a status doesn't open the detail. */}

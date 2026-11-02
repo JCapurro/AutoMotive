@@ -18,12 +18,13 @@ import { requireUser } from "@/lib/auth";
 import { webConfig } from "@/lib/config";
 import { costLinesFor } from "@/lib/cost-estimate-data";
 import { FOLLOW_EMPTY, FOLLOW_LABEL } from "@/lib/copy";
+import { marginAccess, marginLinesFor } from "@/lib/margin-data";
 import { fetchPriceTracks } from "@/lib/price-track";
 import { accessDate, freeResultQuota, includesImmediateAlerts, type PlanLimits, visibleResults } from "@/lib/pro";
 import { describeVehicle } from "@/lib/search";
 import { collectionPending } from "@/lib/search-collection";
 import { loadSearchCollection } from "@/lib/search-collection-server";
-import { isSort, type Sort } from "@/lib/sorts";
+import { effectiveSort, type Sort, sortsFor } from "@/lib/sorts";
 import { createClient } from "@/lib/supabase/server";
 import type { Filters, Preferences } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -76,10 +77,12 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
   if (!/^\d+$/.test(id)) notFound();
   const query = await searchParams;
   const filter: Filter = typeof query.f === "string" && Object.hasOwn(FILTERS, query.f) ? (query.f as Filter) : "all";
-  const sort: Sort = isSort(query.s) ? query.s : "score";
   const page = Math.max(Number(query.p) || 1, 1);
 
   const supabase = await createClient();
+  // PRO-02: «Mayor margen estimado» and the margin line, only for Pro (null on a database without the migration).
+  const margin = await marginAccess(supabase);
+  const sort: Sort = effectiveSort(query.s, margin != null);
   const profileId = Number(id);
   const [{ data: profile }, { data: results }, { data: counts }, follow, { data: planLimits }, { data: sources }, { data: diagnosis }] = await Promise.all([
     supabase.from("search_profiles").select("*").eq("id", profileId).maybeSingle(),
@@ -126,12 +129,13 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
   const shown = rows.slice(0, reach);
   // PAR-03: the drops of the listings on this page only, in one call; on error, no drop line.
   // PAR-01: the total cost line, with the plan's flag only (one listings query for the page).
-  const [tracks, costLines] = await Promise.all([
+  const [tracks, costLines, marginLines] = await Promise.all([
     fetchPriceTracks(
       (fn, args) => supabase.rpc(fn, args),
       shown.map((card) => card.listing_id).filter((lid): lid is number => lid != null),
     ),
     costLinesFor(supabase, user.id, shown),
+    marginLinesFor(supabase, margin, shown),
   ]);
   const href = (next: Partial<{ f: Filter; s: Sort; p: number }>) => {
     const qs = new URLSearchParams({ f: next.f ?? filter, s: next.s ?? sort });
@@ -207,7 +211,7 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
               </Link>
             ))}
           </nav>
-          <SortSelect value={sort} />
+          <SortSelect value={sort} options={sortsFor(margin != null)} profileId={profileId} />
         </div>
       ) : null}
 
@@ -219,6 +223,7 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
               card={card}
               track={card.listing_id != null ? tracks.get(card.listing_id) : null}
               costLine={card.listing_id != null ? costLines.get(card.listing_id) : null}
+              marginLine={card.listing_id != null ? marginLines.get(card.listing_id) : null}
             />
           ))}
         </div>

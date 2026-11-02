@@ -22,6 +22,7 @@ export function ListingCard({
   footer,
   track,
   costLine,
+  marginLine,
 }: {
   card: Pick<
     MatchCard,
@@ -56,6 +57,8 @@ export function ListingCard({
   track?: PriceTrack | null;
   /** PAR-01: the total cost estimate's header (lib/cost-estimate-data.ts costLinesFor), only with the plan's flag. */
   costLine?: string | null;
+  /** PRO-02: the estimated dealer margin's line (lib/margin-data.ts marginLinesFor), only for Pro. */
+  marginLine?: string | null;
 }) {
   const image = firstImage(card.images);
   const name = vehicle(card);
@@ -104,6 +107,12 @@ export function ListingCard({
       {costLine ? (
         <p data-testid="cost-estimate-line" className="col-start-2 min-w-0 text-[13px] break-words text-muted-foreground">
           {costLine}
+        </p>
+      ) : null}
+
+      {marginLine ? (
+        <p data-testid="margin-line" className="col-start-2 min-w-0 text-[13px] break-words text-muted-foreground">
+          {marginLine}
         </p>
       ) : null}
 
