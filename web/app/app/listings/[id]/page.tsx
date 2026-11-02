@@ -37,6 +37,7 @@ import {
 import { ageLine, daysSince, imageUrls, km, money, number, pct, vehicle } from "@/lib/format";
 import { fetchPriceTracks, summaryLine, trackingNote } from "@/lib/price-track";
 import { financingOffered, financingTerms, isCashPrice, publishedIsPartial, publishedKind } from "@/lib/price";
+import { priceGap, priceGapLine } from "@/lib/price-gap";
 import { emphasize, RISK_HINT, RISK_TITLE } from "@/lib/risk-checklist";
 import { sellerFact, strictSellerFilterOn } from "@/lib/seller";
 import { contactSubject, renderContactMessage } from "@/lib/contact-message";
@@ -142,8 +143,13 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
   };
   const back = best ? `/app/searches/${best.search_profile_id}` : "/app";
 
+  const cautious = flags.some((f) => f.id === "much_cheaper") || breakdown.guard === "suspicious";
+  const gap = gone ? null : priceGap(listing, priceRef, cfg.minComparables);
+  const gapLine = gap ? priceGapLine(gap) : null;
+  const scored = best != null && !gone;
+
   return (
-    <div>
+    <div className="max-lg:pb-20">
       <ViewTracker listingId={listingId} notificationId={fromAlert} />
       <Link href={back} className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground hover:underline">
         <ArrowLeft className="size-4" aria-hidden /> {best?.search_profiles?.name ?? "Inicio"}
@@ -156,8 +162,9 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
         </p>
       ) : null}
 
-      <header className="mt-4 grid gap-5 md:grid-cols-[1fr_auto] md:items-end">
-        <div className="min-w-0">
+      {/* Juan 02/11, option B: the decision panel sticks to the right from lg; on a phone it follows the gallery. */}
+      <div className="mt-4 lg:grid lg:grid-cols-[minmax(0,1fr)_21rem] lg:grid-rows-[auto_auto_auto_1fr] lg:gap-x-10 xl:grid-cols-[minmax(0,1fr)_23rem] xl:gap-x-14">
+        <header className="min-w-0 lg:col-start-1 lg:row-start-1">
           <h1 className="type-heading text-[1.9rem] leading-[1.05] md:text-[2.6rem]">{name}</h1>
           <p className="mt-2.5 flex flex-wrap gap-x-4.5 gap-y-1 text-sm text-muted-foreground">
             <span>
@@ -173,81 +180,97 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
               {PRICE_TRACK.detected}
             </p>
           ) : null}
+        </header>
+
+        <div className="min-w-0 lg:col-start-1 lg:row-start-2">
+          <ListingGallery images={images} name={name} />
         </div>
-        {best && !gone ? (
-          <div className="flex items-center gap-3.5">
-            <span data-testid="score" className="type-figure text-[64px] leading-none tracking-[-0.03em]">
-              <span className={markFor(best.level)}>{best.score}</span>
-            </span>
-            <p className="text-sm leading-snug text-muted-foreground">
-              <b className="block text-[17px] font-bold text-foreground">{LEVEL[best.level].label}</b>
-              Opportunity Score de 0 a 100
-            </p>
-          </div>
-        ) : null}
-      </header>
 
-      <ListingGallery images={images} name={name} />
-
-      <dl className="mt-6 grid grid-cols-2 gap-x-6 border-t-2 border-foreground md:grid-cols-[1.6fr_repeat(3,1fr)]">
-        <Fact label={isCashPrice(listing.description_facts) ? "Precio de contado" : "Precio publicado"} className="col-span-2 md:col-span-1 md:row-span-2">
-          <span className="type-figure block text-2xl leading-tight" data-testid="price">
-            {money(listing.price, listing.currency)}
-          </span>
-          {listing.currency === "ARS" && listing.price_usd ? (
-            <span className="block text-[13px] text-muted-foreground">≈ {money(listing.price_usd, "USD")} al dólar del día</span>
-          ) : null}
-          {listing.price_source === "description" && listing.price_published != null ? (
-            <span className="block text-[13px] text-muted-foreground">
-              Publicado {money(listing.price_published, listing.price_published_currency)}
-              {publishedKind(listing.description_facts) ? ` (${publishedKind(listing.description_facts)})` : ""}: el precio sale
-              de la descripción
-            </span>
-          ) : null}
-          {listing.price_partial ? <span className="block text-[13px] text-destructive">Parece un anticipo o una cuota</span> : null}
-          {financingOffered(listing.description_facts) ? (
-            <span className="mt-1 block text-[13px]" data-testid="financing">
-              También se puede financiar
-              {financingTerms(listing.description_facts) ? (
-                <span className="block text-muted-foreground">{financingTerms(listing.description_facts)}</span>
+        <aside
+          aria-label="Precio y acciones"
+          className="mt-6 min-w-0 rounded-lg border p-4 lg:sticky lg:top-20 lg:col-start-2 lg:row-span-4 lg:row-start-1 lg:mt-0 lg:max-h-[calc(100dvh-9.5rem)] lg:scroll-pb-36 lg:self-start lg:overflow-y-auto lg:p-5 lg:[scrollbar-width:thin]"
+        >
+          {/* On a phone the score sits right of the price; reversed only when there is one, or the price alone would hug the right. */}
+          <div className={cn("flex items-start justify-between gap-4 lg:block", scored && "flex-row-reverse")}>
+            {scored ? (
+              <div className="flex shrink-0 items-center gap-3 max-lg:flex-col max-lg:items-end max-lg:gap-1 max-lg:text-right">
+                <span data-testid="score" className="type-figure text-[30px] leading-none tracking-[-0.03em] lg:text-[44px]">
+                  <span className={markFor(best.level)}>{best.score}</span>
+                </span>
+                <p className="text-[12px] leading-snug text-muted-foreground">
+                  <b className="block text-sm font-bold text-foreground lg:text-base">{LEVEL[best.level].label}</b>
+                  <span className="max-lg:sr-only">Opportunity Score de 0 a 100</span>
+                </p>
+              </div>
+            ) : null}
+            <div className={cn("min-w-0 break-words", scored && "lg:mt-4 lg:border-t lg:pt-4")}>
+              <p className="text-[13px] text-muted-foreground">{isCashPrice(listing.description_facts) ? "Precio de contado" : "Precio publicado"}</p>
+              <p className="type-figure mt-0.5 text-[26px] leading-tight lg:text-[32px]" data-testid="price">
+                {money(listing.price, listing.currency)}
+              </p>
+              {listing.currency === "ARS" && listing.price_usd ? (
+                <p className="text-[13px] text-muted-foreground">≈ {money(listing.price_usd, "USD")} al dólar del día</p>
               ) : null}
-            </span>
+              {listing.price_source === "description" && listing.price_published != null ? (
+                <p className="text-[13px] text-muted-foreground">
+                  Publicado {money(listing.price_published, listing.price_published_currency)}
+                  {publishedKind(listing.description_facts) ? ` (${publishedKind(listing.description_facts)})` : ""}: el precio sale
+                  de la descripción
+                </p>
+              ) : null}
+              {listing.price_partial ? <p className="text-[13px] text-destructive">Parece un anticipo o una cuota</p> : null}
+              {financingOffered(listing.description_facts) ? (
+                <p className="mt-1 text-[13px]" data-testid="financing">
+                  También se puede financiar
+                  {financingTerms(listing.description_facts) ? (
+                    <span className="block text-muted-foreground">{financingTerms(listing.description_facts)}</span>
+                  ) : null}
+                </p>
+              ) : null}
+            </div>
+          </div>
+
+          {gap && gapLine ? (
+            <p data-testid="price-gap" className="mt-3 text-[15px] leading-snug">
+              {gapLine.gap ? <span className={gap.diff > 0 ? "mark" : "font-semibold"}>{gapLine.gap}</span> : null}
+              {gapLine.rest}
+            </p>
           ) : null}
-          <CostEstimate listingId={listingId} view={cost} />
-          <MarginEstimate margin={margin} />
-        </Fact>
-        <Fact label="Kilometraje">{km(listing.mileage_km) ?? "No informado"}</Fact>
-        <Fact label="Año">{listing.year ?? "No informado"}</Fact>
-        <Fact label="Caja">{listing.transmission ? TRANSMISSION[listing.transmission] : "No informada"}</Fact>
-        <Fact label="Combustible">{listing.fuel ? (FUEL[listing.fuel] ?? listing.fuel) : "No informado"}</Fact>
-        <Fact label="Vendedor">
-          {/* PRO-01, option C: «vendedor sin dato» when the best match's strict filter didn't know it. */}
-          <span data-testid="seller-fact">{sellerFact(listing, reasons, strictOn)}</span>
-        </Fact>
-        <Fact label="Ubicación">
-          {reasons.location?.result === "ok" ? reasons.location.detail : (listing.location_text ?? "No informada")}
-        </Fact>
-      </dl>
+          {gap && cautious && gap.diff > 0 ? (
+            <p className="mt-1.5 grid grid-cols-[16px_1fr] gap-1.5 text-[13px] font-semibold text-warn">
+              <AlertTriangle className="mt-0.5 size-3.5" aria-hidden />
+              {LOW_PRICE}
+            </p>
+          ) : null}
 
-      <div className="mt-5">
-        <ListingActions
-          listingId={listingId}
-          status={status}
-          saved={interaction?.saved ?? false}
-          outboundHref={outboundHref}
-        />
-      </div>
+          <CostEstimate listingId={listingId} view={cost} className="mt-3 border-t pt-3" />
+          <MarginEstimate margin={margin} className="mt-3 border-t pt-3" />
 
-      <div className="mt-5">
-        <ListingTracking
-          listingId={listingId}
-          status={status}
-          profileId={best?.search_profile_id ?? null}
-        />
-      </div>
+          {/* In a laptop's short window the panel scrolls: the actions stay pinned to its foot (its height leaves them in view on load too). */}
+          <div className="lg:sticky lg:bottom-0 lg:z-10 lg:-mx-5 lg:mt-4 lg:border-t lg:bg-background lg:px-5 lg:pt-4 lg:pb-5">
+            <ListingActions listingId={listingId} status={status} saved={interaction?.saved ?? false} outboundHref={outboundHref} />
+          </div>
 
-      <div className="mt-11 grid gap-11 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] lg:gap-14">
-        <div className="space-y-11">
+          <div className="mt-3 border-t pt-3 lg:mt-0 lg:border-t-0 lg:pt-0">
+            <ListingTracking listingId={listingId} status={status} profileId={best?.search_profile_id ?? null} />
+          </div>
+        </aside>
+
+        <dl className="mt-6 grid grid-cols-2 gap-x-6 border-t-2 border-foreground sm:grid-cols-3 lg:col-start-1 lg:row-start-3 lg:mt-8">
+          <Fact label="Kilometraje">{km(listing.mileage_km) ?? "No informado"}</Fact>
+          <Fact label="Año">{listing.year ?? "No informado"}</Fact>
+          <Fact label="Caja">{listing.transmission ? TRANSMISSION[listing.transmission] : "No informada"}</Fact>
+          <Fact label="Combustible">{listing.fuel ? (FUEL[listing.fuel] ?? listing.fuel) : "No informado"}</Fact>
+          <Fact label="Vendedor">
+            {/* PRO-01, option C: «vendedor sin dato» when the best match's strict filter didn't know it. */}
+            <span data-testid="seller-fact">{sellerFact(listing, reasons, strictOn)}</span>
+          </Fact>
+          <Fact label="Ubicación">
+            {reasons.location?.result === "ok" ? reasons.location.detail : (listing.location_text ?? "No informada")}
+          </Fact>
+        </dl>
+
+        <div className="mt-11 min-w-0 space-y-11 lg:col-start-1 lg:row-start-4">
           <Section title={gone ? "Precio de referencia" : "¿Está bien de precio?"}>
             {gone ? (
               <p className="mt-3 text-[15px] text-muted-foreground">
@@ -261,7 +284,7 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
                 minN={cfg.minComparables}
                 window={cfg.comparables}
                 similar={similar}
-                cautious={flags.some((f) => f.id === "much_cheaper") || breakdown.guard === "suspicious"}
+                cautious={cautious}
               />
             )}
             {!gone ? <DescriptionPriceContext listing={listing} refs={priceRef} minN={cfg.minComparables} /> : null}
@@ -275,9 +298,7 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
               <ScoreInWords breakdown={breakdown} />
             </Section>
           ) : null}
-        </div>
 
-        <div className="space-y-11">
           <SellerDescription listing={listing} />
           {best ? (
             <Section
@@ -354,15 +375,15 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
               </div>
             </Section>
           ) : null}
+
+          {listing.description ? (
+            <details className="rounded-lg bg-muted p-4">
+              <summary className="cursor-pointer text-sm font-semibold">Descripción de la publicación</summary>
+              <p className="mt-3 text-sm whitespace-pre-line text-muted-foreground">{listing.description}</p>
+            </details>
+          ) : null}
         </div>
       </div>
-
-      {listing.description ? (
-        <details className="mt-11 rounded-lg bg-muted p-4">
-          <summary className="cursor-pointer text-sm font-semibold">Descripción de la publicación</summary>
-          <p className="mt-3 text-sm whitespace-pre-line text-muted-foreground">{listing.description}</p>
-        </details>
-      ) : null}
     </div>
   );
 }
@@ -427,6 +448,9 @@ function ReasonRow({ name, reason }: { name: string; reason: Reason }) {
   );
 }
 
+/** The warning of a much cheaper price (much_cheaper or the guard), in the decision panel and in «¿Está bien de precio?». */
+const LOW_PRICE = "Un precio tan bajo puede tener una explicación.";
+
 const SAME: Record<string, string> = {
   trim_transmission: " de la misma versión y caja",
   transmission: " con la misma caja",
@@ -455,9 +479,9 @@ function PriceVerdict({
   similar: Similar[];
   cautious: boolean;
 }) {
-  const usd = listing.price_usd;
-  const median = refs?.median ?? null;
-  if (listing.price_partial || !usd || !refs || !median || refs.n < minN) {
+  const g = priceGap(listing, refs, minN);
+  if (!g || !refs) {
+    const usd = listing.price_usd;
     return (
       <div data-testid="price-analysis">
         <p className="mt-3 rounded-lg bg-muted p-4 text-[15px]">
@@ -473,9 +497,7 @@ function PriceVerdict({
     );
   }
 
-  const diff = refs.diff_pct ?? (1 - usd / median) * 100;
-  const gap = Math.round(Math.abs(median - usd) / 100) * 100;
-  const inLine = Math.abs(diff) < 2.5 || gap < 100;
+  const { usd, median, diff, gap, inLine } = g;
   const years = listing.year ? `, de ${listing.year - window.yearTol} a ${listing.year + window.yearTol}` : "";
   const mileage = listing.mileage_km ? " y con kilometraje parecido" : "";
   const model = [listing.make, listing.model].filter(Boolean).join(" ");
@@ -533,7 +555,7 @@ function PriceVerdict({
         <p className="mt-4 grid grid-cols-[20px_1fr] gap-2.5 rounded-lg bg-warn-soft px-3.5 py-3 text-[15px]">
           <AlertTriangle className="mt-0.5 size-4 text-warn" aria-hidden />
           <span>
-            <b className="font-bold">Un precio tan bajo puede tener una explicación.</b> Antes de ir a verlo, preguntale al vendedor
+            <b className="font-bold">{LOW_PRICE}</b> Antes de ir a verlo, preguntale al vendedor
             por qué lo vende a ese precio.
           </span>
         </p>

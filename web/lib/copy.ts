@@ -408,6 +408,15 @@ export const PRICE_TRACK = {
   historyToggle: "Ver el histórico de precios",
 } as const;
 
+// The listing page's decision panel: the published price against the observed
+// market in one line (lib/price-gap.ts); «¿Está bien de precio?» has the long one.
+export const PRICE_GAP = {
+  below: "{gap} debajo",
+  above: "{gap} arriba",
+  rest: " de lo que suelen pedir por autos parecidos ({pct}).",
+  inLine: "En línea con lo que suelen pedir por autos parecidos.",
+} as const;
+
 // PRO-02: the estimated gross margin against the dealers' median (lib/margin-view.ts
 // formats matches.margin_ref). The line is the worker's (worker/intelligence/copy.py
 // MARGIN); the rest is the listing page's detail. An estimate to orient a dealer,
