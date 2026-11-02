@@ -60,6 +60,8 @@ describe("copy lint (§19)", () => {
     const flat = (v: unknown): string[] => (typeof v === "string" ? [v] : v && typeof v === "object" ? Object.values(v).flatMap(flat) : []);
     const texts = flat(MARGIN);
     expect(MARGIN.line).toBe("Margen bruto estimado: {usd} (contra la mediana de {median} a la que publican las agencias este modelo, n = {n}; {costs}; sin impuestos)");
+    expect(MARGIN.cardLine).toBe("Margen bruto estimado: {usd} (n\u00a0=\u00a0{n}\u00a0agencias)");
+    expect(MARGIN.cardFewDealers).toBe("Margen estimado: pocas agencias para estimarlo (n\u00a0=\u00a0{n})");
     expect(MARGIN.published).toContain("no con precios de venta");
     expect(MARGIN.published).toContain("estimación orientativa");
     // docs/BACKLOG_COMERCIAL.md: never a guaranteed profit; «precios de venta» only in «no con precios de venta».

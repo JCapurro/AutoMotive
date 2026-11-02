@@ -176,7 +176,7 @@ OR (m.margin_ref IS NULL AND l.price_usd > 0
 
 Mismo texto en `worker/intelligence/copy.py` (`MARGIN`) y `web/lib/copy.ts` (`MARGIN`). Montos redondeados hacia afuera a USD 10 (`floor`/`ceil` con `EPS`, como PAR-01); rango «entre USD A y USD B», punto único «USD A»; porcentaje entero.
 
-- **Línea (tarjeta, ficha y email):**
+- **Línea (ficha y email; la tarjeta lleva la corta, ver «Respuestas de Juan (02/11)», 1):**
   «Margen bruto estimado: USD 1.400 a 1.590 (contra la mediana de USD 14.500 a la que publican las agencias este modelo, n = 6; descuenta acondicionamiento del 5 % y transferencia; sin impuestos)».
   Variantes del tramo final:
   - sin transferencia por zona: «…; descuenta acondicionamiento del 5 %; no descuenta la transferencia porque tu búsqueda no tiene localidad; sin impuestos)»;
@@ -300,7 +300,7 @@ En la revisión 3 corrieron contra la base local `supabase/tests/pro02_margin_te
 
 «ok a todo menos a 3 (sobre lo que cuesta comprar el auto), 5 (no lo usamos), 6 (salgamos igual, aclarando)». Aplicado en la revisión 3:
 
-1. **Copy: como se propuso.** La misma línea en tarjeta, ficha y email (la tarjeta la acortaría solo si no entrara; entra con `break-words`).
+1. **Copy: como se propuso, salvo la tarjeta (Juan, 02/11, después de ver las capturas: ocupaba ~5 renglones).** Ficha y email llevan la línea completa. Las tarjetas (resultados, inicio y Guardados) llevan una corta, `marginCardLine` en `web/lib/margin-view.ts`: «Margen bruto estimado: USD 2.590 a 2.610 (n = 6 agencias)» y, con pocas agencias, «Margen estimado: pocas agencias para estimarlo (n = 2)». La mediana, los costos y «sin impuestos» quedan en la ficha. Telegram y la bandeja web usan el contenido del email y no cambian.
 2. **Base del 5 %: como se propuso.** Sobre el precio de compra, con mínimo USD 300.
 3. **Cambio: % sobre lo que cuesta comprar el auto.** `gross_margin_pct = gross_margin_usd / acquisition_usd × 100`, con `acquisition_usd = asking_usd + acondicionamiento + transferencia descontada` (nuevo en `margin_ref`). Rangos coherentes: `pct_min = margen_min / costo_max`, `pct_max = margen_max / costo_min`. Copy del detalle de la ficha: «Lo que cuesta comprar el auto: USD A a B (precio de compra más los costos descontados).» y «Margen sobre lo que cuesta comprar el auto: X % a Y %.» (antes «Margen sobre la mediana: …»). La línea no muestra el %, así que no cambia.
 4. **Sin localidad: como se propuso.** No se descuenta transferencia y se dice.

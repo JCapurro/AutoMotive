@@ -2,7 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { asStoredMargin, marginLine, type StoredMargin } from "@/lib/margin-view";
+import { asStoredMargin, marginCardLine, type StoredMargin } from "@/lib/margin-view";
 import type { Database } from "@/types/database";
 
 /**
@@ -63,7 +63,7 @@ export async function fetchMatchMargins(rpc: Rpc, ids: (number | null | undefine
 
 export type MarginCard = { listing_id: number | null; match_id?: number | null };
 
-/** The cards of a page: listing_id -> the margin line of its match. Nothing without access. */
+/** The cards of a page: listing_id -> the short margin line of its match (marginCardLine). Nothing without access. */
 export async function marginLinesFor(supabase: Supabase, access: MarginAccess | null, cards: MarginCard[]): Promise<Map<number, string>> {
   const lines = new Map<number, string>();
   if (!access) return lines;
@@ -71,7 +71,7 @@ export async function marginLinesFor(supabase: Supabase, access: MarginAccess | 
   for (const card of cards) {
     if (card.listing_id == null || card.match_id == null || lines.has(card.listing_id)) continue;
     const ref = margins.get(card.match_id);
-    const line = ref ? marginLine(ref) : null;
+    const line = ref ? marginCardLine(ref) : null;
     if (line) lines.set(card.listing_id, line);
   }
   return lines;

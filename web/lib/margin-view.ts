@@ -1,7 +1,7 @@
 /**
  * PRO-02: the words of matches.margin_ref (worker/intelligence/margin.py
- * computes and stores it): the line of the cards, the listing page and the
- * Pro emails, and the listing page's detail. Pure; the same rounding as the
+ * computes and stores it): the line of the listing page and the Pro emails,
+ * the cards' short line, and the listing page's detail. Pure; the same rounding as the
  * worker's margin.email_payload (outward to USD 10, floor/ceil with EPS, the
  * median to the nearest 10), so the web and the alerts print the same line.
  */
@@ -160,12 +160,26 @@ export function fewDealersLine(r: MarginFewDealers): string {
   return fill(MARGIN.fewDealers, { n: r.dealer_n, min_n: r.min_n });
 }
 
-/** The line of the cards, the listing page and the Pro emails: the margin, or why there is none. */
+/** The line of the listing page and the Pro emails: the margin, or why there is none. */
 export function marginLine(value: unknown): string | null {
   const few = asFewDealers(value);
   if (few) return fewDealersLine(few);
   const ref = asMarginRef(value);
   return ref ? marginHeadline(marginPayload(ref)) : null;
+}
+
+/**
+ * The result cards' short line (Juan, 02/11: the full one took ~5 lines in a
+ * card): the same USD figure or range as marginLine and the dealers' n; the
+ * median, the costs and «sin impuestos» stay on the listing page.
+ */
+export function marginCardLine(value: unknown): string | null {
+  const few = asFewDealers(value);
+  if (few) return fill(MARGIN.cardFewDealers, { n: few.dealer_n });
+  const ref = asMarginRef(value);
+  if (!ref) return null;
+  const p = marginPayload(ref);
+  return fill(MARGIN.cardLine, { usd: usdText(p.usd_min, p.usd_max), n: p.dealer_n });
 }
 
 function usdRange(r: MarginRange): string {
