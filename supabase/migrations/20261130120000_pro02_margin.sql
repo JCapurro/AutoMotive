@@ -13,17 +13,39 @@
 --   (Juan, plan §8) and whether the transfer cost (PAR-01) is subtracted.
 -- * plan_limits.pro.dealer_margin and min_threshold_usd = 500, only added when
 --   missing, so a value changed in /admin/config stays.
--- * my_margin_access() and my_match_margins(bigint[]): what the web reads.
---   Without the feature both say no / return nothing.
+-- * margin_ref is not readable by anon/authenticated: the table-wide SELECT
+--   on matches becomes a column list without it (RLS lets every user read
+--   their own matches whatever the plan, and the worker fills margin_ref for
+--   every match). A later migration that adds a column to matches must grant
+--   SELECT on it to authenticated (and anon) itself.
+-- * my_margin_access(), my_match_margins(bigint[]) and
+--   my_margin_sort_keys(bigint): what the web reads, security definer with
+--   the owner and the feature checked inside. Without the feature they say
+--   no / return nothing.
 -- * search_results: 20261119120000_x01_tracking.sql's, plus p_sort = 'margin'
 --   (only with the feature). match_cards is left alone.
 --
--- Rollback: drop the three functions, re-apply X-01's search_results; the
--- columns and the config rows can stay.
+-- Rollback: drop the four functions, re-apply X-01's search_results, grant
+-- select on public.matches to anon, authenticated again; the columns and the
+-- config rows can stay.
 
 alter table public.matches add column if not exists margin_ref jsonb;
 comment on column public.matches.margin_ref is
   'PRO-02: estimated gross margin against price_ref.dealer_median (ranges in USD, worker/intelligence/margin.py). Null without enough dealer comparables. Read by the web only through my_match_margins (Pro).';
+
+-- The Pro-only gate (Juan: all of PRO-02 is Pro) cannot rest on the functions
+-- alone: authenticated had SELECT on every column of matches
+-- (20260927120100_rls.sql only revoked insert/update/delete). Keep SELECT on
+-- every other column, whatever exists when this runs.
+do $$
+declare cols text;
+begin
+  select string_agg(format('%I', column_name), ', ' order by ordinal_position) into cols
+    from information_schema.columns
+   where table_schema = 'public' and table_name = 'matches' and column_name <> 'margin_ref';
+  execute 'revoke select on public.matches from anon, authenticated';
+  execute format('grant select (%s) on public.matches to anon, authenticated', cols);
+end $$;
 
 alter table public.search_profiles add column if not exists opportunity_threshold_usd integer
   constraint search_profiles_opportunity_threshold_usd_check check (opportunity_threshold_usd between 1 and 1000000);
@@ -64,15 +86,31 @@ language sql stable security definer set search_path = '' as $$
                             'min_threshold_usd', public.min_threshold_usd((select auth.uid())))
 $$;
 
--- margin_ref of the caller's own matches (RLS of matches: security invoker),
--- nothing without the feature.
+-- margin_ref of the caller's own matches (the owner checked here, as the RLS
+-- of matches does: authenticated cannot read the column), nothing without
+-- the feature.
 create or replace function public.my_match_margins(p_match_ids bigint[])
 returns table (match_id bigint, margin_ref jsonb)
-language sql stable security invoker set search_path = '' as $$
+language sql stable security definer set search_path = '' as $$
   select m.id, m.margin_ref
     from public.matches m
+    join public.search_profiles sp on sp.id = m.search_profile_id
    where m.id = any(p_match_ids) and m.margin_ref is not null
-     and public.my_plan_feature('dealer_margin')
+     and sp.user_id = (select auth.uid())
+     and (select public.my_plan_feature('dealer_margin'))
+$$;
+
+-- search_results' sort key: the margin's low end of the caller's own matches
+-- of one search, nothing without the feature.
+create or replace function public.my_margin_sort_keys(p_profile_id bigint)
+returns table (match_id bigint, low numeric)
+language sql stable security definer set search_path = '' as $$
+  select m.id, (m.margin_ref->'gross_margin_usd'->>'min')::numeric
+    from public.matches m
+    join public.search_profiles sp on sp.id = m.search_profile_id
+   where m.search_profile_id = p_profile_id and m.margin_ref is not null
+     and sp.user_id = (select auth.uid())
+     and (select public.my_plan_feature('dealer_margin'))
 $$;
 
 create or replace function public.search_results(
@@ -85,8 +123,11 @@ create or replace function public.search_results(
       else 2147483647 end n from access
   ), margin_access as (
     select p_sort = 'margin' and public.my_plan_feature('dealer_margin') ok
+  ), margins as (
+    select k.match_id, k.low from public.my_margin_sort_keys(p_profile_id) k where (select ok from margin_access)
   )
   select c.* from public.match_cards c
+  left join margins mg on mg.match_id = c.match_id
   where c.search_profile_id = p_profile_id and case p_filter
     when 'new' then c.listing_status = 'active' and c.status = 'new'
     when 'opportunities' then c.listing_status = 'active' and c.level = 'high' and c.status <> 'discarded'
@@ -96,8 +137,7 @@ create or replace function public.search_results(
     when 'purchased' then c.status = 'purchased'
     else c.listing_status = 'active' and c.status <> 'discarded' end
   order by case when p_sort = 'score' then c.score end desc nulls last,
-    case when (select ok from margin_access) then
-      (select (m.margin_ref->'gross_margin_usd'->>'min')::numeric from public.matches m where m.id = c.match_id) end desc nulls last,
+    case when (select ok from margin_access) then mg.low end desc nulls last,
     case when p_sort = 'price' then c.price_usd end asc nulls last,
     case when p_sort = 'km' then c.mileage_km end asc nulls last,
     coalesce(c.published_at, c.first_seen_at) desc nulls last, c.listing_id desc
@@ -106,7 +146,9 @@ create or replace function public.search_results(
 $$;
 
 revoke all on function public.min_threshold_usd(uuid) from public, anon, authenticated;
-revoke all on function public.my_margin_access(), public.my_match_margins(bigint[]) from public, anon;
-grant execute on function public.my_margin_access(), public.my_match_margins(bigint[]) to authenticated;
+revoke all on function public.my_margin_access(), public.my_match_margins(bigint[]),
+  public.my_margin_sort_keys(bigint) from public, anon;
+grant execute on function public.my_margin_access(), public.my_match_margins(bigint[]),
+  public.my_margin_sort_keys(bigint) to authenticated;
 
 notify pgrst, 'reload schema';

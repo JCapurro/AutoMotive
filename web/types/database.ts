@@ -1189,6 +1189,11 @@ isOneToOne: false
 "my_margin_access":
 { Args: Record<PropertyKey, never>; Returns: Json
                            },
+"my_margin_sort_keys":
+{ Args: { "p_profile_id": number }; Returns: {
+              "low": number,"match_id": number
+            }[]
+                           },
 "my_match_margins":
 { Args: { "p_match_ids": (number)[] }; Returns: {
               "margin_ref": Json,"match_id": number

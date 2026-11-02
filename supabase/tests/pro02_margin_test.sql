@@ -40,6 +40,14 @@ select ok(not has_function_privilege('anon', 'public.my_match_margins(bigint[])'
 select ok(has_function_privilege('authenticated', 'public.my_match_margins(bigint[])', 'execute'), 'my_match_margins: for authenticated');
 select ok(has_function_privilege('authenticated', 'public.my_margin_access()', 'execute'), 'my_margin_access: for authenticated');
 select ok(not has_function_privilege('authenticated', 'public.min_threshold_usd(uuid)', 'execute'), 'min_threshold_usd: worker only');
+select ok(not has_column_privilege('authenticated', 'public.matches', 'margin_ref', 'SELECT'),
+          'matches.margin_ref: not readable by authenticated (only through my_match_margins)');
+select ok(not has_column_privilege('anon', 'public.matches', 'margin_ref', 'SELECT'), '... nor by anon');
+select ok(has_column_privilege('authenticated', 'public.matches', 'price_ref', 'SELECT')
+          and has_column_privilege('authenticated', 'public.matches', 'score', 'SELECT')
+          and has_column_privilege('authenticated', 'public.matches', 'contact_questions', 'SELECT'),
+          'the other columns of matches stay readable');
+select ok(not has_function_privilege('anon', 'public.my_margin_sort_keys(bigint)', 'execute'), 'my_margin_sort_keys: not for anon');
 
 -- ---------------------------------------------------------------- fixtures: a Pro, a Particular and an admin
 insert into auth.users (instance_id, id, aud, role, email, created_at, updated_at) values
@@ -93,6 +101,10 @@ select results_eq($$select match_id from public.my_match_margins(array[99710001,
 select results_eq($$select listing_id from public.search_results(9971, 'all', 'margin')$$,
                   $$values (997002::bigint), (997001::bigint), (997003::bigint)$$,
                   'search_results margin: by the margin''s low end, without margin last');
+select is((select count(*)::int from public.my_margin_sort_keys(9972)), 0,
+          'my_margin_sort_keys: never another user''s search');
+select throws_ok($$select margin_ref from public.matches where id = 99710001$$, '42501', null,
+                 'the Pro cannot read matches.margin_ref directly either');
 select results_eq($$select listing_id from public.search_results(9971, 'all', 'score')$$,
                   $$values (997001::bigint), (997002::bigint), (997003::bigint)$$, 'search_results score unchanged');
 
@@ -105,6 +117,12 @@ set local request.jwt.claims = '{"sub": "c0200000-0000-0000-0000-000000000002", 
 select is(public.my_margin_access()->'enabled', 'false'::jsonb, 'my_margin_access: Particular, not enabled');
 select is((select count(*)::int from public.my_match_margins(array[99720001, 99720002]::bigint[])), 0,
           'my_match_margins: nothing without the feature, even of the own matches');
+select throws_ok($$select margin_ref from public.matches where id = 99720001$$, '42501', null,
+                 'matches.margin_ref: the Particular cannot read it through PostgREST/RLS');
+select is((select count(*)::int from public.matches where search_profile_id = 9972), 2,
+          '... but still reads its own matches');
+select is((select count(*)::int from public.my_margin_sort_keys(9972)), 0,
+          'my_margin_sort_keys: nothing without the feature, even of the own search');
 select is((select array_agg(listing_id) from public.search_results(9972, 'all', 'margin')),
           (select array_agg(listing_id) from public.search_results(9972, 'all', 'recent')),
           'search_results margin without the feature: the recent order');
