@@ -10,9 +10,11 @@ import { marginCardLine, marginLine } from "@/lib/margin-view";
 import { effectiveSort, isSort, SORTS, sortsFor } from "@/lib/sorts";
 
 const GOLDEN = JSON.parse(readFileSync(path.resolve(__dirname, "../../worker/tests/fixtures/margin/golden.json"), "utf-8")) as {
-  cases: { margin_ref: unknown }[];
+  cases: { name: string; implausible?: boolean; margin_ref: unknown }[];
 };
 const REF = GOLDEN.cases[0].margin_ref;
+// A margin stored before the guard: an ARS price loaded as USD (Facebook).
+const BORA = GOLDEN.cases.find((c) => c.name === "implausible: ARS cargado como USD")!.margin_ref;
 
 type Client = Parameters<typeof marginLinesFor>[0];
 function client(rpc: (fn: string, args?: unknown) => unknown): Client {
@@ -48,6 +50,14 @@ describe("fetchMatchMargins / marginLinesFor", () => {
     const map = await fetchMatchMargins(rpc, [1, 1, 2, null]);
     expect(rpc).toHaveBeenCalledWith("my_match_margins", { p_match_ids: [1, 2] });
     expect([...map.keys()]).toEqual([1]);
+  });
+
+  it("a stored margin for an implausible price is dropped: no line on the card", async () => {
+    const supabase = client(() => ({ data: [{ match_id: 7, margin_ref: REF }, { match_id: 8, margin_ref: BORA }], error: null }));
+    const lines = await marginLinesFor(supabase, { minThresholdUsd: 500 }, [{ listing_id: 70, match_id: 7 }, { listing_id: 80, match_id: 8 }]);
+    expect([...lines.keys()]).toEqual([70]);
+    const map = await fetchMatchMargins(async () => ({ data: [{ match_id: 8, margin_ref: BORA }], error: null }), [8]);
+    expect(map.size).toBe(0);
   });
 
   it("without access, nothing past the check (not Pro)", async () => {

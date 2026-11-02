@@ -59,12 +59,14 @@ export const AdminLifecycleInput = z.object({
 });
 
 /** PRO-02: app_config.dealer_margin, the rules of worker/intelligence/margin.py parse_config. */
-export const DEALER_MARGIN_MESSAGE = "dealer_margin necesita reconditioning.pct (0 a 100), reconditioning.min_usd (0 o más) y transfer.enabled (true/false); as_of en formato AAAA-MM-DD.";
+export const DEALER_MARGIN_MESSAGE = "dealer_margin necesita reconditioning.pct (0 a 100), reconditioning.min_usd (0 o más) y transfer.enabled (true/false); as_of en formato AAAA-MM-DD; plausible_ratio, si está, min entre 0 y 1 y max mayor que 1.";
 export const DealerMarginInput = z.object({
   as_of: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   source: z.string().optional(),
   reconditioning: z.object({ pct: z.number().min(0).max(100), min_usd: z.number().min(0) }).passthrough(),
   transfer: z.object({ enabled: z.boolean() }).passthrough(),
+  // Optional: without it the worker uses {min: 0.4, max: 3} (margin.PLAUSIBLE_RATIO); an invalid one is refused here.
+  plausible_ratio: z.object({ min: z.number().gt(0).lt(1), max: z.number().gt(1) }).passthrough().optional(),
 }).passthrough();
 
 export const SourceValuesInput = z.object({

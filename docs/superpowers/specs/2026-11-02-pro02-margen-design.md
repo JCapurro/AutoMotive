@@ -53,6 +53,7 @@ gross_margin_pct    = gross_margin_usd / acquisition_usd × 100              (ra
 - **Patente.** No entra: es anual, no es parte de la transferencia. Tampoco deudas de patente ni multas (no las conocemos).
 - **Precio parcial (PAR-03).** Un aviso con `price_partial` no genera match, pero uno cuyo precio publicado es un anticipo o una cuota y cuya descripción trae el precio de contado sí (`resolve_price` deja `price_partial = false` y `price_check.published_partial = true`). `build_input` excluye los dos y `margin.compute` los chequea con `published_partial` y devuelve null: nunca un margen sobre un anticipo. El relleno (§6) los excluye también, para converger. **Sin línea** (revisión 3): lo que falta es el precio, no las agencias, y la tarjeta y la ficha ya muestran el precio y su aviso de parcial; una línea más no agrega nada. Tiene prioridad sobre «pocas agencias».
 - **Sin `price_usd`** (aviso en ARS sin cotización): null y sin línea, por la misma razón (el precio se ve en pesos).
+- **Precio implausible (revisión 4, §13):** `asking_usd > 3 × dealer_median` o `asking_usd < 0,4 × dealer_median` → null y sin línea, como el precio parcial. Los bordes son plausibles.
 - **Negativo.** Se guarda y se muestra (`USD -300`): para una agencia «la mediana de agencias está por debajo de lo que te costaría» es información. El orden lo deja al final de los positivos de forma natural.
 
 ### 2. Transferencia: solo con números reales y localidad conocida
@@ -100,6 +101,7 @@ Siempre rangos `{min, max}` (iguales cuando no hay incertidumbre), en USD, sin r
   "acquisition_usd": {"min": 12912.4, "max": 13098.1},
   "gross_margin_usd": {"min": 1401.9, "max": 1587.6},
   "gross_margin_pct": {"min": 10.7, "max": 12.3},
+  "plausible_ratio": {"min": 0.4, "max": 3.0},
   "as_of": {"dealer_margin": "2026-11-02", "cost_estimator": "2026-10-30"}
 }
 ```
@@ -108,6 +110,7 @@ Siempre rangos `{min, max}` (iguales cuando no hay incertidumbre), en USD, sin r
 - `transfer.usd = null` con `status ≠ ok`; `jurisdiction`/`seller` se guardan igual para el copy.
 - `est_costs_usd` = suma de lo que haya (puede ser `{0, 0}` sin parámetros).
 - `v` permite cambiar la forma sin bump de `SCORING_VERSION`. La revisión 3 suma `status` y `acquisition_usd` sin subir `v` (nada se desplegó con la forma anterior); la web trata un `margin_ref` sin `status` como `ok` y sin `acquisition_usd` omite esa línea del detalle.
+- `plausible_ratio` (revisión 4): los límites que pasó el precio. Los `margin_ref` anteriores no lo tienen; quien los lee usa `{0.4, 3}`. Sin subir `v`: es una clave nueva opcional.
 - Pocas agencias: `{"v": 1, "status": "few_dealers", "dealer_n": 2, "min_n": 5, "n": 10, "level_used": "transmission"}`, sin `gross_margin_usd` (no alcanza el umbral, va al final del orden).
 
 ### 4. `app_config.dealer_margin`
@@ -123,7 +126,7 @@ Sembrada por la migración (`on conflict (key) do nothing`):
 }
 ```
 
-Parser tolerante en `worker/intelligence/margin.py` (mismo estilo que `cost_estimator.parse_config`): `pct` en 0–100, `min_usd ≥ 0`; inválido → `reconditioning = null`, sin defaults numéricos en código. Editable en `/admin/config` (editor existente): `HINTS.dealer_margin`, `NAMES.dealer_margin = "Margen estimado (PRO-02)"` y un validador zod en `validateConfigChange` (bloque `reconditioning` con números válidos, `transfer.enabled` booleano). El cambio se refleja en los matches en el siguiente rescore (como cualquier parámetro del score).
+Parser tolerante en `worker/intelligence/margin.py` (mismo estilo que `cost_estimator.parse_config`): `pct` en 0–100, `min_usd ≥ 0`; inválido → `reconditioning = null`, sin defaults numéricos en código para los costos. La excepción (revisión 4) es `plausible_ratio: {"min": 0.4, "max": 3}`, que la migración no siembra: si falta o es inválida (`0 < min < 1 < max`), el código usa ese default (`margin.PLAUSIBLE_RATIO`); un guard ausente mostraría márgenes absurdos, no omitiría un costo. Editable en `/admin/config` (editor existente): `HINTS.dealer_margin`, `NAMES.dealer_margin = "Margen estimado (PRO-02)"` y un validador zod en `validateConfigChange` (bloque `reconditioning` con números válidos, `transfer.enabled` booleano). El cambio se refleja en los matches en el siguiente rescore (como cualquier parámetro del score).
 
 ### 5. Dónde se calcula
 
@@ -150,6 +153,7 @@ OR (m.margin_ref IS NULL AND l.price_usd > 0
 - Converge: la condición replica todos los casos en que `margin.compute` devuelve null para un match que existe (`price_ref` sin `dealer_n`, agencias suficientes pero mediana ≤ 0, sin `price_usd`, precio publicado parcial según `published_partial`, con `PARTIAL_KINDS` pasado como parámetro). Tras recalcular, o `margin_ref` queda con valor, o el nuevo `price_ref` sale de la condición. Sin esto, un anticipo con precio de contado en la descripción volvía a la cola en cada arranque y en cada pasada. Un `price_ref` de siete claves no entra (no tiene `dealer_n`); lo completa la pasada nocturna de 14 días, que recalcula `price_ref` y margen juntos.
 - Es idempotente y no reenvía alertas: `rescore()` solo hace `upsert_scored(..., backfill=True)`, que en una fila existente conserva `is_backfill` y `generated_at` y no pasa por el `Notifier`.
 - Primer efecto: el primer arranque del worker después de aplicar la migración (que despliega con el worker nuevo, así que siempre hay un arranque). No hay `tools/rescore` en `worker/tools/` y no se agrega: la condición del arranque es el relleno.
+- **Revisión 4:** la rama `dealer_median > 0` exige además `round(l.price_usd, 2)` dentro de `[min × mediana − 0,01, max × mediana + 0,01]` (los mismos límites y holgura que `margin.plausible_price`, con `plausible_ratio` de la config como parámetro), así un precio implausible, que queda en null, no vuelve a la cola en cada pasada. Y se suma `IMPLAUSIBLE_MARGIN` (§13) para los ya guardados.
 - Matches de avisos `gone` o fuera de 14 días no se rellenan (la condición exige `l.status = 'active'`, como hoy): sin margen en el histórico.
 
 ### 7. Gating (solo Pro)
@@ -195,6 +199,7 @@ Mismo texto en `worker/intelligence/copy.py` (`MARGIN`) y `web/lib/copy.ts` (`MA
 - `search_results`: nueva rama
   `case when (select ok from margin_access) then mg.low end desc nulls last`, con `margin_access as (select p_sort = 'margin' and public.my_plan_feature('dealer_margin') ok)` una sola vez por consulta y un `left join` a `public.my_margin_sort_keys(p_profile_id)` (`security definer`: dueño y feature chequeados adentro, porque `search_results` es `security invoker` y `authenticated` no lee `margin_ref`). Sin margen, al final y luego por fecha. Se redefine `search_results` **sin tocar `match_cards`** (PRO-01 la redefine para agregar `seller_unknown`; si las dos ramas la tocaran, la segunda en aplicarse rompería con «cannot drop columns from view»).
 - Ordena por el extremo bajo, como el umbral. Un `few_dealers` no tiene `gross_margin_usd`: `my_margin_sort_keys` le da `low = null` y queda al final, con los que no tienen margen (revisión 3).
+- Precio implausible (revisión 4): `margin_ref = null`, así que también al final. Los guardados antes del guard los recalcula el worker (§13); `my_margin_sort_keys` no cambia.
 
 ### 11. Eventos
 
@@ -209,6 +214,17 @@ Mismo texto en `worker/intelligence/copy.py` (`MARGIN`) y `web/lib/copy.ts` (`MA
 - `marginAccess = my_plan_feature('dealer_margin') && snapshot.limits.min_threshold_usd != null`: en la base vieja `plan_limits` no tiene `min_threshold_usd`, así que ni un admin ve el control ni se envía `opportunity_threshold_usd` en el insert/update (la columna no existe). `toColumns` solo incluye la clave si el valor está definido.
 - `web/types/database.ts` se edita a mano: `matches.margin_ref`, `search_profiles.opportunity_threshold_usd`, `Functions.my_match_margins`.
 - El **worker** sí necesita la migración (escribe `margin_ref`, lee `opportunity_threshold_usd`): orden de despliegue migración → worker → web, como F-02.
+
+### 13. Precio implausible (revisión 4, 02/11, tras desplegar)
+
+En producción, de 1.480 matches con margen, 185 (casi todos Facebook) tenían `asking_usd > 3 ×` la mediana de agencias (p. ej. un VW Bora «USD 600.000», pesos cargados como dólares, contra una mediana de USD 8.038 → «Margen bruto estimado: USD -645.970») y 16 `asking_usd < 0,5 ×` (anticipo o cuota no detectados). Regla de Juan: no mostrar números que no son reales.
+
+- **Cálculo.** `margin.compute`, después de `few_dealers` y de la mediana: si el precio no cumple `min × mediana ≤ asking ≤ max × mediana` (`plausible_price`, con `asking` y la mediana redondeados a centavos como se guardan y 0,01 USD de holgura), devuelve **null**. Se eligió null y no un `status` nuevo porque es el mismo caso que el precio parcial: lo que está mal es el precio, que la tarjeta y la ficha ya muestran; una aclaración («precio dudoso») sería un juicio sobre el aviso que no podemos sostener y no le sirve al Pro para decidir. `few_dealers` tiene prioridad (es cierto con cualquier precio). Los bordes (exactamente 3× y 0,4×) son plausibles.
+- **Parámetros.** `app_config.dealer_margin.plausible_ratio = {"min": 0.4, "max": 3}`, con default en código y sin migración (§4). Editable en `/admin/config` (validado: `0 < min < 1 < max`).
+- **Guard al leer lo guardado** (para no esperar al recálculo): `margin.plausible(ref)` en el worker (`email_payload` y `threshold_low` devuelven null: sin línea en el email y sin umbral en USD) y `plausiblePrice` en `web/lib/margin-view.ts` (`asMarginRef` devuelve null, así que `marginLine`, `marginCardLine`, `marginDetail`, `fetchMatchMargins` y `MarginEstimate` no muestran nada). Usan los límites guardados en el ref o, si no los tiene (los anteriores), `{0.4, 3}`.
+- **Umbral en USD.** Con null no hay `payload.margin`, así que un precio implausible nunca alcanza el umbral; un ref viejo tampoco (`threshold_low` null).
+- **Convergencia de los ya guardados.** `rescore_queue` suma `IMPLAUSIBLE_MARGIN`: `margin_ref` con `status` ok (o sin `status`) cuyo `asking_usd` está fuera de `plausible_ratio × dealer_median` del propio ref, con los límites de la config **o** con los del propio ref (`plausible_ratio` guardado, o el default para los de antes del guard: los mismos con que `margin.plausible` y la web los ocultan). Lo segundo evita que, con una config más laxa que el default, un ref viejo oculto quede oculto para siempre sin recalcularse; un ref recalculado guarda como propios los límites de la config, así que cae fuera de las dos y sale de la cola. Corre en las dos pasadas, así que el **primer arranque del worker** después del deploy los recalcula: quedan en null (o con un margen real si el precio o la mediana cambiaron) y salen de las dos condiciones. Como todo rescore, `upsert_scored(backfill=True)` no pasa por el `Notifier`: no se reenvían alertas y `generated_at` no cambia. Si Juan ajusta `plausible_ratio`, la próxima pasada recalcula los que quedaron afuera.
+- **Lo que no converge solo.** Los matches de avisos no activos (o de búsquedas sin acceso) no entran a la cola: conservan el ref viejo, que el guard de lectura oculta. Solo aparecen en filtros como «Guardados» o «Comprados» y, con el orden por margen, uno de esos debajo de 0,4× podría quedar arriba sin línea. No se arregla con SQL ahora: si hiciera falta, una migración que haga que `my_margin_sort_keys` devuelva `low = null` cuando `asking_usd` está fuera de `[0,4; 3] × dealer_median` del ref (propuesta, no aplicada). Las notificaciones ya creadas (digest pendiente) llevan el payload congelado; un email de digest no lleva la línea en v1.
 
 ## Migración
 
@@ -256,6 +272,7 @@ Offline (corren en esta rama):
 Contra la base local (corridos en la revisión 3):
 
 - pgTAP `supabase/tests/pro02_margin_test.sql`: `my_match_margins` vacía sin la feature y con filas para Pro (incluido un `few_dealers`); `search_results('margin')` ordena por margen solo con la feature, con `few_dealers` y sin margen al final; claves de `plan_limits`; `authenticated`/`anon` sin `SELECT` sobre `matches.margin_ref` (un `select margin_ref` directo falla con 42501, Pro o no) y con el resto de las columnas; `my_margin_sort_keys` vacía sin la feature y para búsquedas ajenas; la migración se aplica desde base vacía.
+- Revisión 4 (precio implausible): `golden.json` suma «en el borde de arriba (3x)», «en el borde de abajo (0,4x)» (con margen) y tres refs guardados antes del guard (`implausible: true`: ARS cargado como USD, apenas arriba de 3×, abajo de 0,4×) cuyo `payload` y `line` son null; `test_margin.py` (`ImplausibleTests`, `plausible_ratio` con default), `test_notifications_margin.py` (no alcanza el umbral), `margin-view.test.ts` y `margin-data.test.ts` (nada en tarjeta, ficha ni detalle), `admin-config.test.ts`; `pytest -m db` (`ImplausiblePricePostgresTests`): arriba de 3× y abajo de 0,4× sin margen y fuera de la cola, el borde con margen, un ref viejo implausible recalculado una vez sin notificaciones, uno de un precio corregido recibe el margen real, `plausible_ratio` de la config llega a la cola, y con una config más laxa un ref viejo oculto por el default vuelve a la cola y se recalcula con los límites de la config.
 - `pytest -m db`: 6 agencias + 4 particulares por `comparables()` → `rescore` → `margin_ref.dealer_n = 6`; `rescore_queue` toma un match con `dealer_n ≥ min_n` y `margin_ref` null, y no lo vuelve a tomar después; lo mismo con 0 agencias (`few_dealers`).
 
 ## Riesgos

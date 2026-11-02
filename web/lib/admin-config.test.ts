@@ -36,8 +36,10 @@ describe("guided config validators", () => {
     const current = { as_of: "2026-11-02", source: "Juan", reconditioning: { pct: 5, min_usd: 300 }, transfer: { enabled: true } };
     expect(validateConfigChange("dealer_margin", current, current)).toBeNull();
     expect(validateConfigChange("dealer_margin", { ...current, reconditioning: { pct: 7.5, min_usd: 0 } }, current)).toBeNull();
+    expect(validateConfigChange("dealer_margin", { ...current, plausible_ratio: { min: 0.4, max: 3 } }, current)).toBeNull();
     for (const bad of [{ reconditioning: { pct: 120, min_usd: 300 } }, { reconditioning: { pct: 5 } }, { transfer: { enabled: "yes" } },
-      { as_of: "02/11/2026" }, { reconditioning: { pct: 5, min_usd: -1 } }]) {
+      { as_of: "02/11/2026" }, { reconditioning: { pct: 5, min_usd: -1 } }, { plausible_ratio: { min: 0, max: 3 } },
+      { plausible_ratio: { min: 0.4, max: 0.9 } }, { plausible_ratio: { min: 0.4 } }]) {
       expect(validateConfigChange("dealer_margin", { ...current, ...bad }, current)).toBe(DEALER_MARGIN_MESSAGE);
     }
     const limits = { enforced: false, pro: { max_profiles: 20, dealer_margin: true, min_threshold_usd: 500 } };

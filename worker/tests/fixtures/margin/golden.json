@@ -55,6 +55,10 @@
      "min": 7.25,
      "max": 7.3
     },
+    "plausible_ratio": {
+     "min": 0.4,
+     "max": 3.0
+    },
     "as_of": {
      "dealer_margin": "2026-11-02",
      "cost_estimator": "2026-10-30"
@@ -121,6 +125,10 @@
     "gross_margin_pct": {
      "min": 11.43,
      "max": 11.43
+    },
+    "plausible_ratio": {
+     "min": 0.4,
+     "max": 3.0
     },
     "as_of": {
      "dealer_margin": "2026-11-02"
@@ -196,6 +204,10 @@
      "min": 7.25,
      "max": 7.3
     },
+    "plausible_ratio": {
+     "min": 0.4,
+     "max": 3.0
+    },
     "as_of": {
      "dealer_margin": "2026-11-02",
      "cost_estimator": "2026-10-30"
@@ -266,6 +278,10 @@
      "min": 11.43,
      "max": 11.43
     },
+    "plausible_ratio": {
+     "min": 0.4,
+     "max": 3.0
+    },
     "as_of": {
      "dealer_margin": "2026-11-02"
     }
@@ -334,6 +350,10 @@
     "gross_margin_pct": {
      "min": 11.43,
      "max": 11.43
+    },
+    "plausible_ratio": {
+     "min": 0.4,
+     "max": 3.0
     },
     "as_of": {
      "dealer_margin": "2026-11-02"
@@ -404,6 +424,10 @@
      "min": 14.29,
      "max": 14.29
     },
+    "plausible_ratio": {
+     "min": 0.4,
+     "max": 3.0
+    },
     "as_of": {
      "dealer_margin": "2026-11-02"
     }
@@ -470,6 +494,10 @@
      "min": 11.43,
      "max": 11.43
     },
+    "plausible_ratio": {
+     "min": 0.4,
+     "max": 3.0
+    },
     "as_of": {
      "dealer_margin": "2026-11-02"
     }
@@ -533,6 +561,10 @@
     "gross_margin_pct": {
      "min": 11.43,
      "max": 11.43
+    },
+    "plausible_ratio": {
+     "min": 0.4,
+     "max": 3.0
     },
     "as_of": {
      "dealer_margin": "2026-11-02"
@@ -603,6 +635,10 @@
      "min": 12.4,
      "max": 12.46
     },
+    "plausible_ratio": {
+     "min": 0.4,
+     "max": 3.0
+    },
     "as_of": {
      "dealer_margin": "2026-11-02",
      "cost_estimator": "2026-10-30"
@@ -665,6 +701,10 @@
     "gross_margin_pct": {
      "min": 17.0,
      "max": 17.0
+    },
+    "plausible_ratio": {
+     "min": 0.4,
+     "max": 3.0
     },
     "as_of": {
      "dealer_margin": "2026-11-02"
@@ -738,6 +778,10 @@
     "gross_margin_pct": {
      "min": -10.63,
      "max": -10.58
+    },
+    "plausible_ratio": {
+     "min": 0.4,
+     "max": 3.0
     },
     "as_of": {
      "dealer_margin": "2026-11-02",
@@ -815,6 +859,10 @@
      "min": 7.25,
      "max": 7.3
     },
+    "plausible_ratio": {
+     "min": 0.4,
+     "max": 3.0
+    },
     "as_of": {
      "dealer_margin": "2026-11-02",
      "cost_estimator": "2026-10-30"
@@ -853,6 +901,315 @@
     "min_n": 5
    },
    "line": "Margen estimado: no hay suficientes agencias publicando este modelo para estimarlo (n = 2, mínimo 5)"
+  },
+  {
+   "name": "en el borde de arriba (3x)",
+   "margin_ref": {
+    "v": 1,
+    "status": "ok",
+    "dealer_median": 18000.0,
+    "dealer_n": 6,
+    "n": 10,
+    "level_used": "transmission",
+    "asking_usd": 54000.0,
+    "price_label": "published",
+    "currency": "USD",
+    "fx": null,
+    "reconditioning": {
+     "pct": 5.0,
+     "min_usd": 300.0,
+     "usd": 2700.0
+    },
+    "transfer": {
+     "status": "no_fx",
+     "usd": null,
+     "terms": [
+      "arancel",
+      "sellos",
+      "formularios"
+     ],
+     "jurisdiction": [
+      "caba"
+     ],
+     "seller": "private"
+    },
+    "est_costs_usd": {
+     "min": 2700.0,
+     "max": 2700.0
+    },
+    "acquisition_usd": {
+     "min": 56700.0,
+     "max": 56700.0
+    },
+    "gross_margin_usd": {
+     "min": -38700.0,
+     "max": -38700.0
+    },
+    "gross_margin_pct": {
+     "min": -68.25,
+     "max": -68.25
+    },
+    "plausible_ratio": {
+     "min": 0.4,
+     "max": 3.0
+    },
+    "as_of": {
+     "dealer_margin": "2026-11-02"
+    }
+   },
+   "payload": {
+    "status": "ok",
+    "usd_min": -38700,
+    "usd_max": -38700,
+    "pct_min": -68,
+    "pct_max": -68,
+    "dealer_median": 18000,
+    "dealer_n": 6,
+    "reconditioning_pct": 5.0,
+    "transfer_status": "no_fx",
+    "jurisdiction": [
+     "caba"
+    ],
+    "as_of": "2026-11-02"
+   },
+   "line": "Margen bruto estimado: USD -38.700 (contra la mediana de USD 18.000 a la que publican las agencias este modelo, n = 6; descuenta acondicionamiento del 5 %; no descuenta la transferencia porque falta el dólar del día; sin impuestos)"
+  },
+  {
+   "name": "en el borde de abajo (0,4x)",
+   "margin_ref": {
+    "v": 1,
+    "status": "ok",
+    "dealer_median": 18000.0,
+    "dealer_n": 6,
+    "n": 10,
+    "level_used": "transmission",
+    "asking_usd": 7200.0,
+    "price_label": "published",
+    "currency": "USD",
+    "fx": null,
+    "reconditioning": {
+     "pct": 5.0,
+     "min_usd": 300.0,
+     "usd": 360.0
+    },
+    "transfer": {
+     "status": "no_fx",
+     "usd": null,
+     "terms": [
+      "arancel",
+      "sellos",
+      "formularios"
+     ],
+     "jurisdiction": [
+      "caba"
+     ],
+     "seller": "private"
+    },
+    "est_costs_usd": {
+     "min": 360.0,
+     "max": 360.0
+    },
+    "acquisition_usd": {
+     "min": 7560.0,
+     "max": 7560.0
+    },
+    "gross_margin_usd": {
+     "min": 10440.0,
+     "max": 10440.0
+    },
+    "gross_margin_pct": {
+     "min": 138.1,
+     "max": 138.1
+    },
+    "plausible_ratio": {
+     "min": 0.4,
+     "max": 3.0
+    },
+    "as_of": {
+     "dealer_margin": "2026-11-02"
+    }
+   },
+   "payload": {
+    "status": "ok",
+    "usd_min": 10440,
+    "usd_max": 10440,
+    "pct_min": 138,
+    "pct_max": 138,
+    "dealer_median": 18000,
+    "dealer_n": 6,
+    "reconditioning_pct": 5.0,
+    "transfer_status": "no_fx",
+    "jurisdiction": [
+     "caba"
+    ],
+    "as_of": "2026-11-02"
+   },
+   "line": "Margen bruto estimado: USD 10.440 (contra la mediana de USD 18.000 a la que publican las agencias este modelo, n = 6; descuenta acondicionamiento del 5 %; no descuenta la transferencia porque falta el dólar del día; sin impuestos)"
+  },
+  {
+   "name": "implausible: ARS cargado como USD",
+   "implausible": true,
+   "margin_ref": {
+    "v": 1,
+    "status": "ok",
+    "dealer_median": 8038.0,
+    "dealer_n": 6,
+    "n": 10,
+    "level_used": "transmission",
+    "asking_usd": 600000.0,
+    "price_label": "published",
+    "currency": "USD",
+    "fx": null,
+    "reconditioning": {
+     "pct": 5.0,
+     "min_usd": 300.0,
+     "usd": 30000.0
+    },
+    "transfer": {
+     "status": "no_fx",
+     "usd": null,
+     "terms": [
+      "arancel",
+      "sellos",
+      "formularios"
+     ],
+     "jurisdiction": [
+      "caba"
+     ],
+     "seller": "private"
+    },
+    "est_costs_usd": {
+     "min": 30000.0,
+     "max": 30000.0
+    },
+    "acquisition_usd": {
+     "min": 630000.0,
+     "max": 630000.0
+    },
+    "gross_margin_usd": {
+     "min": -621962.0,
+     "max": -621962.0
+    },
+    "gross_margin_pct": {
+     "min": -98.72,
+     "max": -98.72
+    },
+    "as_of": {
+     "dealer_margin": "2026-11-02"
+    }
+   },
+   "payload": null,
+   "line": null
+  },
+  {
+   "name": "implausible: apenas arriba de 3x",
+   "implausible": true,
+   "margin_ref": {
+    "v": 1,
+    "status": "ok",
+    "dealer_median": 18000.0,
+    "dealer_n": 6,
+    "n": 10,
+    "level_used": "transmission",
+    "asking_usd": 54010.0,
+    "price_label": "published",
+    "currency": "USD",
+    "fx": null,
+    "reconditioning": {
+     "pct": 5.0,
+     "min_usd": 300.0,
+     "usd": 2700.5
+    },
+    "transfer": {
+     "status": "no_fx",
+     "usd": null,
+     "terms": [
+      "arancel",
+      "sellos",
+      "formularios"
+     ],
+     "jurisdiction": [
+      "caba"
+     ],
+     "seller": "private"
+    },
+    "est_costs_usd": {
+     "min": 2700.5,
+     "max": 2700.5
+    },
+    "acquisition_usd": {
+     "min": 56710.5,
+     "max": 56710.5
+    },
+    "gross_margin_usd": {
+     "min": -38710.5,
+     "max": -38710.5
+    },
+    "gross_margin_pct": {
+     "min": -68.26,
+     "max": -68.26
+    },
+    "as_of": {
+     "dealer_margin": "2026-11-02"
+    }
+   },
+   "payload": null,
+   "line": null
+  },
+  {
+   "name": "implausible: abajo de 0,4x",
+   "implausible": true,
+   "margin_ref": {
+    "v": 1,
+    "status": "ok",
+    "dealer_median": 18000.0,
+    "dealer_n": 6,
+    "n": 10,
+    "level_used": "transmission",
+    "asking_usd": 7190.0,
+    "price_label": "published",
+    "currency": "USD",
+    "fx": null,
+    "reconditioning": {
+     "pct": 5.0,
+     "min_usd": 300.0,
+     "usd": 359.5
+    },
+    "transfer": {
+     "status": "no_fx",
+     "usd": null,
+     "terms": [
+      "arancel",
+      "sellos",
+      "formularios"
+     ],
+     "jurisdiction": [
+      "caba"
+     ],
+     "seller": "private"
+    },
+    "est_costs_usd": {
+     "min": 359.5,
+     "max": 359.5
+    },
+    "acquisition_usd": {
+     "min": 7549.5,
+     "max": 7549.5
+    },
+    "gross_margin_usd": {
+     "min": 10450.5,
+     "max": 10450.5
+    },
+    "gross_margin_pct": {
+     "min": 138.43,
+     "max": 138.43
+    },
+    "as_of": {
+     "dealer_margin": "2026-11-02"
+    }
+   },
+   "payload": null,
+   "line": null
   }
  ]
 }

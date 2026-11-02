@@ -169,6 +169,23 @@ class PayloadGatingTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(kinds(decide(e, RULES)), [("opportunity", "digest")])
         self.assertIsNone(service.margin_payload(few, {"dealer_margin": False}))
 
+    def test_an_implausible_price_never_reaches_it(self):
+        """asking_usd below 0,4x the dealers' median: compute() gives no
+        margin, and a margin_ref stored before the guard (USD 10.450 of
+        «margin») has no payload either: no line, no USD threshold."""
+        from test_margin import STORED_CASES, stored_before_the_guard
+        low = STORED_CASES["implausible: abajo de 0,4x"]
+        self.assertIsNone(compute(**low))
+        stored = stored_before_the_guard(low)
+        self.assertGreater(stored["gross_margin_usd"]["min"], 10_000)
+        self.assertIsNone(service.margin_payload(stored, {"dealer_margin": True}))
+        e = Event(MATCH, 10, pro(usd=500), level="high", score=80, match_id=110,
+                  payload={"match": {"score": 80, "level": "high", "diff_pct": None},
+                           "margin": service.margin_payload(stored, {"dealer_margin": True})})
+        out = decide(e, RULES)
+        self.assertEqual(kinds(out), [("opportunity", "digest")])
+        self.assertIsNone(out[0].payload.get("threshold_usd"))
+
     def test_a_payload_without_usd_low_does_not_reach_it(self):
         payload = {"match": {"score": 80, "level": "high", "diff_pct": None},
                    "margin": {k: v for k, v in MARGIN_CABA.items()}}
