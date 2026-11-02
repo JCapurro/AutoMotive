@@ -4,7 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { CostEstimate } from "@/components/app/cost-estimate";
-import { MarginEstimate } from "@/components/app/margin-estimate";
+import { MarginEstimate, MarginTeaser } from "@/components/app/margin-estimate";
 import { ListingActions } from "@/components/app/listing-actions";
 import { ListingGallery } from "@/components/app/listing-gallery";
 import { ListingTracking } from "@/components/app/listing-tracking";
@@ -17,7 +17,7 @@ import { ViewTracker } from "@/components/app/view-tracker";
 import { requireUser } from "@/lib/auth";
 import { type WebConfig, webConfig } from "@/lib/config";
 import { costEstimateFor } from "@/lib/cost-estimate-data";
-import { fetchMatchMargins } from "@/lib/margin-data";
+import { fetchMatchMargins, marginAccess, marginTeasersFor } from "@/lib/margin-data";
 import {
   BASE_SELLER_QUESTIONS,
   BODY_TYPE,
@@ -121,7 +121,7 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
   const trackNote = trackingNote(listing, track?.first_at ?? snapshots?.[0]?.observed_at);
   // A down payment or an installment that moved is no price history (PAR-03).
   const showHistory = history.length >= 2 && !publishedIsPartial(listing);
-  const [similar, cost, ownProfile, catalogModel, margins] = await Promise.all([
+  const [similar, cost, ownProfile, catalogModel, margins, marginTeaser] = await Promise.all([
     gone ? Promise.resolve([]) : similarListings(supabase, listing, priceRef),
     // PAR-01: with the plan's total_cost flag, the jurisdiction of the best match's search.
     gone ? Promise.resolve(null) : costEstimateFor(supabase, user.id, listing, best?.search_profile_id ?? null),
@@ -130,6 +130,12 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
     catalogModelOf(supabase, listing),
     // PRO-02: the best match's estimated dealer margin, only for Pro (my_match_margins is empty otherwise).
     gone || !best ? Promise.resolve(new Map()) : fetchMatchMargins((fn, args) => supabase.rpc(fn, args), [best.id]),
+    // Juan, 02/11: without Pro, only whether Pro would see one here; the block is then a blurred placeholder.
+    gone || !best
+      ? Promise.resolve(false)
+      : marginAccess(supabase)
+          .then((access) => marginTeasersFor(user.id, access, [{ listing_id: listingId, match_id: best.id }]))
+          .then((ids) => ids.has(listingId)),
   ]);
   const margin = best ? (margins.get(best.id) ?? null) : null;
   const contactTemplate = ownProfile?.contact_template ?? null;
@@ -245,6 +251,7 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
 
           <CostEstimate listingId={listingId} view={cost} className="mt-3 border-t pt-3" />
           <MarginEstimate margin={margin} className="mt-3 border-t pt-3" />
+          {marginTeaser ? <MarginTeaser className="mt-3 border-t pt-3" /> : null}
 
           {/* In a laptop's short window the panel scrolls: the actions stay pinned to its foot (its height leaves them in view on load too). */}
           <div className="lg:sticky lg:bottom-0 lg:z-10 lg:-mx-5 lg:mt-4 lg:border-t lg:bg-background lg:px-5 lg:pt-4 lg:pb-5">

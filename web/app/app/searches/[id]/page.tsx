@@ -18,7 +18,7 @@ import { requireUser } from "@/lib/auth";
 import { webConfig } from "@/lib/config";
 import { costLinesFor } from "@/lib/cost-estimate-data";
 import { FOLLOW_EMPTY, FOLLOW_LABEL } from "@/lib/copy";
-import { marginAccess, marginLinesFor } from "@/lib/margin-data";
+import { marginAccess, marginLinesFor, marginTeasersFor } from "@/lib/margin-data";
 import { fetchPriceTracks } from "@/lib/price-track";
 import { accessDate, freeResultQuota, includesImmediateAlerts, type PlanLimits, visibleResults } from "@/lib/pro";
 import { describeVehicle } from "@/lib/search";
@@ -133,13 +133,15 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
   const shown = rows.slice(0, reach);
   // PAR-03: the drops of the listings on this page only, in one call; on error, no drop line.
   // PAR-01: the total cost line, with the plan's flag only (one listings query for the page).
-  const [tracks, costLines, marginLines] = await Promise.all([
+  // PRO-02: the margin line for Pro; the other plans, where it would be (Juan, 02/11).
+  const [tracks, costLines, marginLines, marginTeasers] = await Promise.all([
     fetchPriceTracks(
       (fn, args) => supabase.rpc(fn, args),
       shown.map((card) => card.listing_id).filter((lid): lid is number => lid != null),
     ),
     costLinesFor(supabase, user.id, shown),
     marginLinesFor(supabase, margin, shown),
+    marginTeasersFor(user.id, margin, shown),
   ]);
   const href = (next: Partial<{ f: Filter; s: Sort; p: number }>) => {
     const qs = new URLSearchParams({ f: next.f ?? filter, s: next.s ?? sort });
@@ -229,6 +231,7 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
               track={card.listing_id != null ? tracks.get(card.listing_id) : null}
               costLine={card.listing_id != null ? costLines.get(card.listing_id) : null}
               marginLine={card.listing_id != null ? marginLines.get(card.listing_id) : null}
+              marginTeaser={card.listing_id != null && marginTeasers.has(card.listing_id)}
             />
           ))}
         </div>

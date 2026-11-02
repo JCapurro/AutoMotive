@@ -4,10 +4,12 @@ import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
+vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
 
-import { fetchMatchMargins, marginAccess, marginLinesFor, parseMarginAccess } from "@/lib/margin-data";
+import { fetchMatchMargins, marginAccess, marginLinesFor, marginTeasersFor, parseMarginAccess } from "@/lib/margin-data";
 import { marginCardLine, marginLine } from "@/lib/margin-view";
 import { effectiveSort, isSort, SORTS, sortsFor } from "@/lib/sorts";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 const GOLDEN = JSON.parse(readFileSync(path.resolve(__dirname, "../../worker/tests/fixtures/margin/golden.json"), "utf-8")) as {
   cases: { name: string; implausible?: boolean; margin_ref: unknown }[];
@@ -80,6 +82,74 @@ describe("fetchMatchMargins / marginLinesFor", () => {
     const supabase = client(() => ({ data: [{ match_id: 7, margin_ref: few }], error: null }));
     const lines = await marginLinesFor(supabase, { minThresholdUsd: 500 }, [{ listing_id: 70, match_id: 7 }]);
     expect(lines.get(70)).toBe("Margen estimado: pocas agencias para estimarlo (n\u00a0=\u00a02)");
+  });
+});
+
+// The service-role read behind the other plans' preview: what it asked for and what it returns.
+function admin(result: () => { data: unknown; error: unknown }) {
+  const query: { table?: string; columns?: string; filters: unknown[][] } = { filters: [] };
+  const builder = {
+    from(table: string) {
+      query.table = table;
+      return builder;
+    },
+    select(columns: string) {
+      query.columns = columns;
+      return builder;
+    },
+    in(...args: unknown[]) {
+      query.filters.push(["in", ...args]);
+      return builder;
+    },
+    eq(...args: unknown[]) {
+      query.filters.push(["eq", ...args]);
+      return builder;
+    },
+    not(...args: unknown[]) {
+      query.filters.push(["not", ...args]);
+      return builder;
+    },
+    then(resolve: (value: unknown) => unknown, reject: (reason: unknown) => unknown) {
+      return Promise.resolve().then(result).then(resolve, reject);
+    },
+  };
+  vi.mocked(createAdminClient).mockReset().mockReturnValue(builder as unknown as ReturnType<typeof createAdminClient>);
+  return query;
+}
+
+describe("marginTeasersFor (Juan, 02/11: the other plans see where, never the margin)", () => {
+  const FEW = { v: 1, status: "few_dealers", dealer_n: 2, min_n: 5, n: 10, level_used: "transmission" };
+
+  it("Pro, or no match on the page: no teaser and no read", async () => {
+    admin(() => ({ data: [{ id: 7, margin_ref: REF }], error: null }));
+    expect((await marginTeasersFor("u1", { minThresholdUsd: 500 }, [{ listing_id: 70, match_id: 7 }])).size).toBe(0);
+    expect((await marginTeasersFor("u1", null, [{ listing_id: 70, match_id: null }, { listing_id: 71 }]))).toEqual(new Set());
+    expect(createAdminClient).not.toHaveBeenCalled();
+  });
+
+  it("only where Pro would see a figure: not «pocas agencias», not an implausible price", async () => {
+    admin(() => ({ data: [{ id: 7, margin_ref: REF }, { id: 8, margin_ref: BORA }, { id: 9, margin_ref: FEW }], error: null }));
+    const cards = [{ listing_id: 70, match_id: 7 }, { listing_id: 80, match_id: 8 }, { listing_id: 90, match_id: 9 }, { listing_id: 10, match_id: 1 }];
+    expect(await marginTeasersFor("u1", null, cards)).toEqual(new Set([70]));
+  });
+
+  it("reads margin_ref once, from the user's own matches only; only listing ids leave", async () => {
+    const query = admin(() => ({ data: [{ id: 7, margin_ref: REF }], error: null }));
+    const out = await marginTeasersFor("u1", null, [{ listing_id: 70, match_id: 7 }, { listing_id: 71, match_id: 7 }, { listing_id: 80, match_id: 8 }]);
+    expect(createAdminClient).toHaveBeenCalledTimes(1);
+    expect(query.table).toBe("matches");
+    expect(query.columns).toBe("id, margin_ref, search_profiles!inner(user_id)");
+    expect(query.filters).toEqual([["in", "id", [7, 8]], ["eq", "search_profiles.user_id", "u1"], ["not", "margin_ref", "is", null]]);
+    expect([...out]).toEqual([70, 71]);
+  });
+
+  it("an error, or no service key: no teaser rather than a broken page", async () => {
+    admin(() => ({ data: null, error: { message: "permission denied" } }));
+    expect((await marginTeasersFor("u1", null, [{ listing_id: 70, match_id: 7 }])).size).toBe(0);
+    vi.mocked(createAdminClient).mockImplementation(() => {
+      throw new Error("supabaseKey is required.");
+    });
+    expect((await marginTeasersFor("u1", null, [{ listing_id: 70, match_id: 7 }])).size).toBe(0);
   });
 });
 

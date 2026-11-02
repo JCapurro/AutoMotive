@@ -2,7 +2,8 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { asStoredMargin, marginCardLine, type StoredMargin } from "@/lib/margin-view";
+import { asMarginRef, asStoredMargin, marginCardLine, type StoredMargin } from "@/lib/margin-view";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type { Database } from "@/types/database";
 
 /**
@@ -75,4 +76,33 @@ export async function marginLinesFor(supabase: Supabase, access: MarginAccess | 
     if (line) lines.set(card.listing_id, line);
   }
   return lines;
+}
+
+/**
+ * Juan, 02/11: the other plans see where Pro has a margin, never the margin.
+ * Without access, the listing ids among `cards` whose match has one a Pro user
+ * would see as a figure (asMarginRef: not «pocas agencias», a plausible price).
+ * margin_ref is not readable with the user's session, so this reads it with
+ * the server's client, only from `userId`'s own matches; only ids leave here.
+ */
+export async function marginTeasersFor(userId: string, access: MarginAccess | null, cards: MarginCard[]): Promise<Set<number>> {
+  const out = new Set<number>();
+  const ids = [...new Set(cards.map((c) => c.match_id).filter((id): id is number => id != null))];
+  if (access || !ids.length) return out;
+  try {
+    const { data, error } = await createAdminClient()
+      .from("matches")
+      .select("id, margin_ref, search_profiles!inner(user_id)")
+      .in("id", ids)
+      .eq("search_profiles.user_id", userId)
+      .not("margin_ref", "is", null);
+    if (error || !data) return out;
+    const shown = new Set(data.filter((row) => asMarginRef(row.margin_ref) != null).map((row) => Number(row.id)));
+    for (const card of cards) {
+      if (card.listing_id != null && card.match_id != null && shown.has(card.match_id)) out.add(card.listing_id);
+    }
+  } catch {
+    // No teaser rather than a broken page.
+  }
+  return out;
 }

@@ -1,7 +1,7 @@
 import { Car, MapPin, Star } from "lucide-react";
 import Link from "next/link";
 
-import { BODY_TYPE, SELLER_UNKNOWN, isBodyType } from "@/lib/copy";
+import { BODY_TYPE, MARGIN_TEASER, SELLER_UNKNOWN, isBodyType } from "@/lib/copy";
 import { ageLine, firstImage, km, money, vehicle } from "@/lib/format";
 import { cardTrackLine, type PriceTrack } from "@/lib/price-track";
 import type { MatchCard } from "@/lib/types";
@@ -23,6 +23,7 @@ export function ListingCard({
   track,
   costLine,
   marginLine,
+  marginTeaser = false,
 }: {
   card: Pick<
     MatchCard,
@@ -56,6 +57,8 @@ export function ListingCard({
   costLine?: string | null;
   /** PRO-02: the estimated dealer margin's short card line (lib/margin-data.ts marginLinesFor), only for Pro. */
   marginLine?: string | null;
+  /** Juan, 02/11: without Pro, Pro would show a margin here (marginTeasersFor): the line, unreadable. */
+  marginTeaser?: boolean;
 }) {
   const image = firstImage(card.images);
   const name = vehicle(card);
@@ -110,6 +113,17 @@ export function ListingCard({
       {marginLine ? (
         <p data-testid="margin-line" className="col-start-2 min-w-0 text-[13px] break-words text-muted-foreground">
           {marginLine}
+        </p>
+      ) : marginTeaser ? (
+        <p data-testid="margin-teaser-line" className="col-start-2 flex min-w-0 flex-wrap items-center gap-x-1.5 text-[13px] text-muted-foreground">
+          <span>
+            {MARGIN_TEASER.label}:<span className="sr-only"> {MARGIN_TEASER.hidden}</span>
+          </span>
+          {/* One piece, so a narrow card wraps it whole instead of leaving the badge alone. */}
+          <span aria-hidden className="inline-flex items-center gap-1.5">
+            <span className="blur-[4px] select-none">{MARGIN_TEASER.cardFigure}</span>
+            <span className="rounded bg-foreground px-1.5 py-px text-[11px] leading-4 font-semibold text-background">{MARGIN_TEASER.badge}</span>
+          </span>
         </p>
       ) : null}
 

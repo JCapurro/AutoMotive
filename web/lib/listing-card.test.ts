@@ -66,6 +66,22 @@ it("shows the total cost line only when given, and leaves the card as it was oth
   for (const costLine of [null, undefined, ""]) expect(renderToStaticMarkup(createElement(ListingCard, { card, costLine }))).toBe(plain);
 });
 
+// Juan, 02/11: without Pro, where Pro would see the margin, the line in view and unreadable.
+it("shows the margin teaser only when asked, with no figure, and never over Pro's own line", () => {
+  const html = renderToStaticMarkup(createElement(ListingCard, { card, marginTeaser: true }));
+  const teaser = html.match(/<p[^>]*data-testid="margin-teaser-line"[^>]*>[\s\S]*?<\/p>/)?.[0] ?? "";
+  expect(teaser).toMatch(/^<p[^>]*class="col-start-2\b/);
+  expect(teaser).toMatch(/<span aria-hidden="true" class="[^"]*"><span class="blur-\[4px\] select-none">USD X\.XXX<\/span><span [^>]*>Pro<\/span><\/span>/);
+  expect(teaser).toContain('<span class="sr-only"> disponible con Pro</span>');
+  expect(teaser.replace(/<[^>]+>/g, "")).not.toMatch(/\d/);
+  // The card is one link (its title's, stretched): nothing to click inside the line.
+  expect(teaser).not.toContain("<a");
+  const pro = renderToStaticMarkup(createElement(ListingCard, { card, marginLine: "Margen bruto estimado: USD 1.210 a 1.230", marginTeaser: true }));
+  expect(pro).toContain('data-testid="margin-line"');
+  expect(pro).not.toContain("margin-teaser-line");
+  expect(renderToStaticMarkup(createElement(ListingCard, { card, marginTeaser: false }))).toBe(renderToStaticMarkup(createElement(ListingCard, { card })));
+});
+
 // The photo spans three rows; a cost line makes the km line the fourth, which
 // auto-placement would drop into the photo's column.
 it("keeps the km / body / location line in the text column, with or without a cost line", () => {
