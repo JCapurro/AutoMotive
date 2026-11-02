@@ -138,8 +138,9 @@ async def delete_matches(cx: AsyncConnection, profile_id: int, listing_ids: list
 # PRO-02: a match that should have a margin_ref and has none (stored before
 # margin_ref existed; SCORING_VERSION was not bumped). It mirrors every case
 # where intelligence/margin.compute returns None: a price_ref without
-# dealer_n (before the seller split), enough dealers but a median <= 0, no
-# price in USD, and a published price that is a down payment or an
+# dealer_n (before the seller split), enough dealers but a median <= 0 or a
+# price outside plausible_ratio x the median (margin.plausible_price, the
+# same bounds and slack), no price in USD, and a published price that is a down payment or an
 # installment (pipeline.ingest.published_partial: such a listing still
 # matches when the description gave its cash price). Fewer dealers than
 # min_n do get one ({status: few_dealers}). Re-scoring a row that passes
@@ -148,22 +149,42 @@ async def delete_matches(cx: AsyncConnection, profile_id: int, listing_ids: list
 WITHOUT_MARGIN = ("(m.margin_ref IS NULL AND l.price_usd > 0 "
                   " AND (m.price_ref->>'dealer_n')::int IS NOT NULL "
                   " AND ((m.price_ref->>'dealer_n')::int < %(min_n)s "
-                  "      OR (m.price_ref->>'dealer_median')::numeric > 0) "
+                  "      OR ((m.price_ref->>'dealer_median')::numeric > 0 "
+                  "          AND round(l.price_usd, 2) BETWEEN "
+                  "              %(ratio_min)s * (m.price_ref->>'dealer_median')::numeric - %(eps)s "
+                  "          AND %(ratio_max)s * (m.price_ref->>'dealer_median')::numeric + %(eps)s)) "
                   " AND NOT coalesce(l.price_partial, false) "
                   " AND l.description_facts #> '{price_check,published_partial}' IS DISTINCT FROM 'true'::jsonb "
                   " AND NOT coalesce(l.description_facts #>> '{price_check,published_kind}' = ANY(%(partial_kinds)s),"
                   "                  false))")
 
+# PRO-02: a stored margin whose price is implausible (margin.plausible): the
+# rows written before the guard (185 in production, almost all Facebook) and
+# any written under looser bounds. Re-scoring writes margin_ref = null (or a
+# plausible one if the price or the median moved), which then fails both
+# this and WITHOUT_MARGIN: the queue converges and, as every re-score, sends
+# no alert. Until then the worker's alerts and the web hide them.
+IMPLAUSIBLE_MARGIN = ("(coalesce(m.margin_ref->>'status', 'ok') = 'ok' "
+                      " AND (m.margin_ref->>'dealer_median')::numeric > 0 "
+                      " AND (m.margin_ref->>'asking_usd')::numeric NOT BETWEEN "
+                      "     %(ratio_min)s * (m.margin_ref->>'dealer_median')::numeric - %(eps)s "
+                      " AND %(ratio_max)s * (m.margin_ref->>'dealer_median')::numeric + %(eps)s)")
+
 
 async def rescore_queue(*, days: int, scoring_version: str, min_n: int | None = None,
+                        plausible_ratio: dict[str, float] | None = None,
                         outdated_only: bool = False) -> list[dict[str, Any]]:
     """(match_id, search_profile_id, listing_id) to re-score (sección 6.1): the
     matches of active listings seen in the last `days` (the median moves),
     every match scored by another scoring_version, and (PRO-02) those with
-    dealer comparables counted and no margin_ref yet (WITHOUT_MARGIN)."""
+    dealer comparables counted and no margin_ref yet (WITHOUT_MARGIN) or a
+    margin for an implausible price (IMPLAUSIBLE_MARGIN). `plausible_ratio`:
+    app_config.dealer_margin's (margin.parse_config), the default without it."""
+    from intelligence import margin
     if min_n is None:
         from intelligence.config import DEFAULT_COMPARABLES
         min_n = int(DEFAULT_COMPARABLES["min_n"])
+    ratio = margin.parse_ratio(plausible_ratio)
     recent = "" if outdated_only else (
         " OR l.last_seen_at >= now() - make_interval(days => %(days)s)")
     async with connection() as cx:
@@ -172,10 +193,11 @@ async def rescore_queue(*, days: int, scoring_version: str, min_n: int | None = 
             "  JOIN listings l ON l.id = m.listing_id "
             "  JOIN search_profiles sp ON sp.id = m.search_profile_id "
             " WHERE l.status = 'active' AND public.search_access_active(sp.id) "
-            f"  AND (m.scoring_version <> %(version)s OR {WITHOUT_MARGIN}{recent}) "
+            f"  AND (m.scoring_version <> %(version)s OR {WITHOUT_MARGIN} OR {IMPLAUSIBLE_MARGIN}{recent}) "
             " ORDER BY m.search_profile_id, m.listing_id",
             {"days": days, "version": scoring_version, "min_n": min_n,
-             "partial_kinds": sorted(PARTIAL_KINDS)})).fetchall()
+             "partial_kinds": sorted(PARTIAL_KINDS), "ratio_min": ratio["min"], "ratio_max": ratio["max"],
+             "eps": margin.PLAUSIBLE_EPS})).fetchall()
 
 
 async def matches_of_profile(profile_id: int) -> list[dict[str, Any]]:

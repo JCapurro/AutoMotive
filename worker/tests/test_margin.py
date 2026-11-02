@@ -45,7 +45,18 @@ def compute(r=None, ref=POOL, zones=PALERMO, dealer=DEALER, cost=COST, fx=None, 
 
 class ParseConfigTests(unittest.TestCase):
     def test_the_seeded_config(self):
-        self.assertEqual(DEALER, {"as_of": "2026-11-02", "reconditioning": {"pct": 5.0, "min_usd": 300.0}, "transfer": True})
+        self.assertEqual(DEALER, {"as_of": "2026-11-02", "reconditioning": {"pct": 5.0, "min_usd": 300.0}, "transfer": True,
+                                  "plausible_ratio": {"min": 0.4, "max": 3.0}})
+
+    def test_the_plausible_ratio_defaults_in_code(self):
+        """No migration: without plausible_ratio in app_config the guard is {0.4, 3}."""
+        for raw in (None, {}, {"plausible_ratio": None}, {"plausible_ratio": {"min": 0.4}},
+                    {"plausible_ratio": {"min": 0, "max": 3}}, {"plausible_ratio": {"min": 0.5, "max": 0.9}},
+                    {"plausible_ratio": {"min": True, "max": 3}}, {"plausible_ratio": {"min": 1.2, "max": 3}}):
+            with self.subTest(raw=raw):
+                self.assertEqual(margin.parse_config(raw)["plausible_ratio"], {"min": 0.4, "max": 3.0})
+        self.assertEqual(margin.parse_config({"plausible_ratio": {"min": 0.5, "max": 2.5}})["plausible_ratio"],
+                         {"min": 0.5, "max": 2.5})
 
     def test_tolerant_and_without_defaults(self):
         for raw in (None, {}, "x", {"reconditioning": {"pct": 120, "min_usd": 300}},
@@ -357,7 +368,70 @@ class EvaluationTests(unittest.TestCase):
         self.assertEqual(scorer.evaluate(1, profile).row()["margin_ref"]["min_n"], scorer.cfg.min_n)
 
 
-USD_ROW = row(price=15_000.0, currency="USD", price_usd=15_000.0)
+def usd_row(price_usd: float):
+    return row(price=price_usd, currency="USD", price_usd=price_usd)
+
+
+# The production case (PRO-02 after deploy): a VW Bora «USD 600.000», ARS loaded as USD.
+BORA = PriceRef(**{**POOL.__dict__, "dealer_median": 8_038.0})
+# No guard: what compute() stored before it (the refs rescore_queue recomputes).
+NO_GUARD = {**DEALER, "plausible_ratio": {"min": 1e-9, "max": 1e9}}
+
+
+class ImplausibleTests(unittest.TestCase):
+    """asking_usd above 3x or below 0.4x the dealers' median: no margin
+    (None: no line, no note, no threshold), the bounds inclusive."""
+
+    def test_above_and_below_have_no_margin(self):
+        self.assertIsNone(compute(r=usd_row(600_000.0), ref=BORA))
+        self.assertIsNone(compute(r=usd_row(54_010.0)))      # 3,0006x
+        self.assertIsNone(compute(r=usd_row(7_190.0)))       # 0,399x
+
+    def test_the_bounds_are_plausible(self):
+        top, bottom = compute(r=usd_row(54_000.0)), compute(r=usd_row(7_200.0))
+        self.assertEqual((top["status"], top["asking_usd"], top["plausible_ratio"]), ("ok", 54_000.0, {"min": 0.4, "max": 3.0}))
+        self.assertLess(top["gross_margin_usd"]["min"], 0)
+        self.assertEqual(bottom["asking_usd"], 7_200.0)
+        self.assertGreater(bottom["gross_margin_usd"]["min"], 0)
+
+    def test_the_config_s_bounds(self):
+        tight = {**DEALER, "plausible_ratio": {"min": 0.5, "max": 2}}
+        self.assertIsNone(compute(r=usd_row(40_000.0), dealer=tight))
+        self.assertIsNone(compute(r=usd_row(8_000.0), dealer=tight))
+        self.assertEqual(compute(r=usd_row(36_000.0), dealer=tight)["plausible_ratio"], {"min": 0.5, "max": 2.0})
+        # Without plausible_ratio (a dealer_cfg built by hand): the default.
+        self.assertIsNone(compute(r=usd_row(600_000.0), ref=BORA,
+                                  dealer={k: v for k, v in DEALER.items() if k != "plausible_ratio"}))
+
+    def test_fewer_dealers_still_say_so(self):
+        """The few_dealers line is true whatever the price: it stays."""
+        few = compute(r=usd_row(600_000.0), ref=PriceRef(**{**BORA.__dict__, "dealer_n": 2}))
+        self.assertEqual(few["status"], "few_dealers")
+
+    def test_a_stored_ref_from_before_the_guard_is_not_shown(self):
+        """The 185 stored in production: no line, no payload, no threshold,
+        until rescore_queue recomputes them."""
+        stored = compute(r=usd_row(600_000.0), ref=BORA, dealer=NO_GUARD)
+        stored.pop("plausible_ratio")
+        self.assertLess(stored["gross_margin_usd"]["min"], -600_000)   # production: USD -645.970
+        self.assertFalse(margin.plausible(stored))
+        self.assertIsNone(margin.email_payload(stored))
+        self.assertIsNone(margin.line(stored))
+        self.assertIsNone(margin.threshold_low(stored))
+        low = compute(r=usd_row(5_000.0), dealer=NO_GUARD)
+        low.pop("plausible_ratio")
+        self.assertGreater(low["gross_margin_usd"]["min"], 10_000)
+        self.assertIsNone(margin.threshold_low(low))
+        self.assertIsNone(margin.email_payload(low))
+        # A stored ref with bounds is checked against its own.
+        own = {**compute(r=usd_row(36_000.0)), "plausible_ratio": {"min": 0.5, "max": 1.5}}
+        self.assertFalse(margin.plausible(own))
+        self.assertTrue(margin.plausible(compute()))
+        for ref in (None, {}, compute(ref=PriceRef(**{**POOL.__dict__, "dealer_n": 2}))):
+            self.assertFalse(margin.plausible(ref))
+
+
+USD_ROW = usd_row(15_000.0)
 # golden.json's cases: name -> compute()'s arguments.
 GOLDEN_CASES = {
     "pool CABA": {},
@@ -373,7 +447,23 @@ GOLDEN_CASES = {
     "negativo": {"ref": PriceRef(**{**POOL.__dict__, "dealer_median": 15_000.0})},
     "de contado": {"r": row(description_facts={"price_check": {"effective_kind": "cash"}})},
     "pocas agencias": {"ref": PriceRef(**{**POOL.__dict__, "dealer_n": 2})},
+    # The bounds are plausible (inclusive).
+    "en el borde de arriba (3x)": {"r": usd_row(54_000.0)},
+    "en el borde de abajo (0,4x)": {"r": usd_row(7_200.0)},
 }
+# Implausible prices: compute() gives None; margin_ref is what it stored
+# before the guard (no plausible_ratio), which neither the worker nor the web shows.
+STORED_CASES = {
+    "implausible: ARS cargado como USD": {"r": usd_row(600_000.0), "ref": BORA},
+    "implausible: apenas arriba de 3x": {"r": usd_row(54_010.0)},
+    "implausible: abajo de 0,4x": {"r": usd_row(7_190.0)},
+}
+
+
+def stored_before_the_guard(kw):
+    ref = compute(**{**kw, "dealer": NO_GUARD})
+    ref.pop("plausible_ratio")
+    return ref
 GOLDEN_PATH = Path(__file__).parent / "fixtures" / "margin" / "golden.json"
 
 
@@ -391,14 +481,25 @@ class GoldenTests(unittest.TestCase):
                 ref = compute(**kw)
                 cases.append({"name": name, "margin_ref": ref, "payload": margin.email_payload(ref),
                               "line": margin.line(ref)})
+            for name, kw in STORED_CASES.items():
+                ref = stored_before_the_guard(kw)
+                cases.append({"name": name, "implausible": True, "margin_ref": ref,
+                              "payload": margin.email_payload(ref), "line": margin.line(ref)})
             doc = json.loads(GOLDEN_PATH.read_text(encoding="utf-8"))["_doc"]
             GOLDEN_PATH.write_text(json.dumps({"_doc": doc, "cases": cases}, ensure_ascii=False, indent=1) + "\n",
                                    encoding="utf-8")
         golden = json.loads(GOLDEN_PATH.read_text(encoding="utf-8"))
-        self.assertEqual([c["name"] for c in golden["cases"]], list(GOLDEN_CASES))
+        self.assertEqual([c["name"] for c in golden["cases"]], [*GOLDEN_CASES, *STORED_CASES])
         for case in golden["cases"]:
             with self.subTest(case["name"]):
-                self.assertEqual(case["margin_ref"], compute(**GOLDEN_CASES[case["name"]]))
+                if case.get("implausible"):
+                    kw = STORED_CASES[case["name"]]
+                    self.assertIsNone(compute(**kw))
+                    self.assertEqual(case["margin_ref"], stored_before_the_guard(kw))
+                    self.assertIsNone(case["payload"])
+                    self.assertIsNone(case["line"])
+                else:
+                    self.assertEqual(case["margin_ref"], compute(**GOLDEN_CASES[case["name"]]))
                 self.assertEqual(margin.email_payload(case["margin_ref"]), case["payload"])
                 self.assertEqual(margin.line(case["margin_ref"]), case["line"])
 

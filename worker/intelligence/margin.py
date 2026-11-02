@@ -16,6 +16,18 @@ min_n} (Juan, 02/11: say why there is no margin); it is None when price_ref
 predates the seller split, for a partial price or without price_usd (the
 price is what is missing there, and the card already shows it).
 
+An implausible price has no margin either (None, no line and no note, as a
+partial price): asking_usd above plausible_ratio.max x dealer_median (an ARS
+price loaded as USD: a VW Bora «USD 600.000» against a median of USD 8.038)
+or below plausible_ratio.min x dealer_median (a down payment or installment
+the description did not reveal). The bounds are inclusive and come from
+app_config.dealer_margin.plausible_ratio, {min: 0.4, max: 3} by default
+(PLAUSIBLE_RATIO); the ref stores the bounds it passed. A status would say
+something the Pro cannot act on and would still look like a number about the
+car; None keeps the rule "no simulated numbers" (Juan). The stored refs from
+before the guard are hidden by plausible() (here and in web/lib/margin-view.ts)
+and recomputed by rescore_queue (db/repos/matches.py IMPLAUSIBLE_MARGIN).
+
 The transfer is all or nothing and never borrowed from another zone: without
 the search's jurisdiction (or the dollar, or the parameters) it is not
 subtracted and `transfer.status` says why; the copy tells it. Only CABA and
@@ -48,6 +60,10 @@ TRANSFER_STATUS = ("ok", "no_zone", "no_official", "no_official_some", "no_fx", 
 OFFICIAL_JURISDICTIONS = ("caba", "ba")
 # margin_ref.status: a margin, or not enough dealers to estimate one.
 OK, FEW_DEALERS = "ok", "few_dealers"
+# asking_usd / dealer_median outside [min, max]: no margin (app_config.dealer_margin.plausible_ratio).
+PLAUSIBLE_RATIO = {"min": 0.4, "max": 3.0}
+# The comparison's slack in USD: the stored amounts are rounded to cents.
+PLAUSIBLE_EPS = 0.01
 
 
 def _num(x: Any) -> float | None:
@@ -70,11 +86,22 @@ def _range(lo: float, hi: float) -> dict[str, float]:
 # app_config.dealer_margin
 # ---------------------------------------------------------------------------
 
+def parse_ratio(raw: Any) -> dict[str, float]:
+    """plausible_ratio {min, max} with 0 < min < 1 < max, else PLAUSIBLE_RATIO."""
+    if isinstance(raw, Mapping):
+        lo, hi = _num(raw.get("min")), _num(raw.get("max"))
+        if lo is not None and hi is not None and 0 < lo < 1 < hi:
+            return {"min": lo, "max": hi}
+    return dict(PLAUSIBLE_RATIO)
+
+
 def parse_config(raw: Any) -> dict[str, Any]:
-    """{as_of, reconditioning: {pct, min_usd} | None, transfer: bool}. Tolerant
-    and without numeric defaults: an invalid or missing reconditioning block is
-    None (the margin says it subtracts no reconditioning); the transfer is
-    subtracted only with transfer.enabled = true."""
+    """{as_of, reconditioning: {pct, min_usd} | None, transfer: bool,
+    plausible_ratio: {min, max}}. Tolerant and without numeric defaults for
+    the costs: an invalid or missing reconditioning block is None (the margin
+    says it subtracts no reconditioning); the transfer is subtracted only with
+    transfer.enabled = true. plausible_ratio does default (PLAUSIBLE_RATIO):
+    a missing guard would show absurd margins, not omit a cost."""
     raw = raw if isinstance(raw, dict) else {}
     as_of = raw.get("as_of") if cost_estimator._date(raw.get("as_of")) else None
     rec = raw.get("reconditioning")
@@ -85,7 +112,26 @@ def parse_config(raw: Any) -> dict[str, Any]:
             reconditioning = {"pct": pct, "min_usd": min_usd}
     transfer = raw.get("transfer")
     return {"as_of": as_of, "reconditioning": reconditioning,
-            "transfer": isinstance(transfer, dict) and transfer.get("enabled") is True}
+            "transfer": isinstance(transfer, dict) and transfer.get("enabled") is True,
+            "plausible_ratio": parse_ratio(raw.get("plausible_ratio"))}
+
+
+def plausible_price(asking: float, median: float, ratio: Mapping[str, Any] | None = None) -> bool:
+    """min x median <= asking <= max x median (inclusive, with PLAUSIBLE_EPS)."""
+    r = parse_ratio(ratio)
+    return r["min"] * median - PLAUSIBLE_EPS <= asking <= r["max"] * median + PLAUSIBLE_EPS
+
+
+def plausible(ref: Mapping[str, Any] | None) -> bool:
+    """A stored margin (status ok) whose price is plausible against its own
+    median, with its own bounds or, for the refs from before the guard,
+    PLAUSIBLE_RATIO. Not a margin (few_dealers, None, an unknown shape): False."""
+    if not isinstance(ref, Mapping) or ref.get("status", OK) != OK:
+        return False
+    asking, median = _num(ref.get("asking_usd")), _num(ref.get("dealer_median"))
+    if asking is None or median is None or median <= 0:
+        return False
+    return plausible_price(asking, median, ref.get("plausible_ratio"))
 
 
 # ---------------------------------------------------------------------------
@@ -159,6 +205,10 @@ def compute(row: Mapping[str, Any], price_ref: PriceRef | None, zones: Sequence[
     if median is None or median <= 0:
         return None
     dealer_cfg = dealer_cfg if dealer_cfg is not None else parse_config(None)
+    # Compared as stored (cents), so the web and rescore_queue's SQL agree.
+    ratio = parse_ratio(dealer_cfg.get("plausible_ratio"))
+    if not plausible_price(_r2(asking), _r2(median), ratio):
+        return None
 
     rec_cfg = dealer_cfg.get("reconditioning")
     reconditioning = None
@@ -195,6 +245,7 @@ def compute(row: Mapping[str, Any], price_ref: PriceRef | None, zones: Sequence[
         # On what buying the car costs (Juan, 02/11). The margin falls as the
         # cost rises, so the low end pairs the margin's min with the cost's max.
         "gross_margin_pct": _range(gross[0] / acquisition[1] * 100, gross[1] / acquisition[0] * 100),
+        "plausible_ratio": ratio,
         "as_of": as_of,
     }
 
@@ -222,7 +273,10 @@ def threshold_low(ref: Mapping[str, Any] | None) -> float | None:
     """What the USD threshold compares: the estimated margin's low end as
     computed, never the shown number. email_payload rounds a single value to
     the nearest 10, so a USD 495 margin shows as USD 500 but must not reach a
-    USD 500 threshold (the low end, conservative)."""
+    USD 500 threshold (the low end, conservative). None for an implausible
+    price (plausible): it never reaches the threshold."""
+    if not plausible(ref):
+        return None
     g = ref.get("gross_margin_usd") if isinstance(ref, Mapping) else None
     low = _num(g.get("min")) if isinstance(g, Mapping) else None
     return _r2(low) if low is not None else None
@@ -241,7 +295,7 @@ def email_payload(ref: Mapping[str, Any] | None) -> dict[str, Any] | None:
     compares threshold_low, not usd_min."""
     if few_dealers(ref):
         return {"status": FEW_DEALERS, "dealer_n": ref["dealer_n"], "min_n": ref["min_n"]}
-    if not ref or not isinstance(ref.get("gross_margin_usd"), dict):
+    if not ref or not isinstance(ref.get("gross_margin_usd"), dict) or not plausible(ref):
         return None
     g, p = ref["gross_margin_usd"], ref.get("gross_margin_pct") or {}
     rec = ref.get("reconditioning")
