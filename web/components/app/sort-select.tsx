@@ -35,8 +35,9 @@ export function SortSelect({ value, options = sortsFor(false), locked = [], prof
           {SORTS[s]}
         </NativeSelectOption>
       ))}
+      {/* Greyed: the options' own text color would hide that it's disabled. */}
       {locked.filter((s) => !options.includes(s)).map((s) => (
-        <NativeSelectOption key={s} value={s} disabled>
+        <NativeSelectOption key={s} value={s} disabled className="text-muted-foreground">
           {PRO_LOCKED.sort.replace("{sort}", SORTS[s])}
         </NativeSelectOption>
       ))}

@@ -77,7 +77,10 @@ describe("ProLockedSwitch", () => {
 describe("the order", () => {
   const select = (props: Partial<ComponentProps<typeof SortSelect>>) => renderToStaticMarkup(createElement(SortSelect, { value: "score", ...props }));
   it("«Mayor margen estimado» in view and disabled without Pro", () => {
-    expect(select({ locked: ["margin"] })).toMatch(/<option[^>]* value="margin" disabled="">Mayor margen estimado \(Pro\)<\/option>/);
+    const html = select({ locked: ["margin"] });
+    expect(html).toMatch(/<option[^>]* value="margin" disabled="">Mayor margen estimado \(Pro\)<\/option>/);
+    // Greyed in place of the options' own color, which would hide that it's disabled.
+    expect(html.match(/class="([^"]*)" value="margin"/)?.[1].split(" ")).toEqual(["bg-[Canvas]", "text-muted-foreground"]);
     expect(select({})).not.toContain('value="margin"');
   });
   it("Pro picks it as any other", () => {
