@@ -720,6 +720,7 @@ Mientras no existe la web, hay un inspector por CLI: `python -m tools.explain_ma
 - **Publicaciones:** `listing_detail_viewed`, `listing_outbound_clicked`, `listing_status_changed`, `listing_saved`, `listing_discarded` (`reason`).
 - **Preguntas al vendedor:** `seller_questions_generated`, `seller_questions_copied`.
 - **Antes de señar (PAR-02):** `risk_checklist_viewed` (el bloque entró en pantalla abierto o se expandió; una vez por carga de la ficha), `risk_checklist_copied` (`listing_id`; cuenta como acción humana en `admin_decision_metrics`, `viewed` no). Solo a la tabla `events`, no a Pixel ni GA.
+- **Duplicados (PAR-02 resto):** `duplicate_link_clicked` (`listing_id`, `other_listing_id`, `kind`: `duplicate_photos` | `cross_source_photos` | `cross_source_data`, `target`: `internal` si abrió la ficha del otro aviso, `external` si fue a su URL). Lo dispara «Ver la otra publicación» de «Conviene verificar» sin bloquear la navegación; cuenta como acción humana en `admin_decision_metrics` (`20261203120100`). Solo a la tabla `events`.
 - **Compra:** `vehicle_purchased`, `purchase_influence_answered`.
 - **Monetización:** `pro_cta_viewed`, `pro_cta_clicked`, `waitlist_joined`, `plan_limit_hit`.
 
