@@ -34,12 +34,27 @@ export function sellerLabel(listing: SellerFields): string | null {
 }
 
 /**
- * PRO-01, option C: the strict seller filter ran and didn't know the seller
- * (matches.match_reasons.seller unknown and hard). Twin of
- * match_cards.seller_unknown and worker/intelligence/matching.strict_seller_unknown.
+ * PRO-01, option C: the search has the strict seller filter right now: a
+ * seller type stored and the owner's profiles.seller_filter_access (the flag
+ * sync_seller_filter_access keeps with plan_feature('seller_filter')). Twin of
+ * match_cards.seller_unknown's gate (20261129120100). The stored reasons of a
+ * listing the rematch no longer rewrites (gone, paused) outlive a downgrade,
+ * so the reasons alone don't say it.
  */
-export function strictSellerUnknown(reasons: unknown): boolean {
-  if (!reasons || typeof reasons !== "object") return false;
+export function strictSellerFilterOn(filters: unknown, sellerFilterAccess: boolean | null | undefined): boolean {
+  if (sellerFilterAccess !== true || !filters || typeof filters !== "object") return false;
+  const types = (filters as Record<string, unknown>).seller_types;
+  return Array.isArray(types) && types.length > 0;
+}
+
+/**
+ * PRO-01, option C: the strict seller filter ran and didn't know the seller
+ * (matches.match_reasons.seller unknown and hard), and it still applies
+ * (`strictOn`, strictSellerFilterOn). Twin of match_cards.seller_unknown and
+ * worker/intelligence/matching.strict_seller_unknown.
+ */
+export function strictSellerUnknown(reasons: unknown, strictOn: boolean): boolean {
+  if (!strictOn || !reasons || typeof reasons !== "object") return false;
   const seller = (reasons as Record<string, unknown>).seller;
   if (!seller || typeof seller !== "object") return false;
   const { result, kind } = seller as { result?: unknown; kind?: unknown };
@@ -47,7 +62,7 @@ export function strictSellerUnknown(reasons: unknown): boolean {
 }
 
 /** The listing page's «Vendedor» fact: the best match's strict filter without a known seller says so. */
-export function sellerFact(listing: SellerFields & { seller_name?: string | null }, reasons: unknown): string {
-  const label = strictSellerUnknown(reasons) ? SELLER_UNKNOWN : sellerLabel(listing);
+export function sellerFact(listing: SellerFields & { seller_name?: string | null }, reasons: unknown, strictOn: boolean): string {
+  const label = strictSellerUnknown(reasons, strictOn) ? SELLER_UNKNOWN : sellerLabel(listing);
   return [label, listing.seller_name].filter(Boolean).join(", ") || "No informado";
 }

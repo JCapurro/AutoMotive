@@ -3,7 +3,8 @@
 -- that flips plan_feature('seller_filter') marks the user's strict searches
 -- for rematch, whichever path wrote it (a profile write, the time-based expiry
 -- swept by expire_commercial_access, plan_limits edited, a search moved to
--- another user); match_cards.seller_unknown. Every payment path end to end,
+-- another user); match_cards.seller_unknown, only while the strict filter
+-- applies (20261129120100). Every payment path end to end,
 -- and the rematch itself, are in worker/tests/test_pro01_plan_change_postgres.py.
 -- Run with: supabase test db
 begin;
@@ -182,6 +183,33 @@ set local request.jwt.claims = '{"sub": "c2000000-0000-0000-0000-000000000001", 
 select is((select seller_unknown from public.search_results(9921) where listing_id = 9971), true,
           'search_results (setof match_cards) returns it');
 reset role;
+
+-- 20261129120100: only while the strict filter applies, also for a listing
+-- the rematch no longer rewrites (gone, paused).
+insert into public.listings (id, source, external_id, url, title, make, model, year, price, currency, price_usd, seller_type, first_seen_at)
+overriding system value values
+  (9975, 'mercadolibre', 'P01PC-5', 'https://example.test/p01pc-5', 'Pgtap Carro', 'Pgtap', 'Carro', 2018, 15000, 'USD', 15000, null, now());
+insert into public.matches (search_profile_id, listing_id, score, level, score_breakdown, match_reasons, red_flags, scoring_version) values
+  (9922, 9975, 70, 'good', '{}', '{"seller": {"result": "unknown", "detail": "la publicación no lo informa", "kind": "hard"}}', '[]', 'pgtap');
+select is((select seller_unknown from public.match_cards where listing_id = 9975), false,
+          'stale hard reasons on a search without seller_types: no label');
+update public.listings set status = 'gone' where id = 9971;
+select is((select seller_unknown from public.match_cards where listing_id = 9971), true, 'a gone listing keeps it while Pro');
+update public.profiles set plan = 'free', plan_expires_at = null where id = 'c2000000-0000-0000-0000-000000000001';
+select is((select seller_unknown from public.match_cards where listing_id = 9971), false,
+          'after a downgrade from Pro the gone listing (never rematched) loses it');
+set local role authenticated;
+set local request.jwt.claims = '{"sub": "c2000000-0000-0000-0000-000000000001", "role": "authenticated"}';
+select is((select seller_unknown from public.match_cards where listing_id = 9971), false, '... read by the user too');
+reset role;
+update public.profiles set plan = 'pro', plan_expires_at = now() + interval '20 days' where id = 'c2000000-0000-0000-0000-000000000001';
+set local role authenticated;
+set local request.jwt.claims = '{"sub": "c2000000-0000-0000-0000-000000000001", "role": "authenticated"}';
+select is((select seller_unknown from public.match_cards where listing_id = 9971), true, '... and back with Pro');
+reset role;
+update public.search_profiles set filters = filters - 'seller_types' where id = 9921;
+select is((select seller_unknown from public.match_cards where listing_id = 9971), false,
+          'seller_types removed from the search: no label');
 
 select * from finish();
 rollback;

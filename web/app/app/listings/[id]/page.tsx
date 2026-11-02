@@ -36,7 +36,7 @@ import { ageLine, daysSince, imageUrls, km, money, number, pct, vehicle } from "
 import { fetchPriceTracks, summaryLine, trackingNote } from "@/lib/price-track";
 import { financingOffered, financingTerms, isCashPrice, publishedIsPartial, publishedKind } from "@/lib/price";
 import { emphasize, RISK_HINT, RISK_TITLE } from "@/lib/risk-checklist";
-import { sellerFact } from "@/lib/seller";
+import { sellerFact, strictSellerFilterOn } from "@/lib/seller";
 import { contactSubject, renderContactMessage } from "@/lib/contact-message";
 import { createClient } from "@/lib/supabase/server";
 import type { Component, Listing, PriceRef, Reason, RedFlag } from "@/lib/types";
@@ -82,7 +82,7 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
     supabase
       .from("matches")
       .select(
-        "id, search_profile_id, score, level, score_breakdown, match_reasons, price_ref, red_flags, seller_questions, contact_questions, search_profiles(id, name)",
+        "id, search_profile_id, score, level, score_breakdown, match_reasons, price_ref, red_flags, seller_questions, contact_questions, search_profiles(id, name, filters)",
       )
       .eq("listing_id", listingId)
       .order("score", { ascending: false }),
@@ -118,14 +118,17 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
   const trackNote = trackingNote(listing, track?.first_at ?? snapshots?.[0]?.observed_at);
   // A down payment or an installment that moved is no price history (PAR-03).
   const showHistory = history.length >= 2 && !publishedIsPartial(listing);
-  const [similar, cost, contactTemplate, catalogModel] = await Promise.all([
+  const [similar, cost, ownProfile, catalogModel] = await Promise.all([
     gone ? Promise.resolve([]) : similarListings(supabase, listing, priceRef),
     // PAR-01: with the plan's total_cost flag, the jurisdiction of the best match's search.
     gone ? Promise.resolve(null) : costEstimateFor(supabase, user.id, listing, best?.search_profile_id ?? null),
     // PRO-01: the user's template (linted again by renderContactMessage) and the catalog's model, never the title.
-    supabase.from("profiles").select("contact_template").eq("id", user.id).maybeSingle().then(({ data }) => data?.contact_template ?? null),
+    supabase.from("profiles").select("contact_template, seller_filter_access").eq("id", user.id).maybeSingle().then(({ data }) => data),
     catalogModelOf(supabase, listing),
   ]);
+  const contactTemplate = ownProfile?.contact_template ?? null;
+  // PRO-01, option C: «vendedor sin dato» only while the best match's search has the strict filter.
+  const strictOn = strictSellerFilterOn(best?.search_profiles?.filters, ownProfile?.seller_filter_access);
   const contact = {
     message: renderContactMessage(contactTemplate, catalogModel, listing.year, best?.contact_questions ?? null),
     subject: contactSubject(catalogModel, listing.year),
@@ -213,7 +216,7 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
         <Fact label="Combustible">{listing.fuel ? (FUEL[listing.fuel] ?? listing.fuel) : "No informado"}</Fact>
         <Fact label="Vendedor">
           {/* PRO-01, option C: «vendedor sin dato» when the best match's strict filter didn't know it. */}
-          <span data-testid="seller-fact">{sellerFact(listing, reasons)}</span>
+          <span data-testid="seller-fact">{sellerFact(listing, reasons, strictOn)}</span>
         </Fact>
         <Fact label="Ubicación">
           {reasons.location?.result === "ok" ? reasons.location.detail : (listing.location_text ?? "No informada")}

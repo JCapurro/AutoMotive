@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { ListingCard } from "@/components/app/listing-card";
 import { SELLER_UNKNOWN, forbiddenTermsIn } from "@/lib/copy";
-import { sellerFact, strictSellerUnknown } from "@/lib/seller";
+import { sellerFact, strictSellerFilterOn, strictSellerUnknown } from "@/lib/seller";
 
 /**
  * PRO-01, option C (docs/superpowers/specs/2026-10-31-pro01-contacto-design.md,
@@ -12,7 +12,8 @@ import { sellerFact, strictSellerUnknown } from "@/lib/seller";
  * effective seller is unknown still passes, and the card and the listing page
  * say «vendedor sin dato». The rule is matches.match_reasons.seller unknown and
  * hard: match_cards.seller_unknown in SQL, strictSellerUnknown here, twin of
- * worker/intelligence/matching.strict_seller_unknown. Nothing changes without it.
+ * worker/intelligence/matching.strict_seller_unknown. Nothing changes without it,
+ * and only while the search still has the strict filter (strictSellerFilterOn).
  */
 const UNKNOWN_HARD = { seller: { result: "unknown", detail: "la publicación no lo informa", kind: "hard" } } as const;
 
@@ -25,27 +26,43 @@ describe("the copy", () => {
 
 describe("strictSellerUnknown", () => {
   it("only when the hard check didn't know the seller", () => {
-    expect(strictSellerUnknown(UNKNOWN_HARD)).toBe(true);
-    expect(strictSellerUnknown({ seller: { result: "ok", detail: "particular", kind: "hard" } })).toBe(false);
-    expect(strictSellerUnknown({ seller_type: { result: "unknown", detail: "x", kind: "soft" } })).toBe(false);
-    expect(strictSellerUnknown({ seller: { result: "unknown", detail: "x", kind: "soft" } })).toBe(false);
+    expect(strictSellerUnknown(UNKNOWN_HARD, true)).toBe(true);
+    expect(strictSellerUnknown({ seller: { result: "ok", detail: "particular", kind: "hard" } }, true)).toBe(false);
+    expect(strictSellerUnknown({ seller_type: { result: "unknown", detail: "x", kind: "soft" } }, true)).toBe(false);
+    expect(strictSellerUnknown({ seller: { result: "unknown", detail: "x", kind: "soft" } }, true)).toBe(false);
     for (const empty of [{}, null, undefined, "x", { seller: null }, { seller: "unknown" }]) {
-      expect(strictSellerUnknown(empty)).toBe(false);
+      expect(strictSellerUnknown(empty, true)).toBe(false);
     }
+  });
+
+  it("not once the strict filter stopped applying (stale reasons of a gone listing after a downgrade)", () => {
+    expect(strictSellerUnknown(UNKNOWN_HARD, false)).toBe(false);
+  });
+});
+
+describe("strictSellerFilterOn", () => {
+  it("a seller type stored and the owner's seller_filter_access", () => {
+    expect(strictSellerFilterOn({ seller_types: ["private"] }, true)).toBe(true);
+    expect(strictSellerFilterOn({ seller_types: ["private"] }, false)).toBe(false);
+    expect(strictSellerFilterOn({ seller_types: ["dealer"] }, null)).toBe(false);
+    expect(strictSellerFilterOn({ seller_types: [] }, true)).toBe(false);
+    expect(strictSellerFilterOn({ make: "Ford" }, true)).toBe(false);
+    expect(strictSellerFilterOn(null, true)).toBe(false);
   });
 });
 
 describe("sellerFact (the listing page's «Vendedor»)", () => {
   it("says «vendedor sin dato» instead of «No informado», keeping the seller's name", () => {
-    expect(sellerFact({ seller_type: null }, UNKNOWN_HARD)).toBe(SELLER_UNKNOWN);
-    expect(sellerFact({ seller_type: null, seller_name: "Juan" }, UNKNOWN_HARD)).toBe(`${SELLER_UNKNOWN}, Juan`);
+    expect(sellerFact({ seller_type: null }, UNKNOWN_HARD, true)).toBe(SELLER_UNKNOWN);
+    expect(sellerFact({ seller_type: null, seller_name: "Juan" }, UNKNOWN_HARD, true)).toBe(`${SELLER_UNKNOWN}, Juan`);
   });
 
   it("is what it was without the strict filter", () => {
-    expect(sellerFact({ seller_type: null }, {})).toBe("No informado");
-    expect(sellerFact({ seller_type: null, seller_name: "Juan" }, null)).toBe("Juan");
-    expect(sellerFact({ seller_type: "private", seller_name: "Juan" }, {})).toBe("Particular, Juan");
-    expect(sellerFact({ seller_type: "dealer", dealer_inferred: false }, { seller: { result: "ok", detail: "x", kind: "hard" } }))
+    expect(sellerFact({ seller_type: null }, {}, true)).toBe("No informado");
+    expect(sellerFact({ seller_type: null }, UNKNOWN_HARD, false)).toBe("No informado");
+    expect(sellerFact({ seller_type: null, seller_name: "Juan" }, null, true)).toBe("Juan");
+    expect(sellerFact({ seller_type: "private", seller_name: "Juan" }, {}, true)).toBe("Particular, Juan");
+    expect(sellerFact({ seller_type: "dealer", dealer_inferred: false }, { seller: { result: "ok", detail: "x", kind: "hard" } }, true))
       .toBe("Concesionaria");
   });
 });

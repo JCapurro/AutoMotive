@@ -134,5 +134,6 @@ Criterio: «nada nuevo en rojo» respecto de la línea base.
 - [x] Migración `20261129120000_pro01_plan_change_rematch.sql` aplicada, versión insertada, `tools.test_db`.
 - [x] Respuesta 4: tests worker (`test_notifications_seller_unknown.py`, snapshot nuevo `opportunity_seller_unknown.txt`, los 12 anteriores sin cambios), web (`pro01-seller-unknown.test.ts`, `saved-page.test.ts`) y e2e (tarjeta y ficha, escritorio y teléfono).
 - [x] Los cinco comandos en verde; commit por paths.
+- [x] Revisión: `mark_bootstrapped(id, requested_at)` borra solo la marca leída (cambio de plan durante el rematch); batch antes del rematch de una búsqueda con `seller_types` → backfill; «vendedor sin dato» solo con el estricto vigente (`20261129120100_pro01_seller_unknown_gate.sql` aplicada, versión insertada, `tools.test_db`; `strictSellerFilterOn` en la ficha y Guardados). Tests rojos antes del cambio; los cinco comandos en verde; commit por paths.
 - [ ] Juan: `seller_unknown_pct` por fuente antes de desplegar (sigue pendiente).
 
