@@ -1,7 +1,7 @@
 import { Car, MapPin, Star } from "lucide-react";
 import Link from "next/link";
 
-import { BODY_TYPE, isBodyType } from "@/lib/copy";
+import { BODY_TYPE, SELLER_UNKNOWN, isBodyType } from "@/lib/copy";
 import { ageLine, firstImage, km, money, vehicle } from "@/lib/format";
 import { cardTrackLine, type PriceTrack } from "@/lib/price-track";
 import type { MatchCard } from "@/lib/types";
@@ -46,7 +46,7 @@ export function ListingCard({
     | "listing_status"
     | "probable_repost_of"
   > &
-    Partial<Pick<MatchCard, "price_kind" | "financing_offered" | "price_usd" | "body_type" | "price_source">>;
+    Partial<Pick<MatchCard, "price_kind" | "financing_offered" | "price_usd" | "body_type" | "price_source" | "seller_unknown">>;
   showProfile?: boolean;
   footer?: React.ReactNode;
   /** PAR-03: the listing's drops since we first saw it (listing_price_tracks); a line only with a net drop of the price shown. */
@@ -108,6 +108,8 @@ export function ListingCard({
       <p data-testid="card-meta" className="col-start-2 flex min-w-0 flex-wrap gap-x-3.5 text-[13px] text-muted-foreground">
         {mileage ? <span>{mileage}</span> : null}
         {isBodyType(card.body_type) ? <span>{BODY_TYPE[card.body_type]}</span> : null}
+        {/* PRO-01, option C: the strict seller filter let it through without a known seller. */}
+        {card.seller_unknown ? <span data-testid="card-seller-unknown">{SELLER_UNKNOWN}</span> : null}
         {card.location_text ? (
           <span className="inline-flex min-w-0 items-center gap-1">
             <MapPin className="size-3 shrink-0" aria-hidden />

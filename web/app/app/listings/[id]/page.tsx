@@ -26,6 +26,7 @@ import {
   isBodyType,
   LEVEL,
   type Level,
+  lintContactTemplate,
   PRICE_TRACK,
   REASON_NAME,
   REASON_OK,
@@ -35,7 +36,8 @@ import { ageLine, daysSince, imageUrls, km, money, number, pct, vehicle } from "
 import { fetchPriceTracks, summaryLine, trackingNote } from "@/lib/price-track";
 import { financingOffered, financingTerms, isCashPrice, publishedIsPartial, publishedKind } from "@/lib/price";
 import { emphasize, RISK_HINT, RISK_TITLE } from "@/lib/risk-checklist";
-import { sellerLabel } from "@/lib/seller";
+import { sellerFact, strictSellerFilterOn } from "@/lib/seller";
+import { contactSubject, renderContactMessage } from "@/lib/contact-message";
 import { createClient } from "@/lib/supabase/server";
 import type { Component, Listing, PriceRef, Reason, RedFlag } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -45,6 +47,18 @@ export const metadata: Metadata = { title: "Publicación" };
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
 type Similar = { id: number; name: string; mileage: string | null; source: string; usd: number };
+
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
+/** PRO-01: vehicle_catalog's spelling of the listing's model (rows_for_scoring's join), or null. */
+async function catalogModelOf(supabase: Awaited<ReturnType<typeof createClient>>, listing: Pick<Listing, "make" | "model">): Promise<string | null> {
+  if (!listing.make || !listing.model) return null;
+  const { data } = await supabase.from("vehicle_catalog").select("model")
+    .ilike("make", escapeLike(listing.make)).ilike("model", escapeLike(listing.model)).is("trim", null).limit(1).maybeSingle();
+  return data?.model ?? null;
+}
 
 export default async function ListingPage({ params, searchParams }: PageProps<"/app/listings/[id]">) {
   const user = await requireUser();
@@ -68,7 +82,7 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
     supabase
       .from("matches")
       .select(
-        "id, search_profile_id, score, level, score_breakdown, match_reasons, price_ref, red_flags, seller_questions, search_profiles(id, name)",
+        "id, search_profile_id, score, level, score_breakdown, match_reasons, price_ref, red_flags, seller_questions, contact_questions, search_profiles(id, name, filters)",
       )
       .eq("listing_id", listingId)
       .order("score", { ascending: false }),
@@ -104,11 +118,23 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
   const trackNote = trackingNote(listing, track?.first_at ?? snapshots?.[0]?.observed_at);
   // A down payment or an installment that moved is no price history (PAR-03).
   const showHistory = history.length >= 2 && !publishedIsPartial(listing);
-  const [similar, cost] = await Promise.all([
+  const [similar, cost, ownProfile, catalogModel] = await Promise.all([
     gone ? Promise.resolve([]) : similarListings(supabase, listing, priceRef),
     // PAR-01: with the plan's total_cost flag, the jurisdiction of the best match's search.
     gone ? Promise.resolve(null) : costEstimateFor(supabase, user.id, listing, best?.search_profile_id ?? null),
+    // PRO-01: the user's template (linted again by renderContactMessage) and the catalog's model, never the title.
+    supabase.from("profiles").select("contact_template, seller_filter_access").eq("id", user.id).maybeSingle().then(({ data }) => data),
+    catalogModelOf(supabase, listing),
   ]);
+  const contactTemplate = ownProfile?.contact_template ?? null;
+  // PRO-01, option C: «vendedor sin dato» only while the best match's search has the strict filter.
+  const strictOn = strictSellerFilterOn(best?.search_profiles?.filters, ownProfile?.seller_filter_access);
+  const contact = {
+    message: renderContactMessage(contactTemplate, catalogModel, listing.year, best?.contact_questions ?? null),
+    subject: contactSubject(catalogModel, listing.year),
+    custom: lintContactTemplate(contactTemplate).value != null,
+    outboundHref,
+  };
   const back = best ? `/app/searches/${best.search_profile_id}` : "/app";
 
   return (
@@ -189,7 +215,8 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
         <Fact label="Caja">{listing.transmission ? TRANSMISSION[listing.transmission] : "No informada"}</Fact>
         <Fact label="Combustible">{listing.fuel ? (FUEL[listing.fuel] ?? listing.fuel) : "No informado"}</Fact>
         <Fact label="Vendedor">
-          {[sellerLabel(listing), listing.seller_name].filter(Boolean).join(", ") || "No informado"}
+          {/* PRO-01, option C: «vendedor sin dato» when the best match's strict filter didn't know it. */}
+          <span data-testid="seller-fact">{sellerFact(listing, reasons, strictOn)}</span>
         </Fact>
         <Fact label="Ubicación">
           {reasons.location?.result === "ok" ? reasons.location.detail : (listing.location_text ?? "No informada")}
@@ -286,7 +313,7 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
 
           <Section title="¿Qué le pregunto al vendedor?" hint="Un mensaje con lo que falta saber, listo para copiar.">
             <div className="mt-3">
-              <SellerQuestions listingId={listingId} text={best?.seller_questions ?? BASE_SELLER_QUESTIONS} />
+              <SellerQuestions listingId={listingId} text={best?.seller_questions ?? BASE_SELLER_QUESTIONS} contact={contact} />
             </div>
           </Section>
 

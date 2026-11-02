@@ -4,7 +4,9 @@ import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { requireUser } from "@/lib/auth";
-import type { Frequency } from "@/lib/copy";
+import { z } from "zod";
+
+import { CONTACT_TEMPLATE_ERROR, type Frequency, lintContactTemplate } from "@/lib/copy";
 import { track } from "@/lib/events";
 import { createClient } from "@/lib/supabase/server";
 
@@ -32,6 +34,27 @@ export async function saveFrequency(frequency: Frequency): Promise<void> {
   await supabase.from("search_profiles").update({ notification_frequency: frequency }).eq("user_id", user.id);
   await track(supabase, user.id, "notification_frequency_updated", { frequency });
   refresh();
+}
+
+const ContactTemplateInput = z.string().max(5000).nullable();
+
+/**
+ * PRO-01: the template of the message for sellers (profiles.contact_template).
+ * Linted (lintContactTemplate, the worker's rule too); empty saves null (the
+ * default template). The error goes back, never thrown, so the form shows it.
+ * No event of its own: adoption shows in contact_message_copied.custom_template.
+ */
+export async function saveContactTemplate(raw: string | null): Promise<{ error?: string; value?: string | null }> {
+  const user = await requireUser();
+  const parsed = ContactTemplateInput.safeParse(raw);
+  if (!parsed.success) return { error: CONTACT_TEMPLATE_ERROR.too_long };
+  const { value, error } = lintContactTemplate(parsed.data);
+  if (error) return { error: CONTACT_TEMPLATE_ERROR[error] };
+  const supabase = await createClient();
+  const { error: dbError } = await supabase.from("profiles").update({ contact_template: value }).eq("id", user.id);
+  if (dbError) return { error: "No pudimos guardar. Probá de nuevo." };
+  refresh();
+  return { value };
 }
 
 /**

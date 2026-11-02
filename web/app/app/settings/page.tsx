@@ -5,11 +5,12 @@ import { DeleteAccount } from "@/components/app/delete-account";
 import { BillingStatus } from "@/components/app/billing-status";
 import { RenewalButton } from "@/components/app/renewal-button";
 import { ProCtaButton } from "@/components/app/pro-cta";
-import { ChannelsForm, FrequencyForm } from "@/components/app/settings-forms";
+import { ChannelsForm, ContactTemplateForm, FrequencyForm } from "@/components/app/settings-forms";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireUser } from "@/lib/auth";
 import { webConfig } from "@/lib/config";
+import { CONTACT_MESSAGE } from "@/lib/copy";
 import { accountAlertCap, extendsPass, isWaitlistPlan, PLAN_COPY, PLAN_NAMES, accessDescription, accessDate, planPrice, type PlanLimits } from "@/lib/pro";
 import { createClient } from "@/lib/supabase/server";
 
@@ -22,7 +23,7 @@ export default async function SettingsPage() {
   const [{ data: profile }, { data: waitlist }, { data: rawAccess }, { data: payments }, { data: declines }, { data: subscriptions }] = await Promise.all([
     supabase
       .from("profiles")
-      .select("email, plan, default_channels, default_notification_frequency, email_only")
+      .select("email, plan, default_channels, default_notification_frequency, email_only, contact_template")
       .single(),
     supabase.from("pro_waitlist").select("plan").maybeSingle(),
     supabase.rpc("my_plan_limits"),
@@ -59,6 +60,17 @@ export default async function SettingsPage() {
         </CardHeader>
         <CardContent className="grid gap-5 sm:grid-cols-2">
           <FrequencyForm value={profile?.default_notification_frequency ?? "immediate"} />
+        </CardContent>
+      </Card>
+
+      {/* PRO-01 (asumido, a confirmar por Juan: pregunta 1): every plan. */}
+      <Card>
+        <CardHeader>
+          <CardTitle>{CONTACT_MESSAGE.settingsTitle}</CardTitle>
+          <CardDescription>{CONTACT_MESSAGE.settingsHint}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ContactTemplateForm value={profile?.contact_template ?? null} />
         </CardContent>
       </Card>
 

@@ -145,6 +145,7 @@ export type PlanLimits = {
   limits: {
     max_profiles?: number; max_visible_results?: number; max_total_results?: number; immediate_alerts_per_day?: number; immediate_alerts?: boolean;
     threshold_alerts?: boolean; model_less_search?: boolean; max_locations?: number;
+    seller_filter?: boolean; contact_email?: boolean;
   };
 };
 /** Custom is arranged over WhatsApp. wa.me wants the full international number: 54 9 11 3345-4741. */
