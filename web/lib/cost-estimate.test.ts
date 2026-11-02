@@ -56,75 +56,103 @@ function view(o: Opts = {}): CostView {
   const jurisdiction = o.jurisdiction === undefined ? (["caba"] as Jurisdiction[]) : o.jurisdiction;
   const seller = o.seller === undefined ? "private" : o.seller;
   const estimate = estimateCost(listing, jurisdiction, seller, o.fx ?? null, cfg)!;
-  return { estimate, line: costLine(estimate), zones: o.zones ?? [PALERMO], from: o.from ?? "search", sellerKind: o.sellerKind ?? (seller ?? "none"), cfg };
+  return {
+    estimate, line: costLine(estimate), zones: o.zones ?? [PALERMO], from: o.from ?? "search", sellerKind: o.sellerKind ?? (seller ?? "none"), cfg,
+    searchProfileId: (o.from ?? "search") === "search" ? 9 : null,
+  };
 }
 const html = (v: CostView | null) => renderToStaticMarkup(createElement(CostEstimate, { listingId: 7, view: v }));
 const text = (markup: string) => markup.replace(/<[^>]+>/g, "\n").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#x27;/g, "'");
 
 describe("CostEstimate (the listing page)", () => {
-  it("shows the header and a closed breakdown", () => {
+  // Juan 02/11: the breakdown is a compact summary of at most four lines.
+  const rows = (markup: string) =>
+    [...markup.matchAll(/<dt[^>]*>([^<]*)<\/dt><dd[^>]*>([^<]*)<\/dd>/g)].map((m) => [m[1], m[2]]);
+  const footnote = (markup: string) => text(markup.match(/<p[^>]*data-testid="cost-estimate-footnote"[^>]*>[\s\S]*?<\/p>/)?.[0] ?? "").trim();
+
+  it("shows the header and a closed, compact breakdown: transfer, patente, total and one footnote", () => {
     const markup = html(view());
     expect(markup).toContain('data-testid="cost-estimate"');
     expect(markup).toContain(">Costo total estimado: USD 16.290 – 16.560 (ARS 21.188.000 – 21.518.000)<");
     expect(markup).toMatch(/<details[^>]*data-testid="cost-estimate-details"[^>]*>/);
     expect(markup).not.toMatch(/<details[^>]* open/);
-    const t = text(markup);
-    for (const s of ["Ver detalle", "Precio publicado", "ARS 20.000.000", "Arancel de transferencia DNRPA", "ARS 200.000", "Sellos de CABA",
-      "ARS 600.000", "Formularios 08 y 12", "ARS 8.000 – 18.900", "Patente anual (valores 2026)", "ARS 380.900 – 698.700",
-      "Fuera del total: informe de dominio ARS 4.000 – 4.400, recomendado antes de señar.",
-      "Gestor opcional: sin tarifa oficial, se pacta con el gestor.",
-      "Patente y sellos de CABA, según tu búsqueda en «Palermo, CABA».", "Vendedor: particular.",
-      "La valuación fiscal se estima como precio × 0,70–1,00 (supuesto propio, no oficial). Si la tabla oficial de tu modelo supera el precio, el arancel y los sellos son mayores.",
-      "Dólar del aviso: $1.300.", "Montos redondeados hacia afuera.", "Parámetros al 30/10.", "Fuentes:"]) {
-      expect(t, s).toContain(s);
+    expect(text(markup)).toContain("Ver detalle");
+    expect(rows(markup)).toEqual([
+      ["Transferencia", "ARS 808.000 – 818.900"],
+      ["Patente anual (valores 2026)", "ARS 380.900 – 698.700"],
+      ["Total estimado", "ARS 21.188.000 – 21.518.000"],
+    ]);
+    expect(footnote(markup)).toBe("Valores oficiales al 30/10 para CABA. No incluye gestoría ni informe de dominio (ARS 4.000 – 4.400).");
+    // Nothing else inline: no per-term rows, no notes list, no sources outside their toggle.
+    const t = text(markup.replace(/<details[^>]*data-testid="cost-estimate-sources"[\s\S]*?<\/details>/, ""));
+    for (const gone of ["Arancel de transferencia DNRPA", "Sellos de", "Formularios 08 y 12", "Precio publicado", "Vendedor:", "valuación fiscal",
+      "Dólar del aviso", "Montos redondeados", "Parámetros al", "Res. MJ 412/2026"]) {
+      expect(t, gone).not.toContain(gone);
     }
+    expect(markup).not.toContain("<ul");
   });
 
-  it("cites each term's source with its date", () => {
-    const t = text(html(view()));
+  it("names the jurisdiction once (the sources, behind their toggle, aside)", () => {
+    const t = text(html(view()).replace(/<details[^>]*data-testid="cost-estimate-sources"[\s\S]*?<\/details>/, ""));
+    expect(t.match(/CABA/g)).toHaveLength(1);
+  });
+
+  it("keeps the sources behind a single «Ver fuentes» toggle, each with its date", () => {
+    const markup = html(view());
+    const sources = markup.match(/<details[^>]*data-testid="cost-estimate-sources"[^>]*>([\s\S]*?)<\/details>/);
+    expect(sources).not.toBeNull();
+    expect(sources![0]).not.toMatch(/<details[^>]* open/);
+    expect(markup.match(/data-testid="cost-estimate-sources"/g)).toHaveLength(1);
+    const t = text(sources![1]);
+    expect(t).toContain("Ver fuentes");
     expect(t).toContain("Arancel: Res. MJ 412/2026, Anexo I, arancel 2A (https://www.cira.org.ar/wp-content/uploads/anexo_7754131_1.pdf) (01/09)");
     expect(t).toMatch(/Sellos \(CABA\): Ley 6927 Anexo art\. 32 .* \(01\/01\)/);
     expect(t).toMatch(/Formularios \(08\): IF-2026-06520679-APN-SSGA#MJ .* \(19\/01\)/);
     expect(t).toMatch(/Patente \(CABA\): Ley 6927 Anexo art\. 50 .* \(01\/01\)/);
     expect(t).toMatch(/Valuación fiscal: Supuesto propio, no oficial\..* \(30\/10\)/);
     expect(t).toMatch(/Informe de dominio: Res\. MJ 412\/2026, Anexo I, arancel 5A \(01\/09\)/);
+    expect(t).toContain("Dólar del aviso: $1.300");
   });
 
-  it("says what is missing and why", () => {
-    let t = text(html(view({ year: null })));
-    expect(t).toContain("Costo total estimado (sin patente): USD 16.000 – 16.020 (ARS 20.808.000 – 20.819.000)");
-    expect(t).toContain("Patente: falta el año del modelo.");
-    t = text(html(view({ jurisdiction: null, zones: [] })));
-    expect(t).toContain("Costo total estimado (sin sellos ni patente): USD 15.540 – 15.560 (ARS 20.208.000 – 20.219.000)");
-    expect(t).toContain("Sellos y patente: tu búsqueda no tiene zona en Argentina.");
-    expect(t).not.toContain("Patente y sellos de");
-    t = text(html(view({ jurisdiction: ["ba"], year: 1985, zones: [{ lat: -34.92, lon: -57.95, label: "La Plata" }] })));
-    expect(t).toContain("Patente: modelo anterior a 1990 en Buenos Aires: sin dato.");
-  });
-
-  it("names AMBA, the rest of the country and several zones", () => {
-    let t = text(html(view({ jurisdiction: ["caba", "ba"], zones: [{ lat: -34.6037, lon: -58.3816, label: "AMBA" }] })));
-    expect(t).toContain("Patente y sellos de CABA y Buenos Aires, según tu búsqueda en «AMBA»: el rango cubre las dos.");
-    expect(t).toContain("Tu búsqueda es AMBA: el rango cubre CABA y provincia de Buenos Aires.");
-    t = text(html(view({ jurisdiction: ["rest"], zones: [{ lat: -32.94, lon: -60.65, label: "Rosario (zona aproximada)" }] })));
-    expect(t).toContain("Patente y sellos de resto del país, según tu búsqueda en «Rosario (zona aproximada)».");
-    expect(t).toContain("Resto del país: rango armado con Córdoba, Santa Fe y Mendoza.");
-    t = text(html(view({ jurisdiction: ["caba", "rest"], zones: [PALERMO, CORDOBA] })));
-    expect(t).toContain("Patente y sellos de CABA y resto del país, según tu búsqueda en «Palermo, CABA» y «Córdoba»: el rango cubre las dos.");
-    t = text(html(view({ from: "profile", zones: [{ ...PALERMO, label: "Palermo" }] })));
-    expect(t).toContain("Patente y sellos de CABA, según tu zona en «Palermo».");
-  });
-
-  it("names the seller: posible agencia, concesionaria, sin informar", () => {
-    expect(text(html(view({ seller: "dealer", sellerKind: "inferred" })))).toContain("Vendedor: posible agencia.");
-    expect(text(html(view({ seller: "dealer", sellerKind: "dealer" })))).toContain("Vendedor: concesionaria.");
-    expect(text(html(view({ seller: null, sellerKind: "none" })))).toContain("Vendedor: sin informar: el rango cubre particular y agencia.");
-  });
-
-  it("shows only pesos without the listing's dollar", () => {
+  it("other missing pieces keep their explicit message", () => {
+    let markup = html(view({ year: null }));
+    expect(text(markup)).toContain("Costo total estimado (sin patente): USD 16.000 – 16.020 (ARS 20.808.000 – 20.819.000)");
+    expect(rows(markup)[1]).toEqual(["Patente anual (valores 2026)", "falta el año del modelo"]);
+    markup = html(view({ jurisdiction: ["ba"], year: 1985, zones: [{ lat: -34.92, lon: -57.95, label: "La Plata" }] }));
+    expect(rows(markup)[1]).toEqual(["Patente anual (valores 2026)", "modelo anterior a 1990 en Buenos Aires: sin dato"]);
+    const noForm12 = parseCostEstimator({ ...GOLDEN.config, fixed_ars: { ...(GOLDEN.config.fixed_ars as object), form_12: { min: 1 } } })!;
+    const est = estimateCost({ price: 20000000, currency: "ARS", fx_rate: 1300, cash: false, year: 2017, body_type: "sedan" }, ["caba"], "private", null, noForm12)!;
+    markup = html({ ...view(), estimate: est, line: costLine(est), cfg: noForm12 });
+    expect(rows(markup)[0]).toEqual(["Transferencia (sin formularios)", "ARS 800.000"]);
     const t = text(html(view({ fx_rate: null })));
     expect(t).toContain("Costo total estimado: ARS 21.188.000 – 21.518.000 (sin dólar del día)");
-    expect(t).toContain("Sin dólar del día: el total va solo en pesos.");
+  });
+
+  it("AMBA and several zones: the range across real jurisdictions, named with «o»", () => {
+    let markup = html(view({ jurisdiction: ["caba", "ba"], zones: [{ lat: -34.6037, lon: -58.3816, label: "AMBA" }] }));
+    expect(text(markup)).toContain("Costo total estimado: USD 16.110 – 16.560 (ARS 20.948.000 – 21.518.000)");
+    expect(footnote(markup)).toBe("Valores oficiales al 30/10 para CABA o Provincia de Buenos Aires. No incluye gestoría ni informe de dominio (ARS 4.000 – 4.400).");
+    markup = html(view({ jurisdiction: ["caba", "rest"], zones: [PALERMO, CORDOBA] }));
+    expect(footnote(markup)).toContain("para CABA o resto del país.");
+    markup = html(view({ jurisdiction: ["caba", "ba", "rest"], zones: [PALERMO, CORDOBA] }));
+    expect(footnote(markup)).toContain("para CABA, Provincia de Buenos Aires o resto del país.");
+  });
+
+  it("without the buyer's locality: one clear line, no total nor partial total, no breakdown (Juan 02/11)", () => {
+    const NO_ZONE = "Costo total: no sabemos tu localidad. Cargala en la búsqueda para estimarlo";
+    for (const o of [{ jurisdiction: null, zones: [] }, { jurisdiction: [] as Jurisdiction[], zones: [] },
+      { jurisdiction: null, zones: [], price: 15000, currency: "USD" as const, fx_rate: null, fx: { rate: 1300, kind: "blue", date: "2026-10-29" } }]) {
+      const markup = html({ ...view(o), searchProfileId: 9 });
+      const headline = markup.match(/<p[^>]*data-testid="cost-estimate-headline"[^>]*>([\s\S]*?)<\/p>/)![1];
+      expect(text(headline).replace(/\n/g, "")).toBe(NO_ZONE);
+      expect(headline).toMatch(/<a[^>]*href="\/app\/searches\/9\/edit"[^>]*>Cargala en la búsqueda<\/a>/);
+      expect(text(markup)).not.toMatch(/ARS|USD|\d/);
+      expect(markup).not.toContain("cost-estimate-details");
+    }
+    // No search (the account's default place, missing): the same words, nothing to link.
+    const markup = html({ ...view({ jurisdiction: null, zones: [], from: "profile" }), searchProfileId: null });
+    expect(text(markup).replace(/\n/g, "")).toBe(NO_ZONE);
+    expect(markup).not.toContain("<a");
   });
 
   it("a USD listing without a current quote: the header only, no breakdown", () => {
@@ -133,15 +161,9 @@ describe("CostEstimate (the listing page)", () => {
     expect(markup).not.toContain("cost-estimate-details");
   });
 
-  it("a USD listing with the blue quote says which one", () => {
+  it("a USD listing with the blue quote says which one, in the sources", () => {
     const t = text(html(view({ price: 15000, currency: "USD", fx_rate: null, fx: { rate: 1300, kind: "blue", date: "2026-10-29" } })));
-    expect(t).toContain("USD 15.000 = ARS 19.500.000");
-    expect(t).toContain("Dólar blue del 29/10: $1.300.");
-  });
-
-  it("labels the price as the listing page does", () => {
-    expect(text(html(view({ cash: true })))).toContain("Precio de contado");
-    expect(text(html(view({ cash: false })))).toContain("Precio publicado");
+    expect(t).toContain("Dólar blue del 29/10: $1.300");
   });
 
   it("renders nothing without an estimate", () => {
@@ -149,11 +171,11 @@ describe("CostEstimate (the listing page)", () => {
   });
 
   it("never says «8–10 %» nor «precio real»", () => {
-    for (const v of [view(), view({ year: null }), view({ seller: "dealer", sellerKind: "inferred" }), view({ fx_rate: null })]) {
+    for (const v of [view(), view({ year: null }), view({ seller: "dealer", sellerKind: "inferred" }), view({ fx_rate: null }), view({ jurisdiction: null, zones: [] })]) {
       const t = text(html(v)).toLowerCase();
       expect(t).not.toMatch(/8\s*[–-]\s*10\s*%/);
       expect(t).not.toContain("precio real");
-      expect(t).toContain("estimado");
+      expect(t).toMatch(/estimado|estimarlo/);
     }
   });
 });
@@ -237,9 +259,14 @@ describe("costLinesFor", () => {
     expect(lines.get(501)).toBe("Costo total estimado: USD 16.290 – 16.560 (ARS 21.188.000 – 21.518.000)");
     expect(fake.calls.map((c) => c.table)).toEqual(["listings", "profiles"]);
     expect(fake.calls[1].filter).toEqual(["id", "u1"]);
+    // Without one: no line on the card (Juan 02/11: never a partial total; the same
+    // «no sabemos tu localidad» on every card would only repeat what the listing page says).
     fake = fakeSupabase({ feature: true, listings: [ROW], profile: { default_origin_lat: null, default_origin_lon: null, default_origin_label: null } });
     lines = await costLinesFor(fake.client, "u1", [{ listing_id: 501 }]);
-    expect(lines.get(501)).toBe("Costo total estimado (sin sellos ni patente): USD 15.540 – 15.560 (ARS 20.208.000 – 20.219.000)");
+    expect(lines.has(501)).toBe(false);
+    fake = fakeSupabase({ feature: true, listings: [ROW], searches: [{ id: 9, origin_lat: null, origin_lon: null, filters: {} }] });
+    lines = await costLinesFor(fake.client, "u1", [{ listing_id: 501, search_profile_id: 9 }]);
+    expect(lines.has(501)).toBe(false);
   });
 
   it("a USD listing reads the latest blue quote, else the oficial one", async () => {

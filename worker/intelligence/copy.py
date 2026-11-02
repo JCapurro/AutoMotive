@@ -196,6 +196,7 @@ TOTAL_COST = {
     "line": "Costo total estimado{suffix}: {usd} ({ars})",
     "line_no_usd": "Costo total estimado{suffix}: {ars} (sin dólar del día)",
     "line_no_fx": "Costo total estimado: sin dólar del día, no se puede estimar",
+    "line_no_zone": "Costo total: no sabemos tu localidad. Cargala en la búsqueda para estimarlo",
     "suffix": " (sin {items})",
     "last": " ni ",
     "email": "{line}. Parámetros al {date}.",

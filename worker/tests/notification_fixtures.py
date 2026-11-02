@@ -78,11 +78,12 @@ DIGEST = notification("digest", {"date": "2026-09-27", "degraded": 1, "items": [
 ]}, id=43, listing_id=None)
 
 # PAR-01: payload["total_cost"] (cost_estimator.email_payload) of golden case 1
-# (ARS 20.000.000, CABA, private, 2017 sedan, dollar 1.300) and case 18 (no zone).
+# (ARS 20.000.000, CABA, private, 2017 sedan, dollar 1.300) and case 18 (no zone:
+# no amount at all since Juan's 02/11 request).
 TOTAL_COST_CABA = {"ars_min": 21188000, "ars_max": 21518000, "usd_min": 16290, "usd_max": 16560, "missing": [],
                    "jurisdiction": ["caba"], "as_of": "2026-10-30"}
-TOTAL_COST_NO_ZONE = {"ars_min": 20208000, "ars_max": 20219000, "usd_min": 15540, "usd_max": 15560,
-                      "missing": ["sellos", "patente"], "jurisdiction": None, "as_of": "2026-10-30"}
+TOTAL_COST_NO_ZONE = {"ars_min": None, "ars_max": None, "usd_min": None, "usd_max": None,
+                      "missing": ["zone"], "jurisdiction": None, "as_of": "2026-10-30"}
 _ARS_LISTING = {**FIESTA, "price": 20000000.0, "currency": "ARS"}
 OPPORTUNITY_TOTAL_COST = notification("opportunity", {**OPPORTUNITY.payload, "listing": _ARS_LISTING,
                                                       "total_cost": TOTAL_COST_CABA})

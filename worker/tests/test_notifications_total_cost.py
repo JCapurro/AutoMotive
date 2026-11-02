@@ -38,8 +38,17 @@ class TotalCostLineTests(unittest.TestCase):
         for codes, line in cases.items():
             with self.subTest(codes):
                 self.assertEqual(templates.total_cost_line({**TOTAL_COST_CABA, "missing": list(codes)}), line)
-        self.assertEqual(templates.total_cost_line(TOTAL_COST_NO_ZONE),
-                         "Costo total estimado (sin sellos ni patente): USD 15.540 – 15.560 (ARS 20.208.000 – 20.219.000). Parámetros al 30/10.")
+
+
+    def test_without_the_buyers_locality_says_so_without_any_amount(self):
+        # Juan 02/11: never a partial total built from the other costs.
+        line = templates.total_cost_line(TOTAL_COST_NO_ZONE)
+        self.assertEqual(line, "Costo total: no sabemos tu localidad. Cargala en la búsqueda para estimarlo.")
+        self.assertNotRegex(line, r"\d")
+        # An old row frozen before the change (partial totals, sellos and patente missing) is not re-shown as a total either.
+        old = {"ars_min": 20208000, "ars_max": 20219000, "usd_min": 15540, "usd_max": 15560,
+               "missing": ["sellos", "patente"], "jurisdiction": None, "as_of": "2026-10-30"}
+        self.assertEqual(templates.total_cost_line(old), "Costo total: no sabemos tu localidad. Cargala en la búsqueda para estimarlo.")
 
     def test_without_the_dollar(self):
         ars = {**TOTAL_COST_CABA, "usd_min": None, "usd_max": None, "missing": ["fx"]}
@@ -57,8 +66,7 @@ class TotalCostLineTests(unittest.TestCase):
             for term in (*copy.FORBIDDEN_TERMS, "precio final", "costo real", "costo exacto", "total real"):
                 with self.subTest(text=text, term=term):
                     self.assertNotIn(normalize_text(term), folded)
-        for text in texts[:2]:
-            self.assertIn("estimado", text)
+        self.assertIn("estimado", texts[0])
 
 
 class OpportunityEmailTests(unittest.TestCase):

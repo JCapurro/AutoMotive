@@ -227,4 +227,9 @@ describe("header", () => {
     );
     expect(costHeadline(null, null, ["fx"])).toBe("Costo total estimado: sin dólar del día, no se puede estimar");
   });
+
+  it("without the buyer's locality says so, never an amount (Juan 02/11)", () => {
+    expect(costHeadline(null, null, ["zone"])).toBe("Costo total: no sabemos tu localidad. Cargala en la búsqueda para estimarlo");
+    expect(costHeadline({ min: 20208000, max: 20219000 }, { min: 15540, max: 15560 }, ["zone"])).toBe("Costo total: no sabemos tu localidad. Cargala en la búsqueda para estimarlo");
+  });
 });

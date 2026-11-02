@@ -1525,7 +1525,7 @@
    }
   },
   {
-   "name": "18 sin jurisdicción",
+   "name": "18 sin jurisdicción: ni total ni parcial, se dice que falta la localidad (Juan 02/11)",
    "input": {
     "listing": {
      "price": 20000000,
@@ -1540,49 +1540,116 @@
     "fx_latest": null
    },
    "expect": {
-    "terms": [
-     {
-      "code": "arancel",
-      "min": 200000,
-      "max": 200000
-     },
-     {
-      "code": "formularios",
-      "min": 8000,
-      "max": 18840
-     }
-    ],
-    "total_ars": {
-     "min": 20208000,
-     "max": 20218840
-    },
-    "total_usd": {
-     "min": 15544.615384615385,
-     "max": 15552.953846153847
-    },
-    "extras": [
-     {
-      "code": "domain_report",
-      "min": 4040,
-      "max": 4360
-     },
-     {
-      "code": "gestoria",
-      "min": null,
-      "max": null
-     }
-    ],
+    "p_ars": null,
+    "rate": null,
+    "terms": [],
+    "extras": [],
     "missing": [
      {
-      "code": "sellos",
-      "reason": "no_zone"
-     },
-     {
-      "code": "patente",
+      "code": "zone",
       "reason": "no_zone"
      }
     ],
-    "line": "Costo total estimado (sin sellos ni patente): USD 15.540 – 15.560 (ARS 20.208.000 – 20.219.000)"
+    "total_ars": null,
+    "total_usd": null,
+    "line": "Costo total: no sabemos tu localidad. Cargala en la búsqueda para estimarlo"
+   }
+  },
+  {
+   "name": "18 jurisdicción vacía: igual que sin jurisdicción",
+   "input": {
+    "listing": {
+     "price": 20000000,
+     "currency": "ARS",
+     "fx_rate": 1300,
+     "cash": false,
+     "year": 2017,
+     "body_type": "sedan"
+    },
+    "jurisdiction": [],
+    "seller": "private",
+    "fx_latest": null
+   },
+   "expect": {
+    "p_ars": null,
+    "rate": null,
+    "terms": [],
+    "extras": [],
+    "missing": [
+     {
+      "code": "zone",
+      "reason": "no_zone"
+     }
+    ],
+    "total_ars": null,
+    "total_usd": null,
+    "line": "Costo total: no sabemos tu localidad. Cargala en la búsqueda para estimarlo"
+   }
+  },
+  {
+   "name": "18 sin jurisdicción y aviso en USD sin dólar: primero falta la localidad",
+   "input": {
+    "listing": {
+     "price": 15000,
+     "currency": "USD",
+     "fx_rate": null,
+     "cash": false,
+     "year": 2017,
+     "body_type": "sedan"
+    },
+    "jurisdiction": null,
+    "seller": "private",
+    "fx_latest": null
+   },
+   "expect": {
+    "p_ars": null,
+    "rate": null,
+    "terms": [],
+    "extras": [],
+    "missing": [
+     {
+      "code": "zone",
+      "reason": "no_zone"
+     }
+    ],
+    "total_ars": null,
+    "total_usd": null,
+    "line": "Costo total: no sabemos tu localidad. Cargala en la búsqueda para estimarlo"
+   }
+  },
+  {
+   "name": "18 sin jurisdicción, aviso en USD con dólar: tampoco hay total",
+   "input": {
+    "listing": {
+     "price": 15000,
+     "currency": "USD",
+     "fx_rate": null,
+     "cash": false,
+     "year": 2017,
+     "body_type": "sedan"
+    },
+    "jurisdiction": null,
+    "seller": null,
+    "fx_latest": {
+     "rate": 1300,
+     "kind": "blue",
+     "date": "2026-10-29"
+    }
+   },
+   "expect": {
+    "p_ars": null,
+    "rate": null,
+    "terms": [],
+    "extras": [],
+    "missing": [
+     {
+      "code": "zone",
+      "reason": "no_zone"
+     }
+    ],
+    "total_ars": null,
+    "total_usd": null,
+    "line": "Costo total: no sabemos tu localidad. Cargala en la búsqueda para estimarlo"
    }
   },
   {
@@ -1846,12 +1913,14 @@
     "listing": {
      "price": 20000000,
      "currency": "ARS",
-     "fx_rate": 1010.4,
+     "fx_rate": 1040.4,
      "cash": false,
      "year": null,
      "body_type": "sedan"
     },
-    "jurisdiction": null,
+    "jurisdiction": [
+     "caba"
+    ],
     "seller": "private",
     "fx_latest": null,
     "config_patch": [
@@ -1881,14 +1950,19 @@
       "max": 200000
      },
      {
+      "code": "sellos",
+      "min": 600000,
+      "max": 600000
+     },
+     {
       "code": "formularios",
       "min": 8000,
       "max": 8000
      }
     ],
     "total_ars": {
-     "min": 20208000,
-     "max": 20208000
+     "min": 20808000,
+     "max": 20808000
     },
     "total_usd": {
      "min": 20000,
@@ -1908,29 +1982,27 @@
     ],
     "missing": [
      {
-      "code": "sellos",
-      "reason": "no_zone"
-     },
-     {
       "code": "patente",
-      "reason": "no_zone"
+      "reason": "no_year"
      }
     ],
-    "line": "Costo total estimado (sin sellos ni patente): USD 20.000 (ARS 20.208.000)"
+    "line": "Costo total estimado (sin patente): USD 20.000 (ARS 20.808.000)"
    }
   },
   {
-   "name": "25 sin jurisdicción y form_12 inválido",
+   "name": "25 form_12 inválido y sin año",
    "input": {
     "listing": {
      "price": 20000000,
      "currency": "ARS",
      "fx_rate": 1300,
      "cash": false,
-     "year": 2017,
+     "year": null,
      "body_type": "sedan"
     },
-    "jurisdiction": null,
+    "jurisdiction": [
+     "caba"
+    ],
     "seller": "private",
     "fx_latest": null,
     "config_patch": [
@@ -1950,15 +2022,20 @@
       "code": "arancel",
       "min": 200000,
       "max": 200000
+     },
+     {
+      "code": "sellos",
+      "min": 600000,
+      "max": 600000
      }
     ],
     "total_ars": {
-     "min": 20200000,
-     "max": 20200000
+     "min": 20800000,
+     "max": 20800000
     },
     "total_usd": {
-     "min": 15538.461538461539,
-     "max": 15538.461538461539
+     "min": 16000,
+     "max": 16000
     },
     "extras": [
      {
@@ -1974,19 +2051,15 @@
     ],
     "missing": [
      {
-      "code": "sellos",
-      "reason": "no_zone"
-     },
-     {
       "code": "formularios",
       "reason": "params"
      },
      {
       "code": "patente",
-      "reason": "no_zone"
+      "reason": "no_year"
      }
     ],
-    "line": "Costo total estimado (sin sellos, formularios ni patente): USD 15.530 – 15.540 (ARS 20.200.000)"
+    "line": "Costo total estimado (sin formularios ni patente): USD 16.000 (ARS 20.800.000)"
    }
   },
   {
@@ -2062,7 +2135,7 @@
    }
   },
   {
-   "name": "25 sin jurisdicción, sin dnrpa y sin año",
+   "name": "25 sin dnrpa, form_12 inválido y sin año",
    "input": {
     "listing": {
      "price": 20000000,
@@ -2072,7 +2145,9 @@
      "year": null,
      "body_type": "sedan"
     },
-    "jurisdiction": null,
+    "jurisdiction": [
+     "caba"
+    ],
     "seller": "private",
     "fx_latest": null,
     "config_patch": [
@@ -2081,24 +2156,32 @@
        "dnrpa"
       ],
       "delete": true
+     },
+     {
+      "path": [
+       "fixed_ars",
+       "form_12",
+       "min"
+      ],
+      "value": 10000
      }
     ]
    },
    "expect": {
     "terms": [
      {
-      "code": "formularios",
-      "min": 8000,
-      "max": 18840
+      "code": "sellos",
+      "min": 600000,
+      "max": 600000
      }
     ],
     "total_ars": {
-     "min": 20008000,
-     "max": 20018840
+     "min": 20600000,
+     "max": 20600000
     },
     "total_usd": {
-     "min": 15390.76923076923,
-     "max": 15399.107692307693
+     "min": 15846.153846153846,
+     "max": 15846.153846153846
     },
     "extras": [
      {
@@ -2118,15 +2201,15 @@
       "reason": "params"
      },
      {
-      "code": "sellos",
-      "reason": "no_zone"
+      "code": "formularios",
+      "reason": "params"
      },
      {
       "code": "patente",
-      "reason": "no_zone"
+      "reason": "no_year"
      }
     ],
-    "line": "Costo total estimado (sin arancel, sellos ni patente): USD 15.390 – 15.400 (ARS 20.008.000 – 20.019.000)"
+    "line": "Costo total estimado (sin arancel, formularios ni patente): USD 15.840 – 15.850 (ARS 20.600.000)"
    }
   },
   {

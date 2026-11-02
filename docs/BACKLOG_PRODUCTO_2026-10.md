@@ -107,6 +107,8 @@ Criterios de aceptación:
 
 **Estado al 30/10:** implementado en la rama `claude/par01-costo-total` ([diseño](superpowers/specs/2026-10-30-par01-costo-total-design.md), [plan](superpowers/plans/2026-10-30-par01-costo-total.md)), sin aplicar en producción. Por decisión de Juan del 30/10, la migración `20261127120000_par01_cost_estimator` **siembra los valores aprobados** (con fuente y fecha por bloque) en lugar de dejarlos en null. El orden «por costo total» queda fuera de v1 y `results_sorted_total_cost` queda reservado (no se emite). El aviso fijo de 8–10 % se borró para todos.
 
+**Estado al 02/11:** dos cambios pedidos por Juan, sin migración ([diseño, «Cambios pedidos por Juan 02/11»](superpowers/specs/2026-10-30-par01-costo-total-design.md#cambios-pedidos-por-juan-0211)): el detalle de la ficha pasa a un resumen de cuatro renglones (transferencia, patente, total y una nota al pie, con las fuentes detrás de «Ver fuentes»), y sin la localidad del comprador ya no se muestra ningún total ni parcial: la ficha y el email dicen «Costo total: no sabemos tu localidad. Cargala en la búsqueda para estimarlo» y la tarjeta no muestra línea.
+
 Dolor: el precio publicado no es lo que paga. Transferencia, patente según jurisdicción y dólar cambian el orden entre dos autos parecidos.
 
 Qué existe: `price_usd` con el blue congelado del día (`fx_rates`), la ficha muestra «≈ USD X al dólar del día», `web/components/app/dealer-fees-notice.tsx` dice «Trámites y gestoría: 8–10% adicional estimado» solo para avisos de agencia. No hay cálculo de transferencia ni patente.

@@ -54,8 +54,8 @@ describe("copy lint (§19)", () => {
     expect(COST_ESTIMATE.line).toBe("Costo total estimado{suffix}: {usd} ({ars})");
     expect(COST_ESTIMATE.lineNoUsd).toBe("Costo total estimado{suffix}: {ars} (sin dólar del día)");
     expect(COST_ESTIMATE.lineNoFx).toBe("Costo total estimado: sin dólar del día, no se puede estimar");
+    expect(COST_ESTIMATE.lineNoZone).toBe("Costo total: no sabemos tu localidad. Cargala en la búsqueda para estimarlo");
     expect(COST_ESTIMATE.suffix).toBe(" (sin {items})");
-    expect(COST_ESTIMATE.vf).toContain("supuesto propio, no oficial");
     for (const text of texts) {
       for (const term of [...FORBIDDEN_TERMS, "precio final", "costo real", "costo exacto", "total real"]) {
         expect(new RegExp(`(^|[^\\p{L}\\p{N}_])${term}([^\\p{L}\\p{N}_]|$)`, "iu").test(text), `${text}: ${term}`).toBe(false);
