@@ -357,13 +357,13 @@ isOneToOne: false
                   ]
                 },"matches": {
                   Row: {
-                    "generated_at": string,"id": number,"is_backfill": boolean,"level": Database["public"]['Enums']["match_level"],"listing_id": number,"match_reasons": NonNullable<Json>,"price_ref": Json | null,"red_flags": NonNullable<Json>,"score": number,"score_breakdown": NonNullable<Json>,"scoring_version": string,"search_profile_id": number,"seller_questions": string | null,"updated_at": string
+                    "generated_at": string,"id": number,"is_backfill": boolean,"level": Database["public"]['Enums']["match_level"],"listing_id": number,"margin_ref": Json | null,"match_reasons": NonNullable<Json>,"price_ref": Json | null,"red_flags": NonNullable<Json>,"score": number,"score_breakdown": NonNullable<Json>,"scoring_version": string,"search_profile_id": number,"seller_questions": string | null,"updated_at": string
                   }
                   Insert: {
-                    "generated_at"?: string,"id"?: never,"is_backfill"?: boolean,"level": Database["public"]['Enums']["match_level"],"listing_id": number,"match_reasons": NonNullable<Json>,"price_ref"?: Json | null,"red_flags"?: NonNullable<Json>,"score": number,"score_breakdown": NonNullable<Json>,"scoring_version": string,"search_profile_id": number,"seller_questions"?: string | null,"updated_at"?: string
+                    "generated_at"?: string,"id"?: never,"is_backfill"?: boolean,"level": Database["public"]['Enums']["match_level"],"listing_id": number,"margin_ref"?: Json | null,"match_reasons": NonNullable<Json>,"price_ref"?: Json | null,"red_flags"?: NonNullable<Json>,"score": number,"score_breakdown": NonNullable<Json>,"scoring_version": string,"search_profile_id": number,"seller_questions"?: string | null,"updated_at"?: string
                   }
                   Update: {
-                    "generated_at"?: string,"id"?: never,"is_backfill"?: boolean,"level"?: Database["public"]['Enums']["match_level"],"listing_id"?: number,"match_reasons"?: NonNullable<Json>,"price_ref"?: Json | null,"red_flags"?: NonNullable<Json>,"score"?: number,"score_breakdown"?: NonNullable<Json>,"scoring_version"?: string,"search_profile_id"?: number,"seller_questions"?: string | null,"updated_at"?: string
+                    "generated_at"?: string,"id"?: never,"is_backfill"?: boolean,"level"?: Database["public"]['Enums']["match_level"],"listing_id"?: number,"margin_ref"?: Json | null,"match_reasons"?: NonNullable<Json>,"price_ref"?: Json | null,"red_flags"?: NonNullable<Json>,"score"?: number,"score_breakdown"?: NonNullable<Json>,"scoring_version"?: string,"search_profile_id"?: number,"seller_questions"?: string | null,"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -604,13 +604,13 @@ isOneToOne: false
                   ]
                 },"search_profiles": {
                   Row: {
-                    "bootstrapped_at": string | null,"channels": (string)[],"created_at": string,"enabled": boolean,"filters": NonNullable<Json>,"id": number,"name": string,"notification_frequency": Database["public"]['Enums']["notify_frequency"],"notify_min_level": Database["public"]['Enums']["match_level"],"opportunity_threshold_pct": number | null,"origin_lat": number | null,"origin_lon": number | null,"preferences": NonNullable<Json>,"radius_km": number | null,"raw_query": string | null,"rematch_requested_at": string | null,"updated_at": string,"user_id": string
+                    "bootstrapped_at": string | null,"channels": (string)[],"created_at": string,"enabled": boolean,"filters": NonNullable<Json>,"id": number,"name": string,"notification_frequency": Database["public"]['Enums']["notify_frequency"],"notify_min_level": Database["public"]['Enums']["match_level"],"opportunity_threshold_pct": number | null,"opportunity_threshold_usd": number | null,"origin_lat": number | null,"origin_lon": number | null,"preferences": NonNullable<Json>,"radius_km": number | null,"raw_query": string | null,"rematch_requested_at": string | null,"updated_at": string,"user_id": string
                   }
                   Insert: {
-                    "bootstrapped_at"?: string | null,"channels"?: (string)[],"created_at"?: string,"enabled"?: boolean,"filters": NonNullable<Json>,"id"?: never,"name": string,"notification_frequency"?: Database["public"]['Enums']["notify_frequency"],"notify_min_level"?: Database["public"]['Enums']["match_level"],"opportunity_threshold_pct"?: number | null,"origin_lat"?: number | null,"origin_lon"?: number | null,"preferences"?: NonNullable<Json>,"radius_km"?: number | null,"raw_query"?: string | null,"rematch_requested_at"?: string | null,"updated_at"?: string,"user_id": string
+                    "bootstrapped_at"?: string | null,"channels"?: (string)[],"created_at"?: string,"enabled"?: boolean,"filters": NonNullable<Json>,"id"?: never,"name": string,"notification_frequency"?: Database["public"]['Enums']["notify_frequency"],"notify_min_level"?: Database["public"]['Enums']["match_level"],"opportunity_threshold_pct"?: number | null,"opportunity_threshold_usd"?: number | null,"origin_lat"?: number | null,"origin_lon"?: number | null,"preferences"?: NonNullable<Json>,"radius_km"?: number | null,"raw_query"?: string | null,"rematch_requested_at"?: string | null,"updated_at"?: string,"user_id": string
                   }
                   Update: {
-                    "bootstrapped_at"?: string | null,"channels"?: (string)[],"created_at"?: string,"enabled"?: boolean,"filters"?: NonNullable<Json>,"id"?: never,"name"?: string,"notification_frequency"?: Database["public"]['Enums']["notify_frequency"],"notify_min_level"?: Database["public"]['Enums']["match_level"],"opportunity_threshold_pct"?: number | null,"origin_lat"?: number | null,"origin_lon"?: number | null,"preferences"?: NonNullable<Json>,"radius_km"?: number | null,"raw_query"?: string | null,"rematch_requested_at"?: string | null,"updated_at"?: string,"user_id"?: string
+                    "bootstrapped_at"?: string | null,"channels"?: (string)[],"created_at"?: string,"enabled"?: boolean,"filters"?: NonNullable<Json>,"id"?: never,"name"?: string,"notification_frequency"?: Database["public"]['Enums']["notify_frequency"],"notify_min_level"?: Database["public"]['Enums']["match_level"],"opportunity_threshold_pct"?: number | null,"opportunity_threshold_usd"?: number | null,"origin_lat"?: number | null,"origin_lon"?: number | null,"preferences"?: NonNullable<Json>,"radius_km"?: number | null,"raw_query"?: string | null,"rematch_requested_at"?: string | null,"updated_at"?: string,"user_id"?: string
                   }
                   Relationships: [
                     {
@@ -1185,6 +1185,14 @@ isOneToOne: false
                            },
 "my_plan_feature":
 { Args: { "p_feature": string }; Returns: boolean
+                           },
+"my_margin_access":
+{ Args: Record<PropertyKey, never>; Returns: Json
+                           },
+"my_match_margins":
+{ Args: { "p_match_ids": (number)[] }; Returns: {
+              "margin_ref": Json,"match_id": number
+            }[]
                            },
 "my_plan_limits":
 { Args: Record<PropertyKey, never>; Returns: Json
