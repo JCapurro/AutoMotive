@@ -6,10 +6,13 @@ select no_plan();
 
 select is((select (value->>'much_cheaper_verify_pct')::int from public.app_config where key = 'red_flags'),
           35, 'red_flags has much_cheaper_verify_pct = 35');
-select is((select value - 'much_cheaper_verify_pct' from public.app_config where key = 'red_flags'),
+-- PAR-02 resto (20261203120000_par02_duplicates) adds red_flags.order: tested in par02_duplicates_test.sql.
+select is((select value - 'much_cheaper_verify_pct' - 'order' from public.app_config where key = 'red_flags'),
           '{"much_cheaper_pct": 25, "anticipo_pct": 50, "min_km_per_year": 5000, "min_description_chars": 150}'::jsonb,
           'the other red_flags keys did not change');
-select is((select value from public.app_config where key = 'risk'),
+-- PAR-02 resto adds its own keys to risk (par02_duplicates_test.sql); the checklist's stay as they were.
+select is((select value - 'photo_hash_count' - 'phash_max_distance' - 'photo_hash' - 'cross_source' - 'signals'
+             from public.app_config where key = 'risk'),
           '{"checklist_enabled": true, "links": {"dnrpa": null, "patentes": [], "infracciones": [], "vtv": null, "form_08": null}}'::jsonb,
           'risk exists, enabled, with every link empty');
 
