@@ -231,6 +231,19 @@ class MercadoLibreWindowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(detail.await_count, 3)
         self.assertTrue(results.complete)
 
+    def test_id_floors_need_dated_ads_at_the_start_of_the_window(self):
+        from db.repos import targets as targets_repo
+
+        def row(series, n, recent, edge, floor):
+            return {"series": series, "n": n, "recent": recent, "edge": edge, "floor": floor}
+
+        covered = [row(2, 5000, 4000, 300, 2_240_000_000), row(4, 4900, 4300, 280, 4_130_000_000),
+                   row(3, 356, 0, 0, None), row(1, 47, 0, 0, None)]
+        self.assertEqual(targets_repo.floors_from(covered), {2: 2_240_000_000, 4: 4_130_000_000, 3: None})
+        # After a gap the dated ads are from its end only: no floor, no series counts as all older.
+        gap = [row(2, 5000, 40, 0, 2_252_000_000), row(4, 4900, 0, 0, None), row(3, 356, 0, 0, None)]
+        self.assertEqual(targets_repo.floors_from(gap), {})
+
     async def test_today_s_results_are_kept_without_reading_each_ad(self):
         """The ad's page says "hace 1 día" for an ad Mercado Libre lists as published today."""
         detail = AsyncMock(return_value=NOW - DAY)
@@ -299,9 +312,9 @@ class FacebookPage:
     the scroll to batch n downloads; `after_reload`, the batches a reload
     shows (None: the same ones)."""
     def __init__(self, batches, *, expire_after=None, body="Marketplace", html=None, answers=None,
-                 after_reload=None):
+                 after_reload=None, reload_html=None):
         self.batches, self.index = batches, 0
-        self.after_reload = after_reload
+        self.after_reload, self.reload_html = after_reload, reload_html
         self.reloads = self.card_reads = 0
         self.url = ""
         self.expire_after = expire_after
@@ -333,8 +346,13 @@ class FacebookPage:
 
     async def reload(self, **kwargs):
         self.reloads += 1
+        if isinstance(self.after_reload, Exception):
+            raise self.after_reload
         if self.after_reload is not None:
             self.batches, self.index = self.after_reload, 0
+        response = MagicMock(status=200)
+        response.text = AsyncMock(return_value=self.reload_html or "")
+        return response
 
     def locator(self, selector):
         if selector == "body":
@@ -441,6 +459,12 @@ class FacebookWindowTests(unittest.IsolatedAsyncioTestCase):
         results = await self.search(FacebookPage([[]], body=body), marca="Nissan", modelo="Sentra")
         self.assertEqual(results, [])
         self.assertTrue(results.complete)
+
+    async def test_a_failed_reload_of_an_empty_feed_is_still_unconfirmed(self):
+        page = FacebookPage([[]], after_reload=TimeoutError("Timeout 45000ms exceeded"))
+        with self.assertRaisesRegex(fb.FeedUnconfirmed, "reload failed"):
+            await self.search(page)
+        page.close.assert_awaited_once()
 
     async def test_unconfirmed_empty_feed_fails_without_blocking(self):
         for body in ("Marketplace", "Marketplace\nCargando...",

@@ -410,16 +410,20 @@ async def run_target(target: dict[str, Any], on_health: HealthHandler | None = N
             items = await run_collector(scraper.search(filters), timeout=COLLECTOR_TIMEOUT_SECONDS)
     except Exception as exc:
         log.warning("target=%s %s %s failed: %s", target["id"], source, _label(target), exc)
+        unconfirmed = isinstance(exc, FeedUnconfirmed)
+        if unconfirmed and breaker.chronic(source, target["id"]):
+            # Empty again: most likely really empty. Not again in 15 minutes.
+            retry = int(target.get("crawl_interval_seconds") or retry)
         health = await runs.finish_run(run_id, ok=False, error=traceback.format_exc())
         await targets_repo.finish_target(target["id"], ok=False, retry_seconds=retry)
         await _report(on_health, health)
         if isinstance(exc, CollectorBlocked):
             breaker.pause(source, str(exc))
             raise SourceBlocked(source) from exc
-        if isinstance(exc, FeedUnconfirmed) and breaker.suspect(source, str(exc)):
+        if unconfirmed and breaker.suspect(source, target["id"], str(exc)):
             raise SourceBlocked(source) from exc
         return None
-    breaker.vouch(source)
+    breaker.vouch(source, target["id"])
     keep, rejected = prefilter(target), set()
     if keep is not None and source not in RECENT_SOURCES:
         def keep(row: dict[str, Any], _keep=keep) -> bool:
