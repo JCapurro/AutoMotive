@@ -89,7 +89,7 @@ class DuplicateFlagTests(unittest.TestCase):
         self.assertEqual(f.severity, "info")
         self.assertEqual(f.text, copy.RED_FLAG["cross_source_data"].format(source="Mercado Libre"))
         self.assertEqual(f.link, {"listing_id": 77, "url": "https://auto.mercadolibre.com.ar/MLA-1",
-                                  "source_name": "Mercado Libre"})
+                                  "source_name": "Mercado Libre", "kind": "cross_source_data"})
         self.assertEqual(f.to_json()["link"]["listing_id"], 77)
 
     def test_the_default_shadow_never_shows_the_data_level(self):

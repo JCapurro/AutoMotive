@@ -25,8 +25,9 @@ class RedFlag:
     id: str
     text: str
     severity: str        # 'info' | 'warning'
-    # PAR-02 resto: the other listing of a duplicate flag,
-    # {listing_id, url, source_name}; left out of the JSON when None.
+    # PAR-02 resto: the other listing of a duplicate flag, {listing_id, url,
+    # source_name, kind} (kind: the pair's, for duplicate_link_clicked); left
+    # out of the JSON when None.
     link: dict[str, Any] | None = None
 
     def to_json(self) -> dict[str, Any]:
@@ -178,7 +179,8 @@ def duplicate_flags(pairs: Any, risk: Mapping[str, Any]) -> list[RedFlag]:
         more = len(found) - 1
         source = (copy.RED_FLAG_SOURCE["more"].format(source=name, k=more) if more
                   else copy.RED_FLAG_SOURCE["one"].format(source=name))
-        link = {"listing_id": best.get("other_id"), "url": best.get("url"), "source_name": name}
+        link = {"listing_id": best.get("other_id"), "url": best.get("url"), "source_name": name,
+                "kind": best["kind"]}
         out.append(RedFlag(flag_id, copy.RED_FLAG[text_key].format(source=source),
                            _DUPLICATE_FLAG[best["kind"]][2], link=link))
     return out

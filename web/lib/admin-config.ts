@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { costEstimatorProblem } from "@/lib/cost-estimator";
 import { proOffer } from "@/lib/pro";
+import { RED_FLAGS_ORDER_MESSAGE, RedFlagsOrderInput } from "@/lib/red-flags";
 import { RiskConfigInput } from "@/lib/risk-checklist";
 
 export const MAX_CONFIG_INTEGER = 2_147_483_647;
@@ -137,6 +138,8 @@ export function validateConfigChange(key: string, value: unknown, current: unkno
     if (![low, verify, high].every((n) => typeof n === "number" && Number.isFinite(n)) || !((low as number) < (verify as number) && (verify as number) <= (high as number))) {
       return "much_cheaper_verify_pct tiene que ser un número mayor que much_cheaper_pct y menor o igual que anticipo_pct (sin la clave: 25, 35 y 50).";
     }
+    // PAR-02 resto: the email's priority of flags (worker/intelligence/config.py flag_order).
+    if ("order" in v && !RedFlagsOrderInput.safeParse(v.order).success) return RED_FLAGS_ORDER_MESSAGE;
   }
   if (key === "lifecycle_emails") {
     const parsed = AdminLifecycleInput.safeParse(value);
@@ -170,6 +173,9 @@ export function configFieldLabel(key: string, path: string): string {
     const [group, name, ...rest] = path.split(".");
     const linkName = ({ dnrpa: "informe de dominio (DNRPA)", patentes: "patentes", infracciones: "infracciones", vtv: "VTV", form_08: "formulario 08" } as Record<string, string>)[name];
     if (group === "links" && linkName) return `Link oficial: ${linkName}${rest.length ? ` (${rest.join(".")})` : ""}`;
+    // PAR-02 resto: the duplicate signals and the photo hash.
+    if (group === "photo_hash" && name === "enabled") return "Hash de fotos prendido (descarga imágenes)";
+    if (group === "signals" && name) return `Señal ${name} (on, shadow u off)`;
   }
   if (key === "lifecycle_emails") {
     if (path.startsWith("kinds.")) return LIFECYCLE_KINDS[path.slice(6) as keyof typeof LIFECYCLE_KINDS]?.label ?? path;

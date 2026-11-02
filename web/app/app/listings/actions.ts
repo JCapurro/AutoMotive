@@ -7,6 +7,7 @@ import { requireUser } from "@/lib/auth";
 import { type InteractionStatus, type RejectionReason } from "@/lib/copy";
 import { track } from "@/lib/events";
 import { canChangeStatus } from "@/lib/listing-tracking";
+import { DUPLICATE_KINDS, type DuplicateKind } from "@/lib/red-flags";
 import { createClient } from "@/lib/supabase/server";
 import { Constants } from "@/types/database";
 
@@ -177,6 +178,36 @@ export async function trackRiskChecklist(listingId: number, action: "viewed" | "
   const user = await requireUser();
   const supabase = await createClient();
   await track(supabase, user.id, `risk_checklist_${parsed.data.action}`, { listing_id: parsed.data.listingId });
+}
+
+const DuplicateLinkEvent = z.object({
+  listingId: z.number().int().positive(),
+  otherListingId: z.number().int().positive(),
+  kind: z.enum(DUPLICATE_KINDS),
+  target: z.enum(["internal", "external"]),
+});
+
+/**
+ * PAR-02 resto: «Ver la otra publicación» of a duplicate flag was clicked
+ * (duplicate_link_clicked). Only to the events table, never to Pixel or GA;
+ * fired without waiting, the navigation goes on.
+ */
+export async function trackDuplicateLink(
+  listingId: number,
+  otherListingId: number,
+  kind: DuplicateKind,
+  target: "internal" | "external",
+) {
+  const parsed = DuplicateLinkEvent.safeParse({ listingId, otherListingId, kind, target });
+  if (!parsed.success) return;
+  const user = await requireUser();
+  const supabase = await createClient();
+  await track(supabase, user.id, "duplicate_link_clicked", {
+    listing_id: parsed.data.listingId,
+    other_listing_id: parsed.data.otherListingId,
+    kind: parsed.data.kind,
+    target: parsed.data.target,
+  });
 }
 
 /** PAR-03: the listing page's price history was opened (once per view, components/app/price-history-details.tsx). */

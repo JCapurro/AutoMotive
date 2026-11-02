@@ -10,6 +10,8 @@
  */
 import { z } from "zod";
 
+import { EMPHASIS_FLAGS } from "@/lib/red-flags";
+
 export const RISK_TITLE = "Antes de señar";
 export const RISK_HINT = "Controles para hacer vos antes de dejar una seña.";
 export const RISK_HEADER = "Son controles que conviene hacer vos. Ese Auto no verificó nada de esta publicación.";
@@ -70,9 +72,55 @@ const LinkInput = z
   })
   .passthrough();
 
+// PAR-02 resto: the duplicate signals and the photo hash, same bounds as
+// worker/intelligence/config.py risk(). Each key is optional (the worker falls
+// back to its default); a present one must be valid.
+const Signal = z.enum(["on", "shadow", "off"], "Cada señal de signals tiene que ser on, shadow u off.");
+const range = (name: string, min: number, max: number, int = true) =>
+  z.number(`${name} tiene que ser un número entre ${min} y ${max}.`).refine(
+    (n) => Number.isFinite(n) && n >= min && n <= max && (!int || Number.isInteger(n)),
+    `${name} tiene que ser un${int ? " entero" : " número"} entre ${min} y ${max}.`,
+  );
+export const RiskDuplicatesInput = z.object({
+  photo_hash_count: range("photo_hash_count", 1, 5).optional(),
+  phash_max_distance: range("phash_max_distance", 0, 16).optional(),
+  photo_hash: z
+    .object({
+      enabled: z.boolean("photo_hash.enabled tiene que ser true o false.").optional(),
+      daily_image_cap: range("photo_hash.daily_image_cap", 0, 5000).optional(),
+      max_attempts: range("photo_hash.max_attempts", 1, 10).optional(),
+      max_bytes: range("photo_hash.max_bytes", 10_000, 20_000_000).optional(),
+      timeout_seconds: range("photo_hash.timeout_seconds", 1, 60, false).optional(),
+      per_host_interval_seconds: range("photo_hash.per_host_interval_seconds", 0, 60, false).optional(),
+      common_min_sellers: range("photo_hash.common_min_sellers", 2, 100).optional(),
+      skip_sources: z.array(z.string().min(1), "photo_hash.skip_sources tiene que ser una lista de fuentes.").optional(),
+    })
+    .passthrough()
+    .optional(),
+  cross_source: z
+    .object({
+      km_tol_pct: range("cross_source.km_tol_pct", 0, 20, false).optional(),
+      price_tol_pct: range("cross_source.price_tol_pct", 0, 20, false).optional(),
+      data_min_km: range("cross_source.data_min_km", 0, 1_000_000).optional(),
+      data_max_dist_km: range("cross_source.data_max_dist_km", 1, 500, false).optional(),
+    })
+    .passthrough()
+    .optional(),
+  signals: z
+    .object({
+      private_many_listings: Signal.optional(),
+      cross_source_photos: Signal.optional(),
+      cross_source_data: Signal.optional(),
+      duplicate_photos: Signal.optional(),
+    })
+    .passthrough()
+    .optional(),
+});
+
 /** /admin/config validation of app_config.risk; unknown keys are kept. */
 export const RiskConfigInput = z
   .object({
+    ...RiskDuplicatesInput.shape,
     checklist_enabled: z.boolean("checklist_enabled tiene que ser true o false.").optional(),
     links: z
       .object({
@@ -147,7 +195,10 @@ export function checklistText(title: string): string {
   return [short ? `${RISK_TITLE}: ${short}` : RISK_TITLE, RISK_HEADER, ...CHECKLIST_ITEMS.map((item) => `- ${item.text}`)].join("\n");
 }
 
-/** The block opens with the emphasis line when the price itself is a reason to be careful. */
+/**
+ * The block opens with the emphasis line when the price itself is a reason to
+ * be careful, or (PAR-02 resto) the photos also appear in another listing.
+ */
 export function emphasize(flags: readonly { id: string }[]): boolean {
-  return flags.some((flag) => flag.id === "much_cheaper" || flag.id === "partial_price_suspect");
+  return flags.some((flag) => EMPHASIS_FLAGS.has(flag.id));
 }

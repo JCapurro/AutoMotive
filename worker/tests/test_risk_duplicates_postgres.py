@@ -114,7 +114,7 @@ class DetectAllTests(DuplicatesCase):
         flags = await self.flags(aid)
         self.assertEqual(flags[a]["cross_source_duplicate"]["link"],
                          {"listing_id": b, "url": f"https://example.test/rosariogarage/d{2}",
-                          "source_name": "Rosario Garage"})
+                          "source_name": "Rosario Garage", "kind": "cross_source_photos"})
         self.assertEqual(flags[b]["cross_source_duplicate"]["link"]["listing_id"], a)
         self.assertIn("(mismas fotos)", flags[a]["cross_source_duplicate"]["text"])
 
