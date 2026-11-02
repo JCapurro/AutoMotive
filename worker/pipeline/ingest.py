@@ -37,8 +37,9 @@ from db.repos.catalog import load_models
 from db.repos.fx import quote_for_today
 from db.repos.runs import log_error
 from normalization.description_facts import PARTIAL_KINDS, DescriptionFacts, resolve_price
+from normalization import not_vehicle
 from normalization.geo import SOURCE_DEFAULT_LOCATIONS, geocode_location
-from normalization.listing import Target, attrs_hash, fingerprint, normalize_listing
+from normalization.listing import Target, attrs_hash, facebook_price, fingerprint, normalize_listing
 from normalization.seller import seller_key
 from pipeline.seller_classification import classify_groups
 
@@ -191,6 +192,19 @@ def _reread_currency(attrs_new: dict[str, Any], old_pub: float | None,
     if not read or not _same_number(read.get("amount"), old_pub) or read.get("currency") != old_pub_cur:
         return None
     return read.get("as") or False
+
+
+def misread_currency(row: dict[str, Any]) -> bool:
+    """Whether the stored published price is in a currency read wrong
+    (normalization.listing.facebook_price would read it otherwise: a peso
+    amount stored as USD before the fix, still unrepaired). Any new price
+    compared with it is no price drop (listing 21327: USD 990.000 read again
+    as $ 950.000 is no 99% drop)."""
+    pub = row.get("price_published") if row.get("price_published") is not None else row.get("price")
+    cur = row.get("price_published_currency") or row.get("currency")
+    _, _, note = facebook_price(row.get("source"), pub, cur, make=row.get("make"), model=row.get("model"),
+                                sign=(row.get("attributes") or {}).get("_price_sign"))
+    return note is not None
 
 
 def merge(existing: dict[str, Any], incoming: dict[str, Any], *,
@@ -369,11 +383,15 @@ async def ingest_rows(rows: Iterable[dict[str, Any]], *, detail: bool = False,
         existing = await repo.lock_existing(cx, list(batch))
         for key, row in batch.items():
             old = existing.get(key)
-            if row.get("not_vehicle"):
-                # A part, not a car: never stored; one stored before ends here.
+            # A part, not a car: never stored; one stored before ends here. A
+            # stored listing is judged with what it already knows too (its
+            # description, the mileage of an earlier read): a card alone
+            # carries neither. One taken for a part and read as a car again
+            # is merged, which brings it back.
+            if row.get("not_vehicle") and (reason := not_vehicle.classify_update(row, old)):
                 result.not_vehicle += 1
                 if old is not None and "_not_vehicle" not in (old.get("attributes") or {}):
-                    await repo.mark_not_vehicle(cx, [(old["id"], row["not_vehicle"])])
+                    await repo.mark_not_vehicle(cx, [(old["id"], reason)])
                 continue
             if old is None:
                 stored = await repo.insert_listing(cx, row, detail=detail)
@@ -427,7 +445,8 @@ async def _on_update(cx, old: dict[str, Any], row: dict[str, Any], result: Inges
     # A lower down payment or installment is no price drop: no event, no alert.
     # The old row as stored, the new one as merge() just resolved it.
     partial = published_partial(old) or published_partial(values)
-    if "price" in changes and not partial and (drop := price_drop_pct(before, after)) is not None \
+    if "price" in changes and not partial and not misread_currency(old) \
+            and (drop := price_drop_pct(before, after)) is not None \
             and drop >= config.price_drop_min_pct:
         result.events.append(ListingEvent("price_drop", drop_pct=drop, **base))
 

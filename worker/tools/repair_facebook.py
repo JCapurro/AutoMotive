@@ -12,7 +12,7 @@ transaction:
   comparables and market stats, and their matches deleted
   (listings.mark_not_vehicle); nobody is notified;
 * a "USD" price at or above FB_USD_CEILING (money.facebook_currency, unless the
-  car is high-end) becomes ARS: the effective price is resolved again with the
+  car is high-end or the price was written with «US$») becomes ARS: the effective price is resolved again with the
   stored description facts and today's dollar; a peso amount too small for a
   car (below MIN_ARS_VEHICLE_PRICE) leaves the listing without a price, as
   the collector does now;
@@ -94,7 +94,8 @@ def reprice(row: dict[str, Any], fx: FxQuote | None) -> dict[str, Any] | None:
     """The price columns of a stored row once facebook_price is applied, or
     None when it doesn't change them."""
     pub, cur = _published(row)
-    amount, currency, note = facebook_price(row["source"], pub, cur, make=row.get("make"), model=row.get("model"))
+    amount, currency, note = facebook_price(row["source"], pub, cur, make=row.get("make"), model=row.get("model"),
+                                            sign=(row.get("attributes") or {}).get("_price_sign"))
     if note is None:
         return None
     attrs = {"_currency_read": {**note, "by": "tools.repair_facebook"}}

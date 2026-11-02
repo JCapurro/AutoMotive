@@ -9,9 +9,10 @@ from collectors.base import Listing
 from normalization import not_vehicle
 from normalization.fx import FxQuote
 from normalization.listing import Target, facebook_price, normalize_listing
-from normalization.money import facebook_currency, high_end
+from collectors.facebook import _parse_price_sign, parse_card
+from normalization.money import explicit_usd, facebook_currency, high_end
 from normalization.vehicle import CatalogModel
-from pipeline.ingest import merge
+from pipeline.ingest import merge, misread_currency
 
 # (title, price, currency as stored)
 PARTS = [
@@ -82,6 +83,16 @@ CARS = [
     ("Volkswagen Gol Trend 5 puertas", 8000, "USD"),
     ("Vendo Peugeot 208 Feline", 15000, "USD"),
     ("Nuevo Peugeot 208 0km", 25000, "USD"),
+    # Car titles that open with a piece of equipment, slang or a negated «desarme».
+    ("BOMBA Gol Trend 2012 full", 7000, "USD"),
+    ("Bomba!! Peugeot 208 impecable", 15000, "USD"),
+    ("Caja automática Peugeot 208 Allure 2020", 18000, "USD"),
+    ("Techo solar Jeep Compass Limited 2018", 25000, "USD"),
+    ("Radio taxi Chevrolet Spin con licencia", 9000, "USD"),
+    ("Llantas de aleación, Gol Trend 2013 full", 8000, "USD"),
+    ("Alarma Chevrolet Onix 2018", 11000, "USD"),
+    ("Accesorios incluidos Toyota Hilux 2019", 30000, "USD"),
+    ("Ford Ka 2012 no es desarme", 6000, "USD"),
 ]
 
 
@@ -93,6 +104,12 @@ class NotVehicleTests(unittest.TestCase):
     def test_no_car_is_a_part(self):
         wrong = [(t, not_vehicle.classify(t)) for t, _, _ in CARS if not_vehicle.classify(t)]
         self.assertEqual(wrong, [])
+
+    def test_equipment_without_a_single_year_is_still_a_part(self):
+        for title in ("Llantas Peugeot 206 2008 al 2012", "Radio Peugeot 206", "Caja automatica Peugeot 208",
+                      "Techo solar Peugeot 206/207", "Alarma Ford Ka 2010-2014", "Bomba nafta Gol Trend",
+                      "Bomba inyectora Hilux 2012", "Desarme Ford Ka 2012"):
+            self.assertIsNotNone(not_vehicle.classify(title), title)
 
     def test_whole_car_evidence_wins(self):
         # The source's own year and mileage: Facebook only shows km on vehicles.
@@ -112,6 +129,35 @@ class NotVehicleTests(unittest.TestCase):
         self.assertIsNone(not_vehicle.classify_row({**row, "source": "mercadolibre", "attributes": {}}))
 
 
+class ClassifyUpdateTests(unittest.TestCase):
+    """A card on a stored listing is judged with what the listing already knows."""
+
+    card = {"source": "facebook", "title": "Frente impecable Peugeot 206 XT", "description": None,
+            "year": 2010, "mileage_km": None, "attributes": {}}
+
+    def test_the_stored_description_says_car(self):
+        card = {**self.card, "not_vehicle": not_vehicle.classify_row(self.card)}
+        self.assertIsNotNone(card["not_vehicle"])
+        stored = {**self.card, "description": "Vendo mi auto, titular, VTV al día"}
+        self.assertIsNone(not_vehicle.classify_row(stored))
+        self.assertIsNone(not_vehicle.classify_update(card, stored))
+
+    def test_the_stored_mileage_says_car(self):
+        card = {**self.card, "not_vehicle": not_vehicle.classify_row(self.card)}
+        self.assertIsNone(not_vehicle.classify_update(card, {**self.card, "mileage_km": 150_000}))
+        # ... unless the description filled it.
+        stored = {**self.card, "mileage_km": 150_000, "attributes": {"_description_filled": ["mileage_km"]}}
+        self.assertIsNotNone(not_vehicle.classify_update(card, stored))
+
+    def test_without_stored_evidence_it_is_a_part(self):
+        card = {**self.card, "not_vehicle": not_vehicle.classify_row(self.card)}
+        self.assertEqual(not_vehicle.classify_update(card, None), card["not_vehicle"])
+        self.assertEqual(not_vehicle.classify_update(card, {**self.card, "description": "Impecable"}),
+                         card["not_vehicle"])
+        self.assertIsNone(not_vehicle.classify_update({**self.card, "title": "Peugeot 206", "not_vehicle": None},
+                                                      None))
+
+
 class FacebookCurrencyTests(unittest.TestCase):
     def test_usd_from_the_ceiling_up_is_ars(self):
         for title, price, currency in PARTS + CARS:
@@ -127,9 +173,35 @@ class FacebookCurrencyTests(unittest.TestCase):
     def test_high_end_cars_keep_their_dollars(self):
         self.assertEqual(facebook_currency(180_000, "USD", make="Porsche", model="911"), "USD")
         self.assertEqual(facebook_currency(160_000, "USD", make="Land Rover", model="Range Rover Sport"), "USD")
-        self.assertEqual(facebook_currency(160_000, "USD", make="Land Rover", model="Defender"), "ARS")
         self.assertTrue(high_end("Mercedes-Benz", "AMG GT"))
         self.assertFalse(high_end("Peugeot", "208"))
+        # Cars that cost more than USD 100.000 in Argentina (seed.sql names).
+        for make, model, price in (("Land Rover", "Defender", 140_000), ("BMW", "X5", 130_000),
+                                   ("BMW", "M4", 130_000), ("Mercedes-Benz", "GLE", 115_000),
+                                   ("Mercedes-Benz", "Clase S", 150_000), ("Ford", "F-150", 150_000),
+                                   ("Audi", "Q8", 140_000), ("Volvo", "XC90", 120_000),
+                                   ("Ram", "2500", 120_000), ("Chevrolet", "Tahoe", 140_000),
+                                   ("Chevrolet", "Silverado", 120_000), ("Jeep", "Grand Cherokee", 110_000),
+                                   ("Lexus", "RX", 180_000)):
+            self.assertEqual(facebook_currency(price, "USD", make=make, model=model), "USD", (make, model))
+        # A mainstream car's bare «$ 130.000» is still pesos.
+        self.assertEqual(facebook_currency(130_000, "USD", make="Ford", model="EcoSport"), "ARS")
+
+    def test_a_sign_that_names_the_dollar_is_never_reinterpreted(self):
+        for sign in ("US$", "u$s", "USD", " U$S "):
+            self.assertTrue(explicit_usd(sign), sign)
+            self.assertEqual(facebook_currency(180_000, "USD", sign=sign), "USD", sign)
+        for sign in ("$", None, "ARS"):
+            self.assertFalse(explicit_usd(sign), sign)
+        self.assertEqual(facebook_currency(180_000, "USD", sign="$"), "ARS")
+        self.assertEqual(facebook_price("facebook", 180_000, "USD", sign="US$"), (180_000, "USD", None))
+
+    def test_the_collector_keeps_the_sign(self):
+        self.assertEqual(_parse_price_sign("US$ 180.000"), (180_000.0, "USD", "US$"))
+        self.assertEqual(_parse_price_sign("$ 11.900"), (11_900.0, "USD", "$"))
+        self.assertEqual(_parse_price_sign("$12"), (None, None, None))
+        card = parse_card("/marketplace/item/42/", "US$ 130.000\nLexus LX 570 2019\nNordelta")
+        self.assertEqual((card.precio, card.moneda, card.extra), (130_000, "USD", {"price_sign": "US$"}))
 
     def test_facebook_price(self):
         # A peso amount too small for a car is no price, as the collector drops it.
@@ -169,6 +241,12 @@ class NormalizeFacebookTests(unittest.TestCase):
         self.assertIsNone(row["price"])
         self.assertIsNone(row["price_published"])
         self.assertNotIn("moneda", row["attributes"])
+
+    def test_an_explicit_dollar_sign_keeps_the_dollars_and_is_stored(self):
+        row = self.normalize("Ford Ecosport Titanium 2024", 130_000, "USD", extra={"price_sign": "US$"})
+        self.assertEqual((row["price"], row["currency"]), (130_000, "USD"))
+        self.assertEqual(row["attributes"]["_price_sign"], "US$")
+        self.assertNotIn("_currency_read", row["attributes"])
 
     def test_a_dollar_car_stays(self):
         row = self.normalize("FORD ECOSPORT 1.4 XLS 2008 ‼️SE PUEDE FINANCIAR", 6_400, "USD", anio=2008)
@@ -213,6 +291,14 @@ class MergeReinterpretedCurrencyTests(unittest.TestCase):
         out, changes = merge(existing, incoming, detail=False)
         self.assertEqual((out["price_published_currency"], out["attributes"]["moneda"]), ("USD", "USD"))
         self.assertIn("price", changes)
+
+    def test_a_misread_stored_price_is_known(self):
+        self.assertTrue(misread_currency(self.stored(990_000, "USD")))
+        self.assertFalse(misread_currency(self.stored(990_000, "ARS")))
+        self.assertFalse(misread_currency(self.stored(9_900, "USD")))
+        self.assertFalse(misread_currency(self.stored(990_000, "USD", attributes={"_price_sign": "US$"})))
+        self.assertFalse(misread_currency(self.stored(130_000, "USD", make="BMW", model="X5")))
+        self.assertFalse(misread_currency(self.stored(990_000, "USD", source="mercadolibre")))
 
     def test_a_listing_read_as_a_car_again_loses_the_mark(self):
         existing = self.stored(9_500, "USD", attributes={"moneda": "USD", "_not_vehicle": {"reason": "x"}})

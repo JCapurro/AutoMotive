@@ -254,7 +254,8 @@ async def mark_not_vehicle(cx: AsyncConnection, marks: list[tuple[int, str]]) ->
     (status 'gone'), their price out of every comparable and market stat
     (price_partial, as a down payment's), attributes._not_vehicle saying why,
     and their matches deleted (notifications keep theirs, match_id null), so
-    no search shows them again. Returns how many matches went."""
+    no search shows them again, as well as their expired_search_matches rows,
+    so no count email counts them. Returns how many matches went."""
     if not marks:
         return 0
     async with cx.cursor() as cur:
@@ -265,7 +266,10 @@ async def mark_not_vehicle(cx: AsyncConnection, marks: list[tuple[int, str]]) ->
             "                    jsonb_build_object('reason', %s::text, 'at', now())) "
             " WHERE id = %s",
             [(NOT_VEHICLE_REASON, reason, reason, lid) for lid, reason in marks])
-    cur = await cx.execute("DELETE FROM matches WHERE listing_id = ANY(%s)", ([lid for lid, _ in marks],))
+    ids = [lid for lid, _ in marks]
+    # Nor does the count after expiry (2.5): «aparecieron N autos» counts cars.
+    await cx.execute("DELETE FROM expired_search_matches WHERE listing_id = ANY(%s)", (ids,))
+    cur = await cx.execute("DELETE FROM matches WHERE listing_id = ANY(%s)", (ids,))
     return cur.rowcount
 
 

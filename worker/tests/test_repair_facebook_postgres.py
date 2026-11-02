@@ -88,6 +88,48 @@ class IngestTests(Case):
         self.assertAlmostEqual(float(row["price_usd"]), 990_000 / TEST_FX_RATE)
         self.assertEqual(row["attributes"]["moneda"], "ARS")
 
+    async def test_a_peso_card_on_a_misread_stored_price_is_no_price_drop(self):
+        # 21327 still unrepaired and the seller lowered the price: USD 990.000
+        # against $ 950.000 (ARS) is no 99% drop.
+        await self.store("21327", "FORD ECOSPORT XLS 1.6 GNC FULL", 990_000, "USD", moneda="ARS")
+        result = await ingest([fb("21327", "FORD ECOSPORT XLS 1.6 GNC FULL", 950_000)], geocode=None)
+        kinds = [e.kind for e in result.events]
+        self.assertIn("listing_updated", kinds)
+        self.assertNotIn("price_drop", kinds)
+        row = await self.listing("21327")
+        self.assertEqual((float(row["price"]), row["currency"]), (950_000, "ARS"))
+
+    async def test_a_real_price_drop_is_still_one(self):
+        await self.store("8", "FORD ECOSPORT 1.4 XLS 2008", 10_000, "USD", year=2008, km=150_000)
+        result = await ingest([fb("8", "FORD ECOSPORT 1.4 XLS 2008", 8_000, anio=2008, km=150_000)],
+                              geocode=None)
+        self.assertIn("price_drop", [e.kind for e in result.events])
+
+    async def test_an_enriched_car_read_again_by_card_is_not_ended(self):
+        # The card has neither description nor mileage; the stored listing does.
+        lid = await self.store("9", "Frente impecable Peugeot 206 XT", 5_000, "USD", make="Peugeot",
+                               model="206", year=2010)
+        async with db.connection() as cx:
+            await cx.execute("UPDATE listings SET description = 'Vendo mi auto, titular, VTV al día', "
+                             "       enriched_at = now() WHERE id = %s", (lid,))
+        await self.match(lid)
+        result = await ingest([fb("9", "Frente impecable Peugeot 206 XT", 5_000, anio=2010)], geocode=None)
+        self.assertEqual(result.not_vehicle, 0)
+        row = await self.listing("9")
+        self.assertEqual((row["status"], row["price_partial"]), ("active", False))
+        self.assertNotIn("_not_vehicle", row["attributes"])
+        self.assertEqual(len(await self.rows("SELECT * FROM matches")), 1)
+
+    async def test_a_stored_part_leaves_the_count_after_expiry(self):
+        lid = await self.store("1", "Butacas Ford Ecosport", 350_000, "USD")
+        [aid] = await db.create_alert(user_id=TG_USER, chat_id=TG_USER, name="Ecosport",
+                                      filters={"marcas": ["Ford"], "modelos": ["EcoSport"]})
+        async with db.connection() as cx:
+            await cx.execute("INSERT INTO expired_search_matches (search_profile_id, listing_id, access_ended_at, "
+                             "  level) VALUES (%s, %s, now() - interval '8 days', 'good')", (aid, lid))
+        await ingest([fb("1", "Butacas Ford Ecosport", 350_000)], geocode=None)
+        self.assertEqual(await self.rows("SELECT * FROM expired_search_matches"), [])
+
 
 @requires_db
 class RepairToolTests(Case):
@@ -102,7 +144,12 @@ class RepairToolTests(Case):
             "moneda": await self.store("6", "Ford Ecosport 2.0 4x2 XLT Plus", 10_000, "USD", moneda="ARS"),
             "porsche": await self.store("7", "Porsche 911 Carrera S", 180_000, "USD",
                                         make="Porsche", model="911"),
+            "bmw": await self.store("10", "BMW X5 xDrive40i M Sport", 130_000, "USD", make="BMW", model="X5"),
+            "explicit": await self.store("11", "Ford Ecosport Titanium", 130_000, "USD"),
         }
+        async with db.connection() as cx:
+            await cx.execute("UPDATE listings SET attributes = attributes || '{\"_price_sign\": \"US$\"}' "
+                             " WHERE id = %s", (ids["explicit"],))
         async with db.connection() as cx:
             await cx.execute("UPDATE listings SET status = 'gone' WHERE id = %s", (ids["part_gone"],))
         await self.match(ids["part"])
@@ -149,7 +196,7 @@ class RepairToolTests(Case):
         self.assertEqual(polo["status"], "active")
 
         self.assertEqual((await self.listing("6"))["attributes"]["moneda"], "USD")
-        for untouched in ("3", "7"):
+        for untouched in ("3", "7", "10", "11"):
             row = await self.listing(untouched)
             self.assertEqual((row["currency"], row["attributes"]["moneda"]), ("USD", "USD"), untouched)
         self.assertEqual(ids["car_usd"], (await self.listing("3"))["id"])
