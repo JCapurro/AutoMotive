@@ -9,7 +9,7 @@ from urllib.parse import urlsplit
 MAX_PHOTOS = 3
 
 
-def image_urls(images: Any) -> list[str]:
+def image_urls(images: Any, limit: int = MAX_PHOTOS) -> list[str]:
     """Accept the same URL / {url} array as the web gallery, with a small cap.
 
     Old notifications have no images. Ignore malformed entries, unsafe schemes
@@ -33,6 +33,6 @@ def image_urls(images: Any) -> list[str]:
             continue
         if valid and url not in out:
             out.append(url)
-        if len(out) == MAX_PHOTOS:
+        if len(out) == limit:
             break
     return out
