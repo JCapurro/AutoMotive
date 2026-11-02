@@ -39,10 +39,8 @@ async function expectNoHorizontalScroll(page: Page) {
   expect(overflow, `horizontal overflow on ${page.url()}`).toBeLessThanOrEqual(0);
 }
 
-/** Main navigation: the bottom tab bar on a phone, the header on desktop. */
+/** Main navigation: icons in the header on a phone, links on desktop. */
 async function navigate(page: Page, name: "Inicio" | "Guardados" | "Ajustes") {
-  // The tab bar slides away while scrolling down and comes back near the top.
-  if (mobile(page)) await page.evaluate(() => window.scrollTo(0, 0));
   const nav = page.getByRole("navigation", { name: "Principal" }).filter({ visible: true });
   await nav.getByRole("link", { name, exact: false }).first().click();
 }
@@ -220,11 +218,12 @@ test("F4: búsqueda gratis con el email, backfill, alerta, guardar y guardados",
   });
 
   if (mobile(page)) {
-    await test.step("mobile: navegación inferior a 375 px", async () => {
+    await test.step("mobile: navegación en el encabezado a 375 px", async () => {
       expect(page.viewportSize()?.width).toBe(375);
       const tabs = page.getByRole("navigation", { name: "Principal" }).filter({ visible: true });
-      // Inicio, Guardados, «Nueva» in the middle, Ajustes.
+      // Inicio, Guardados, Ajustes and «Nueva búsqueda» last, next to the logo; no bar at the bottom.
       await expect(tabs.getByRole("link")).toHaveCount(4);
+      expect((await tabs.boundingBox())!.y).toBeLessThan(80);
       for (const name of ["Inicio", "Guardados", "Ajustes"] as const) {
         await navigate(page, name);
         await expect(tabs.getByRole("link", { name }).first()).toHaveAttribute("aria-current", "page");

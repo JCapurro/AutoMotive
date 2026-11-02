@@ -1,4 +1,4 @@
-import { AcquirePlanButton, BottomNav, TopNav } from "@/components/app/app-nav";
+import { AcquirePlanButton, MobileNav, TopNav } from "@/components/app/app-nav";
 import { Logo } from "@/components/logo";
 import { canViewHealth } from "@/lib/health-auth";
 import { isAdmin } from "@/lib/admin";
@@ -18,16 +18,19 @@ export default async function AppLayout({ children }: LayoutProps<"/app">) {
     <>
       <div className="flex min-h-dvh flex-col bg-background">
         <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur-sm">
-          <div className="mx-auto flex h-15 w-full max-w-6xl items-center gap-7 px-4 sm:px-6 lg:px-10">
-            <Logo href="/app" />
+          <div className="mx-auto flex h-15 w-full max-w-6xl items-center gap-3 px-4 sm:px-6 md:gap-7 lg:px-10">
+            <Logo href="/app" className="shrink-0 whitespace-nowrap" />
             <TopNav admin={admin} healthOwner={healthOwner} canAcquirePlan={showAcquirePlan} />
-            <AcquirePlanButton canAcquirePlan={showAcquirePlan} className="ml-auto md:hidden" />
+            {/* Below 360 px «Planes» gives way, so the icons never push the page sideways. */}
+            <div className="ml-auto flex h-full items-center gap-1.5 md:hidden">
+              <AcquirePlanButton canAcquirePlan={showAcquirePlan} className="h-8 px-2.5 text-[13px] max-[359px]:hidden" />
+              <MobileNav healthOwner={healthOwner} />
+            </div>
           </div>
         </header>
-        <main className="mx-auto w-full max-w-6xl flex-1 px-4 pt-7 pb-28 sm:px-6 md:pt-10 md:pb-16 lg:px-10">
+        <main className="mx-auto w-full max-w-6xl flex-1 px-4 pt-7 pb-16 sm:px-6 md:pt-10 lg:px-10">
           {children}
         </main>
-        <BottomNav healthOwner={healthOwner} />
       </div>
     </>
   );
