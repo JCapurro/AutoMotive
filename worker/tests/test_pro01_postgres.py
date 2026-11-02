@@ -191,6 +191,10 @@ class LowResultsFlagTests(Pro01Case):
         self.assertEqual(fun.main_blocker, "seller")
 
         await self.plan("pass")
+        # Respuestas de Juan 02/11, 3: the downgrade asks for a rematch; until it
+        # runs the search is not prepared, and the low-results job waits for it.
+        self.assertNotIn(self.profile, [r["id"] for r in await low_repo.candidates(max_results=3, min_age_hours=1)])
+        await rematch.run_pending()
         [row] = [r for r in await low_repo.candidates(max_results=3, min_age_hours=1) if r["id"] == self.profile]
         self.assertIs(row["seller_filter"], False)
         self.assertNotEqual(lr.fingerprint(low_job._profile(row)), lr.fingerprint(profile))
