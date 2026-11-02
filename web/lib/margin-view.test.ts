@@ -73,26 +73,26 @@ describe("margin line (the worker's, byte for byte)", () => {
 
 describe("margin card line (Juan, 02/11: short in the result cards)", () => {
   it("a range: the same USD range as the full line and the dealers' n", () => {
-    expect(marginCardLine(byName("pool CABA"))).toBe("Margen bruto estimado: USD 1.210 a 1.230 (n = 6 agencias)");
+    expect(marginCardLine(byName("pool CABA"))).toBe("Margen bruto estimado: USD 1.210 a 1.230 (n\u00a0=\u00a06\u00a0agencias)");
   });
 
   it("a single value", () => {
-    expect(marginCardLine(byName("sin localidad"))).toBe("Margen bruto estimado: USD 1.850 (n = 6 agencias)");
+    expect(marginCardLine(byName("sin localidad"))).toBe("Margen bruto estimado: USD 1.850 (n\u00a0=\u00a06\u00a0agencias)");
   });
 
   it("a negative margin keeps its sign", () => {
-    expect(marginCardLine(byName("negativo"))).toBe("Margen bruto estimado: USD -1.790 a -1.770 (n = 6 agencias)");
+    expect(marginCardLine(byName("negativo"))).toBe("Margen bruto estimado: USD -1.790 a -1.770 (n\u00a0=\u00a06\u00a0agencias)");
   });
 
   it("few dealers: short and honest", () => {
-    expect(marginCardLine(byName("pocas agencias"))).toBe("Margen estimado: pocas agencias para estimarlo (n = 2)");
+    expect(marginCardLine(byName("pocas agencias"))).toBe("Margen estimado: pocas agencias para estimarlo (n\u00a0=\u00a02)");
     expect(marginCardLine({ status: "few_dealers", dealer_n: 2 })).toBeNull();
   });
 
   it("starts like the full line, which keeps the median, the costs and «sin impuestos»", () => {
     for (const c of GOLDEN.cases) {
       const card = marginCardLine(c.margin_ref)!;
-      if (c.payload.status === "ok") expect(c.line.startsWith(card.replace(/ \(n = \d+ agencias\)$/, " ("))).toBe(true);
+      if (c.payload.status === "ok") expect(c.line.startsWith(card.replace(/ \(n\u00a0=\u00a0\d+\u00a0agencias\)$/, " ("))).toBe(true);
       expect(card.length).toBeLessThan(c.line.length);
     }
     expect(marginLine(byName("pool CABA"))).toContain("contra la mediana de USD 18.000");

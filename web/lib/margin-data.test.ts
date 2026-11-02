@@ -60,7 +60,7 @@ describe("fetchMatchMargins / marginLinesFor", () => {
     const supabase = client(() => ({ data: [{ match_id: 7, margin_ref: REF }], error: null }));
     const lines = await marginLinesFor(supabase, { minThresholdUsd: 500 }, [{ listing_id: 70, match_id: 7 }, { listing_id: 71, match_id: 8 }]);
     expect(lines.get(70)).toBe(marginCardLine(REF));
-    expect(lines.get(70)).toBe("Margen bruto estimado: USD 1.210 a 1.230 (n = 6 agencias)");
+    expect(lines.get(70)).toBe("Margen bruto estimado: USD 1.210 a 1.230 (n\u00a0=\u00a06\u00a0agencias)");
     expect(lines.get(70)).not.toBe(marginLine(REF));
     expect(lines.has(71)).toBe(false);
   });
@@ -69,7 +69,7 @@ describe("fetchMatchMargins / marginLinesFor", () => {
     const few = { v: 1, status: "few_dealers", dealer_n: 2, min_n: 5, n: 10, level_used: "transmission" };
     const supabase = client(() => ({ data: [{ match_id: 7, margin_ref: few }], error: null }));
     const lines = await marginLinesFor(supabase, { minThresholdUsd: 500 }, [{ listing_id: 70, match_id: 7 }]);
-    expect(lines.get(70)).toBe("Margen estimado: pocas agencias para estimarlo (n = 2)");
+    expect(lines.get(70)).toBe("Margen estimado: pocas agencias para estimarlo (n\u00a0=\u00a02)");
   });
 });
 

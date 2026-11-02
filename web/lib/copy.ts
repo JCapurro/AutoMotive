@@ -424,8 +424,8 @@ export const MARGIN = {
   fewDealers: "Margen estimado: no hay suficientes agencias publicando este modelo para estimarlo (n = {n}, mínimo {min_n})",
   // Juan, 02/11: the result cards (search, dashboard, Guardados) carry the short
   // line; the listing page and the Pro emails keep the full one above.
-  cardLine: "Margen bruto estimado: {usd} (n = {n} agencias)",
-  cardFewDealers: "Margen estimado: pocas agencias para estimarlo (n = {n})",
+  cardLine: "Margen bruto estimado: {usd} (n\u00a0=\u00a0{n}\u00a0agencias)",
+  cardFewDealers: "Margen estimado: pocas agencias para estimarlo (n\u00a0=\u00a0{n})",
   why: {
     no_zone: "tu búsqueda no tiene localidad",
     no_official: "no tenemos los valores oficiales de tu provincia",
