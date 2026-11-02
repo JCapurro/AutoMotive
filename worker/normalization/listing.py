@@ -12,11 +12,12 @@ from datetime import datetime, timezone
 from typing import Any
 
 from collectors.base import Listing
-from normalization import body_type
+from normalization import body_type, not_vehicle
 from normalization import transmission as tx
 from normalization.description_facts import DescriptionFacts, parse as parse_facts, resolve_price
 from normalization.fx import FxQuote
 from normalization.geo import is_not_a_place, normalize_location_query
+from normalization.money import MIN_ARS_VEHICLE_PRICE, facebook_currency
 from normalization.normalize import normalize_text
 from normalization.price_check import keyword_partial
 from normalization.vehicle import CatalogModel, resolve_trim, resolve_vehicle
@@ -83,6 +84,25 @@ def price_usd(price: float | None, currency: str | None, fx: FxQuote | None) -> 
     if currency == "ARS" and fx and fx.rate > 0:
         return round(float(price) / fx.rate, 2)
     return None
+
+
+def facebook_price(source: str | None, amount: float | None, currency: str | None, *,
+                   make: str | None = None, model: str | None = None, sign: str | None = None
+                   ) -> tuple[float | None, str | None, dict[str, Any] | None]:
+    """A Facebook price with money.facebook_currency applied: (amount,
+    currency, what was read when it changed). An amount that becomes ARS below
+    MIN_ARS_VEHICLE_PRICE is no car's price, as the collector would have
+    dropped it: (None, None, note). `sign`: the symbol the price was written
+    with (attributes._price_sign), None when unknown."""
+    if source != "facebook" or not amount or not currency:
+        return amount, currency, None
+    fixed = facebook_currency(amount, currency, make=make, model=model, sign=sign)
+    if fixed == currency:
+        return amount, currency, None
+    note = {"amount": amount, "currency": currency, "as": fixed}
+    if fixed == "ARS" and amount < MIN_ARS_VEHICLE_PRICE:
+        return None, None, {**note, "as": None}
+    return amount, fixed, note
 
 
 def catalog_entry(catalog: list[CatalogModel], make: str | None,
@@ -165,6 +185,20 @@ def normalize_listing(item: Listing, *, catalog: list[CatalogModel], target: Tar
     }
 
     published = item.precio if item.precio and item.precio > 0 else None
+    # The symbol the source wrote the price with (collectors/facebook.py): a
+    # bare "$" is ambiguous, «US$» is not.
+    if sign := item.extra.get("price_sign"):
+        attributes["_price_sign"] = sign
+    published, currency, currency_note = facebook_price(item.source, published, currency,
+                                                        make=vehicle.make, model=vehicle.model, sign=sign)
+    if currency_note:
+        attributes["_currency_read"] = currency_note
+    # The published currency, as the price columns have it (it may have been
+    # reinterpreted above): a raw copy diverged from them (listing 21327).
+    if currency:
+        attributes["moneda"] = currency
+    elif currency_note:
+        attributes.pop("moneda", None)
     # Why the title or the page's structure (Autocosmos' "Anticipo" block)
     # already say the published number isn't the total.
     partial_reason = (item.price_partial_reason or "parcial") if item.price_partial         else keyword_partial(item.titulo)
@@ -213,4 +247,6 @@ def normalize_listing(item: Listing, *, catalog: list[CatalogModel], target: Tar
     row["usd_rate"] = usd_rate
     row["published_partial_reason"] = partial_reason
     row["fingerprint"] = fingerprint(row)
+    # Not a column: a part or an accessory, not a car (ingest_rows skips it).
+    row["not_vehicle"] = not_vehicle.classify_row(row)
     return row

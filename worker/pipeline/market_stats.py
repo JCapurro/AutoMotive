@@ -24,6 +24,9 @@ What each column counts (reposts never count):
   being published is never said to be sold.
 * prices: over the active ones with price_usd > 0 and not price_partial.
 
+Listings that are not a car (attributes._not_vehicle, a part on Facebook:
+normalization/not_vehicle.py) count nowhere.
+
 Below app_config.market_stats.min_n (price 8, days 5) the percentiles stay
 null and the counts are kept.
 """
@@ -321,6 +324,7 @@ SELECT l.id, l.source, l.make, l.model, l.body_type, l.year, l.status::text AS s
   FROM listings l
   LEFT JOIN listing_zones z ON z.listing_id = l.id
  WHERE l.year IS NOT NULL
+   AND NOT l.attributes ? '_not_vehicle'
    AND l.first_seen_at < %(end)s
    AND greatest(l.last_seen_at, l.last_full_seen_at) >= %(since)s
  ORDER BY l.id

@@ -122,13 +122,20 @@ def _city_slug_from_origin(f: dict) -> str:
 
 
 def _parse_price(txt: str) -> tuple[float | None, str | None]:
+    amount, moneda, _ = _parse_price_sign(txt)
+    return amount, moneda
+
+
+def _parse_price_sign(txt: str) -> tuple[float | None, str | None, str | None]:
+    """(amount, currency, the symbol as written): a bare "$" is ambiguous
+    (money.facebook_currency), «US$» is not."""
     m = _PRICE_RE.search(txt or "")
     if not m:
-        return None, None
+        return None, None, None
     sym, num = m.groups()
     digits = re.sub(r"[^\d]", "", num)
     if not digits:
-        return None, None
+        return None, None, None
     amount = float(digits)
     sym_l = sym.lower()
     if "us" in sym_l:
@@ -138,12 +145,14 @@ def _parse_price(txt: str) -> tuple[float | None, str | None]:
     else:
         # FB Argentina commonly renders USD listings as "$ 11,900" and ARS
         # vehicle listings as "$ 11,900,000". Treat plain "$" in millions as ARS.
+        # Between FACEBOOK_USD_CEILING and a million it is ARS too ("$ 350.000"
+        # a part), which needs the make: normalization.listing.facebook_price.
         moneda = plain_dollar_currency(amount)
     if moneda == "USD" and amount < MIN_USD_VEHICLE_PRICE:
-        return None, None
+        return None, None, None
     if moneda == "ARS" and amount < MIN_ARS_VEHICLE_PRICE:
-        return None, None
-    return amount, moneda
+        return None, None, None
+    return amount, moneda, sym
 
 
 def _parse_km(txt: str) -> int | None:
@@ -242,9 +251,9 @@ def parse_card(href: str, text: str, label: str = "", img: str | None = None) ->
     if not m:
         return None
     lines = [ln.strip() for ln in (text or "").split("\n") if ln.strip()]
-    price, moneda = _parse_price(text)
+    price, moneda, sign = _parse_price_sign(text)
     if price is None:
-        price, moneda = _parse_price(label)
+        price, moneda, sign = _parse_price_sign(label)
     title = _title_from_card(label, lines) or (text or "")[:120]
 
     # Publication cues only; a model year or a price is not a date.
@@ -266,6 +275,7 @@ def parse_card(href: str, text: str, label: str = "", img: str | None = None) ->
         ubicacion=_extract_location(lines, title),
         published_at=parse_publication_date(date_line),
         imagenes=[img] if img else [],
+        extra={"price_sign": sign} if sign else {},
     )
 
 
@@ -373,11 +383,11 @@ def parse_detail(html: str, url: str, status: int = 200) -> ListingDetail:
         raise ValueError(f"facebook detail without id/title: {url}")
 
     # The price sits by the title; the description below may quote others.
-    price = moneda = None
+    price = moneda = sign = None
     head = next((i for i, p in enumerate(plain) if p in _DESCRIPTION_HEADERS or p in _DETAILS_HEADERS),
                 len(lines))
     for ln in lines[:head]:
-        price, moneda = _parse_price(ln)
+        price, moneda, sign = _parse_price_sign(ln)
         if price is not None:
             break
 
@@ -445,6 +455,7 @@ def parse_detail(html: str, url: str, status: int = 200) -> ListingDetail:
         imagenes=list(dict.fromkeys(i for i in images if i)),
         atributos=atributos,
         published_at=published_at,
+        extra={"price_sign": sign} if sign else {},
     ))
 
 

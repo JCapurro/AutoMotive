@@ -245,6 +245,34 @@ async def mark_gone(cx: AsyncConnection, listing_id: int) -> bool:
     return cur.rowcount > 0
 
 
+NOT_VEHICLE_REASON = "no es un auto"
+
+
+async def mark_not_vehicle(cx: AsyncConnection, marks: list[tuple[int, str]]) -> int:
+    """Listings that turned out to be a part or an accessory
+    (normalization/not_vehicle.py), as (id, reason): ended without an event
+    (status 'gone'), their price out of every comparable and market stat
+    (price_partial, as a down payment's), attributes._not_vehicle saying why,
+    and their matches deleted (notifications keep theirs, match_id null), so
+    no search shows them again, as well as their expired_search_matches rows,
+    so no count email counts them. Returns how many matches went."""
+    if not marks:
+        return 0
+    async with cx.cursor() as cur:
+        await cur.executemany(
+            "UPDATE listings SET status = 'gone', price_partial = true, "
+            "       price_partial_reason = %s || ': ' || %s, "
+            "       attributes = attributes || jsonb_build_object('_not_vehicle', "
+            "                    jsonb_build_object('reason', %s::text, 'at', now())) "
+            " WHERE id = %s",
+            [(NOT_VEHICLE_REASON, reason, reason, lid) for lid, reason in marks])
+    ids = [lid for lid, _ in marks]
+    # Nor does the count after expiry (2.5): «aparecieron N autos» counts cars.
+    await cx.execute("DELETE FROM expired_search_matches WHERE listing_id = ANY(%s)", (ids,))
+    cur = await cx.execute("DELETE FROM matches WHERE listing_id = ANY(%s)", (ids,))
+    return cur.rowcount
+
+
 async def stored_description(listing_id: int) -> dict[str, Any] | None:
     """The description and its facts as stored, to reuse the LLM's reading of the same text."""
     async with connection() as cx:
