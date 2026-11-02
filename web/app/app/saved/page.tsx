@@ -23,8 +23,8 @@ type Snapshot = { observed_at: string; price: number | null; currency: string | 
 /**
  * §30 Watchlist: saved listings (and the ones being followed), with what
  * Ese Auto noticed since: price drops, changes, "ya no está", days online.
- * X-01: filtered by follow-up status with ?e=, each card with its note and
- * a compact status select.
+ * X-01: filtered by follow-up status with ?e=, each card with a compact
+ * status select.
  */
 export default async function SavedPage({ searchParams }: PageProps<"/app/saved">) {
   const user = await requireUser();
@@ -32,7 +32,7 @@ export default async function SavedPage({ searchParams }: PageProps<"/app/saved"
   const filter: FollowFilter | null =
     typeof query.e === "string" && (FOLLOW_FILTERS as readonly string[]).includes(query.e) ? (query.e as FollowFilter) : null;
   const supabase = await createClient();
-  const base = supabase.from("user_listing_interactions").select("listing_id, status, saved, note, updated_at");
+  const base = supabase.from("user_listing_interactions").select("listing_id, status, saved, updated_at");
   const { data: interactions } = await (filter
     ? base.eq("status", filter)
     : base.or(`saved.eq.true,status.in.(${FOLLOWED.join(",")})`)
@@ -147,7 +147,6 @@ export default async function SavedPage({ searchParams }: PageProps<"/app/saved"
                 status: i.status,
                 saved: i.saved,
                 profile_name: m?.profile ?? null,
-                note: i.note,
               }}
               costLine={costLines.get(l.id)}
               footer={

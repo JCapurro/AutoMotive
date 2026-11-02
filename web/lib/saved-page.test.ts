@@ -11,7 +11,7 @@ const state = vi.hoisted(() => ({
 vi.mock("@/lib/cost-estimate-data", () => ({ costLinesFor: async () => new Map() }));
 vi.mock("@/lib/auth", () => ({ requireUser: async () => ({ id: "account" }) }));
 vi.mock("@/lib/config", () => ({ webConfig: async () => ({ watchlistStaleDays: 30 }) }));
-vi.mock("@/app/app/listings/actions", () => ({ setStatus: vi.fn(), setSaved: vi.fn(), recordPurchase: vi.fn(), setNote: vi.fn() }));
+vi.mock("@/app/app/listings/actions", () => ({ setStatus: vi.fn(), setSaved: vi.fn(), recordPurchase: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
     from: (table: string) => {
@@ -50,10 +50,10 @@ async function render(e?: string) {
 }
 const interactionCalls = () => state.calls.filter((c) => c[0] === "user_listing_interactions");
 
-it("lists saved and followed listings, purchased included, with their note (X-01)", async () => {
+it("lists saved and followed listings, purchased included, without reading the note (X-01, Juan 02/11)", async () => {
   await render();
   const calls = interactionCalls();
-  expect(calls.find((c) => c[1] === "select")?.[2]).toContain("note");
+  expect(calls.find((c) => c[1] === "select")?.[2]).not.toMatch(/\bnote\b/);
   expect(calls).toContainEqual(["user_listing_interactions", "or", "saved.eq.true,status.in.(interested,contacted,visit_scheduled,purchased)"]);
   expect(calls.some((c) => c[1] === "eq")).toBe(false);
 });
@@ -78,12 +78,11 @@ it("draws the filter pills with the active one marked", async () => {
   expect(html.match(/aria-current="page"/g)).toHaveLength(1);
 });
 
-it("shows each card's status, its note on one line and a compact status select", async () => {
+it("shows each card's status and a compact status select, never a note", async () => {
   const html = await render();
   expect(html).toContain(">Contactado</span>");
-  const note = html.match(/<p[^>]*data-testid="card-note"[^>]*>([\s\S]*?)<\/p>/);
-  expect(note?.[0]).toContain("truncate");
-  expect(note?.[1]).toContain("Llamé\nel martes &lt;b&gt;");
+  expect(html).not.toContain("card-note");
+  expect(html).not.toContain("Llamé");
   expect(html).toMatch(/<div[^>]*class="[^"]*relative z-10[^"]*"[^>]*>[\s\S]*?<select[^>]*aria-label="Estado"/);
 });
 

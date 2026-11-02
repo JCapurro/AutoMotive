@@ -46,10 +46,7 @@ export function ListingCard({
     | "listing_status"
     | "probable_repost_of"
   > &
-    Partial<Pick<MatchCard, "price_kind" | "financing_offered" | "price_usd" | "body_type" | "price_source">> & {
-      /** X-01: the user's private note, shown on one line. */
-      note?: string | null;
-    };
+    Partial<Pick<MatchCard, "price_kind" | "financing_offered" | "price_usd" | "body_type" | "price_source">>;
   showProfile?: boolean;
   footer?: React.ReactNode;
   /** PAR-03: the listing's drops since we first saw it (listing_price_tracks); a line only with a net drop of the price shown. */
@@ -140,12 +137,6 @@ export function ListingCard({
       {drops ? (
         <p data-testid="card-price-track" className="col-span-full min-w-0 text-[13px] break-words text-muted-foreground sm:col-start-2">
           {drops}
-        </p>
-      ) : null}
-
-      {card.note ? (
-        <p data-testid="card-note" className="col-span-full truncate text-[13px] text-muted-foreground sm:col-start-2" title={card.note}>
-          Tu nota: {card.note}
         </p>
       ) : null}
 

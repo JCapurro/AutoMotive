@@ -72,7 +72,7 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
       )
       .eq("listing_id", listingId)
       .order("score", { ascending: false }),
-    supabase.from("user_listing_interactions").select("status, saved, rejection_reason, note").eq("listing_id", listingId).maybeSingle(),
+    supabase.from("user_listing_interactions").select("status, saved, rejection_reason").eq("listing_id", listingId).maybeSingle(),
     supabase
       .from("listing_snapshots")
       .select("observed_at, price, currency, price_usd, change_kind")
@@ -209,8 +209,6 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
         <ListingTracking
           listingId={listingId}
           status={status}
-          note={interaction?.note ?? null}
-          noteMaxChars={cfg.listingTracking.noteMaxChars}
           profileId={best?.search_profile_id ?? null}
         />
       </div>

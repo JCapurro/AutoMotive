@@ -27,7 +27,7 @@ const HINTS: Record<string, string> = {
   score_weights: "Pesos del Opportunity Score (sección 6.3).",
   level_thresholds: "Umbrales de 🔥 / 🟢 / 🟡 (sección 6.4).",
   comparables: "Cascada de comparables (sección 6.2).",
-  listing_tracking: "Seguimiento de publicaciones (X-01). note_max_chars: largo máximo de la nota por publicación (500).",
+  listing_tracking: "Sin uso: era el largo máximo de la nota por publicación (X-01), que se sacó el 02/11. Editarla no cambia nada.",
   digest_hour: "Hora del digest diario (ART).",
   price_drop_min_pct: "Baja mínima para alertar «Bajó de precio».",
   price_track:

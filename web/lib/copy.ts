@@ -48,11 +48,6 @@ export const STATUSES: InteractionStatus[] = [
 export const TRACKING = {
   title: "Seguimiento",
   status: "Estado",
-  note: "Tu nota",
-  notePlaceholder: "Qué hablaste, cuándo es la visita, qué falta revisar",
-  saveNote: "Guardar nota",
-  editNote: "Editar nota",
-  notePrivacy: "La nota es privada: no se la mostramos al vendedor ni a otros usuarios.",
   purchasedLocked: "Marcaste que la compraste. Por ahora la compra no se puede deshacer desde acá.",
   purchaseTitle: "¿La compraste?",
   purchaseDescription: "Es definitivo: después no vas a poder cambiar el estado desde acá. Precio, moneda y fecha son opcionales.",

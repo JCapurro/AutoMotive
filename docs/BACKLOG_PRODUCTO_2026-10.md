@@ -293,6 +293,8 @@ Criterios de aceptación:
 
 **Estado al 30/10:** en `main` (PR #51). Migraciones aplicadas en producción el 30/10. Texto de Privacidad sobre las notas en PR #56. Plan: [2026-10-29-x01-seguimiento](superpowers/plans/2026-10-29-x01-seguimiento.md).
 
+**Estado al 02/11: sin notas.** Juan: «lo de las notas no me gusta, sacalo de las publicaciones y de las funcionalidades». Se sacaron el bloque «Tu nota» de la ficha, `setNote` y el evento `listing_note_saved`, la nota en las tarjetas de resultados y de Guardados, `webConfig().listingTracking`, la clave `TRACKING.note*` del copy y el ítem «Tus notas» de Privacidad (fecha 2 de noviembre de 2026). Los emails y exportaciones nunca la llevaron. Se mantiene el seguimiento por estado (contactado, visita agendada, compré) y sus filtros. Base: **sin migración**; en producción hay 0 notas. La columna `user_listing_interactions.note` es del esquema original (20260927), `match_cards.note`, su CHECK de 2000 caracteres y la fila `app_config.listing_tracking` quedan dormidas: ninguna pantalla ni acción las lee o escribe, y en /admin/config la clave figura «Sin uso». Sacar `match_cards.note` obliga a borrar y recrear la vista y `search_results` (que devuelve `setof match_cards`), un riesgo que 0 filas no justifican; si algún día se quiere, va en una migración propia junto con el `drop column`.
+
 ### H-01 · El email no trae las preguntas
 
 **Estado al 30/10:** en `main` (PR #50).

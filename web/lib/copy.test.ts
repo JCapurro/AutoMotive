@@ -35,9 +35,10 @@ describe("copy lint (§19)", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("keeps the follow-up texts (X-01) prudent and the note's privacy honest", () => {
+  it("keeps the follow-up texts (X-01) prudent, with no note left (Juan 02/11)", () => {
     const texts = [...Object.values(TRACKING), ...Object.values(FOLLOW_LABEL), ...Object.values(FOLLOW_EMPTY)];
-    expect(texts).toContain("La nota es privada: no se la mostramos al vendedor ni a otros usuarios.");
+    expect(Object.keys(TRACKING).filter((k) => /note/i.test(k))).toEqual([]);
+    expect(texts.filter((t) => /\bnota\b/i.test(t))).toEqual([]);
     for (const text of texts) {
       for (const term of FORBIDDEN_TERMS) {
         expect(new RegExp(`(^|[^\\p{L}\\p{N}_])${term}([^\\p{L}\\p{N}_]|$)`, "iu").test(text), `${text}: ${term}`).toBe(false);
