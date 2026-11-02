@@ -18,6 +18,9 @@ reads each complete description, retaining evidence and seller statements.
 The text/version cache and a persistent ledger enforce llm_daily_cap across
 concurrent sources and failed attempts.
 
+Then the photo hash pass (PAR-02 resto, pipeline/photo_hash.py; off by
+default) hashes the first photos of the listings worth comparing.
+
 After a pass the matches of the listings that changed are re-scored
 (pipeline/rescore.py): transmission or version may go from unknown to a
 value, and the description feeds the red flags (sección 5.5). A listing
@@ -49,6 +52,7 @@ from normalization.description_facts import VERSION, from_llm, parse as parse_fa
 from normalization.listing import Target
 from pipeline import breaker
 from pipeline.ingest import IngestResult, ListingEvent, ingest
+from pipeline.photo_hash import photo_hash_pass
 from pipeline.rematch import match_model_less
 from pipeline.rescore import rescore_listings
 
@@ -235,6 +239,9 @@ async def enrich_pass(stop: asyncio.Event | None = None) -> IngestResult:
     if rows:
         log.info("enrichment: %d listings, %d updated, %d events",
                  len(rows), result.updated, len(result.events))
+    # PAR-02 resto: off by default (app_config.risk.photo_hash.enabled); its own
+    # daily image budget, never the detail pages' nor the LLM's. Never raises.
+    await photo_hash_pass(stop)
     await rescore_changed(result)
     return result
 

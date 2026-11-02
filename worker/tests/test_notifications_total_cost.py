@@ -115,6 +115,7 @@ class OnMatchesTotalCostTests(unittest.IsolatedAsyncioTestCase):
              patch.object(service.repo, "interactions", AsyncMock(return_value={})), \
              patch.object(service.repo, "price_tracks", AsyncMock(return_value={})), \
              patch.object(service, "_min_n", AsyncMock(return_value=5)), \
+             patch.object(service, "flag_order", AsyncMock(return_value=service.config.DEFAULT_FLAG_ORDER)), \
              patch.object(service, "_cost_config", AsyncMock(return_value=cfg)) as config, \
              patch.object(service, "_latest_fx", AsyncMock(return_value=fx)) as latest_fx, \
              patch.object(notifier, "_commit", AsyncMock(return_value=[])) as commit:

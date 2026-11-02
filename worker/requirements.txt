@@ -11,3 +11,7 @@ psycopg[binary]==3.2.13
 psycopg-pool==3.3.1
 pytest==8.4.1
 anthropic>=0.120,<1
+# PAR-02 resto: the photo hash (intelligence/photo_hash.py), imported lazily and
+# only when app_config.risk.photo_hash.enabled; the worker runs without it.
+# Pending Juan's approval to install it on the VPS.
+Pillow==12.3.0

@@ -26,6 +26,9 @@ test("F7: privacidad, baja del email y borrar la cuenta", async ({ page, request
     await page.goto("/login");
     await page.getByLabel("Email").fill(email);
     await page.getByRole("link", { name: "Crear cuenta", exact: true }).click();
+    // A client navigation: until the signup form is up, «Email» is the login
+    // form's input, and a fill there is lost when the form is swapped.
+    await expect(page.getByLabel("Repetí la contraseña")).toBeVisible();
     await page.getByLabel("Email", { exact: true }).fill(email);
     await page.getByLabel("Contraseña", { exact: true }).fill("e2e-password-123");
     await page.getByLabel("Repetí la contraseña").fill("e2e-password-123");

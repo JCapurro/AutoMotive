@@ -49,6 +49,9 @@ def _run_loop(*, anchor: bool, classify_error: Exception | None = None):
         if classify_error is not None:
             raise classify_error
 
+    async def detect(trigger):
+        calls.append(f"duplicates:{trigger}")
+
     async def outdated():
         calls.append("rescore_outdated")
 
@@ -61,6 +64,7 @@ def _run_loop(*, anchor: bool, classify_error: Exception | None = None):
 
     log_error = AsyncMock()
     with patch.object(rescore, "classify_sellers", side_effect=classify), \
+            patch.object(rescore, "detect_duplicates", side_effect=detect), \
             patch.object(rescore, "rescore_outdated", side_effect=outdated), \
             patch.object(rescore, "rescore_recent", side_effect=recent), \
             patch.object(rescore, "purge_stale_listings", side_effect=purge), \
@@ -74,28 +78,59 @@ def _run_loop(*, anchor: bool, classify_error: Exception | None = None):
 
 def test_startup_classifies_sellers_before_rescore_outdated():
     calls, _ = _run_loop(anchor=False)
-    assert calls[:2] == ["classify:startup", "rescore_outdated"]
+    assert calls[:3] == ["classify:startup", "duplicates:startup", "rescore_outdated"]
 
 
 def test_a_startup_classification_error_is_logged_and_the_rescore_runs():
     calls, log_error = _run_loop(anchor=False, classify_error=RuntimeError("boom"))
-    assert calls[:2] == ["classify:startup", "rescore_outdated"]
+    assert calls[:3] == ["classify:startup", "duplicates:startup", "rescore_outdated"]
     stage, ref, error = log_error.await_args_list[0].args
     assert (stage, ref) == ("seller_classification", "startup") and "boom" in error
 
 
 def test_the_anchor_slot_classifies_before_rescore_recent():
     calls, _ = _run_loop(anchor=True)
-    assert calls == ["classify:startup", "rescore_outdated", "classify:nightly", "rescore_recent", "purge"]
+    assert calls == ["classify:startup", "duplicates:startup", "rescore_outdated", "classify:nightly",
+                     "duplicates:nightly", "rescore_recent", "purge"]
 
 
 def test_an_anchor_classification_error_is_logged_and_the_rescore_runs():
     calls, log_error = _run_loop(anchor=True, classify_error=RuntimeError("boom"))
-    assert calls == ["classify:startup", "rescore_outdated", "classify:nightly", "rescore_recent", "purge"]
+    assert calls == ["classify:startup", "duplicates:startup", "rescore_outdated", "classify:nightly",
+                     "duplicates:nightly", "rescore_recent", "purge"]
     assert [c.args[:2] for c in log_error.await_args_list] == [
         ("seller_classification", "startup"), ("seller_classification", "nightly")]
 
 
 def test_other_slots_do_not_classify():
     calls, _ = _run_loop(anchor=False)
-    assert calls == ["classify:startup", "rescore_outdated", "rescore_recent"]
+    assert calls == ["classify:startup", "duplicates:startup", "rescore_outdated", "rescore_recent"]
+
+
+# PAR-02 resto: the duplicate detection runs after the classification, also when it fails.
+def test_a_duplicates_error_is_logged_and_the_rescore_runs():
+    calls: list[str] = []
+    stop = asyncio.Event()
+
+    async def boom(trigger):
+        calls.append(f"duplicates:{trigger}")
+        raise RuntimeError("dup")
+
+    async def recent():
+        calls.append("rescore_recent")
+        stop.set()
+
+    log_error = AsyncMock()
+    with patch.object(rescore, "classify_sellers", AsyncMock()), \
+            patch.object(rescore, "detect_duplicates", side_effect=boom), \
+            patch.object(rescore, "rescore_outdated", AsyncMock()), \
+            patch.object(rescore, "rescore_recent", side_effect=recent), \
+            patch.object(rescore, "purge_stale_listings", AsyncMock()), \
+            patch.object(rescore, "purge_raw_pages", AsyncMock()), \
+            patch.object(rescore, "log_error", log_error), \
+            patch.object(rescore, "next_slot", return_value=(0, True)), \
+            patch.object(rescore.db, "get_config", AsyncMock(return_value={})):
+        asyncio.run(rescore.nightly_loop(stop))
+    assert calls == ["duplicates:startup", "duplicates:nightly", "rescore_recent"]
+    assert [c.args[:2] for c in log_error.await_args_list] == [
+        ("risk_duplicates", "startup"), ("risk_duplicates", "nightly")]

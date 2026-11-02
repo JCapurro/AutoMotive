@@ -134,6 +134,7 @@ class OnMatchesPayloadTests(unittest.IsolatedAsyncioTestCase):
              patch.object(service.repo, "interactions", AsyncMock(return_value={})), \
              patch.object(service.repo, "price_tracks", AsyncMock(return_value=tracks)) as price_tracks, \
              patch.object(service, "_min_n", AsyncMock(return_value=5)), \
+             patch.object(service, "flag_order", AsyncMock(return_value=service.config.DEFAULT_FLAG_ORDER)), \
              patch.object(notifier, "_commit", AsyncMock(return_value=[])) as commit:
             await notifier.on_matches(candidates, rows, now=NOW)
         return [e.payload for e in commit.await_args.args[0]], price_tracks
@@ -180,6 +181,7 @@ class DescriptionPriceTests(unittest.IsolatedAsyncioTestCase):
              patch.object(service.repo, "interactions", AsyncMock(return_value={})), \
              patch.object(service.repo, "price_tracks", AsyncMock(return_value=tracks)) as price_tracks, \
              patch.object(service, "_min_n", AsyncMock(return_value=5)), \
+             patch.object(service, "flag_order", AsyncMock(return_value=service.config.DEFAULT_FLAG_ORDER)), \
              patch.object(notifier, "_commit", AsyncMock(return_value=[])) as commit:
             await notifier.on_matches(candidates, rows, now=NOW)
         return {e.listing_id: e.payload for e in commit.await_args.args[0]}, price_tracks
@@ -281,6 +283,7 @@ class RunDigestTests(unittest.IsolatedAsyncioTestCase):
              patch.object(digest.repo, "price_tracks", AsyncMock(return_value={501: row(drops=1)})) as tracks, \
              patch.object(digest.repo, "insert_digest", AsyncMock(return_value=99)) as insert, \
              patch.object(digest, "_min_n", AsyncMock(return_value=5)), \
+             patch.object(digest, "flag_order", AsyncMock(return_value=service.config.DEFAULT_FLAG_ORDER)), \
              patch.object(digest.db, "get_config", AsyncMock(side_effect=lambda k, d=None: config.get(k, d))):
             self.assertEqual(await digest.run_digest(notifier, now=NOW), 1)
         tracks.assert_awaited_once_with([501, 502])

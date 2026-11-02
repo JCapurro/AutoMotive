@@ -25,9 +25,16 @@ class RedFlag:
     id: str
     text: str
     severity: str        # 'info' | 'warning'
+    # PAR-02 resto: the other listing of a duplicate flag, {listing_id, url,
+    # source_name, kind} (kind: the pair's, for duplicate_link_clicked); left
+    # out of the JSON when None.
+    link: dict[str, Any] | None = None
 
     def to_json(self) -> dict[str, Any]:
-        return asdict(self)
+        out = asdict(self)
+        if out["link"] is None:
+            del out["link"]
+        return out
 
 
 _OWNERS = re.compile(r"\b(duen[oa]s?|titular(es)?|unico dueno|primer dueno|1 dueno|(unica|primera|segunda) mano)\b")
@@ -114,7 +121,71 @@ def red_flags(listing: Mapping[str, Any], *, diff_pct: float | None, guard: str 
     if listing.get("probable_repost_of"):
         flags.append(RedFlag("repost", copy.RED_FLAG["repost"], "info"))
     flags += description_mismatches(listing)
-    return flags
+    if flag := private_many_listings(listing, cfg.risk):
+        flags.append(flag)
+    flags += duplicate_flags(listing.get("risk_duplicates"), cfg.risk)
+    return ordered(flags, cfg.flag_order)
+
+
+def ordered(flags: list[RedFlag], order: tuple[str, ...]) -> list[RedFlag]:
+    """By app_config.red_flags.order (PAR-02 resto, decision 8); ids it does
+    not list go last, in the order they were emitted."""
+    rank = {flag_id: i for i, flag_id in enumerate(order)}
+    return sorted(flags, key=lambda f: rank.get(f.id, len(rank)))
+
+
+def private_many_listings(listing: Mapping[str, Any], risk: Mapping[str, Any]) -> RedFlag | None:
+    """The source says «particular» and F-02 infers a «posible agencia»
+    (dealer_inferred: the same seller has seller_classification.min_listings or
+    more cars active in the source; the job's switch clears it). Not when the
+    source does not say what the seller is, nor when it says dealer."""
+    if risk["signals"]["private_many_listings"] != "on":
+        return None
+    n = listing.get("seller_listing_count")
+    if listing.get("seller_type") != "private" or not listing.get("dealer_inferred") or n is None:
+        return None
+    return RedFlag("private_many_listings",
+                   copy.RED_FLAG["private_many_listings"].format(n=copy.number(n)), "info")
+
+
+# A pair's kind → (flag id, text key, severity). A pair never yields both flags
+# (pipeline/risk_duplicates.py picks one kind per pair).
+_DUPLICATE_FLAG = {
+    "duplicate_photos": ("duplicate_photos", "duplicate_photos", "warning"),
+    "cross_source_photos": ("cross_source_duplicate", "cross_source_photos", "info"),
+    "cross_source_data": ("cross_source_duplicate", "cross_source_data", "info"),
+}
+
+
+def duplicate_flags(pairs: Any, risk: Mapping[str, Any]) -> list[RedFlag]:
+    """listing["risk_duplicates"] (db/repos/listings.rows_for_scoring: the shown
+    pairs, best first) as at most one flag per id, linked to its best pair and
+    «y N más» when there are more. A kind whose signal is not "on" is skipped
+    here too, so turning it off works on the next re-score."""
+    by_flag: dict[str, list[tuple[str, Mapping[str, Any]]]] = {}
+    for pair in pairs or ():
+        if not isinstance(pair, Mapping) or pair.get("kind") not in _DUPLICATE_FLAG:
+            continue
+        if risk["signals"].get(pair["kind"]) != "on":
+            continue
+        flag_id, text_key, _ = _DUPLICATE_FLAG[pair["kind"]]
+        if text_key == "duplicate_photos" and pair.get("reason") == "other_zone":
+            text_key = "duplicate_photos_zone"   # the data do not differ: say what does
+        by_flag.setdefault(flag_id, []).append((text_key, pair))
+    out = []
+    for flag_id, found in by_flag.items():
+        # The photos level first: it is the stronger evidence.
+        found.sort(key=lambda kp: kp[0] != "cross_source_photos")
+        text_key, best = found[0]
+        name = best.get("source_name") or best.get("source") or ""
+        more = len(found) - 1
+        source = (copy.RED_FLAG_SOURCE["more"].format(source=name, k=more) if more
+                  else copy.RED_FLAG_SOURCE["one"].format(source=name))
+        link = {"listing_id": best.get("other_id"), "url": best.get("url"), "source_name": name,
+                "kind": best["kind"]}
+        out.append(RedFlag(flag_id, copy.RED_FLAG[text_key].format(source=source),
+                           _DUPLICATE_FLAG[best["kind"]][2], link=link))
+    return out
 
 
 def description_mismatches(listing: Mapping[str, Any]) -> list[RedFlag]:

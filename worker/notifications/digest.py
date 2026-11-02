@@ -25,7 +25,7 @@ import db
 from db.repos import listings as listings_repo
 from db.repos import notifications as repo
 from db.repos.runs import log_error
-from notifications.service import (AR, Notifier, _min_n, deliverable, payload, price_track_payload,
+from notifications.service import (AR, Notifier, _min_n, deliverable, flag_order, payload, price_track_payload,
                                    shows_published_price)
 from pipeline.rescore import seconds_until
 
@@ -88,6 +88,7 @@ async def run_digest(notifier: Notifier, now: datetime | None = None) -> int:
     day = now.astimezone(AR).date().isoformat()
     top_n = int(await db.get_config("digest_top_n", 10))
     min_n = await _min_n()
+    order = await flag_order()
     created = 0
     for user in await repo.digest_users(now - WINDOW):
         for channel in deliverable(user["channels"] or (), user, notifier.available):
@@ -98,7 +99,7 @@ async def run_digest(notifier: Notifier, now: datetime | None = None) -> int:
                     async with db.connection() as cx:
                         rows = await listings_repo.rows_for_scoring(cx, [t["listing_id"] for t in top])
                     top = [{"listing_id": t["listing_id"],
-                            **payload(rows[t["listing_id"]], t, min_n=min_n)} for t in top
+                            **payload(rows[t["listing_id"]], t, min_n=min_n, order=order)} for t in top
                            if t["listing_id"] in rows]
                 items = build_items(pending, top, top_n)
                 if not items:

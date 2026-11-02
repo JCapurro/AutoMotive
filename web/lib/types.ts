@@ -31,7 +31,9 @@ export type PriceRef = {
   private_n?: number;
 };
 
-export type RedFlag = { id: string; text: string; severity: "info" | "warning" };
+/** PAR-02 resto: `link` is the other listing of a duplicate flag (worker/intelligence/red_flags.py); older matches have none. */
+export type RedFlagLink = { listing_id: number; url?: string | null; source_name?: string | null; kind?: string };
+export type RedFlag = { id: string; text: string; severity: "info" | "warning"; link?: RedFlagLink };
 
 /** search_profiles.filters (sección 4.3). */
 export type Filters = {

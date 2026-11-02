@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowLeft, Ban, CircleCheck, CircleHelp, CircleMinus, Info } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Ban, CircleCheck, CircleHelp, CircleMinus } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -11,6 +11,7 @@ import { ListingTracking } from "@/components/app/listing-tracking";
 import { DescriptionPriceContext, SellerDescription } from "@/components/app/description-insights";
 import { type PricePoint, PriceChange, PriceHistory } from "@/components/app/price-history";
 import { PriceHistoryDetails } from "@/components/app/price-history-details";
+import { RedFlagList } from "@/components/app/red-flag-list";
 import { RiskChecklist } from "@/components/app/risk-checklist";
 import { SellerQuestions } from "@/components/app/seller-questions";
 import { ViewTracker } from "@/components/app/view-tracker";
@@ -38,6 +39,7 @@ import { ageLine, daysSince, imageUrls, km, money, number, pct, vehicle } from "
 import { fetchPriceTracks, summaryLine, trackingNote } from "@/lib/price-track";
 import { financingOffered, financingTerms, isCashPrice, publishedIsPartial, publishedKind } from "@/lib/price";
 import { priceGap, priceGapLine } from "@/lib/price-gap";
+import { linkedListingIds, sortFlags } from "@/lib/red-flags";
 import { emphasize, RISK_HINT, RISK_TITLE } from "@/lib/risk-checklist";
 import { sellerFact, strictSellerFilterOn } from "@/lib/seller";
 import { contactSubject, renderContactMessage } from "@/lib/contact-message";
@@ -108,7 +110,7 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
   const reasons = (best?.match_reasons ?? {}) as Record<string, Reason>;
   const breakdown = (best?.score_breakdown ?? {}) as Record<string, Component | string>;
   const priceRef = (best?.price_ref ?? null) as PriceRef | null;
-  const flags = ((best?.red_flags ?? []) as RedFlag[]).slice().sort((a, b) => Number(b.severity === "warning") - Number(a.severity === "warning"));
+  const flags = sortFlags((best?.red_flags ?? []) as RedFlag[]);
   const status = (interaction?.status ?? "new") as InteractionStatus;
   const fromAlert = notification?.id ?? null;
   const outboundHref = fromAlert ? `/r/${fromAlert}?to=listing` : `/app/listings/${listingId}/out`;
@@ -121,7 +123,8 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
   const trackNote = trackingNote(listing, track?.first_at ?? snapshots?.[0]?.observed_at);
   // A down payment or an installment that moved is no price history (PAR-03).
   const showHistory = history.length >= 2 && !publishedIsPartial(listing);
-  const [similar, cost, ownProfile, catalogModel, margins, marginTeaser] = await Promise.all([
+  const linked = linkedListingIds(flags);
+  const [similar, cost, ownProfile, catalogModel, margins, marginTeaser, present] = await Promise.all([
     gone ? Promise.resolve([]) : similarListings(supabase, listing, priceRef),
     // PAR-01: with the plan's total_cost flag, the jurisdiction of the best match's search.
     gone ? Promise.resolve(null) : costEstimateFor(supabase, user.id, listing, best?.search_profile_id ?? null),
@@ -136,6 +139,10 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
       : marginAccess(supabase)
           .then((access) => marginTeasersFor(user.id, access, [{ listing_id: listingId, match_id: best.id }]))
           .then((ids) => ids.has(listingId)),
+    // PAR-02 resto: which listings the duplicate links point to are still in the base (one query).
+    linked.length
+      ? supabase.from("listings").select("id").in("id", linked).then(({ data }) => new Set((data ?? []).map((r) => r.id)))
+      : Promise.resolve(new Set<number>()),
   ]);
   const margin = best ? (margins.get(best.id) ?? null) : null;
   const contactTemplate = ownProfile?.contact_template ?? null;
@@ -324,18 +331,7 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
 
           <Section title="Conviene verificar" hint="Información que conviene confirmar. No indica un problema.">
             {flags.length ? (
-              <ul className="mt-2" data-testid="red-flags">
-                {flags.map((f) => (
-                  <li key={f.id} className="grid grid-cols-[20px_1fr] gap-2.5 border-b py-2.5 text-[15px] last:border-b-0">
-                    {f.severity === "warning" ? (
-                      <AlertTriangle className="mt-0.5 size-4 text-warn" aria-label="Importante" />
-                    ) : (
-                      <Info className="mt-0.5 size-4 text-faint" aria-hidden />
-                    )}
-                    <span className={f.severity === "warning" ? "font-semibold text-warn" : undefined}>{f.text}</span>
-                  </li>
-                ))}
-              </ul>
+              <RedFlagList listingId={listingId} flags={flags} present={present} />
             ) : (
               <p className="mt-3 text-sm text-muted-foreground">
                 {listing.description || listing.enriched_at

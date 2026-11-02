@@ -13,13 +13,14 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Any, Iterable, Mapping
+from typing import Any, Iterable, Mapping, Sequence
 
 import db
 from db.repos import fx as fx_repo
 from db.repos import listings as listings_repo
 from db.repos import notifications as repo
 from intelligence import cost_estimator, margin
+from intelligence import config
 from intelligence.config import DEFAULT_COMPARABLES
 from intelligence import contact_message
 from intelligence.matching import strict_seller_unknown
@@ -109,9 +110,24 @@ def match_payload(match: Mapping[str, Any], min_n: int) -> dict[str, Any]:
             "diff_pct": float(diff) if diff is not None else None}
 
 
-def flag_texts(red_flags: Iterable[Mapping[str, Any]] | None) -> list[str]:
-    flags = sorted(red_flags or [], key=lambda f: f.get("severity") != "warning")
+def flag_texts(red_flags: Iterable[Mapping[str, Any]] | None,
+               order: Sequence[str] | None = None) -> list[str]:
+    """The first MAX_FLAGS texts by app_config.red_flags.order (PAR-02 resto,
+    decision 8), read again at send time so it also reorders older matches;
+    ids it does not list go last, in their stored order. Without an order,
+    warnings first (the order before it existed)."""
+    flags = list(red_flags or [])
+    if order is None:
+        flags.sort(key=lambda f: f.get("severity") != "warning")
+    else:
+        rank = {flag_id: i for i, flag_id in enumerate(order)}
+        flags.sort(key=lambda f: rank.get(f.get("id"), len(rank)))
     return [f["text"] for f in flags[:MAX_FLAGS]]
+
+
+async def flag_order() -> tuple[str, ...]:
+    """app_config.red_flags.order as intelligence/config.flag_order reads it."""
+    return config.flag_order((await db.get_config("red_flags", {}) or {}).get("order"))
 
 
 def price_track_payload(row: Mapping[str, Any] | None) -> dict[str, Any] | None:
@@ -138,11 +154,11 @@ def shows_published_price(row: Mapping[str, Any] | None) -> bool:
 
 
 def payload(listing: Mapping[str, Any], match: Mapping[str, Any] | None, *, min_n: int,
-            profile_name: str | None = None, **extra: Any) -> dict[str, Any]:
+            profile_name: str | None = None, order: Sequence[str] | None = None, **extra: Any) -> dict[str, Any]:
     out: dict[str, Any] = {"listing": listing_payload(listing), "profile_name": profile_name}
     if match and match.get("level"):
         out["match"] = match_payload(match, min_n)
-        out["red_flags"] = flag_texts(match.get("red_flags"))
+        out["red_flags"] = flag_texts(match.get("red_flags"), order)
     out.update({k: v for k, v in extra.items() if v is not None})
     return out
 
@@ -233,6 +249,7 @@ class Notifier:
         if cost_cfg and any((rows.get(c.listing_id) or {}).get("currency") == "USD" for c in costed):
             fx_latest = await _latest_fx()
         min_n = await _min_n()
+        order = await flag_order()
         events = []
         for c in candidates:
             a = audiences.get(c.profile_id)
@@ -258,7 +275,7 @@ class Notifier:
                 MATCH, c.listing_id, self._audience(a), level=ev["level"], score=ev["score"],
                 match_id=c.match_id, repost=c.repost, saved=bool(state.get("saved")),
                 status=state.get("status"),
-                payload=payload(listing, ev, min_n=min_n, profile_name=a["profile_name"],
+                payload=payload(listing, ev, min_n=min_n, profile_name=a["profile_name"], order=order,
                                 questions=questions or None, price_track=track, total_cost=cost,
                                 margin=dealer, contact_message=contact, seller_unknown=seller_unknown)))
         return await self._commit(events, now=now)
@@ -283,6 +300,7 @@ class Notifier:
         for a in await repo.listing_audiences(ids, matched_before=matched_before):
             by_listing.setdefault(a["listing_id"], []).append(a)
         min_n = await _min_n()
+        order = await flag_order()
         events = []
         for e in wanted:
             listing = rows.get(e.listing_id)
@@ -298,7 +316,7 @@ class Notifier:
                     e.kind, e.listing_id, self._audience(a), level=a.get("level"), score=a.get("score"),
                     match_id=a.get("match_id"), saved=bool(a.get("saved")), status=a.get("status"),
                     snapshot_id=e.snapshot_id, drop_pct=e.drop_pct,
-                    payload=payload(listing, a, min_n=min_n, profile_name=a.get("profile_name"),
+                    payload=payload(listing, a, min_n=min_n, profile_name=a.get("profile_name"), order=order,
                                     price_drop=drop,
                                     margin=margin_payload(a.get("margin_ref"), a) if e.kind == PRICE_DROP else None)))
         return await self._commit(events, now=now)

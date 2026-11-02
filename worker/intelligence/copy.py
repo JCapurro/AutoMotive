@@ -146,7 +146,26 @@ RED_FLAG = {
     "price_mismatch": "La descripción menciona otro precio ({price}): conviene verificar cuál está vigente.",
     "year_mismatch": "La descripción dice año {year}, distinto del publicado: conviene verificarlo.",
     "km_mismatch": "La descripción dice {km} km, distinto de lo publicado: conviene verificarlo.",
+    # PAR-02 resto (docs/superpowers/specs/2026-11-02-par02-resto-design.md). The
+    # backlog's copy; never «agencia»: F-02 only infers it (intelligence/seller.py).
+    "private_many_listings": "El vendedor tiene {n} publicaciones activas: conviene preguntar si es titular.",
+    # {source} is RED_FLAG_SOURCE: the other listing's source, plus «y N más».
+    "duplicate_photos": ("Las fotos de esta publicación aparecen también en otra publicación ({source}) "
+                         "con otros datos: conviene pedir fotos actuales y ver el auto antes de señar."),
+    # The same photos in the same source, another zone, with the same or unstated data.
+    "duplicate_photos_zone": ("Las fotos de esta publicación aparecen también en otra publicación ({source}) "
+                              "de otra zona: conviene pedir fotos actuales y ver el auto antes de señar."),
+    "cross_source_photos": ("Parece el mismo auto publicado también en {source} (mismas fotos): "
+                            "conviene comparar las dos publicaciones."),
+    "cross_source_data": ("Parece el mismo auto publicado también en {source} (mismo modelo y año, "
+                          "kilometraje y precio parecidos): conviene comparar las dos publicaciones."),
 }
+# How a duplicate flag names the other listings: «MercadoLibre» or «MercadoLibre y 2 más».
+RED_FLAG_SOURCE = {"one": "{source}", "more": "{source} y {k} más"}
+# PAR-02 resto: words the duplicate and seller flags must never use (they would
+# claim what Ese Auto only suspects). tests/test_intelligence_copy.py checks them.
+RISK_FORBIDDEN = ("robad", "estafa", "fraude", "verificado por ese auto", "certificad", "garantiz",
+                  "agencia", "revendedor")
 
 # ---------------------------------------------------------------------------
 # PAR-03: a listing's price drops since Ese Auto first saw it (its first
@@ -180,6 +199,8 @@ QUESTION = {
     "greeting": "Hola, ¿cómo estás?",
     "available": "¿Lo seguís teniendo?",
     "holder": "¿Sos titular?",
+    # PAR-02 resto: instead of "holder" when the listing has private_many_listings.
+    "holder_detail": "¿El auto está a tu nombre? Si no, ¿quién es el titular y puede estar en la firma?",
     "owners": "¿Cuántos dueños tuvo?",
     "timing_belt": "¿Cuándo se hizo la distribución por última vez?",
     "vtv": "¿Tiene VTV vigente?",

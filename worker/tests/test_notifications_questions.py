@@ -59,6 +59,7 @@ class PayloadTests(unittest.IsolatedAsyncioTestCase):
              patch.object(service.repo, "interactions", AsyncMock(return_value={})), \
              patch.object(service.repo, "price_tracks", AsyncMock(return_value={})), \
              patch.object(service, "_min_n", AsyncMock(return_value=5)), \
+             patch.object(service, "flag_order", AsyncMock(return_value=service.config.DEFAULT_FLAG_ORDER)), \
              patch.object(notifier, "_commit", AsyncMock(return_value=[])) as commit:
             await notifier.on_matches([cand], {listing["id"]: listing}, now=NOW)
         return [e.payload for e in commit.await_args.args[0]]

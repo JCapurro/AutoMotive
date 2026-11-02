@@ -55,6 +55,22 @@ export type Database = {
         Update: { dismissed_at?: string | null }
         Relationships: []
       }
+      // PAR-02 resto (20261203120000_par02_duplicates): service role only; the web reads neither.
+      listing_duplicates: {
+        Row: { listing_id: number; other_id: number; kind: string; shown: boolean; photo_distance: number | null; evidence: Json; detected_at: string }
+        Insert: { listing_id: number; other_id: number; kind: string; shown: boolean; photo_distance?: number | null; evidence?: Json; detected_at?: string }
+        Update: { kind?: string; shown?: boolean; photo_distance?: number | null; evidence?: Json; detected_at?: string }
+        Relationships: [
+          { foreignKeyName: "listing_duplicates_listing_id_fkey"; columns: ["listing_id"]; isOneToOne: false; referencedRelation: "listings"; referencedColumns: ["id"] },
+          { foreignKeyName: "listing_duplicates_other_id_fkey"; columns: ["other_id"]; isOneToOne: false; referencedRelation: "listings"; referencedColumns: ["id"] },
+        ]
+      }
+      photo_hash_runs: {
+        Row: { id: number; listing_id: number | null; started_at: string; finished_at: string | null; images_requested: number; images_hashed: number | null; error: string | null }
+        Insert: { id?: never; listing_id?: number | null; started_at?: string; finished_at?: string | null; images_requested: number; images_hashed?: number | null; error?: string | null }
+        Update: { id?: never; listing_id?: number | null; finished_at?: string | null; images_hashed?: number | null; error?: string | null }
+        Relationships: [{ foreignKeyName: "photo_hash_runs_listing_id_fkey"; columns: ["listing_id"]; isOneToOne: false; referencedRelation: "listings"; referencedColumns: ["id"] }]
+      }
       platform_health_checks: {
         Row: { id: number; checked_at: string; checks: Json; email_pending: boolean; last_email_at: string | null }
         Insert: { id: number; checked_at: string; checks: Json; email_pending?: boolean; last_email_at?: string | null }

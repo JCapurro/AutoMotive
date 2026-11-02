@@ -323,18 +323,56 @@ async def mark_detail_checked(listing_ids: Iterable[int]) -> None:
             await cx.execute("UPDATE listings SET detail_checked_at = now() WHERE id = ANY(%s)", (ids,))
 
 
+# PAR-02 resto: the shown duplicate pairs of a listing whose other side is
+# still active, best first (closest photos, then closest price), for the
+# duplicate red flags (intelligence/red_flags.duplicate_flags).
+MAX_DUPLICATES = 10
+_DUPLICATES = f"""
+  LEFT JOIN LATERAL (
+    SELECT jsonb_agg(jsonb_build_object('other_id', p.other_id, 'kind', p.kind, 'source', p.source,
+                                        'source_name', p.source_name, 'url', p.url, 'distance', p.photo_distance,
+                                        'reason', p.reason)
+                     ORDER BY p.rank) AS pairs
+      FROM (SELECT d.other_id, d.kind, d.photo_distance, d.evidence ->> 'reason' AS reason, o.source, s.name AS source_name, o.url,
+                   row_number() OVER (ORDER BY d.photo_distance NULLS LAST,
+                                               abs(o.price_usd - l.price_usd) NULLS LAST, d.other_id) AS rank
+              FROM listing_duplicates d
+              JOIN listings o ON o.id = d.other_id AND o.status = 'active'
+              LEFT JOIN sources s ON s.id = o.source
+             WHERE d.listing_id = l.id AND d.shown
+             ORDER BY rank LIMIT {MAX_DUPLICATES}) p) dup ON true
+"""
+# Whether listing_duplicates exists (migration 20261203120000), asked once per
+# process: a worker deployed before the migration scores without duplicates.
+_has_duplicates: bool | None = None
+
+
+async def duplicates_table(cx: AsyncConnection) -> bool:
+    global _has_duplicates
+    if _has_duplicates is None:
+        row = await (await cx.execute(
+            "SELECT to_regclass('public.listing_duplicates') IS NOT NULL AS ok")).fetchone()
+        _has_duplicates = bool(row["ok"])
+    return _has_duplicates
+
+
 async def rows_for_scoring(cx: AsyncConnection, ids: Iterable[int]) -> dict[int, dict[str, Any]]:
     """Listings by id as intelligence/ reads them, with the catalog's
-    timing_belt for their model (red flag no_timing_belt, sección 6.5) and
-    its spelling of the model (catalog_model, PRO-01's ready-to-send message)."""
+    timing_belt for their model (red flag no_timing_belt, sección 6.5), its
+    spelling of the model (catalog_model, PRO-01's ready-to-send message) and
+    (PAR-02 resto) risk_duplicates: the shown duplicate pairs, best first."""
     ids = list(dict.fromkeys(ids))
     if not ids:
         return {}
+    dup = await duplicates_table(cx)
     rows = await (await cx.execute(
-        "SELECT l.*, vc.timing_belt, vc.model AS catalog_model FROM listings l "
+        "SELECT l.*, vc.timing_belt, vc.model AS catalog_model"
+        + (", coalesce(dup.pairs, '[]'::jsonb) AS risk_duplicates" if dup else ", '[]'::jsonb AS risk_duplicates")
+        + " FROM listings l "
         "  LEFT JOIN vehicle_catalog vc ON lower(vc.make) = lower(l.make) "
         "        AND lower(vc.model) = lower(l.model) AND vc.trim IS NULL "
-        " WHERE l.id = ANY(%s)", (ids,))).fetchall()
+        + (_DUPLICATES if dup else "")
+        + " WHERE l.id = ANY(%s)", (ids,))).fetchall()
     return {r["id"]: _pythonic(r) for r in rows}
 
 
