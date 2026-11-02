@@ -101,3 +101,8 @@ Hoy la UI web no puede llegar a esos estados, así que los criterios 3 y 5 solo 
 ## Siguiente paso
 
 Con tu aprobación escribo el plan en `docs/superpowers/plans/2026-10-29-x01-seguimiento.md` (tareas `- [ ]` con los comandos de prueba exactos; primera tarea: leer `AGENTS.md` de la web) y abro la rama `claude/x01-seguimiento`. Se entrega primero (a) y, con tu OK para aplicar la migración, (b).
+
+## Cambio pedido por Juan 02/11: sin notas
+
+«Lo de las notas no me gusta, sacalo de las publicaciones y de las funcionalidades.» La nota por publicación se sacó de la ficha, de las tarjetas (resultados y Guardados), de las acciones (`setNote`, `listing_note_saved`), de la configuración web y de Privacidad. El resto de este diseño (estados, filtros, compra) sigue vigente. La base no cambia: `note`, su CHECK y `match_cards.note` quedan sin uso (detalle en el backlog, X-01, «Estado al 02/11»).
+

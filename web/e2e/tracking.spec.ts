@@ -6,8 +6,9 @@ import { magicLink } from "./support/mail";
 
 /**
  * X-01 (docs/superpowers/specs/2026-10-29-x01-seguimiento-design.md): the
- * follow-up status and the private note, on the listing page and in
- * Guardados, on desktop and on a 375 px phone.
+ * follow-up status, on the listing page and in Guardados, on desktop and on
+ * a 375 px phone. No private note since Juan's 02/11 request: the block has
+ * no textarea and nothing writes user_listing_interactions.note.
  */
 
 test.describe.configure({ mode: "serial" });
@@ -40,7 +41,7 @@ async function interaction(email: string, listingId: number) {
   return row;
 }
 
-test("seguimiento: estado, nota, Guardados con filtro y compra", async ({ page }, testInfo) => {
+test("seguimiento: estado, sin nota, Guardados con filtro y compra", async ({ page }, testInfo) => {
   const run = `${testInfo.project.name}-${Date.now()}`;
   const email = `tracking-${run}@${E2E_EMAIL_DOMAIN}`;
   await signIn(page, email);
@@ -62,25 +63,19 @@ test("seguimiento: estado, nota, Guardados con filtro y compra", async ({ page }
     await expect(tracking.getByLabel("Estado", { exact: true })).toHaveValue("contacted");
   });
 
-  await test.step("una nota privada", async () => {
-    await tracking.getByLabel("Tu nota").fill("Llamé el martes.\nVisita el sábado 10 hs.");
-    await tracking.getByRole("button", { name: "Guardar nota" }).click();
-    await expect(page.getByText("Nota guardada")).toBeVisible();
-    await expect(tracking.getByTestId("listing-note")).toContainText("Visita el sábado 10 hs.");
-    await expect.poll(async () => (await interaction(email, seeded.active)).note).toBe("Llamé el martes.\nVisita el sábado 10 hs.");
-    const [event] = await query<{ props: Record<string, unknown> }>(
-      `select e.props from public.events e join public.profiles p on p.id = e.user_id where p.email = $1 and e.name = 'listing_note_saved'`,
-      [email],
-    );
-    // pg returns the bigint id as a string; the event carries it as a number.
-    expect(event.props).toEqual({ listing_id: Number(seeded.active), length: 40 });
+  await test.step("sin nota privada (Juan 02/11)", async () => {
+    await expect(tracking.locator("textarea")).toHaveCount(0);
+    await expect(tracking).not.toContainText("nota");
+    await expect(tracking.getByRole("button", { name: "Guardar nota" })).toHaveCount(0);
+    expect((await interaction(email, seeded.active)).note).toBeNull();
     await expectNoHorizontalScroll(page);
   });
 
-  await test.step("Guardados: nota en la tarjeta y filtro por estado", async () => {
+  await test.step("Guardados: tarjeta sin nota y filtro por estado", async () => {
     await page.goto("/app/saved");
     const card = page.getByTestId("listing-card").filter({ hasText: "Vicente López" });
-    await expect(card.getByTestId("card-note")).toContainText("Llamé el martes.");
+    await expect(card).toBeVisible();
+    await expect(card.getByTestId("card-note")).toHaveCount(0);
     await page.getByRole("link", { name: "Contactados", exact: true }).click();
     await expect(page).toHaveURL(/\/app\/saved\?e=contacted$/);
     await expect(page.getByTestId("listing-card")).toHaveCount(1);
@@ -148,7 +143,7 @@ test("seguimiento: estado, nota, Guardados con filtro y compra", async ({ page }
 
     await pills.getByRole("link", { name: /^Comprados/ }).click();
     await expect(page.getByTestId("listing-card")).toHaveCount(1);
-    await expect(page.getByTestId("card-note")).toContainText("Llamé el martes.");
+    await expect(page.getByTestId("card-note")).toHaveCount(0);
     await expectNoHorizontalScroll(page);
   });
 });

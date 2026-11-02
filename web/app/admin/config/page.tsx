@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { ConfigEditor } from "@/components/admin/config-editor";
 import { PageHeader } from "@/components/admin/ui";
 import { requireAdmin } from "@/lib/admin";
+import { visibleConfigRows } from "@/lib/admin-config";
 import { costReviewItem, costReviewState } from "@/lib/admin-dashboard";
 import { when } from "@/lib/admin-format";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -27,7 +28,6 @@ const HINTS: Record<string, string> = {
   score_weights: "Pesos del Opportunity Score (sección 6.3).",
   level_thresholds: "Umbrales de 🔥 / 🟢 / 🟡 (sección 6.4).",
   comparables: "Cascada de comparables (sección 6.2).",
-  listing_tracking: "Seguimiento de publicaciones (X-01). note_max_chars: largo máximo de la nota por publicación (500).",
   digest_hour: "Hora del digest diario (ART).",
   price_drop_min_pct: "Baja mínima para alertar «Bajó de precio».",
   price_track:
@@ -62,7 +62,7 @@ export default async function ConfigPage() {
     admin.from("app_config").select("*").order("key"),
     admin.from("admin_config_audit").select("*").order("created_at", { ascending: false }).order("id", { ascending: false }).limit(100),
   ]);
-  const rows = (data ?? []).sort((a, b) => Number(b.key in HINTS) - Number(a.key in HINTS));
+  const rows = visibleConfigRows(data ?? []).sort((a, b) => Number(b.key in HINTS) - Number(a.key in HINTS));
   return (
     <>
       <PageHeader title="Configuración" description="Revisá los cambios antes de guardarlos. Cada operación registra quién la hizo, su fecha y los valores anteriores. La web los toma en la próxima lectura; el worker, al renovar su caché (aproximadamente un minuto)." />

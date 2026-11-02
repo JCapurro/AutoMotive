@@ -135,9 +135,14 @@ def total_cost_line(cost: Mapping[str, Any] | None) -> str | None:
     (cost_estimator.email_payload: totals already rounded, frozen when the
     row was created). None without it: an old payload, or a plan without
     total_cost. Missing terms go in the header's "(sin …)"; a USD listing
-    without a dollar says it cannot be estimated."""
+    without a dollar says it cannot be estimated. Without the buyer's
+    locality (missing zone, or a row frozen before 02/11 with no
+    jurisdiction and a partial total) the line says so, with no amount:
+    Juan wants it explicit, and the email is where the plan sees it first."""
     if not cost:
         return None
+    if "zone" in (cost.get("missing") or []) or not cost.get("jurisdiction"):
+        return copy.TOTAL_COST["email_no_fx"].format(line=copy.TOTAL_COST["line_no_zone"])
     def pair(lo: str, hi: str) -> dict[str, Any] | None:
         return {"min": cost[lo], "max": cost[hi]} if cost.get(lo) is not None and cost.get(hi) is not None else None
     ars, usd = pair("ars_min", "ars_max"), pair("usd_min", "usd_max")

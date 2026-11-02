@@ -350,3 +350,34 @@ La migración pasa a `20261127120000`: F-02 ocupó de 20261123120000 a 202611251
 - **Validación:** `domain_report.in_total` y `gestoria.in_total` tienen que ser `false` y `gestoria.official_value`, `null` (v1 no los suma ni los muestra como monto). El JSON dorado tiene además `config_cases` con cada regla del parser tolerante.
 - **Componente de la ficha:** la prueba vive en `web/lib/cost-estimate.test.ts`, porque vitest solo corre `lib/**/*.test.ts`.
 
+## Cambios pedidos por Juan 02/11
+
+> «El detalle del costo total estimado debe ser más resumido. Si no se tiene la info de la localidad, aclararlo, no simular con otros costos.»
+
+Reemplaza lo que dicen arriba «Dónde se ve» (el bloque de la ficha, los faltantes y las variantes de texto) y la decisión 3 en lo que toca a la jurisdicción `null`. Las fórmulas, los parámetros y el armado de la entrada no cambian. Sin migración.
+
+**1. Detalle resumido (solo la ficha; la tarjeta y el email nunca tuvieron detalle).** `▸ Ver detalle` abre a lo sumo cuatro renglones:
+
+```
+  Transferencia                    ARS 808.000 – 818.900    (arancel DNRPA + sellos + formularios, un solo rango)
+  Patente anual (valores 2026)     ARS 380.900 – 698.700
+  Total estimado                   ARS 21.188.000 – 21.518.000
+  Valores oficiales al 30/10 para CABA. No incluye gestoría ni informe de dominio (ARS 4.000 – 4.400).
+  ▸ Ver fuentes                                              (<details> cerrado: fuente y fecha por bloque, y el dólar usado)
+```
+
+- La jurisdicción se nombra una sola vez, en la nota al pie. Con varias: «CABA o Provincia de Buenos Aires». AMBA y las búsquedas con varias zonas conocen la localidad (jurisdicciones reales) y siguen mostrando el rango que las cubre.
+- «Resto del país» nunca se llama «oficial»: su rango sale de las escalas de Córdoba, Santa Fe y Mendoza. Solo: «Valores al 30/10 de Córdoba, Santa Fe y Mendoza como referencia: no son los oficiales de tu provincia.». Con otras jurisdicciones: «Valores oficiales al 30/10 para CABA; para el resto del país, referencia con Córdoba, Santa Fe y Mendoza.».
+- Si falta una parte de la transferencia, el renglón dice cuál: «Transferencia (sin formularios)». Si falta la patente, el monto se reemplaza por el motivo: «falta el año del modelo», «modelo anterior a 1990 en Buenos Aires: sin dato». El encabezado sigue con su «(sin …)».
+- Salen del detalle: el precio, cada término por separado, el vendedor, el supuesto de valuación fiscal, el redondeo y la línea de AMBA/resto. El dólar usado pasa a «Ver fuentes». `total_cost_expanded` no cambia.
+- Código: `web/lib/cost-estimate-view.ts` (`costDetail` devuelve `rows`, `footnote`, `sources`) y `web/components/app/cost-estimate.tsx`. Pruebas: `web/lib/cost-estimate.test.ts`.
+
+**2. Sin localidad del comprador, ningún total.** Jurisdicción `null` (búsqueda sin zona, zona a más de `buyer_zone.max_locality_km`, tarjeta sin búsqueda ni lugar por defecto): la calculadora devuelve una estimación vacía con `missing = [{code: "zone", reason: "no_zone"}]`, `p_ars`, `terms`, `extras` y los totales en `null`, en los dos lados y **antes** que el dólar (un aviso en USD sin dólar y sin zona dice lo de la zona: es lo que el usuario puede arreglar). Ya no se arma un total parcial con arancel y formularios.
+
+- **Ficha:** una sola línea, `COST_ESTIMATE.lineNoZone` / `TOTAL_COST["line_no_zone"]`: «Costo total: no sabemos tu localidad. Cargala en la búsqueda para estimarlo», con «Cargala en la búsqueda» enlazado a `/app/searches/{id}/edit` cuando la ficha usó una búsqueda. Sin detalle.
+- **Tarjeta:** nada. La misma frase repetida en cada tarjeta de una búsqueda sin zona solo agrega ruido; la ficha y el email ya lo dicen.
+- **Email de oportunidad (y Telegram/bandeja, que usan las mismas líneas):** la línea explícita, «Costo total: no sabemos tu localidad. Cargala en la búsqueda para estimarlo.», sin «Parámetros al». Se eligió decirlo en lugar de callar porque el email es donde el plan ve el costo primero: sin la línea parecería que la función desapareció, y la frase indica qué hacer. Nunca un parcial. `payload['total_cost']` queda `{ars_*: null, usd_*: null, missing: ["zone"], jurisdiction: null, as_of}`; una fila congelada antes del cambio (con `jurisdiction: null` y un parcial) también se muestra con la línea nueva.
+- Vectores dorados: los casos 18 (y tres nuevos: jurisdicción vacía, USD sin dólar y USD con dólar, todos sin zona) esperan la estimación vacía y la línea nueva. Los casos 24 y los dos 25, que usaban la falta de jurisdicción para otra cosa, pasan a CABA y mantienen lo que probaban (un solo número tras redondear; el sufijo de dos y de tres faltantes). El snapshot `opportunity_total_cost_missing.txt` cambia a la línea nueva.
+
+Los demás faltantes (dólar vencido, año, parámetros) siguen con su mensaje de siempre.
+

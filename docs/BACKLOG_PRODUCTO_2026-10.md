@@ -37,7 +37,7 @@ Tamaños: S = hasta 1 día, M = 2–3 días, L = 4–6 días efectivos de desarr
 | PRO-03 | Pro | Capital clavado en stock que no rota | Monitor de mi stock: posición contra comparables, días contra el mercado, aviso cuando aparece uno más barato | F-01, F-03 | P2 | L |
 | PRO-04 | Pro | Decide qué comprar por intuición | Radar de mercado por zona: rotación, oferta, demanda de los particulares de la plataforma, spread entre zonas | F-03 | P2 | M |
 | PRO-05 | Pro | Compite con veinte revendedores por el mismo aviso | Avisos de particulares que quieren vender, antes de que publiquen | PAR-05 | P2 | M |
-| X-01 | Pro | Lleva el seguimiento en WhatsApp y planilla | Estados de seguimiento (contactado, visita, comprado) y notas en la UI | — | P1 | S |
+| X-01 | Pro | Lleva el seguimiento en WhatsApp y planilla | Estados de seguimiento (contactado, visita, comprado) en la UI; sin notas (Juan, 02/11) | — | P1 | S |
 | H-01 | ambos | Promesa de la landing que el email no cumple | Llevar las 3 preguntas principales al email de oportunidad | — | P0 | S |
 
 ## Fundaciones
@@ -106,6 +106,8 @@ Criterios de aceptación:
 ### PAR-01 · Costo total estimado
 
 **Estado al 30/10:** implementado en la rama `claude/par01-costo-total` ([diseño](superpowers/specs/2026-10-30-par01-costo-total-design.md), [plan](superpowers/plans/2026-10-30-par01-costo-total.md)), sin aplicar en producción. Por decisión de Juan del 30/10, la migración `20261127120000_par01_cost_estimator` **siembra los valores aprobados** (con fuente y fecha por bloque) en lugar de dejarlos en null. El orden «por costo total» queda fuera de v1 y `results_sorted_total_cost` queda reservado (no se emite). El aviso fijo de 8–10 % se borró para todos.
+
+**Estado al 02/11:** dos cambios pedidos por Juan, sin migración ([diseño, «Cambios pedidos por Juan 02/11»](superpowers/specs/2026-10-30-par01-costo-total-design.md#cambios-pedidos-por-juan-0211)): el detalle de la ficha pasa a un resumen de cuatro renglones (transferencia, patente, total y una nota al pie, con las fuentes detrás de «Ver fuentes»), y sin la localidad del comprador ya no se muestra ningún total ni parcial: la ficha y el email dicen «Costo total: no sabemos tu localidad. Cargala en la búsqueda para estimarlo» y la tarjeta no muestra línea.
 
 Dolor: el precio publicado no es lo que paga. Transferencia, patente según jurisdicción y dólar cambian el orden entre dos autos parecidos.
 
@@ -294,6 +296,8 @@ Criterios de aceptación:
 `user_listing_interactions.status` ya tiene `new | seen | interested | discarded | contacted | visit_scheduled | purchased`, `rejection_reason` y `note`; la UI solo ofrece Guardar y Descartar, y el selector de estado se retiró. Las agencias llevan esto en WhatsApp y una planilla. Para Pro: devolver el selector con `contacted`, `visit_scheduled`, `purchased`, campo de nota y filtro por estado en resultados y guardados. `listing_status_changed` ya existe como evento. Tamaño S. Exportación CSV **no**: Juan la retiró el 15/10 (`20261027120000_remove_csv_export.sql`) y sigue en reserva hasta que un Pro la pida.
 
 **Estado al 30/10:** en `main` (PR #51). Migraciones aplicadas en producción el 30/10. Texto de Privacidad sobre las notas en PR #56. Plan: [2026-10-29-x01-seguimiento](superpowers/plans/2026-10-29-x01-seguimiento.md).
+
+**Estado al 02/11: sin notas.** Juan: «lo de las notas no me gusta, sacalo de las publicaciones y de las funcionalidades». Se sacaron el bloque «Tu nota» de la ficha, `setNote` y el evento `listing_note_saved`, la nota en las tarjetas de resultados y de Guardados, `webConfig().listingTracking`, la clave `TRACKING.note*` del copy y el ítem «Tus notas» de Privacidad (fecha 2 de noviembre de 2026). Los emails y exportaciones nunca la llevaron. Se mantiene el seguimiento por estado (contactado, visita agendada, compré) y sus filtros. Base: **sin migración**; en producción hay 0 notas. La columna `user_listing_interactions.note` es del esquema original (20260927), `match_cards.note`, su CHECK de 2000 caracteres y la fila `app_config.listing_tracking` quedan dormidas: ninguna pantalla ni acción las lee o escribe, y /admin/config oculta la clave y rechaza guardarla (`RETIRED_CONFIG_KEYS` en `web/lib/admin-config.ts`). Sacar `match_cards.note` obliga a borrar y recrear la vista y `search_results` (que devuelve `setof match_cards`), un riesgo que 0 filas no justifican; si algún día se quiere, va en una migración propia junto con el `drop column`.
 
 ### H-01 · El email no trae las preguntas
 

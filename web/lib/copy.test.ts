@@ -28,9 +28,10 @@ describe("copy lint (§19)", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("keeps the follow-up texts (X-01) prudent and the note's privacy honest", () => {
+  it("keeps the follow-up texts (X-01) prudent, with no note left (Juan 02/11)", () => {
     const texts = [...Object.values(TRACKING), ...Object.values(FOLLOW_LABEL), ...Object.values(FOLLOW_EMPTY)];
-    expect(texts).toContain("La nota es privada: no se la mostramos al vendedor ni a otros usuarios.");
+    expect(Object.keys(TRACKING).filter((k) => /note/i.test(k))).toEqual([]);
+    expect(texts.filter((t) => /\bnota\b/i.test(t))).toEqual([]);
     for (const text of texts) {
       expect(forbiddenTermsIn(text), text).toEqual([]);
       // An admin with the service role can read the database: never promise "only you".
@@ -44,8 +45,8 @@ describe("copy lint (§19)", () => {
     expect(COST_ESTIMATE.line).toBe("Costo total estimado{suffix}: {usd} ({ars})");
     expect(COST_ESTIMATE.lineNoUsd).toBe("Costo total estimado{suffix}: {ars} (sin dólar del día)");
     expect(COST_ESTIMATE.lineNoFx).toBe("Costo total estimado: sin dólar del día, no se puede estimar");
+    expect(COST_ESTIMATE.lineNoZone).toBe("Costo total: no sabemos tu localidad. Cargala en la búsqueda para estimarlo");
     expect(COST_ESTIMATE.suffix).toBe(" (sin {items})");
-    expect(COST_ESTIMATE.vf).toContain("supuesto propio, no oficial");
     for (const text of texts) {
       expect(forbiddenTermsIn(text), text).toEqual([]);
       for (const term of ["precio final", "costo real", "costo exacto", "total real"]) {

@@ -13,14 +13,12 @@ const card: Card = {
   profile_name: "SUV hasta USD 30.000", listing_status: "active", probable_repost_of: null,
 };
 
-it("shows the user's note on one line, escaped, and nothing without one (X-01)", () => {
-  const html = renderToStaticMarkup(createElement(ListingCard, { card: { ...card, note: "Llamé\n<b>martes</b>" } }));
-  const note = html.match(/<p[^>]*data-testid="card-note"[^>]*>([\s\S]*?)<\/p>/);
-  expect(note?.[0]).toContain("truncate");
-  expect(note?.[1]).toContain("Llamé\n&lt;b&gt;martes&lt;/b&gt;");
+it("never shows a note, even one left in the row by older versions (Juan 02/11)", () => {
   const plain = renderToStaticMarkup(createElement(ListingCard, { card }));
   expect(plain).not.toContain("card-note");
-  expect(renderToStaticMarkup(createElement(ListingCard, { card: { ...card, note: null } }))).toBe(plain);
+  expect(plain).not.toContain("Tu nota");
+  const withOld = { ...card, note: "Llamé el martes" } as Card;
+  expect(renderToStaticMarkup(createElement(ListingCard, { card: withOld }))).toBe(plain);
 });
 
 it("shows the body type in the card's meta line (docs/CARROCERIA.md)", () => {

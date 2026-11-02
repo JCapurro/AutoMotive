@@ -303,7 +303,8 @@ export function buildCostInput(
 
 export type Term = { code: TermCode; min: number; max: number; blocks: string[] };
 export type Extra = { code: "domain_report" | "gestoria"; min: number | null; max: number | null; blocks: string[] };
-export type Missing = { code: TermCode | "fx"; reason: MissingReason };
+/** "zone": no buyer jurisdiction, so no amount at all (Juan 02/11). */
+export type Missing = { code: TermCode | "fx" | "zone"; reason: MissingReason };
 export type Estimate = {
   p_ars: number | null;
   p_orig: { amount: number; currency: "ARS" | "USD" };
@@ -419,7 +420,10 @@ function patente(p: number, listing: CostListing, jurisdiction: Jurisdiction[] |
 /**
  * The estimate, or null without a config (no root as_of) or a price. A USD
  * listing without a dollar gets an empty estimate (missing fx): the scales
- * are in pesos, nothing can be computed.
+ * are in pesos, nothing can be computed. Without the buyer's jurisdiction
+ * (no zone, a zone past buyer_zone.max_locality_km, no search nor default
+ * place) the estimate is empty too, missing zone, checked first: Juan
+ * (02/11) wants no total, not even a partial one built from the other costs.
  */
 export function estimateCost(
   listing: CostListing,
@@ -439,6 +443,9 @@ export function estimateCost(
     seller,
     as_of: cfg.as_of,
   };
+  if (!jurisdiction?.length) {
+    return { ...base, p_ars: null, rate: null, terms: [], extras: [], missing: [{ code: "zone", reason: "no_zone" }], total_ars: null, total_usd: null };
+  }
   let p: number;
   let rate: Estimate["rate"];
   if (listing.currency === "USD") {
@@ -510,8 +517,9 @@ export function roundedTotals(est: Pick<Estimate, "total_ars" | "total_usd">): R
   };
 }
 
-/** The header from already rounded totals. */
+/** The header from already rounded totals. Without the buyer's locality, only that, never an amount. */
 export function costHeadline(ars: Range | null, usd: Range | null, codes: readonly string[]): string {
+  if (codes.includes("zone")) return COST_ESTIMATE.lineNoZone;
   if (!ars) return COST_ESTIMATE.lineNoFx;
   const suffix = missingSuffix(codes);
   const arsText = formatRange(ars.min, ars.max, "ARS");

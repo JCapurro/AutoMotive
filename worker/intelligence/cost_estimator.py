@@ -378,7 +378,10 @@ def estimate(listing: Mapping[str, Any], jurisdiction: Sequence[str] | None, sel
              fx_latest: Mapping[str, Any] | None, cfg: Mapping[str, Any] | None) -> dict[str, Any] | None:
     """The estimate, or None without a config (no root as_of) or a price. A USD
     listing without a dollar gets an empty estimate (missing fx): the scales
-    are in pesos, nothing can be computed."""
+    are in pesos, nothing can be computed. Without the buyer's jurisdiction
+    (no zone, a zone past buyer_zone.max_locality_km, no search nor default
+    place) the estimate is empty too, missing zone, checked first: Juan
+    (02/11) wants no total, not even a partial one built from the other costs."""
     if cfg is None:
         return None
     price = _to_num(listing.get("price"))
@@ -390,6 +393,9 @@ def estimate(listing: Mapping[str, Any], jurisdiction: Sequence[str] | None, sel
                            "price_label": "cash" if listing.get("cash") else "published",
                            "jurisdiction": list(jurisdiction) if jurisdiction else None, "seller": seller,
                            "as_of": cfg["as_of"]}
+    if not jurisdiction:
+        return {**out, "p_ars": None, "rate": None, "terms": [], "extras": [],
+                "missing": [{"code": "zone", "reason": "no_zone"}], "total_ars": None, "total_usd": None}
     if currency == "USD":
         rate = _to_num((fx_latest or {}).get("rate"))
         if not rate or rate <= 0:
@@ -482,7 +488,10 @@ def missing_suffix(codes: Sequence[str]) -> str:
 
 
 def headline(ars: Mapping[str, int] | None, usd: Mapping[str, int] | None, codes: Sequence[str]) -> str:
-    """The header from already rounded totals (the email keeps those)."""
+    """The header from already rounded totals (the email keeps those).
+    Without the buyer's locality, only that, never an amount."""
+    if "zone" in codes:
+        return copy.TOTAL_COST["line_no_zone"]
     if ars is None:
         return copy.TOTAL_COST["line_no_fx"]
     suffix = missing_suffix(codes)
