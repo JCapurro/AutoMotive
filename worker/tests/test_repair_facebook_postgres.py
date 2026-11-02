@@ -79,25 +79,69 @@ class IngestTests(Case):
         self.assertEqual(await self.rows("SELECT * FROM matches"), [])
 
     async def test_a_peso_price_read_as_dollars_is_ars_and_no_price_drop(self):
-        await self.store("21327", "FORD ECOSPORT XLS 1.6 GNC FULL", 990_000, "USD", moneda="ARS")
-        result = await ingest([fb("21327", "FORD ECOSPORT XLS 1.6 GNC FULL", 990_000)], geocode=None)
+        await self.store("21327", "FORD ECOSPORT XLS 1.6 GNC FULL", 1_990_000, "USD", moneda="ARS")
+        result = await ingest([fb("21327", "FORD ECOSPORT XLS 1.6 GNC FULL", 1_990_000)], geocode=None)
         self.assertNotIn("price_drop", [e.kind for e in result.events])
         row = await self.listing("21327")
         self.assertEqual((float(row["price"]), row["currency"], row["price_published_currency"]),
-                         (990_000, "ARS", "ARS"))
-        self.assertAlmostEqual(float(row["price_usd"]), 990_000 / TEST_FX_RATE)
+                         (1_990_000, "ARS", "ARS"))
+        self.assertAlmostEqual(float(row["price_usd"]), 1_990_000 / TEST_FX_RATE)
         self.assertEqual(row["attributes"]["moneda"], "ARS")
 
     async def test_a_peso_card_on_a_misread_stored_price_is_no_price_drop(self):
-        # 21327 still unrepaired and the seller lowered the price: USD 990.000
-        # against $ 950.000 (ARS) is no 99% drop.
-        await self.store("21327", "FORD ECOSPORT XLS 1.6 GNC FULL", 990_000, "USD", moneda="ARS")
-        result = await ingest([fb("21327", "FORD ECOSPORT XLS 1.6 GNC FULL", 950_000)], geocode=None)
+        # Still unrepaired and the seller lowered the price: USD 1.990.000
+        # against $ 1.950.000 (ARS) is no 99% drop.
+        await self.store("21327", "FORD ECOSPORT XLS 1.6 GNC FULL", 1_990_000, "USD", moneda="ARS")
+        result = await ingest([fb("21327", "FORD ECOSPORT XLS 1.6 GNC FULL", 1_950_000)], geocode=None)
         kinds = [e.kind for e in result.events]
         self.assertIn("listing_updated", kinds)
         self.assertNotIn("price_drop", kinds)
         row = await self.listing("21327")
-        self.assertEqual((float(row["price"]), row["currency"]), (950_000, "ARS"))
+        self.assertEqual((float(row["price"]), row["currency"]), (1_950_000, "ARS"))
+
+    async def test_a_new_listing_with_an_unreadable_price_is_stored_without_one(self):
+        result = await ingest([fb("30", "Ford ecosport porton trasero", 600_000)], geocode=None)
+        self.assertEqual((result.new, result.not_vehicle), (1, 0))
+        row = await self.listing("30")
+        self.assertEqual((row["price"], row["currency"], row["price_usd"], row["price_published"]),
+                         (None, None, None, None))
+        self.assertEqual((row["price_partial"], row["price_partial_reason"]),
+                         (True, "precio de Facebook no interpretable: $ 600.000"))
+        self.assertEqual(row["attributes"]["_currency_read"]["amount"], 600_000)
+        self.assertNotIn("moneda", row["attributes"])
+
+    async def test_a_stored_listing_read_with_an_unreadable_price_then_a_credible_one(self):
+        # 21327 as stored before #73 (USD 990.000, attributes.moneda ARS).
+        await self.store("21327", "FORD ECOSPORT XLS 1.6 GNC FULL", 990_000, "USD", moneda="ARS")
+        result = await ingest([fb("21327", "FORD ECOSPORT XLS 1.6 GNC FULL", 990_000)], geocode=None)
+        self.assertNotIn("price_drop", [e.kind for e in result.events])
+        row = await self.listing("21327")
+        self.assertEqual((row["price"], row["currency"], row["price_usd"], row["price_partial"]),
+                         (None, None, None, True))
+        self.assertNotIn("moneda", row["attributes"])
+        # The same card again: nothing changes.
+        again = await ingest([fb("21327", "FORD ECOSPORT XLS 1.6 GNC FULL", 990_000)], geocode=None)
+        self.assertEqual((again.updated, again.events), (0, []))
+        # The seller writes a credible price: it stands, unflagged, and is no price drop.
+        result = await ingest([fb("21327", "FORD ECOSPORT XLS 1.6 GNC FULL", 9_900)], geocode=None)
+        kinds = [e.kind for e in result.events]
+        self.assertIn("listing_updated", kinds)
+        self.assertNotIn("price_drop", kinds)
+        row = await self.listing("21327")
+        self.assertEqual((float(row["price"]), row["currency"], float(row["price_usd"]), row["price_partial"],
+                          row["price_partial_reason"], row["attributes"]["moneda"]),
+                         (9_900, "USD", 9_900, False, None, "USD"))
+        self.assertNotIn("_currency_read", row["attributes"])
+        # ... and a lower one afterwards is a real drop again.
+        result = await ingest([fb("21327", "FORD ECOSPORT XLS 1.6 GNC FULL", 9_000)], geocode=None)
+        self.assertIn("price_drop", [e.kind for e in result.events])
+
+    async def test_an_unreadable_card_over_a_credible_price_is_no_drop(self):
+        await self.store("8", "Ford ecosport porton trasero", 9_500, "USD")
+        result = await ingest([fb("8", "Ford ecosport porton trasero", 600_000)], geocode=None)
+        self.assertNotIn("price_drop", [e.kind for e in result.events])
+        row = await self.listing("8")
+        self.assertEqual((row["price"], row["price_partial"]), (None, True))
 
     async def test_a_real_price_drop_is_still_one(self):
         await self.store("8", "FORD ECOSPORT 1.4 XLS 2008", 10_000, "USD", year=2008, km=150_000)
@@ -138,9 +182,15 @@ class RepairToolTests(Case):
             "part": await self.store("1", "Butacas Ford Ecosport", 350_000, "USD"),
             "part_gone": await self.store("2", "Paragolpe trasero de Ford Ecosport", 100_000, "USD"),
             "car_usd": await self.store("3", "FORD ECOSPORT 1.4 XLS 2008", 6_400, "USD", year=2008, km=150_000),
-            "car_ars": await self.store("4", "FORD ECOSPORT XLS 1.6 GNC FULL", 990_000, "USD", moneda="ARS"),
+            "car_ars": await self.store("4", "FORD ECOSPORT XLS 1.6 GNC FULL", 1_990_000, "USD", moneda="ARS"),
             "car_no_price": await self.store("5", "2027 Volkswagen Polo", 285_000, "USD",
                                              make="Volkswagen", model="Polo"),
+            "21327": await self.store("21327", "FORD ECOSPORT XLS 1.6 GNC FULL", 990_000, "USD", moneda="ARS"),
+            "porton": await self.store("12", "Ford ecosport porton trasero", 600_000, "USD"),
+            "retiralo": await self.store("13", "FORD ECOSPORT 1.4 XLS 2008 ‼️RETÍRALO CON $900.000 Y CUOTAS FIJAS‼️",
+                                         900_000, "USD", year=2008),
+            # Left without a price by #73's ingest, not flagged, still matching.
+            "legacy": await self.store("14", "OPORTUNIDAD TAPA DE CILINDROS FORD 1.6", None, None),
             "moneda": await self.store("6", "Ford Ecosport 2.0 4x2 XLT Plus", 10_000, "USD", moneda="ARS"),
             "porsche": await self.store("7", "Porsche 911 Carrera S", 180_000, "USD",
                                         make="Porsche", model="911"),
@@ -152,7 +202,11 @@ class RepairToolTests(Case):
                              " WHERE id = %s", (ids["explicit"],))
         async with db.connection() as cx:
             await cx.execute("UPDATE listings SET status = 'gone' WHERE id = %s", (ids["part_gone"],))
-        await self.match(ids["part"])
+            await cx.execute("UPDATE listings SET attributes = attributes || %s WHERE id = %s",
+                             (db_json({"_currency_read": {"amount": 220_000, "currency": "USD", "as": None}}),
+                              ids["legacy"]))
+        for key in ("part", "porton", "retiralo", "legacy", "car_usd"):
+            await self.match(ids[key])
         return ids
 
     async def test_dry_run_counts_and_writes_nothing(self):
@@ -163,37 +217,52 @@ class RepairToolTests(Case):
             ("facebook", repair_facebook.PART): 1,              # the gone one is left alone
             ("facebook", repair_facebook.PART_MATCHES): 1,
             ("facebook", repair_facebook.TO_ARS): 1,
-            ("facebook", repair_facebook.NO_PRICE): 1,
+            ("facebook", repair_facebook.DOUBTFUL): 5,          # Polo, 21327, portón, retiralo, legacy
+            ("facebook", repair_facebook.DOUBTFUL_MATCHES): 3,
             ("facebook", repair_facebook.MONEDA): 1,
         })
         self.assertIn("Butacas", p.examples[("facebook", repair_facebook.PART)][0])
+        doubtful = "\n".join(p.examples[("facebook", repair_facebook.DOUBTFUL)])
+        self.assertIn("«Ford ecosport porton trasero» USD 600.000 leído -> sin precio "
+                      "(precio de Facebook no interpretable: $ 600.000; 1 matches)", doubtful)
+        report = "\n".join(repair_facebook.report(p, write=False))
+        self.assertIn(repair_facebook.DOUBTFUL, report)
         self.assertEqual(await self.rows("SELECT * FROM listings ORDER BY id"), before)
-        self.assertEqual(len(await self.rows("SELECT * FROM matches")), 1)
+        self.assertEqual(len(await self.rows("SELECT * FROM matches")), 5)
         self.assertEqual(await self.rows("SELECT * FROM fx_rates"), [])
         self.assertIn("simulación", repair_facebook.report(p, write=False)[-1])
 
     async def test_write_applies_and_a_second_run_finds_nothing(self):
         ids = await self.seed()
-        await repair_facebook.repair(write=True, sources=["facebook"])
+        p = await repair_facebook.repair(write=True, sources=["facebook"])
+        self.assertEqual(p.counts[("*", repair_facebook.DELETED)], 3)
 
         part = await self.listing("1")
         self.assertEqual((part["status"], part["price_partial"]), ("gone", True))
         self.assertEqual(part["attributes"]["_not_vehicle"]["reason"], "título: «butacas»")
-        self.assertEqual(await self.rows("SELECT * FROM matches"), [])
+        # Only the dollar car keeps its match; nobody was notified.
+        self.assertEqual([r["listing_id"] for r in await self.rows("SELECT listing_id FROM matches")],
+                         [ids["car_usd"]])
+        self.assertEqual(await self.rows("SELECT * FROM notifications"), [])
         self.assertEqual((await self.listing("2"))["attributes"].get("_not_vehicle"), None)
 
         car = await self.listing("4")
         self.assertEqual((float(car["price"]), car["currency"], float(car["price_published"]),
                           car["price_published_currency"], car["attributes"]["moneda"]),
-                         (990_000, "ARS", 990_000, "ARS", "ARS"))
-        self.assertAlmostEqual(float(car["price_usd"]), 990_000 / TEST_FX_RATE)
+                         (1_990_000, "ARS", 1_990_000, "ARS", "ARS"))
+        self.assertAlmostEqual(float(car["price_usd"]), 1_990_000 / TEST_FX_RATE)
         self.assertEqual(car["attributes"]["_currency_read"]["currency"], "USD")
 
-        polo = await self.listing("5")
-        self.assertEqual((polo["price"], polo["currency"], polo["price_usd"], polo["price_published"]),
-                         (None, None, None, None))
-        self.assertNotIn("moneda", polo["attributes"])
-        self.assertEqual(polo["status"], "active")
+        for external_id, amount in (("5", "285.000"), ("21327", "990.000"), ("12", "600.000"),
+                                    ("13", "900.000"), ("14", "220.000")):
+            row = await self.listing(external_id)
+            self.assertEqual((row["price"], row["currency"], row["price_usd"], row["price_published"],
+                              row["price_published_currency"], row["status"]),
+                             (None, None, None, None, None, "active"), external_id)
+            self.assertEqual((row["price_partial"], row["price_partial_reason"]),
+                             (True, f"precio de Facebook no interpretable: $ {amount}"), external_id)
+            self.assertNotIn("moneda", row["attributes"], external_id)
+            self.assertEqual(row["attributes"]["_currency_read"]["as"], None, external_id)
 
         self.assertEqual((await self.listing("6"))["attributes"]["moneda"], "USD")
         for untouched in ("3", "7", "10", "11"):
@@ -203,6 +272,18 @@ class RepairToolTests(Case):
 
         again = await repair_facebook.repair(write=False, sources=["facebook"])
         self.assertEqual(dict(again.counts), {})
+        self.assertEqual((await repair_facebook.repair(write=True, sources=["facebook"])).counts, {})
+        self.assertEqual(await self.rows("SELECT * FROM notifications"), [])
+
+    async def test_a_repaired_listing_read_again_keeps_its_flag_then_clears_it(self):
+        await self.seed()
+        await repair_facebook.repair(write=True, sources=["facebook"])
+        result = await ingest([fb("12", "Ford ecosport porton trasero", 600_000)], geocode=None)
+        self.assertEqual((result.updated, result.events), (0, []))
+        result = await ingest([fb("12", "Ford ecosport porton trasero", 7_500)], geocode=None)
+        self.assertNotIn("price_drop", [e.kind for e in result.events])
+        row = await self.listing("12")
+        self.assertEqual((float(row["price"]), row["currency"], row["price_partial"]), (7_500, "USD", False))
 
     async def test_only_the_named_sources(self):
         await self.seed()

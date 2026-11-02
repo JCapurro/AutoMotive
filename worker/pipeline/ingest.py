@@ -39,7 +39,7 @@ from db.repos.runs import log_error
 from normalization.description_facts import PARTIAL_KINDS, DescriptionFacts, resolve_price
 from normalization import not_vehicle
 from normalization.geo import SOURCE_DEFAULT_LOCATIONS, geocode_location
-from normalization.listing import Target, attrs_hash, facebook_price, fingerprint, normalize_listing
+from normalization.listing import Target, attrs_hash, doubtful_price, facebook_price, fingerprint, normalize_listing
 from normalization.seller import seller_key
 from pipeline.seller_classification import classify_groups
 
@@ -186,8 +186,8 @@ def _reread_currency(attrs_new: dict[str, Any], old_pub: float | None,
                      old_pub_cur: str | None) -> str | None | bool:
     """When the incoming row reinterpreted the currency of the very price
     stored (attributes._currency_read, normalization.listing.facebook_price):
-    the currency it is now ("ARS"), or False when it is no price at all.
-    None otherwise."""
+    the currency it is now ("ARS"), or False when it is no price at all
+    (unreadable, normalization.listing.doubtful_price). None otherwise."""
     read = attrs_new.get("_currency_read")
     if not read or not _same_number(read.get("amount"), old_pub) or read.get("currency") != old_pub_cur:
         return None
@@ -270,7 +270,15 @@ def merge(existing: dict[str, Any], incoming: dict[str, Any], *,
         # no seller moved the price, so no 'price' change and no price drop.
         published_changed = False
         pub, pub_cur = (old_pub, reread) if reread else (None, None)
+    elif new_pub is None and doubtful_price(attrs_new.get("_currency_read")):
+        # The card now shows a Facebook price that can't be read (a part's, a
+        # down payment's): the stored one is stale. No price, flagged partial
+        # (incoming's published_partial_reason); no 'price' change, no drop.
+        pub, pub_cur = None, None
     out["price_published"], out["price_published_currency"] = pub, pub_cur
+    if pub is not None and doubtful_price(out["attributes"].get("_currency_read")):
+        # Read again with a credible price: the unreadable one is history.
+        out["attributes"].pop("_currency_read")
     # attributes.moneda follows the published price, never the other way round.
     if pub_cur:
         out["attributes"]["moneda"] = pub_cur

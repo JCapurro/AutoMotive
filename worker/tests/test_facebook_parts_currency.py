@@ -8,11 +8,11 @@ import unittest
 from collectors.base import Listing
 from normalization import not_vehicle
 from normalization.fx import FxQuote
-from normalization.listing import Target, facebook_price, normalize_listing
+from normalization.listing import Target, doubtful_price, facebook_price, normalize_listing
 from collectors.facebook import _parse_price_sign, parse_card
 from normalization.money import explicit_usd, facebook_currency, high_end
 from normalization.vehicle import CatalogModel
-from pipeline.ingest import merge, misread_currency
+from pipeline.ingest import merge, misread_currency, price_drop_pct, published_partial, published_view
 
 # (title, price, currency as stored)
 PARTS = [
@@ -159,13 +159,16 @@ class ClassifyUpdateTests(unittest.TestCase):
 
 
 class FacebookCurrencyTests(unittest.TestCase):
-    def test_usd_from_the_ceiling_up_is_ars(self):
+    def test_usd_from_the_ceiling_is_unreadable_below_a_million_and_ars_above(self):
         for title, price, currency in PARTS + CARS:
             if currency != "USD":
                 continue
-            expected = "ARS" if price >= 100_000 else "USD"
+            expected = "USD" if price < 100_000 else None
             self.assertEqual(facebook_currency(price, currency), expected, title)
         self.assertEqual(facebook_currency(1_500_000, "ARS"), "ARS")
+        self.assertEqual(facebook_currency(1_000_000, "USD"), "ARS")
+        self.assertIsNone(facebook_currency(999_999, "USD"))
+        self.assertIsNone(facebook_currency(100_000, "USD"))
         self.assertIsNone(facebook_currency(None, None))
         self.assertEqual(facebook_currency(99_999, "USD"), "USD")
         self.assertEqual(facebook_currency(150_000, "USD", ceiling=200_000), "USD")
@@ -184,8 +187,9 @@ class FacebookCurrencyTests(unittest.TestCase):
                                    ("Chevrolet", "Silverado", 120_000), ("Jeep", "Grand Cherokee", 110_000),
                                    ("Lexus", "RX", 180_000)):
             self.assertEqual(facebook_currency(price, "USD", make=make, model=model), "USD", (make, model))
-        # A mainstream car's bare «$ 130.000» is still pesos.
-        self.assertEqual(facebook_currency(130_000, "USD", make="Ford", model="EcoSport"), "ARS")
+        # A mainstream car's bare «$ 130.000» is neither dollars nor a car's pesos.
+        self.assertIsNone(facebook_currency(130_000, "USD", make="Ford", model="EcoSport"))
+        self.assertEqual(facebook_currency(1_300_000, "USD", make="Ford", model="EcoSport"), "ARS")
 
     def test_a_sign_that_names_the_dollar_is_never_reinterpreted(self):
         for sign in ("US$", "u$s", "USD", " U$S "):
@@ -193,7 +197,7 @@ class FacebookCurrencyTests(unittest.TestCase):
             self.assertEqual(facebook_currency(180_000, "USD", sign=sign), "USD", sign)
         for sign in ("$", None, "ARS"):
             self.assertFalse(explicit_usd(sign), sign)
-        self.assertEqual(facebook_currency(180_000, "USD", sign="$"), "ARS")
+        self.assertIsNone(facebook_currency(180_000, "USD", sign="$"))
         self.assertEqual(facebook_price("facebook", 180_000, "USD", sign="US$"), (180_000, "USD", None))
 
     def test_the_collector_keeps_the_sign(self):
@@ -204,11 +208,14 @@ class FacebookCurrencyTests(unittest.TestCase):
         self.assertEqual((card.precio, card.moneda, card.extra), (130_000, "USD", {"price_sign": "US$"}))
 
     def test_facebook_price(self):
-        # A peso amount too small for a car is no price, as the collector drops it.
+        # Below a million a bare «$» from the ceiling up is no price: neither
+        # dollars nor pesos make it a car's.
         self.assertEqual(facebook_price("facebook", 350_000, "USD"),
-                         (None, None, {"amount": 350_000, "currency": "USD", "as": None}))
-        self.assertEqual(facebook_price("facebook", 990_000, "USD"),
-                         (990_000, "ARS", {"amount": 990_000, "currency": "USD", "as": "ARS"}))
+                         (None, None, {"amount": 350_000, "currency": "USD", "as": None,
+                                       "reason": "precio de Facebook no interpretable: $ 350.000"}))
+        self.assertEqual(facebook_price("facebook", 990_000, "USD")[:2], (None, None))
+        self.assertEqual(facebook_price("facebook", 1_990_000, "USD"),
+                         (1_990_000, "ARS", {"amount": 1_990_000, "currency": "USD", "as": "ARS"}))
         self.assertEqual(facebook_price("facebook", 6_400, "USD"), (6_400, "USD", None))
         self.assertEqual(facebook_price("mercadolibre", 350_000, "USD"), (350_000, "USD", None))
 
@@ -227,13 +234,21 @@ class NormalizeFacebookTests(unittest.TestCase):
         return normalize_listing(item(*args, **kw), catalog=CATALOG, target=Target("Ford", "EcoSport"), fx=FX)
 
     def test_ecosport_21327(self):
-        # «$ 990.000»: ARS, and attributes.moneda says the same as the columns.
-        row = self.normalize("FORD ECOSPORT XLS 1.6 GNC FULL", 990_000, "USD")
-        self.assertEqual((row["price_published"], row["price_published_currency"]), (990_000, "ARS"))
-        self.assertEqual((row["price"], row["currency"], row["price_usd"]), (990_000, "ARS", 990.0))
-        self.assertEqual(row["attributes"]["moneda"], "ARS")
+        # «$ 990.000»: no EcoSport costs USD 990.000 nor ARS 990.000 (USD 990).
+        row = self.normalize("FORD ECOSPORT XLS 1.6 GNC FULL", 990_000, "USD", atributos={"moneda": "ARS"})
+        self.assertEqual((row["price_published"], row["price_published_currency"]), (None, None))
+        self.assertEqual((row["price"], row["currency"], row["price_usd"]), (None, None, None))
+        self.assertEqual((row["price_partial"], row["price_partial_reason"]),
+                         (True, "precio de Facebook no interpretable: $ 990.000"))
+        self.assertNotIn("moneda", row["attributes"])
         self.assertEqual(row["attributes"]["_currency_read"]["currency"], "USD")
         self.assertIsNone(row["not_vehicle"])
+
+    def test_a_peso_price_of_a_million_or_more_stored_as_dollars_is_ars(self):
+        row = self.normalize("FORD ECOSPORT XLS 1.6 GNC FULL", 9_900_000, "USD")
+        self.assertEqual((row["price"], row["currency"], row["price_usd"], row["price_partial"]),
+                         (9_900_000, "ARS", 9_900.0, False))
+        self.assertEqual(row["attributes"]["moneda"], "ARS")
 
     def test_a_part_is_flagged_and_its_peso_price_dropped(self):
         row = self.normalize("Butacas Ford Ecosport", 350_000, "USD")
@@ -265,22 +280,24 @@ class MergeReinterpretedCurrencyTests(unittest.TestCase):
                 "attributes": {"moneda": "ARS"}, "enriched_at": "2026-10-01", **kw}
 
     def test_same_amount_new_currency_is_no_price_change(self):
-        existing = self.stored(990_000, "USD")
-        incoming = normalize_listing(item("FORD ECOSPORT XLS 1.6 GNC FULL", 990_000, "USD"),
+        existing = self.stored(1_990_000, "USD")
+        incoming = normalize_listing(item("FORD ECOSPORT XLS 1.6 GNC FULL", 1_990_000, "USD"),
                                      catalog=CATALOG, fx=FX)
         out, changes = merge(existing, incoming, detail=False)
-        self.assertEqual((out["price_published"], out["price_published_currency"]), (990_000, "ARS"))
-        self.assertEqual((out["price"], out["currency"], out["price_usd"]), (990_000, "ARS", 990.0))
+        self.assertEqual((out["price_published"], out["price_published_currency"]), (1_990_000, "ARS"))
+        self.assertEqual((out["price"], out["currency"], out["price_usd"]), (1_990_000, "ARS", 1_990.0))
         self.assertEqual(out["attributes"]["moneda"], "ARS")
         self.assertNotIn("price", changes)          # no snapshot 'price', no price_drop
         self.assertIn("description", changes)
 
-    def test_a_peso_amount_too_small_clears_the_price(self):
+    def test_an_unreadable_amount_clears_the_price_and_flags_it(self):
         existing = self.stored(285_000, "USD", attributes={"moneda": "USD"})
         incoming = normalize_listing(item("2027 Volkswagen Polo", 285_000, "USD"), catalog=CATALOG, fx=FX)
         out, changes = merge(existing, incoming, detail=False)
         self.assertEqual((out["price"], out["currency"], out["price_usd"], out["price_published"]),
                          (None, None, None, None))
+        self.assertEqual((out["price_partial"], out["price_partial_reason"]),
+                         (True, "precio de Facebook no interpretable: $ 285.000"))
         self.assertNotIn("moneda", out["attributes"])
         self.assertNotIn("price", changes)
 
@@ -305,6 +322,115 @@ class MergeReinterpretedCurrencyTests(unittest.TestCase):
         incoming = normalize_listing(item("FORD ECOSPORT XLS 1.6 GNC FULL", 9_500, "USD"), catalog=CATALOG, fx=FX)
         out, _ = merge(existing, incoming, detail=True)
         self.assertNotIn("_not_vehicle", out["attributes"])
+
+
+# The ones tools.repair_facebook's dry run of 02/11/2026 would have turned
+# into peso «cars» (or left without a price but still matching): bare «$»,
+# FB_USD_CEILING <= amount < 1.000.000, none of them a part by its title.
+DOUBTFUL = [
+    ("Ford ecosport porton trasero", 600_000, "Ford", "EcoSport"),
+    ("FORD ECOSPORT 1.4 XLS 2008 ‼️RETÍRALO CON $900.000 Y CUOTAS FIJAS‼️", 900_000, "Ford", "EcoSport"),
+    ("Chevrolet Onix tracker 1.0 1.2 tapa de cilindro", 500_000, "Chevrolet", "Onix"),
+    ("Torpedo y centro de volante Chevrolet tracker sin detalles", 750_000, "Chevrolet", "Tracker"),
+    ("4 Llantas Ford 16 pulgadas", 800_000, "Ford", None),
+    ("TURBO COMPRSOR FORD", 650_000, "Ford", None),
+    ("FORD ECOSPORT XLS 1.6 GNC FULL", 990_000, "Ford", "EcoSport"),           # 21327
+    ("OPORTUNIDAD TAPA DE CILINDROS FORD 1.6", 220_000, "Ford", None),
+    ("You", 111_111, None, None),
+    ("2027 Volkswagen Polo", 285_000, "Volkswagen", "Polo"),
+]
+WIDE_CATALOG = CATALOG + [CatalogModel(make="Chevrolet", model="Onix", body_types=("hatchback",)),
+                          CatalogModel(make="Chevrolet", model="Tracker", body_types=("suv",)),
+                          CatalogModel(make="Volkswagen", model="Polo", body_types=("hatchback",))]
+
+
+class DoubtfulFacebookPriceTests(unittest.TestCase):
+    def normalize(self, title, price, *, make=None, model=None, **kw):
+        return normalize_listing(item(title, price, "USD", **kw), catalog=WIDE_CATALOG,
+                                 target=Target(make, model), fx=FX)
+
+    def test_every_real_example_is_left_without_a_price_and_flagged(self):
+        for title, price, make, model in DOUBTFUL:
+            with self.subTest(title):
+                row = self.normalize(title, price, make=make, model=model, atributos={"moneda": "ARS"})
+                self.assertIsNone(row["not_vehicle"])                    # a «car» by its title...
+                self.assertEqual((row["price"], row["currency"], row["price_usd"], row["price_published"],
+                                  row["price_published_currency"], row["fx_rate"]),
+                                 (None, None, None, None, None, None))
+                reason = "precio de Facebook no interpretable: $ " + f"{price:,}".replace(",", ".")
+                self.assertEqual((row["price_partial"], row["price_partial_reason"]), (True, reason))
+                self.assertEqual(row["attributes"]["_currency_read"],
+                                 {"amount": price, "currency": "USD", "as": None, "reason": reason})
+                self.assertNotIn("moneda", row["attributes"])
+                self.assertEqual(doubtful_price(row["attributes"]["_currency_read"]), reason)
+
+    def test_the_reason_wins_over_the_titles(self):
+        # «CUOTAS» in the title would say installment; the number is unreadable anyway.
+        row = self.normalize(DOUBTFUL[1][0], 900_000, make="Ford", model="EcoSport")
+        self.assertEqual(row["price_partial_reason"], "precio de Facebook no interpretable: $ 900.000")
+
+    def test_premium_and_explicit_dollars_keep_their_usd(self):
+        for title, price, kw in (("Porsche 911 Carrera S", 180_000, {"make": "Porsche", "model": "911"}),
+                                 ("BMW X5 xDrive40i", 130_000, {"make": "BMW", "model": "X5"}),
+                                 ("Ford Ecosport Titanium 2024", 600_000, {"extra": {"price_sign": "US$"}}),
+                                 ("Ford Ecosport Titanium 2024", 130_000, {"extra": {"price_sign": "U$S"}}),
+                                 ("Ford Ecosport Titanium 2024", 130_000, {"extra": {"price_sign": "USD"}})):
+            with self.subTest(title, price=price, **kw):
+                row = normalize_listing(item(title, price, "USD", **{k: v for k, v in kw.items() if k == "extra"}),
+                                        catalog=CATALOG, target=Target(kw.get("make"), kw.get("model")), fx=FX)
+                self.assertEqual((row["price"], row["currency"], row["price_partial"]), (price, "USD", False))
+                self.assertNotIn("_currency_read", row["attributes"])
+
+    def test_below_the_ceiling_is_a_dollar_price(self):
+        row = self.normalize("Ford Ecosport 2.0 4x2 XLT Plus", 10_000, make="Ford", model="EcoSport")
+        self.assertEqual((row["price"], row["currency"], row["price_partial"]), (10_000, "USD", False))
+
+    def test_other_sources_are_untouched(self):
+        row = normalize_listing(Listing(source="mercadolibre", listing_id="1", titulo="Ford Ecosport",
+                                        url="https://x/1", precio=600_000, moneda="USD"),
+                                catalog=CATALOG, fx=FX)
+        self.assertEqual((row["price"], row["currency"], row["price_partial"]), (600_000, "USD", False))
+
+
+class MergeDoubtfulTests(unittest.TestCase):
+    """A stored listing read with an unreadable price, and the other way round."""
+
+    def stored(self, **kw):
+        return {**MergeReinterpretedCurrencyTests.stored(None, 9_500, "USD"),
+                "attributes": {"moneda": "USD"}, "price_partial": False, **kw}
+
+    def card(self, price, **kw):
+        return normalize_listing(item("Ford ecosport porton trasero", price, "USD", **kw), catalog=CATALOG,
+                                 target=Target("Ford", "EcoSport"), fx=FX)
+
+    def test_an_unreadable_card_over_a_stored_price_leaves_no_price(self):
+        out, changes = merge(self.stored(), self.card(600_000), detail=False)
+        self.assertEqual((out["price"], out["currency"], out["price_usd"], out["price_published"]),
+                         (None, None, None, None))
+        self.assertEqual((out["price_partial"], out["price_partial_reason"]),
+                         (True, "precio de Facebook no interpretable: $ 600.000"))
+        self.assertNotIn("price", changes)          # no 'price' snapshot, no price_drop
+        self.assertNotIn("moneda", out["attributes"])
+
+    def test_a_flagged_listing_read_again_the_same_does_not_change(self):
+        first, _ = merge(self.stored(), self.card(600_000), detail=False)
+        stored = {**self.stored(), **first}
+        out, changes = merge(stored, self.card(600_000), detail=False)
+        self.assertEqual((out["price"], out["price_partial"]), (None, True))
+        self.assertEqual(changes, [])
+
+    def test_a_credible_price_clears_the_flag_without_a_drop(self):
+        first, _ = merge(self.stored(), self.card(600_000), detail=False)
+        stored = {**self.stored(), **first}
+        out, changes = merge(stored, self.card(8_500), detail=False)
+        self.assertEqual((out["price"], out["currency"], out["price_usd"], out["price_partial"],
+                          out["price_partial_reason"]), (8_500, "USD", 8_500, False, None))
+        self.assertEqual(out["attributes"]["moneda"], "USD")
+        self.assertNotIn("_currency_read", out["attributes"])
+        self.assertIn("price", changes)
+        # ingest: no price drop from a listing without a price, and it was partial.
+        self.assertIsNone(price_drop_pct(published_view(stored), published_view(out)))
+        self.assertTrue(published_partial(stored))
 
 
 if __name__ == "__main__":

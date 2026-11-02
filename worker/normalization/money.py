@@ -22,17 +22,28 @@ _MULTIPLIERS = {"millones": 1e6, "millon": 1e6, "palos": 1e6,
                 "mil": 1e3, "lucas": 1e3, "k": 1e3}
 
 
-def plain_dollar_currency(amount: float, *, ars_from: float = 1_000_000) -> str:
+# From here up a bare "$" is pesos (collectors/facebook.py reads it so).
+PLAIN_DOLLAR_ARS_FROM = 1_000_000
+
+
+def plain_dollar_currency(amount: float, *, ars_from: float = PLAIN_DOLLAR_ARS_FROM) -> str:
     """The currency of an amount written with a bare "$": ARS from `ars_from` up."""
     return "ARS" if amount >= ars_from else "USD"
 
 
 # Facebook Marketplace (AR) shows almost every price with a bare "$": sellers
 # type dollars ("$ 11.900") or pesos ("$ 11.900.000"), and parts in pesos
-# ("$ 350.000" a pair of seats). The collector reads "$" below a million as
-# USD; at or above this a bare-"$" Facebook price is an ARS amount (a used
-# car is rarely sold for USD 100.000; FB_USD_CEILING). A sign that says
-# dollars («US$», «U$S», «USD») is not ambiguous and is never reinterpreted.
+# ("$ 350.000" a pair of seats). The collector reads "$" below a million
+# (PLAIN_DOLLAR_ARS_FROM) as USD. At or above FB_USD_CEILING such a "USD"
+# figure is no dollar price of a mainstream car (a used one is rarely sold for
+# USD 100.000), but below a million it is no peso price of a car either
+# (ARS 100.000-999.999 is USD ~70-700): a part, a down payment («RETÍRALO CON
+# $900.000»), a placeholder («$ 111.111»). It is unreadable: the listing is
+# left without a price and flagged partial, out of every match, comparable
+# and stat (normalization.listing.facebook_price). A stored bare "$" figure
+# of a million or more in "USD" (before the collector read it as ARS) is ARS.
+# A sign that says dollars («US$», «U$S», «USD») is not ambiguous and is
+# never reinterpreted; nor is a high-end car's price.
 FACEBOOK_USD_CEILING = float(os.getenv("FB_USD_CEILING", "100000"))
 # ... except for these, which do cost that much in dollars in Argentina: whole
 # premium makes (an X5, a GLE, a Defender, a Q8 or an XC90 is sold above USD
@@ -68,15 +79,22 @@ def high_end(make: str | None, model: str | None = None) -> bool:
 def facebook_currency(amount: float | None, currency: str | None, *, make: str | None = None,
                       model: str | None = None, ceiling: float | None = None,
                       sign: str | None = None) -> str | None:
-    """The currency of a Facebook price: a "USD" amount read from a bare "$"
-    at or above `ceiling` (FACEBOOK_USD_CEILING) is ARS, unless the car is a
-    high-end one. `sign` is the symbol the price was written with (None when
-    unknown: Facebook AR writes a bare "$"); one that names the dollar keeps USD."""
+    """The currency of a Facebook price. A "USD" amount read from a bare "$"
+    at or above `ceiling` (FACEBOOK_USD_CEILING), of a car that is not a
+    high-end one, is ARS from PLAIN_DOLLAR_ARS_FROM up and unreadable below
+    it: None (normalization.listing.facebook_price leaves no price). Anything
+    else keeps `currency`. `sign` is the symbol the price was written with
+    (None when unknown: Facebook AR writes a bare "$"); one that names the
+    dollar keeps USD."""
     ceiling = FACEBOOK_USD_CEILING if ceiling is None else ceiling
-    if currency == "USD" and amount and amount >= ceiling and not explicit_usd(sign) \
-            and not high_end(make, model):
-        return "ARS"
-    return currency
+    if currency != "USD" or not amount or amount < ceiling or explicit_usd(sign) or high_end(make, model):
+        return currency
+    return "ARS" if amount >= PLAIN_DOLLAR_ARS_FROM else None
+
+
+def doubtful_reason(amount: float) -> str:
+    """price_partial_reason of a listing whose Facebook price is unreadable."""
+    return f"precio de Facebook no interpretable: $ {int(amount):,}".replace(",", ".")
 
 
 def plausible_vehicle_price(amount: float | None, currency: str | None) -> bool:
