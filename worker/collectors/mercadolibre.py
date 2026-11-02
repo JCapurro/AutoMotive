@@ -24,6 +24,7 @@ import random
 import re
 import time
 from typing import Any
+import unicodedata
 from urllib.parse import urlsplit
 
 from bs4 import BeautifulSoup
@@ -76,9 +77,8 @@ _SLUG_RE = re.compile(r"[^a-z0-9]+")
 
 def _slug(s: str) -> str:
     s = s.lower().strip()
-    # strip accents minimally
-    repl = str.maketrans("áéíóúñü", "aeiounu")
-    s = s.translate(repl)
+    # strip every accent: "Citroën" as citro-n answers 404 (01/11/2026)
+    s = "".join(c for c in unicodedata.normalize("NFKD", s) if not unicodedata.combining(c))
     return _SLUG_RE.sub("-", s).strip("-")
 
 

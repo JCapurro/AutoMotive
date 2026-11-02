@@ -26,7 +26,7 @@ import urllib.parse
 from pathlib import Path
 from typing import Iterable, NamedTuple
 
-from playwright.async_api import async_playwright
+from playwright.async_api import TimeoutError as PlaywrightTimeoutError, async_playwright
 
 from .base import BaseScraper, CollectorBlocked, Listing, ListingDetail, SearchResults
 from ._recency import DateSkip, PublicationWindow, encode_date_skips, parse_date_skips
@@ -58,6 +58,10 @@ log = logging.getLogger("collectors.facebook")
 DATE_FETCH_LIMIT = "facebook: date fetch limit reached"
 # A card telling it was just published (they show no other age).
 _JUST_LISTED = ("just listed", "publicado recientemente")
+# The feed drops cards while a batch is being read: a card gone from the page
+# made Playwright wait 30 s for nth(39) and ended the scan (Chevrolet Prisma,
+# 6 partial runs in a row, 2026-11-01). A read that slow means the batch is stale.
+CARD_READ_MS = 5_000
 
 
 # Common AR cities → FB Marketplace location slugs. Each one checked on the VPS
@@ -849,23 +853,28 @@ class FacebookMarketplaceScraper(BaseScraper):
                     raise RuntimeError(f"facebook search HTTP {response.status}")
                 await _require_session(ctx)
                 await page.wait_for_timeout(3_500)
+                reread = False
                 while True:
                     if "/login" in page.url or "checkpoint" in page.url:
                         raise CollectorBlocked("facebook: session expired")
-                    before = len(seen)
+                    before, stale = len(seen), False
                     # Read each batch before scrolling; older cards may leave the DOM.
                     for a in await page.locator("a[href*='/marketplace/item/']").all():
-                        href = await a.get_attribute("href") or ""
-                        match = re.search(r"/marketplace/item/(\d+)", href)
-                        if not match or match[1] in seen:
-                            continue
+                        try:
+                            href = await a.get_attribute("href", timeout=CARD_READ_MS) or ""
+                            match = re.search(r"/marketplace/item/(\d+)", href)
+                            if not match or match[1] in seen:
+                                continue
+                            text = (await a.inner_text(timeout=CARD_READ_MS)).strip()
+                            label = await a.get_attribute("aria-label", timeout=CARD_READ_MS) or ""
+                            image = a.locator("img").first
+                            img = await image.get_attribute("src", timeout=CARD_READ_MS) if await image.count() else None
+                        except PlaywrightTimeoutError:
+                            stale = True                  # the card left the page: so did the rest of the batch
+                            break
                         seen.add(match[1])
-                        text = (await a.inner_text()).strip()
-                        label = await a.get_attribute("aria-label") or ""
                         if not _matches_query_text(f"{label}\n{text}", filters):
                             continue
-                        image = a.locator("img").first
-                        img = await image.get_attribute("src") if await image.count() else None
                         listing = parse_card(href, text, label, img)
                         if listing is None:
                             continue
@@ -916,6 +925,10 @@ class FacebookMarketplaceScraper(BaseScraper):
                                 out_of_window += 1
                     if results.reason == DATE_FETCH_LIMIT:
                         break
+                    if stale and not reread:
+                        reread = True                     # read the list again once before scrolling
+                        continue
+                    reread = False
                     stalls = stalls + 1 if len(seen) == before else 0
                     if stalls >= 3:
                         body = _plain(await page.locator("body").inner_text())
