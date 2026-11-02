@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   planFeatures,
   accountAlertCap, alertCapsText, bannerCopy, canAcquirePlan, DEFAULT_PLAN_LIMITS, DEFAULT_PRO_OFFER, extendsPass, includesImmediateAlerts,
-  isPlacement, isWaitlistPlan, modelLessText, planLimits, proOffer, searchCapacity, visibleResults,
+  isPlacement, isWaitlistPlan, modelLessText, type PlanLimits, planLimits, proLocked, proOffer, searchCapacity, visibleResults, withoutPro,
 } from "./pro";
 
 const free = (enforced: boolean) => ({ plan: "free" as const, enforced, limits: { max_visible_results: 50 } });
@@ -27,6 +27,31 @@ describe("canAcquirePlan", () => {
   it("doesn't offer acquisition until the account's access is known", () => {
     expect(canAcquirePlan(null)).toBe(false);
     expect(canAcquirePlan({ plan: "pro", enforced: true, limits: {} })).toBe(false);
+  });
+});
+
+describe("proLocked (Juan, 02/11: Pro's settings in view on the other plans)", () => {
+  const access = (plan: PlanLimits["plan"], active = true): PlanLimits => ({ plan, enforced: true, active, limits: {} });
+  const none = { thresholdAlerts: false, margin: false, sellerFilter: false };
+  const off = { opportunity: false, margin: false, seller: false };
+  it("locks Pro's settings for Free, Particular and an expired Pro", () => {
+    for (const a of [access("free"), access("pass"), access("pro", false)]) {
+      expect(withoutPro(a)).toBe(true);
+      expect(proLocked(a, DEFAULT_PLAN_LIMITS.pro, none)).toEqual({ opportunity: true, margin: true, seller: true });
+    }
+  });
+  it("none for a running Pro, even when a flag failed to load, nor without the snapshot", () => {
+    expect(withoutPro(access("pro"))).toBe(false);
+    expect(proLocked(access("pro"), DEFAULT_PLAN_LIMITS.pro, none)).toEqual(off);
+    expect(withoutPro(null)).toBe(false);
+    expect(proLocked(null, DEFAULT_PLAN_LIMITS.pro, none)).toEqual(off);
+  });
+  it("only what Pro includes and the account doesn't have", () => {
+    expect(proLocked(access("pass"), { ...DEFAULT_PLAN_LIMITS.pro, dealerMargin: false, sellerFilter: false }, none))
+      .toEqual({ opportunity: true, margin: false, seller: false });
+    // A feature the plan's config grants shows as usual, not locked.
+    expect(proLocked(access("free"), DEFAULT_PLAN_LIMITS.pro, { thresholdAlerts: true, margin: false, sellerFilter: true }))
+      .toEqual({ opportunity: false, margin: true, seller: false });
   });
 });
 
@@ -73,7 +98,7 @@ describe("planLimits", () => {
       pass: { max_profiles: 3, immediate_alerts_per_day: 10, model_less_search: true },
       pro: { max_profiles: 15, immediate_alerts_per_day: 50, threshold_alerts: true, model_less_search: true },
     })).toEqual({ ...DEFAULT_PLAN_LIMITS,
-      pro: { maxProfiles: 15, maxVisibleResults: null, immediateAlertsPerDay: 50, thresholdAlerts: true, modelLessSearch: true, maxLocations: null } });
+      pro: { maxProfiles: 15, maxVisibleResults: null, immediateAlertsPerDay: 50, thresholdAlerts: true, modelLessSearch: true, sellerFilter: false, dealerMargin: false, maxLocations: null } });
   });
   it("gives a feature only to the plans that say true", () => {
     const limits = planLimits({ pro: { max_profiles: 20, threshold_alerts: true }, pass: { max_profiles: 3, threshold_alerts: "true" } });
@@ -83,6 +108,12 @@ describe("planLimits", () => {
     expect(planLimits({ pass: { max_profiles: 3, model_less_search: true } }).pass.modelLessSearch).toBe(true);
     expect([DEFAULT_PLAN_LIMITS.free, DEFAULT_PLAN_LIMITS.pass, DEFAULT_PLAN_LIMITS.pro].map((p) => p.modelLessSearch))
       .toEqual([false, true, true]);
+    // seller_filter and dealer_margin (PRO-01, PRO-02) too: Pro's by default.
+    const pro0102 = planLimits({ pro: { max_profiles: 20, seller_filter: true, dealer_margin: true }, pass: { max_profiles: 3, seller_filter: "true", dealer_margin: 1 } });
+    expect([pro0102.pro.sellerFilter, pro0102.pro.dealerMargin, pro0102.pass.sellerFilter, pro0102.pass.dealerMargin])
+      .toEqual([true, true, false, false]);
+    expect([DEFAULT_PLAN_LIMITS.free, DEFAULT_PLAN_LIMITS.pass, DEFAULT_PLAN_LIMITS.pro].map((p) => [p.sellerFilter, p.dealerMargin]))
+      .toEqual([[false, false], [false, false], [true, true]]);
   });
   it("reads the legacy boolean as the database does: the global cap or none", () => {
     const legacy = planLimits({
@@ -90,13 +121,13 @@ describe("planLimits", () => {
       pass: { max_profiles: 3, immediate_alerts: true },
       pro: { max_profiles: 10, immediate_alerts: true },
     }, 10);
-    expect(legacy.free).toEqual({ maxProfiles: 1, maxVisibleResults: 50, maxTotalResults: 50, immediateAlertsPerDay: 0, thresholdAlerts: false, modelLessSearch: false, maxLocations: 3 });
-    expect(legacy.pro).toEqual({ maxProfiles: 10, maxVisibleResults: null, immediateAlertsPerDay: 10, thresholdAlerts: false, modelLessSearch: false, maxLocations: null });
+    expect(legacy.free).toEqual({ maxProfiles: 1, maxVisibleResults: 50, maxTotalResults: 50, immediateAlertsPerDay: 0, thresholdAlerts: false, modelLessSearch: false, sellerFilter: false, dealerMargin: false, maxLocations: 3 });
+    expect(legacy.pro).toEqual({ maxProfiles: 10, maxVisibleResults: null, immediateAlertsPerDay: 10, thresholdAlerts: false, modelLessSearch: false, sellerFilter: false, dealerMargin: false, maxLocations: null });
   });
   it("keeps the defaults for a missing config or plan, and rejects junk", () => {
     expect(planLimits(null)).toEqual(DEFAULT_PLAN_LIMITS);
     expect(planLimits({ free: { max_profiles: "1", immediate_alerts_per_day: -2 } }).free)
-      .toEqual({ maxProfiles: 1, maxVisibleResults: null, maxTotalResults: 50, immediateAlertsPerDay: 0, thresholdAlerts: false, modelLessSearch: false, maxLocations: 3 });
+      .toEqual({ maxProfiles: 1, maxVisibleResults: null, maxTotalResults: 50, immediateAlertsPerDay: 0, thresholdAlerts: false, modelLessSearch: false, sellerFilter: false, dealerMargin: false, maxLocations: 3 });
   });
   it("words the per-plan alert caps for the plans page and terms", () => {
     expect(alertCapsText(DEFAULT_PLAN_LIMITS)).toBe(

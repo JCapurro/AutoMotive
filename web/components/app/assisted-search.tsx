@@ -28,6 +28,7 @@ import {
   toggleChoice,
 } from "@/lib/assisted";
 import type { Catalog } from "@/lib/catalog";
+import type { ProLocked } from "@/lib/pro";
 import { filterParts } from "@/lib/search";
 import { type SearchValues, toFilters } from "@/lib/search-form";
 import type { DetectedLocation } from "@/lib/search-location";
@@ -106,6 +107,7 @@ export function AssistedSearch({
   modelLessSearch = false,
   maxLocations = null,
   sellerFilter = false,
+  lockedPro = {},
 }: {
   catalog: Catalog;
   sources: Source[];
@@ -120,6 +122,8 @@ export function AssistedSearch({
   maxLocations?: number | null;
   /** The strict seller filter (Pro, PRO-01): «particular» in the text is the hard filter. */
   sellerFilter?: boolean;
+  /** Juan, 02/11: Pro's settings the plan doesn't include, shown locked in every form below. */
+  lockedPro?: Partial<ProLocked>;
 }) {
   const [text, setText] = useState(initialText);
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
@@ -415,6 +419,7 @@ export function AssistedSearch({
           notes={phase.draft.notes}
           thresholdAlerts={thresholdAlerts}
           sellerFilter={sellerFilter}
+          lockedPro={lockedPro}
           modelLessSearch={modelLessSearch}
           maxLocations={maxLocations}
         />
@@ -527,6 +532,7 @@ export function AssistedSearch({
                   onSaved={(id) => update(i, { state: "saved", savedId: id })}
                   thresholdAlerts={thresholdAlerts}
                   sellerFilter={sellerFilter}
+                  lockedPro={lockedPro}
                   modelLessSearch={modelLessSearch}
                   maxLocations={maxLocations}
                 />
@@ -599,6 +605,7 @@ export function AssistedSearch({
           origin={{ mode: "assisted_fallback", jobId: phase.jobId, stay: false }}
           thresholdAlerts={thresholdAlerts}
           sellerFilter={sellerFilter}
+          lockedPro={lockedPro}
           modelLessSearch={modelLessSearch}
           maxLocations={maxLocations}
         />

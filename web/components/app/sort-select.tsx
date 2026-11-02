@@ -4,14 +4,16 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { trackMarginSort } from "@/app/app/searches/margin-actions";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { PRO_LOCKED } from "@/lib/copy";
 import { type Sort, SORTS, sortsFor } from "@/lib/sorts";
 
 /**
  * §29 "Orden": keeps the filter, drops the page. `options`: the orders the
  * user can pick (PRO-02: «Mayor margen estimado» only for Pro); choosing it
- * records results_sorted_margin for `profileId`.
+ * records results_sorted_margin for `profileId`. `locked`: Pro's orders the
+ * plan doesn't include, in view and disabled (Juan, 02/11).
  */
-export function SortSelect({ value, options = sortsFor(false), profileId }: { value: Sort; options?: Sort[]; profileId?: number }) {
+export function SortSelect({ value, options = sortsFor(false), locked = [], profileId }: { value: Sort; options?: Sort[]; locked?: Sort[]; profileId?: number }) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -31,6 +33,11 @@ export function SortSelect({ value, options = sortsFor(false), profileId }: { va
       {options.map((s) => (
         <NativeSelectOption key={s} value={s}>
           {SORTS[s]}
+        </NativeSelectOption>
+      ))}
+      {locked.filter((s) => !options.includes(s)).map((s) => (
+        <NativeSelectOption key={s} value={s} disabled>
+          {PRO_LOCKED.sort.replace("{sort}", SORTS[s])}
         </NativeSelectOption>
       ))}
     </NativeSelect>

@@ -8,13 +8,15 @@ const state = vi.hoisted(() => ({ used: 50, count: 50, plan: "free" as PlanLimit
 vi.mock("@/lib/cost-estimate-data", () => ({ costLinesFor: async () => new Map() }));
 vi.mock("@/lib/margin-data", () => ({ marginAccess: async () => null, marginLinesFor: async () => new Map(), marginTeasersFor: async () => new Set() }));
 vi.mock("@/lib/auth", () => ({ requireUser: async () => ({ id: "account" }) }));
-vi.mock("@/lib/config", () => ({ webConfig: async () => ({ proOffer: {}, automaticPayments: true, commercialPilot: true }) }));
+vi.mock("@/lib/config", () => ({ webConfig: async () => ({ proOffer: {}, automaticPayments: true, commercialPilot: true, planLimits: { pro: { dealerMargin: true } } }) }));
 vi.mock("@/lib/search-collection-server", () => ({ loadSearchCollection: async () => [] }));
 vi.mock("@/components/app/auto-refresh", () => ({ AutoRefresh: () => null }));
 // The low-results bot imports the searches' server actions, which are server-only.
 vi.mock("@/components/app/low-results-notice", () => ({ LowResultsNotice: () => null }));
 vi.mock("@/components/app/search-actions", () => ({ FrequencySelect: () => null, PauseButton: () => null }));
-vi.mock("@/components/app/sort-select", () => ({ SortSelect: () => null }));
+vi.mock("@/components/app/sort-select", () => ({
+  SortSelect: ({ locked = [] }: { locked?: string[] }) => createElement("span", { "data-locked-sorts": locked.join(",") }),
+}));
 vi.mock("@/components/app/search-criteria-summary", () => ({ SearchCriteriaSummary: () => null }));
 vi.mock("@/components/app/pro-cta", () => ({ ProBanner: () => null, VisibleResultsReport: () => null }));
 vi.mock("@/components/app/free-result-limit", () => ({
@@ -60,4 +62,11 @@ it("waits until 50 distinct publications have been received", async () => {
 it("keeps paid plans unrestricted", async () => {
   state.plan = "pass";
   expect(await render()).not.toContain("data-quota-popup");
+});
+it("shows «Mayor margen estimado» locked without Pro (Juan, 02/11), never to Pro", async () => {
+  expect(await render()).toContain('data-locked-sorts="margin"');
+  state.plan = "pass";
+  expect(await render()).toContain('data-locked-sorts="margin"');
+  state.plan = "pro";
+  expect(await render()).toContain('data-locked-sorts=""');
 });

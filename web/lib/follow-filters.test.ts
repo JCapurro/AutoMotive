@@ -9,7 +9,7 @@ const state = vi.hoisted(() => ({
 }));
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/auth", () => ({ requireUser: async () => ({ id: "account" }) }));
-vi.mock("@/lib/config", () => ({ webConfig: async () => ({ proOffer: {}, automaticPayments: false, commercialPilot: false }) }));
+vi.mock("@/lib/config", () => ({ webConfig: async () => ({ proOffer: {}, automaticPayments: false, commercialPilot: false, planLimits: { pro: { dealerMargin: true } } }) }));
 vi.mock("@/lib/search-collection-server", () => ({ loadSearchCollection: async () => [] }));
 vi.mock("@/components/app/auto-refresh", () => ({ AutoRefresh: () => null }));
 vi.mock("@/components/app/search-actions", () => ({ FrequencySelect: () => null, PauseButton: () => null }));
