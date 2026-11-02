@@ -8,6 +8,11 @@ its crawl lane stops and doesn't start again, and enrichment and the
 watchlist skip its pages, until the pause ends; then one request tries it
 again and pauses it once more if it is still blocked.
 
+An empty answer the source doesn't confirm (FeedUnconfirmed) is only a
+suspicion: a rare model or a page that didn't render looks the same as a
+block. The source is paused after SOURCE_SUSPECT_STREAK of them in a row; a
+good run in between clears the streak (suspect, vouch).
+
 The pause lives in this process (a restart tries again at once).
 """
 from __future__ import annotations
@@ -15,11 +20,12 @@ from __future__ import annotations
 import logging
 import time
 
-from config import SOURCE_BLOCKED_PAUSE_SECONDS
+from config import SOURCE_BLOCKED_PAUSE_SECONDS, SOURCE_SUSPECT_STREAK
 
 log = logging.getLogger("breaker")
 
 _paused: dict[str, float] = {}
+_suspicions: dict[str, int] = {}
 
 
 def pause(source: str, reason: str, *, seconds: float = SOURCE_BLOCKED_PAUSE_SECONDS) -> None:
@@ -39,6 +45,24 @@ def paused(source: str) -> bool:
     return True
 
 
+def suspect(source: str, reason: str, *, streak: int = SOURCE_SUSPECT_STREAK) -> bool:
+    """One more unconfirmed empty answer in a row; pauses the source at
+    `streak` of them. Whether it is paused now."""
+    count = _suspicions[source] = _suspicions.get(source, 0) + 1
+    if count < streak:
+        log.info("source %s suspect %d/%d: %s", source, count, streak, reason)
+        return False
+    _suspicions.pop(source, None)
+    pause(source, f"{reason} ({count} in a row)")
+    return True
+
+
+def vouch(source: str) -> None:
+    """A good run of the source: its suspicions start over."""
+    _suspicions.pop(source, None)
+
+
 def clear() -> None:
     """Tests."""
     _paused.clear()
+    _suspicions.clear()

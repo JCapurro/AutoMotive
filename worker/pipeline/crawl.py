@@ -62,13 +62,14 @@ from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable
 
 from collectors import REGISTRY, Listing
-from collectors.base import PARTIAL_PREFIX, CollectorBlocked
+from collectors.base import PARTIAL_PREFIX, CollectorBlocked, FeedUnconfirmed
 from collectors.facebook import DATE_FETCH_LIMIT as FB_DATE_FETCH_LIMIT
 from collectors._isolated import call as isolated_call, isolated
 from collectors._loop import run_collector
 import config
 from config import COLLECTOR_TIMEOUT_SECONDS
-from collectors._recency import POLICY_VERSION, SOURCES as RECENT_SOURCES, one_request_read, target_window
+from collectors._recency import (POLICY_VERSION, SOURCES as RECENT_SOURCES, PublicationWindow,
+                                 one_request_read, target_window)
 from db.pool import connection
 from db.repos import runs, targets as targets_repo
 from db.repos.config import get_config
@@ -95,6 +96,9 @@ COUNT_ONLY_RETRY_SECONDS = 6 * 3600
 # A Facebook scan that stopped at its item-page cap (facebook.DATE_FETCH_LIMIT)
 # goes on soon: it kept what it read, and the due targets go before it anyway.
 DATE_FETCH_RETRY_SECONDS = 180
+# A long window of these sources gets the stored ads' ID floors
+# (targets_repo.id_floors): the cards below them are older and aren't dated.
+ID_FLOOR_SOURCES = frozenset({"mercadolibre"})
 # A read of a target's whole stock (full_read) gives up after this long. It
 # runs inside the target's claim, in the lease's margin past the search.
 FULL_READ_TIMEOUT_SECONDS = 900
@@ -395,6 +399,9 @@ async def run_target(target: dict[str, Any], on_health: HealthHandler | None = N
         read, covers = news.read_envelope(target, filters), news.read_covers(target, filters)
         if source in RECENT_SOURCES:
             filters["known_publication_dates"] = await targets_repo.publication_dates(target)
+        if (source in ID_FLOOR_SOURCES and (window := PublicationWindow.from_filters(filters))
+                and not one_request_read(source, filters, window)):
+            filters["id_floors"] = await targets_repo.id_floors(source, window.since)
         if _date_memory(target):
             filters["date_skips"] = list(target.get("prefilter_rejected") or ())
         if isolated(scraper):
@@ -409,7 +416,10 @@ async def run_target(target: dict[str, Any], on_health: HealthHandler | None = N
         if isinstance(exc, CollectorBlocked):
             breaker.pause(source, str(exc))
             raise SourceBlocked(source) from exc
+        if isinstance(exc, FeedUnconfirmed) and breaker.suspect(source, str(exc)):
+            raise SourceBlocked(source) from exc
         return None
+    breaker.vouch(source)
     keep, rejected = prefilter(target), set()
     if keep is not None and source not in RECENT_SOURCES:
         def keep(row: dict[str, Any], _keep=keep) -> bool:
