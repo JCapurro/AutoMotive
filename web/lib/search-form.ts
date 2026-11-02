@@ -6,9 +6,9 @@
  */
 import { z } from "zod";
 
-import { BODY_TYPE_CODES, type BodyType, type Level, bodyTypeCodes, bodyTypesText, isBodyType } from "@/lib/copy";
+import { BODY_TYPE_CODES, type BodyType, type Level, SELLER_STRICT, bodyTypeCodes, bodyTypesText, isBodyType } from "@/lib/copy";
 import { money, number } from "@/lib/format";
-import type { Filters, Preferences, SearchProfile } from "@/lib/types";
+import type { Filters, Preferences, SearchProfile, SellerType } from "@/lib/types";
 
 /** Hard ceiling on places added to a search, whatever the plan (the plan's own cap is lower or none). */
 export const MAX_EXTRA_LOCATIONS = 9;
@@ -60,6 +60,9 @@ export const SearchInput = z
     km_target: kilometers,
     price_target: positive,
     seller_type: z.enum(["", "private", "dealer"]).default(""),
+    // PRO-01: seller_type as a hard filter (filters.seller_types), Pro only;
+    // the server action decides what a plan without it keeps (sellerForPlan).
+    seller_strict: z.boolean().default(false),
     notification_frequency: z.enum(["immediate", "daily"]).default("immediate"),
     notify_min_level: z.enum(["high", "good", "match", "low"]).default("good"),
     // Pro (3.2): "avisame solo si está X% o más por debajo de comparables".
@@ -75,6 +78,7 @@ export const SearchInput = z
     message: "El año «desde» no puede ser mayor que el «hasta».",
     path: ["year_max"],
   })
+  .refine((v) => !v.seller_strict || v.seller_type !== "", { message: SELLER_STRICT.required, path: ["seller_type"] })
   // A model, or (plans with model_less_search) no make and no model with body
   // types and a max price. The plan itself is checked by the server and the database.
   .superRefine((v, ctx) => {
@@ -143,6 +147,25 @@ export function defaultName(v: {
     .filter(Boolean).join(" ").trim().slice(0, 80);
 }
 
+/** filters.seller_types as stored: one known type, or none (anything else is no filter, as in the worker). */
+export function storedSellerTypes(f: Pick<Filters, "seller_types"> | null | undefined): SellerType[] {
+  const types = f?.seller_types;
+  return Array.isArray(types) ? types.filter((t): t is SellerType => t === "private" || t === "dealer") : [];
+}
+
+/**
+ * PRO-01, decisión 8: only a plan with seller_filter (Pro) sets the strict
+ * seller filter; any plan clears it. Without the feature a strict value is
+ * kept only when it is the one already stored (`stored`, an edit that didn't
+ * touch it); a new one, or another one, never gets stored: a new search's
+ * type goes as the soft preference, an edit keeps what was stored.
+ */
+export function sellerForPlan(v: SearchValues, sellerFilter: boolean, stored: SellerType[] = []): SearchValues {
+  if (sellerFilter || !v.seller_strict) return v;
+  if (stored.length) return { ...v, seller_type: stored[0], seller_strict: true };
+  return { ...v, seller_strict: false };
+}
+
 /** The hard filters of the form, as `filters` stores them. `allSources`: every enabled source. */
 export function toFilters(v: SearchValues, allSources: string[] = []): Filters {
   const trims = selectedTrims(v);
@@ -167,6 +190,7 @@ export function toFilters(v: SearchValues, allSources: string[] = []): Filters {
     // Extras only count next to a place of its own: without one the search covers the whole country.
     if (v.extra_locations.length) f.extra_locations = v.extra_locations;
   }
+  if (v.seller_strict && v.seller_type) f.seller_types = [v.seller_type];
   return f;
 }
 
@@ -174,7 +198,8 @@ export function toPreferences(v: SearchValues): Preferences {
   const p: Preferences = {};
   if (v.km_target != null) p.km_target = v.km_target;
   if (v.price_target != null) p.price_target = v.price_target;
-  if (v.seller_type) p.seller_type = v.seller_type;
+  // With the strict filter the type lives in filters.seller_types, never twice.
+  if (v.seller_type && !v.seller_strict) p.seller_type = v.seller_type;
   return p;
 }
 
@@ -219,7 +244,9 @@ export function fromProfile(p: SearchProfile, allSources: string[]): SearchValue
     extra_locations: f.extra_locations ?? [],
     km_target: prefs.km_target ?? null,
     price_target: prefs.price_target ?? null,
-    seller_type: prefs.seller_type ?? "",
+    // A downgraded search keeps filters.seller_types: the worker reads it as the preference, the select shows it.
+    seller_type: prefs.seller_type ?? storedSellerTypes(f)[0] ?? "",
+    seller_strict: storedSellerTypes(f).length > 0,
     notification_frequency: p.notification_frequency,
     notify_min_level: p.notify_min_level as Level,
     opportunity_threshold_pct: p.opportunity_threshold_pct ?? null,

@@ -23,6 +23,7 @@ import { accessDate, freeResultQuota, includesImmediateAlerts, type PlanLimits, 
 import { describeVehicle } from "@/lib/search";
 import { collectionPending } from "@/lib/search-collection";
 import { loadSearchCollection } from "@/lib/search-collection-server";
+import { storedSellerTypes } from "@/lib/search-form";
 import { isSort, type Sort } from "@/lib/sorts";
 import { createClient } from "@/lib/supabase/server";
 import type { Filters, Preferences } from "@/lib/types";
@@ -100,6 +101,9 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
   if (!profile) notFound();
 
   const filters = profile.filters as Filters;
+  // PRO-01: only a search with the strict seller filter asks whether the plan applies it.
+  const sellerFilter = storedSellerTypes(filters).length > 0
+    && (await supabase.rpc("my_plan_feature", { p_feature: "seller_filter" })).data === true;
   const collectionSources = await loadSearchCollection(profile, user.id, sources);
   const collecting = collectionPending(collectionSources);
   const needsPreparation = !profile.bootstrapped_at || Boolean(profile.rematch_requested_at) || collecting;
@@ -165,6 +169,7 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
           radiusKm={profile.radius_km}
           hasLocation={profile.origin_lat != null && profile.origin_lon != null}
           sources={collectionSources}
+          sellerFilter={sellerFilter}
         />
       </header>
 

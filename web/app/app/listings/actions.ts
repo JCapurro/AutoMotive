@@ -164,6 +164,26 @@ export async function trackSellerQuestions(listingId: number, action: "generated
   await track(supabase, user.id, `seller_questions_${action}`, { listing_id: listingId });
 }
 
+const ContactMessageEvent = z.object({
+  listingId: z.number().int().positive(),
+  via: z.enum(["clipboard", "mailto"]),
+  custom: z.boolean(),
+});
+
+/**
+ * PRO-01: the ready-to-send message was copied or opened in the user's email
+ * (contact_message_copied). Nothing is sent: Ese Auto has no seller address.
+ */
+export async function trackContactMessage(listingId: number, via: "clipboard" | "mailto", custom: boolean) {
+  const parsed = ContactMessageEvent.safeParse({ listingId, via, custom });
+  if (!parsed.success) return;
+  const user = await requireUser();
+  const supabase = await createClient();
+  await track(supabase, user.id, "contact_message_copied", {
+    listing_id: parsed.data.listingId, via: parsed.data.via, custom_template: parsed.data.custom,
+  });
+}
+
 const RiskChecklistEvent = z.object({ listingId: z.number().int().positive(), action: z.enum(["viewed", "copied"]) });
 
 /**

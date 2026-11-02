@@ -105,6 +105,7 @@ export function AssistedSearch({
   thresholdAlerts = false,
   modelLessSearch = false,
   maxLocations = null,
+  sellerFilter = false,
 }: {
   catalog: Catalog;
   sources: Source[];
@@ -117,6 +118,8 @@ export function AssistedSearch({
   modelLessSearch?: boolean;
   /** Places one search may look in (plan cap); null = no cap. */
   maxLocations?: number | null;
+  /** The strict seller filter (Pro, PRO-01): «particular» in the text is the hard filter. */
+  sellerFilter?: boolean;
 }) {
   const [text, setText] = useState(initialText);
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
@@ -192,7 +195,7 @@ export function AssistedSearch({
       } else {
         const drafts: Reviewed[] = parsed.data.drafts.map((draft, i) => ({
           title: draftTitle(draft, i),
-          ...draftToValues(draft, base, modelLessSearch, maxLocations),
+          ...draftToValues(draft, base, modelLessSearch, maxLocations, sellerFilter),
           state: "pending",
           resolved: draft.resolved,
         }));
@@ -271,7 +274,7 @@ export function AssistedSearch({
       clearTimeout(deadline);
       if (channel) void supabase.removeChannel(channel);
     };
-  }, [waitingJob, supabase, base, limit, modelLessSearch, maxLocations, catalog, approximateLocation]);
+  }, [waitingJob, supabase, base, limit, modelLessSearch, maxLocations, sellerFilter, catalog, approximateLocation]);
 
   // Medición (sección 8.4): what each request ended up showing, once per job and screen.
   const shownKey = phase.kind === "review" || phase.kind === "active" || phase.kind === "choose" || phase.kind === "full"
@@ -411,6 +414,7 @@ export function AssistedSearch({
           approximateLocation={approximateLocation}
           notes={phase.draft.notes}
           thresholdAlerts={thresholdAlerts}
+          sellerFilter={sellerFilter}
           modelLessSearch={modelLessSearch}
           maxLocations={maxLocations}
         />
@@ -522,6 +526,7 @@ export function AssistedSearch({
                   origin={{ mode: "assisted", jobId: phase.jobId, stay: !single }}
                   onSaved={(id) => update(i, { state: "saved", savedId: id })}
                   thresholdAlerts={thresholdAlerts}
+                  sellerFilter={sellerFilter}
                   modelLessSearch={modelLessSearch}
                   maxLocations={maxLocations}
                 />
@@ -593,6 +598,7 @@ export function AssistedSearch({
           approximateLocation={approximateLocation}
           origin={{ mode: "assisted_fallback", jobId: phase.jobId, stay: false }}
           thresholdAlerts={thresholdAlerts}
+          sellerFilter={sellerFilter}
           modelLessSearch={modelLessSearch}
           maxLocations={maxLocations}
         />

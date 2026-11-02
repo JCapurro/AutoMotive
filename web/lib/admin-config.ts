@@ -20,6 +20,8 @@ const plan = z.object({
   threshold_alerts: z.boolean().optional(), model_less_search: z.boolean().optional(),
   max_locations: positiveCount.nullable().optional(),
   total_cost: z.boolean().optional(),
+  // PRO-01: the strict seller filter and the «mensaje listo» block in the opportunity email.
+  seller_filter: z.boolean().optional(), contact_email: z.boolean().optional(),
 }).passthrough();
 export const AdminPlanLimitsInput = z.object({ enforced: z.boolean().optional(), free: plan.optional(), pass: plan.optional(), pro: plan.optional() }).passthrough();
 
@@ -140,7 +142,7 @@ export function configFieldLabel(key: string, path: string): string {
   if (key === "plan_limits") {
     const [tier, field] = path.split(".");
     const planName = ({ free: "Prueba gratis", pass: "Particular", pro: "Pro" } as Record<string, string>)[tier];
-    const fieldName = ({ max_profiles: "búsquedas activas", max_visible_results: "resultados por búsqueda", max_total_results: "resultados acumulados durante la prueba", immediate_alerts_per_day: "avisos inmediatos por día", max_locations: "zonas por búsqueda", threshold_alerts: "umbral de oportunidad", model_less_search: "búsqueda sin modelo", total_cost: "costo total estimado" } as Record<string, string>)[field];
+    const fieldName = ({ max_profiles: "búsquedas activas", max_visible_results: "resultados por búsqueda", max_total_results: "resultados acumulados durante la prueba", immediate_alerts_per_day: "avisos inmediatos por día", max_locations: "zonas por búsqueda", threshold_alerts: "umbral de oportunidad", model_less_search: "búsqueda sin modelo", total_cost: "costo total estimado", seller_filter: "filtro estricto de vendedor", contact_email: "mensaje listo en el email" } as Record<string, string>)[field];
     if (planName) return fieldName ? `${planName}: ${fieldName}` : planName + (field ? `: ${field}` : "");
   }
   if (key === "risk") {

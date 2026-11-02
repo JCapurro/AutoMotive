@@ -22,7 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import type { Catalog } from "@/lib/catalog";
-import { BODY_TYPE, BODY_TYPE_CODES, type BodyType, FREQUENCY, FUEL, MIN_LEVEL_OPTIONS, SELLER, SELLER_FORM_HINT, TRANSMISSION, isBodyType } from "@/lib/copy";
+import { BODY_TYPE, BODY_TYPE_CODES, type BodyType, FREQUENCY, FUEL, MIN_LEVEL_OPTIONS, SELLER, SELLER_FORM_HINT, SELLER_STRICT, TRANSMISSION, isBodyType } from "@/lib/copy";
 import { number } from "@/lib/format";
 import { PROVINCES, citiesInProvince, cityById, cityByLocation } from "@/lib/argentina-locations";
 import {
@@ -88,6 +88,8 @@ type Draft = {
   km_target: string;
   price_target: string;
   seller_type: "" | "private" | "dealer";
+  /** PRO-01: filters.seller_types (Pro); a plan without it only sees it on a downgraded search, to clear it. */
+  seller_strict: boolean;
   notification_frequency: "immediate" | "daily";
   notify_min_level: SearchValues["notify_min_level"];
   opportunity_threshold_pct: string;
@@ -177,6 +179,7 @@ function draftFrom(
     km_target: v.km_target != null ? number(v.km_target) : "",
     price_target: v.price_target != null ? number(v.price_target) : "",
     seller_type: v.seller_type,
+    seller_strict: v.seller_strict && v.seller_type !== "",
     notification_frequency: v.notification_frequency,
     notify_min_level: v.notify_min_level,
     opportunity_threshold_pct: v.opportunity_threshold_pct?.toString() ?? "",
@@ -223,6 +226,7 @@ function toInput(d: Draft, offered: readonly string[]): SearchInput {
     km_target: amount(d.km_target),
     price_target: amount(d.price_target),
     seller_type: d.seller_type,
+    seller_strict: d.seller_strict && d.seller_type !== "",
     notification_frequency: d.notification_frequency,
     notify_min_level: d.notify_min_level,
     opportunity_threshold_pct: percentInput(d.opportunity_threshold_pct),
@@ -244,6 +248,7 @@ export function SearchForm({
   thresholdAlerts = false,
   modelLessSearch = false,
   maxLocations = null,
+  sellerFilter = false,
 }: {
   catalog: Catalog;
   sources: Source[];
@@ -263,6 +268,8 @@ export function SearchForm({
   modelLessSearch?: boolean;
   /** Places one search may look in, its own included (the plan's cap); null = no cap. */
   maxLocations?: number | null;
+  /** The plan has the strict seller filter (Pro, PRO-01). */
+  sellerFilter?: boolean;
 }) {
   const fid = (key: string) => (idPrefix ? `${idPrefix}-${key}` : key);
   const isNew = profileId == null && !initial.location;
@@ -701,21 +708,42 @@ export function SearchForm({
                 ))}
               </NativeSelect>
             </Field>
-            <Field id={fid("seller_type")} label="Vendedor" hint="Preferido">
+            <Field id={fid("seller_type")} label="Vendedor" hint={sellerFilter && d.seller_strict ? "Estricto" : "Preferido"} error={fieldError("seller_type")}>
               <NativeSelect
                 id={fid("seller_type")}
                 value={d.seller_type}
-                onChange={(e) => set("seller_type", e.target.value as Draft["seller_type"])}
+                onChange={(e) => {
+                  const value = e.target.value as Draft["seller_type"];
+                  // Without the plan feature, touching the select clears a strict value it can't set again.
+                  setDraft((prev) => ({ ...prev, seller_type: value, seller_strict: sellerFilter ? prev.seller_strict && value !== "" : false }));
+                }}
                 className="w-full"
               >
                 <NativeSelectOption value="">Cualquiera</NativeSelectOption>
-                <NativeSelectOption value="private">{SELLER.private}</NativeSelectOption>
-                <NativeSelectOption value="dealer">{SELLER.dealer}</NativeSelectOption>
+                <NativeSelectOption value="private">{sellerFilter ? SELLER_STRICT.option.private : SELLER.private}</NativeSelectOption>
+                <NativeSelectOption value="dealer">{sellerFilter ? SELLER_STRICT.option.dealer : SELLER.dealer}</NativeSelectOption>
               </NativeSelect>
-              {d.seller_type === "dealer" ? (
+              {!sellerFilter && d.seller_type === "dealer" ? (
                 <p className="text-[13px] text-muted-foreground" data-testid="seller-type-hint">
                   {SELLER_FORM_HINT}
                 </p>
+              ) : null}
+              {sellerFilter && d.seller_type ? (
+                <label className="flex items-start gap-2 text-sm" data-testid="seller-strict">
+                  <Checkbox className="mt-0.5" checked={d.seller_strict} onCheckedChange={(v) => set("seller_strict", v === true)} />
+                  <span>{SELLER_STRICT.check}</span>
+                </label>
+              ) : null}
+              {sellerFilter && d.seller_strict ? (
+                <p className="text-[13px] text-muted-foreground" data-testid="seller-strict-hint">{SELLER_STRICT.hint}</p>
+              ) : null}
+              {!sellerFilter && d.seller_strict ? (
+                <div className="space-y-1.5" data-testid="seller-strict-pro-only">
+                  <p className="text-[13px] text-muted-foreground">{SELLER_STRICT.proOnly}</p>
+                  <Button type="button" variant="outline" size="sm" onClick={() => set("seller_strict", false)}>
+                    {SELLER_STRICT.remove}
+                  </Button>
+                </div>
               ) : null}
             </Field>
             <Field id={fid("km_max")} label="Kilometraje máximo" error={fieldError("km_max")}>

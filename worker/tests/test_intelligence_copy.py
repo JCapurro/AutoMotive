@@ -46,11 +46,13 @@ def _docstring_nodes(tree: ast.AST) -> set[int]:
 
 
 def _forbidden_terms_node(tree: ast.AST) -> set[int]:
+    """The FORBIDDEN_TERMS list itself and ALLOWED_PHRASES (PRO-01: «vale la pena»)."""
+    skip: set[int] = set()
     for node in ast.walk(tree):
-        if isinstance(node, ast.Assign) and any(getattr(t, "id", None) == "FORBIDDEN_TERMS"
+        if isinstance(node, ast.Assign) and any(getattr(t, "id", None) in ("FORBIDDEN_TERMS", "ALLOWED_PHRASES")
                                                 for t in node.targets):
-            return {id(n) for n in ast.walk(node.value)}
-    return set()
+            skip |= {id(n) for n in ast.walk(node.value)}
+    return skip
 
 
 def string_literals(path: Path) -> list[tuple[int, str]]:

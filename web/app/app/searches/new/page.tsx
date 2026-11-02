@@ -24,7 +24,7 @@ export default async function NewSearchPage({ searchParams }: PageProps<"/app/se
   const approximateLocation = approximateLocationFromHeaders(await headers());
   const prompt = searchIntentPrompt((await searchParams).prompt);
   const supabase = await createClient();
-  const [{ catalog, sources, defaultFrequency, thresholdAlerts, modelLessSearch }, { data: snapshot }, cfg, emailOnly] = await Promise.all([
+  const [{ catalog, sources, defaultFrequency, thresholdAlerts, modelLessSearch, sellerFilter }, { data: snapshot }, cfg, emailOnly] = await Promise.all([
     loadFormData(supabase),
     supabase.rpc("my_plan_snapshot"),
     webConfig(),
@@ -66,6 +66,7 @@ export default async function NewSearchPage({ searchParams }: PageProps<"/app/se
     km_target: null,
     price_target: null,
     seller_type: "",
+    seller_strict: false,
     notification_frequency: defaultFrequency,
     notify_min_level: "good",
     opportunity_threshold_pct: null,
@@ -97,6 +98,7 @@ export default async function NewSearchPage({ searchParams }: PageProps<"/app/se
             thresholdAlerts={thresholdAlerts}
             modelLessSearch={modelLessSearch}
             maxLocations={maxLocations}
+            sellerFilter={sellerFilter}
           />
         </TabsContent>
         <TabsContent value="assisted" forceMount className="pt-3 data-[state=inactive]:hidden">
@@ -110,6 +112,7 @@ export default async function NewSearchPage({ searchParams }: PageProps<"/app/se
             thresholdAlerts={thresholdAlerts}
             modelLessSearch={modelLessSearch}
             maxLocations={maxLocations}
+            sellerFilter={sellerFilter}
           />
         </TabsContent>
       </Tabs>

@@ -143,6 +143,16 @@ insert into public.events(user_id,name,props,created_at) values ('da000000-0000-
 select is((public.admin_decision_metrics('2026-02-01 03:00Z','2026-02-08 03:00Z','2026-02-08 12:00Z')#>>'{current,activeUsers}'), '3', 'a viewed risk checklist is not activity (PAR-02)');
 insert into public.events(user_id,name,props,created_at) values ('da000000-0000-4000-8000-000000000005','risk_checklist_copied','{"listing_id":99001}','2026-02-06 04:00Z');
 select is((public.admin_decision_metrics('2026-02-01 03:00Z','2026-02-08 03:00Z','2026-02-08 12:00Z')#>>'{current,activeUsers}'), '4', 'a copied risk checklist is activity (PAR-02)');
+-- PRO-01: copying the ready-to-send message is an explicit action; seller_filter_set alone
+-- is not counted (it always comes with search_profile_created/updated, which are).
+insert into auth.users (id, email) values ('da000000-0000-4000-8000-000000000007','pro01@metrics.test');
+insert into public.profiles (id,email,created_at,role)
+values ('da000000-0000-4000-8000-000000000007','pro01@metrics.test','2026-02-01 03:00Z','user')
+on conflict (id) do update set created_at = excluded.created_at, role = excluded.role;
+insert into public.events(user_id,name,props,created_at) values ('da000000-0000-4000-8000-000000000007','seller_filter_set','{"profile_id":99001,"seller_types":["private"],"mode":"edit"}','2026-02-06 03:00Z');
+select is((public.admin_decision_metrics('2026-02-01 03:00Z','2026-02-08 03:00Z','2026-02-08 12:00Z')#>>'{current,activeUsers}'), '4', 'seller_filter_set alone is not activity (PRO-01)');
+insert into public.events(user_id,name,props,created_at) values ('da000000-0000-4000-8000-000000000007','contact_message_copied','{"listing_id":99001,"via":"clipboard","custom_template":false}','2026-02-06 04:00Z');
+select is((public.admin_decision_metrics('2026-02-01 03:00Z','2026-02-08 03:00Z','2026-02-08 12:00Z')#>>'{current,activeUsers}'), '5', 'a copied contact message is activity (PRO-01)');
 select is((public.admin_decision_metrics('2026-02-01 03:00Z','2026-02-08 03:00Z','2026-02-08 12:00Z')#>>'{current,firstValueUnobserved}'), '0', 'instrumented synthetic cohort has full coverage');
 update public.admin_metric_observation set first_value_tracking_since='2026-02-03 03:00Z';
 select is((public.admin_decision_metrics('2026-02-01 03:00Z','2026-02-08 03:00Z','2026-02-08 12:00Z')#>>'{current,firstValueUnobserved}'), '1', 'legacy mature search is reported as unobserved, not a failed result');

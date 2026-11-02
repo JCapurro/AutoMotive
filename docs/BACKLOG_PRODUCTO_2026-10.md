@@ -201,6 +201,8 @@ Criterios de aceptación:
 
 ### PRO-01 · Solo particulares, push y mensaje listo
 
+**Estado al 31/10:** filtro estricto y mensaje listo implementados en la rama `claude/pro01-contacto` ([diseño](superpowers/specs/2026-10-31-pro01-contacto-design.md), [plan](superpowers/plans/2026-10-31-pro01-contacto.md)), sin push (requiere F-04) y sin aplicar en producción. Las cuatro preguntas del diseño quedaron con su recomendación, a confirmar por Juan. Antes de desplegar el filtro: `seller_unknown_pct` por fuente.
+
 Dolor: pierde el auto por minutos y encima le llegan avisos de otras agencias.
 
 Qué existe: `preferences.seller_type` es blanda (suma al score). Kavak, Autocity, Car One y Randazzo son siempre dealer; ML, Facebook, V6, deRuedas, RosarioGarage y Usados Santa Fe lo resuelven por señales; Mardel e Instagram quedan null. No se guardan teléfonos ni WhatsApp (los collectors los descartan a propósito) y la política es que Ese Auto no contacta vendedores: el contacto siempre lo hace la agencia desde la publicación original (`/app/listings/[id]/out`). Hoy la ficha tiene «copiar preguntas».
