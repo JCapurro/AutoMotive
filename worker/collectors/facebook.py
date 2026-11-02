@@ -26,9 +26,9 @@ import urllib.parse
 from pathlib import Path
 from typing import Iterable, NamedTuple
 
-from playwright.async_api import TimeoutError as PlaywrightTimeoutError, async_playwright
+from playwright.async_api import async_playwright
 
-from .base import BaseScraper, CollectorBlocked, Listing, ListingDetail, SearchResults
+from .base import BaseScraper, CollectorBlocked, FeedUnconfirmed, Listing, ListingDetail, SearchResults
 from ._recency import DateSkip, PublicationWindow, encode_date_skips, parse_date_skips
 from ._browser import browser_context
 from ._dates import parse_publication_date
@@ -58,10 +58,25 @@ log = logging.getLogger("collectors.facebook")
 DATE_FETCH_LIMIT = "facebook: date fetch limit reached"
 # A card telling it was just published (they show no other age).
 _JUST_LISTED = ("just listed", "publicado recientemente")
-# The feed drops cards while a batch is being read: a card gone from the page
-# made Playwright wait 30 s for nth(39) and ended the scan (Chevrolet Prisma,
-# 6 partial runs in a row, 2026-11-01). A read that slow means the batch is stale.
-CARD_READ_MS = 5_000
+# The cards on the page, read in one call inside it: [href, innerText,
+# aria-label, the first img's src]. Reading them one locator at a time, the
+# feed dropped cards mid-batch and Playwright waited 30 s for nth(39), ending
+# the scan (Chevrolet Prisma, 6 partial runs in a row, 2026-11-01).
+_CARDS_JS = """els => els.map(a => {
+    const img = a.querySelector('img');
+    return [a.getAttribute('href') || '', a.innerText || '', a.getAttribute('aria-label') || '',
+            img ? img.getAttribute('src') : null];
+})"""
+_CARD_SELECTOR = "a[href*='/marketplace/item/']"
+# How an empty search says so, lowercased and without accents (_plain).
+_NO_RESULTS = ("no se encontraron resultados", "no se encontraron publicaciones",
+               "no hay resultados", "no results found", "no listings found")
+
+
+async def _cards(page) -> list[tuple[str, str, str, str | None]]:
+    """The item cards on the page now: (href, text, aria-label, img src)."""
+    rows = await page.locator(_CARD_SELECTOR).evaluate_all(_CARDS_JS)
+    return [(h or "", (t or "").strip(), l or "", i) for h, t, l, i in rows]
 
 
 # Common AR cities → FB Marketplace location slugs. Each one checked on the VPS
@@ -771,28 +786,13 @@ class FacebookMarketplaceScraper(BaseScraper):
                     await page.mouse.wheel(0, 4_000)
                     await page.wait_for_timeout(900)
 
-                anchors = await page.locator("a[href*='/marketplace/item/']").all()
-                for a in anchors:
-                    href = (await a.get_attribute("href")) or ""
+                for href, text, label, img in await _cards(page):
                     m = re.search(r"/marketplace/item/(\d+)", href)
                     if not m or m.group(1) in seen:
                         continue
                     seen.add(m.group(1))
-
-                    text = (await a.inner_text()).strip()
-                    label = await a.get_attribute("aria-label") or ""
                     if not _matches_query_text(f"{label}\n{text}", filters):
                         continue
-
-                    # Try to grab thumbnail from the anchor's img
-                    img = None
-                    try:
-                        img_el = a.locator("img").first
-                        if await img_el.count() > 0:
-                            img = await img_el.get_attribute("src")
-                    except Exception:
-                        pass
-
                     listing = parse_card(href, text, label, img)
                     if listing is None:
                         continue
@@ -853,25 +853,16 @@ class FacebookMarketplaceScraper(BaseScraper):
                     raise RuntimeError(f"facebook search HTTP {response.status}")
                 await _require_session(ctx)
                 await page.wait_for_timeout(3_500)
-                reread = False
+                reloaded = False
                 while True:
                     if "/login" in page.url or "checkpoint" in page.url:
                         raise CollectorBlocked("facebook: session expired")
-                    before, stale = len(seen), False
+                    before = len(seen)
                     # Read each batch before scrolling; older cards may leave the DOM.
-                    for a in await page.locator("a[href*='/marketplace/item/']").all():
-                        try:
-                            href = await a.get_attribute("href", timeout=CARD_READ_MS) or ""
-                            match = re.search(r"/marketplace/item/(\d+)", href)
-                            if not match or match[1] in seen:
-                                continue
-                            text = (await a.inner_text(timeout=CARD_READ_MS)).strip()
-                            label = await a.get_attribute("aria-label", timeout=CARD_READ_MS) or ""
-                            image = a.locator("img").first
-                            img = await image.get_attribute("src", timeout=CARD_READ_MS) if await image.count() else None
-                        except PlaywrightTimeoutError:
-                            stale = True                  # the card left the page: so did the rest of the batch
-                            break
+                    for href, text, label, img in await _cards(page):
+                        match = re.search(r"/marketplace/item/(\d+)", href)
+                        if not match or match[1] in seen:
+                            continue
                         seen.add(match[1])
                         if not _matches_query_text(f"{label}\n{text}", filters):
                             continue
@@ -925,17 +916,24 @@ class FacebookMarketplaceScraper(BaseScraper):
                                 out_of_window += 1
                     if results.reason == DATE_FETCH_LIMIT:
                         break
-                    if stale and not reread:
-                        reread = True                     # read the list again once before scrolling
-                        continue
-                    reread = False
                     stalls = stalls + 1 if len(seen) == before else 0
                     if stalls >= 3:
                         body = _plain(await page.locator("body").inner_text())
-                        if not seen and not any(s in body for s in (
-                                "no se encontraron resultados", "no se encontraron publicaciones",
-                                "no hay resultados", "no results found", "no listings found")):
-                            raise CollectorBlocked("facebook: empty feed without a confirmed no-results message")
+                        if not seen and not any(s in body for s in _NO_RESULTS):
+                            if not reloaded:
+                                # Often a feed that didn't render: one more load before failing.
+                                reloaded, stalls = True, 0
+                                try:
+                                    response = await page.reload(timeout=45_000, wait_until="domcontentloaded")
+                                except Exception as exc:
+                                    raise FeedUnconfirmed(f"facebook: empty feed, then the reload failed: "
+                                                          f"{type(exc).__name__}") from exc
+                                await probe.document(response)     # the first batch's feed dates
+                                if response and response.status >= 400:
+                                    raise FeedUnconfirmed(f"facebook: empty feed, then reload HTTP {response.status}")
+                                await page.wait_for_timeout(3_500)
+                                continue
+                            raise FeedUnconfirmed("facebook: empty feed without a confirmed no-results message")
                         break
                     if scrolls >= config.RECENT_FB_MAX_SCROLLS:
                         results.complete, results.reason = False, "facebook: publication scan scroll limit reached"

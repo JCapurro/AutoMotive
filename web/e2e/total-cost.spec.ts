@@ -8,7 +8,7 @@ import { magicLink } from "./support/mail";
  * PAR-01 (docs/superpowers/specs/2026-10-30-par01-costo-total-design.md): the
  * total cost estimate. With the plan's total_cost flag (Particular; the free
  * plan during the pilot) the listing page shows the header and a closed
- * breakdown that logs total_cost_expanded, and the results card shows the
+ * compact breakdown (Juan 02/11) that logs total_cost_expanded, and the results card shows the
  * same header; Pro sees neither, and nobody sees the old fixed «8–10 %»
  * notice. An ARS listing of 20.000.000 at the dollar 1.300 of its price_usd,
  * a 2017 sedan of a private seller, from a search in «Palermo, CABA»:
@@ -62,12 +62,20 @@ test("Particular: ficha con detalle, tarjeta y total_cost_expanded", async ({ pa
   await test.step("«Ver detalle» abre el desglose y registra total_cost_expanded una vez", async () => {
     await page.getByText("Ver detalle", { exact: true }).click();
     const details = page.getByTestId("cost-estimate-details");
-    await expect(details.getByText("Sellos de CABA", { exact: true })).toBeVisible();
+    // Juan 02/11: a compact summary, sources behind «Ver fuentes».
+    await expect(details.getByText("Transferencia", { exact: true })).toBeVisible();
+    await expect(details.getByText("ARS 808.000 – 818.900", { exact: true })).toBeVisible();
     await expect(details.getByText("Patente anual (valores 2026)", { exact: true })).toBeVisible();
     await expect(details.getByText("ARS 380.900 – 698.700", { exact: true })).toBeVisible();
-    await expect(details.getByText("Patente y sellos de CABA, según tu búsqueda en «Palermo, CABA».", { exact: true })).toBeVisible();
-    await expect(details.getByText("Fuera del total: informe de dominio ARS 4.000 – 4.400, recomendado antes de señar.", { exact: true })).toBeVisible();
-    await expect(details.getByText("Parámetros al 30/10.", { exact: true })).toBeVisible();
+    await expect(details.getByText("Total estimado", { exact: true })).toBeVisible();
+    await expect(details.getByTestId("cost-estimate-footnote")).toHaveText(
+      "Valores oficiales al 30/10 para CABA. No incluye gestoría ni informe de dominio (ARS 4.000 – 4.400).",
+    );
+    await expect(details.getByText("Sellos de CABA", { exact: true })).toHaveCount(0);
+    const sources = details.getByTestId("cost-estimate-sources");
+    await expect(sources).not.toHaveAttribute("open", "");
+    await sources.getByText("Ver fuentes", { exact: true }).click();
+    await expect(sources.getByText(/^Arancel: Res\. MJ 412\/2026/)).toBeVisible();
     await expectNoHorizontalScroll(page);
     await expect.poll(async () => (await expandedEvents(email, ids.private)).length).toBe(1);
     // Closing and opening again does not log it twice.
@@ -99,7 +107,24 @@ test("Particular: ficha con detalle, tarjeta y total_cost_expanded", async ({ pa
     await expect(page.getByTestId("dealer-fees-notice")).toHaveCount(0);
     await expect(page.getByTestId("cost-estimate-headline")).toHaveText(/^Costo total estimado: USD /);
     await page.getByText("Ver detalle", { exact: true }).click();
-    await expect(page.getByText("Vendedor: concesionaria.", { exact: true })).toBeVisible();
+    await expect(page.getByTestId("cost-estimate-details").getByText("Transferencia", { exact: true })).toBeVisible();
+  });
+
+  await test.step("sin localidad en la búsqueda: ni total ni parcial, se dice que falta (Juan 02/11)", async () => {
+    await query(
+      `update public.search_profiles set origin_lat = null, origin_lon = null,
+              filters = filters - 'location_label' - 'extra_locations' where id = $1`,
+      [ids.profileId],
+    );
+    await page.goto(`/app/listings/${ids.private}`);
+    const headline = page.getByTestId("cost-estimate-headline");
+    await expect(headline).toHaveText("Costo total: no sabemos tu localidad. Cargala en la búsqueda para estimarlo");
+    await expect(headline.getByRole("link", { name: "Cargala en la búsqueda" })).toHaveAttribute("href", `/app/searches/${ids.profileId}/edit`);
+    await expect(page.getByTestId("cost-estimate-details")).toHaveCount(0);
+    await page.goto(`/app/searches/${ids.profileId}`);
+    await expect(page.getByTestId("listing-card").first()).toBeVisible();
+    await expect(page.getByTestId("cost-estimate-line")).toHaveCount(0);
+    await expectNoHorizontalScroll(page);
   });
 });
 

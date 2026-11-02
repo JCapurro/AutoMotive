@@ -90,7 +90,13 @@ export function configObject(value: unknown): Record<string, unknown> {
 function shape(value: unknown): string {
   return value === null ? "null" : Array.isArray(value) ? "array" : typeof value;
 }
+/** Keys whose feature was removed: hidden in /admin/config and not editable (X-01 notes, Juan 02/11). */
+export const RETIRED_CONFIG_KEYS: ReadonlySet<string> = new Set(["listing_tracking"]);
+export function visibleConfigRows<T extends { key: string }>(rows: readonly T[]): T[] {
+  return rows.filter((row) => !RETIRED_CONFIG_KEYS.has(row.key));
+}
 export function validateConfigChange(key: string, value: unknown, current: unknown): string | null {
+  if (RETIRED_CONFIG_KEYS.has(key)) return "Esta clave ya no se usa y no se puede editar.";
   if (key === "commercial_pilot") return "Habilitá el piloto desde Cobros para iniciar las pruebas y aplicar límites juntos.";
   if (!z.json().safeParse(value).success) return "El valor debe ser JSON con números finitos.";
   if (value === null) return "El valor no puede ser null.";

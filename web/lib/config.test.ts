@@ -24,22 +24,11 @@ beforeEach(() => {
 });
 
 // webConfig is wrapped in React's cache(), a no-op outside a request: each call reads again.
-it("defaults the note limit to 500 while app_config.listing_tracking is missing (X-01)", async () => {
-  const cfg = await webConfig();
-  expect(mock.keys).toContain("listing_tracking");
-  expect(cfg.listingTracking).toEqual({ noteMaxChars: 500 });
-});
-
-it("reads app_config.listing_tracking.note_max_chars", async () => {
+it("no longer reads app_config.listing_tracking: the note is gone (Juan 02/11)", async () => {
   mock.rows = [{ key: "listing_tracking", value: { note_max_chars: 300 } }];
-  expect((await webConfig()).listingTracking).toEqual({ noteMaxChars: 300 });
-});
-
-it("falls back to 500 on a malformed or non-positive limit", async () => {
-  for (const value of [{ note_max_chars: "x" }, { note_max_chars: 0 }, { note_max_chars: -1 }, "500"]) {
-    mock.rows = [{ key: "listing_tracking", value }];
-    expect((await webConfig()).listingTracking).toEqual({ noteMaxChars: 500 });
-  }
+  const cfg = await webConfig();
+  expect(mock.keys).not.toContain("listing_tracking");
+  expect(cfg).not.toHaveProperty("listingTracking");
 });
 
 // PAR-01: the cost estimator's parameters, parsed tolerantly.

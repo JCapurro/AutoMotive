@@ -2,13 +2,13 @@ import { createElement, type ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, it, vi } from "vitest";
 
-vi.mock("@/app/app/listings/actions", () => ({ setStatus: vi.fn(), setSaved: vi.fn(), recordPurchase: vi.fn(), setNote: vi.fn() }));
+vi.mock("@/app/app/listings/actions", () => ({ setStatus: vi.fn(), setSaved: vi.fn(), recordPurchase: vi.fn() }));
 
 import { ListingTracking } from "@/components/app/listing-tracking";
 import { selectableStatuses } from "@/lib/listing-tracking";
 
 type Props = ComponentProps<typeof ListingTracking>;
-const base: Props = { listingId: 7, status: "contacted", note: null, noteMaxChars: 500, profileId: 3 };
+const base: Props = { listingId: 7, status: "contacted", profileId: 3 };
 const html = (props: Partial<Props> = {}) => renderToStaticMarkup(createElement(ListingTracking, { ...base, ...props }));
 const select = (markup: string) => markup.match(/<select[^>]*>[\s\S]*?<\/select>/)?.[0] ?? "";
 
@@ -29,25 +29,12 @@ it("locks a purchased listing and says why", () => {
   expect(select(html())).not.toMatch(/<select[^>]*disabled=""/);
 });
 
-it("asks for a private note, capped at the configured length", () => {
-  const markup = html({ noteMaxChars: 300 });
-  const textarea = markup.match(/<textarea[^>]*>/)?.[0] ?? "";
-  const id = markup.match(/<label[^>]*for="([^"]+)"[^>]*>Tu nota<\/label>/)?.[1];
-  expect(textarea).toContain(`id="${id}"`);
-  expect(textarea).toContain('placeholder="Qué hablaste, cuándo es la visita, qué falta revisar"');
-  // No native maxLength: it counts UTF-16 units, the counter and the server count characters.
-  expect(textarea).not.toMatch(/maxlength/i);
-  expect(markup).toContain("0/300");
-  expect(markup).toMatch(/<button[^>]*>Guardar nota<\/button>/);
-  expect(markup).toContain("La nota es privada: no se la mostramos al vendedor ni a otros usuarios.");
-  expect(markup).not.toMatch(/solo la ves vos/i);
-});
-
-it("shows a saved note as text, line breaks kept and markup escaped", () => {
-  const markup = html({ note: "Llamé el martes\n<script>alert(1)</script>" });
-  const shown = markup.match(/<p[^>]*data-testid="listing-note"[^>]*>([\s\S]*?)<\/p>/);
-  expect(shown?.[0]).toContain("whitespace-pre-line");
-  expect(shown?.[1]).toBe("Llamé el martes\n&lt;script&gt;alert(1)&lt;/script&gt;");
-  expect(markup).not.toContain("<script>");
-  expect(markup).toMatch(/<button[^>]*>Editar nota<\/button>/);
+it("has no private note: no textarea, no «Tu nota», nothing to save (Juan 02/11)", () => {
+  const markup = html();
+  expect(markup).not.toMatch(/<textarea/i);
+  expect(markup).not.toMatch(/nota/i);
+  expect(markup).not.toContain("listing-note");
+  expect(markup).not.toMatch(/<button[^>]*>Guardar/);
+  // A note left in the row by older versions is never passed in nor drawn.
+  expect(html({ note: "vieja" } as Partial<Props>)).not.toContain("vieja");
 });

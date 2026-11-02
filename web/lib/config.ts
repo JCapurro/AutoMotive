@@ -3,7 +3,6 @@ import "server-only";
 import { cache } from "react";
 
 import { type CostConfig, parseCostEstimator } from "@/lib/cost-estimator";
-import { listingTrackingConfig } from "@/lib/listing-tracking";
 import { type PlanLimitsConfig, planLimits, type ProOffer, proOffer } from "@/lib/pro";
 import { type RiskConfig, riskConfig } from "@/lib/risk-checklist";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -25,8 +24,6 @@ export type WebConfig = {
   automaticPayments: boolean;
   /** app_config.email_only_signup: the free search's email-only accounts and their brakes. */
   emailOnlySignup: EmailOnlySignup;
-  /** app_config.listing_tracking (X-01): the private note's length limit. */
-  listingTracking: { noteMaxChars: number };
   /** app_config.risk (PAR-02): the «Antes de señar» checklist switch and its official links (none until Juan loads them). */
   risk: RiskConfig;
   /** app_config.cost_estimator (PAR-01), parsed tolerantly: null without the row or its root as_of; an invalid block is null. */
@@ -66,7 +63,7 @@ export const webConfig = cache(async (): Promise<WebConfig> => {
   const { data } = await createAdminClient()
     .from("app_config")
     .select("key, value")
-    .in("key", ["comparables", "watchlist_stale_days", "pro_offer", "commercial_pilot", "plan_limits", "alerts_max_per_user_day", "email_only_signup", "listing_tracking", "risk", "cost_estimator"]);
+    .in("key", ["comparables", "watchlist_stale_days", "pro_offer", "commercial_pilot", "plan_limits", "alerts_max_per_user_day", "email_only_signup", "risk", "cost_estimator"]);
   const values = Object.fromEntries((data ?? []).map((row) => [row.key, row.value]));
   const comparables = (values.comparables ?? {}) as { min_n?: number; year_tol?: number; km_tol_pct?: number; max_age_days?: number };
   return {
@@ -82,7 +79,6 @@ export const webConfig = cache(async (): Promise<WebConfig> => {
     commercialPilot: (values.commercial_pilot as { enabled?: boolean } | undefined)?.enabled === true,
     automaticPayments: paymentsEnabled() && (values.commercial_pilot as { enabled?: boolean } | undefined)?.enabled === true,
     emailOnlySignup: emailOnlySignup(values.email_only_signup),
-    listingTracking: listingTrackingConfig(values.listing_tracking),
     risk: riskConfig(values.risk),
     costEstimator: parseCostEstimator(values.cost_estimator),
   };

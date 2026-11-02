@@ -96,6 +96,8 @@ export type CostView = {
   from: "search" | "profile";
   sellerKind: SellerKind;
   cfg: CostConfig;
+  /** The search the zones came from: the no-locality line links to its edit form. */
+  searchProfileId: number | null;
 };
 
 function sellerKind(row: CostRow, seller: string | null): SellerKind {
@@ -135,14 +137,17 @@ export async function costEstimateFor(
   const fx = listing.currency === "USD" ? await latestFx() : null;
   const out = estimateRow(listing, zones, fx, cfg, todayAr());
   if (!out) return null;
-  return { estimate: out.estimate, line: costLine(out.estimate), zones, from, sellerKind: sellerKind(listing, out.seller), cfg };
+  return {
+    estimate: out.estimate, line: costLine(out.estimate), zones, from, sellerKind: sellerKind(listing, out.seller), cfg,
+    searchProfileId: from === "search" ? searchProfileId : null,
+  };
 }
 
 export type CostCard = { listing_id: number | null; search_profile_id?: number | null };
 
 /**
  * The cards of a page: one line per listing, the header of the listing
- * page. One listings query for the page, one for the distinct searches, the
+ * page, except without the buyer's locality (no line). One listings query for the page, one for the distinct searches, the
  * account's default place only if a card has no search, and the quote only
  * for USD listings. Without the flag, nothing past the flag check.
  */
@@ -170,7 +175,9 @@ export async function costLinesFor(supabase: Supabase, userId: string, cards: Co
     if (!row || lines.has(card.listing_id!)) continue;
     const zones = card.search_profile_id != null ? (zonesBySearch.get(card.search_profile_id) ?? []) : zonesOfProfile(origin);
     const out = estimateRow(row, zones, fx, cfg, today);
-    if (out) lines.set(card.listing_id!, costLine(out.estimate));
+    // Without the buyer's locality, no line on the card (Juan 02/11): never a
+    // partial total, and the listing page already says what is missing.
+    if (out && !out.estimate.missing.some((m) => m.code === "zone")) lines.set(card.listing_id!, costLine(out.estimate));
   }
   return lines;
 }

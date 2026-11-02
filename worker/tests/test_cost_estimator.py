@@ -204,6 +204,12 @@ class FormatTests(unittest.TestCase):
                          "Costo total estimado (sin patente): ARS 21.188.000 – 21.518.000 (sin dólar del día)")
         self.assertEqual(ce.headline(None, None, ["fx"]), "Costo total estimado: sin dólar del día, no se puede estimar")
 
+    def test_headline_without_the_buyers_locality(self):
+        # Juan 02/11: no total, not even a partial one, when we don't know where the buyer is.
+        self.assertEqual(ce.headline(None, None, ["zone"]), "Costo total: no sabemos tu localidad. Cargala en la búsqueda para estimarlo")
+        self.assertEqual(ce.headline({"min": 20208000, "max": 20219000}, {"min": 15540, "max": 15560}, ["zone"]),
+                         "Costo total: no sabemos tu localidad. Cargala en la búsqueda para estimarlo")
+
     def test_day_month(self):
         self.assertEqual(ce.day_month("2026-10-30"), "30/10")
         self.assertEqual(ce.day_month("2026-01-05"), "05/01")
@@ -229,12 +235,22 @@ class CopyLintTests(unittest.TestCase):
 
     def test_always_estimated(self):
         for case in GOLDEN["cases"]:
-            if case["expect"]:
+            if case["expect"] and case["expect"]["line"] != copy.TOTAL_COST["line_no_zone"]:
                 self.assertIn("estimado", case["expect"]["line"])
+
+    def test_no_amount_without_the_buyers_locality(self):
+        no_zone = [c for c in GOLDEN["cases"] if c["expect"] and c["input"]["jurisdiction"] in (None, [])]
+        self.assertGreaterEqual(len(no_zone), 3)
+        for case in no_zone:
+            with self.subTest(case["name"]):
+                self.assertEqual(case["expect"]["line"], copy.TOTAL_COST["line_no_zone"])
+                self.assertNotRegex(case["expect"]["line"], r"\d")
+                self.assertIsNone(case["expect"]["total_ars"])
+                self.assertEqual(case["expect"]["terms"], [])
 
     def test_the_same_header_as_the_web(self):
         web = (Path(__file__).resolve().parents[2] / "web" / "lib" / "copy.ts").read_text(encoding="utf-8")
-        for py, ts in (("line", "line"), ("line_no_usd", "lineNoUsd"), ("line_no_fx", "lineNoFx"),
+        for py, ts in (("line", "line"), ("line_no_usd", "lineNoUsd"), ("line_no_fx", "lineNoFx"), ("line_no_zone", "lineNoZone"),
                        ("suffix", "suffix"), ("last", "last")):
             with self.subTest(py):
                 self.assertIn(f"  {ts}: {json.dumps(copy.TOTAL_COST[py], ensure_ascii=False)},", web)
