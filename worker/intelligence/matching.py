@@ -326,6 +326,14 @@ def _seller(listing, profile) -> Reason | None:
     return Reason(FAIL, copy.REASON["seller_only_other"].format(kind=kind, wanted=names))
 
 
+def strict_seller_unknown(match_reasons: Any) -> bool:
+    """PRO-01, option C: the strict seller filter ran and didn't know the
+    seller (matches.match_reasons.seller unknown and hard). The same rule as
+    match_cards.seller_unknown; the opportunity email says copy.SELLER_UNKNOWN."""
+    seller = match_reasons.get("seller") if isinstance(match_reasons, Mapping) else None
+    return isinstance(seller, Mapping) and seller.get("result") == UNKNOWN and seller.get("kind") == "hard"
+
+
 def trim_matches(trim: str | None, wanted: str) -> bool:
     """"1.6 Titanium" is a Titanium: every word of the wanted trim is in it."""
     have = set(normalize_text(trim).replace("!", "").split())

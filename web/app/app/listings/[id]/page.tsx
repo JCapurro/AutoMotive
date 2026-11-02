@@ -36,7 +36,7 @@ import { ageLine, daysSince, imageUrls, km, money, number, pct, vehicle } from "
 import { fetchPriceTracks, summaryLine, trackingNote } from "@/lib/price-track";
 import { financingOffered, financingTerms, isCashPrice, publishedIsPartial, publishedKind } from "@/lib/price";
 import { emphasize, RISK_HINT, RISK_TITLE } from "@/lib/risk-checklist";
-import { sellerLabel } from "@/lib/seller";
+import { sellerFact } from "@/lib/seller";
 import { contactSubject, renderContactMessage } from "@/lib/contact-message";
 import { createClient } from "@/lib/supabase/server";
 import type { Component, Listing, PriceRef, Reason, RedFlag } from "@/lib/types";
@@ -212,7 +212,8 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
         <Fact label="Caja">{listing.transmission ? TRANSMISSION[listing.transmission] : "No informada"}</Fact>
         <Fact label="Combustible">{listing.fuel ? (FUEL[listing.fuel] ?? listing.fuel) : "No informado"}</Fact>
         <Fact label="Vendedor">
-          {[sellerLabel(listing), listing.seller_name].filter(Boolean).join(", ") || "No informado"}
+          {/* PRO-01, option C: «vendedor sin dato» when the best match's strict filter didn't know it. */}
+          <span data-testid="seller-fact">{sellerFact(listing, reasons)}</span>
         </Fact>
         <Fact label="Ubicación">
           {reasons.location?.result === "ok" ? reasons.location.detail : (listing.location_text ?? "No informada")}

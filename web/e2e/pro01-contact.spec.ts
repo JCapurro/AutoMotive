@@ -186,6 +186,8 @@ test("mensaje listo: ficha, copiar, correo sin destinatario y plantilla en Ajust
     expect(href).not.toContain("+");
     await expect(block.getByRole("link", { name: "Mandalo desde la publicación" })).toHaveAttribute("href", `/app/listings/${listingId}/out`);
     await expectNoHorizontalScroll(page);
+    // Respuestas de Juan 02/11, 1: he wants to see it.
+    await block.screenshot({ path: testInfo.outputPath("pro01-ficha-mensaje-listo.png") });
   });
 
   await test.step("Ajustes rechaza un término prohibido y un teléfono, y guarda una plantilla", async () => {
@@ -204,6 +206,7 @@ test("mensaje listo: ficha, copiar, correo sin destinatario y plantilla en Ajust
     await expectNoHorizontalScroll(page);
     await save.click();
     await expect(page.getByText("Mensaje guardado.")).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath("pro01-ajustes-plantilla.png"), fullPage: true });
     const [row] = await query<{ contact_template: string | null }>(`select contact_template from public.profiles where email = $1`, [email]);
     expect(row.contact_template).toBe("Buenas, me interesa tu {auto}.\n{preguntas}");
   });
@@ -238,4 +241,79 @@ test("mensaje listo: una copia que falla no se registra como copiada", async ({ 
   await expect(page.getByText("No pudimos copiar", { exact: false })).toBeVisible();
   await page.waitForTimeout(2_500);
   expect(await copiedEvents(email)).toEqual([]);
+});
+
+/**
+ * Respuestas de Juan 02/11, 4 (opción C): under «Solo particulares» a listing
+ * without a known seller passes and the card and the listing page say
+ * «vendedor sin dato»; the same listing under a search without the strict
+ * filter says nothing new. The match rows are what the worker writes
+ * (match_reasons.seller unknown and hard under the strict filter, no seller
+ * reason without it).
+ */
+async function seedUnknownSeller(email: string, run: string) {
+  const externalId = `${E2E_LISTING_PREFIX}pro01-unknown-${run}`;
+  const [listing] = await query<{ id: number }>(
+    `insert into public.listings (source, external_id, url, title, make, model, trim, year, price, currency, price_usd,
+                                  mileage_km, seller_type, published_at, first_seen_at, last_seen_at, fingerprint, status)
+     values ('mercadolibre', $1, $2, 'FORD FIESTA 2017', 'Ford', 'Fiesta', 'Titanium', 2017, 10300, 'USD',
+             10300, 112000, null, now() - interval '1 day', now() - interval '1 day', now(), $1, 'active')
+     returning id`,
+    [externalId, `https://example.test/${externalId}`],
+  );
+  const searches = await query<{ id: number; name: string }>(
+    `insert into public.search_profiles (user_id, name, filters, bootstrapped_at, radius_km)
+     select p.id, v.name, v.filters::jsonb, now(), v.radius from public.profiles p,
+       (values ('Solo particulares', '{"make": "Ford", "model": "Fiesta", "seller_types": ["private"]}', 1),
+               ('Cualquier vendedor', '{"make": "Ford", "model": "Fiesta"}', 2)) as v (name, filters, radius)
+      where p.email = $1
+     returning id, name`,
+    [email],
+  );
+  const strict = searches.find((s) => s.name === "Solo particulares")!.id;
+  const plain = searches.find((s) => s.name === "Cualquier vendedor")!.id;
+  await query(
+    `insert into public.matches (search_profile_id, listing_id, score, level, score_breakdown, match_reasons, red_flags, scoring_version)
+     values ($1, $3, 72, 'good', '{}', '{"seller": {"result": "unknown", "detail": "la publicación no lo informa", "kind": "hard"}}', '[]', 'e2e'),
+            ($2, $3, 70, 'good', '{}', '{}', '[]', 'e2e')`,
+    [strict, plain, listing.id],
+  );
+  return { listingId: Number(listing.id), strict: Number(strict), plain: Number(plain) };
+}
+
+test("solo particulares: un vendedor sin dato pasa y se rotula «vendedor sin dato»", async ({ page }, testInfo) => {
+  const run = `${testInfo.project.name}-${Date.now()}`;
+  const email = `pro01-unknown-${run}@${E2E_EMAIL_DOMAIN}`;
+  await signIn(page, email);
+  await setPlan(email, "pro");
+  const { listingId, strict, plain } = await seedUnknownSeller(email, run);
+
+  await test.step("la tarjeta de la búsqueda estricta lo dice", async () => {
+    await page.goto(`/app/searches/${strict}`);
+    const card = page.getByTestId("listing-card");
+    await expect(card).toHaveCount(1);
+    await expect(card.getByTestId("card-seller-unknown")).toHaveText("vendedor sin dato");
+    await expectNoHorizontalScroll(page);
+    await card.screenshot({ path: testInfo.outputPath("pro01-card-vendedor-sin-dato.png") });
+  });
+
+  await test.step("la búsqueda sin filtro estricto no cambia", async () => {
+    await page.goto(`/app/searches/${plain}`);
+    await expect(page.getByTestId("listing-card")).toHaveCount(1);
+    await expect(page.getByTestId("card-seller-unknown")).toHaveCount(0);
+    await expect(page.getByText("vendedor sin dato")).toHaveCount(0);
+  });
+
+  await test.step("la ficha (mejor coincidencia: la estricta) lo dice en «Vendedor»", async () => {
+    await page.goto(`/app/listings/${listingId}`);
+    await expect(page.getByTestId("seller-fact")).toHaveText("vendedor sin dato");
+    await expectNoHorizontalScroll(page);
+    await page.screenshot({ path: testInfo.outputPath("pro01-ficha-vendedor-sin-dato.png"), fullPage: true });
+  });
+
+  await test.step("sin la coincidencia estricta, la ficha dice lo de siempre", async () => {
+    await query(`delete from public.matches where search_profile_id = $1`, [strict]);
+    await page.goto(`/app/listings/${listingId}`);
+    await expect(page.getByTestId("seller-fact")).toHaveText("No informado");
+  });
 });

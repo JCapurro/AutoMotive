@@ -9,6 +9,7 @@ import { webConfig } from "@/lib/config";
 import { costLinesFor } from "@/lib/cost-estimate-data";
 import { FOLLOW_EMPTY, FOLLOW_FILTERS, FOLLOW_LABEL, type FollowFilter, type InteractionStatus, type Level } from "@/lib/copy";
 import { daysSince, dayMonth, money, pct } from "@/lib/format";
+import { strictSellerUnknown } from "@/lib/seller";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
 
@@ -105,7 +106,7 @@ export default async function SavedPage({ searchParams }: PageProps<"/app/saved"
       .order("observed_at"),
     supabase
       .from("matches")
-      .select("listing_id, search_profile_id, score, level, search_profiles(name)")
+      .select("listing_id, search_profile_id, score, level, match_reasons, search_profiles(name)")
       .in("listing_id", ids)
       .order("score", { ascending: false }),
   ]);
@@ -113,10 +114,14 @@ export default async function SavedPage({ searchParams }: PageProps<"/app/saved"
   const byId = new Map((listings ?? []).map((l) => [l.id, l]));
   const history = new Map<number, Snapshot[]>();
   for (const s of snapshots ?? []) history.set(s.listing_id, [...(history.get(s.listing_id) ?? []), s]);
-  const bestMatch = new Map<number, { score: number; level: Level; profile: string | null; profileId: number }>();
+  const bestMatch = new Map<number, { score: number; level: Level; profile: string | null; profileId: number; sellerUnknown: boolean }>();
   for (const m of matches ?? []) {
     if (!bestMatch.has(m.listing_id)) {
-      bestMatch.set(m.listing_id, { score: m.score, level: m.level, profile: m.search_profiles?.name ?? null, profileId: m.search_profile_id });
+      bestMatch.set(m.listing_id, {
+        score: m.score, level: m.level, profile: m.search_profiles?.name ?? null, profileId: m.search_profile_id,
+        // PRO-01, option C: the best match's strict seller filter didn't know the seller.
+        sellerUnknown: strictSellerUnknown(m.match_reasons),
+      });
     }
   }
   // PAR-01: the best match's search, or the account's default place for a listing without one.
@@ -148,6 +153,7 @@ export default async function SavedPage({ searchParams }: PageProps<"/app/saved"
                 saved: i.saved,
                 profile_name: m?.profile ?? null,
                 note: i.note,
+                seller_unknown: m?.sellerUnknown ?? false,
               }}
               costLine={costLines.get(l.id)}
               footer={

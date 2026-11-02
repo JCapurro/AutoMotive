@@ -116,6 +116,12 @@ export const TRANSMISSION: Record<string, string> = { manual: "Manual", automati
 export const SELLER: Record<string, string> = { private: "Particular", dealer: "Concesionaria" };
 /** F-02: listings.dealer_inferred, a seller with many cars in the same source (lib/seller.ts). */
 export const SELLER_INFERRED = "Posible agencia";
+/**
+ * PRO-01, option C (Juan, 02/11): the strict seller filter let a listing whose
+ * seller is unknown through (lib/seller.ts strictSellerUnknown). The card, the
+ * listing page and the opportunity email (worker copy.SELLER_UNKNOWN).
+ */
+export const SELLER_UNKNOWN = "vendedor sin dato";
 /** F-02: under the search form's «Vendedor» when it prefers a dealer. */
 export const SELLER_FORM_HINT = "Incluye posibles agencias.";
 /**

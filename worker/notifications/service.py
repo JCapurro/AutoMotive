@@ -22,6 +22,7 @@ from db.repos import notifications as repo
 from intelligence import cost_estimator
 from intelligence.config import DEFAULT_COMPARABLES
 from intelligence import contact_message
+from intelligence.matching import strict_seller_unknown
 from intelligence.seller_questions import question_texts
 from notifications import dispatch
 from notifications.channels.base import Channel
@@ -236,13 +237,15 @@ class Notifier:
             contact = (contact_message.render(a.get("contact_template"), listing.get("catalog_model"),
                                               listing.get("year"), questions)
                        if _opportunity(c) and a.get("contact_email") else None)
+            # PRO-01, option C: «vendedor sin dato» in the opportunity email.
+            seller_unknown = True if _opportunity(c) and strict_seller_unknown(ev.get("match_reasons")) else None
             events.append(Event(
                 MATCH, c.listing_id, self._audience(a), level=ev["level"], score=ev["score"],
                 match_id=c.match_id, repost=c.repost, saved=bool(state.get("saved")),
                 status=state.get("status"),
                 payload=payload(listing, ev, min_n=min_n, profile_name=a["profile_name"],
                                 questions=questions or None, price_track=track, total_cost=cost,
-                                contact_message=contact)))
+                                contact_message=contact, seller_unknown=seller_unknown)))
         return await self._commit(events, now=now)
 
     async def on_listing_events(self, listing_events: Iterable[Any], *, now: datetime | None = None,

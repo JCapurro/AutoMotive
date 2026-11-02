@@ -395,6 +395,11 @@ def email(n: Notification, links: Links, now: datetime) -> EmailMessage:
         c.subject += " · Ese Auto"
     app_url = f"{links.base_url.rstrip('/')}/app" if links.tracked else None
 
+    if n.kind == "opportunity" and n.payload.get("seller_unknown") is True:
+        # PRO-01, option C: after the km and the price, email only.
+        listing = n.payload.get("listing") or {}
+        c.lines.insert(len([x for x in (km(listing), price(listing)) if x]), copy.SELLER_UNKNOWN)
+
     text = [c.header]
     if c.vehicle:
         text.append(c.vehicle)

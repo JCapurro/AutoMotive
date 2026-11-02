@@ -82,6 +82,9 @@ SELLER = {"private": "particular", "dealer": "concesionaria"}
 SELLER_INFERRED = "posible agencia"
 # PRO-01: what a strict seller filter keeps («se busca solo particulares»).
 SELLER_ONLY = {"private": "particulares", "dealer": "agencias"}
+# PRO-01, option C (Juan, 02/11): the strict seller filter let a listing whose
+# seller is unknown through. The card, the listing page and the opportunity email.
+SELLER_UNKNOWN = "vendedor sin dato"
 UNKNOWN_BADGE = "❔ no informado"
 
 # ---------------------------------------------------------------------------
