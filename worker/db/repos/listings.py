@@ -245,6 +245,30 @@ async def mark_gone(cx: AsyncConnection, listing_id: int) -> bool:
     return cur.rowcount > 0
 
 
+NOT_VEHICLE_REASON = "no es un auto"
+
+
+async def mark_not_vehicle(cx: AsyncConnection, marks: list[tuple[int, str]]) -> int:
+    """Listings that turned out to be a part or an accessory
+    (normalization/not_vehicle.py), as (id, reason): ended without an event
+    (status 'gone'), their price out of every comparable and market stat
+    (price_partial, as a down payment's), attributes._not_vehicle saying why,
+    and their matches deleted (notifications keep theirs, match_id null), so
+    no search shows them again. Returns how many matches went."""
+    if not marks:
+        return 0
+    async with cx.cursor() as cur:
+        await cur.executemany(
+            "UPDATE listings SET status = 'gone', price_partial = true, "
+            "       price_partial_reason = %s || ': ' || %s, "
+            "       attributes = attributes || jsonb_build_object('_not_vehicle', "
+            "                    jsonb_build_object('reason', %s::text, 'at', now())) "
+            " WHERE id = %s",
+            [(NOT_VEHICLE_REASON, reason, reason, lid) for lid, reason in marks])
+    cur = await cx.execute("DELETE FROM matches WHERE listing_id = ANY(%s)", ([lid for lid, _ in marks],))
+    return cur.rowcount
+
+
 async def stored_description(listing_id: int) -> dict[str, Any] | None:
     """The description and its facts as stored, to reuse the LLM's reading of the same text."""
     async with connection() as cx:

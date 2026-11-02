@@ -1,0 +1,131 @@
+"""Listings that are not a car: parts, accessories, a car taken apart.
+
+Facebook Marketplace searches ("peugeot 206") bring back whatever mentions
+the model, and in AR that is mostly parts: «Cremallera Peugeot 206-207-307»,
+«Butacas Ford Ecosport», «Desarme de Chevrolet prisma 2017». Ingested as
+cars they matched searches and, priced in pesos but read as dollars
+(normalization/money.facebook_currency), skewed the comparables.
+
+The rule is conservative on purpose: letting a part through costs one bad
+row, while hiding a real car costs a user an opportunity. A listing is a
+part only when
+
+* its title *starts* with a part's name («Paragolpe trasero de Ford
+  Ecosport», «Kit Embrague Valeo», «Vendo frente de Chevrolet prisma»): car
+  titles start with the year, the make or a word like «Oportunidad», never
+  with «Faro» or «Puerta»; or the title says «desarme», «autopartes» or
+  «repuestos de/para» anywhere;
+* and nothing says it is a whole car: the source's own mileage together with
+  a year (Facebook only shows «Conducido 112.000 km» on vehicles), a title
+  that starts with the year (Facebook's own vehicle titles: «2017 Ford ka
+  se»), a mileage in the title, or words only a car's seller uses («vendo mi»,
+  «permuto», «titular», «papeles al día», «VTV», «formulario 08», «único
+  dueño», «km reales»), in the title or the description.
+
+Pure: no I/O.
+"""
+from __future__ import annotations
+
+import re
+import unicodedata
+from typing import Any
+
+# Sources whose listings are checked. Facebook is the only general
+# marketplace; the others are vehicle classifieds.
+SOURCES = frozenset({"facebook"})
+
+# A part's name, as the first word(s) of a title (accents stripped, lowercase).
+_PARTS = (
+    r"paragolpes?", r"butacas?", r"asientos?", r"cremalleras?", r"caja (?:de )?(?:velocidad|cambio)\w*",
+    r"caja automatica", r"faros?", r"farol\w*", r"faritos?", r"opticas?", r"lentes?", r"bombas?",
+    r"burros?(?: de arranque)?", r"tapas?(?: de cilindro\w*)?", r"tableros?", r"puertas?", r"porton\w*",
+    r"embragues?", r"llantas?", r"cubiertas?", r"neumaticos?", r"espejos?", r"retrovisor\w*",
+    r"ciguenal\w*", r"ecu", r"modulos?", r"computadora", r"centralita", r"estereos?", r"stereos?",
+    r"capot\w*", r"capo", r"aleron?\w*", r"suspension\w*", r"amortiguador\w*", r"espirales?",
+    r"puesta (?:a )?punto", r"parrillas?", r"rejillas?", r"molduras?", r"zocalos?", r"guardaplast\w*",
+    r"guardabarros?", r"compresor\w*", r"condensador\w*", r"evaporador\w*", r"radiador\w*",
+    r"electroventilador\w*", r"barras?", r"sensor\w*", r"spoiler\w*", r"deflector\w*", r"guias?",
+    r"motor (?:de arranque|limpia\w*|levanta\w*|electroventilador|completo|para|de)",
+    r"limpiaparabrisas", r"parabrisas", r"lunetas?", r"vidrios?", r"desarmes?", r"volantes?",
+    r"radiadores?", r"frentes?", r"trompas?", r"cosas de", r"alternador\w*", r"inyector\w*",
+    r"bobinas?", r"semiej\w*", r"homocinetic\w*", r"diferencial\w*", r"cardan\w*",
+    r"silenciador\w*", r"catalizador\w*", r"multiple", r"carter\w*", r"culatas?", r"juntas?",
+    r"pistones?", r"arbol de levas", r"correas?", r"tensor\w*", r"bujias?",
+    r"discos? de freno", r"pastillas?", r"calipers?", r"mazas?", r"rodamientos?", r"bujes?",
+    r"rotulas?", r"parantes?", r"elasticos?", r"tanques?", r"manijas?", r"cerraduras?", r"bocinas?",
+    r"pantallas?", r"radios?", r"parlantes?", r"antenas?", r"alarmas?", r"cinturon\w*",
+    r"airbags?", r"palancas?", r"pedaler\w*", r"tapizad\w*", r"tapiceria", r"fundas?", r"alfombras?",
+    r"cubre\w*", r"portaequipaje\w*", r"enganches?", r"emblemas?", r"calcos?",
+    r"termostato\w*", r"turbocompresor\w*", r"repuestos?", r"autopartes?", r"accesorios?",
+    r"guardafangos?", r"baul de", r"techo solar", r"estribos?", r"barral\w*",
+)
+# Words a part's title may open with before the part («Vendo frente de...»,
+# «Kit faros auxiliares», «Juego de llantas», «Base Moldura»).
+_LEAD = (r"vendo", r"venta(?: de)?", r"se vende", r"liquido", r"oferta", r"kit(?: de)?", r"juego(?: de)?",
+         r"par(?: de)?", r"set(?: de)?", r"base", r"originale?s?", r"nuevos?", r"nuevas?", r"usados?",
+         r"usadas?", r"repuesto", r"x\d+")
+_PART_START = re.compile(
+    rf"^(?:(?:{'|'.join(_LEAD)})\b[\s,/:-]*){{0,3}}(?:{'|'.join(_PARTS)})\b")
+_PART_ANYWHERE = re.compile(r"\b(?:desarmes?|autopartes?|repuestos (?:de|para))\b")
+
+# Whole-car evidence (title or description).
+_CAR_WORDS = re.compile(
+    r"\bvendo mi\b|\bpermut\w*|\btitular\b|\bpapeles al dia\b|\bvtv\b|\bformulario 08\b|\b08 firmado\b"
+    r"|\bunico dueno\b|\bkm reales\b|\bkilometros reales\b|\bdueno directo\b")
+_YEAR_FIRST = re.compile(r"^(?:19[89]\d|20[0-3]\d)\s+\S")
+_KM_IN_TITLE = re.compile(r"\b\d[\d.,]*\s*(?:mil\s*)?(?:km|kms|kilometros)\b")
+
+
+def _plain(text: str | None) -> str:
+    text = "".join(c for c in unicodedata.normalize("NFD", (text or "").lower())
+                   if unicodedata.category(c) != "Mn")
+    # Emoji, «‼️», quotes and the like become spaces.
+    return re.sub(r"\s+", " ", re.sub(r"[^\w\s,./:-]", " ", text)).strip()
+
+
+def part_reason(title: str | None) -> str | None:
+    """Why the title names a part, or None."""
+    t = _plain(title)
+    if m := _PART_START.match(t):
+        return f"título: «{m.group(0).strip()}»"
+    if m := _PART_ANYWHERE.search(t):
+        return f"título: «{m.group(0)}»"
+    return None
+
+
+def car_evidence(title: str | None, description: str | None = None, *,
+                 year: int | None = None, mileage_km: int | None = None) -> str | None:
+    """Why the listing is a whole car, or None. `mileage_km` and `year` only
+    from the source itself, never read from the description."""
+    t = _plain(title)
+    if year and mileage_km:
+        return "año y kilometraje"
+    if _YEAR_FIRST.match(t):
+        return "el título empieza con el año"
+    if _KM_IN_TITLE.search(t):
+        return "kilometraje en el título"
+    if m := _CAR_WORDS.search(f"{t} {_plain(description)}"):
+        return f"«{m.group(0)}»"
+    return None
+
+
+def classify(title: str | None, description: str | None = None, *,
+             year: int | None = None, mileage_km: int | None = None) -> str | None:
+    """The reason a listing is not a car (a part, an accessory, a car taken
+    apart), or None when it may be one."""
+    reason = part_reason(title)
+    if reason is None or car_evidence(title, description, year=year, mileage_km=mileage_km):
+        return None
+    return reason
+
+
+def classify_row(row: dict[str, Any]) -> str | None:
+    """classify() for a `listings` row (normalized or stored), only for SOURCES.
+    The year and mileage count as the source's only when the description did
+    not fill them (attributes._description_filled)."""
+    if row.get("source") not in SOURCES:
+        return None
+    filled = set((row.get("attributes") or {}).get("_description_filled") or ())
+    return classify(row.get("title"), row.get("description"),
+                    year=None if "year" in filled else row.get("year"),
+                    mileage_km=None if "mileage_km" in filled else row.get("mileage_km"))
