@@ -50,7 +50,7 @@ gross_margin_pct    = gross_margin_usd / dealer_median × 100                (ra
 - **Base del 5 %.** El precio de compra (`asking_usd`). Ver pregunta 2.
 - **Porcentaje.** Sobre `dealer_median` (margen sobre el precio al que se vendería, la definición habitual de margen bruto), no sobre el costo (markup). Ver pregunta 3.
 - **Patente.** No entra: es anual, no es parte de la transferencia. Tampoco deudas de patente ni multas (no las conocemos).
-- **Precio parcial (PAR-03).** Un precio parcial no genera match (`engine.evaluate` devuelve None) y `build_input` también lo excluye. Igual `margin.compute` lo chequea con `published_partial` y devuelve null: nunca un margen sobre un anticipo.
+- **Precio parcial (PAR-03).** Un aviso con `price_partial` no genera match, pero uno cuyo precio publicado es un anticipo o una cuota y cuya descripción trae el precio de contado sí (`resolve_price` deja `price_partial = false` y `price_check.published_partial = true`). `build_input` excluye los dos y `margin.compute` los chequea con `published_partial` y devuelve null: nunca un margen sobre un anticipo. El relleno (§6) los excluye también, para converger.
 - **Sin `price_usd`** (aviso en ARS sin cotización): null.
 - **Negativo.** Se guarda y se muestra (`USD -300`): para una agencia «la mediana de agencias está por debajo de lo que te costaría» es información. El orden lo deja al final de los positivos de forma natural.
 
@@ -133,11 +133,14 @@ Parser tolerante en `worker/intelligence/margin.py` (mismo estilo que `cost_esti
 
 ```sql
 OR (m.margin_ref IS NULL AND l.price_usd > 0
+    AND (m.price_ref->>'dealer_median')::numeric > 0
     AND (m.price_ref->>'dealer_n')::int >= %(min_n)s
-    AND m.price_ref->>'dealer_median' IS NOT NULL)
+    AND NOT coalesce(l.price_partial, false)
+    AND l.description_facts #> '{price_check,published_partial}' IS DISTINCT FROM 'true'::jsonb
+    AND NOT coalesce(l.description_facts #>> '{price_check,published_kind}' = ANY(%(partial_kinds)s), false))
 ```
 
-- Converge: tras recalcular, o `margin_ref` queda con valor, o el nuevo `price_ref` tiene `dealer_n < min_n` y sale de la condición. Un `price_ref` de siete claves no entra (no tiene `dealer_n`); lo completa la pasada nocturna de 14 días, que recalcula `price_ref` y margen juntos.
+- Converge: la condición replica todos los casos en que `margin.compute` devuelve null para un match que existe (sin agencias suficientes, mediana ≤ 0, sin `price_usd`, precio publicado parcial según `published_partial`, con `PARTIAL_KINDS` pasado como parámetro). Tras recalcular, o `margin_ref` queda con valor, o el nuevo `price_ref` sale de la condición. Sin esto, un anticipo con precio de contado en la descripción volvía a la cola en cada arranque y en cada pasada. Un `price_ref` de siete claves no entra (no tiene `dealer_n`); lo completa la pasada nocturna de 14 días, que recalcula `price_ref` y margen juntos.
 - Es idempotente y no reenvía alertas: `rescore()` solo hace `upsert_scored(..., backfill=True)`, que en una fila existente conserva `is_backfill` y `generated_at` y no pasa por el `Notifier`.
 - Primer efecto: el primer arranque del worker después de aplicar la migración (que despliega con el worker nuevo, así que siempre hay un arranque). No hay `tools/rescore` en `worker/tools/` y no se agrega: la condición del arranque es el relleno.
 - Matches de avisos `gone` o fuera de 14 días no se rellenan (la condición exige `l.status = 'active'`, como hoy): sin margen en el histórico.
@@ -148,14 +151,15 @@ OR (m.margin_ref IS NULL AND l.price_usd > 0
 - **Worker.** `db/repos/notifications.py`: `public.plan_feature(sp.user_id, 'dealer_margin') AS dealer_margin` y
   `CASE WHEN plan_feature(..., 'dealer_margin') AND sp.opportunity_threshold_usd >= coalesce((plan_limits_for(sp.user_id)->'limits'->>'min_threshold_usd')::int, 500) THEN sp.opportunity_threshold_usd END AS threshold_usd`
   en `profile_audiences` y `listing_audiences` (esta también suma `m.margin_ref`). El payload lleva `margin` solo si `dealer_margin`.
-- **Web.** Nueva RPC `public.my_match_margins(p_match_ids bigint[]) returns table (match_id bigint, margin_ref jsonb)`, `security invoker` (RLS de `matches`), vacía si `not my_plan_feature('dealer_margin')`. Ficha y tarjetas la usan; nada de la web selecciona `matches.margin_ref` directo.
+- **Base.** `matches.margin_ref` no es legible por `anon`/`authenticated`: la RLS de `matches` deja a cualquier usuario leer sus propios matches sea cual sea el plan, y el worker calcula el margen para todos. La migración cambia el `SELECT` de tabla por una lista de columnas sin `margin_ref` (armada en un `do $$` con las columnas que existan). Una migración futura que agregue una columna a `matches` tiene que darle `grant select` a `authenticated` (y `anon`).
+- **Web.** Nueva RPC `public.my_match_margins(p_match_ids bigint[]) returns table (match_id bigint, margin_ref jsonb)`, `security definer` que chequea el dueño (`search_profiles.user_id = auth.uid()`, como la RLS) y vacía si `not my_plan_feature('dealer_margin')`. Ficha y tarjetas la usan; nada de la web selecciona `matches.margin_ref` directo (tampoco puede).
 - **Admins** tienen todas las features: ven margen y orden. Para que un admin no rompa nada con la base vieja, la web exige además que el snapshot del plan traiga `min_threshold_usd` (ver «Base vieja»).
 
 ### 8. Umbral en USD (engine)
 
 - Columna `search_profiles.opportunity_threshold_usd integer check (opportunity_threshold_usd between 1 and 1000000)`, null = sin umbral. El mínimo del plan no va en un CHECK (cambia sin migración): lo valida la web al guardar y el worker lo ignora si queda por debajo (CASE de arriba).
 - `Audience.threshold_usd`. `classify`: «tiene umbral» pasa a ser `threshold_pct is not None or threshold_usd is not None`; **alcanza** si alcanza cualquiera de los dos (OR). Con uno solo cargado se comporta igual que hoy el de %. Mismo resultado en `MATCH` y `PRICE_DROP`: alcanza → inmediato, sin tope, no cuenta; no alcanza → digest; alcanzar avisa aunque esté debajo de `notify_min_level`; un guardado con baja sigue siempre inmediato.
-- Alcanza en USD si `payload.margin.usd_min >= threshold_usd`: el **extremo bajo** del rango (conservador). Sin margen (n insuficiente, sin dato) no alcanza.
+- Alcanza en USD si `payload.margin.usd_low >= threshold_usd`: el **extremo bajo** del rango sin redondear (`margin.threshold_low`, conservador). No se compara `usd_min`, que es el número del copy: un valor único se redondea a la decena más cercana (USD 495 se muestra USD 500 pero no alcanza un umbral de USD 500). Sin margen (n insuficiente, sin dato) no alcanza.
 - `decide`: si alcanzó por USD, `payload.threshold_usd = threshold_usd`; por %, `payload.threshold_pct` como hoy (si alcanza los dos, ambos).
 - `sent_today`: `AND NOT (payload ? 'threshold_pct' OR payload ? 'threshold_usd')`.
 - **Baja de precio.** `on_listing_events` corre después del rescore del lote, así que `m.margin_ref` ya refleja el precio nuevo.
@@ -172,15 +176,14 @@ Mismo texto en `worker/intelligence/copy.py` (`MARGIN`) y `web/lib/copy.ts` (`MA
   - sin acondicionamiento cargado: «…; sin descontar costos: faltan los parámetros de acondicionamiento; sin impuestos)».
 - **Ficha, detalle debajo de la línea:** qué descuenta en números («Acondicionamiento: USD 600 (5 % del precio, mínimo USD 300). Transferencia: entre USD 310 y 500 (arancel, sellos y formularios de CABA, según tu búsqueda en «Palermo, CABA»).»), «No incluye impuestos de la venta, patente ni comisiones.», «Comparamos con precios publicados por agencias, no con precios de venta. Es una estimación orientativa.», nivel de comparables (`COMPARABLE_LEVEL`) y «Parámetros al dd/mm».
 - **Tarjeta:** solo la línea (sin detalle), debajo de la línea de costo total si existe.
-- **Email Pro:** la línea en `opportunity` y `new_match` inmediatos y en `price_drop`, después de la de costo total. Payload congelado al crear la fila: `payload.margin = margin.email_payload(margin_ref)` = `{usd_min, usd_max, dealer_median, dealer_n, transfer_status, reconditioning_pct, jurisdiction, as_of}` ya redondeados. El digest no la lleva en v1.
+- **Email Pro:** la línea en `opportunity` y `new_match` inmediatos y en `price_drop`, después de la de costo total. Payload congelado al crear la fila: `payload.margin = margin.email_payload(margin_ref)` = `{usd_min, usd_max, dealer_median, dealer_n, transfer_status, reconditioning_pct, jurisdiction, as_of}` ya redondeados, más `usd_low` (sin redondear, solo para el umbral). El digest no la lleva en v1.
 - **Lint.** Términos extra prohibidos para el bloque `MARGIN` (además de `FORBIDDEN_TERMS`): «ganancia», «ganancias», «garantiz», «rentab», «asegur», «seguro que», «vas a ganar», «precio de venta» (salvo en la frase «no con precios de venta», que el test permite explícitamente), «vale». Se prueba en `web/lib/copy.test.ts` y `worker/tests/test_intelligence_copy.py`, y sobre el texto renderizado de las variantes.
 
 ### 10. Orden «por margen estimado»
 
 - `web/lib/sorts.ts`: `margin: "Mayor margen estimado"`, ofrecida por `SortSelect` solo si el usuario tiene margen (prop `options`). `isSort` acepta `margin`; para quien no lo tiene, la página lo trata como `score`.
 - `search_results`: nueva rama
-  `case when p_sort = 'margin' and (select ok from margin_access) then (select (m.margin_ref->'gross_margin_usd'->>'min')::numeric from public.matches m where m.id = c.match_id) end desc nulls last`,
-  con `margin_access as (select public.my_plan_feature('dealer_margin') ok)` una sola vez por consulta. Sin margen, al final y luego por fecha. Se redefine `search_results` **sin tocar `match_cards`** (PRO-01 la redefine para agregar `seller_unknown`; si las dos ramas la tocaran, la segunda en aplicarse rompería con «cannot drop columns from view»).
+  `case when (select ok from margin_access) then mg.low end desc nulls last`, con `margin_access as (select p_sort = 'margin' and public.my_plan_feature('dealer_margin') ok)` una sola vez por consulta y un `left join` a `public.my_margin_sort_keys(p_profile_id)` (`security definer`: dueño y feature chequeados adentro, porque `search_results` es `security invoker` y `authenticated` no lee `margin_ref`). Sin margen, al final y luego por fecha. Se redefine `search_results` **sin tocar `match_cards`** (PRO-01 la redefine para agregar `seller_unknown`; si las dos ramas la tocaran, la segunda en aplicarse rompería con «cannot drop columns from view»).
 - Ordena por el extremo bajo, como el umbral.
 
 ### 11. Eventos
@@ -205,11 +208,12 @@ Mismo texto en `worker/intelligence/copy.py` (`MARGIN`) y `web/lib/copy.ts` (`MA
 2. `alter table public.search_profiles add column if not exists opportunity_threshold_usd integer check (...)` + comment.
 3. `insert into public.app_config (key, value) values ('dealer_margin', ...) on conflict (key) do nothing;`
 4. `update public.app_config set value = jsonb_set(...) where key = 'plan_limits'` agregando `dealer_margin` y `min_threshold_usd` solo si faltan.
-5. `create function public.my_match_margins(bigint[])`, revoke de `public, anon`, grant a `authenticated`.
-6. `create or replace function public.search_results(...)` = la de `20261119120000_x01_tracking.sql` + rama `margin`.
-7. `notify pgrst, 'reload schema';`
+5. `do $$ ... $$`: `revoke select on public.matches from anon, authenticated` y `grant select (<todas las columnas menos margin_ref>)`.
+6. `create function public.my_match_margins(bigint[])` y `public.my_margin_sort_keys(bigint)` (`security definer`), revoke de `public, anon`, grant a `authenticated`.
+7. `create or replace function public.search_results(...)` = la de `20261119120000_x01_tracking.sql` + rama `margin`.
+8. `notify pgrst, 'reload schema';`
 
-Sin `lock table` (dos `add column` sin default son solo catálogo). Rollback: dropear la función nueva, re-aplicar el `search_results` de X-01 y las columnas pueden quedar.
+Sin `lock table` (dos `add column` sin default son solo catálogo). Rollback: dropear las funciones nuevas, re-aplicar el `search_results` de X-01, volver a `grant select on public.matches to anon, authenticated`; las columnas pueden quedar.
 
 ## Archivos
 
@@ -239,7 +243,7 @@ Offline (corren en esta rama):
 
 Escritos pero **no corridos en esta rama** (la base local la usa otro trabajo; correr antes del merge):
 
-- pgTAP `supabase/tests/pro02_margin_test.sql`: `my_match_margins` vacía sin la feature y con filas para Pro; `search_results('margin')` ordena por margen solo con la feature; claves de `plan_limits`; la migración se aplica desde base vacía.
+- pgTAP `supabase/tests/pro02_margin_test.sql`: `my_match_margins` vacía sin la feature y con filas para Pro; `search_results('margin')` ordena por margen solo con la feature; claves de `plan_limits`; `authenticated`/`anon` sin `SELECT` sobre `matches.margin_ref` (un `select margin_ref` directo falla con 42501, Pro o no) y con el resto de las columnas; `my_margin_sort_keys` vacía sin la feature y para búsquedas ajenas; la migración se aplica desde base vacía.
 - `pytest -m db`: 6 agencias + 4 particulares por `comparables()` → `rescore` → `margin_ref.dealer_n = 6`; `rescore_queue` toma un match con `dealer_n ≥ min_n` y `margin_ref` null, y no lo vuelve a tomar después.
 
 ## Riesgos
