@@ -24,7 +24,7 @@ export default async function NewSearchPage({ searchParams }: PageProps<"/app/se
   const approximateLocation = approximateLocationFromHeaders(await headers());
   const prompt = searchIntentPrompt((await searchParams).prompt);
   const supabase = await createClient();
-  const [{ catalog, sources, defaultFrequency, thresholdAlerts, modelLessSearch }, { data: snapshot }, cfg, emailOnly] = await Promise.all([
+  const [{ catalog, sources, defaultFrequency, thresholdAlerts, marginThreshold, modelLessSearch }, { data: snapshot }, cfg, emailOnly] = await Promise.all([
     loadFormData(supabase),
     supabase.rpc("my_plan_snapshot"),
     webConfig(),
@@ -95,6 +95,7 @@ export default async function NewSearchPage({ searchParams }: PageProps<"/app/se
             profileId={null}
             approximateLocation={approximateLocation}
             thresholdAlerts={thresholdAlerts}
+            marginThreshold={marginThreshold}
             modelLessSearch={modelLessSearch}
             maxLocations={maxLocations}
           />

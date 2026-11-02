@@ -8,7 +8,7 @@ import { when } from "@/lib/admin-format";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const metadata: Metadata = { title: "Configuración" };
-const NAMES: Record<string, string> = { pro_offer: "Precios y oferta", plan_limits: "Límites por plan", lifecycle_emails: "Emails del plan", cost_estimator: "Costo total (PAR-01)" };
+const NAMES: Record<string, string> = { pro_offer: "Precios y oferta", plan_limits: "Límites por plan", lifecycle_emails: "Emails del plan", cost_estimator: "Costo total (PAR-01)", dealer_margin: "Margen estimado (PRO-02)" };
 // Keys with a guided form: their hint lives in the form.
 const GUIDED = new Set(["pro_offer", "plan_limits", "lifecycle_emails"]);
 
@@ -35,6 +35,8 @@ const HINTS: Record<string, string> = {
   llm_limits: "Jobs del LLM por usuario y hora.",
   cost_estimator:
     "Parámetros del costo total estimado (PAR-01). Cada bloque necesita source y as_of. as_of de la raíz: fecha en que revisaste todo; se muestra como «parámetros al dd/mm». Porcentajes en %, montos en ARS, rangos {min, max}. Sin un bloque válido, ese concepto se muestra como faltante.",
+  dealer_margin:
+    "Margen bruto estimado contra la mediana de agencias (PRO-02, solo Pro). reconditioning: acondicionamiento en % del precio de compra (pct) con un mínimo en USD (min_usd); transfer.enabled: descontar la transferencia de PAR-01 (arancel, sellos y formularios, solo con la localidad de la búsqueda). as_of y source: cuándo y quién lo decidió. Sin un bloque válido, el margen dice que no lo descuenta. Los matches lo toman en el próximo rescore.",
   red_flags: "Señales «Conviene verificar» (sección 6). much_cheaper_pct: desde cuánto % debajo de publicaciones comparables sale la señal de precio; much_cheaper_verify_pct (PAR-02, 35): desde ahí el texto pide verificar todo antes de señar; anticipo_pct: desde ahí pide verificar que el precio no sea un anticipo. Tiene que valer much_cheaper_pct < much_cheaper_verify_pct <= anticipo_pct. Solo cambia el texto, no el score ni las alertas; los matches lo toman en el próximo rescore.",
   risk: "Checklist «Antes de señar» de la ficha (PAR-02). checklist_enabled: con false el bloque desaparece sin deploy. links: los links oficiales (dnrpa, vtv, form_08, y listas patentes e infracciones por jurisdicción), cada uno {\"label\": \"...\", \"url\": \"https://...\"} o null; solo https://, sin usuario ni contraseña, hasta 300 caracteres. Sin links el bloque se muestra sin ellos.",
   seller_classification:

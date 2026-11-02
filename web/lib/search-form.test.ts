@@ -69,6 +69,18 @@ describe("search form → search_profiles (sección 4.3)", () => {
     expect(matchingChanged(stored, toColumns({ ...values, opportunity_threshold_pct: 15 }, ALL))).toBe(false);
   });
 
+  it("keeps the threshold by margin in USD only when it is defined (PRO-02)", () => {
+    const values = SearchInput.parse({ ...input, opportunity_threshold_usd: 800 });
+    expect(toColumns(values, ALL).opportunity_threshold_usd).toBe(800);
+    // Undefined (no feature, or a database without the column): no key in the write.
+    expect(toColumns(SearchInput.parse(input), ALL)).not.toHaveProperty("opportunity_threshold_usd");
+    expect(toColumns({ ...values, opportunity_threshold_usd: null }, ALL).opportunity_threshold_usd).toBeNull();
+    for (const bad of [0, -5, 12.5, 1_000_001]) expect(SearchInput.safeParse({ ...input, opportunity_threshold_usd: bad }).success).toBe(false);
+    const stored = { ...toColumns(values, ALL), id: 1, notification_frequency: "immediate", notify_min_level: "good" } as unknown as SearchProfile;
+    expect(fromProfile(stored, ALL).opportunity_threshold_usd).toBe(800);
+    expect(matchingChanged(stored, toColumns({ ...values, opportunity_threshold_usd: 900 }, ALL))).toBe(false);
+  });
+
   it("round-trips a stored search and knows when matching changes", () => {
     const c = toColumns(input, ALL);
     const stored = { ...c, id: 1, notification_frequency: "immediate", notify_min_level: "good" } as unknown as SearchProfile;

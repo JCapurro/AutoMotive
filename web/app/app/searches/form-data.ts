@@ -1,6 +1,7 @@
 import "server-only";
 
 import { loadCatalog } from "@/lib/catalog";
+import { marginAccess } from "@/lib/margin-data";
 import { type PlanLimits, locationCap } from "@/lib/pro";
 import type { createClient } from "@/lib/supabase/server";
 
@@ -8,7 +9,7 @@ import type { createClient } from "@/lib/supabase/server";
  * frequency and whether their plan has the opportunity threshold (Pro) and
  * the search by body type without a model (Particular and Pro). */
 export async function loadFormData(supabase: Awaited<ReturnType<typeof createClient>>) {
-  const [catalog, { data: sources }, { data: profile }, { data: thresholdAlerts }, { data: modelLessSearch }, { data: snapshot }] = await Promise.all([
+  const [catalog, { data: sources }, { data: profile }, { data: thresholdAlerts }, { data: modelLessSearch }, { data: snapshot }, margin] = await Promise.all([
     loadCatalog(supabase),
     supabase.from("sources").select("id, name").eq("enabled", true).order("priority"),
     supabase
@@ -18,6 +19,7 @@ export async function loadFormData(supabase: Awaited<ReturnType<typeof createCli
     supabase.rpc("my_plan_feature", { p_feature: "threshold_alerts" }),
     supabase.rpc("my_plan_feature", { p_feature: "model_less_search" }),
     supabase.rpc("my_plan_snapshot"),
+    marginAccess(supabase),
   ]);
   return {
     catalog,
@@ -25,6 +27,8 @@ export async function loadFormData(supabase: Awaited<ReturnType<typeof createCli
     defaultFrequency: profile?.default_notification_frequency ?? "immediate",
     thresholdAlerts: thresholdAlerts === true,
     modelLessSearch: modelLessSearch === true,
+    /** PRO-02: the threshold by margin and its minimum (Pro); null without it or without the migration. */
+    marginThreshold: margin,
     /** Places one search may look in; null = no cap. */
     maxLocations: locationCap((snapshot ?? null) as PlanLimits | null),
   };
