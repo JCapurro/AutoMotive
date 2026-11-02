@@ -91,15 +91,16 @@ overriding system value values
   (997004, 'mercadolibre', 'PRO02-4', 'https://example.test/pro02-4', 'Pgtap Margen 4', 'Pgtap', 'Margen', 13000, 'USD', 13000, 'active');
 
 -- Scores and margins in opposite orders; 997003 has no margin, 997004 too few
--- dealers to estimate one (Juan, 02/11: the web says so).
+-- dealers to estimate one (Juan, 02/11: the web says so). The margins carry a
+-- plausible price (my_margin_sort_keys skips the others since 20261201120000).
 insert into public.matches (id, search_profile_id, listing_id, score, level, score_breakdown, match_reasons, scoring_version, margin_ref)
 overriding system value values
-  (99710001, 9971, 997001, 90, 'good', '{}', '{}', 'test', '{"v": 1, "gross_margin_usd": {"min": 300, "max": 400}}'),
-  (99710002, 9971, 997002, 80, 'good', '{}', '{}', 'test', '{"v": 1, "gross_margin_usd": {"min": 1500, "max": 1700}}'),
+  (99710001, 9971, 997001, 90, 'good', '{}', '{}', 'test', '{"v": 1, "asking_usd": 10000, "dealer_median": 11000, "gross_margin_usd": {"min": 300, "max": 400}}'),
+  (99710002, 9971, 997002, 80, 'good', '{}', '{}', 'test', '{"v": 1, "asking_usd": 11000, "dealer_median": 13500, "gross_margin_usd": {"min": 1500, "max": 1700}}'),
   (99710003, 9971, 997003, 70, 'good', '{}', '{}', 'test', null),
   (99710004, 9971, 997004, 95, 'good', '{}', '{}', 'test', '{"v": 1, "status": "few_dealers", "dealer_n": 2, "min_n": 5}'),
-  (99720001, 9972, 997001, 90, 'good', '{}', '{}', 'test', '{"v": 1, "gross_margin_usd": {"min": 300, "max": 400}}'),
-  (99720002, 9972, 997002, 80, 'good', '{}', '{}', 'test', '{"v": 1, "gross_margin_usd": {"min": 1500, "max": 1700}}');
+  (99720001, 9972, 997001, 90, 'good', '{}', '{}', 'test', '{"v": 1, "asking_usd": 10000, "dealer_median": 11000, "gross_margin_usd": {"min": 300, "max": 400}}'),
+  (99720002, 9972, 997002, 80, 'good', '{}', '{}', 'test', '{"v": 1, "asking_usd": 11000, "dealer_median": 13500, "gross_margin_usd": {"min": 1500, "max": 1700}}');
 
 -- ---------------------------------------------------------------- the Pro
 set local role authenticated;
