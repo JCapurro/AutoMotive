@@ -4,14 +4,12 @@ import { Bookmark, Check, ExternalLink, X } from "lucide-react";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { setSaved, setStatus } from "@/app/app/listings/actions";
-import { useHideOnScrollDown } from "@/components/app/app-nav";
 import { Button } from "@/components/ui/button";
 import { pixel } from "@/lib/meta-pixel";
 import { analyticsEvent } from "@/lib/google-analytics";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { REJECTION, type RejectionReason, type InteractionStatus } from "@/lib/copy";
 import { statusOnSave } from "@/lib/listing-tracking";
-import { cn } from "@/lib/utils";
 
 type Props = {
   listingId: number;
@@ -22,13 +20,11 @@ type Props = {
 
 /**
  * The listing page's actions: in its decision panel from lg; below it, a bar
- * fixed at the bottom of the screen, above the phone's bottom nav and in its
- * place while the nav hides, with Guardar and Descartar as icons on a phone.
+ * fixed at the bottom of the screen, with Guardar and Descartar as icons on a phone.
  */
 export function ListingActions({ listingId, status, saved, outboundHref }: Props) {
   const [pending, start] = useTransition();
   const [discarding, setDiscarding] = useState(false);
-  const navHidden = useHideOnScrollDown();
   // X-01: "Guardada" follows saved, so a contacted listing can be saved too.
   const interested = saved;
   const run = (fn: () => Promise<void>, ok: string) => start(async () => {
@@ -40,13 +36,7 @@ export function ListingActions({ listingId, status, saved, outboundHref }: Props
     }
   });
   return (
-    <div
-      className={cn(
-        "fixed inset-x-0 bottom-0 z-30 flex items-center gap-2 border-t bg-background/95 px-4 pt-2.5 pb-[calc(0.625rem+env(safe-area-inset-bottom))] backdrop-blur-sm transition-transform duration-200 motion-reduce:transition-none sm:px-6",
-        !navHidden && "max-md:translate-y-[calc(-3.5rem-env(safe-area-inset-bottom))] max-md:pb-2.5",
-        "lg:static lg:grid lg:translate-y-0 lg:grid-cols-2 lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none",
-      )}
-    >
+    <div className="fixed inset-x-0 bottom-0 z-30 flex items-center gap-2 border-t bg-background/95 px-4 pt-2.5 pb-[calc(0.625rem+env(safe-area-inset-bottom))] backdrop-blur-sm sm:px-6 lg:static lg:grid lg:grid-cols-2 lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
       <Button asChild size="lg" className="h-11 flex-1 text-[15px] max-lg:order-last lg:col-span-2">
         <a href={outboundHref} target="_blank" rel="noopener noreferrer">Ver publicación <ExternalLink aria-hidden /></a>
       </Button>

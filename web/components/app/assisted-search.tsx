@@ -536,7 +536,7 @@ export function AssistedSearch({
         ))}
 
         {pending && !formButtonVisible ? (
-          <div className="fixed inset-x-0 bottom-[calc(3.75rem+env(safe-area-inset-bottom))] z-30 border-t bg-background/95 p-3 backdrop-blur md:bottom-0 lg:hidden">
+          <div className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur lg:hidden">
             <Button type="button" className="h-11 w-full text-base" onClick={submitActive} data-testid="assisted-sticky-save">
               Guardar y activar alertas
             </Button>
