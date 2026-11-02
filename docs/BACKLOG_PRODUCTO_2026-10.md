@@ -234,6 +234,8 @@ Criterios de aceptación:
 - Eventos: `margin_threshold_set`, `results_sorted_margin`.
 - Tests: pool con 6 agencias y 4 particulares; margen nulo con n insuficiente; snapshot de email Pro; lint de copy (sin «ganancia garantizada», «rentabilidad»).
 
+**Estado al 02/11:** ciclo 1 (margen v1 y umbral en USD) implementado en la rama `claude/pro02-margen` ([diseño](superpowers/specs/2026-11-02-pro02-margen-design.md)), sin pushear ni aplicar en producción. La migración `20261130120000_pro02_margin` siembra `dealer_margin` con lo que decidió Juan (acondicionamiento 5 % con mínimo USD 300 y transferencia de PAR-01) y agrega `plan_limits.pro.dealer_margin` y `min_threshold_usd = 500`. `SCORING_VERSION` no cambia: el primer arranque del worker después de la migración rellena `margin_ref` de los matches existentes sin reenviar alertas. Sin localidad en la búsqueda, el margen no descuenta la transferencia y lo dice. Orden de despliegue: migración, worker, web. Antes del merge falta correr el pgTAP (`supabase/tests/pro02_margin_test.sql`) y los `pytest -m db` nuevos, y que Juan responda las preguntas del diseño. La rotación (F-03) queda para el ciclo 2.
+
 ### PRO-03 · Monitor de mi stock
 
 Dolor: capital clavado en autos que no rotan y precios de publicación puestos a ojo.

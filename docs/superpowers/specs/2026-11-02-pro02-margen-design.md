@@ -1,6 +1,6 @@
 # PRO-02 · Margen estimado (ciclo 1: margen v1 y umbral en USD)
 
-Ítem PRO-02 del [backlog de producto](../../BACKLOG_PRODUCTO_2026-10.md) y Fase 2, fila 3, del [plan por fases](../../PLAN_FASES_BACKLOG_PRODUCTO_2026-10.md) (secciones 3, 4 y 8). Rama `claude/pro02-margen`, creada desde `origin/main` en `4f212bf`. Estado: **diseño, revisión 1**. Nada implementado ni aplicado en producción.
+Ítem PRO-02 del [backlog de producto](../../BACKLOG_PRODUCTO_2026-10.md) y Fase 2, fila 3, del [plan por fases](../../PLAN_FASES_BACKLOG_PRODUCTO_2026-10.md) (secciones 3, 4 y 8). Rama `claude/pro02-margen`, creada desde `origin/main` en `4f212bf`. Estado: **implementado en la rama (revisión 2)**, sin pushear ni aplicar en producción. Los cambios respecto de la revisión 1 están en «Implementación».
 
 ## Alcance
 
@@ -249,6 +249,22 @@ Escritos pero **no corridos en esta rama** (la base local la usa otro trabajo; c
 - **Conflictos.** `email_html.py`/`templates.py`/snapshots, `listing-card.tsx`, ficha, `search-form`, `notifications.py` y `engine.py` los tocan también PRO-01 y `claude/sin-notas-costo-resumido`. Cambios acotados (líneas nuevas, sin reordenar). `match_cards` no se toca; `search_results` solo la redefine esta rama.
 - **Desfase de parámetros.** Un cambio en `cost_estimator` o `dealer_margin` se ve en el margen recién en el próximo rescore (horas); el costo total de la web se calcula en vivo. Puede verse un costo de transferencia distinto entre la línea de costo total y el detalle del margen hasta el rescore.
 - **Admins.** `plan_feature` les da todo; con la base vieja se cubre con `min_threshold_usd` en el snapshot.
+
+## Implementación (revisión 2)
+
+Lo que cambió al implementar, respecto de las secciones de arriba:
+
+- **Acceso de la web.** No se usa `my_plan_feature('dealer_margin') && snapshot.limits.min_threshold_usd`: para un admin `plan_limits_for` devuelve `limits = {"immediate_alerts": true}`, así que el snapshot nunca trae el mínimo y un admin no vería nada. En su lugar hay una RPC `public.my_margin_access()` que devuelve `{enabled, min_threshold_usd}`. En una base sin la migración la RPC no existe, la web lo toma como «sin acceso» y no muestra línea, orden ni control, ni manda `opportunity_threshold_usd` en el insert o el update.
+- **Mínimo del umbral.** `public.min_threshold_usd(user)`: el `min_threshold_usd` del plan y, si no tiene (admins), el de Pro. Lo usan el worker (`CASE … >= public.min_threshold_usd(sp.user_id)`) y `my_margin_access`. No hay un 500 escrito en el código: si no hay mínimo cargado, no aplica ningún umbral en USD.
+- **Estados de la transferencia.** Se suma `no_price` (el aviso no tiene una moneda que el calculador lea), con su texto. El orden de los motivos es `disabled` → `params` → `no_price` → `no_zone` → `no_fx` → el del término que falte.
+- **Redondeo.** Si el margen no tiene rango (sin transferencia), se muestra un número redondeado a USD 10 («USD 1.850»), no «USD 1.840 a 1.850».
+- **Vectores compartidos.** `worker/tests/fixtures/margin/golden.json` (11 casos: `margin_ref`, payload y línea). Lo leen `worker/tests/test_margin.py` y `web/lib/margin-view.test.ts`, así que la web y los emails imprimen la misma línea.
+- **Superficies.** La línea va en las tarjetas de resultados, del inicio y de favoritos (estas toman el mejor match, que ahora trae su `id`), y en la ficha con un detalle cerrado («Ver detalle del margen»). En el email, la línea también llega a Telegram y a la bandeja web, porque usan el mismo contenido (igual que el costo total de PAR-01).
+- **Formulario.** El control del umbral en USD está en el formulario estructurado (crear y editar). El asistido no lo muestra; si una búsqueda ya tiene un valor, el formulario lo conserva.
+- **Evento de orden.** `results_sorted_margin` se registra con una server action propia (`app/app/searches/margin-actions.ts`) que llama `SortSelect`, para no tocar `actions.ts` de más.
+- **Admin.** `/admin/config` valida `dealer_margin` (`DealerMarginInput`) y las claves nuevas de `plan_limits`; el formulario de límites suma el toggle «Margen estimado para agencias (PRO-02)» y el mínimo en USD.
+
+Tests que quedaron escritos pero sin correr en esta rama: `supabase/tests/pro02_margin_test.sql`, `worker/tests/test_margin_postgres.py` y `UsdThresholdTests` en `worker/tests/test_notifications_postgres.py`.
 
 ## Preguntas para Juan
 
