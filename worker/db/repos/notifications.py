@@ -30,11 +30,15 @@ _MARGIN = ("public.plan_feature(sp.user_id, 'dealer_margin') AS dealer_margin, "
            "THEN sp.opportunity_threshold_usd END AS threshold_usd ")
 _TOTAL_COST = ("public.plan_feature(sp.user_id, 'total_cost') AS total_cost, sp.origin_lat, sp.origin_lon, "
                "sp.filters->>'location_label' AS location_label, sp.filters->'extra_locations' AS extra_locations ")
+# PRO-01: whether the opportunity email carries the «mensaje listo» block, and
+# the user's template (linted again when rendered, contact_message.render).
+_CONTACT_EMAIL = "public.plan_feature(sp.user_id, 'contact_email') AS contact_email, p.contact_template "
 
 
 async def profile_audiences(profile_ids: Iterable[int]) -> dict[int, dict[str, Any]]:
     """Search profiles with their notification settings and the user's contacts
-    (and, PAR-01, the total_cost flag and the search's zones; PRO-02, the
+    (and, PAR-01, the total_cost flag and the search's zones; PRO-01, the
+    contact_email flag and the user's contact_template; PRO-02, the
     dealer_margin flag and the threshold in USD)."""
     ids = list(dict.fromkeys(profile_ids))
     if not ids:
@@ -44,7 +48,8 @@ async def profile_audiences(profile_ids: Iterable[int]) -> dict[int, dict[str, A
             "SELECT sp.id AS profile_id, sp.name AS profile_name, sp.user_id, "
             "       public.effective_search_frequency(sp.user_id, sp.notification_frequency)::text AS frequency, "
             "       sp.notify_min_level::text AS min_level, sp.channels, " + _THRESHOLD + ", " + _TOTAL_COST + ", "
-            + _MARGIN + ", " + _CONTACT +
+            + _CONTACT_EMAIL + ", " + _MARGIN + ", "
+            + _CONTACT +
             "  FROM search_profiles sp JOIN profiles p ON p.id = sp.user_id "
             " WHERE sp.id = ANY(%s) AND public.search_access_active(sp.id)", (ids,))).fetchall()
     return {r["profile_id"]: r for r in rows}

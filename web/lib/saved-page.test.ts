@@ -6,6 +6,8 @@ const state = vi.hoisted(() => ({
   calls: [] as Call[],
   interactions: [] as Record<string, unknown>[],
   listings: [] as Record<string, unknown>[],
+  matches: [] as Record<string, unknown>[],
+  profile: { seller_filter_access: false } as Record<string, unknown>,
 }));
 // PAR-01: the cards' total cost line has its own tests (lib/cost-estimate.test.ts).
 vi.mock("@/lib/cost-estimate-data", () => ({ costLinesFor: async () => new Map() }));
@@ -17,7 +19,8 @@ vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
     from: (table: string) => {
       const rows = () =>
-        table === "user_listing_interactions" ? state.interactions : table === "listings" ? state.listings : [];
+        table === "user_listing_interactions" ? state.interactions : table === "listings" ? state.listings
+          : table === "matches" ? state.matches : table === "profiles" ? state.profile : [];
       const builder: Record<string, unknown> = new Proxy({}, {
         get: (_target, method: string) =>
           method === "then"
@@ -44,6 +47,8 @@ beforeEach(() => {
   state.calls = [];
   state.interactions = [{ listing_id: 5, status: "contacted", saved: false, note: "Llamé\nel martes <b>", updated_at: "2026-10-28" }];
   state.listings = [listing];
+  state.matches = [];
+  state.profile = { seller_filter_access: false };
 });
 
 async function render(e?: string) {
@@ -94,4 +99,30 @@ it("says what an empty filter means, without the first-time screen", async () =>
   expect(html).toContain("No marcaste publicaciones como contactadas.");
   expect(html).not.toContain("Todavía no guardaste publicaciones");
   expect(await render()).toContain("Todavía no guardaste publicaciones");
+});
+
+it("says «vendedor sin dato» when the best match's strict filter didn't know the seller (PRO-01, option C)", async () => {
+  state.profile = { seller_filter_access: true };
+  state.matches = [{ listing_id: 5, search_profile_id: 1, score: 70, level: "good",
+                     search_profiles: { name: "Fiesta", filters: { seller_types: ["private"] } },
+                     match_reasons: { seller: { result: "unknown", detail: "la publicación no lo informa", kind: "hard" } } }];
+  const html = await render();
+  expect(state.calls.find((c) => c[0] === "matches" && c[1] === "select")?.[2]).toContain("match_reasons");
+  expect(state.calls.find((c) => c[0] === "matches" && c[1] === "select")?.[2]).toContain("filters");
+  expect(html).toContain('data-testid="card-seller-unknown"');
+  state.matches = [{ ...state.matches[0], match_reasons: { seller_type: { result: "unknown", detail: "x", kind: "soft" } } }];
+  expect(await render()).not.toContain("card-seller-unknown");
+});
+
+it("not once the strict filter stopped applying: stale reasons of a sold listing after a downgrade (PRO-01, option C)", async () => {
+  state.listings = [{ ...listing, status: "gone" }];
+  const stale = { listing_id: 5, search_profile_id: 1, score: 70, level: "good",
+                  search_profiles: { name: "Fiesta", filters: { seller_types: ["private"] } },
+                  match_reasons: { seller: { result: "unknown", detail: "la publicación no lo informa", kind: "hard" } } };
+  state.matches = [stale];
+  state.profile = { seller_filter_access: false };                 // Pro expired
+  expect(await render()).not.toContain("card-seller-unknown");
+  state.profile = { seller_filter_access: true };
+  state.matches = [{ ...stale, search_profiles: { name: "Fiesta", filters: {} } }];   // seller_types removed
+  expect(await render()).not.toContain("card-seller-unknown");
 });

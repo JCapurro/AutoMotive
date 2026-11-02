@@ -21,6 +21,8 @@ from db.repos import listings as listings_repo
 from db.repos import notifications as repo
 from intelligence import cost_estimator, margin
 from intelligence.config import DEFAULT_COMPARABLES
+from intelligence import contact_message
+from intelligence.matching import strict_seller_unknown
 from intelligence.seller_questions import question_texts
 from notifications import dispatch
 from notifications.channels.base import Channel
@@ -242,13 +244,19 @@ class Notifier:
                     if cost_cfg and _opportunity(c) and a.get("total_cost") else None)
             # PRO-02: the margin line (and the USD threshold) only with the plan's flag.
             dealer = margin_payload(ev.get("margin_ref"), a)
+            # PRO-01: the ready-to-send message, already rendered (never raises), Pro's opportunities only.
+            contact = (contact_message.render(a.get("contact_template"), listing.get("catalog_model"),
+                                              listing.get("year"), questions)
+                       if _opportunity(c) and a.get("contact_email") else None)
+            # PRO-01, option C: «vendedor sin dato» in the opportunity email.
+            seller_unknown = True if _opportunity(c) and strict_seller_unknown(ev.get("match_reasons")) else None
             events.append(Event(
                 MATCH, c.listing_id, self._audience(a), level=ev["level"], score=ev["score"],
                 match_id=c.match_id, repost=c.repost, saved=bool(state.get("saved")),
                 status=state.get("status"),
                 payload=payload(listing, ev, min_n=min_n, profile_name=a["profile_name"],
                                 questions=questions or None, price_track=track, total_cost=cost,
-                                margin=dealer)))
+                                margin=dealer, contact_message=contact, seller_unknown=seller_unknown)))
         return await self._commit(events, now=now)
 
     async def on_listing_events(self, listing_events: Iterable[Any], *, now: datetime | None = None,

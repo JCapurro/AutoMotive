@@ -13,7 +13,7 @@ const catalog: Catalog = [
 const base: SearchValues = {
   name: "", make: "", model: "", trim: "", trims: [], trim_strict: false, year_min: null, year_max: null,
   price_max: null, currency: "USD", km_max: null, transmission: "", fuel: "", body_types: [], sources: ["mercadolibre"],
-  location: null, extra_locations: [], km_target: null, price_target: null, seller_type: "", notification_frequency: "immediate",
+  location: null, extra_locations: [], km_target: null, price_target: null, seller_type: "", seller_strict: false, notification_frequency: "immediate",
   notify_min_level: "good", opportunity_threshold_pct: null,
 };
 

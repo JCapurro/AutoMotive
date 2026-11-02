@@ -232,6 +232,7 @@ class Content:
     link: Link | None = None
     notes: list[str] = field(default_factory=list)       # what explains it
     questions: list[str] = field(default_factory=list)   # for the seller (email only)
+    contact_message: str | None = None                   # PRO-01: ready to send (email only)
     sections: list[tuple[str, list[DigestItem]]] = field(default_factory=list)   # digest
     images: list[str] = field(default_factory=list)
     price: str | None = None
@@ -284,6 +285,8 @@ def content(n: Notification, links: Links, now: datetime, *, owner: str | None =
         if dealer := margin_line(p.get("margin")):
             c.lines.append(dealer)
         c.questions = list(p.get("questions") or [])
+        if n.kind == "opportunity" and p.get("contact_message"):
+            c.contact_message = str(p["contact_message"])
     elif n.kind == "price_drop":
         drop = p.get("price_drop") or {}
         before, after = before_after(drop, listing)
@@ -412,12 +415,22 @@ def email(n: Notification, links: Links, now: datetime) -> EmailMessage:
         c.subject += " · Ese Auto"
     app_url = f"{links.base_url.rstrip('/')}/app" if links.tracked else None
 
+    if n.kind == "opportunity" and n.payload.get("seller_unknown") is True:
+        # PRO-01, option C: after the km and the price, email only.
+        listing = n.payload.get("listing") or {}
+        c.lines.insert(len([x for x in (km(listing), price(listing)) if x]), copy.SELLER_UNKNOWN)
+
     text = [c.header]
     if c.vehicle:
         text.append(c.vehicle)
     text += c.lines
     if c.questions:
-        text += ["", copy.QUESTIONS_TITLE] + [f"- {q}" for q in c.questions] + [copy.QUESTIONS_FOOTER]
+        # With the block below, the footer («copiá el mensaje desde la ficha») would repeat it.
+        text += ["", copy.QUESTIONS_TITLE] + [f"- {q}" for q in c.questions]
+        text += [] if c.contact_message else [copy.QUESTIONS_FOOTER]
+    if c.contact_message:
+        text += ["", copy.CONTACT_MESSAGE["email_title"], *c.contact_message.splitlines(),
+                 copy.CONTACT_MESSAGE["email_note"]]
     if c.link:
         text.append(f"{c.link.label}: {c.link.url}")
     for title, rows in c.sections:

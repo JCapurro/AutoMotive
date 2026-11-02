@@ -20,6 +20,8 @@ const plan = z.object({
   threshold_alerts: z.boolean().optional(), model_less_search: z.boolean().optional(),
   max_locations: positiveCount.nullable().optional(),
   total_cost: z.boolean().optional(),
+  // PRO-01: the strict seller filter and the «mensaje listo» block in the opportunity email.
+  seller_filter: z.boolean().optional(), contact_email: z.boolean().optional(),
   // PRO-02: the estimated dealer margin (line, order and threshold) and the smallest threshold in USD.
   dealer_margin: z.boolean().optional(), min_threshold_usd: positiveCount.max(1_000_000).optional(),
 }).passthrough();
@@ -152,7 +154,7 @@ export function configFieldLabel(key: string, path: string): string {
   if (key === "plan_limits") {
     const [tier, field] = path.split(".");
     const planName = ({ free: "Prueba gratis", pass: "Particular", pro: "Pro" } as Record<string, string>)[tier];
-    const fieldName = ({ max_profiles: "búsquedas activas", max_visible_results: "resultados por búsqueda", max_total_results: "resultados acumulados durante la prueba", immediate_alerts_per_day: "avisos inmediatos por día", max_locations: "zonas por búsqueda", threshold_alerts: "umbral de oportunidad", model_less_search: "búsqueda sin modelo", total_cost: "costo total estimado", dealer_margin: "margen estimado para agencias", min_threshold_usd: "umbral mínimo por margen (USD)" } as Record<string, string>)[field];
+    const fieldName = ({ max_profiles: "búsquedas activas", max_visible_results: "resultados por búsqueda", max_total_results: "resultados acumulados durante la prueba", immediate_alerts_per_day: "avisos inmediatos por día", max_locations: "zonas por búsqueda", threshold_alerts: "umbral de oportunidad", model_less_search: "búsqueda sin modelo", total_cost: "costo total estimado", seller_filter: "filtro estricto de vendedor", contact_email: "mensaje listo en el email", dealer_margin: "margen estimado para agencias", min_threshold_usd: "umbral mínimo por margen (USD)" } as Record<string, string>)[field];
     if (planName) return fieldName ? `${planName}: ${fieldName}` : planName + (field ? `: ${field}` : "");
   }
   if (key === "risk") {

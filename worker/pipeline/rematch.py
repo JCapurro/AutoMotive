@@ -89,7 +89,8 @@ async def rematch_profile(alert: dict, scorer: Scorer | None = None) -> int:
     kept = {i for i, _ in scored}
     await rescore([q for q in await matches_repo.matches_of_profile(alert["id"]) if q["listing_id"] not in kept],
                   scorer)
-    await db.mark_bootstrapped(alert["id"])
+    # Only the request this run read: one a plan flip wrote meanwhile stays pending.
+    await db.mark_bootstrapped(alert["id"], alert.get("rematch_requested_at"))
     return len(scored)
 
 

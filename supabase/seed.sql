@@ -42,7 +42,7 @@ insert into public.app_config (key, value) values
      "enforced": false,
      "free": {"max_profiles": 1, "max_visible_results": 100, "immediate_alerts_per_day": 3, "total_cost": true},
      "pass": {"max_profiles": 3, "immediate_alerts_per_day": 10, "model_less_search": true, "total_cost": true},
-     "pro":  {"max_profiles": 20, "immediate_alerts_per_day": 50, "model_less_search": true}
+     "pro":  {"max_profiles": 20, "immediate_alerts_per_day": 50, "model_less_search": true, "seller_filter": true, "contact_email": true}
    }'),
   ('repost',                        '{"window_days": 60, "price_tol_pct": 10}'),
   ('enrichment',                    '{"batch_per_source": 20, "max_age_days": 30}'),

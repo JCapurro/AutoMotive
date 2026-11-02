@@ -80,6 +80,14 @@ async def _stage(alert: dict, listing_ids: list[int], scorer: Scorer) -> _Staged
     return _Staged(alert, evaluations, fresh, elsewhere)
 
 
+def _seller_rematch_pending(alert: dict) -> bool:
+    """A search with a seller type whose rematch is pending (a plan flip
+    marks those, sync_seller_filter_access): until run_pending() rematches it,
+    what its batches find for the first time is backfill, never notified."""
+    filters = (alert.get("profile") or {}).get("filters") or {}
+    return bool(alert.get("rematch_requested") and filters.get("seller_types"))
+
+
 async def match_alert(staged: _Staged, scorer: Scorer, *, first_run: bool,
                       max_age_days: int, foreign_first_run: bool = False, held_first_run: bool = False,
                       backfill_ids: Iterable[int] = ()) -> list[MatchCandidate]:
@@ -125,11 +133,17 @@ async def match_alert(staged: _Staged, scorer: Scorer, *, first_run: bool,
     elif first_run or not alert.get("bootstrapped"):
         await store(fresh, backfill=True)
         if not alert.get("bootstrapped"):
-            await db.mark_bootstrapped(alert["id"])
+            await db.mark_bootstrapped(alert["id"], alert.get("rematch_requested_at"))
         log.info("profile=%s %s: %d backfill, no notifications", alert["id"],
                  "first target run" if first_run else "bootstrap", len(fresh))
         return []
 
+    if _seller_rematch_pending(alert):
+        # PRO-01, answer 3: a plan flip's rematch is pending. The lane read
+        # the new seller_filter, but a listing the old one had matched (and
+        # the strict rematch deleted) has no match row, so it looks fresh: it
+        # goes back as backfill, as the rematch would store it, not as news.
+        backfill_ids = {*backfill_ids, *fresh}
     quiet = {*backfill_ids, *(lid for lid in fresh if news.muted(rows[lid]))} & set(fresh)
     if quiet:
         await store([lid for lid in fresh if lid in quiet], backfill=True)

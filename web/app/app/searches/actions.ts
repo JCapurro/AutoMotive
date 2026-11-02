@@ -18,13 +18,16 @@ import {
   isModelLess,
   matchingChanged,
   modelBodyTypes,
+  sellerForPlan,
   sortKeys,
+  storedSellerTypes,
   toColumns,
   toFilters,
 } from "@/lib/search-form";
 import { type RelaxSuggestion, applyRelax, bestSuggestions, relaxVariants } from "@/lib/search-relax";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import type { Filters } from "@/lib/types";
 import type { Json } from "@/types/database";
 
 export type SaveResult = { error?: string; fields?: Record<string, string>; savedId?: number };
@@ -126,13 +129,23 @@ async function save(id: number | null, raw: SearchInput, origin?: SaveOrigin): P
   const supabase = await createClient();
   // No make and no model: a search by body type, for plans with model_less_search (the database checks it again).
   const modelLess = isModelLess(parsed.data);
-  const [vehicle, { data: thresholdAlerts }, { data: modelLessSearch }, { data: access }, margin] = await Promise.all([
+  const [vehicle, { data: thresholdAlerts }, { data: modelLessSearch }, { data: access }, { data: sellerFilter }, before, margin] = await Promise.all([
     modelLess ? null : canonical(supabase, parsed.data),
     supabase.rpc("my_plan_feature", { p_feature: "threshold_alerts" }),
     modelLess ? supabase.rpc("my_plan_feature", { p_feature: "model_less_search" }) : { data: null },
     parsed.data.location && parsed.data.extra_locations.length ? supabase.rpc("my_plan_snapshot") : { data: null },
+    supabase.rpc("my_plan_feature", { p_feature: "seller_filter" }),
+    id == null ? null : supabase
+      .from("search_profiles")
+      .select("filters, preferences, origin_lat, origin_lon, radius_km")
+      .eq("id", id)
+      .maybeSingle()
+      .then(({ data }) => data),
     marginAccess(supabase),
   ]);
+  if (id != null && !before) return { error: "La búsqueda no existe." };
+  // PRO-01: what was stored, for the strict seller filter a plan without it can keep but not set.
+  const storedSeller = storedSellerTypes(before?.filters as Filters | undefined);
   // PRO-02: only with the margin (Pro, and a database with the column) the threshold in USD is written, at least the plan's minimum.
   const thresholdUsd = margin ? (parsed.data.opportunity_threshold_usd ?? null) : undefined;
   if (margin && thresholdUsd != null && thresholdUsd < margin.minThresholdUsd) {
@@ -152,7 +165,7 @@ async function save(id: number | null, raw: SearchInput, origin?: SaveOrigin): P
     ? { make: vehicle.make, model: vehicle.model, body_types: parsed.data.body_types.filter((code) => offered.includes(code)) }
     : {};
   // Only a plan with the threshold (Pro) keeps one; any other plan saves none.
-  const values = { ...parsed.data, ...vehicleValues,
+  const values = { ...sellerForPlan(parsed.data, sellerFilter === true, storedSeller), ...vehicleValues,
     opportunity_threshold_pct: thresholdAlerts ? parsed.data.opportunity_threshold_pct : null,
     opportunity_threshold_usd: thresholdUsd };
   const sources = await enabledSources(supabase);
@@ -206,6 +219,10 @@ async function save(id: number | null, raw: SearchInput, origin?: SaveOrigin): P
       by_body_type: modelLess,
       ...(origin ? { llm_job_id: origin.jobId, edited: origin.edited } : {}),
     });
+    const sellerTypes = storedSellerTypes(columns.filters);
+    if (sellerTypes.length) {
+      await track(supabase, user.id, "seller_filter_set", { profile_id: data.id, seller_types: sellerTypes, mode: origin?.mode ?? "structured" });
+    }
     // Several reviewed models report the request when the review ends (finishAssisted).
     if (!origin?.stay) {
       await recordSearchRequest(supabase, user.id, origin?.mode === "assisted" ? origin.jobId : null, origin?.mode ?? "structured", modelLess);
@@ -218,11 +235,6 @@ async function save(id: number | null, raw: SearchInput, origin?: SaveOrigin): P
     redirect(`/app/searches/${data.id}`);
   }
 
-  const { data: before } = await supabase
-    .from("search_profiles")
-    .select("filters, preferences, origin_lat, origin_lon, radius_km")
-    .eq("id", id)
-    .maybeSingle();
   if (!before) return { error: "La búsqueda no existe." };
   const previousUsd = margin
     ? ((await supabase.from("search_profiles").select("opportunity_threshold_usd").eq("id", id).maybeSingle()).data?.opportunity_threshold_usd ?? null)
@@ -235,6 +247,10 @@ async function save(id: number | null, raw: SearchInput, origin?: SaveOrigin): P
   if (error && isDuplicate(error)) return { error: DUPLICATE_ACTIVE };
   if (error) return modelLessError(error.message) ?? { error: "No pudimos guardar los cambios. Probá de nuevo." };
   await track(supabase, user.id, "search_profile_updated", { profile_id: id, filters_changed: rematch });
+  const sellerTypes = storedSellerTypes(columns.filters);
+  if (JSON.stringify(sellerTypes) !== JSON.stringify(storedSeller)) {
+    await track(supabase, user.id, "seller_filter_set", { profile_id: id, seller_types: sellerTypes, mode: "edit" });
+  }
   if (margin && thresholdUsd !== previousUsd) {
     await track(supabase, user.id, "margin_threshold_set", { profile_id: id, threshold_usd: thresholdUsd ?? null, previous: previousUsd });
   }

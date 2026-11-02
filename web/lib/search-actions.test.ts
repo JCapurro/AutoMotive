@@ -9,6 +9,8 @@ const state = vi.hoisted(() => ({
   catalog: null as { make: string; model: string; body_types: string[] } | null,
   dbError: null as { code?: string; message: string } | null,
   inserted: null as Record<string, unknown> | null,
+  /** The stored row an edit reads first (PRO-01: its filters.seller_types). */
+  before: null as Record<string, unknown> | null,
   updated: null as Record<string, unknown> | null,
   active: [] as Record<string, unknown>[],
   /** Answers for successive active-search lookups, before falling back to `active`. */
@@ -43,7 +45,7 @@ vi.mock("@/lib/supabase/server", () => ({
         if (table === "vehicle_catalog") return { data: state.catalog };
         if (table === "sources") return { data: [{ id: "mercadolibre" }, { id: "kavak" }] };
         if (table === "profiles") return { data: { default_channels: ["email"] } };
-        return { data: { id: 9, filters: {}, preferences: {}, origin_lat: null, origin_lon: null, radius_km: null }, error: state.dbError, count: 1 };
+        return { data: state.before ?? { id: 9, filters: {}, preferences: {}, origin_lat: null, origin_lon: null, radius_km: null }, error: state.dbError, count: 1 };
       };
       const query: Record<string, unknown> = {};
       for (const method of ["select", "eq", "ilike", "is", "limit", "in", "order"]) query[method] = () => query;
@@ -70,6 +72,7 @@ beforeEach(() => {
   state.catalog = null;
   state.dbError = null;
   state.inserted = null;
+  state.before = null;
   state.active = [];
   state.activeQueue = [];
   state.updated = null;
@@ -255,5 +258,71 @@ describe("saveSearch: the threshold by margin in USD (PRO-02, Pro only)", () => 
     const result = await saveSearch(null, { ...CORSA, opportunity_threshold_usd: 499 }, STAY);
     expect(result.fields).toEqual({ opportunity_threshold_usd: "El mínimo es USD 500." });
     expect(state.inserted).toBeNull();
+  });
+});
+
+describe("PRO-01: the strict seller filter (decisión 8)", () => {
+  const FIESTA = { make: "ford", model: "fiesta", sources: ["mercadolibre", "kavak"] };
+  const stored = (filters: Record<string, unknown>) => ({
+    id: 9, filters: { make: "Ford", model: "Fiesta", trims: [], trim_strict: false, ...filters }, preferences: {}, origin_lat: null, origin_lon: null, radius_km: null,
+  });
+  const events = (name: string) => state.track.mock.calls.filter((c) => c[2] === name).map((c) => c[3]);
+  beforeEach(() => { state.catalog = { make: "Ford", model: "Fiesta", body_types: [] }; });
+
+  it("Pro stores it and records seller_filter_set", async () => {
+    state.features.seller_filter = true;
+    await saveSearch(null, { ...FIESTA, seller_type: "private", seller_strict: true }, STAY);
+    expect(state.inserted?.filters).toMatchObject({ seller_types: ["private"] });
+    expect(state.inserted?.preferences).not.toHaveProperty("seller_type");
+    expect(events("seller_filter_set")).toEqual([{ profile_id: 9, seller_types: ["private"], mode: "assisted" }]);
+  });
+
+  it("without the feature a new one is not stored: the type is the preference", async () => {
+    await saveSearch(null, { ...FIESTA, seller_type: "private", seller_strict: true }, STAY);
+    expect(state.inserted?.filters).not.toHaveProperty("seller_types");
+    expect(state.inserted?.preferences).toMatchObject({ seller_type: "private" });
+    expect(events("seller_filter_set")).toEqual([]);
+  });
+
+  it("without the feature an edit keeps the stored one (no spurious rematch) and never replaces it", async () => {
+    state.before = stored({ seller_types: ["private"] });
+    await saveSearch(9, { ...FIESTA, seller_type: "private", seller_strict: true });
+    expect(state.updated?.filters).toMatchObject({ seller_types: ["private"] });
+    expect(state.updated).not.toHaveProperty("rematch_requested_at");
+    expect(events("seller_filter_set")).toEqual([]);
+    await saveSearch(9, { ...FIESTA, seller_type: "dealer", seller_strict: true });
+    expect(state.updated?.filters).toMatchObject({ seller_types: ["private"] });
+  });
+
+  it("any plan clears it («Quitar filtro estricto»), with a rematch and the event", async () => {
+    state.before = stored({ seller_types: ["private"] });
+    await saveSearch(9, { ...FIESTA, seller_type: "private", seller_strict: false });
+    expect(state.updated?.filters).not.toHaveProperty("seller_types");
+    expect(state.updated?.preferences).toMatchObject({ seller_type: "private" });
+    expect(state.updated).toHaveProperty("rematch_requested_at");
+    expect(events("seller_filter_set")).toEqual([{ profile_id: 9, seller_types: [], mode: "edit" }]);
+  });
+
+  it("Pro with a malformed value: an error and nothing written", async () => {
+    state.features.seller_filter = true;
+    for (const bad of [
+      { seller_type: "dealer_inferred", seller_strict: true },
+      { seller_type: "private", seller_strict: "true" },
+      { seller_type: "", seller_strict: true },
+      { seller_type: ["private", "dealer"], seller_strict: true },
+    ]) {
+      const result = await saveSearch(null, { ...FIESTA, ...bad } as never, STAY);
+      expect(result.error).toBe("Revisá los campos marcados.");
+      expect(state.inserted).toBeNull();
+    }
+  });
+
+  it("seller_filter_set only when it changes", async () => {
+    state.features.seller_filter = true;
+    state.before = stored({ seller_types: ["private"] });
+    await saveSearch(9, { ...FIESTA, seller_type: "private", seller_strict: true, km_max: 100000 });
+    expect(events("seller_filter_set")).toEqual([]);
+    await saveSearch(9, { ...FIESTA, seller_type: "dealer", seller_strict: true });
+    expect(events("seller_filter_set")).toEqual([{ profile_id: 9, seller_types: ["dealer"], mode: "edit" }]);
   });
 });

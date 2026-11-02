@@ -43,6 +43,7 @@ export default async function EditSearchPage({ params }: PageProps<"/app/searche
         marginThreshold={formData.marginThreshold}
         modelLessSearch={formData.modelLessSearch}
         maxLocations={formData.maxLocations}
+        sellerFilter={formData.sellerFilter}
       />
     </div>
   );

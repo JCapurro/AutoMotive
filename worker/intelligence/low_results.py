@@ -25,10 +25,11 @@ from dataclasses import dataclass, field
 from typing import Any, Iterable, Mapping
 
 from intelligence import copy
-from intelligence.matching import FAIL, evaluate, model_less
+from intelligence.matching import FAIL, evaluate, model_less, seller_types, strict_seller
 
 # The filters the funnel reports, in the order a person reads them.
-FILTERS = ("year", "price", "km", "location", "transmission", "fuel", "body_type", "trim", "source", "model")
+FILTERS = ("year", "price", "km", "location", "transmission", "fuel", "body_type", "trim", "seller", "source",
+           "model")
 
 LABEL = {
     "year": "año",
@@ -39,6 +40,7 @@ LABEL = {
     "fuel": "combustible",
     "body_type": "carrocería",
     "trim": "versión",
+    "seller": "vendedor",
     "source": "fuentes",
     "model": "modelo",
 }
@@ -78,8 +80,12 @@ def eligible(filters: Mapping[str, Any]) -> bool:
 
 
 def fingerprint(profile: Mapping[str, Any]) -> str:
-    """Changes when what decides the results changes (filters, place, radius)."""
+    """Changes when what decides the results changes (filters, place, radius).
+    PRO-01: with filters.seller_types the plan flag decides too (a plan change
+    asks for a new diagnosis); without it the key is today's, byte for byte."""
     key = {k: profile.get(k) for k in ("filters", "origin_lat", "origin_lon", "radius_km")}
+    if "seller_types" in (profile.get("filters") or {}):
+        key["seller_filter"] = bool(profile.get("seller_filter"))
     return hashlib.sha256(json.dumps(key, sort_keys=True, default=str).encode()).hexdigest()[:16]
 
 
@@ -216,6 +222,8 @@ def llm_context(fun: Funnel, profile: Mapping[str, Any], results: int) -> dict[s
     search = {k: f[k] for k in keep if f.get(k) not in (None, [], "")}
     if profile.get("radius_km"):
         search["radius_km"] = profile["radius_km"]
+    if strict_seller(profile):
+        search["vendedor"] = "solo " + " o ".join(copy.SELLER_ONLY[t] for t in seller_types(f))
     if search.get("transmission"):
         search["transmission"] = copy.TRANSMISSION.get(search["transmission"], search["transmission"])
     return {"busqueda": search, "resultados_actuales": results, "embudo": fun.to_json(),
