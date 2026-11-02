@@ -47,6 +47,14 @@ select ok(has_column_privilege('authenticated', 'public.matches', 'price_ref', '
           and has_column_privilege('authenticated', 'public.matches', 'score', 'SELECT')
           and has_column_privilege('authenticated', 'public.matches', 'contact_questions', 'SELECT'),
           'the other columns of matches stay readable');
+-- Every other column, whatever exists: a later migration that adds a column to matches
+-- without granting it would break a web select that names it (403 from PostgREST).
+select is((select array_agg(c.column_name::text order by c.column_name)
+             from information_schema.columns c
+            where c.table_schema = 'public' and c.table_name = 'matches' and c.column_name <> 'margin_ref'
+              and not (has_column_privilege('authenticated', 'public.matches', c.column_name, 'SELECT')
+                       and has_column_privilege('anon', 'public.matches', c.column_name, 'SELECT'))),
+          null, 'every column of matches but margin_ref is readable by authenticated and anon');
 select ok(not has_function_privilege('anon', 'public.my_margin_sort_keys(bigint)', 'execute'), 'my_margin_sort_keys: not for anon');
 
 -- ---------------------------------------------------------------- fixtures: a Pro, a Particular and an admin
@@ -113,6 +121,23 @@ select throws_ok($$select margin_ref from public.matches where id = 99710001$$, 
                  'the Pro cannot read matches.margin_ref directly either');
 select results_eq($$select listing_id from public.search_results(9971, 'all', 'score')$$,
                   $$values (997004::bigint), (997001::bigint), (997002::bigint), (997003::bigint)$$, 'search_results score unchanged');
+-- What the web selects from matches with the user's client (the PostgREST shapes of
+-- app/app/listings/[id]/page.tsx and app/app/saved/page.tsx, on this branch and on main),
+-- and the views and RPCs over matches, keep working; only select * (which the web never
+-- does with the user's client, web/lib/matches-select.test.ts) is refused.
+select results_eq($$select q.id from (select m.id, m.search_profile_id, m.score, m.level, m.score_breakdown, m.match_reasons,
+                       m.price_ref, m.red_flags, m.seller_questions, m.contact_questions, sp.name, sp.filters
+                       from public.matches m left join public.search_profiles sp on sp.id = m.search_profile_id
+                      where m.listing_id = 997001) q$$,
+                  $$values (99710001::bigint)$$, 'the listing page''s columns of matches (with search_profiles) are readable');
+select lives_ok($$select m.id, m.listing_id, m.search_profile_id, m.score, m.level, m.match_reasons from public.matches m$$,
+                'the saved page''s columns of matches are readable');
+select is((select count(*)::int from public.matches), 4, 'count(*) over the own matches works');
+select throws_ok($$select * from public.matches$$, '42501', null, 'select * from matches is refused (it includes margin_ref)');
+select lives_ok($$select * from public.match_cards$$, 'match_cards (security invoker) still reads');
+select lives_ok($$select * from public.search_result_counts(9971)$$, 'search_result_counts still reads');
+select lives_ok($$select * from public.recent_opportunities(10)$$, 'recent_opportunities still reads');
+select lives_ok($$select public.dashboard_summary()$$, 'dashboard_summary still reads');
 
 reset role;
 
