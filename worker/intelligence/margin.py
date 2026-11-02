@@ -195,10 +195,20 @@ def pct_text(pct: float) -> str:
     return str(int(pct)) if float(pct).is_integer() else f"{pct:.2f}".rstrip("0").replace(".", ",")
 
 
+def threshold_low(ref: Mapping[str, Any] | None) -> float | None:
+    """What the USD threshold compares: the estimated margin's low end as
+    computed, never the shown number. email_payload rounds a single value to
+    the nearest 10, so a USD 495 margin shows as USD 500 but must not reach a
+    USD 500 threshold (the low end, conservative)."""
+    g = ref.get("gross_margin_usd") if isinstance(ref, Mapping) else None
+    low = _num(g.get("min")) if isinstance(g, Mapping) else None
+    return _r2(low) if low is not None else None
+
+
 def email_payload(ref: Mapping[str, Any] | None) -> dict[str, Any] | None:
     """What an alert keeps (notifications.payload['margin']): the margin
     rounded outward to USD 10 and the words' inputs, frozen when the row is
-    created. usd_min is what the USD threshold compares (the low end)."""
+    created. The USD threshold compares threshold_low, not usd_min."""
     if not ref or not isinstance(ref.get("gross_margin_usd"), dict):
         return None
     g, p = ref["gross_margin_usd"], ref.get("gross_margin_pct") or {}

@@ -231,6 +231,14 @@ class LineTests(unittest.TestCase):
                              "dealer_n": 6, "reconditioning_pct": 5.0, "transfer_status": "ok", "jurisdiction": ["caba"],
                              "as_of": "2026-10-30"})
         self.assertIsNone(margin.email_payload(None))
+
+    def test_the_threshold_low_end_is_unrounded(self):
+        ref = {**compute(), "gross_margin_usd": {"min": 495.0, "max": 495.0}}
+        self.assertEqual(margin.email_payload(ref)["usd_min"], 500)       # the copy, to the nearest 10
+        self.assertEqual(margin.threshold_low(ref), 495.0)                  # what the threshold compares
+        self.assertEqual(margin.threshold_low(compute()), 1216.27)
+        self.assertIsNone(margin.threshold_low(None))
+        self.assertIsNone(margin.threshold_low({"gross_margin_usd": None}))
         self.assertIsNone(margin.line(None))
 
     def test_every_variant_is_prudent(self):

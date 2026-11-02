@@ -175,10 +175,14 @@ def total_cost_payload(listing: Mapping[str, Any], audience: Mapping[str, Any], 
 
 def margin_payload(margin_ref: Mapping[str, Any] | None, audience: Mapping[str, Any]) -> dict[str, Any] | None:
     """PRO-02: what an alert keeps of matches.margin_ref (margin.email_payload,
-    rounded and frozen), only when the plan has dealer_margin."""
+    rounded and frozen), only when the plan has dealer_margin, plus usd_low
+    (margin.threshold_low, unrounded), what the USD threshold compares."""
     if not audience.get("dealer_margin") or not isinstance(margin_ref, Mapping):
         return None
-    return margin.email_payload(margin_ref)
+    out = margin.email_payload(margin_ref)
+    if out is not None:
+        out["usd_low"] = margin.threshold_low(margin_ref)
+    return out
 
 
 async def _min_n() -> int:

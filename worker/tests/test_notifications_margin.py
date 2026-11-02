@@ -23,10 +23,10 @@ def pro(pct=None, usd=None, **kw) -> Audience:
                     kw.get("profile_id", 1), pct, usd)
 
 
-def event(level="high", *, audience, diff=None, usd_min=None, listing=10, kind=MATCH, **kw) -> Event:
+def event(level="high", *, audience, diff=None, usd_min=None, usd_low=None, listing=10, kind=MATCH, **kw) -> Event:
     payload = {"match": {"score": 80, "level": level, "diff_pct": diff}}
     if usd_min is not None:
-        payload["margin"] = {**MARGIN_CABA, "usd_min": usd_min}
+        payload["margin"] = {**MARGIN_CABA, "usd_min": usd_min, "usd_low": usd_min if usd_low is None else usd_low}
     extra = {"snapshot_id": 7, "drop_pct": 6} if kind == DROP else {}
     return Event(kind, listing, audience, level=level, score=80, match_id=100 + listing, payload=payload,
                  **extra, **kw)
@@ -63,6 +63,10 @@ class UsdThresholdTests(unittest.TestCase):
 
     def test_the_low_end_of_the_range_decides(self):
         e = event(audience=pro(usd=1220), usd_min=1210)            # usd_max 1230 would reach it
+        self.assertEqual(kinds(decide(e, RULES)), [("opportunity", "digest")])
+
+    def test_the_unrounded_low_end_decides_not_the_shown_one(self):
+        e = event(audience=pro(usd=500), usd_min=500, usd_low=495.0)   # shown as USD 500
         self.assertEqual(kinds(decide(e, RULES)), [("opportunity", "digest")])
 
     def test_reaching_it_alerts_even_below_the_minimum_level(self):
@@ -123,7 +127,7 @@ class PayloadGatingTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_only_with_dealer_margin(self):
         e = await self.payloads({"dealer_margin": True, "threshold_usd": 500})
-        self.assertEqual(e.payload["margin"], MARGIN_CABA)
+        self.assertEqual(e.payload["margin"], {**MARGIN_CABA, "usd_low": 1216.27})
         self.assertEqual(e.audience.threshold_usd, 500)
         for extra in ({"dealer_margin": False}, {}):
             with self.subTest(extra=extra):
@@ -136,7 +140,27 @@ class PayloadGatingTests(unittest.IsolatedAsyncioTestCase):
     def test_margin_payload(self):
         self.assertIsNone(service.margin_payload(None, {"dealer_margin": True}))
         self.assertIsNone(service.margin_payload(compute(), {"dealer_margin": False}))
-        self.assertEqual(service.margin_payload(compute(), {"dealer_margin": True}), MARGIN_CABA)
+        self.assertEqual(service.margin_payload(compute(), {"dealer_margin": True}), {**MARGIN_CABA, "usd_low": 1216.27})
+
+    def test_the_threshold_compares_the_unrounded_low_end(self):
+        """A single USD 495 (no transfer subtracted) shows as USD 500 but does
+        not reach a USD 500 threshold; USD 500.00 does."""
+        for low, reached in ((495.0, False), (499.99, False), (500.0, True)):
+            ref = {**compute(), "gross_margin_usd": {"min": low, "max": low}}
+            p = service.margin_payload(ref, {"dealer_margin": True})
+            with self.subTest(low=low):
+                self.assertEqual((p["usd_min"], p["usd_max"], p["usd_low"]), (500, 500, low))
+                e = Event(MATCH, 10, pro(usd=500), level="high", score=80, match_id=110,
+                          payload={"match": {"score": 80, "level": "high", "diff_pct": None}, "margin": p})
+                out = decide(e, RULES)
+                self.assertEqual(kinds(out), [("opportunity", "queued" if reached else "digest")])
+                self.assertEqual(out[0].payload.get("threshold_usd"), 500 if reached else None)
+
+    def test_a_payload_without_usd_low_does_not_reach_it(self):
+        payload = {"match": {"score": 80, "level": "high", "diff_pct": None},
+                   "margin": {k: v for k, v in MARGIN_CABA.items()}}
+        e = Event(MATCH, 10, pro(usd=500), level="high", score=80, match_id=110, payload=payload)
+        self.assertEqual(kinds(decide(e, RULES)), [("opportunity", "digest")])
 
 
 class MarginLineTests(unittest.TestCase):

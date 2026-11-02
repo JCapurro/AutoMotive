@@ -28,7 +28,7 @@ Rules:
     notify_min_level. A saved listing's price_drop stays always immediate.
   * threshold by margin (PRO-02, Pro): the same rule with
     opportunity_threshold_usd against the estimated margin's low end
-    (payload.margin.usd_min); with both thresholds set, reaching either one
+    (payload.margin.usd_low, unrounded); with both thresholds set, reaching either one
     is enough (payload.threshold_usd and/or threshold_pct). Without a margin
     (not enough dealer comparables) it is not reached.
   * dedupe_key: match:<listing_id> for new_match and opportunity (a listing is
@@ -125,8 +125,10 @@ def below_comparables(event: Event) -> float | None:
 
 
 def margin_low(event: Event) -> float | None:
-    """PRO-02: the estimated margin's low end in USD (payload.margin.usd_min), or None."""
-    low = (event.payload.get("margin") or {}).get("usd_min")
+    """PRO-02: the estimated margin's low end in USD, unrounded
+    (payload.margin.usd_low, margin.threshold_low), or None. Never usd_min:
+    that one is rounded for the copy (a single value to the nearest 10)."""
+    low = (event.payload.get("margin") or {}).get("usd_low")
     return float(low) if isinstance(low, (int, float)) and not isinstance(low, bool) else None
 
 
