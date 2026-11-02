@@ -11,9 +11,10 @@ import type { Jurisdiction } from "@/lib/cost-estimator";
 import { ceilTo, floorTo, isoDayMonth, ROUNDING_EPS, thousands } from "@/lib/format";
 
 export type MarginRange = { min: number; max: number };
-export type TransferStatus = "ok" | "no_zone" | "no_fx" | "params" | "base" | "no_price" | "disabled";
+export type TransferStatus = "ok" | "no_zone" | "no_official" | "no_official_some" | "no_fx" | "params" | "base" | "no_price" | "disabled";
 export type MarginRef = {
   v: number;
+  status?: "ok";
   dealer_median: number;
   dealer_n: number;
   n: number;
@@ -25,13 +26,29 @@ export type MarginRef = {
   reconditioning: { pct: number; min_usd: number; usd: number } | null;
   transfer: { status: TransferStatus; usd: MarginRange | null; terms?: string[]; jurisdiction: Jurisdiction[] | null; seller: string | null };
   est_costs_usd: MarginRange;
+  /** What buying the car costs: asking_usd + est_costs_usd (the base of gross_margin_pct). */
+  acquisition_usd?: MarginRange;
   gross_margin_usd: MarginRange;
   gross_margin_pct: MarginRange;
   as_of: { dealer_margin?: string | null; cost_estimator?: string | null };
 };
 
+/** Juan, 02/11: fewer dealers than comparables.min_n, no margin but the line that says so. */
+export type MarginFewDealers = {
+  v: number;
+  status: "few_dealers";
+  dealer_n: number;
+  min_n: number;
+  n?: number;
+  level_used?: string;
+};
+
+/** What matches.margin_ref holds: a margin, or not enough dealers. */
+export type StoredMargin = MarginRef | MarginFewDealers;
+
 /** What the worker's alerts keep (margin.email_payload), rounded. */
 export type MarginPayload = {
+  status?: "ok";
   usd_min: number;
   usd_max: number;
   pct_min: number | null;
@@ -50,10 +67,23 @@ function fill(template: string, values: Record<string, string | number>): string
 
 const isNum = (x: unknown): x is number => typeof x === "number" && Number.isFinite(x);
 
-/** A stored margin_ref, or null when it is not one (an unknown shape is never shown). */
+/** A stored margin_ref that says there are not enough dealers, or null. */
+export function asFewDealers(value: unknown): MarginFewDealers | null {
+  if (!value || typeof value !== "object") return null;
+  const r = value as Partial<MarginFewDealers>;
+  return r.status === "few_dealers" && Number.isInteger(r.dealer_n) && Number.isInteger(r.min_n) ? (r as MarginFewDealers) : null;
+}
+
+/** A stored margin_ref (a margin or not enough dealers), or null when it is not one. */
+export function asStoredMargin(value: unknown): StoredMargin | null {
+  return asFewDealers(value) ?? asMarginRef(value);
+}
+
+/** A stored margin_ref with a margin, or null when it is not one (an unknown shape is never shown). */
 export function asMarginRef(value: unknown): MarginRef | null {
   if (!value || typeof value !== "object") return null;
-  const r = value as Partial<MarginRef>;
+  const r = value as Partial<MarginRef> & { status?: unknown };
+  if (r.status !== undefined && r.status !== "ok") return null;
   const g = r.gross_margin_usd;
   if (!g || !isNum(g.min) || !isNum(g.max) || !isNum(r.dealer_median) || !isNum(r.dealer_n)) return null;
   return r as MarginRef;
@@ -78,12 +108,18 @@ export function marginPayload(ref: MarginRef): MarginPayload {
   const g = ref.gross_margin_usd;
   const p = ref.gross_margin_pct;
   const single = Math.abs(g.max - g.min) < ROUNDING_EPS;
+  const pct = p && isNum(p.min) && isNum(p.max)
+    ? Math.abs(p.max - p.min) < ROUNDING_EPS
+      ? [Math.floor(p.min + 0.5), Math.floor(p.min + 0.5)]
+      : [Math.floor(p.min + ROUNDING_EPS), Math.ceil(p.max - ROUNDING_EPS)]
+    : [null, null];
   const dates = [ref.as_of?.dealer_margin, ref.as_of?.cost_estimator].filter((d): d is string => typeof d === "string").sort();
   return {
+    status: "ok",
     usd_min: single ? round10(g.min) : floorTo(g.min, 10),
     usd_max: single ? round10(g.min) : ceilTo(g.max, 10),
-    pct_min: p && isNum(p.min) ? Math.floor(p.min + ROUNDING_EPS) : null,
-    pct_max: p && isNum(p.max) ? Math.ceil(p.max - ROUNDING_EPS) : null,
+    pct_min: pct[0],
+    pct_max: pct[1],
     dealer_median: round10(ref.dealer_median),
     dealer_n: ref.dealer_n,
     reconditioning_pct: ref.reconditioning ? ref.reconditioning.pct : null,
@@ -119,7 +155,15 @@ export function marginHeadline(p: MarginPayload): string {
   });
 }
 
+/** «Margen estimado: no hay suficientes agencias … (n = 2, mínimo 5)». */
+export function fewDealersLine(r: MarginFewDealers): string {
+  return fill(MARGIN.fewDealers, { n: r.dealer_n, min_n: r.min_n });
+}
+
+/** The line of the cards, the listing page and the Pro emails: the margin, or why there is none. */
 export function marginLine(value: unknown): string | null {
+  const few = asFewDealers(value);
+  if (few) return fewDealersLine(few);
   const ref = asMarginRef(value);
   return ref ? marginHeadline(marginPayload(ref)) : null;
 }
@@ -152,10 +196,11 @@ export function marginDetail(ref: MarginRef): string[] {
   const t = ref.transfer;
   if (t?.status === "ok" && t.usd) {
     out.push(fill(MARGIN.transfer, { usd: usdRange(t.usd), jurisdiction: jurisdictionNames(t.jurisdiction ?? []) }));
-    if (t.jurisdiction?.includes("rest")) out.push(MARGIN.rest);
   } else {
     out.push(fill(MARGIN.transferMissing, { why: why(t?.status ?? null) }));
   }
+  const acq = ref.acquisition_usd;
+  if (acq && isNum(acq.min) && isNum(acq.max)) out.push(fill(MARGIN.acquisition, { usd: usdRange(acq) }));
   if (p.pct_min != null && p.pct_max != null) {
     out.push(fill(MARGIN.pct, { pct: p.pct_min === p.pct_max ? `${p.pct_min} %` : `${p.pct_min} % a ${p.pct_max} %` }));
   }

@@ -62,6 +62,13 @@ describe("fetchMatchMargins / marginLinesFor", () => {
     expect(lines.get(70)).toBe(marginLine(REF));
     expect(lines.has(71)).toBe(false);
   });
+
+  it("without enough dealers, the line that says so (Juan, 02/11)", async () => {
+    const few = { v: 1, status: "few_dealers", dealer_n: 2, min_n: 5, n: 10, level_used: "transmission" };
+    const supabase = client(() => ({ data: [{ match_id: 7, margin_ref: few }], error: null }));
+    const lines = await marginLinesFor(supabase, { minThresholdUsd: 500 }, [{ listing_id: 70, match_id: 7 }]);
+    expect(lines.get(70)).toBe("Margen estimado: no hay suficientes agencias publicando este modelo para estimarlo (n = 2, mínimo 5)");
+  });
 });
 
 describe("sorts", () => {

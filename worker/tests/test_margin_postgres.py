@@ -45,13 +45,26 @@ class MarginPostgresTests(IntelligenceCase):
         # 12.250 - 10.300 - max(515, 300)
         self.assertEqual(ref["gross_margin_usd"], {"min": 1435.0, "max": 1435.0})
 
-    async def test_not_enough_dealers_is_null(self):
+    async def test_not_enough_dealers_says_so_and_leaves_the_queue(self):
+        """Juan, 02/11: {status: few_dealers, dealer_n, min_n} instead of
+        null, and the startup fill converges on it."""
         lid = await self.listing(price=10_300, price_usd=10_300)
         for p in (11_000, 11_100, 11_200, 11_300, 11_400):
             await self.listing(price=p, price_usd=p, seller_type="private")
         aid = await self.fiesta_alert(km_max=150_000)
         await rematch.run_pending()
-        self.assertIsNone((await self.match_row(aid, lid))["margin_ref"])
+        m = await self.match_row(aid, lid)
+        self.assertEqual(m["price_ref"]["dealer_n"], 0)
+        self.assertEqual({k: m["margin_ref"][k] for k in ("status", "dealer_n", "min_n")},
+                         {"status": "few_dealers", "dealer_n": 0, "min_n": 5})
+        async with db.connection() as cx:
+            await cx.execute("UPDATE matches SET margin_ref = NULL WHERE id = %s", (m["id"],))
+        queue = await matches_repo.rescore_queue(days=14, scoring_version=SCORING_VERSION, min_n=5, outdated_only=True)
+        self.assertIn(m["id"], [q["id"] for q in queue])
+        await rescore.rescore_outdated()
+        self.assertEqual((await self.match_row(aid, lid))["margin_ref"]["status"], "few_dealers")
+        queue = await matches_repo.rescore_queue(days=14, scoring_version=SCORING_VERSION, min_n=5, outdated_only=True)
+        self.assertNotIn(m["id"], [q["id"] for q in queue])
 
     async def test_the_startup_pass_fills_existing_matches_once(self):
         lid = await self.pool()

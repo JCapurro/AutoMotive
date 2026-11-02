@@ -5,17 +5,23 @@ which dealers publish the model (docs/superpowers/specs/2026-11-02-pro02-margen-
     reconditioning_usd  = max(asking_usd x pct / 100, min_usd)             (app_config.dealer_margin)
     transfer_usd        = (arancel + sellos + formularios) / dollar        (PAR-01, intelligence/cost_estimator.py)
     est_costs_usd       = reconditioning_usd + transfer_usd
-    gross_margin_usd    = dealer_median - asking_usd - est_costs_usd       (min uses the max costs)
-    gross_margin_pct    = gross_margin_usd / dealer_median x 100
+    acquisition_usd     = asking_usd + est_costs_usd                       (what buying the car costs)
+    gross_margin_usd    = dealer_median - acquisition_usd                  (min uses the max costs)
+    gross_margin_pct    = gross_margin_usd / acquisition_usd x 100         (min: margin min / cost max)
 
 Every amount is a range {min, max}. dealer_median is price_ref's (F-02 paso
-3, the same pool and level as the median); the margin is None when dealer_n
-< comparables.min_n, when price_ref predates the seller split, for a partial
-price or without price_usd.
+3, the same pool and level as the median). With fewer dealers than
+comparables.min_n the margin is only {status: "few_dealers", dealer_n,
+min_n} (Juan, 02/11: say why there is no margin); it is None when price_ref
+predates the seller split, for a partial price or without price_usd (the
+price is what is missing there, and the card already shows it).
 
 The transfer is all or nothing and never borrowed from another zone: without
 the search's jurisdiction (or the dollar, or the parameters) it is not
-subtracted and `transfer.status` says why; the copy tells it. The patente is
+subtracted and `transfer.status` says why; the copy tells it. Only CABA and
+Buenos Aires have official values loaded: a search elsewhere ("rest") does
+not subtract it (no_official), and neither does a search whose zones mix
+them with another province (no_official_some; Juan, 02/11). The patente is
 annual, not part of the transfer: it is never subtracted.
 
 Pure: no network, no database, no clock. The words are in intelligence/copy.py
@@ -35,7 +41,13 @@ from intelligence.comparables import PriceRef
 VERSION = 1
 # The PAR-01 terms the transfer is made of.
 TRANSFER_TERMS = ("arancel", "sellos", "formularios")
-TRANSFER_STATUS = ("ok", "no_zone", "no_fx", "params", "base", "no_price", "disabled")
+TRANSFER_STATUS = ("ok", "no_zone", "no_official", "no_official_some", "no_fx", "params", "base", "no_price",
+                   "disabled")
+# Jurisdictions with official transfer values (PAR-01's "rest" is a range
+# built from Córdoba, Santa Fe and Mendoza: not used for the margin).
+OFFICIAL_JURISDICTIONS = ("caba", "ba")
+# margin_ref.status: a margin, or not enough dealers to estimate one.
+OK, FEW_DEALERS = "ok", "few_dealers"
 
 
 def _num(x: Any) -> float | None:
@@ -101,6 +113,9 @@ def _transfer(row: Mapping[str, Any], zones: Sequence[Mapping[str, Any]], dealer
     out.update(jurisdiction=built["jurisdiction"], seller=built["seller"])
     if not built["jurisdiction"]:
         return {**out, "status": "no_zone"}
+    unofficial = [j for j in built["jurisdiction"] if j not in OFFICIAL_JURISDICTIONS]
+    if unofficial:
+        return {**out, "status": "no_official" if len(unofficial) == len(built["jurisdiction"]) else "no_official_some"}
     est = cost_estimator.estimate(built["listing"], built["jurisdiction"], built["seller"], built["fx_latest"], cost_cfg)
     if est is None:
         return {**out, "status": "no_price"}
@@ -130,15 +145,18 @@ def compute(row: Mapping[str, Any], price_ref: PriceRef | None, zones: Sequence[
     quote (USD listings only)."""
     from pipeline.ingest import published_partial   # pipeline imports intelligence
 
-    if price_ref is None or price_ref.dealer_n is None or price_ref.dealer_n < min_n:
-        return None
-    median = _num(price_ref.dealer_median)
-    if median is None or median <= 0:
+    if price_ref is None or price_ref.dealer_n is None:
         return None
     if published_partial(dict(row)):
         return None
     asking = _num(row.get("price_usd"))
     if asking is None or asking <= 0:
+        return None
+    if price_ref.dealer_n < min_n:
+        return {"v": VERSION, "status": FEW_DEALERS, "dealer_n": int(price_ref.dealer_n), "min_n": int(min_n),
+                "n": int(price_ref.n), "level_used": price_ref.level_used}
+    median = _num(price_ref.dealer_median)
+    if median is None or median <= 0:
         return None
     dealer_cfg = dealer_cfg if dealer_cfg is not None else parse_config(None)
 
@@ -152,13 +170,15 @@ def compute(row: Mapping[str, Any], price_ref: PriceRef | None, zones: Sequence[
     rec_usd = reconditioning["usd"] if reconditioning else 0.0
     t = transfer["usd"] or {"min": 0.0, "max": 0.0}
     costs = (rec_usd + t["min"], rec_usd + t["max"])
-    gross = (median - asking - costs[1], median - asking - costs[0])
+    acquisition = (asking + costs[0], asking + costs[1])
+    gross = (median - acquisition[1], median - acquisition[0])
     as_of = {"dealer_margin": dealer_cfg.get("as_of")}
     if transfer.get("as_of"):
         as_of["cost_estimator"] = transfer.pop("as_of")
     fx = transfer.pop("fx", None)
     return {
         "v": VERSION,
+        "status": OK,
         "dealer_median": _r2(median),
         "dealer_n": int(price_ref.dealer_n),
         "n": int(price_ref.n),
@@ -170,8 +190,11 @@ def compute(row: Mapping[str, Any], price_ref: PriceRef | None, zones: Sequence[
         "reconditioning": reconditioning,
         "transfer": transfer,
         "est_costs_usd": _range(*costs),
+        "acquisition_usd": _range(*acquisition),
         "gross_margin_usd": _range(*gross),
-        "gross_margin_pct": _range(gross[0] / median * 100, gross[1] / median * 100),
+        # On what buying the car costs (Juan, 02/11). The margin falls as the
+        # cost rises, so the low end pairs the margin's min with the cost's max.
+        "gross_margin_pct": _range(gross[0] / acquisition[1] * 100, gross[1] / acquisition[0] * 100),
         "as_of": as_of,
     }
 
@@ -205,10 +228,19 @@ def threshold_low(ref: Mapping[str, Any] | None) -> float | None:
     return _r2(low) if low is not None else None
 
 
+def few_dealers(ref: Mapping[str, Any] | None) -> bool:
+    """A margin_ref that says there are not enough dealers to estimate one."""
+    return (isinstance(ref, Mapping) and ref.get("status") == FEW_DEALERS
+            and all(isinstance(ref.get(k), int) and not isinstance(ref.get(k), bool) for k in ("dealer_n", "min_n")))
+
+
 def email_payload(ref: Mapping[str, Any] | None) -> dict[str, Any] | None:
     """What an alert keeps (notifications.payload['margin']): the margin
     rounded outward to USD 10 and the words' inputs, frozen when the row is
-    created. The USD threshold compares threshold_low, not usd_min."""
+    created, or {status: few_dealers, dealer_n, min_n}. The USD threshold
+    compares threshold_low, not usd_min."""
+    if few_dealers(ref):
+        return {"status": FEW_DEALERS, "dealer_n": ref["dealer_n"], "min_n": ref["min_n"]}
     if not ref or not isinstance(ref.get("gross_margin_usd"), dict):
         return None
     g, p = ref["gross_margin_usd"], ref.get("gross_margin_pct") or {}
@@ -220,9 +252,14 @@ def email_payload(ref: Mapping[str, Any] | None) -> dict[str, Any] | None:
         lo = hi = round10(g["min"])            # one number: to the nearest 10, not a range
     else:
         lo, hi = cost_estimator.floor_to(g["min"], 10), cost_estimator.ceil_to(g["max"], 10)
-    return {"usd_min": lo, "usd_max": hi,
-            "pct_min": math.floor(p["min"] + cost_estimator.EPS) if _num(p.get("min")) is not None else None,
-            "pct_max": math.ceil(p["max"] - cost_estimator.EPS) if _num(p.get("max")) is not None else None,
+    pct_lo, pct_hi = _num(p.get("min")), _num(p.get("max"))
+    if pct_lo is None or pct_hi is None:
+        pct_lo = pct_hi = None
+    elif abs(pct_hi - pct_lo) < cost_estimator.EPS:
+        pct_lo = pct_hi = math.floor(pct_lo + 0.5)    # one number: the nearest whole %, not a range
+    else:
+        pct_lo, pct_hi = math.floor(pct_lo + cost_estimator.EPS), math.ceil(pct_hi - cost_estimator.EPS)
+    return {"status": OK, "usd_min": lo, "usd_max": hi, "pct_min": pct_lo, "pct_max": pct_hi,
             "dealer_median": round10(ref["dealer_median"]), "dealer_n": ref.get("dealer_n"),
             "reconditioning_pct": rec.get("pct") if isinstance(rec, dict) else None,
             "transfer_status": transfer.get("status"), "jurisdiction": transfer.get("jurisdiction"),
@@ -248,6 +285,8 @@ def usd_text(lo: int, hi: int) -> str:
 
 def headline(p: Mapping[str, Any]) -> str:
     """The line from email_payload's rounded numbers (cards, the listing page and alerts say the same)."""
+    if p.get("status") == FEW_DEALERS:
+        return copy.MARGIN["few_dealers"].format(n=p["dealer_n"], min_n=p["min_n"])
     return copy.MARGIN["line"].format(
         usd=usd_text(p["usd_min"], p["usd_max"]), median=copy.MARGIN["single"].format(v=signed(p["dealer_median"])),
         n=p.get("dealer_n"), costs=costs_text(p.get("reconditioning_pct"), p.get("transfer_status")))

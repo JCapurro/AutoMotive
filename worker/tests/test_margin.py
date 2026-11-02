@@ -24,6 +24,9 @@ TODAY = date(2026, 11, 2)
 PALERMO = cost_estimator.search_zones({"lat": -34.5875, "lon": -58.42, "label": "Palermo, CABA"})
 AMBA = cost_estimator.search_zones({"lat": -34.6037, "lon": -58.3816, "label": "AMBA"})
 CORDOBA = cost_estimator.search_zones({"lat": -31.4201, "lon": -64.1888, "label": "Córdoba"})
+CABA_AND_CORDOBA = cost_estimator.search_zones({"lat": -34.5875, "lon": -58.42, "label": "Palermo, CABA",
+                                                "extra_locations": [{"lat": -31.4201, "lon": -64.1888,
+                                                                     "label": "Córdoba"}]})
 # Pool of 10 comparables: 6 dealers (median 18.000) and 4 private sellers (median 12.000).
 POOL = PriceRef(n=10, level_used="transmission", median=13_000.0, p25=12_000.0, p75=17_000.0, median_km=90_000.0,
                 diff_pct=-18.3, dealer_median=18_000.0, dealer_n=6, private_median=12_000.0, private_n=4)
@@ -64,8 +67,10 @@ class PoolTests(unittest.TestCase):
         self.assertEqual(m["transfer"]["status"], "ok")
         self.assertEqual(m["transfer"]["usd"], {"min": 621.54, "max": 629.88})
         self.assertEqual(m["est_costs_usd"], {"min": 1390.77, "max": 1399.11})
+        self.assertEqual(m["acquisition_usd"], {"min": 16775.39, "max": 16783.73})
         self.assertEqual(m["gross_margin_usd"], {"min": 1216.27, "max": 1224.61})
-        self.assertEqual(m["gross_margin_pct"], {"min": 6.76, "max": 6.8})
+        self.assertEqual(m["gross_margin_pct"], {"min": 7.25, "max": 7.3})
+        self.assertEqual(m["status"], "ok")
         # Not the overall median (13.000) nor the private one (12.000): both would give a negative margin.
         self.assertGreater(m["gross_margin_usd"]["min"], 0)
 
@@ -85,11 +90,43 @@ class PoolTests(unittest.TestCase):
         self.assertAlmostEqual(m["gross_margin_usd"]["max"],
                                m["dealer_median"] - m["asking_usd"] - m["est_costs_usd"]["min"], places=1)
 
+    def test_the_percentage_is_on_what_buying_the_car_costs(self):
+        """Juan, 02/11: on the price plus reconditioning and transfer, not on
+        the dealers' median; the low end is the margin's min over the cost's max."""
+        m = compute()
+        acq, g = m["acquisition_usd"], m["gross_margin_usd"]
+        self.assertAlmostEqual(acq["min"], m["asking_usd"] + m["est_costs_usd"]["min"], places=1)
+        self.assertAlmostEqual(acq["max"], m["asking_usd"] + m["est_costs_usd"]["max"], places=1)
+        self.assertAlmostEqual(m["gross_margin_pct"]["min"], g["min"] / acq["max"] * 100, places=2)
+        self.assertAlmostEqual(m["gross_margin_pct"]["max"], g["max"] / acq["min"] * 100, places=2)
+        self.assertNotAlmostEqual(m["gross_margin_pct"]["min"], g["min"] / m["dealer_median"] * 100, places=1)
+        negative = compute(ref=PriceRef(**{**POOL.__dict__, "dealer_median": 15_000.0}))
+        self.assertLess(negative["gross_margin_pct"]["min"], negative["gross_margin_pct"]["max"])
+
 
 class NullTests(unittest.TestCase):
-    def test_not_enough_dealers(self):
-        self.assertIsNone(compute(ref=PriceRef(**{**POOL.__dict__, "dealer_n": 4})))
-        self.assertIsNotNone(compute(ref=PriceRef(**{**POOL.__dict__, "dealer_n": 4}), min_n=4))
+    def test_not_enough_dealers_says_so(self):
+        """Juan, 02/11: with fewer dealers than min_n, no margin but the line
+        that says why (n and the minimum); no threshold reached."""
+        few = compute(ref=PriceRef(**{**POOL.__dict__, "dealer_n": 4}))
+        self.assertEqual(few, {"v": 1, "status": "few_dealers", "dealer_n": 4, "min_n": 5, "n": 10,
+                               "level_used": "transmission"})
+        self.assertEqual(margin.line(few), "Margen estimado: no hay suficientes agencias publicando este modelo "
+                                           "para estimarlo (n = 4, mínimo 5)")
+        self.assertEqual(margin.email_payload(few), {"status": "few_dealers", "dealer_n": 4, "min_n": 5})
+        self.assertIsNone(margin.threshold_low(few))
+        self.assertTrue(margin.few_dealers(few))
+        self.assertFalse(margin.few_dealers(compute()))
+        self.assertEqual(compute(ref=PriceRef(**{**POOL.__dict__, "dealer_n": 0, "dealer_median": None}))["dealer_n"], 0)
+        self.assertEqual(compute(ref=PriceRef(**{**POOL.__dict__, "dealer_n": 4}), min_n=4)["status"], "ok")
+
+    def test_few_dealers_but_a_partial_price_or_no_price_usd_say_nothing(self):
+        """The price is what is missing there (the card already says it): no line."""
+        ref = PriceRef(**{**POOL.__dict__, "dealer_n": 2})
+        for r in (row(price_partial=True), row(description_facts={"price_check": {"published_partial": True}}),
+                  row(price_usd=None)):
+            with self.subTest(r=r):
+                self.assertIsNone(compute(r, ref=ref))
 
     def test_a_price_ref_before_the_seller_split_or_none(self):
         old = PriceRef.from_json({"n": 10, "level_used": "model", "median": 13_000, "p25": 1, "p75": 2,
@@ -171,9 +208,22 @@ class TransferTests(unittest.TestCase):
         self.assertEqual(m["transfer"]["jurisdiction"], ["caba", "ba"])
         self.assertLess(m["transfer"]["usd"]["min"], m["transfer"]["usd"]["max"])
 
-    def test_the_rest_of_the_country_uses_par01_s_range(self):
+    def test_outside_caba_and_buenos_aires_no_transfer(self):
+        """Juan, 02/11: PAR-01's range for the rest of the country (Córdoba,
+        Santa Fe, Mendoza) is not used; the copy says there are no official values."""
         m = compute(zones=CORDOBA)
-        self.assertEqual((m["transfer"]["status"], m["transfer"]["jurisdiction"]), ("ok", ["rest"]))
+        self.assertEqual((m["transfer"]["status"], m["transfer"]["jurisdiction"]), ("no_official", ["rest"]))
+        self.assertIsNone(m["transfer"]["usd"])
+        self.assertEqual(m["est_costs_usd"], {"min": 769.23, "max": 769.23})
+        self.assertNotIn("cost_estimator", m["as_of"])
+        self.assertIn("no descuenta la transferencia porque no tenemos los valores oficiales de tu provincia",
+                      margin.line(m))
+
+    def test_a_search_that_mixes_caba_with_another_province_subtracts_none(self):
+        m = compute(zones=CABA_AND_CORDOBA)
+        self.assertEqual((m["transfer"]["status"], m["transfer"]["jurisdiction"]), ("no_official_some", ["caba", "rest"]))
+        self.assertIsNone(m["transfer"]["usd"])
+        self.assertIn("no tenemos los valores oficiales de todas las provincias de tu búsqueda", margin.line(m))
 
     def test_a_usd_listing_needs_a_fresh_quote(self):
         usd = row(price=15_000.0, currency="USD", price_usd=15_000.0)
@@ -227,7 +277,8 @@ class LineTests(unittest.TestCase):
 
     def test_the_payload_rounds_outward(self):
         p = margin.email_payload(compute())
-        self.assertEqual(p, {"usd_min": 1210, "usd_max": 1230, "pct_min": 6, "pct_max": 7, "dealer_median": 18_000,
+        self.assertEqual(p, {"status": "ok", "usd_min": 1210, "usd_max": 1230, "pct_min": 7, "pct_max": 8,
+                             "dealer_median": 18_000,
                              "dealer_n": 6, "reconditioning_pct": 5.0, "transfer_status": "ok", "jurisdiction": ["caba"],
                              "as_of": "2026-10-30"})
         self.assertIsNone(margin.email_payload(None))
@@ -246,7 +297,8 @@ class LineTests(unittest.TestCase):
                     margin.line(compute(row(price=15_000.0, currency="USD", price_usd=15_000.0))),
                     margin.line(compute(cost=None)), margin.line(compute(dealer={**DEALER, "transfer": False})),
                     margin.line(compute(dealer={**DEALER, "reconditioning": None})),
-                    margin.line(compute(dealer={**DEALER, "reconditioning": None}, zones=[]))]
+                    margin.line(compute(dealer={**DEALER, "reconditioning": None}, zones=[])),
+                    margin.line(compute(zones=CORDOBA)), margin.line(compute(zones=CABA_AND_CORDOBA))]
         self.assertEqual(len(set(variants)), len(variants))
         for text in variants:
             with self.subTest(text=text):
@@ -299,23 +351,56 @@ class EvaluationTests(unittest.TestCase):
         self.assertEqual(ev.row()["margin_ref"]["dealer_median"], 12_500.0)
         self.assertEqual(ev.row()["margin_ref"]["transfer"]["jurisdiction"], ["caba"])
         self.assertEqual(profile_zones(profile)[0]["label"], "Palermo, CABA")
-        # Without enough dealers: null, and the row says so.
+        # Without enough dealers: the row says so, with the config's min_n.
         scorer.refs[1] = PriceRef(**{**ref.__dict__, "dealer_n": 2})
-        self.assertIsNone(scorer.evaluate(1, profile).row()["margin_ref"])
+        self.assertEqual(scorer.evaluate(1, profile).row()["margin_ref"]["status"], "few_dealers")
+        self.assertEqual(scorer.evaluate(1, profile).row()["margin_ref"]["min_n"], scorer.cfg.min_n)
+
+
+USD_ROW = row(price=15_000.0, currency="USD", price_usd=15_000.0)
+# golden.json's cases: name -> compute()'s arguments.
+GOLDEN_CASES = {
+    "pool CABA": {},
+    "sin localidad": {"zones": []},
+    "AMBA": {"zones": AMBA},
+    "resto del país": {"zones": CORDOBA},
+    "CABA y Córdoba": {"zones": CABA_AND_CORDOBA},
+    "USD sin dólar": {"r": USD_ROW},
+    "sin parámetros de costo": {"cost": None},
+    "transferencia desactivada": {"dealer": {**DEALER, "transfer": False}},
+    "sin acondicionamiento": {"dealer": {**DEALER, "reconditioning": None}},
+    "sin acondicionamiento ni localidad": {"dealer": {**DEALER, "reconditioning": None}, "zones": []},
+    "negativo": {"ref": PriceRef(**{**POOL.__dict__, "dealer_median": 15_000.0})},
+    "de contado": {"r": row(description_facts={"price_check": {"effective_kind": "cash"}})},
+    "pocas agencias": {"ref": PriceRef(**{**POOL.__dict__, "dealer_n": 2})},
+}
+GOLDEN_PATH = Path(__file__).parent / "fixtures" / "margin" / "golden.json"
 
 
 class GoldenTests(unittest.TestCase):
     """tests/fixtures/margin/golden.json: margin_ref -> payload and line, the
-    vectors web/lib/margin-view.test.ts formats too (the web prints the same line)."""
+    vectors web/lib/margin-view.test.ts formats too (the web prints the same
+    line). After an intended change, regenerate it with
+    UPDATE_GOLDEN=1 pytest tests/test_margin.py and review the diff."""
 
     def test_the_vectors_are_the_calculator_s(self):
-        golden = json.loads((Path(__file__).parent / "fixtures" / "margin" / "golden.json").read_text(encoding="utf-8"))
-        self.assertGreaterEqual(len(golden["cases"]), 10)
+        import os
+        if os.getenv("UPDATE_GOLDEN"):
+            cases = []
+            for name, kw in GOLDEN_CASES.items():
+                ref = compute(**kw)
+                cases.append({"name": name, "margin_ref": ref, "payload": margin.email_payload(ref),
+                              "line": margin.line(ref)})
+            doc = json.loads(GOLDEN_PATH.read_text(encoding="utf-8"))["_doc"]
+            GOLDEN_PATH.write_text(json.dumps({"_doc": doc, "cases": cases}, ensure_ascii=False, indent=1) + "\n",
+                                   encoding="utf-8")
+        golden = json.loads(GOLDEN_PATH.read_text(encoding="utf-8"))
+        self.assertEqual([c["name"] for c in golden["cases"]], list(GOLDEN_CASES))
         for case in golden["cases"]:
             with self.subTest(case["name"]):
+                self.assertEqual(case["margin_ref"], compute(**GOLDEN_CASES[case["name"]]))
                 self.assertEqual(margin.email_payload(case["margin_ref"]), case["payload"])
                 self.assertEqual(margin.line(case["margin_ref"]), case["line"])
-        self.assertEqual(golden["cases"][0]["margin_ref"], compute())
 
 
 if __name__ == "__main__":

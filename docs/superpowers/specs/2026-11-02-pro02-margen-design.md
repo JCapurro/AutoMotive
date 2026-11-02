@@ -1,6 +1,6 @@
 # PRO-02 · Margen estimado (ciclo 1: margen v1 y umbral en USD)
 
-Ítem PRO-02 del [backlog de producto](../../BACKLOG_PRODUCTO_2026-10.md) y Fase 2, fila 3, del [plan por fases](../../PLAN_FASES_BACKLOG_PRODUCTO_2026-10.md) (secciones 3, 4 y 8). Rama `claude/pro02-margen`, creada desde `origin/main` en `4f212bf`. Estado: **implementado en la rama (revisión 2)**, sin pushear ni aplicar en producción. Los cambios respecto de la revisión 1 están en «Implementación».
+Ítem PRO-02 del [backlog de producto](../../BACKLOG_PRODUCTO_2026-10.md) y Fase 2, fila 3, del [plan por fases](../../PLAN_FASES_BACKLOG_PRODUCTO_2026-10.md) (secciones 3, 4 y 8). Rama `claude/pro02-margen`, creada desde `origin/main` en `4f212bf`. Estado: **implementado en la rama (revisión 3: respuestas de Juan del 02/11 aplicadas)**, sin pushear ni aplicar en producción. Los cambios respecto de la revisión 1 están en «Implementación»; los de la revisión 3, en «Respuestas de Juan (02/11)».
 
 ## Alcance
 
@@ -41,17 +41,18 @@ asking_usd          = listings.price_usd (el precio efectivo: de contado si sali
 reconditioning_usd  = max(asking_usd × pct / 100, min_usd)                 (dealer_margin.reconditioning)
 transfer_usd        = (arancel + sellos + formularios) / dólar, en rango    (cost_estimator, PAR-01)
 est_costs_usd       = reconditioning_usd + transfer_usd                     (rango)
-gross_margin_usd    = dealer_median − asking_usd − est_costs_usd            (rango: min usa costos max)
-gross_margin_pct    = gross_margin_usd / dealer_median × 100                (rango)
+acquisition_usd     = asking_usd + est_costs_usd                            (lo que cuesta comprar el auto, rango)
+gross_margin_usd    = dealer_median − acquisition_usd                       (rango: min usa costos max)
+gross_margin_pct    = gross_margin_usd / acquisition_usd × 100              (rango: min = margen min / costo max)
 ```
 
 - **Contra qué.** `price_ref.dealer_median`, a nivel `price_ref.level_used`. Es la mediana de **precios publicados** por agencias, no de precios de venta: el copy lo dice.
-- **Mínimo.** `margin_ref = null` si `price_ref` es null, si no tiene `dealer_n` (price_ref de siete claves), si `dealer_n < comparables.min_n` (el mismo `min_n`, hoy 5) o si `dealer_median` no es positivo.
+- **Mínimo.** `margin_ref = null` si `price_ref` es null, si no tiene `dealer_n` (price_ref de siete claves) o si `dealer_median` no es positivo. Si `dealer_n < comparables.min_n` (el mismo `min_n`, hoy 5), `margin_ref = {v, status: "few_dealers", dealer_n, min_n, n, level_used}`: no hay margen pero la línea lo dice (pregunta 6, revisión 3).
 - **Base del 5 %.** El precio de compra (`asking_usd`). Ver pregunta 2.
-- **Porcentaje.** Sobre `dealer_median` (margen sobre el precio al que se vendería, la definición habitual de margen bruto), no sobre el costo (markup). Ver pregunta 3.
+- **Porcentaje.** Sobre **lo que cuesta comprar el auto** (`acquisition_usd` = precio en USD + acondicionamiento + transferencia descontada), no sobre la mediana (decisión de Juan, pregunta 3). Como el margen baja cuando el costo sube, el extremo bajo es `margen_min / costo_max` y el alto `margen_max / costo_min`; vale también con margen negativo.
 - **Patente.** No entra: es anual, no es parte de la transferencia. Tampoco deudas de patente ni multas (no las conocemos).
-- **Precio parcial (PAR-03).** Un aviso con `price_partial` no genera match, pero uno cuyo precio publicado es un anticipo o una cuota y cuya descripción trae el precio de contado sí (`resolve_price` deja `price_partial = false` y `price_check.published_partial = true`). `build_input` excluye los dos y `margin.compute` los chequea con `published_partial` y devuelve null: nunca un margen sobre un anticipo. El relleno (§6) los excluye también, para converger.
-- **Sin `price_usd`** (aviso en ARS sin cotización): null.
+- **Precio parcial (PAR-03).** Un aviso con `price_partial` no genera match, pero uno cuyo precio publicado es un anticipo o una cuota y cuya descripción trae el precio de contado sí (`resolve_price` deja `price_partial = false` y `price_check.published_partial = true`). `build_input` excluye los dos y `margin.compute` los chequea con `published_partial` y devuelve null: nunca un margen sobre un anticipo. El relleno (§6) los excluye también, para converger. **Sin línea** (revisión 3): lo que falta es el precio, no las agencias, y la tarjeta y la ficha ya muestran el precio y su aviso de parcial; una línea más no agrega nada. Tiene prioridad sobre «pocas agencias».
+- **Sin `price_usd`** (aviso en ARS sin cotización): null y sin línea, por la misma razón (el precio se ve en pesos).
 - **Negativo.** Se guarda y se muestra (`USD -300`): para una agencia «la mediana de agencias está por debajo de lo que te costaría» es información. El orden lo deja al final de los positivos de forma natural.
 
 ### 2. Transferencia: solo con números reales y localidad conocida
@@ -64,9 +65,11 @@ Reglas de Juan: solo números con fuente; lo incierto va como rango hasta el res
   - `no_fx`: aviso en USD sin cotización vigente (las escalas están en pesos).
   - `params`/`base`: faltan parámetros en `cost_estimator`, o la base cargada no es el precio.
   - `disabled`: `dealer_margin.transfer.enabled = false`.
-  Ver pregunta 4 (descuento parcial).
+  - `no_official` / `no_official_some`: la búsqueda está (en todo o en parte) fuera de CABA y Buenos Aires (ver abajo).
+  Sin descuento parcial (pregunta 4, confirmado).
 - **Jurisdicción múltiple / AMBA**: el rango cubre todas (unión), igual que PAR-01, y el copy la nombra.
-- **«Resto del país»**: PAR-01 aprobó un rango armado con Córdoba, Santa Fe y Mendoza. Es un rango con fuente, pero no la tabla exacta de, por ejemplo, Tucumán. En v1 se usa ese rango y el copy lo dice («sellos de resto del país, rango con Córdoba, Santa Fe y Mendoza»). Ver pregunta 5.
+- **Fuera de CABA y Provincia de Buenos Aires** (decisión de Juan, pregunta 5): **no** se usa el rango «resto del país» de PAR-01 (Córdoba, Santa Fe y Mendoza). Si la búsqueda cae en otra provincia, `transfer.status = "no_official"` y no se descuenta: «no descuenta la transferencia porque no tenemos los valores oficiales de tu provincia».
+- **Zona multi-jurisdicción con otra provincia** (p. ej. Palermo + Córdoba): se descuenta solo si **todas** las jurisdicciones de la búsqueda tienen valores oficiales (CABA, Buenos Aires). Si alguna no, `status = "no_official_some"`, no se descuenta nada (sin descuento parcial, coherente con «todo o nada») y se dice: «no descuenta la transferencia porque no tenemos los valores oficiales de todas las provincias de tu búsqueda». `jurisdiction` se guarda igual (`["caba", "rest"]`).
 - **Dólar.** Aviso en ARS: el mismo del `price_usd` (`price / price_usd`). Aviso en USD: la última cotización guardada si no supera `cost_estimator.fx.max_age_days`. Se guarda `fx` en `margin_ref`.
 
 ### 3. Forma exacta de `margin_ref`
@@ -76,6 +79,7 @@ Siempre rangos `{min, max}` (iguales cuando no hay incertidumbre), en USD, sin r
 ```json
 {
   "v": 1,
+  "status": "ok",
   "dealer_median": 14500.0,
   "dealer_n": 6,
   "n": 10,
@@ -93,8 +97,9 @@ Siempre rangos `{min, max}` (iguales cuando no hay incertidumbre), en USD, sin r
     "seller": "private"
   },
   "est_costs_usd": {"min": 912.4, "max": 1098.1},
+  "acquisition_usd": {"min": 12912.4, "max": 13098.1},
   "gross_margin_usd": {"min": 1401.9, "max": 1587.6},
-  "gross_margin_pct": {"min": 9.67, "max": 10.95},
+  "gross_margin_pct": {"min": 10.7, "max": 12.3},
   "as_of": {"dealer_margin": "2026-11-02", "cost_estimator": "2026-10-30"}
 }
 ```
@@ -102,7 +107,8 @@ Siempre rangos `{min, max}` (iguales cuando no hay incertidumbre), en USD, sin r
 - `reconditioning = null` si `dealer_margin.reconditioning` falta o es inválido (el backlog lo pide: «el margen se muestra sin costos y lo dice»).
 - `transfer.usd = null` con `status ≠ ok`; `jurisdiction`/`seller` se guardan igual para el copy.
 - `est_costs_usd` = suma de lo que haya (puede ser `{0, 0}` sin parámetros).
-- `v` permite cambiar la forma sin bump de `SCORING_VERSION`.
+- `v` permite cambiar la forma sin bump de `SCORING_VERSION`. La revisión 3 suma `status` y `acquisition_usd` sin subir `v` (nada se desplegó con la forma anterior); la web trata un `margin_ref` sin `status` como `ok` y sin `acquisition_usd` omite esa línea del detalle.
+- Pocas agencias: `{"v": 1, "status": "few_dealers", "dealer_n": 2, "min_n": 5, "n": 10, "level_used": "transmission"}`, sin `gross_margin_usd` (no alcanza el umbral, va al final del orden).
 
 ### 4. `app_config.dealer_margin`
 
@@ -133,14 +139,15 @@ Parser tolerante en `worker/intelligence/margin.py` (mismo estilo que `cost_esti
 
 ```sql
 OR (m.margin_ref IS NULL AND l.price_usd > 0
-    AND (m.price_ref->>'dealer_median')::numeric > 0
-    AND (m.price_ref->>'dealer_n')::int >= %(min_n)s
+    AND (m.price_ref->>'dealer_n')::int IS NOT NULL
+    AND ((m.price_ref->>'dealer_n')::int < %(min_n)s          -- revisión 3: few_dealers
+         OR (m.price_ref->>'dealer_median')::numeric > 0)
     AND NOT coalesce(l.price_partial, false)
     AND l.description_facts #> '{price_check,published_partial}' IS DISTINCT FROM 'true'::jsonb
     AND NOT coalesce(l.description_facts #>> '{price_check,published_kind}' = ANY(%(partial_kinds)s), false))
 ```
 
-- Converge: la condición replica todos los casos en que `margin.compute` devuelve null para un match que existe (sin agencias suficientes, mediana ≤ 0, sin `price_usd`, precio publicado parcial según `published_partial`, con `PARTIAL_KINDS` pasado como parámetro). Tras recalcular, o `margin_ref` queda con valor, o el nuevo `price_ref` sale de la condición. Sin esto, un anticipo con precio de contado en la descripción volvía a la cola en cada arranque y en cada pasada. Un `price_ref` de siete claves no entra (no tiene `dealer_n`); lo completa la pasada nocturna de 14 días, que recalcula `price_ref` y margen juntos.
+- Converge: la condición replica todos los casos en que `margin.compute` devuelve null para un match que existe (`price_ref` sin `dealer_n`, agencias suficientes pero mediana ≤ 0, sin `price_usd`, precio publicado parcial según `published_partial`, con `PARTIAL_KINDS` pasado como parámetro). Tras recalcular, o `margin_ref` queda con valor, o el nuevo `price_ref` sale de la condición. Sin esto, un anticipo con precio de contado en la descripción volvía a la cola en cada arranque y en cada pasada. Un `price_ref` de siete claves no entra (no tiene `dealer_n`); lo completa la pasada nocturna de 14 días, que recalcula `price_ref` y margen juntos.
 - Es idempotente y no reenvía alertas: `rescore()` solo hace `upsert_scored(..., backfill=True)`, que en una fila existente conserva `is_backfill` y `generated_at` y no pasa por el `Notifier`.
 - Primer efecto: el primer arranque del worker después de aplicar la migración (que despliega con el worker nuevo, así que siempre hay un arranque). No hay `tools/rescore` en `worker/tools/` y no se agrega: la condición del arranque es el relleno.
 - Matches de avisos `gone` o fuera de 14 días no se rellenan (la condición exige `l.status = 'active'`, como hoy): sin margen en el histórico.
@@ -172,9 +179,11 @@ Mismo texto en `worker/intelligence/copy.py` (`MARGIN`) y `web/lib/copy.ts` (`MA
   «Margen bruto estimado: USD 1.400 a 1.590 (contra la mediana de USD 14.500 a la que publican las agencias este modelo, n = 6; descuenta acondicionamiento del 5 % y transferencia; sin impuestos)».
   Variantes del tramo final:
   - sin transferencia por zona: «…; descuenta acondicionamiento del 5 %; no descuenta la transferencia porque tu búsqueda no tiene localidad; sin impuestos)»;
+  - fuera de CABA y Buenos Aires: «…porque no tenemos los valores oficiales de tu provincia…»; zona mixta: «…porque no tenemos los valores oficiales de todas las provincias de tu búsqueda…»;
   - sin dólar: «…porque falta el dólar del día…»; sin parámetros: «…porque faltan parámetros cargados…»;
   - sin acondicionamiento cargado: «…; sin descontar costos: faltan los parámetros de acondicionamiento; sin impuestos)».
-- **Ficha, detalle debajo de la línea:** qué descuenta en números («Acondicionamiento: USD 600 (5 % del precio, mínimo USD 300). Transferencia: entre USD 310 y 500 (arancel, sellos y formularios de CABA, según tu búsqueda en «Palermo, CABA»).»), «No incluye impuestos de la venta, patente ni comisiones.», «Comparamos con precios publicados por agencias, no con precios de venta. Es una estimación orientativa.», nivel de comparables (`COMPARABLE_LEVEL`) y «Parámetros al dd/mm».
+- **Pocas agencias (revisión 3), en lugar de la línea, en tarjeta, ficha y email:** «Margen estimado: no hay suficientes agencias publicando este modelo para estimarlo (n = 2, mínimo 5)» (en el email con punto final y sin «Parámetros al»). En la ficha va sola, sin «Ver detalle».
+- **Ficha, detalle debajo de la línea:** qué descuenta en números («Acondicionamiento: USD 600 (5 % del precio, mínimo USD 300). Transferencia: entre USD 310 y 500 (arancel, sellos y formularios de CABA, según tu búsqueda en «Palermo, CABA»).»), lo que cuesta comprar el auto y el % sobre eso («Lo que cuesta comprar el auto: USD 12.910 a 13.100 (precio de compra más los costos descontados).», «Margen sobre lo que cuesta comprar el auto: 10 % a 13 %.»), «No incluye impuestos de la venta, patente ni comisiones.», «Comparamos con precios publicados por agencias, no con precios de venta. Es una estimación orientativa.», nivel de comparables (`COMPARABLE_LEVEL`) y «Parámetros al dd/mm».
 - **Tarjeta:** solo la línea (sin detalle), debajo de la línea de costo total si existe.
 - **Email Pro:** la línea en `opportunity` y `new_match` inmediatos y en `price_drop`, después de la de costo total. Payload congelado al crear la fila: `payload.margin = margin.email_payload(margin_ref)` = `{usd_min, usd_max, dealer_median, dealer_n, transfer_status, reconditioning_pct, jurisdiction, as_of}` ya redondeados, más `usd_low` (sin redondear, solo para el umbral). El digest no la lleva en v1.
 - **Lint.** Términos extra prohibidos para el bloque `MARGIN` (además de `FORBIDDEN_TERMS`): «ganancia», «ganancias», «garantiz», «rentab», «asegur», «seguro que», «vas a ganar», «precio de venta» (salvo en la frase «no con precios de venta», que el test permite explícitamente), «vale». Se prueba en `web/lib/copy.test.ts` y `worker/tests/test_intelligence_copy.py`, y sobre el texto renderizado de las variantes.
@@ -184,7 +193,7 @@ Mismo texto en `worker/intelligence/copy.py` (`MARGIN`) y `web/lib/copy.ts` (`MA
 - `web/lib/sorts.ts`: `margin: "Mayor margen estimado"`, ofrecida por `SortSelect` solo si el usuario tiene margen (prop `options`). `isSort` acepta `margin`; para quien no lo tiene, la página lo trata como `score`.
 - `search_results`: nueva rama
   `case when (select ok from margin_access) then mg.low end desc nulls last`, con `margin_access as (select p_sort = 'margin' and public.my_plan_feature('dealer_margin') ok)` una sola vez por consulta y un `left join` a `public.my_margin_sort_keys(p_profile_id)` (`security definer`: dueño y feature chequeados adentro, porque `search_results` es `security invoker` y `authenticated` no lee `margin_ref`). Sin margen, al final y luego por fecha. Se redefine `search_results` **sin tocar `match_cards`** (PRO-01 la redefine para agregar `seller_unknown`; si las dos ramas la tocaran, la segunda en aplicarse rompería con «cannot drop columns from view»).
-- Ordena por el extremo bajo, como el umbral.
+- Ordena por el extremo bajo, como el umbral. Un `few_dealers` no tiene `gross_margin_usd`: `my_margin_sort_keys` le da `low = null` y queda al final, con los que no tienen margen (revisión 3).
 
 ### 11. Eventos
 
@@ -231,24 +240,26 @@ Offline (corren en esta rama):
   - pool de **6 agencias y 4 particulares** (`PriceRef(n=10, dealer_n=6, private_n=4, ...)` con medianas distintas): el margen usa `dealer_median`, no `median` ni `private_median`;
   - `dealer_n = 4` con `min_n = 5` → null; `price_ref` de siete claves → null; precio parcial → null; sin `price_usd` → null;
   - ARS (dólar del aviso) y USD (cotización vigente / vencida → `no_fx`);
-  - sin zona → `no_zone`, sin transferencia y sin usar otra jurisdicción; AMBA → rango CABA+BA; resto del país;
+  - sin zona → `no_zone`, sin transferencia y sin usar otra jurisdicción; AMBA → rango CABA+BA; resto del país → `no_official`; CABA + Córdoba → `no_official_some`;
+  - `dealer_n < min_n` → `few_dealers` con su línea; con precio parcial o sin `price_usd`, null;
+  - % sobre lo que cuesta comprar el auto (`margen_min / costo_max`, `margen_max / costo_min`);
   - acondicionamiento: 5 % por encima y por debajo del mínimo de USD 300; config null → sin costos;
   - rangos: `gross_margin_usd.min` usa los costos máximos; negativo; redondeo hacia afuera.
 - `worker/tests/test_notifications_engine*.py`: umbral USD alcanzado → inmediato, sin tope, no cuenta, `payload.threshold_usd`; no alcanzado → digest; sin margen → digest; % OR USD; baja de precio; por debajo de `notify_min_level` igual avisa.
-- `worker/tests/test_notifications_margin.py`: `payload.margin` solo con `dealer_margin`; **snapshots** `tests/snapshots/notifications/opportunity_margin.txt` y `opportunity_margin_no_zone.txt` (email Pro).
+- `worker/tests/test_notifications_margin.py`: `payload.margin` solo con `dealer_margin`; `few_dealers` no alcanza el umbral; **snapshots** `tests/snapshots/notifications/opportunity_margin.txt`, `opportunity_margin_no_zone.txt` y `opportunity_margin_few_dealers.txt` (email Pro).
 - `worker/tests/test_intelligence_copy.py`: lint de `MARGIN` y de las variantes renderizadas.
 - `Evaluation.row()` incluye `margin_ref`; `Scorer` lo completa (con fakes).
 - Web (vitest): `lib/margin-view.test.ts` (línea, variantes, rangos, negativos), `lib/copy.test.ts` (lint), `lib/margin-data.test.ts` (RPC con error → mapa vacío; `marginAccess` con/sin `min_threshold_usd`), `lib/search-form.test.ts` (umbral USD: mínimo del plan, null, gating en el action), `lib/admin-config.test.ts` (`dealer_margin`, `plan_limits` nuevas claves), sorts (opción solo con acceso).
 - `npx tsc --noEmit` y lint del web.
 
-Escritos pero **no corridos en esta rama** (la base local la usa otro trabajo; correr antes del merge):
+Contra la base local (corridos en la revisión 3):
 
-- pgTAP `supabase/tests/pro02_margin_test.sql`: `my_match_margins` vacía sin la feature y con filas para Pro; `search_results('margin')` ordena por margen solo con la feature; claves de `plan_limits`; `authenticated`/`anon` sin `SELECT` sobre `matches.margin_ref` (un `select margin_ref` directo falla con 42501, Pro o no) y con el resto de las columnas; `my_margin_sort_keys` vacía sin la feature y para búsquedas ajenas; la migración se aplica desde base vacía.
-- `pytest -m db`: 6 agencias + 4 particulares por `comparables()` → `rescore` → `margin_ref.dealer_n = 6`; `rescore_queue` toma un match con `dealer_n ≥ min_n` y `margin_ref` null, y no lo vuelve a tomar después.
+- pgTAP `supabase/tests/pro02_margin_test.sql`: `my_match_margins` vacía sin la feature y con filas para Pro (incluido un `few_dealers`); `search_results('margin')` ordena por margen solo con la feature, con `few_dealers` y sin margen al final; claves de `plan_limits`; `authenticated`/`anon` sin `SELECT` sobre `matches.margin_ref` (un `select margin_ref` directo falla con 42501, Pro o no) y con el resto de las columnas; `my_margin_sort_keys` vacía sin la feature y para búsquedas ajenas; la migración se aplica desde base vacía.
+- `pytest -m db`: 6 agencias + 4 particulares por `comparables()` → `rescore` → `margin_ref.dealer_n = 6`; `rescore_queue` toma un match con `dealer_n ≥ min_n` y `margin_ref` null, y no lo vuelve a tomar después; lo mismo con 0 agencias (`few_dealers`).
 
 ## Riesgos
 
-- **Cobertura de vendedor.** Mardel e Instagram dejan el vendedor en null y la cascada elige nivel por `n` total, así que muchos matches tendrán `dealer_n < 5` y no mostrarán margen. Conviene medir el porcentaje de matches Pro con margen antes de venderlo (pregunta 6).
+- **Cobertura de vendedor.** Mardel e Instagram dejan el vendedor en null y la cascada elige nivel por `n` total, así que muchos matches tendrán `dealer_n < 5` y no mostrarán margen. Juan decidió salir igual (pregunta 6): esos matches muestran «no hay suficientes agencias…» en vez de nada. Conviene igual medir el porcentaje de matches Pro con margen.
 - **Mediana de publicados.** Las agencias publican más caro de lo que venden; el margen sobre publicados sobreestima. El copy lo dice, pero es el riesgo comercial principal (BACKLOG_COMERCIAL prohíbe prometer rentabilidad).
 - **Conflictos.** `email_html.py`/`templates.py`/snapshots, `listing-card.tsx`, ficha, `search-form`, `notifications.py` y `engine.py` los tocan también PRO-01 y `claude/sin-notas-costo-resumido`. Cambios acotados (líneas nuevas, sin reordenar). `match_cards` no se toca; `search_results` solo la redefine esta rama.
 - **Desfase de parámetros.** Un cambio en `cost_estimator` o `dealer_margin` se ve en el margen recién en el próximo rescore (horas); el costo total de la web se calcula en vivo. Puede verse un costo de transferencia distinto entre la línea de costo total y el detalle del margen hasta el rescore.
@@ -260,7 +271,7 @@ Lo que cambió al implementar, respecto de las secciones de arriba:
 
 - **Acceso de la web.** No se usa `my_plan_feature('dealer_margin') && snapshot.limits.min_threshold_usd`: para un admin `plan_limits_for` devuelve `limits = {"immediate_alerts": true}`, así que el snapshot nunca trae el mínimo y un admin no vería nada. En su lugar hay una RPC `public.my_margin_access()` que devuelve `{enabled, min_threshold_usd}`. En una base sin la migración la RPC no existe, la web lo toma como «sin acceso» y no muestra línea, orden ni control, ni manda `opportunity_threshold_usd` en el insert o el update.
 - **Mínimo del umbral.** `public.min_threshold_usd(user)`: el `min_threshold_usd` del plan y, si no tiene (admins), el de Pro. Lo usan el worker (`CASE … >= public.min_threshold_usd(sp.user_id)`) y `my_margin_access`. No hay un 500 escrito en el código: si no hay mínimo cargado, no aplica ningún umbral en USD.
-- **Estados de la transferencia.** Se suma `no_price` (el aviso no tiene una moneda que el calculador lea), con su texto. El orden de los motivos es `disabled` → `params` → `no_price` → `no_zone` → `no_fx` → el del término que falte.
+- **Estados de la transferencia.** Se suma `no_price` (el aviso no tiene una moneda que el calculador lea), con su texto. El orden de los motivos es `disabled` → `params` → `no_price` → `no_zone` → `no_official`/`no_official_some` (revisión 3) → `no_fx` → el del término que falte.
 - **Redondeo.** Si el margen no tiene rango (sin transferencia), se muestra un número redondeado a USD 10 («USD 1.850»), no «USD 1.840 a 1.850».
 - **Vectores compartidos.** `worker/tests/fixtures/margin/golden.json` (11 casos: `margin_ref`, payload y línea). Lo leen `worker/tests/test_margin.py` y `web/lib/margin-view.test.ts`, así que la web y los emails imprimen la misma línea.
 - **Superficies.** La línea va en las tarjetas de resultados, del inicio y de favoritos (estas toman el mejor match, que ahora trae su `id`), y en la ficha con un detalle cerrado («Ver detalle del margen»). En el email, la línea también llega a Telegram y a la bandeja web, porque usan el mismo contenido (igual que el costo total de PAR-01).
@@ -268,7 +279,11 @@ Lo que cambió al implementar, respecto de las secciones de arriba:
 - **Evento de orden.** `results_sorted_margin` se registra con una server action propia (`app/app/searches/margin-actions.ts`) que llama `SortSelect`, para no tocar `actions.ts` de más.
 - **Admin.** `/admin/config` valida `dealer_margin` (`DealerMarginInput`) y las claves nuevas de `plan_limits`; el formulario de límites suma el toggle «Margen estimado para agencias (PRO-02)» y el mínimo en USD.
 
-Tests que quedaron escritos pero sin correr en esta rama: `supabase/tests/pro02_margin_test.sql`, `worker/tests/test_margin_postgres.py` y `UsdThresholdTests` en `worker/tests/test_notifications_postgres.py`.
+En la revisión 3 corrieron contra la base local `supabase/tests/pro02_margin_test.sql`, `worker/tests/test_margin_postgres.py` y `worker/tests/test_notifications_postgres.py`.
+
+- **Bug del merge con PRO-01 (revisión 3).** `Evaluation` tenía `margin_ref` antes de `contact_questions` y `assess` pasaba las preguntas por posición: caían en `margin_ref`. Ahora `contact_questions` va antes y se pasa por nombre (test de regresión en `test_intelligence.py`).
+- **Vectores compartidos (revisión 3).** `golden.json` tiene 13 casos (suma «CABA y Córdoba» y «pocas agencias»; «resto del país» pasa a `no_official`). `GoldenTests` recalcula **todos** los `margin_ref` con `margin.compute` y se regenera con `UPDATE_GOLDEN=1 pytest tests/test_margin.py`.
+- **Porcentaje de un solo valor.** Sin rango (sin transferencia), el % se muestra redondeado al entero («11 %»), no «11 % a 12 %», como el monto.
 
 ## Preguntas para Juan
 
@@ -279,3 +294,15 @@ Tests que quedaron escritos pero sin correr en esta rama: `supabase/tests/pro02_
 5. **Resto del país**: ¿aceptás el rango de PAR-01 (Córdoba, Santa Fe y Mendoza) para una búsqueda en otra provincia, o preferís no descontar transferencia fuera de CABA y Buenos Aires?
 6. **Cobertura**: ¿salimos aunque una parte grande de los matches no tenga margen por `dealer_n < 5`, o preferís medir primero y decidir si bajar el mínimo solo para margen?
 7. **Umbral**: con % y USD cargados a la vez, ¿alcanza con cualquiera (propuesto, OR) o tienen que cumplirse los dos?
+
+## Respuestas de Juan (02/11)
+
+«ok a todo menos a 3 (sobre lo que cuesta comprar el auto), 5 (no lo usamos), 6 (salgamos igual, aclarando)». Aplicado en la revisión 3:
+
+1. **Copy: como se propuso.** La misma línea en tarjeta, ficha y email (la tarjeta la acortaría solo si no entrara; entra con `break-words`).
+2. **Base del 5 %: como se propuso.** Sobre el precio de compra, con mínimo USD 300.
+3. **Cambio: % sobre lo que cuesta comprar el auto.** `gross_margin_pct = gross_margin_usd / acquisition_usd × 100`, con `acquisition_usd = asking_usd + acondicionamiento + transferencia descontada` (nuevo en `margin_ref`). Rangos coherentes: `pct_min = margen_min / costo_max`, `pct_max = margen_max / costo_min`. Copy del detalle de la ficha: «Lo que cuesta comprar el auto: USD A a B (precio de compra más los costos descontados).» y «Margen sobre lo que cuesta comprar el auto: X % a Y %.» (antes «Margen sobre la mediana: …»). La línea no muestra el %, así que no cambia.
+4. **Sin localidad: como se propuso.** No se descuenta transferencia y se dice.
+5. **Cambio: no se usa «resto del país».** Fuera de CABA y Provincia de Buenos Aires no se descuenta transferencia (`transfer.status = "no_official"`): «…; no descuenta la transferencia porque no tenemos los valores oficiales de tu provincia; sin impuestos)». **Zona multi-jurisdicción** que incluye otra provincia: se descuenta solo si todas las jurisdicciones tienen valores oficiales; si no, no se descuenta nada (`no_official_some`, sin descuento parcial, como en la respuesta 4): «…porque no tenemos los valores oficiales de todas las provincias de tu búsqueda…». Se quitó la nota del detalle «Resto del país: rango de sellos armado con Córdoba, Santa Fe y Mendoza.».
+6. **Cambio: salimos igual, aclarando.** Con `dealer_n < min_n` el worker guarda `{status: "few_dealers", dealer_n, min_n}` y, para Pro, la línea es «Margen estimado: no hay suficientes agencias publicando este modelo para estimarlo (n = Z, mínimo 5)». **Dónde:** ficha, tarjeta y email (recomendación: las tres, porque reemplaza la línea de margen, no se suma a ella, así que no satura más que un match con margen, y sin ella un Pro ve margen en unas tarjetas y nada en otras sin saber por qué). En el orden «Mayor margen estimado» van al final con los que no tienen margen; no alcanzan el umbral en USD. **Precio parcial o sin precio en USD:** no se muestra nada (ni línea de margen ni aclaración): lo que falta es el precio, que la tarjeta y la ficha ya muestran con su aviso; tiene prioridad sobre «pocas agencias». Un `price_ref` sin `dealer_n` (anterior a F-02 paso 3) tampoco muestra nada: no sabemos cuántas agencias hay. El relleno sin bump (§6) también completa los `few_dealers`.
+7. **Umbral: como se propuso.** Alcanza con cualquiera (OR).

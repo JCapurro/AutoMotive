@@ -2,7 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { asMarginRef, marginLine, type MarginRef } from "@/lib/margin-view";
+import { asStoredMargin, marginLine, type StoredMargin } from "@/lib/margin-view";
 import type { Database } from "@/types/database";
 
 /**
@@ -40,16 +40,19 @@ type Rpc = (
   args: { p_match_ids: number[] },
 ) => PromiseLike<{ data: { match_id: number; margin_ref: unknown }[] | null; error: unknown }>;
 
-/** my_match_margins for these match ids, by match id. Any error leaves the map empty. */
-export async function fetchMatchMargins(rpc: Rpc, ids: (number | null | undefined)[]): Promise<Map<number, MarginRef>> {
+/**
+ * my_match_margins for these match ids, by match id: a margin, or «not enough
+ * dealers» (Juan, 02/11: say why there is none). Any error leaves the map empty.
+ */
+export async function fetchMatchMargins(rpc: Rpc, ids: (number | null | undefined)[]): Promise<Map<number, StoredMargin>> {
   const unique = [...new Set(ids.filter((id): id is number => id != null))];
-  const out = new Map<number, MarginRef>();
+  const out = new Map<number, StoredMargin>();
   if (!unique.length) return out;
   try {
     const { data, error } = await rpc("my_match_margins", { p_match_ids: unique });
     if (error || !data) return out;
     for (const row of data) {
-      const ref = asMarginRef(row.margin_ref);
+      const ref = asStoredMargin(row.margin_ref);
       if (ref) out.set(Number(row.match_id), ref);
     }
   } catch {

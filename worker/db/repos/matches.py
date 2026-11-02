@@ -135,17 +135,20 @@ async def delete_matches(cx: AsyncConnection, profile_id: int, listing_ids: list
     return cur.rowcount
 
 
-# PRO-02: a match that should have a margin and has none (stored before
+# PRO-02: a match that should have a margin_ref and has none (stored before
 # margin_ref existed; SCORING_VERSION was not bumped). It mirrors every case
-# where intelligence/margin.compute returns None: price_ref without enough
-# dealers or a median <= 0, no price in USD, and a published price that is a
-# down payment or an installment (pipeline.ingest.published_partial: such a
-# listing still matches when the description gave its cash price). Re-scoring
-# a row that passes either fills margin_ref or writes a price_ref that fails
-# it, so the fill converges and re-scoring sends no alert.
+# where intelligence/margin.compute returns None: a price_ref without
+# dealer_n (before the seller split), enough dealers but a median <= 0, no
+# price in USD, and a published price that is a down payment or an
+# installment (pipeline.ingest.published_partial: such a listing still
+# matches when the description gave its cash price). Fewer dealers than
+# min_n do get one ({status: few_dealers}). Re-scoring a row that passes
+# either fills margin_ref or writes a price_ref that fails it, so the fill
+# converges and re-scoring sends no alert.
 WITHOUT_MARGIN = ("(m.margin_ref IS NULL AND l.price_usd > 0 "
-                  " AND (m.price_ref->>'dealer_median')::numeric > 0 "
-                  " AND (m.price_ref->>'dealer_n')::int >= %(min_n)s "
+                  " AND (m.price_ref->>'dealer_n')::int IS NOT NULL "
+                  " AND ((m.price_ref->>'dealer_n')::int < %(min_n)s "
+                  "      OR (m.price_ref->>'dealer_median')::numeric > 0) "
                   " AND NOT coalesce(l.price_partial, false) "
                   " AND l.description_facts #> '{price_check,published_partial}' IS DISTINCT FROM 'true'::jsonb "
                   " AND NOT coalesce(l.description_facts #>> '{price_check,published_kind}' = ANY(%(partial_kinds)s),"
@@ -157,7 +160,7 @@ async def rescore_queue(*, days: int, scoring_version: str, min_n: int | None = 
     """(match_id, search_profile_id, listing_id) to re-score (sección 6.1): the
     matches of active listings seen in the last `days` (the median moves),
     every match scored by another scoring_version, and (PRO-02) those with
-    enough dealer comparables and no margin_ref yet (WITHOUT_MARGIN)."""
+    dealer comparables counted and no margin_ref yet (WITHOUT_MARGIN)."""
     if min_n is None:
         from intelligence.config import DEFAULT_COMPARABLES
         min_n = int(DEFAULT_COMPARABLES["min_n"])

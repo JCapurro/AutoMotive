@@ -444,8 +444,12 @@ export const MARGIN = {
   costsNoTransfer: "descuenta acondicionamiento del {pct} %; no descuenta la transferencia porque {why}",
   costsNoReconditioning: "descuenta transferencia; no descuenta acondicionamiento porque faltan sus parámetros",
   costsNone: "sin descontar costos: faltan los parámetros de acondicionamiento y no descuenta la transferencia porque {why}",
+  // Juan, 02/11: without enough dealers, say so instead of showing nothing.
+  fewDealers: "Margen estimado: no hay suficientes agencias publicando este modelo para estimarlo (n = {n}, mínimo {min_n})",
   why: {
     no_zone: "tu búsqueda no tiene localidad",
+    no_official: "no tenemos los valores oficiales de tu provincia",
+    no_official_some: "no tenemos los valores oficiales de todas las provincias de tu búsqueda",
     no_fx: "falta el dólar del día",
     params: "faltan parámetros cargados",
     base: "faltan parámetros cargados",
@@ -461,8 +465,8 @@ export const MARGIN = {
   reconditioningMissing: "Acondicionamiento: no se descuenta, faltan sus parámetros.",
   transfer: "Transferencia: {usd} (arancel, sellos y formularios de {jurisdiction}, según tu búsqueda).",
   transferMissing: "Transferencia: no se descuenta porque {why}.",
-  rest: "Resto del país: rango de sellos armado con Córdoba, Santa Fe y Mendoza.",
-  pct: "Margen sobre la mediana: {pct}.",
+  acquisition: "Lo que cuesta comprar el auto: {usd} (precio de compra más los costos descontados).",
+  pct: "Margen sobre lo que cuesta comprar el auto: {pct}.",
   excludes: "No incluye impuestos de la venta, patente ni comisiones.",
   published: "Comparamos con precios publicados por agencias, no con precios de venta. Es una estimación orientativa.",
   asOf: "Parámetros al {date}.",

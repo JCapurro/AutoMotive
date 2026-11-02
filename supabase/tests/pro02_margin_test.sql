@@ -79,14 +79,17 @@ insert into public.listings (id, source, external_id, url, title, make, model, p
 overriding system value values
   (997001, 'mercadolibre', 'PRO02-1', 'https://example.test/pro02-1', 'Pgtap Margen 1', 'Pgtap', 'Margen', 10000, 'USD', 10000, 'active'),
   (997002, 'mercadolibre', 'PRO02-2', 'https://example.test/pro02-2', 'Pgtap Margen 2', 'Pgtap', 'Margen', 11000, 'USD', 11000, 'active'),
-  (997003, 'mercadolibre', 'PRO02-3', 'https://example.test/pro02-3', 'Pgtap Margen 3', 'Pgtap', 'Margen', 12000, 'USD', 12000, 'active');
+  (997003, 'mercadolibre', 'PRO02-3', 'https://example.test/pro02-3', 'Pgtap Margen 3', 'Pgtap', 'Margen', 12000, 'USD', 12000, 'active'),
+  (997004, 'mercadolibre', 'PRO02-4', 'https://example.test/pro02-4', 'Pgtap Margen 4', 'Pgtap', 'Margen', 13000, 'USD', 13000, 'active');
 
--- Scores and margins in opposite orders; 997003 has no margin.
+-- Scores and margins in opposite orders; 997003 has no margin, 997004 too few
+-- dealers to estimate one (Juan, 02/11: the web says so).
 insert into public.matches (id, search_profile_id, listing_id, score, level, score_breakdown, match_reasons, scoring_version, margin_ref)
 overriding system value values
   (99710001, 9971, 997001, 90, 'good', '{}', '{}', 'test', '{"v": 1, "gross_margin_usd": {"min": 300, "max": 400}}'),
   (99710002, 9971, 997002, 80, 'good', '{}', '{}', 'test', '{"v": 1, "gross_margin_usd": {"min": 1500, "max": 1700}}'),
   (99710003, 9971, 997003, 70, 'good', '{}', '{}', 'test', null),
+  (99710004, 9971, 997004, 95, 'good', '{}', '{}', 'test', '{"v": 1, "status": "few_dealers", "dealer_n": 2, "min_n": 5}'),
   (99720001, 9972, 997001, 90, 'good', '{}', '{}', 'test', '{"v": 1, "gross_margin_usd": {"min": 300, "max": 400}}'),
   (99720002, 9972, 997002, 80, 'good', '{}', '{}', 'test', '{"v": 1, "gross_margin_usd": {"min": 1500, "max": 1700}}');
 
@@ -95,18 +98,21 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub": "c0200000-0000-0000-0000-000000000001", "role": "authenticated"}';
 
 select is(public.my_margin_access(), '{"enabled": true, "min_threshold_usd": 500}'::jsonb, 'my_margin_access: Pro');
-select results_eq($$select match_id from public.my_match_margins(array[99710001, 99710002, 99710003, 99720001]::bigint[]) order by 1$$,
-                  $$values (99710001::bigint), (99710002::bigint)$$,
-                  'my_match_margins: the Pro''s own matches with a margin, never another user''s');
-select results_eq($$select listing_id from public.search_results(9971, 'all', 'margin')$$,
-                  $$values (997002::bigint), (997001::bigint), (997003::bigint)$$,
-                  'search_results margin: by the margin''s low end, without margin last');
+select results_eq($$select match_id from public.my_match_margins(array[99710001, 99710002, 99710003, 99710004, 99720001]::bigint[]) order by 1$$,
+                  $$values (99710001::bigint), (99710002::bigint), (99710004::bigint)$$,
+                  'my_match_margins: the Pro''s own matches with a margin_ref (few_dealers too), never another user''s');
+select results_eq($$select listing_id from public.search_results(9971, 'all', 'margin') limit 2$$,
+                  $$values (997002::bigint), (997001::bigint)$$,
+                  'search_results margin: by the margin''s low end');
+select set_eq($$select listing_id from public.search_results(9971, 'all', 'margin') offset 2$$,
+              $$values (997003::bigint), (997004::bigint)$$,
+              '... without margin or with too few dealers last, whatever the score');
 select is((select count(*)::int from public.my_margin_sort_keys(9972)), 0,
           'my_margin_sort_keys: never another user''s search');
 select throws_ok($$select margin_ref from public.matches where id = 99710001$$, '42501', null,
                  'the Pro cannot read matches.margin_ref directly either');
 select results_eq($$select listing_id from public.search_results(9971, 'all', 'score')$$,
-                  $$values (997001::bigint), (997002::bigint), (997003::bigint)$$, 'search_results score unchanged');
+                  $$values (997004::bigint), (997001::bigint), (997002::bigint), (997003::bigint)$$, 'search_results score unchanged');
 
 reset role;
 

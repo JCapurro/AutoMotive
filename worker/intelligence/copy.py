@@ -245,7 +245,13 @@ MARGIN = {
     "costs_no_reconditioning": "descuenta transferencia; no descuenta acondicionamiento porque faltan sus parámetros",
     "costs_none": ("sin descontar costos: faltan los parámetros de acondicionamiento y "
                    "no descuenta la transferencia porque {why}"),
-    "why": {"no_zone": "tu búsqueda no tiene localidad", "no_fx": "falta el dólar del día",
+    # Juan, 02/11: without enough dealers, say so instead of showing nothing.
+    "few_dealers": ("Margen estimado: no hay suficientes agencias publicando este modelo para estimarlo "
+                    "(n = {n}, mínimo {min_n})"),
+    "why": {"no_zone": "tu búsqueda no tiene localidad",
+            "no_official": "no tenemos los valores oficiales de tu provincia",
+            "no_official_some": "no tenemos los valores oficiales de todas las provincias de tu búsqueda",
+            "no_fx": "falta el dólar del día",
             "params": "faltan parámetros cargados", "base": "faltan parámetros cargados",
             "no_price": "no pudimos leer la moneda del precio", "disabled": "no está activada"},
     "email": "{line}. Parámetros al {date}.",

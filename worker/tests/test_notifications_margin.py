@@ -1,7 +1,8 @@
 """PRO-02 in the alerts: the threshold in USD (notifications/engine.py), the
 margin payload only with the plan's dealer_margin (service.margin_payload)
 and the margin line of the Pro emails (templates.margin_line; snapshots
-opportunity_margin, opportunity_margin_no_zone and price_drop_margin in
+opportunity_margin, opportunity_margin_no_zone, opportunity_margin_few_dealers
+and price_drop_margin in
 test_notifications_templates.py)."""
 from __future__ import annotations
 
@@ -9,8 +10,9 @@ import unittest
 from unittest.mock import AsyncMock, patch
 
 from intelligence import copy
-from notification_fixtures import (LINKS, MARGIN_CABA, MARGIN_NO_ZONE, NOW, OPPORTUNITY, OPPORTUNITY_MARGIN,
-                                   PRICE_DROP, PRICE_DROP_MARGIN, notification)
+from notification_fixtures import (LINKS, MARGIN_CABA, MARGIN_FEW_DEALERS, MARGIN_NO_ZONE, NOW, OPPORTUNITY,
+                                   OPPORTUNITY_MARGIN, OPPORTUNITY_MARGIN_FEW_DEALERS, PRICE_DROP, PRICE_DROP_MARGIN,
+                                   notification)
 from notifications import service, templates
 from notifications.engine import MATCH, PRICE_DROP as DROP, Audience, Event, Rules, decide, decide_all
 from test_margin import MarginCopyLint, compute
@@ -156,6 +158,17 @@ class PayloadGatingTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(kinds(out), [("opportunity", "queued" if reached else "digest")])
                 self.assertEqual(out[0].payload.get("threshold_usd"), 500 if reached else None)
 
+    def test_few_dealers_never_reaches_it(self):
+        from intelligence.comparables import PriceRef
+        from test_margin import POOL
+        few = compute(ref=PriceRef(**{**POOL.__dict__, "dealer_n": 2}))
+        p = service.margin_payload(few, {"dealer_margin": True})
+        self.assertEqual(p, {**MARGIN_FEW_DEALERS, "usd_low": None})
+        e = Event(MATCH, 10, pro(usd=500), level="high", score=80, match_id=110,
+                  payload={"match": {"score": 80, "level": "high", "diff_pct": None}, "margin": p})
+        self.assertEqual(kinds(decide(e, RULES)), [("opportunity", "digest")])
+        self.assertIsNone(service.margin_payload(few, {"dealer_margin": False}))
+
     def test_a_payload_without_usd_low_does_not_reach_it(self):
         payload = {"match": {"score": 80, "level": "high", "diff_pct": None},
                    "margin": {k: v for k, v in MARGIN_CABA.items()}}
@@ -176,6 +189,15 @@ class MarginLineTests(unittest.TestCase):
         self.assertIn("no descuenta la transferencia porque tu búsqueda no tiene localidad",
                       templates.margin_line(MARGIN_NO_ZONE))
 
+    def test_few_dealers_says_so_without_a_date(self):
+        self.assertEqual(templates.margin_line(MARGIN_FEW_DEALERS),
+                         "Margen estimado: no hay suficientes agencias publicando este modelo para estimarlo "
+                         "(n = 2, mínimo 5).")
+        self.assertIn(templates.margin_line(MARGIN_FEW_DEALERS),
+                      templates.email(OPPORTUNITY_MARGIN_FEW_DEALERS, LINKS, NOW).text.splitlines())
+        for m in ({"status": "few_dealers", "dealer_n": 2}, {"status": "few_dealers", "dealer_n": "2", "min_n": 5}):
+            self.assertIsNone(templates.margin_line(m))
+
     def test_every_channel_and_kind(self):
         line = templates.margin_line(MARGIN_CABA)
         for n in (OPPORTUNITY_MARGIN, PRICE_DROP_MARGIN,
@@ -192,7 +214,10 @@ class MarginLineTests(unittest.TestCase):
             self.assertEqual(templates.email(n, LINKS, NOW), templates.email(base, LINKS, NOW))
 
     def test_the_rendered_copy_is_prudent(self):
-        for m in (MARGIN_CABA, MARGIN_NO_ZONE, {**MARGIN_CABA, "reconditioning_pct": None, "transfer_status": "no_fx"}):
+        for m in (MARGIN_CABA, MARGIN_NO_ZONE, MARGIN_FEW_DEALERS,
+                  {**MARGIN_CABA, "reconditioning_pct": None, "transfer_status": "no_fx"},
+                  {**MARGIN_NO_ZONE, "transfer_status": "no_official", "jurisdiction": ["rest"]},
+                  {**MARGIN_NO_ZONE, "transfer_status": "no_official_some", "jurisdiction": ["caba", "rest"]}):
             with self.subTest(m=m):
                 self.assertEqual(MarginCopyLint.offenders(templates.margin_line(m)), [])
         self.assertEqual(MarginCopyLint.offenders(copy.MARGIN["email"]), [])

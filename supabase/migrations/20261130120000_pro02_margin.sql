@@ -3,9 +3,12 @@
 --
 -- * matches.margin_ref: the estimated gross margin against the dealers'
 --   median of price_ref (F-02 paso 3), written by the worker
---   (worker/intelligence/margin.py) on every scoring and rescore. Null when
---   dealer_n < comparables.min_n. SCORING_VERSION does not change: the
---   worker's rescore_queue picks the matches that should have one and don't.
+--   (worker/intelligence/margin.py) on every scoring and rescore. With
+--   dealer_n < comparables.min_n it only says so ({status: few_dealers,
+--   dealer_n, min_n}, no gross_margin_usd: last in the margin order); null
+--   for a partial price or without price_usd. SCORING_VERSION does not
+--   change: the worker's rescore_queue picks the matches that should have
+--   one and don't.
 -- * search_profiles.opportunity_threshold_usd: Pro's threshold by margin, in
 --   USD; the plan's minimum (plan_limits.pro.min_threshold_usd) is checked by
 --   the web on save and by the worker when it reads it, not by a CHECK.
@@ -31,7 +34,7 @@
 
 alter table public.matches add column if not exists margin_ref jsonb;
 comment on column public.matches.margin_ref is
-  'PRO-02: estimated gross margin against price_ref.dealer_median (ranges in USD, worker/intelligence/margin.py). Null without enough dealer comparables. Read by the web only through my_match_margins (Pro).';
+  'PRO-02: estimated gross margin against price_ref.dealer_median (ranges in USD, worker/intelligence/margin.py). With fewer dealer comparables than comparables.min_n, only {status: few_dealers, dealer_n, min_n}; null for a partial price or without price_usd. Read by the web only through my_match_margins (Pro).';
 
 -- The Pro-only gate (Juan: all of PRO-02 is Pro) cannot rest on the functions
 -- alone: authenticated had SELECT on every column of matches
@@ -101,7 +104,7 @@ language sql stable security definer set search_path = '' as $$
 $$;
 
 -- search_results' sort key: the margin's low end of the caller's own matches
--- of one search, nothing without the feature.
+-- of one search (null for few_dealers, so last), nothing without the feature.
 create or replace function public.my_margin_sort_keys(p_profile_id bigint)
 returns table (match_id bigint, low numeric)
 language sql stable security definer set search_path = '' as $$

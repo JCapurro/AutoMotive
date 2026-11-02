@@ -153,7 +153,10 @@ def margin_line(m: Mapping[str, Any] | None) -> str | None:
     """PRO-02: "Margen bruto estimado: USD 1.210 a 1.230 (contra la mediana …;
     sin impuestos). Parámetros al 30/10." from payload["margin"]
     (margin.email_payload: rounded, frozen when the row was created). None
-    without it: an old payload, or a plan without dealer_margin."""
+    without it: an old payload, or a plan without dealer_margin. Without
+    enough dealers, the line that says so (Juan, 02/11), without a date."""
+    if margin.few_dealers(m):
+        return copy.MARGIN["email_no_date"].format(line=margin.headline(m))
     if not m or any(not isinstance(m.get(k), int) or isinstance(m.get(k), bool)
                     for k in ("usd_min", "usd_max", "dealer_median", "dealer_n")):
         return None

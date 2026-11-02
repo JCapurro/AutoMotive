@@ -4,18 +4,41 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { MARGIN } from "@/lib/copy";
-import { asMarginRef, marginDetail, marginHeadline, marginLine, marginPayload, type MarginRef, pctText, round10, signed } from "@/lib/margin-view";
+import {
+  asFewDealers,
+  asMarginRef,
+  asStoredMargin,
+  marginDetail,
+  marginHeadline,
+  marginLine,
+  marginPayload,
+  type MarginRef,
+  pctText,
+  round10,
+  signed,
+} from "@/lib/margin-view";
 
 // PRO-02: the vectors shared with worker/tests/test_margin.py (GoldenTests).
 const GOLDEN = JSON.parse(
   readFileSync(path.resolve(__dirname, "../../worker/tests/fixtures/margin/golden.json"), "utf-8"),
 ) as { cases: { name: string; margin_ref: MarginRef; payload: Record<string, unknown>; line: string }[] };
 const byName = (name: string) => GOLDEN.cases.find((c) => c.name === name)!.margin_ref;
+const MARGINS = GOLDEN.cases.filter((c) => c.payload.status === "ok");
 
 describe("margin line (the worker's, byte for byte)", () => {
   it.each(GOLDEN.cases.map((c) => [c.name, c] as const))("%s", (_, c) => {
-    expect(marginPayload(c.margin_ref)).toEqual(c.payload);
+    if (c.payload.status === "ok") expect(marginPayload(c.margin_ref)).toEqual(c.payload);
     expect(marginLine(c.margin_ref)).toBe(c.line);
+  });
+
+  it("without enough dealers, says so (Juan, 02/11)", () => {
+    const few = byName("pocas agencias");
+    expect(asFewDealers(few)).toEqual(few);
+    expect(asMarginRef(few)).toBeNull();
+    expect(asStoredMargin(few)).toEqual(few);
+    expect(marginLine(few)).toBe("Margen estimado: no hay suficientes agencias publicando este modelo para estimarlo (n = 2, mínimo 5)");
+    expect(marginLine({ status: "few_dealers", dealer_n: 2 })).toBeNull();
+    expect(marginLine({ ...byName("pool CABA"), status: "other" })).toBeNull();
   });
 
   it("pool of 6 dealers and 4 private sellers: the dealers' median", () => {
@@ -46,7 +69,7 @@ describe("margin line (the worker's, byte for byte)", () => {
 describe("margin copy lint over every rendered variant", () => {
   it("never promises a result", () => {
     const fold = (t: string) => t.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().replace("no con precios de venta", "");
-    const texts = GOLDEN.cases.flatMap((c) => [c.line, ...marginDetail(c.margin_ref)]);
+    const texts = [...GOLDEN.cases.map((c) => c.line), ...MARGINS.flatMap((c) => marginDetail(c.margin_ref))];
     for (const text of texts) {
       for (const term of ["vale", "ganancia", "garantiz", "rentab", "asegur", "seguro que", "vas a ganar", "precio de venta", "precios de venta"]) {
         expect(fold(text).includes(term), `${text}: ${term}`).toBe(false);
@@ -62,7 +85,8 @@ describe("margin detail (listing page)", () => {
     expect(detail).toContain("Precio de compra: USD 15.380.");
     expect(detail).toContain("Acondicionamiento: USD 770 (5 % del precio, mínimo USD 300).");
     expect(detail).toContain("Transferencia: USD 620 a 630 (arancel, sellos y formularios de CABA, según tu búsqueda).");
-    expect(detail).toContain("Margen sobre la mediana: 6 % a 7 %.");
+    expect(detail).toContain("Lo que cuesta comprar el auto: USD 16.770 a 16.790 (precio de compra más los costos descontados).");
+    expect(detail).toContain("Margen sobre lo que cuesta comprar el auto: 7 % a 8 %.");
     expect(detail).toContain(MARGIN.excludes);
     expect(detail).toContain(MARGIN.published);
     expect(detail).toContain("Parámetros al 30/10.");
@@ -74,9 +98,19 @@ describe("margin detail (listing page)", () => {
     expect(detail.join(" ")).not.toMatch(/CABA|Buenos Aires|resto del país/);
   });
 
-  it("names AMBA's two jurisdictions and the rest of the country's range", () => {
+  it("names AMBA's two jurisdictions; outside CABA and Buenos Aires, no transfer and why", () => {
     expect(marginDetail(byName("AMBA")).join(" ")).toContain("de CABA y Buenos Aires");
-    expect(marginDetail(byName("resto del país"))).toContain(MARGIN.rest);
+    const rest = marginDetail(byName("resto del país"));
+    expect(rest).toContain("Transferencia: no se descuenta porque no tenemos los valores oficiales de tu provincia.");
+    expect(rest.join(" ")).not.toMatch(/Córdoba|Santa Fe|Mendoza|resto del país/);
+    expect(marginDetail(byName("CABA y Córdoba"))).toContain(
+      "Transferencia: no se descuenta porque no tenemos los valores oficiales de todas las provincias de tu búsqueda.",
+    );
+  });
+
+  it("a single percentage when the cost has no range", () => {
+    expect(marginDetail(byName("sin localidad"))).toContain("Margen sobre lo que cuesta comprar el auto: 11 %.");
+    expect(marginDetail(byName("sin localidad"))).toContain("Lo que cuesta comprar el auto: USD 16.150 (precio de compra más los costos descontados).");
   });
 
   it("a cash price and missing reconditioning", () => {
