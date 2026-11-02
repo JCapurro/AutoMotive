@@ -241,3 +241,64 @@ class RematchSemanticsTests(Pro01Case):
         await self.tick()
         self.assertTrue((await self.card(dealer))["is_backfill"])         # lifted at once, as backfill
         self.assertEqual(await self.notices(), {})                        # the rematch never notifies
+
+    async def requested(self):
+        [row] = await self.rows("SELECT rematch_requested_at FROM search_profiles WHERE id=%s", self.profile)
+        return row["rematch_requested_at"]
+
+    async def test_a_flip_during_a_running_rematch_stays_pending(self):
+        await self.plan("pro")
+        await self.strict("private")
+        await self.unmark()
+        dealer = await self.seller_listing("dealer")
+        await self.crawl(dealer)
+        self.assertIsNone(await self.card(dealer))                        # strict: an agency is out
+        async with db.connection() as cx:                                 # a filter edit asks for a rematch
+            await cx.execute("UPDATE search_profiles SET rematch_requested_at = now() WHERE id=%s", (self.profile,))
+        [alert] = [a for a in await db.pending_rematch() if a["id"] == self.profile]
+        self.assertTrue(alert["profile"]["seller_filter"])                # read before the flip
+        await self.plan("pass")                                           # the refund webhook lands meanwhile
+        flipped = await self.requested()
+        self.assertNotEqual(flipped, alert["rematch_requested_at"])
+        await rematch.rematch_profile(alert)                              # evaluated with the stale flag
+        self.assertIsNone(await self.card(dealer))
+        self.assertEqual(await self.requested(), flipped)                 # the flip's request is not erased
+        await rematch.run_pending()                                       # the next one applies it
+        self.assertTrue((await self.card(dealer))["is_backfill"])
+        self.assertIsNone(await self.requested())
+        self.assertEqual(await self.notices(), {})
+
+    async def test_a_lane_before_the_rematch_stores_backfill(self):
+        await self.plan("pass")
+        await self.strict("private")
+        await self.unmark()
+        dealer = await self.seller_listing("dealer")
+        await self.rematch()                                              # soft: matched as backfill, never notified
+        self.assertTrue((await self.card(dealer))["is_backfill"])
+        await self.plan("pro")
+        await self.tick()
+        self.assertIsNone(await self.card(dealer))                        # the strict rematch deleted it
+        await self.plan("pass")                                           # demoted: rematch pending
+        self.assertIsNotNone(await self.requested())
+        await self.crawl(dealer)                                          # a lane sees it before run_pending()
+        self.assertTrue((await self.card(dealer))["is_backfill"])         # back as backfill, not news
+        self.assertEqual(await self.notices(), {})
+        await self.tick()
+        self.assertTrue((await self.card(dealer))["is_backfill"])
+        self.assertEqual(await self.notices(), {})
+
+    async def test_the_label_of_a_gone_listing_follows_the_plan(self):
+        await self.plan("pro")
+        await self.strict("private")
+        await self.unmark()
+        unknown = await self.seller_listing(None)
+        await self.crawl(unknown)
+        self.assertTrue((await self.card(unknown))["seller_unknown"])
+        async with db.connection() as cx:
+            await cx.execute("UPDATE listings SET status='gone' WHERE id=%s", (unknown,))
+        await self.plan("pass")
+        await self.tick()                                                 # the rematch skips a gone listing
+        [row] = await self.rows("SELECT match_reasons FROM matches WHERE search_profile_id=%s AND listing_id=%s",
+                                self.profile, unknown)
+        self.assertEqual(row["match_reasons"]["seller"]["kind"], "hard")  # stale reasons kept
+        self.assertFalse((await self.card(unknown))["seller_unknown"])    # but no «vendedor sin dato»

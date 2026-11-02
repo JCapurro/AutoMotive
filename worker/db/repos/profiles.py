@@ -72,6 +72,9 @@ def _to_alert(r: dict) -> dict[str, Any]:
         "created_at": _epoch(r["created_at"]),
         "bootstrapped": 1 if r["bootstrapped_at"] else 0,
         "rematch_requested": bool(r["rematch_requested_at"]),
+        # The request as read: mark_bootstrapped clears only this one, not one
+        # written while the rematch ran (a plan flip, a filter edit).
+        "rematch_requested_at": r["rematch_requested_at"],
         "make": r["filters"].get("make"),
         "model": r["filters"].get("model"),
         # The search_profiles row as intelligence/ reads it (sección 4.3).
@@ -256,12 +259,29 @@ async def delete_alert(alert_id: int) -> None:
         await cx.execute("DELETE FROM search_profiles WHERE id = %s", (alert_id,))
 
 
-async def mark_bootstrapped(alert_id: int) -> None:
-    """The profile's backfill is done: later listings may notify."""
+_ANY_REQUEST = object()
+
+
+async def mark_bootstrapped(alert_id: int, requested_at: Any = _ANY_REQUEST) -> None:
+    """The profile's backfill is done: later listings may notify.
+
+    `requested_at`: the rematch_requested_at the backfill was read with
+    (pending_rematch). The request is cleared only if it hasn't moved since:
+    one written while the rematch ran (a plan flip by the payment webhook or
+    an admin plan_limits edit, sync_seller_filter_access; a filter edit) was
+    evaluated with what the rematch read before it, so it stays pending for
+    the next run_pending(). Without it, any request is cleared."""
     async with connection() as cx:
+        if requested_at is _ANY_REQUEST:
+            await cx.execute(
+                "UPDATE search_profiles SET bootstrapped_at = coalesce(bootstrapped_at, now()), "
+                "  rematch_requested_at = NULL WHERE id = %s", (alert_id,))
+            return
         await cx.execute(
             "UPDATE search_profiles SET bootstrapped_at = coalesce(bootstrapped_at, now()), "
-            "  rematch_requested_at = NULL WHERE id = %s", (alert_id,))
+            "  rematch_requested_at = CASE WHEN rematch_requested_at IS NOT DISTINCT FROM %s::timestamptz "
+            "                              THEN NULL ELSE rematch_requested_at END "
+            " WHERE id = %s", (requested_at, alert_id))
 
 
 async def enabled_profiles() -> list[dict[str, Any]]:
