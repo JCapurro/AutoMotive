@@ -133,9 +133,15 @@ describe("CostEstimate (the listing page)", () => {
     expect(text(markup)).toContain("Costo total estimado: USD 16.110 – 16.560 (ARS 20.948.000 – 21.518.000)");
     expect(footnote(markup)).toBe("Valores oficiales al 30/10 para CABA o Provincia de Buenos Aires. No incluye gestoría ni informe de dominio (ARS 4.000 – 4.400).");
     markup = html(view({ jurisdiction: ["caba", "rest"], zones: [PALERMO, CORDOBA] }));
-    expect(footnote(markup)).toContain("para CABA o resto del país.");
+    expect(footnote(markup)).toContain("Valores oficiales al 30/10 para CABA; para el resto del país, referencia con Córdoba, Santa Fe y Mendoza.");
     markup = html(view({ jurisdiction: ["caba", "ba", "rest"], zones: [PALERMO, CORDOBA] }));
-    expect(footnote(markup)).toContain("para CABA, Provincia de Buenos Aires o resto del país.");
+    expect(footnote(markup)).toContain("para CABA o Provincia de Buenos Aires; para el resto del país, referencia con Córdoba, Santa Fe y Mendoza.");
+  });
+
+  it("resto del país alone: the proxy range is disclosed, never called official", () => {
+    const markup = html(view({ jurisdiction: ["rest"], zones: [CORDOBA] }));
+    expect(footnote(markup)).toBe("Valores al 30/10 de Córdoba, Santa Fe y Mendoza como referencia: no son los oficiales de tu provincia. No incluye gestoría ni informe de dominio (ARS 4.000 – 4.400).");
+    expect(footnote(markup)).not.toContain("Valores oficiales");
   });
 
   it("without the buyer's locality: one clear line, no total nor partial total, no breakdown (Juan 02/11)", () => {

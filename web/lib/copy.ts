@@ -252,6 +252,9 @@ export const COST_ESTIMATE = {
   patente: "Patente anual (valores {year})",
   total: "Total estimado",
   footnote: "Valores oficiales al {date} para {jurisdiction}.{outside}",
+  // «rest» has no official scale of its own: its range is built from other provinces, so it is never called official.
+  footnoteRest: "Valores al {date} de Córdoba, Santa Fe y Mendoza como referencia: no son los oficiales de tu provincia.{outside}",
+  footnoteMixed: "Valores oficiales al {date} para {jurisdiction}; para el resto del país, referencia con Córdoba, Santa Fe y Mendoza.{outside}",
   outside: " No incluye {items}.",
   outsideGestoria: "gestoría",
   outsideDomainReport: "informe de dominio ({amount})",

@@ -366,7 +366,8 @@ Reemplaza lo que dicen arriba «Dónde se ve» (el bloque de la ficha, los falta
   ▸ Ver fuentes                                              (<details> cerrado: fuente y fecha por bloque, y el dólar usado)
 ```
 
-- La jurisdicción se nombra una sola vez, en la nota al pie. Con varias: «CABA o Provincia de Buenos Aires», «CABA, Provincia de Buenos Aires o resto del país». AMBA y las búsquedas con varias zonas conocen la localidad (jurisdicciones reales) y siguen mostrando el rango que las cubre.
+- La jurisdicción se nombra una sola vez, en la nota al pie. Con varias: «CABA o Provincia de Buenos Aires». AMBA y las búsquedas con varias zonas conocen la localidad (jurisdicciones reales) y siguen mostrando el rango que las cubre.
+- «Resto del país» nunca se llama «oficial»: su rango sale de las escalas de Córdoba, Santa Fe y Mendoza. Solo: «Valores al 30/10 de Córdoba, Santa Fe y Mendoza como referencia: no son los oficiales de tu provincia.». Con otras jurisdicciones: «Valores oficiales al 30/10 para CABA; para el resto del país, referencia con Córdoba, Santa Fe y Mendoza.».
 - Si falta una parte de la transferencia, el renglón dice cuál: «Transferencia (sin formularios)». Si falta la patente, el monto se reemplaza por el motivo: «falta el año del modelo», «modelo anterior a 1990 en Buenos Aires: sin dato». El encabezado sigue con su «(sin …)».
 - Salen del detalle: el precio, cada término por separado, el vendedor, el supuesto de valuación fiscal, el redondeo y la línea de AMBA/resto. El dólar usado pasa a «Ver fuentes». `total_cost_expanded` no cambia.
 - Código: `web/lib/cost-estimate-view.ts` (`costDetail` devuelve `rows`, `footnote`, `sources`) y `web/components/app/cost-estimate.tsx`. Pruebas: `web/lib/cost-estimate.test.ts`.

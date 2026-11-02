@@ -4,6 +4,8 @@
  * the transfer (DNRPA fee, stamp tax and forms as one range), one for the
  * annual patente, the total, and one footnote with the date of the official
  * values, the jurisdiction (named once) and what stays outside the total.
+ * «Resto del país» is never called official: the footnote says its range is
+ * a reference built from Córdoba, Santa Fe and Mendoza.
  * The sources, with the dollar used, go behind a single «Ver fuentes».
  * Pure: the component (components/app/cost-estimate.tsx) only lays it out.
  */
@@ -93,9 +95,13 @@ export function costDetail(estimate: Estimate, cfg: CostConfig): CostDetail {
   if (domain?.min != null && domain.max != null) {
     outside.push(fill(COST_ESTIMATE.outsideDomainReport, { amount: termAmount({ min: domain.min, max: domain.max }) }));
   }
-  const footnote = fill(COST_ESTIMATE.footnote, {
+  // «rest» is a proxy range (Córdoba, Santa Fe, Mendoza), never «oficial»: it is disclosed as such.
+  const jurisdiction = estimate.jurisdiction ?? [];
+  const official = jurisdiction.filter((j) => j !== "rest");
+  const hasRest = official.length < jurisdiction.length;
+  const footnote = fill(hasRest ? (official.length ? COST_ESTIMATE.footnoteMixed : COST_ESTIMATE.footnoteRest) : COST_ESTIMATE.footnote, {
     date: isoDayMonth(estimate.as_of),
-    jurisdiction: jurisdictionNames(estimate.jurisdiction ?? []),
+    jurisdiction: jurisdictionNames(official),
     outside: outside.length ? fill(COST_ESTIMATE.outside, { items: outside.join(COST_ESTIMATE.last) }) : "",
   });
 
