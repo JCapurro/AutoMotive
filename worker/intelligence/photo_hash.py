@@ -19,12 +19,19 @@ from typing import Iterable
 
 HASH_SIZE = 8
 _SIDE = HASH_SIZE * 4               # 32
-# Decompression bombs: a listing photo never needs more than this.
-MAX_IMAGE_PIXELS = 40_000_000
+# Decompression bombs: a listing photo never needs more than this. Checked by
+# hand on the header before decoding: Pillow's own MAX_IMAGE_PIXELS only
+# raises above twice its value (between 1x and 2x it just warns), and draft()
+# shrinks JPEG alone.
+MAX_IMAGE_PIXELS = 25_000_000
 # cos(pi * u * (2n + 1) / (2 * 32)) for the 8 low frequencies u and the 32 samples n.
 _COS = [[math.cos(math.pi * u * (2 * n + 1) / (2 * _SIDE)) for n in range(_SIDE)] for u in range(HASH_SIZE)]
 # A near-blank image (a flat colour, a placeholder) hashes to almost all 0s or 1s.
 _FLAT_BITS = 4
+
+
+class TooManyPixels(ValueError):
+    """The image is larger than MAX_IMAGE_PIXELS: never decoded."""
 
 
 class PillowMissing(RuntimeError):
@@ -68,6 +75,10 @@ def phash(data: bytes) -> str:
         raise PillowMissing("Pillow no instalado") from e
     Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
     with Image.open(BytesIO(data)) as img:
+        # Image.open only reads the header: refuse before any pixel is decoded.
+        width, height = img.size
+        if width * height > MAX_IMAGE_PIXELS:
+            raise TooManyPixels(f"{width}x{height}")
         if img.format == "JPEG":
             # Decode at a reduced scale: a 32×32 hash never needs the full photo.
             img.draft("L", (_SIDE * 4, _SIDE * 4))

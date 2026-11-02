@@ -65,6 +65,11 @@ def report_lines(result: dict[str, Any], listings: dict[int, dict[str, Any]]) ->
                 bits.append(f"Δkm {ev['km_pct']}%")
             if "price_pct" in ev:
                 bits.append(f"Δprecio {ev['price_pct']}%")
+            if ev.get("reason"):
+                bits.append("otra zona" if ev["reason"] == "other_zone"
+                            else "otros datos: " + ", ".join(ev.get("conflicts") or []))
+            if ev.get("data") == "unconfirmed":
+                bits.append("datos sin confirmar")
             if p.distance is not None:
                 bits.append(f"distancia foto {p.distance}")
             if zone.get("dist_km") is not None:

@@ -152,10 +152,13 @@ RED_FLAG = {
     # {source} is RED_FLAG_SOURCE: the other listing's source, plus «y N más».
     "duplicate_photos": ("Las fotos de esta publicación aparecen también en otra publicación ({source}) "
                          "con otros datos: conviene pedir fotos actuales y ver el auto antes de señar."),
+    # The same photos in the same source, another zone, with the same or unstated data.
+    "duplicate_photos_zone": ("Las fotos de esta publicación aparecen también en otra publicación ({source}) "
+                              "de otra zona: conviene pedir fotos actuales y ver el auto antes de señar."),
     "cross_source_photos": ("Parece el mismo auto publicado también en {source} (mismas fotos): "
                             "conviene comparar las dos publicaciones."),
-    "cross_source_data": ("Parece el mismo auto publicado también en {source} (mismo modelo, año y "
-                          "kilometraje, precio parecido): conviene comparar las dos publicaciones."),
+    "cross_source_data": ("Parece el mismo auto publicado también en {source} (mismo modelo y año, "
+                          "kilometraje y precio parecidos): conviene comparar las dos publicaciones."),
 }
 # How a duplicate flag names the other listings: «MercadoLibre» or «MercadoLibre y 2 más».
 RED_FLAG_SOURCE = {"one": "{source}", "more": "{source} y {k} más"}

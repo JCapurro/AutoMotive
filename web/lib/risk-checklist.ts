@@ -103,6 +103,8 @@ export const RiskDuplicatesInput = z.object({
       price_tol_pct: range("cross_source.price_tol_pct", 0, 20, false).optional(),
       data_min_km: range("cross_source.data_min_km", 0, 1_000_000).optional(),
       data_max_dist_km: range("cross_source.data_max_dist_km", 1, 500, false).optional(),
+      photo_conflict_km_pct: range("cross_source.photo_conflict_km_pct", 0, 50, false).optional(),
+      photo_conflict_price_pct: range("cross_source.photo_conflict_price_pct", 0, 50, false).optional(),
     })
     .passthrough()
     .optional(),

@@ -151,8 +151,8 @@ describe("/admin/config for the PAR-02 resto keys", () => {
       ...risk,
       photo_hash_count: 3,
       phash_max_distance: 6,
-      photo_hash: { enabled: false, daily_image_cap: 600, max_attempts: 2, max_bytes: 2_000_000, timeout_seconds: 10, per_host_interval_seconds: 1, common_min_sellers: 3, skip_sources: ["facebook", "instagram"] },
-      cross_source: { km_tol_pct: 3, price_tol_pct: 5, data_min_km: 10_000, data_max_dist_km: 50 },
+      photo_hash: { enabled: false, daily_image_cap: 600, max_attempts: 2, max_bytes: 2_000_000, timeout_seconds: 10, per_host_interval_seconds: 1, common_min_sellers: 3, skip_sources: ["facebook", "onlycarsusados", "sc_clasificados"] },
+      cross_source: { km_tol_pct: 3, price_tol_pct: 5, data_min_km: 10_000, data_max_dist_km: 50, photo_conflict_km_pct: 10, photo_conflict_price_pct: 15 },
       signals: { private_many_listings: "on", cross_source_photos: "on", cross_source_data: "shadow", duplicate_photos: "on" },
     };
     expect(validateConfigChange("risk", full, risk)).toBeNull();
@@ -167,6 +167,7 @@ describe("/admin/config for the PAR-02 resto keys", () => {
     [{ photo_hash: { daily_image_cap: 9000 } }, /daily_image_cap/],
     [{ photo_hash: { skip_sources: "facebook" } }, /skip_sources/],
     [{ cross_source: { km_tol_pct: 25 } }, /km_tol_pct/],
+    [{ cross_source: { photo_conflict_price_pct: 60 } }, /photo_conflict_price_pct/],
     [{ signals: { cross_source_data: "maybe" } }, /on, shadow u off/],
   ])("rejects risk %j", (change, message) => {
     expect(validateConfigChange("risk", { ...risk, ...change }, risk)).toMatch(message);

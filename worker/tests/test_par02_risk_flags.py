@@ -113,6 +113,22 @@ class DuplicateFlagTests(unittest.TestCase):
         self.assertEqual(by_id["cross_source_duplicate"].link["listing_id"], 78)
         self.assertEqual(ids(flags)[0], "duplicate_photos")
 
+    def test_duplicate_photos_in_another_zone_does_not_claim_other_data(self):
+        moved = {**PAIR_ML, "other_id": 79, "kind": "duplicate_photos", "source_name": "Mercado Libre",
+                 "distance": 0, "reason": "other_zone"}
+        f = {x.id: x for x in flags_of(fiesta_listing(risk_duplicates=[moved]))}["duplicate_photos"]
+        self.assertEqual(f.text, copy.RED_FLAG["duplicate_photos_zone"].format(source="Mercado Libre"))
+        self.assertNotIn("otros datos", f.text)
+        self.assertIn("otra zona", f.text)
+        self.assertEqual(f.severity, "warning")
+        other = {**moved, "reason": "other_data"}
+        f = {x.id: x for x in flags_of(fiesta_listing(risk_duplicates=[other]))}["duplicate_photos"]
+        self.assertIn("con otros datos", f.text)
+
+    def test_the_data_level_says_similar_km_not_the_same(self):
+        self.assertIn("kilometraje y precio parecidos", copy.RED_FLAG["cross_source_data"])
+        self.assertNotIn("año y kilometraje", copy.RED_FLAG["cross_source_data"])
+
     def test_a_kind_turned_off_drops_its_flag_at_the_next_rescore(self):
         stolen = {**PAIR_ML, "kind": "duplicate_photos"}
         self.assertNotIn("duplicate_photos", ids(flags_of(fiesta_listing(risk_duplicates=[stolen]),
@@ -197,7 +213,7 @@ class RiskConfigTests(unittest.TestCase):
     def test_defaults_are_off_and_shadow(self):
         cfg = risk(None)
         self.assertFalse(cfg["photo_hash"]["enabled"])
-        self.assertEqual(cfg["photo_hash"]["skip_sources"], ["facebook", "instagram"])
+        self.assertEqual(cfg["photo_hash"]["skip_sources"], ["facebook", "onlycarsusados", "sc_clasificados"])
         self.assertEqual(cfg["signals"]["cross_source_data"], "shadow")
         self.assertEqual((cfg["photo_hash_count"], cfg["phash_max_distance"]), (3, 6))
 
@@ -209,7 +225,7 @@ class RiskConfigTests(unittest.TestCase):
         self.assertEqual((cfg["photo_hash_count"], cfg["phash_max_distance"]), (3, 4))
         self.assertEqual((cfg["photo_hash"]["enabled"], cfg["photo_hash"]["daily_image_cap"],
                           cfg["photo_hash"]["max_attempts"]), (False, 600, 3))
-        self.assertEqual(cfg["photo_hash"]["skip_sources"], ["facebook", "instagram"])
+        self.assertEqual(cfg["photo_hash"]["skip_sources"], ["facebook", "onlycarsusados", "sc_clasificados"])
         self.assertEqual((cfg["cross_source"]["km_tol_pct"], cfg["cross_source"]["price_tol_pct"]), (3, 4))
         self.assertEqual(cfg["signals"]["cross_source_data"], "shadow")
         self.assertEqual(cfg["signals"]["duplicate_photos"], "shadow")
@@ -218,6 +234,7 @@ class RiskConfigTests(unittest.TestCase):
 
 NEW_TEXTS = {"private_many_listings": copy.RED_FLAG["private_many_listings"].format(n="7"),
              "duplicate_photos": copy.RED_FLAG["duplicate_photos"].format(source="V6 y 2 más"),
+             "duplicate_photos_zone": copy.RED_FLAG["duplicate_photos_zone"].format(source="V6"),
              "cross_source_photos": copy.RED_FLAG["cross_source_photos"].format(source="Mercado Libre"),
              "cross_source_data": copy.RED_FLAG["cross_source_data"].format(source="Mercado Libre"),
              "holder_detail": copy.QUESTION["holder_detail"]}
@@ -238,7 +255,8 @@ class RiskCopyLintTests(unittest.TestCase):
                     self.assertNotIn(normalize_text(term), folded)
 
     def test_every_flag_text_reads_as_something_to_check(self):
-        for key in ("private_many_listings", "duplicate_photos", "cross_source_photos", "cross_source_data"):
+        for key in ("private_many_listings", "duplicate_photos", "duplicate_photos_zone", "cross_source_photos",
+                    "cross_source_data"):
             with self.subTest(key):
                 self.assertIn("conviene", NEW_TEXTS[key])
 

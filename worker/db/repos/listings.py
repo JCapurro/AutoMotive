@@ -330,9 +330,10 @@ MAX_DUPLICATES = 10
 _DUPLICATES = f"""
   LEFT JOIN LATERAL (
     SELECT jsonb_agg(jsonb_build_object('other_id', p.other_id, 'kind', p.kind, 'source', p.source,
-                                        'source_name', p.source_name, 'url', p.url, 'distance', p.photo_distance)
+                                        'source_name', p.source_name, 'url', p.url, 'distance', p.photo_distance,
+                                        'reason', p.reason)
                      ORDER BY p.rank) AS pairs
-      FROM (SELECT d.other_id, d.kind, d.photo_distance, o.source, s.name AS source_name, o.url,
+      FROM (SELECT d.other_id, d.kind, d.photo_distance, d.evidence ->> 'reason' AS reason, o.source, s.name AS source_name, o.url,
                    row_number() OVER (ORDER BY d.photo_distance NULLS LAST,
                                                abs(o.price_usd - l.price_usd) NULLS LAST, d.other_id) AS rank
               FROM listing_duplicates d

@@ -230,13 +230,66 @@ class PhotoBudgetTests(DuplicatesCase):
         self.assertEqual(row["attributes"]["_photo_hashes"]["hashes"], [H1])
         self.assertEqual(snaps["n"], 0)
 
-    async def test_the_queue_brings_matched_listings_and_their_candidates_but_never_skipped_sources(self):
+    async def queue(self, **kw):
+        args = dict(limit=50, skip_sources=["facebook"], km_tol_pct=3, price_tol_pct=5, version=1, max_attempts=2)
+        return await repo.photo_hash_queue(**{**args, **kw})
+
+    async def test_the_queue_brings_matched_listings_their_candidates_and_never_skipped_sources(self):
         a = await self.listing()
         b = await self.listing("rosariogarage", mileage_km=91_000)
         await self.listing("facebook", mileage_km=90_500)
-        await self.listing("v6", mileage_km=150_000)                 # out of tolerance, no match
+        c = await self.listing("v6", mileage_km=150_000)             # out of tolerance: a photo candidate
+        far = await self.listing("v6", year=2010)                    # another year: none
         await self.alert()
         async with db.connection() as cx:
             await cx.execute("DELETE FROM matches WHERE listing_id <> %s", (a,))
-        rows = await repo.photo_hash_queue(limit=50, skip_sources=["facebook"], km_tol_pct=3, price_tol_pct=5)
-        self.assertEqual(sorted(r["id"] for r in rows), [a, b])
+        rows = await self.queue()
+        self.assertEqual([r["id"] for r in rows], [a, b, c], "matched, data candidate, photo candidate")
+        self.assertNotIn(far, [r["id"] for r in rows])
+
+    async def test_a_much_cheaper_copy_brings_the_original_into_the_queue(self):
+        # Copied photos come with another price and year: the original is outside the data tolerances.
+        original = await self.listing("rosariogarage", price=17_000, price_usd=17_000, year=2016)
+        copy_ = await self.listing(price=12_000, price_usd=12_000)
+        await self.alert()
+        async with db.connection() as cx:
+            await cx.execute("DELETE FROM matches WHERE listing_id <> %s", (copy_,))
+        self.assertEqual([r["id"] for r in await self.queue()], [copy_, original])
+
+    async def test_finished_listings_never_fill_the_queue(self):
+        done = [await self.listing() for _ in range(3)]
+        todo = await self.listing("rosariogarage")
+        await self.alert()
+        for lid in done:
+            await repo.save_photo_hashes(lid, {"v": 1, "urls": [f"u{lid}"], "hashes": [H1], "attempts": 1})
+        rows = await self.queue(limit=1)
+        self.assertEqual([r["id"] for r in rows], [todo], "the hashed ones are skipped in SQL, not after the LIMIT")
+        # Out of attempts: skipped too; with attempts left: back in.
+        await repo.save_photo_hashes(todo, {"v": 1, "urls": ["u"], "hashes": [None], "attempts": 2})
+        self.assertEqual(await self.queue(), [])
+        self.assertEqual([r["id"] for r in await self.queue(max_attempts=3)], [todo])
+        # Images changed: back in until the pass hashes it or marks it seen.
+        async with db.connection() as cx:
+            await cx.execute("UPDATE listings SET images = %s WHERE id = %s",
+                             (Jsonb(["https://img.example.test/new.jpg"]), done[0]))
+        [row] = await self.queue()
+        self.assertEqual(row["id"], done[0])
+        await repo.mark_photo_hashes_seen(done[0], row["photo_hashes"])
+        self.assertEqual(await self.queue(), [])
+        # Another version: back in.
+        self.assertEqual(len(await self.queue(version=2)), 4)
+
+    async def test_rows_for_scoring_carries_the_reason_of_a_duplicate(self):
+        a = await self.listing(hashes=[H1])
+        b = await self.listing(hashes=[H1], zone=("14", "Capital", "locality", -31.42, -64.18))
+        async with db.connection() as cx:
+            await cx.execute("INSERT INTO listing_zones (listing_id, province_id, department, precision, lat, lon) "
+                             "VALUES (%s, %s, %s, %s, %s, %s)", (a, *ROSARIO))
+        await detect_all("cli")
+        pairs = await self.pairs()
+        self.assertEqual({(p["kind"], p["evidence"]["reason"]) for p in pairs.values()},
+                         {("duplicate_photos", "other_zone")})
+        async with db.connection() as cx:
+            rows = await listings_repo.rows_for_scoring(cx, [a])
+        self.assertEqual((rows[a]["risk_duplicates"][0]["other_id"], rows[a]["risk_duplicates"][0]["reason"]),
+                         (b, "other_zone"))

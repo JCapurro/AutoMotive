@@ -76,9 +76,10 @@ update public.app_config c
          'photo_hash', jsonb_build_object(
            'enabled', false, 'daily_image_cap', 600, 'max_attempts', 2, 'max_bytes', 2000000,
            'timeout_seconds', 10, 'per_host_interval_seconds', 1, 'common_min_sellers', 3,
-           'skip_sources', jsonb_build_array('facebook', 'instagram')),
+           'skip_sources', jsonb_build_array('facebook', 'onlycarsusados', 'sc_clasificados')),
          'cross_source', jsonb_build_object(
-           'km_tol_pct', 3, 'price_tol_pct', 5, 'data_min_km', 10000, 'data_max_dist_km', 50),
+           'km_tol_pct', 3, 'price_tol_pct', 5, 'data_min_km', 10000, 'data_max_dist_km', 50,
+           'photo_conflict_km_pct', 10, 'photo_conflict_price_pct', 15),
          'signals', jsonb_build_object(
            'private_many_listings', 'on', 'cross_source_photos', 'on',
            'cross_source_data', 'shadow', 'duplicate_photos', 'on')
@@ -91,8 +92,9 @@ insert into public.app_config(key, value) values
     "photo_hash_count": 3, "phash_max_distance": 6,
     "photo_hash": {"enabled": false, "daily_image_cap": 600, "max_attempts": 2, "max_bytes": 2000000,
                    "timeout_seconds": 10, "per_host_interval_seconds": 1, "common_min_sellers": 3,
-                   "skip_sources": ["facebook", "instagram"]},
-    "cross_source": {"km_tol_pct": 3, "price_tol_pct": 5, "data_min_km": 10000, "data_max_dist_km": 50},
+                   "skip_sources": ["facebook", "onlycarsusados", "sc_clasificados"]},
+    "cross_source": {"km_tol_pct": 3, "price_tol_pct": 5, "data_min_km": 10000, "data_max_dist_km": 50,
+                     "photo_conflict_km_pct": 10, "photo_conflict_price_pct": 15},
     "signals": {"private_many_listings": "on", "cross_source_photos": "on", "cross_source_data": "shadow", "duplicate_photos": "on"}}')
 on conflict (key) do nothing;
 

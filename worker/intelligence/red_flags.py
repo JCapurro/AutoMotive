@@ -169,6 +169,8 @@ def duplicate_flags(pairs: Any, risk: Mapping[str, Any]) -> list[RedFlag]:
         if risk["signals"].get(pair["kind"]) != "on":
             continue
         flag_id, text_key, _ = _DUPLICATE_FLAG[pair["kind"]]
+        if text_key == "duplicate_photos" and pair.get("reason") == "other_zone":
+            text_key = "duplicate_photos_zone"   # the data do not differ: say what does
         by_flag.setdefault(flag_id, []).append((text_key, pair))
     out = []
     for flag_id, found in by_flag.items():

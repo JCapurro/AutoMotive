@@ -79,14 +79,21 @@ reset role;
 select is((select value -> 'photo_hash' ->> 'enabled' from public.app_config where key = 'risk'), 'false',
           'the photo hash is off by default');
 select is((select value -> 'photo_hash' -> 'skip_sources' from public.app_config where key = 'risk'),
-          '["facebook", "instagram"]'::jsonb, 'Facebook and Instagram images are never downloaded by default');
+          '["facebook", "onlycarsusados", "sc_clasificados"]'::jsonb,
+          'Facebook and Instagram (onlycarsusados, sc_clasificados) images are never downloaded by default');
+select ok((select bool_and(exists (select 1 from public.sources s where s.id = e.s))
+             from public.app_config c,
+                  jsonb_array_elements_text(c.value -> 'photo_hash' -> 'skip_sources') e(s)
+            where c.key = 'risk'),
+          'every skip_sources id is a real source id');
 select is((select (value ->> 'photo_hash_count')::int from public.app_config where key = 'risk'), 3, 'photo_hash_count = 3');
 select is((select (value ->> 'phash_max_distance')::int from public.app_config where key = 'risk'), 6, 'phash_max_distance = 6');
 select is((select value -> 'signals' from public.app_config where key = 'risk'),
           '{"private_many_listings": "on", "cross_source_photos": "on", "cross_source_data": "shadow", "duplicate_photos": "on"}'::jsonb,
           'the data-only duplicate starts in shadow');
 select is((select value -> 'cross_source' from public.app_config where key = 'risk'),
-          '{"km_tol_pct": 3, "price_tol_pct": 5, "data_min_km": 10000, "data_max_dist_km": 50}'::jsonb,
+          '{"km_tol_pct": 3, "price_tol_pct": 5, "data_min_km": 10000, "data_max_dist_km": 50,
+            "photo_conflict_km_pct": 10, "photo_conflict_price_pct": 15}'::jsonb,
           'cross_source tolerances');
 select ok((select value ? 'checklist_enabled' and value ? 'links' from public.app_config where key = 'risk'),
           'risk keeps checklist_enabled and links');

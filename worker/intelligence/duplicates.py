@@ -10,22 +10,31 @@ and `hashes` (the hex photo hashes, attributes._photo_hashes, or []).
 
 Per pair, at most one kind (decision 3, precedence):
 
-* cross_source_photos: different sources, the data match (same year, km within
-  km_tol_pct, price_usd within price_tol_pct, neither partial, not linked as a
-  repost) and a shared photo (hash distance <= phash_max_distance).
-* duplicate_photos: a shared photo and either another source or the same
-  source in another zone (locality precision on both, another department or
-  farther than data_max_dist_km), and not the case above. Not between two
+* cross_source_photos: different sources, a shared photo (hash distance <=
+  phash_max_distance) and no data conflict: either the data match (same year,
+  km within km_tol_pct, price_usd within price_tol_pct, neither partial) or
+  nothing contradicts them (a missing km, year or price, a partial price, or
+  gaps under the conflict tolerances below: a dealer prices one portal higher).
+* duplicate_photos: a shared photo and either another source with a data
+  conflict (`conflicts`: both state the year and they differ, or km farther
+  than photo_conflict_km_pct, or both prices full and farther than
+  photo_conflict_price_pct), evidence.reason = "other_data"; or the same source
+  in another zone (locality precision on both, another department or farther
+  than data_max_dist_km), reason "other_data" or "other_zone". Not between two
   listings of the same seller (same source and seller_key: a re-publication,
-  the repost flag's) nor linked as a repost. The year is not compared: a copied
-  photo can come with another year.
+  the repost flag's) nor linked as a repost; not when both sellers are
+  effective dealers nor when either car is new (km under data_min_km): press
+  and stock photos repeat there, and the catalog filter only sees the hashed
+  sample of the group.
 * cross_source_data: no shared photo, the data match, and every guard of
   decision 4: km >= data_min_km on both; trim, transmission and fuel equal
   when both state them; both zones at locality precision, same province and
   (same department or <= data_max_dist_km); neither seller an effective dealer
-  (intelligence/seller.py); and mutual uniqueness: each is the other's only
-  data candidate in the other's source, and neither has a data twin in its
-  own source (a twin means a common configuration, e.g. a dealer's stock).
+  (intelligence/seller.py); mutual uniqueness: each is the other's only data
+  candidate in the other's source, and neither has a data twin in its own
+  source (a twin means a common configuration, e.g. a dealer's stock); and the
+  photos do not contradict it: when both listings have usable hashes and none
+  is shared, they are two cars.
 
 A hash found (within phash_max_distance) on listings of common_min_sellers or
 more distinct sellers is a catalog photo, a logo or a placeholder: it counts
@@ -42,7 +51,7 @@ from intelligence.seller import effective_seller
 
 KINDS = ("duplicate_photos", "cross_source_photos", "cross_source_data")
 # Bump when a rule changes: stored in evidence.rule_v.
-RULE_VERSION = 1
+RULE_VERSION = 2
 
 
 @dataclass(frozen=True)
@@ -87,6 +96,31 @@ def data_match(a: Mapping[str, Any], b: Mapping[str, Any], cs: Mapping[str, Any]
     if km_pct > cs["km_tol_pct"] or price_pct > cs["price_tol_pct"]:
         return None
     return {"km_pct": round(km_pct, 2), "price_pct": round(price_pct, 2)}
+
+
+def conflicts(a: Mapping[str, Any], b: Mapping[str, Any], cs: Mapping[str, Any]) -> list[str]:
+    """What two listings state differently enough to be two cars ("year",
+    "km", "price"); a field one of them does not state, or a partial price, is
+    no conflict: missing is not different."""
+    out = []
+    if a.get("year") is not None and b.get("year") is not None and a["year"] != b["year"]:
+        out.append("year")
+    km_a, km_b = a.get("mileage_km"), b.get("mileage_km")
+    if km_a is not None and km_b is not None and _pct(km_a, km_b) > cs["photo_conflict_km_pct"]:
+        out.append("km")
+    pa, pb = a.get("price_usd"), b.get("price_usd")
+    if (pa and pb and not a.get("price_partial") and not b.get("price_partial")
+            and _pct(float(pa), float(pb)) > cs["photo_conflict_price_pct"]):
+        out.append("price")
+    return out
+
+
+def _new_car(row: Mapping[str, Any], cs: Mapping[str, Any]) -> bool:
+    return row.get("mileage_km") is not None and row["mileage_km"] < cs["data_min_km"]
+
+
+def _usable(hashes: Iterable[Any], common: set[str]) -> bool:
+    return any(valid(h) and h not in common and not is_flat(h) for h in hashes or ())
 
 
 def _same_text(x: Any, y: Any) -> bool:
@@ -151,24 +185,38 @@ def detect(rows: list[Mapping[str, Any]], risk: Mapping[str, Any]) -> list[Pair]
     pairs: dict[tuple[int, int], Pair] = {}
 
     # Photos: only the hashed ones, all against all.
-    hashed = [i for i in ids if any(valid(h) for h in by_id[i].get("hashes") or ())]
+    hashed = [i for i in ids if _usable(by_id[i].get("hashes"), common)]
+    two_cars: set[tuple[int, int]] = set()      # both hashed, no photo shared
     for x, ia in enumerate(hashed):
         a = by_id[ia]
         for ib in hashed[x + 1:]:
             b = by_id[ib]
             match = best_match(a["hashes"], b["hashes"], ignore=common)
             if match is None or match[2] > max_d:
+                two_cars.add((ia, ib))
                 continue
             evidence: dict[str, Any] = {"matched": [list(match)], "rule_v": RULE_VERSION}
-            data = data_match(a, b, cs) if a["source"] != b["source"] else None
-            if data is not None:
-                pairs[(ia, ib)] = Pair(ia, ib, "cross_source_photos", match[2], {**evidence, **data})
-                continue
             if _repost_linked(a, b) or (a.get("seller_key") and _seller(a) == _seller(b)):
                 continue
-            zone = zone_relation(a, b, cs["data_max_dist_km"])
-            if a["source"] == b["source"] and (zone is None or zone["near"]):
-                continue           # the same source and place: a re-publication (repost)
+            conflict = conflicts(a, b, cs)
+            if a["source"] != b["source"]:
+                if not conflict:
+                    data = data_match(a, b, cs)
+                    pairs[(ia, ib)] = Pair(ia, ib, "cross_source_photos", match[2],
+                                           {**evidence, **(data or {"data": "unconfirmed"})})
+                    continue
+                zone = zone_relation(a, b, cs["data_max_dist_km"])
+            else:
+                zone = zone_relation(a, b, cs["data_max_dist_km"])
+                if zone is None or zone["near"]:
+                    continue       # the same source and place: a re-publication (repost)
+            if effective_seller(a) == "dealer" and effective_seller(b) == "dealer":
+                continue           # dealers share stock and press photos
+            if _new_car(a, cs) or _new_car(b, cs):
+                continue           # new cars come with the brand's photos
+            evidence["reason"] = "other_data" if conflict else "other_zone"
+            if conflict:
+                evidence["conflicts"] = conflict
             if zone is not None:
                 evidence["zone"] = zone
             pairs[(ia, ib)] = Pair(ia, ib, "duplicate_photos", match[2], evidence)
@@ -196,7 +244,7 @@ def detect(rows: list[Mapping[str, Any]], risk: Mapping[str, Any]) -> list[Pair]
                 other_source.setdefault(ia, {}).setdefault(sb, []).append(ib)
                 other_source.setdefault(ib, {}).setdefault(sa, []).append(ia)
     for (ia, ib), data in matched.items():
-        if (ia, ib) in pairs:
+        if (ia, ib) in pairs or (ia, ib) in two_cars:
             continue
         a, b = by_id[ia], by_id[ib]
         if ia in twins or ib in twins:

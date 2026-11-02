@@ -140,7 +140,9 @@ def flag_order(raw: Any) -> tuple[str, ...]:
 # PAR-02 resto (docs/superpowers/specs/2026-11-02-par02-resto-design.md,
 # decision 9): app_config.risk beyond the checklist. The photo hash is off by
 # default until Juan approves it; Facebook and Instagram images are never
-# downloaded. signals.<kind>: "on" shows it, "shadow" stores the pairs without
+# downloaded (skip_sources holds the source ids: Instagram is onlycarsusados and
+# sc_clasificados, worker/collectors/instagram.py; pipeline/photo_hash.py also
+# refuses Meta's image hosts whatever the config says). signals.<kind>: "on" shows it, "shadow" stores the pairs without
 # showing them (only the duplicate kinds have pairs), "off" drops it.
 # Same bounds as the /admin/config validator; a missing or bad value falls
 # back to its default, key by key.
@@ -150,8 +152,11 @@ DEFAULT_RISK: dict[str, Any] = {
     "phash_max_distance": 6,
     "photo_hash": {"enabled": False, "daily_image_cap": 600, "max_attempts": 2, "max_bytes": 2_000_000,
                    "timeout_seconds": 10, "per_host_interval_seconds": 1, "common_min_sellers": 3,
-                   "skip_sources": ["facebook", "instagram"]},
-    "cross_source": {"km_tol_pct": 3, "price_tol_pct": 5, "data_min_km": 10_000, "data_max_dist_km": 50},
+                   "skip_sources": ["facebook", "onlycarsusados", "sc_clasificados"]},
+    # photo_conflict_*: how far apart two listings with a shared photo must be
+    # to count as other data (duplicate_photos) rather than the same car.
+    "cross_source": {"km_tol_pct": 3, "price_tol_pct": 5, "data_min_km": 10_000, "data_max_dist_km": 50,
+                     "photo_conflict_km_pct": 10, "photo_conflict_price_pct": 15},
     "signals": {"private_many_listings": "on", "cross_source_photos": "on",
                 "cross_source_data": "shadow", "duplicate_photos": "on"},
 }
@@ -160,7 +165,8 @@ _PHOTO_HASH_BOUNDS = {"daily_image_cap": (0, 5000), "max_attempts": (1, 10), "ma
                       "timeout_seconds": (1, 60), "per_host_interval_seconds": (0, 60),
                       "common_min_sellers": (2, 100)}
 _CROSS_SOURCE_BOUNDS = {"km_tol_pct": (0, 20), "price_tol_pct": (0, 20), "data_min_km": (0, 1_000_000),
-                        "data_max_dist_km": (1, 500)}
+                        "data_max_dist_km": (1, 500), "photo_conflict_km_pct": (0, 50),
+                        "photo_conflict_price_pct": (0, 50)}
 
 
 def _bounded(out: dict[str, Any], raw: Mapping[str, Any], bounds: Mapping[str, tuple[float, float]]) -> None:
@@ -188,6 +194,10 @@ def risk(raw: Any) -> dict[str, Any]:
     cross = raw.get("cross_source")
     if isinstance(cross, Mapping):
         _bounded(out["cross_source"], cross, _CROSS_SOURCE_BOUNDS)
+    cs = out["cross_source"]
+    # A conflict is never inside the data match's own tolerance.
+    cs["photo_conflict_km_pct"] = max(cs["photo_conflict_km_pct"], cs["km_tol_pct"])
+    cs["photo_conflict_price_pct"] = max(cs["photo_conflict_price_pct"], cs["price_tol_pct"])
     signals = raw.get("signals")
     if isinstance(signals, Mapping):
         for key in out["signals"]:

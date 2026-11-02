@@ -118,13 +118,40 @@ async def describe(cx: AsyncConnection, ids: Iterable[int]) -> dict[int, dict[st
 # Photo hash (decision 5)
 # ---------------------------------------------------------------------------
 
+# How many other listings of the same model each queued listing pulls in for
+# duplicate_photos (copied photos come with another price or year, outside the
+# data tolerances): the closest by year and km, another source first.
+PHOTO_CANDIDATES = 10
+
+# Whether a listing's stored _photo_hashes (alias ph) still needs work: none,
+# another version, its images changed since (src = md5 of listings.images,
+# written by save_photo_hashes and mark_photo_hashes_seen), or some photo
+# failed with attempts left. CASE keeps the jsonb functions off non-arrays.
+_NEEDS_HASH = """
+  (ph IS NULL OR jsonb_typeof(ph) <> 'object'
+   OR ph ->> 'v' IS DISTINCT FROM %(version)s
+   OR ph ->> 'src' IS DISTINCT FROM md5(l.images::text)
+   OR CASE WHEN jsonb_typeof(ph -> 'urls') <> 'array' THEN true
+           WHEN jsonb_array_length(ph -> 'urls') = 0 THEN false
+           WHEN CASE WHEN jsonb_typeof(ph -> 'attempts') = 'number' THEN (ph ->> 'attempts')::numeric
+                     ELSE 0 END >= %(max_attempts)s THEN false
+           WHEN coalesce(jsonb_typeof(ph -> 'hashes'), '') <> 'array' THEN true
+           WHEN jsonb_array_length(ph -> 'hashes') <> jsonb_array_length(ph -> 'urls') THEN true
+           ELSE EXISTS (SELECT 1 FROM jsonb_array_elements(ph -> 'hashes') e WHERE jsonb_typeof(e) <> 'string')
+      END)
+"""
+
+
 async def photo_hash_queue(*, limit: int, skip_sources: list[str], max_age_days: int = 30,
-                           km_tol_pct: float, price_tol_pct: float) -> list[dict[str, Any]]:
-    """Active listings with images whose photos are worth hashing, newest
-    first: the ones with a live match or a partial price, and their data
-    candidates in another source (same make, model and year, km and price in
-    tolerance): without the other side hashed there is no pair. Whether each
-    still needs a hash is decided in pipeline/photo_hash.py (_photo_hashes)."""
+                           km_tol_pct: float, price_tol_pct: float, version: int,
+                           max_attempts: int) -> list[dict[str, Any]]:
+    """Active listings with images whose photos still need a hash (_NEEDS_HASH,
+    in SQL so that finished ones never fill the page): the ones with a live
+    match or a partial price, then their data candidates in another source
+    (same make, model and year, km and price in tolerance), then up to
+    PHOTO_CANDIDATES other listings of their model each: without the other side
+    hashed there is no pair. Newest first within each tier.
+    pipeline/photo_hash.needs_hash has the final word."""
     async with connection() as cx:
         return await (await cx.execute(
             LIVE_SEARCHES + """,
@@ -145,15 +172,32 @@ async def photo_hash_queue(*, limit: int, skip_sources: list[str], max_age_days:
                AND o.mileage_km IS NOT NULL AND b.mileage_km IS NOT NULL
                AND abs(o.mileage_km - b.mileage_km) <= %(km)s / 100.0 * greatest(o.mileage_km, b.mileage_km)
                AND o.price_usd > 0 AND b.price_usd > 0
-               AND abs(o.price_usd - b.price_usd) <= %(price)s / 100.0 * greatest(o.price_usd, b.price_usd))
+               AND abs(o.price_usd - b.price_usd) <= %(price)s / 100.0 * greatest(o.price_usd, b.price_usd)),
+            photo_cand AS (
+              SELECT c.id FROM base b CROSS JOIN LATERAL (
+                SELECT o.id FROM listings o
+                 WHERE lower(o.make) = b.make AND lower(o.model) = b.model AND o.id <> b.id
+                   AND o.status = 'active' AND jsonb_array_length(o.images) > 0
+                   AND o.last_seen_at >= now() - make_interval(days => %(days)s)
+                   AND NOT (o.source = ANY(%(skip)s))
+                   AND (o.year IS NULL OR b.year IS NULL OR abs(o.year - b.year) <= 1)
+                 ORDER BY (o.source = b.source), abs(coalesce(o.year, b.year, 0) - coalesce(b.year, 0)),
+                          abs(coalesce(o.mileage_km, 0) - coalesce(b.mileage_km, 0)), o.id
+                 LIMIT %(per)s) c),
+            tiers AS (
+              SELECT id, min(tier) AS tier FROM (
+                SELECT id, 0 AS tier FROM base UNION ALL SELECT id, 1 FROM cand
+                UNION ALL SELECT id, 2 FROM photo_cand) t GROUP BY id)
             SELECT l.id, l.source, l.images, l.attributes -> '_photo_hashes' AS photo_hashes
-              FROM listings l
-             WHERE l.id IN (SELECT id FROM base UNION SELECT id FROM cand)
-             ORDER BY l.first_seen_at DESC
+              FROM listings l JOIN tiers t ON t.id = l.id
+             CROSS JOIN LATERAL (SELECT l.attributes -> '_photo_hashes' AS ph) x
+             WHERE """ + _NEEDS_HASH + """
+             ORDER BY t.tier, l.first_seen_at DESC, l.id
              LIMIT %(limit)s
             """,
             {"days": max_age_days, "skip": list(skip_sources), "km": km_tol_pct, "price": price_tol_pct,
-             "limit": limit})).fetchall()
+             "limit": limit, "per": PHOTO_CANDIDATES, "version": str(version),
+             "max_attempts": max_attempts})).fetchall()
 
 
 async def reserve_photo_run(listing_id: int, images: int, daily_cap: int) -> int | None:
@@ -182,7 +226,17 @@ async def finish_photo_run(run_id: int, *, hashed: int, error: str | None) -> No
 
 
 async def save_photo_hashes(listing_id: int, value: dict[str, Any]) -> None:
-    """attributes._photo_hashes; not a key attribute, so no listing_updated."""
+    """attributes._photo_hashes, with src = md5 of the images it was computed
+    from (photo_hash_queue skips it until they change); not a key attribute,
+    so no listing_updated."""
     async with connection() as cx:
-        await cx.execute("UPDATE listings SET attributes = attributes || jsonb_build_object('_photo_hashes', %s::jsonb) "
-                         " WHERE id = %s", (Jsonb(value), listing_id))
+        await cx.execute("UPDATE listings SET attributes = attributes || jsonb_build_object('_photo_hashes', "
+                         "  %s::jsonb || jsonb_build_object('src', md5(images::text))) WHERE id = %s",
+                         (Jsonb(value), listing_id))
+
+
+async def mark_photo_hashes_seen(listing_id: int, value: dict[str, Any]) -> None:
+    """A queued listing that needs no download (its hashes are done or out of
+    attempts, or it has no photo that may be downloaded): store `value` with
+    the current src so the queue stops returning it."""
+    await save_photo_hashes(listing_id, value)

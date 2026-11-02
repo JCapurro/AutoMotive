@@ -89,6 +89,58 @@ class PhotoLevelTests(unittest.TestCase):
         self.assertEqual(kinds([row(1, "mercadolibre", hashes=[flat]), row(2, "v6", hashes=[flat],
                                                                           price_usd=9_000.0)]), {})
 
+    def test_missing_or_partial_data_with_the_same_photos_is_the_same_car_not_duplicate_photos(self):
+        # A missing km, year or price, or a partial price (a down payment) is not «otros datos».
+        for name, change in {"no km": dict(mileage_km=None), "no year": dict(year=None),
+                             "no price": dict(price_usd=None), "partial price": dict(price_partial=True,
+                                                                                   price_usd=4_000.0)}.items():
+            with self.subTest(name):
+                got = detect([row(1, "mercadolibre", hashes=[H1]), row(2, "rosariogarage", hashes=[H1], **change)],
+                             CFG)
+                self.assertEqual([(p.kind, p.evidence.get("data")) for p in got],
+                                 [("cross_source_photos", "unconfirmed")])
+
+    def test_a_price_gap_under_the_conflict_tolerance_is_the_same_car(self):
+        # A dealer prices one portal 6 % higher (the commission): the same car, not stolen photos.
+        rows = [row(1, "mercadolibre", hashes=[H1], seller_type="dealer"),
+                row(2, "autocosmos", hashes=[H1], seller_type="dealer", price_usd=12_720.0)]
+        self.assertEqual(kinds(rows), {(1, 2): "cross_source_photos"})
+        rows[1]["seller_type"] = rows[0]["seller_type"] = "private"
+        self.assertEqual(kinds(rows), {(1, 2): "cross_source_photos"})
+        rows[1]["mileage_km"] = 97_000           # km 7.2 % apart: under photo_conflict_km_pct
+        self.assertEqual(kinds(rows), {(1, 2): "cross_source_photos"})
+        rows[1]["mileage_km"] = 120_000          # 25 %: other data
+        got = detect(rows, CFG)
+        self.assertEqual([(p.kind, p.evidence["reason"], p.evidence["conflicts"]) for p in got],
+                         [("duplicate_photos", "other_data", ["km"])])
+
+    def test_the_conflict_tolerances_never_fall_under_the_data_match(self):
+        cfg = risk({"cross_source": {"photo_conflict_price_pct": 1}})
+        self.assertEqual(cfg["cross_source"]["photo_conflict_price_pct"], 5)
+        self.assertEqual(kinds([row(1, "mercadolibre", hashes=[H1]), row(2, "v6", hashes=[H1], price_usd=12_400.0)],
+                               cfg), {(1, 2): "cross_source_photos"})
+
+    def test_press_photos_of_new_cars_or_between_dealers_are_not_duplicate_photos(self):
+        # Two dealers' brand photo of a 0 km Corolla, 2023 and 2024: two cars, the catalog photo
+        # unseen by the common filter (only 2 sellers hashed).
+        new = [row(1, "mercadolibre", hashes=[H1], seller_type="dealer", year=2023, mileage_km=0, zone=ROSARIO),
+               row(2, "kavak", hashes=[H1], seller_type="dealer", year=2024, mileage_km=0, zone=CORDOBA)]
+        self.assertEqual(kinds(new), {})
+        new[1]["seller_type"] = "private"         # still a new car: the brand's photos
+        self.assertEqual(kinds(new), {})
+        used = [row(1, "mercadolibre", hashes=[H1], seller_type="dealer"),
+                row(2, "kavak", hashes=[H1], dealer_inferred=True, year=2015)]
+        self.assertEqual(kinds(used), {}, "two effective dealers share stock photos")
+        used[1]["dealer_inferred"] = False        # a private seller with a dealer's photos and another year
+        self.assertEqual(kinds(used), {(1, 2): "duplicate_photos"})
+
+    def test_same_source_another_zone_says_why(self):
+        same = detect([row(1, "mercadolibre", hashes=[H1]), row(2, "mercadolibre", hashes=[H1], zone=CORDOBA)], CFG)
+        self.assertEqual([(p.kind, p.evidence["reason"]) for p in same], [("duplicate_photos", "other_zone")])
+        other = detect([row(1, "mercadolibre", hashes=[H1]),
+                        row(2, "mercadolibre", hashes=[H1], zone=CORDOBA, year=2014)], CFG)
+        self.assertEqual([(p.kind, p.evidence["reason"]) for p in other], [("duplicate_photos", "other_data")])
+
     def test_a_tighter_distance_drops_the_near_copy(self):
         tight = risk({"phash_max_distance": 1})
         self.assertEqual(kinds([row(1, "mercadolibre", hashes=[H1]), row(2, "v6", hashes=[H1_NEAR],
@@ -152,6 +204,16 @@ class DataLevelTests(unittest.TestCase):
     def test_same_province_other_department_within_50_km(self):
         near = {**FUNES, "department": "San Lorenzo", "lat": -32.75, "lon": -60.73}
         self.assertEqual(kinds(self.pair(zone=near), ON), {(1, 2): "cross_source_data"})
+
+    def test_both_hashed_with_no_shared_photo_is_two_cars(self):
+        rows = self.pair()
+        rows[0]["hashes"], rows[1]["hashes"] = [H1], [H2]
+        self.assertEqual(kinds(rows, ON), {})
+        # Only one side hashed, or only flat / catalog hashes: no evidence against the data.
+        rows[1]["hashes"] = []
+        self.assertEqual(kinds(rows, ON), {(1, 2): "cross_source_data"})
+        rows[1]["hashes"] = ["0000000000000001"]
+        self.assertEqual(kinds(rows, ON), {(1, 2): "cross_source_data"})
 
     def test_photos_take_precedence_over_data(self):
         rows = self.pair()

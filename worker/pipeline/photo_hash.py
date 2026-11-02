@@ -17,8 +17,13 @@ Every download reserves its images in photo_hash_runs first (rolling 24 h,
 daily_image_cap; a reservation counts even if it fails). Downloads: public
 https URLs already stored, no cookies, at most max_bytes (Content-Length and
 streamed), only image/*, one image per host every per_host_interval_seconds,
-never a source in skip_sources (Facebook and Instagram by default) nor an IP
-literal or localhost host. Without Pillow the pass logs once and does nothing.
+never a source in skip_sources (Facebook and Instagram by default: facebook,
+onlycarsusados, sc_clasificados) nor a Meta image host (BLOCKED_HOSTS, whatever
+the config says), an IP literal or a localhost host. Redirects are followed by
+hand, at most MAX_REDIRECTS, and every hop is checked the same way before it is
+requested, its host name resolved first: one that resolves to a non-public
+address (private, loopback, link-local, reserved) is never requested. Without
+Pillow the pass logs once and does nothing.
 After hashing, the duplicate detection runs for those listings
 (pipeline/risk_duplicates.detect_for).
 """
@@ -27,6 +32,7 @@ from __future__ import annotations
 import asyncio
 import ipaddress
 import logging
+import socket
 import time
 import traceback
 from datetime import datetime, timezone
@@ -47,6 +53,9 @@ log = logging.getLogger("photo_hash")
 
 VERSION = 1
 QUEUE_LIMIT = 200
+MAX_REDIRECTS = 3
+# Facebook and Instagram images (signed URLs, terms of use: spec question 6).
+BLOCKED_HOSTS = ("fbcdn.net", "facebook.com", "fbsbx.com", "cdninstagram.com", "instagram.com")
 _ERROR_MAX = 300
 _pillow_reported = False
 
@@ -74,6 +83,8 @@ def downloadable(url: str) -> bool:
     host = (parts.hostname or "").lower()
     if parts.scheme != "https" or not host or host == "localhost" or host.endswith(".localhost"):
         return False
+    if any(host == b or host.endswith("." + b) for b in BLOCKED_HOSTS):
+        return False
     try:
         ipaddress.ip_address(host)
         return False                       # an IP literal: never a CDN photo
@@ -94,31 +105,61 @@ def needs_hash(stored: Any, urls: list[str], max_attempts: int) -> tuple[bool, i
 
 
 Fetch = Callable[[str], Awaitable[bytes]]
+Resolve = Callable[[str], Awaitable[list[str]]]
 
 
-def fetcher(client: httpx.AsyncClient, cfg: Mapping[str, Any]) -> Fetch:
+async def system_resolve(host: str) -> list[str]:
+    infos = await asyncio.get_running_loop().getaddrinfo(host, 443, type=socket.SOCK_STREAM)
+    return [info[4][0] for info in infos]
+
+
+def public_address(address: str) -> bool:
+    try:
+        ip = ipaddress.ip_address(address.split("%")[0])
+    except ValueError:
+        return False
+    return ip.is_global and not ip.is_multicast
+
+
+def fetcher(client: httpx.AsyncClient, cfg: Mapping[str, Any], resolve: Resolve = system_resolve) -> Fetch:
     """Download one image within max_bytes and timeout_seconds."""
     max_bytes = int(cfg["max_bytes"])
+    timeout = float(cfg["timeout_seconds"])
+
+    async def check(url: str) -> None:
+        if not downloadable(url):
+            raise DownloadError("disallowed URL")
+        host = urlsplit(url).hostname or ""
+        try:
+            addresses = await asyncio.wait_for(resolve(host), timeout)
+        except (OSError, asyncio.TimeoutError) as e:
+            raise DownloadError(f"cannot resolve {host}") from e
+        if not addresses or not all(public_address(a) for a in addresses):
+            raise DownloadError("host resolves to a non-public address")
 
     async def fetch(url: str) -> bytes:
-        async with client.stream("GET", url, timeout=float(cfg["timeout_seconds"]), follow_redirects=True) as r:
-            if r.status_code != 200:
-                raise DownloadError(f"HTTP {r.status_code}")
-            kind = r.headers.get("content-type", "").split(";")[0].strip().lower()
-            if not kind.startswith("image/"):
-                raise DownloadError(f"not an image ({kind or 'no content-type'})")
-            length = r.headers.get("content-length")
-            if length and length.isdigit() and int(length) > max_bytes:
-                raise DownloadError("too large")
-            if not downloadable(str(r.url)):
-                raise DownloadError("redirected to a disallowed URL")
-            chunks, size = [], 0
-            async for chunk in r.aiter_bytes():
-                size += len(chunk)
-                if size > max_bytes:
+        for _ in range(MAX_REDIRECTS + 1):
+            await check(url)
+            async with client.stream("GET", url, timeout=timeout, follow_redirects=False) as r:
+                if r.is_redirect and r.headers.get("location"):
+                    url = str(r.url.join(r.headers["location"]))
+                    continue
+                if r.status_code != 200:
+                    raise DownloadError(f"HTTP {r.status_code}")
+                kind = r.headers.get("content-type", "").split(";")[0].strip().lower()
+                if not kind.startswith("image/"):
+                    raise DownloadError(f"not an image ({kind or 'no content-type'})")
+                length = r.headers.get("content-length")
+                if length and length.isdigit() and int(length) > max_bytes:
                     raise DownloadError("too large")
-                chunks.append(chunk)
-            return b"".join(chunks)
+                chunks, size = [], 0
+                async for chunk in r.aiter_bytes():
+                    size += len(chunk)
+                    if size > max_bytes:
+                        raise DownloadError("too large")
+                    chunks.append(chunk)
+                return b"".join(chunks)
+        raise DownloadError("too many redirects")
 
     return fetch
 
@@ -166,8 +207,16 @@ async def _report_missing_pillow() -> None:
         await log_error("photo_hash", "pillow", "Pillow no instalado: el hash de fotos no corre")
 
 
+def seen_value(stored: Any, urls: list[str]) -> dict[str, Any]:
+    """What a listing that needs no download keeps in _photo_hashes."""
+    if isinstance(stored, Mapping) and stored.get("v") == VERSION and stored.get("urls") == urls:
+        return dict(stored)
+    return {"v": VERSION, "urls": urls, "hashes": [], "at": datetime.now(timezone.utc).isoformat(),
+            "attempts": 0, "error": None if urls else "no downloadable photo"}
+
+
 async def photo_hash_pass(stop: asyncio.Event | None = None, *, client: httpx.AsyncClient | None = None,
-                          pacer: HostPacer | None = None) -> dict[str, int]:
+                          pacer: HostPacer | None = None, resolve: Resolve = system_resolve) -> dict[str, int]:
     """One pass over the queue. Returns {listings, images, hashed}. Never raises."""
     done = {"listings": 0, "images": 0, "hashed": 0}
     try:
@@ -180,11 +229,12 @@ async def photo_hash_pass(stop: asyncio.Event | None = None, *, client: httpx.As
             return done
         queue = await repo.photo_hash_queue(limit=QUEUE_LIMIT, skip_sources=ph["skip_sources"],
                                             km_tol_pct=cfg["cross_source"]["km_tol_pct"],
-                                            price_tol_pct=cfg["cross_source"]["price_tol_pct"])
+                                            price_tol_pct=cfg["cross_source"]["price_tol_pct"],
+                                            version=VERSION, max_attempts=int(ph["max_attempts"]))
         owned = client is None
         client = client or async_client(headers={"User-Agent": "Mozilla/5.0"}, cookies=None)
         pacer = pacer or HostPacer(float(ph["per_host_interval_seconds"]))
-        fetch = fetcher(client, ph)
+        fetch = fetcher(client, ph, resolve)
         hashed_ids: list[int] = []
         try:
             for row in queue:
@@ -195,6 +245,9 @@ async def photo_hash_pass(stop: asyncio.Event | None = None, *, client: httpx.As
                 urls = first_urls(row.get("images"), int(cfg["photo_hash_count"]))
                 need, attempts = needs_hash(row.get("photo_hashes"), urls, int(ph["max_attempts"]))
                 if not need:
+                    # Done, out of attempts or nothing to download: the queue
+                    # returned it because its images changed; say it was seen.
+                    await repo.mark_photo_hashes_seen(row["id"], seen_value(row.get("photo_hashes"), urls))
                     continue
                 run_id = await repo.reserve_photo_run(row["id"], len(urls), int(ph["daily_image_cap"]))
                 if run_id is None:
