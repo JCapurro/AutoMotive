@@ -27,11 +27,11 @@ class Evaluation:
     price_ref: PriceRef | None
     red_flags: list[RedFlag]
     questions: str
+    # PRO-01: the specific questions (question_texts), for the ready-to-send message.
+    contact_questions: list[str] = field(default_factory=list)
     # PRO-02: matches.margin_ref (intelligence/margin.py), filled by
     # pipeline/scoring.Scorer, which has the config and the search's zones.
     margin_ref: dict[str, Any] | None = None
-    # PRO-01: the specific questions (question_texts), for the ready-to-send message.
-    contact_questions: list[str] = field(default_factory=list)
 
     @property
     def level(self) -> str:
@@ -63,7 +63,7 @@ def assess(listing: Mapping[str, Any], profile: Mapping[str, Any], *,
                       timing_belt=timing_belt, cfg=cfg, now=now)
     questions = seller_questions(listing, flags, timing_belt=timing_belt, now=now)
     contact = question_texts(listing, flags, timing_belt=timing_belt, now=now, limit=3)
-    return result, s, Evaluation(result, s, price_ref, flags, questions, contact)
+    return result, s, Evaluation(result, s, price_ref, flags, questions, contact_questions=contact)
 
 
 def evaluate(listing: Mapping[str, Any], profile: Mapping[str, Any], *,
