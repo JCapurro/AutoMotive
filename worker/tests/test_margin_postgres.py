@@ -6,6 +6,7 @@ dealer split, and the fill of existing matches without a SCORING_VERSION bump
 from __future__ import annotations
 
 import pytest
+from psycopg.types.json import Jsonb
 
 import db
 from db.repos import matches as matches_repo
@@ -71,3 +72,22 @@ class MarginPostgresTests(IntelligenceCase):
             n = await (await cx.execute("SELECT count(*) AS n FROM notifications WHERE match_id = %s",
                                         (m["id"],))).fetchone()
         self.assertEqual(n["n"], 0)
+
+    async def test_a_published_down_payment_leaves_the_queue(self):
+        """A listing whose published price is a down payment but whose cash
+        price came from the description still matches (price_partial false),
+        and margin.compute never gives it a margin: WITHOUT_MARGIN must not
+        queue it again on every pass."""
+        lid = await self.pool()
+        async with db.connection() as cx:
+            await cx.execute(
+                "UPDATE listings SET description_facts = %s WHERE id = %s",
+                (Jsonb({"price_check": {"published_partial": True, "published_kind": "down_payment"}}), lid))
+        aid = await self.fiesta_alert(km_max=150_000)
+        await rematch.run_pending()
+        m = await self.match_row(aid, lid)
+        self.assertIsNotNone(m)
+        self.assertEqual(m["price_ref"]["dealer_n"], 6)
+        self.assertIsNone(m["margin_ref"])
+        queue = await matches_repo.rescore_queue(days=14, scoring_version=SCORING_VERSION, min_n=5, outdated_only=True)
+        self.assertNotIn(m["id"], [q["id"] for q in queue])

@@ -16,6 +16,7 @@ from psycopg import AsyncConnection
 from psycopg.types.json import Jsonb
 
 from db.pool import connection
+from normalization.description_facts import PARTIAL_KINDS
 
 
 LEGACY_SCORING_VERSION = "legacy-v0"
@@ -135,12 +136,20 @@ async def delete_matches(cx: AsyncConnection, profile_id: int, listing_ids: list
 
 
 # PRO-02: a match that should have a margin and has none (stored before
-# margin_ref existed; SCORING_VERSION was not bumped). Re-scoring it either
-# fills margin_ref or writes a price_ref with dealer_n < min_n, so it leaves
-# this condition: the fill converges and re-scoring sends no alert.
+# margin_ref existed; SCORING_VERSION was not bumped). It mirrors every case
+# where intelligence/margin.compute returns None: price_ref without enough
+# dealers or a median <= 0, no price in USD, and a published price that is a
+# down payment or an installment (pipeline.ingest.published_partial: such a
+# listing still matches when the description gave its cash price). Re-scoring
+# a row that passes either fills margin_ref or writes a price_ref that fails
+# it, so the fill converges and re-scoring sends no alert.
 WITHOUT_MARGIN = ("(m.margin_ref IS NULL AND l.price_usd > 0 "
-                  " AND m.price_ref->>'dealer_median' IS NOT NULL "
-                  " AND (m.price_ref->>'dealer_n')::int >= %(min_n)s)")
+                  " AND (m.price_ref->>'dealer_median')::numeric > 0 "
+                  " AND (m.price_ref->>'dealer_n')::int >= %(min_n)s "
+                  " AND NOT coalesce(l.price_partial, false) "
+                  " AND l.description_facts #> '{price_check,published_partial}' IS DISTINCT FROM 'true'::jsonb "
+                  " AND NOT coalesce(l.description_facts #>> '{price_check,published_kind}' = ANY(%(partial_kinds)s),"
+                  "                  false))")
 
 
 async def rescore_queue(*, days: int, scoring_version: str, min_n: int | None = None,
@@ -162,7 +171,8 @@ async def rescore_queue(*, days: int, scoring_version: str, min_n: int | None = 
             " WHERE l.status = 'active' AND public.search_access_active(sp.id) "
             f"  AND (m.scoring_version <> %(version)s OR {WITHOUT_MARGIN}{recent}) "
             " ORDER BY m.search_profile_id, m.listing_id",
-            {"days": days, "version": scoring_version, "min_n": min_n})).fetchall()
+            {"days": days, "version": scoring_version, "min_n": min_n,
+             "partial_kinds": sorted(PARTIAL_KINDS)})).fetchall()
 
 
 async def matches_of_profile(profile_id: int) -> list[dict[str, Any]]:

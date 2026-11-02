@@ -107,6 +107,53 @@ class NullTests(unittest.TestCase):
                 self.assertIsNone(compute(r))
 
 
+class FillQueueTests(unittest.IsolatedAsyncioTestCase):
+    """matches_repo.WITHOUT_MARGIN mirrors every case where compute() returns
+    None for a match that exists, so the fill converges (the SQL runs in
+    test_margin_postgres.py)."""
+
+    async def test_a_published_down_payment_never_gets_a_margin_nor_a_place_in_the_queue(self):
+        from unittest.mock import patch
+        from db.repos import matches as matches_repo
+        from normalization.description_facts import PARTIAL_KINDS
+        from pipeline.ingest import published_partial
+
+        # The description gave the cash price: price_partial is false, the match exists.
+        for facts in ({"price_check": {"published_partial": True}},
+                      {"price_check": {"published_kind": "down_payment"}},
+                      {"price_check": {"published_kind": "installment"}}):
+            with self.subTest(facts=facts):
+                r = row(description_facts=facts, price_partial=False)
+                self.assertTrue(published_partial(r))
+                self.assertIsNone(compute(r))
+
+        calls = []
+
+        class Cursor:
+            async def fetchall(self):
+                return []
+
+        class Cx:
+            async def execute(self, sql, params):
+                calls.append((sql, params))
+                return Cursor()
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *exc):
+                return False
+
+        with patch.object(matches_repo, "connection", lambda: Cx()):
+            await matches_repo.rescore_queue(days=14, scoring_version="v", min_n=5, outdated_only=True)
+        [(sql, params)] = calls
+        self.assertIn("price_partial", sql)
+        self.assertIn("{price_check,published_partial}", sql)
+        self.assertIn("{price_check,published_kind}", sql)
+        self.assertIn("::numeric > 0", sql)            # compute() also needs a positive median
+        self.assertEqual(sorted(params["partial_kinds"]), sorted(PARTIAL_KINDS))
+
+
 class TransferTests(unittest.TestCase):
     def test_without_the_search_s_place_no_transfer_and_no_other_zone(self):
         for zones in ([], [{"lat": None, "lon": None, "label": None}],
