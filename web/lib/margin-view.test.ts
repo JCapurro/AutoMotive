@@ -99,7 +99,7 @@ describe("margin detail (listing page)", () => {
   });
 
   it("names AMBA's two jurisdictions; outside CABA and Buenos Aires, no transfer and why", () => {
-    expect(marginDetail(byName("AMBA")).join(" ")).toContain("de CABA y Buenos Aires");
+    expect(marginDetail(byName("AMBA")).join(" ")).toContain("de CABA o Provincia de Buenos Aires");
     const rest = marginDetail(byName("resto del país"));
     expect(rest).toContain("Transferencia: no se descuenta porque no tenemos los valores oficiales de tu provincia.");
     expect(rest.join(" ")).not.toMatch(/Córdoba|Santa Fe|Mendoza|resto del país/);
