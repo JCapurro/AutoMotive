@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { ageLine, ceilTo, floorTo, formatArsRange, formatRange, formatUsdRange, imageUrls, isoDayMonth, km, money, pct, thousands, vehicle } from "./format";
+import { ageLine, ceilTo, figureLine, floorTo, formatArsRange, formatRange, formatUsdRange, imageUrls, isoDayMonth, km, money, pct, thousands, vehicle } from "./format";
 
 const NOW = new Date("2026-09-28T12:00:00Z");
 
@@ -60,5 +60,32 @@ describe("cost ranges", () => {
   it("reads an as_of as dd/mm without a time zone", () => {
     expect(isoDayMonth("2026-10-30")).toBe("30/10");
     expect(isoDayMonth("2026-01-05")).toBe("05/01");
+  });
+});
+
+// The listing page's decision panel sets the amount of a cost or margin line as a figure.
+describe("figureLine", () => {
+  const joined = (p: ReturnType<typeof figureLine>) => `${p.label}: ${p.figure ? `${p.figure}${p.note ? ` ${p.note}` : ""}` : p.note}`;
+
+  it("splits label, amount and note, and they join back into the line", () => {
+    const lines = [
+      "Costo total estimado: USD 16.290 – 16.560 (ARS 21.188.000 – 21.518.000)",
+      "Costo total estimado (sin patente): ARS 21.188.000 – 21.518.000 (sin dólar del día)",
+      "Margen bruto estimado: USD -300 a 1.400 (contra la mediana de USD 18.000 a la que publican las agencias este modelo, n = 9; descuenta acondicionamiento del 5 % y transferencia; sin impuestos)",
+      "Costo total estimado: sin dólar del día, no se puede estimar",
+      "Costo total: no sabemos tu localidad. Cargala en la búsqueda para estimarlo",
+    ];
+    for (const line of lines) expect(joined(figureLine(line))).toBe(line);
+    expect(figureLine(lines[0])).toEqual({ label: "Costo total estimado", figure: "USD 16.290 – 16.560", note: "(ARS 21.188.000 – 21.518.000)" });
+    expect(figureLine(lines[1])).toEqual({ label: "Costo total estimado (sin patente)", figure: "ARS 21.188.000 – 21.518.000", note: "(sin dólar del día)" });
+    expect(figureLine(lines[2]).figure).toBe("USD -300 a 1.400");
+  });
+
+  it("no figure when the value is no amount", () => {
+    expect(figureLine("Costo total estimado: sin dólar del día, no se puede estimar")).toEqual({
+      label: "Costo total estimado", figure: null, note: "sin dólar del día, no se puede estimar",
+    });
+    expect(figureLine("USD 9.500")).toEqual({ label: "", figure: null, note: "USD 9.500" });
+    expect(figureLine("Total: USD 9.500")).toEqual({ label: "Total", figure: "USD 9.500", note: "" });
   });
 });

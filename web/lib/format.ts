@@ -136,6 +136,22 @@ export function formatUsdRange(min: number, max: number): string {
   return formatRange(floorTo(min, 10), ceilTo(max, 10), "USD");
 }
 
+/**
+ * «Costo total estimado: USD 15.170 – 15.740 (ARS …)» → its label, its amount
+ * and the note after it, so the listing page's decision panel can set the
+ * amount as a figure while the text stays the line's: label + ": " + figure +
+ * " " + note. figure is null when the value is no amount («sin dólar del día…»).
+ */
+export function figureLine(line: string): { label: string; figure: string | null; note: string } {
+  const at = line.indexOf(": ");
+  if (at < 0) return { label: "", figure: null, note: line };
+  const label = line.slice(0, at);
+  const value = line.slice(at + 2);
+  if (!/^(USD|ARS) /.test(value)) return { label, figure: null, note: value };
+  const open = value.indexOf(" (");
+  return open < 0 ? { label, figure: value, note: "" } : { label, figure: value.slice(0, open), note: value.slice(open + 1) };
+}
+
 /** "2026-10-30" -> "30/10", without a time zone. */
 export function isoDayMonth(iso: string): string {
   return `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;

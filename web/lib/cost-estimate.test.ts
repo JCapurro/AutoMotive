@@ -69,11 +69,14 @@ describe("CostEstimate (the listing page)", () => {
   const rows = (markup: string) =>
     [...markup.matchAll(/<dt[^>]*>([^<]*)<\/dt><dd[^>]*>([^<]*)<\/dd>/g)].map((m) => [m[1], m[2]]);
   const footnote = (markup: string) => text(markup.match(/<p[^>]*data-testid="cost-estimate-footnote"[^>]*>[\s\S]*?<\/p>/)?.[0] ?? "").trim();
+  // The header as one line: the decision panel sets its amount apart, its text stays costLine's.
+  const headline = (markup: string) => text(markup.match(/<p[^>]*data-testid="cost-estimate-headline"[^>]*>[\s\S]*?<\/p>/)?.[0] ?? "").replace(/\n/g, "");
 
   it("shows the header and a closed, compact breakdown: transfer, patente, total and one footnote", () => {
     const markup = html(view());
     expect(markup).toContain('data-testid="cost-estimate"');
-    expect(markup).toContain(">Costo total estimado: USD 16.290 – 16.560 (ARS 21.188.000 – 21.518.000)<");
+    expect(headline(markup)).toBe("Costo total estimado: USD 16.290 – 16.560 (ARS 21.188.000 – 21.518.000)");
+    expect(markup).toMatch(/<span class="type-figure[^"]*">USD 16.290 – 16.560<\/span>/);
     expect(markup).toMatch(/<details[^>]*data-testid="cost-estimate-details"[^>]*>/);
     expect(markup).not.toMatch(/<details[^>]* open/);
     expect(text(markup)).toContain("Ver detalle");
@@ -116,7 +119,7 @@ describe("CostEstimate (the listing page)", () => {
 
   it("other missing pieces keep their explicit message", () => {
     let markup = html(view({ year: null }));
-    expect(text(markup)).toContain("Costo total estimado (sin patente): USD 16.000 – 16.020 (ARS 20.808.000 – 20.819.000)");
+    expect(headline(markup)).toBe("Costo total estimado (sin patente): USD 16.000 – 16.020 (ARS 20.808.000 – 20.819.000)");
     expect(rows(markup)[1]).toEqual(["Patente anual (valores 2026)", "falta el año del modelo"]);
     markup = html(view({ jurisdiction: ["ba"], year: 1985, zones: [{ lat: -34.92, lon: -57.95, label: "La Plata" }] }));
     expect(rows(markup)[1]).toEqual(["Patente anual (valores 2026)", "modelo anterior a 1990 en Buenos Aires: sin dato"]);
@@ -124,13 +127,12 @@ describe("CostEstimate (the listing page)", () => {
     const est = estimateCost({ price: 20000000, currency: "ARS", fx_rate: 1300, cash: false, year: 2017, body_type: "sedan" }, ["caba"], "private", null, noForm12)!;
     markup = html({ ...view(), estimate: est, line: costLine(est), cfg: noForm12 });
     expect(rows(markup)[0]).toEqual(["Transferencia (sin formularios)", "ARS 800.000"]);
-    const t = text(html(view({ fx_rate: null })));
-    expect(t).toContain("Costo total estimado: ARS 21.188.000 – 21.518.000 (sin dólar del día)");
+    expect(headline(html(view({ fx_rate: null })))).toBe("Costo total estimado: ARS 21.188.000 – 21.518.000 (sin dólar del día)");
   });
 
   it("AMBA and several zones: the range across real jurisdictions, named with «o»", () => {
     let markup = html(view({ jurisdiction: ["caba", "ba"], zones: [{ lat: -34.6037, lon: -58.3816, label: "AMBA" }] }));
-    expect(text(markup)).toContain("Costo total estimado: USD 16.110 – 16.560 (ARS 20.948.000 – 21.518.000)");
+    expect(headline(markup)).toBe("Costo total estimado: USD 16.110 – 16.560 (ARS 20.948.000 – 21.518.000)");
     expect(footnote(markup)).toBe("Valores oficiales al 30/10 para CABA o Provincia de Buenos Aires. No incluye gestoría ni informe de dominio (ARS 4.000 – 4.400).");
     markup = html(view({ jurisdiction: ["caba", "rest"], zones: [PALERMO, CORDOBA] }));
     expect(footnote(markup)).toContain("Valores oficiales al 30/10 para CABA; para el resto del país, referencia con Córdoba, Santa Fe y Mendoza.");
@@ -163,7 +165,7 @@ describe("CostEstimate (the listing page)", () => {
 
   it("a USD listing without a current quote: the header only, no breakdown", () => {
     const markup = html(view({ price: 15000, currency: "USD", fx_rate: null, fx: null }));
-    expect(text(markup)).toContain("Costo total estimado: sin dólar del día, no se puede estimar");
+    expect(headline(markup)).toBe("Costo total estimado: sin dólar del día, no se puede estimar");
     expect(markup).not.toContain("cost-estimate-details");
   });
 

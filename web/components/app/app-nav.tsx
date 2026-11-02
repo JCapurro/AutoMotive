@@ -3,7 +3,7 @@
 import { Activity, Bookmark, Home, Plus, Settings } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -124,25 +124,44 @@ function Tab({ href, label, icon: Icon, current }: { href: string; label: string
   );
 }
 
-/** True while the reader is scrolling down through the page, past the first screenful. */
-function useHideOnScrollDown() {
-  const [hidden, setHidden] = useState(false);
-  useEffect(() => {
-    let last = window.scrollY;
-    const onScroll = () => {
-      const y = window.scrollY;
-      const atEnd = window.innerHeight + y >= document.documentElement.scrollHeight - 8;
-      if (y < 80 || atEnd) {
-        setHidden(false);
-        last = y;
-      } else if (Math.abs(y - last) > 6) {
-        // Measured from the last change, so a slow scroll still counts.
-        setHidden(y > last);
-        last = y;
-      }
-    };
+// One scroll state for the whole page, so the bottom nav and the listing
+// page's action bar above it always agree on where the nav is.
+let navHidden = false;
+let lastY = 0;
+const listeners = new Set<() => void>();
+
+function onScroll() {
+  const y = window.scrollY;
+  const atEnd = window.innerHeight + y >= document.documentElement.scrollHeight - 8;
+  let next = navHidden;
+  if (y < 80 || atEnd) {
+    next = false;
+    lastY = y;
+  } else if (Math.abs(y - lastY) > 6) {
+    // Measured from the last change, so a slow scroll still counts.
+    next = y > lastY;
+    lastY = y;
+  }
+  if (next === navHidden) return;
+  navHidden = next;
+  listeners.forEach((listener) => listener());
+}
+
+function subscribe(listener: () => void) {
+  if (!listeners.size) {
+    lastY = window.scrollY;
     window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-  return hidden;
+  }
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+    if (listeners.size) return;
+    window.removeEventListener("scroll", onScroll);
+    navHidden = false;
+  };
+}
+
+/** True while the reader is scrolling down through the page, past the first screenful (the bottom nav is then hidden). */
+export function useHideOnScrollDown() {
+  return useSyncExternalStore(subscribe, () => navHidden, () => false);
 }

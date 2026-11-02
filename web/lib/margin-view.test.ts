@@ -106,7 +106,10 @@ describe("margin card line (Juan, 02/11: short in the result cards)", () => {
 
   it("the listing page keeps the full line, with or without enough dealers", () => {
     const html = renderToStaticMarkup(createElement(MarginEstimate, { margin: byName("pool CABA") }));
-    expect(html).toContain(marginLine(byName("pool CABA"))!);
+    // The decision panel sets the amount apart; the headline's text is still the whole line.
+    const headline = html.match(/<p[^>]*data-testid="margin-estimate-headline"[^>]*>[\s\S]*?<\/p>/)![0].replace(/<[^>]+>/g, "");
+    expect(headline).toBe(marginLine(byName("pool CABA"))!);
+    expect(html).toMatch(/<span class="type-figure[^"]*">USD [^<]+<\/span>/);
     expect(html).not.toContain("agencias)");
     const few = renderToStaticMarkup(createElement(MarginEstimate, { margin: asFewDealers(byName("pocas agencias")) }));
     expect(few).toContain("Margen estimado: no hay suficientes agencias publicando este modelo para estimarlo (n = 2, mínimo 5)");
