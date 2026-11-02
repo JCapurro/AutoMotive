@@ -10,6 +10,7 @@ from psycopg.types.json import Jsonb
 
 import db
 from db.repos import matches as matches_repo
+from intelligence import margin
 from intelligence.config import SCORING_VERSION
 from pgcase import requires_db
 from pipeline import rematch, rescore
@@ -216,3 +217,44 @@ class ImplausiblePricePostgresTests(IntelligenceCase):
         queue = await matches_repo.rescore_queue(days=14, scoring_version=SCORING_VERSION, min_n=5,
                                                  plausible_ratio=tight, outdated_only=True)
         self.assertNotIn(m["id"], [q["id"] for q in queue])
+
+    async def test_a_looser_config_recomputes_an_old_ref_hidden_by_the_default(self):
+        """A ref from before the guard (no plausible_ratio) at 3,27x the median
+        is hidden by the default bounds (margin.plausible, the web). With a
+        looser config it must still be re-queued, or it would stay hidden
+        and never recomputed; the recompute stores the config's bounds."""
+        lid = await self.pool()
+        aid = await self.fiesta_alert(km_max=150_000)
+        await rematch.run_pending()
+        m = await self.match_row(aid, lid)
+        stale = {**m["margin_ref"], "asking_usd": 40_000.0}
+        stale.pop("plausible_ratio", None)
+        async with db.connection() as cx:
+            await cx.execute("UPDATE listings SET price = 40000, price_usd = 40000 WHERE id = %s", (lid,))
+            await cx.execute("UPDATE matches SET margin_ref = %s WHERE id = %s", (Jsonb(stale), m["id"]))
+        self.assertFalse(margin.plausible(stale))
+        loose = {"min": 0.4, "max": 5}
+        queue = await matches_repo.rescore_queue(days=14, scoring_version=SCORING_VERSION, min_n=5,
+                                                 plausible_ratio=loose, outdated_only=True)
+        self.assertIn(m["id"], [q["id"] for q in queue])
+        from db.repos import config as app_config
+        async with db.connection() as cx:
+            before = (await (await cx.execute("SELECT value FROM app_config WHERE key = 'dealer_margin'")).fetchone())["value"]
+            await cx.execute("UPDATE app_config SET value = jsonb_set(value, '{plausible_ratio}', %s) "
+                             "WHERE key = 'dealer_margin'", (Jsonb(loose),))
+        app_config.clear_config_cache()
+        try:
+            await rescore.rescore_outdated()
+        finally:
+            async with db.connection() as cx:
+                await cx.execute("UPDATE app_config SET value = %s WHERE key = 'dealer_margin'", (Jsonb(before),))
+            app_config.clear_config_cache()
+        after = (await self.match_row(aid, lid))["margin_ref"]
+        self.assertEqual(after["asking_usd"], 40_000.0)
+        self.assertEqual(after["plausible_ratio"], {"min": 0.4, "max": 5.0})
+        self.assertTrue(margin.plausible(after))
+        queue = await matches_repo.rescore_queue(days=14, scoring_version=SCORING_VERSION, min_n=5,
+                                                 plausible_ratio=loose, outdated_only=True)
+        self.assertNotIn(m["id"], [q["id"] for q in queue])
+        # Back to the default: the config's bounds re-queue it, and it leaves as null.
+        self.assertIn(m["id"], await self.queue_ids())

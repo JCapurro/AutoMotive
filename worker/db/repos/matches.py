@@ -164,11 +164,21 @@ WITHOUT_MARGIN = ("(m.margin_ref IS NULL AND l.price_usd > 0 "
 # plausible one if the price or the median moved), which then fails both
 # this and WITHOUT_MARGIN: the queue converges and, as every re-score, sends
 # no alert. Until then the worker's alerts and the web hide them.
+#
+# Outside either of two bounds: the config's (a tighter config drops it) and
+# the ref's own, or PLAUSIBLE_RATIO for a ref from before the guard, which is
+# what margin.plausible and the web hide by (with a looser config, a hidden
+# old ref would otherwise stay hidden and never be recomputed). A recomputed
+# ref stores the config's bounds as its own, so it fails both and leaves.
+_OWN = "coalesce((m.margin_ref #>> '{plausible_ratio,%s}')::numeric, %%(default_%s)s)"
 IMPLAUSIBLE_MARGIN = ("(coalesce(m.margin_ref->>'status', 'ok') = 'ok' "
                       " AND (m.margin_ref->>'dealer_median')::numeric > 0 "
-                      " AND (m.margin_ref->>'asking_usd')::numeric NOT BETWEEN "
-                      "     %(ratio_min)s * (m.margin_ref->>'dealer_median')::numeric - %(eps)s "
-                      " AND %(ratio_max)s * (m.margin_ref->>'dealer_median')::numeric + %(eps)s)")
+                      " AND ((m.margin_ref->>'asking_usd')::numeric NOT BETWEEN "
+                      "      %(ratio_min)s * (m.margin_ref->>'dealer_median')::numeric - %(eps)s "
+                      "  AND %(ratio_max)s * (m.margin_ref->>'dealer_median')::numeric + %(eps)s "
+                      "   OR (m.margin_ref->>'asking_usd')::numeric NOT BETWEEN "
+                      f"     {_OWN % ('min', 'min')} * (m.margin_ref->>'dealer_median')::numeric - %(eps)s "
+                      f" AND {_OWN % ('max', 'max')} * (m.margin_ref->>'dealer_median')::numeric + %(eps)s))")
 
 
 async def rescore_queue(*, days: int, scoring_version: str, min_n: int | None = None,
@@ -197,6 +207,7 @@ async def rescore_queue(*, days: int, scoring_version: str, min_n: int | None = 
             " ORDER BY m.search_profile_id, m.listing_id",
             {"days": days, "version": scoring_version, "min_n": min_n,
              "partial_kinds": sorted(PARTIAL_KINDS), "ratio_min": ratio["min"], "ratio_max": ratio["max"],
+             "default_min": margin.PLAUSIBLE_RATIO["min"], "default_max": margin.PLAUSIBLE_RATIO["max"],
              "eps": margin.PLAUSIBLE_EPS})).fetchall()
 
 
