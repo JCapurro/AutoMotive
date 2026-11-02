@@ -93,6 +93,22 @@ OPPORTUNITY_TOTAL_COST_MISSING = notification("opportunity", {**OPPORTUNITY.payl
 # email is OPPORTUNITY's byte for byte (test_notifications_total_cost.py builds it).
 OPPORTUNITY_TOTAL_COST_NO_CONFIG = notification("opportunity", dict(OPPORTUNITY.payload))
 
+# PRO-02: payload["margin"] (margin.email_payload) of tests/test_margin.py's
+# pool (6 dealers at a median of USD 18.000, golden case 1's listing), with
+# and without the search's place, and with only 2 dealers (Juan, 02/11: say so).
+MARGIN_CABA = {"status": "ok", "usd_min": 1210, "usd_max": 1230, "pct_min": 7, "pct_max": 8, "dealer_median": 18000,
+               "dealer_n": 6, "reconditioning_pct": 5.0, "transfer_status": "ok", "jurisdiction": ["caba"],
+               "as_of": "2026-10-30"}
+MARGIN_NO_ZONE = {"status": "ok", "usd_min": 1850, "usd_max": 1850, "pct_min": 11, "pct_max": 11,
+                  "dealer_median": 18000, "dealer_n": 6, "reconditioning_pct": 5.0, "transfer_status": "no_zone",
+                  "jurisdiction": None, "as_of": "2026-11-02"}
+MARGIN_FEW_DEALERS = {"status": "few_dealers", "dealer_n": 2, "min_n": 5}
+OPPORTUNITY_MARGIN = notification("opportunity", {**OPPORTUNITY.payload, "listing": _ARS_LISTING, "margin": MARGIN_CABA})
+OPPORTUNITY_MARGIN_NO_ZONE = notification("opportunity", {**OPPORTUNITY.payload, "listing": _ARS_LISTING,
+                                                          "margin": MARGIN_NO_ZONE})
+OPPORTUNITY_MARGIN_FEW_DEALERS = notification("opportunity", {**OPPORTUNITY.payload, "listing": _ARS_LISTING,
+                                                              "margin": MARGIN_FEW_DEALERS})
+PRICE_DROP_MARGIN = notification("price_drop", {**PRICE_DROP.payload, "margin": MARGIN_CABA})
 # PRO-01: payload["contact_message"] (contact_message.render, Pro with contact_email).
 CONTACT_MESSAGE = "Hola, vi tu Fiesta 2017 publicado.\n¿Lo seguís teniendo?\n¿Cuántos dueños tuvo?\n¿Cuándo se puede ver?"
 OPPORTUNITY_CONTACT_MESSAGE = notification("opportunity", {**OPPORTUNITY.payload, "contact_message": CONTACT_MESSAGE})
@@ -106,4 +122,7 @@ CASES = {"opportunity": OPPORTUNITY, "new_match": NEW_MATCH, "price_drop": PRICE
          "opportunity_total_cost": OPPORTUNITY_TOTAL_COST, "opportunity_total_cost_missing": OPPORTUNITY_TOTAL_COST_MISSING,
          "opportunity_total_cost_no_config": OPPORTUNITY_TOTAL_COST_NO_CONFIG,
          "opportunity_contact_message": OPPORTUNITY_CONTACT_MESSAGE,
-         "opportunity_seller_unknown": OPPORTUNITY_SELLER_UNKNOWN}
+         "opportunity_seller_unknown": OPPORTUNITY_SELLER_UNKNOWN,
+         "opportunity_margin": OPPORTUNITY_MARGIN, "opportunity_margin_no_zone": OPPORTUNITY_MARGIN_NO_ZONE,
+         "opportunity_margin_few_dealers": OPPORTUNITY_MARGIN_FEW_DEALERS,
+         "price_drop_margin": PRICE_DROP_MARGIN}

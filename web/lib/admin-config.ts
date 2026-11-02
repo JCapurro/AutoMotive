@@ -22,6 +22,8 @@ const plan = z.object({
   total_cost: z.boolean().optional(),
   // PRO-01: the strict seller filter and the «mensaje listo» block in the opportunity email.
   seller_filter: z.boolean().optional(), contact_email: z.boolean().optional(),
+  // PRO-02: the estimated dealer margin (line, order and threshold) and the smallest threshold in USD.
+  dealer_margin: z.boolean().optional(), min_threshold_usd: positiveCount.max(1_000_000).optional(),
 }).passthrough();
 export const AdminPlanLimitsInput = z.object({ enforced: z.boolean().optional(), free: plan.optional(), pass: plan.optional(), pro: plan.optional() }).passthrough();
 
@@ -55,6 +57,15 @@ export const AdminLifecycleInput = z.object({
   const night = 24 - (minutes(until) - minutes(from)) / 60;
   if ((value.window_hours ?? LIFECYCLE_DEFAULTS.window_hours) <= night) context.addIssue({ code: "custom", path: ["window_hours"], message: "La vigencia debe superar las horas fuera del horario de envío para no perder emails nocturnos." });
 });
+
+/** PRO-02: app_config.dealer_margin, the rules of worker/intelligence/margin.py parse_config. */
+export const DEALER_MARGIN_MESSAGE = "dealer_margin necesita reconditioning.pct (0 a 100), reconditioning.min_usd (0 o más) y transfer.enabled (true/false); as_of en formato AAAA-MM-DD.";
+export const DealerMarginInput = z.object({
+  as_of: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  source: z.string().optional(),
+  reconditioning: z.object({ pct: z.number().min(0).max(100), min_usd: z.number().min(0) }).passthrough(),
+  transfer: z.object({ enabled: z.boolean() }).passthrough(),
+}).passthrough();
 
 export const SourceValuesInput = z.object({
   enabled: z.boolean(),
@@ -108,6 +119,7 @@ export function validateConfigChange(key: string, value: unknown, current: unkno
     }
   }
   if (key === "seller_classification" && !SellerClassificationInput.safeParse(value).success) return SELLER_CLASSIFICATION_MESSAGE;
+  if (key === "dealer_margin" && !DealerMarginInput.safeParse(value).success) return DEALER_MARGIN_MESSAGE;
   // PAR-01: every block with source and as_of, valid ranges and scales (lib/cost-estimator.ts, the parser's own rules).
   if (key === "cost_estimator") return costEstimatorProblem(value);
   if (key === "risk") {
@@ -148,7 +160,7 @@ export function configFieldLabel(key: string, path: string): string {
   if (key === "plan_limits") {
     const [tier, field] = path.split(".");
     const planName = ({ free: "Prueba gratis", pass: "Particular", pro: "Pro" } as Record<string, string>)[tier];
-    const fieldName = ({ max_profiles: "búsquedas activas", max_visible_results: "resultados por búsqueda", max_total_results: "resultados acumulados durante la prueba", immediate_alerts_per_day: "avisos inmediatos por día", max_locations: "zonas por búsqueda", threshold_alerts: "umbral de oportunidad", model_less_search: "búsqueda sin modelo", total_cost: "costo total estimado", seller_filter: "filtro estricto de vendedor", contact_email: "mensaje listo en el email" } as Record<string, string>)[field];
+    const fieldName = ({ max_profiles: "búsquedas activas", max_visible_results: "resultados por búsqueda", max_total_results: "resultados acumulados durante la prueba", immediate_alerts_per_day: "avisos inmediatos por día", max_locations: "zonas por búsqueda", threshold_alerts: "umbral de oportunidad", model_less_search: "búsqueda sin modelo", total_cost: "costo total estimado", seller_filter: "filtro estricto de vendedor", contact_email: "mensaje listo en el email", dealer_margin: "margen estimado para agencias", min_threshold_usd: "umbral mínimo por margen (USD)" } as Record<string, string>)[field];
     if (planName) return fieldName ? `${planName}: ${fieldName}` : planName + (field ? `: ${field}` : "");
   }
   if (key === "risk") {

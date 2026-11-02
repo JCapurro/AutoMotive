@@ -103,5 +103,23 @@ class CopyLintTests(unittest.TestCase):
         self.assertIn("publicaciones comparables (n=23)", text)
 
 
+class MarginCopyTests(unittest.TestCase):
+    """PRO-02: the margin is an estimate to orient a dealer
+    (docs/BACKLOG_COMERCIAL.md): no guaranteed result, profit or sale price."""
+
+    EXTRA = ("ganancia", "garantiz", "rentab", "asegur", "seguro que", "vas a ganar", "precio de venta")
+
+    def test_the_margin_block_says_estimado_and_promises_nothing(self):
+        def flat(v):
+            return [v] if isinstance(v, str) else [x for i in v.values() for x in flat(i)]
+        texts = flat(copy.MARGIN)
+        self.assertIn("estimado", copy.MARGIN["line"])
+        self.assertIn("sin impuestos", copy.MARGIN["line"])
+        for text in texts:
+            self.assertEqual(forbidden_in(text), [], text)
+            for term in self.EXTRA:
+                self.assertNotIn(term, _fold(text), text)
+
+
 if __name__ == "__main__":
     unittest.main()

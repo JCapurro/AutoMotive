@@ -403,6 +403,18 @@ class QuestionTextsTests(unittest.TestCase):
         self.assertEqual(out, [copy.QUESTION[k] for k in ("km_unknown", "transmission", "trim")])
         self.assertEqual(len(self.texts(mileage_km=None, transmission=None, trim=None, price_partial=True)), 3)
 
+    def test_evaluate_stores_them_as_contact_questions_and_leaves_the_margin_empty(self):
+        # PRO-02 added Evaluation.margin_ref; the questions must not land in it.
+        listing = fiesta_listing(description=LONG_DESCRIPTION, trim=None)
+        ev = evaluate(listing, fiesta_profile(), price_ref=MARKET, cfg=CFG, now=NOW, fx_rate=FX)
+        self.assertIsNotNone(ev)
+        expected = question_texts(listing, ev.red_flags, timing_belt=None, now=NOW, limit=3)
+        self.assertIn(copy.QUESTION["trim"], expected)
+        self.assertEqual(ev.contact_questions, expected)
+        self.assertEqual(ev.row()["contact_questions"], expected)
+        self.assertIsNone(ev.margin_ref)
+        self.assertIsNone(ev.row()["margin_ref"])
+
     def test_flags_as_objects_or_dicts_give_the_same_questions(self):
         flag = RedFlag("no_owners", "x", "info")
         self.assertEqual(self.texts([flag]), self.texts([flag.to_json()]))

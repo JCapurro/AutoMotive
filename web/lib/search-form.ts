@@ -73,6 +73,17 @@ export const SearchInput = z
       .max(90, "Elegí entre 1 y 90 %.")
       .nullable()
       .default(null),
+    // PRO-02 (Pro): "avisame al instante si el margen estimado es de USD X o más".
+    // Optional: undefined = the plan has no such threshold (or a database without
+    // the column), and the column is then left out of the write (toColumns).
+    // The plan's minimum is checked by the server action.
+    opportunity_threshold_usd: z
+      .number("Escribí un monto en dólares, sin decimales.")
+      .int("Escribí un monto en dólares, sin decimales.")
+      .min(1, "Escribí un monto mayor a 0.")
+      .max(1_000_000, "Poné hasta USD 1.000.000.")
+      .nullable()
+      .optional(),
   })
   .refine((v) => v.year_min == null || v.year_max == null || v.year_min <= v.year_max, {
     message: "El año «desde» no puede ser mayor que el «hasta».",
@@ -214,6 +225,7 @@ export function toColumns(v: SearchValues, allSources: string[]) {
     notification_frequency: v.notification_frequency,
     notify_min_level: v.notify_min_level,
     opportunity_threshold_pct: v.opportunity_threshold_pct,
+    ...(v.opportunity_threshold_usd !== undefined ? { opportunity_threshold_usd: v.opportunity_threshold_usd } : {}),
   };
 }
 
@@ -250,6 +262,7 @@ export function fromProfile(p: SearchProfile, allSources: string[]): SearchValue
     notification_frequency: p.notification_frequency,
     notify_min_level: p.notify_min_level as Level,
     opportunity_threshold_pct: p.opportunity_threshold_pct ?? null,
+    opportunity_threshold_usd: p.opportunity_threshold_usd ?? null,
   };
 }
 

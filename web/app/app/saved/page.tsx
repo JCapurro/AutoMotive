@@ -7,6 +7,7 @@ import { ListingStatusSelect } from "@/components/app/listing-status-select";
 import { requireUser } from "@/lib/auth";
 import { webConfig } from "@/lib/config";
 import { costLinesFor } from "@/lib/cost-estimate-data";
+import { marginAccess, marginLinesFor } from "@/lib/margin-data";
 import { FOLLOW_EMPTY, FOLLOW_FILTERS, FOLLOW_LABEL, type FollowFilter, type InteractionStatus, type Level } from "@/lib/copy";
 import { daysSince, dayMonth, money, pct } from "@/lib/format";
 import { strictSellerFilterOn, strictSellerUnknown } from "@/lib/seller";
@@ -106,7 +107,7 @@ export default async function SavedPage({ searchParams }: PageProps<"/app/saved"
       .order("observed_at"),
     supabase
       .from("matches")
-      .select("listing_id, search_profile_id, score, level, match_reasons, search_profiles(name, filters)")
+      .select("id, listing_id, search_profile_id, score, level, match_reasons, search_profiles(name, filters)")
       .in("listing_id", ids)
       .order("score", { ascending: false }),
     supabase.from("profiles").select("seller_filter_access").eq("id", user.id).maybeSingle(),
@@ -115,11 +116,11 @@ export default async function SavedPage({ searchParams }: PageProps<"/app/saved"
   const byId = new Map((listings ?? []).map((l) => [l.id, l]));
   const history = new Map<number, Snapshot[]>();
   for (const s of snapshots ?? []) history.set(s.listing_id, [...(history.get(s.listing_id) ?? []), s]);
-  const bestMatch = new Map<number, { score: number; level: Level; profile: string | null; profileId: number; sellerUnknown: boolean }>();
+  const bestMatch = new Map<number, { id: number; score: number; level: Level; profile: string | null; profileId: number; sellerUnknown: boolean }>();
   for (const m of matches ?? []) {
     if (!bestMatch.has(m.listing_id)) {
       bestMatch.set(m.listing_id, {
-        score: m.score, level: m.level, profile: m.search_profiles?.name ?? null, profileId: m.search_profile_id,
+        id: m.id, score: m.score, level: m.level, profile: m.search_profiles?.name ?? null, profileId: m.search_profile_id,
         // PRO-01, option C: the best match's strict seller filter didn't know the seller, and still applies.
         sellerUnknown: strictSellerUnknown(
           m.match_reasons,
@@ -129,11 +130,17 @@ export default async function SavedPage({ searchParams }: PageProps<"/app/saved"
     }
   }
   // PAR-01: the best match's search, or the account's default place for a listing without one.
-  const costLines = await costLinesFor(
-    supabase,
-    user.id,
-    ids.map((id) => ({ listing_id: id, search_profile_id: bestMatch.get(id)?.profileId ?? null })),
-  );
+  // PRO-02: the best match's margin, only for Pro.
+  const [costLines, marginLines] = await Promise.all([
+    costLinesFor(
+      supabase,
+      user.id,
+      ids.map((id) => ({ listing_id: id, search_profile_id: bestMatch.get(id)?.profileId ?? null })),
+    ),
+    marginAccess(supabase).then((access) =>
+      marginLinesFor(supabase, access, ids.map((id) => ({ listing_id: id, match_id: bestMatch.get(id)?.id ?? null }))),
+    ),
+  ]);
 
   return (
     <div className="space-y-4">
@@ -159,6 +166,7 @@ export default async function SavedPage({ searchParams }: PageProps<"/app/saved"
                 seller_unknown: m?.sellerUnknown ?? false,
               }}
               costLine={costLines.get(l.id)}
+              marginLine={marginLines.get(l.id)}
               footer={
                 <>
                   {/* Above the card's stretched link, so picking a status doesn't open the detail. */}

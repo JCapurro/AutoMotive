@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 import { type SaveOrigin, saveSearch } from "@/app/app/searches/actions";
 import { OpportunityThreshold } from "@/components/app/opportunity-threshold";
+import { OpportunityThresholdUsd } from "@/components/app/opportunity-threshold-usd";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -93,6 +94,8 @@ type Draft = {
   notification_frequency: "immediate" | "daily";
   notify_min_level: SearchValues["notify_min_level"];
   opportunity_threshold_pct: string;
+  /** PRO-02: the threshold by margin, whole USD as text ("" = off). */
+  opportunity_threshold_usd: string;
 };
 
 /** "11.500" or "11500" → 11500; "" → null; anything else (signs, decimals, "1e9", letters) → NaN, rejected by checkNumbers. */
@@ -108,7 +111,7 @@ const WHOLE_NUMBER = "Escribí solo números enteros, sin comas ni decimales (po
 function checkNumbers(input: SearchInput, d: Draft): Record<string, string> {
   const fields: Record<string, string> = {};
   const bad = (n: number | null | undefined) => n != null && !Number.isFinite(n);
-  for (const key of ["km_max", "km_target", "price_max", "price_target"] as const) {
+  for (const key of ["km_max", "km_target", "price_max", "price_target", "opportunity_threshold_usd"] as const) {
     if (bad(input[key])) fields[key] = WHOLE_NUMBER;
   }
   if (!fields.km_max && input.km_max != null && input.km_max > 2_000_000) fields.km_max = "Poné hasta 2.000.000 km.";
@@ -183,6 +186,7 @@ function draftFrom(
     notification_frequency: v.notification_frequency,
     notify_min_level: v.notify_min_level,
     opportunity_threshold_pct: v.opportunity_threshold_pct?.toString() ?? "",
+    opportunity_threshold_usd: v.opportunity_threshold_usd != null ? number(v.opportunity_threshold_usd) : "",
   };
 }
 
@@ -230,6 +234,8 @@ function toInput(d: Draft, offered: readonly string[]): SearchInput {
     notification_frequency: d.notification_frequency,
     notify_min_level: d.notify_min_level,
     opportunity_threshold_pct: percentInput(d.opportunity_threshold_pct),
+    // PRO-02: the server keeps it only with the plan's dealer_margin (and checks the plan's minimum).
+    opportunity_threshold_usd: amount(d.opportunity_threshold_usd),
   };
 }
 
@@ -246,6 +252,7 @@ export function SearchForm({
   onSaved,
   approximateLocation = null,
   thresholdAlerts = false,
+  marginThreshold = null,
   modelLessSearch = false,
   maxLocations = null,
   sellerFilter = false,
@@ -264,6 +271,8 @@ export function SearchForm({
   approximateLocation?: DetectedLocation | null;
   /** The plan includes the opportunity threshold (Pro, 3.2). */
   thresholdAlerts?: boolean;
+  /** PRO-02: the plan's threshold by margin and its minimum in USD (Pro); null hides the control. */
+  marginThreshold?: { minThresholdUsd: number } | null;
   /** The plan can search by body type without a model (Particular, Pro; docs/CARROCERIA.md). */
   modelLessSearch?: boolean;
   /** Places one search may look in, its own included (the plan's cap); null = no cap. */
@@ -967,6 +976,15 @@ export function SearchForm({
                 value={d.opportunity_threshold_pct}
                 onChange={(v) => set("opportunity_threshold_pct", v)}
                 error={fieldError("opportunity_threshold_pct")}
+              />
+            ) : null}
+            {marginThreshold ? (
+              <OpportunityThresholdUsd
+                id={fid("opportunity_threshold_usd")}
+                value={d.opportunity_threshold_usd}
+                min={marginThreshold.minThresholdUsd}
+                onChange={(v) => set("opportunity_threshold_usd", v)}
+                error={fieldError("opportunity_threshold_usd")}
               />
             ) : null}
             <Field id={fid("name")} label="Nombre de la búsqueda" className="sm:col-span-2">

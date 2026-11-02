@@ -6,6 +6,9 @@
   the comparables' median moves and a listing may stop fitting its search
   (`nightly_loop`, every app_config.rescore.every_hours from rescore.hour ART).
 * When SCORING_VERSION changes, every match (`rescore_outdated`, at startup).
+* PRO-02: in both passes, the matches with enough dealer comparables and no
+  margin_ref yet (matches_repo.WITHOUT_MARGIN): the margin is filled without
+  a SCORING_VERSION bump, and a re-score never notifies.
 
 Before the startup pass and the one at rescore.hour, the seller
 classification (F-02, pipeline/seller_classification.py) refreshes
@@ -33,7 +36,7 @@ import db
 from db.repos import matches as matches_repo
 from db.repos.profiles import profiles_by_ids
 from db.repos.runs import log_error
-from intelligence.config import DEFAULT_RESCORE, SCORING_VERSION
+from intelligence.config import DEFAULT_COMPARABLES, DEFAULT_RESCORE, SCORING_VERSION
 from pipeline.retention import purge_raw_pages, purge_stale_listings
 from pipeline.scoring import Scorer
 from pipeline.seller_classification import classify_sellers
@@ -89,8 +92,9 @@ async def rescore_listings(listing_ids: Iterable[int]) -> int:
 
 async def rescore_recent(*, outdated_only: bool = False) -> int:
     cfg = {**DEFAULT_RESCORE, **(await db.get_config("rescore", {}) or {})}
+    comparables = {**DEFAULT_COMPARABLES, **(await db.get_config("comparables", {}) or {})}
     queue = await matches_repo.rescore_queue(days=int(cfg["days"]), scoring_version=SCORING_VERSION,
-                                             outdated_only=outdated_only)
+                                             min_n=int(comparables["min_n"]), outdated_only=outdated_only)
     n = await rescore(queue)
     log.info("re-score (%s): %d/%d matches", "outdated" if outdated_only else "nightly", n, len(queue))
     return n

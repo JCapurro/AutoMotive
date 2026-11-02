@@ -99,10 +99,11 @@ class NotificationsCase(PostgresTestCase):
         return r["id"]
 
     async def match(self, profile_id: int, listing_id: int, level: str, score: int, *,
-                    backfill: bool = False, diff_pct: float | None = 8.0) -> MatchCandidate:
+                    backfill: bool = False, diff_pct: float | None = 8.0,
+                    margin_ref: dict | None = None) -> MatchCandidate:
         ev = {"score": score, "level": level, "score_breakdown": {}, "match_reasons": {},
               "price_ref": {"n": 7, "median": 11_200, "diff_pct": diff_pct, "level_used": "model"},
-              "red_flags": [], "scoring_version": "test"}
+              "red_flags": [], "scoring_version": "test", "margin_ref": margin_ref}
         async with db.connection() as cx:
             ids = await matches_repo.upsert_scored(cx, profile_id, [(listing_id, ev)], backfill=backfill)
         return MatchCandidate(profile_id, listing_id, ids.get(listing_id), ev)
@@ -220,6 +221,59 @@ class OpportunityThresholdTests(NotificationsCase):
         await self.matched(await self.match(self.profile, await self.listing(), "high", 90, diff_pct=30.0))
         [row] = await self.emailed()
         self.assertEqual((row["status"], row["payload"].get("degraded")), ("digest", "daily_cap"))
+
+
+class UsdThresholdTests(NotificationsCase):
+    """PRO-02: the threshold by margin in USD, only with dealer_margin and at
+    least the plan's min_threshold_usd; its alerts don't count either."""
+
+    LIMITS = PlanCapTests.LIMITS
+    emailed = PlanCapTests.emailed
+
+    @staticmethod
+    def margin(low: float) -> dict:
+        return {"v": 1, "dealer_median": 18_000.0, "dealer_n": 6, "n": 10, "level_used": "model",
+                "asking_usd": 15_000.0, "reconditioning": {"pct": 5, "min_usd": 300, "usd": 750.0},
+                "transfer": {"status": "no_zone", "usd": None}, "est_costs_usd": {"min": 750.0, "max": 750.0},
+                "gross_margin_usd": {"min": low, "max": low + 10}, "gross_margin_pct": {"min": 5.0, "max": 6.0},
+                "as_of": {"dealer_margin": "2026-11-02"}}
+
+    async def plan(self, plan: str, threshold_usd: int | None) -> None:
+        await self.set_config("plan_limits", {**self.LIMITS, "pro": {**self.LIMITS["pro"], "dealer_margin": True,
+                                                                     "min_threshold_usd": 500}})
+        async with db.connection() as cx:
+            await cx.execute("UPDATE profiles SET plan = %s, plan_expires_at = now() + interval '20 days' "
+                             " WHERE id = %s", (plan, self.user))
+            await cx.execute("UPDATE search_profiles SET opportunity_threshold_usd = %s WHERE id = %s",
+                             (threshold_usd, self.profile))
+            for i in range(50):  # the daily cap is already used up
+                await cx.execute("INSERT INTO notifications (user_id, search_profile_id, kind, channel, status, "
+                                 "  dedupe_key) VALUES (%s, %s, 'new_match', 'email', 'sent', %s)",
+                                 (self.user, self.profile, f"match:earlier-{i}"))
+
+    async def test_what_reaches_it_is_immediate_past_the_cap_and_does_not_count(self):
+        await self.plan("pro", 800)
+        reached = await self.match(self.profile, await self.listing(), "high", 90, margin_ref=self.margin(1_000))
+        short = await self.match(self.profile, await self.listing(), "high", 90, margin_ref=self.margin(300))
+        await self.matched(reached, short)
+        rows = await self.emailed()
+        self.assertEqual([(r["listing_id"], r["status"], r["payload"].get("threshold_usd")) for r in rows],
+                         [(reached.listing_id, "queued", 800), (short.listing_id, "digest", None)])
+        self.assertEqual(rows[0]["payload"]["margin"]["usd_min"], 1_000)
+        since = datetime.now(timezone.utc) - timedelta(days=1)
+        self.assertEqual(await repo.sent_today([self.user], since), {self.user: 50})
+
+    async def test_below_the_plan_s_minimum_it_is_ignored(self):
+        await self.plan("pro", 400)
+        self.assertIsNone((await repo.profile_audiences([self.profile]))[self.profile]["threshold_usd"])
+
+    async def test_another_plan_ignores_it(self):
+        await self.plan("pass", 800)
+        audience = (await repo.profile_audiences([self.profile]))[self.profile]
+        self.assertEqual((audience["threshold_usd"], audience["dealer_margin"]), (None, False))
+        await self.matched(await self.match(self.profile, await self.listing(), "high", 90, margin_ref=self.margin(5_000)))
+        [row] = await self.emailed()
+        self.assertNotIn("margin", row["payload"])
 
 
 class AlertTypesTests(NotificationsCase):

@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // search_profiles and preview_search for searches with body types (docs/CARROCERIA.md).
 const state = vi.hoisted(() => ({
   features: {} as Record<string, boolean>,
+  /** PRO-02: my_margin_access()'s answer (null = no feature, or a database without the migration). */
+  margin: null as { enabled: boolean; min_threshold_usd: number } | null,
   catalog: null as { make: string; model: string; body_types: string[] } | null,
   dbError: null as { code?: string; message: string } | null,
   inserted: null as Record<string, unknown> | null,
@@ -31,6 +33,7 @@ vi.mock("@/lib/supabase/server", () => ({
       state.rpc.push([name, args]);
       if (name === "my_plan_feature") return { data: state.features[String(args?.p_feature)] === true };
       if (name === "preview_search") return { data: { count: 1, sample: [] } };
+      if (name === "my_margin_access") return state.margin ? { data: state.margin, error: null } : { data: null, error: { message: "missing" } };
       return { data: { plan: "pass" } };
     },
     from: (table: string) => {
@@ -65,6 +68,7 @@ const CORSA = { make: "chevrolet", model: "corsa", sources: ["mercadolibre", "ka
 
 beforeEach(() => {
   state.features = {};
+  state.margin = null;
   state.catalog = null;
   state.dbError = null;
   state.inserted = null;
@@ -211,6 +215,49 @@ describe("relaxSuggestions", () => {
     expect(await relaxSuggestions(SUV)).toEqual([]);
     expect(await relaxSuggestions({ ...CORSA, year_min: 2020, year_max: 2010 })).toEqual([]);
     expect(state.rpc.map(([name]) => name)).not.toContain("preview_search");
+  });
+});
+
+describe("saveSearch: the threshold by margin in USD (PRO-02, Pro only)", () => {
+  it("without the margin (not Pro, or no migration) the column is never written", async () => {
+    state.catalog = { make: "Chevrolet", model: "Corsa", body_types: [] };
+    await saveSearch(null, { ...CORSA, opportunity_threshold_usd: 900 }, STAY);
+    expect(state.inserted).not.toHaveProperty("opportunity_threshold_usd");
+    await saveSearch(9, { ...CORSA, opportunity_threshold_usd: 900 });
+    expect(state.updated).not.toHaveProperty("opportunity_threshold_usd");
+    expect(state.track).not.toHaveBeenCalledWith(expect.anything(), "account", "margin_threshold_set", expect.anything());
+  });
+
+  it("Pro saves it and records margin_threshold_set", async () => {
+    state.margin = { enabled: true, min_threshold_usd: 500 };
+    state.catalog = { make: "Chevrolet", model: "Corsa", body_types: [] };
+    expect(await saveSearch(null, { ...CORSA, opportunity_threshold_usd: 900 }, STAY)).toEqual({ savedId: 9 });
+    expect(state.inserted).toMatchObject({ opportunity_threshold_usd: 900 });
+    expect(state.track).toHaveBeenCalledWith(expect.anything(), "account", "margin_threshold_set", { profile_id: 9, threshold_usd: 900, previous: null });
+  });
+
+  it("Pro without a threshold stores null, without an event", async () => {
+    state.margin = { enabled: true, min_threshold_usd: 500 };
+    state.catalog = { make: "Chevrolet", model: "Corsa", body_types: [] };
+    await saveSearch(null, CORSA, STAY);
+    expect(state.inserted).toMatchObject({ opportunity_threshold_usd: null });
+    expect(state.track).not.toHaveBeenCalledWith(expect.anything(), "account", "margin_threshold_set", expect.anything());
+  });
+
+  it("an edit that changes it records the previous value", async () => {
+    state.margin = { enabled: true, min_threshold_usd: 500 };
+    state.catalog = { make: "Chevrolet", model: "Corsa", body_types: [] };
+    await saveSearch(9, { ...CORSA, opportunity_threshold_usd: 700 });
+    expect(state.updated).toMatchObject({ opportunity_threshold_usd: 700 });
+    expect(state.track).toHaveBeenCalledWith(expect.anything(), "account", "margin_threshold_set", { profile_id: 9, threshold_usd: 700, previous: null });
+  });
+
+  it("refuses less than the plan's minimum", async () => {
+    state.margin = { enabled: true, min_threshold_usd: 500 };
+    state.catalog = { make: "Chevrolet", model: "Corsa", body_types: [] };
+    const result = await saveSearch(null, { ...CORSA, opportunity_threshold_usd: 499 }, STAY);
+    expect(result.fields).toEqual({ opportunity_threshold_usd: "El mínimo es USD 500." });
+    expect(state.inserted).toBeNull();
   });
 });
 

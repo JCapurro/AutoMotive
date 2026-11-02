@@ -407,3 +407,51 @@ export const PRICE_TRACK = {
   trackedSince: "Seguimos este aviso desde el {date}; no vemos los cambios anteriores.",
   historyToggle: "Ver el histórico de precios",
 } as const;
+
+// PRO-02: the estimated gross margin against the dealers' median (lib/margin-view.ts
+// formats matches.margin_ref). The line is the worker's (worker/intelligence/copy.py
+// MARGIN); the rest is the listing page's detail. An estimate to orient a dealer,
+// never a promise: lib/copy.test.ts forbids the words of a guaranteed result here.
+export const MARGIN = {
+  line: "Margen bruto estimado: {usd} (contra la mediana de {median} a la que publican las agencias este modelo, n = {n}; {costs}; sin impuestos)",
+  single: "USD {v}",
+  range: "USD {lo} a {hi}",
+  costsBoth: "descuenta acondicionamiento del {pct} % y transferencia",
+  costsNoTransfer: "descuenta acondicionamiento del {pct} %; no descuenta la transferencia porque {why}",
+  costsNoReconditioning: "descuenta transferencia; no descuenta acondicionamiento porque faltan sus parámetros",
+  costsNone: "sin descontar costos: faltan los parámetros de acondicionamiento y no descuenta la transferencia porque {why}",
+  // Juan, 02/11: without enough dealers, say so instead of showing nothing.
+  fewDealers: "Margen estimado: no hay suficientes agencias publicando este modelo para estimarlo (n = {n}, mínimo {min_n})",
+  why: {
+    no_zone: "tu búsqueda no tiene localidad",
+    no_official: "no tenemos los valores oficiales de tu provincia",
+    no_official_some: "no tenemos los valores oficiales de todas las provincias de tu búsqueda",
+    no_fx: "falta el dólar del día",
+    params: "faltan parámetros cargados",
+    base: "faltan parámetros cargados",
+    no_price: "no pudimos leer la moneda del precio",
+    disabled: "no está activada",
+  } as Record<string, string>,
+  // The listing page's «Ver detalle».
+  toggle: "Ver detalle del margen",
+  median: "Mediana de agencias: {median} (n = {n} de {total} comparables, {level}).",
+  asking: "Precio de compra: {asking}.",
+  askingCash: "Precio de compra (de contado): {asking}.",
+  reconditioning: "Acondicionamiento: {usd} ({pct} % del precio, mínimo {min}).",
+  reconditioningMissing: "Acondicionamiento: no se descuenta, faltan sus parámetros.",
+  transfer: "Transferencia: {usd} (arancel, sellos y formularios de {jurisdiction}, según tu búsqueda).",
+  transferMissing: "Transferencia: no se descuenta porque {why}.",
+  acquisition: "Lo que cuesta comprar el auto: {usd} (precio de compra más los costos descontados).",
+  pct: "Margen sobre lo que cuesta comprar el auto: {pct}.",
+  excludes: "No incluye impuestos de la venta, patente ni comisiones.",
+  published: "Comparamos con precios publicados por agencias, no con precios de venta. Es una estimación orientativa.",
+  asOf: "Parámetros al {date}.",
+  // Results order and the search form (Pro).
+  sort: "Mayor margen estimado",
+  thresholdTitle: "Avisos al instante por margen estimado",
+  thresholdOn: "Te avisamos al instante cuando el margen bruto estimado contra la mediana de agencias es de {usd} o más. El resto va al resumen diario.",
+  thresholdOff: "Apagado: el margen estimado no cambia cuándo te avisamos.",
+  thresholdLabel: "Margen mínimo (USD)",
+  thresholdMin: "Desde USD {min}.",
+  thresholdNoMargin: "Lo que no tiene suficientes agencias comparables para estimar el margen va al resumen diario.",
+} as const;

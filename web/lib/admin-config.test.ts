@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { AdminLifecycleInput, AdminOfferInput, AdminPlanLimitsInput, configDifferences, configFieldLabel, LIFECYCLE_KINDS, MAX_OFFER_ARS, sameConfig, SourceUpdateInput, validateConfigChange, visibleConfigRows } from "@/lib/admin-config";
+import { AdminLifecycleInput, AdminOfferInput, AdminPlanLimitsInput, configDifferences, configFieldLabel, DEALER_MARGIN_MESSAGE, LIFECYCLE_KINDS, MAX_OFFER_ARS, sameConfig, SourceUpdateInput, validateConfigChange, visibleConfigRows } from "@/lib/admin-config";
 import { DEFAULT_PRO_OFFER } from "@/lib/pro";
 
 describe("guided config validators", () => {
@@ -32,6 +32,21 @@ describe("guided config validators", () => {
     // Restoring an old price with the current version is validated like any other edit.
     expect(validateConfigChange("pro_offer", DEFAULT_PRO_OFFER, changed)).toMatch(/versión/);
   });
+  it("validates dealer_margin and the PRO-02 plan keys", () => {
+    const current = { as_of: "2026-11-02", source: "Juan", reconditioning: { pct: 5, min_usd: 300 }, transfer: { enabled: true } };
+    expect(validateConfigChange("dealer_margin", current, current)).toBeNull();
+    expect(validateConfigChange("dealer_margin", { ...current, reconditioning: { pct: 7.5, min_usd: 0 } }, current)).toBeNull();
+    for (const bad of [{ reconditioning: { pct: 120, min_usd: 300 } }, { reconditioning: { pct: 5 } }, { transfer: { enabled: "yes" } },
+      { as_of: "02/11/2026" }, { reconditioning: { pct: 5, min_usd: -1 } }]) {
+      expect(validateConfigChange("dealer_margin", { ...current, ...bad }, current)).toBe(DEALER_MARGIN_MESSAGE);
+    }
+    const limits = { enforced: false, pro: { max_profiles: 20, dealer_margin: true, min_threshold_usd: 500 } };
+    expect(validateConfigChange("plan_limits", limits, limits)).toBeNull();
+    expect(validateConfigChange("plan_limits", { ...limits, pro: { ...limits.pro, min_threshold_usd: 0 } }, limits)).not.toBeNull();
+    expect(validateConfigChange("plan_limits", { ...limits, pro: { ...limits.pro, dealer_margin: "true" } }, limits)).not.toBeNull();
+    expect(configFieldLabel("plan_limits", "pro.min_threshold_usd")).toBe("Pro: umbral mínimo por margen (USD)");
+  });
+
   it("keeps seller_classification within the worker's bounds (F-02)", () => {
     const current = { enabled: true, min_listings: 6, window_days: 30 };
     const message = "enabled debe ser true/false, min_listings un entero entre 2 y 100 y window_days entre 1 y 180.";

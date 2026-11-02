@@ -1,0 +1,858 @@
+{
+ "_doc": "PRO-02: margin_ref -> payload and line, shared by worker/tests/test_margin.py and web/lib/margin-view.test.ts. Regenerate with UPDATE_GOLDEN=1 pytest tests/test_margin.py (worker/) only after an intended change, and review the diff.",
+ "cases": [
+  {
+   "name": "pool CABA",
+   "margin_ref": {
+    "v": 1,
+    "status": "ok",
+    "dealer_median": 18000.0,
+    "dealer_n": 6,
+    "n": 10,
+    "level_used": "transmission",
+    "asking_usd": 15384.62,
+    "price_label": "published",
+    "currency": "ARS",
+    "fx": {
+     "rate": 1299.9996,
+     "kind": "listing",
+     "date": null
+    },
+    "reconditioning": {
+     "pct": 5.0,
+     "min_usd": 300.0,
+     "usd": 769.23
+    },
+    "transfer": {
+     "status": "ok",
+     "usd": {
+      "min": 621.54,
+      "max": 629.88
+     },
+     "terms": [
+      "arancel",
+      "sellos",
+      "formularios"
+     ],
+     "jurisdiction": [
+      "caba"
+     ],
+     "seller": "private"
+    },
+    "est_costs_usd": {
+     "min": 1390.77,
+     "max": 1399.11
+    },
+    "acquisition_usd": {
+     "min": 16775.39,
+     "max": 16783.73
+    },
+    "gross_margin_usd": {
+     "min": 1216.27,
+     "max": 1224.61
+    },
+    "gross_margin_pct": {
+     "min": 7.25,
+     "max": 7.3
+    },
+    "as_of": {
+     "dealer_margin": "2026-11-02",
+     "cost_estimator": "2026-10-30"
+    }
+   },
+   "payload": {
+    "status": "ok",
+    "usd_min": 1210,
+    "usd_max": 1230,
+    "pct_min": 7,
+    "pct_max": 8,
+    "dealer_median": 18000,
+    "dealer_n": 6,
+    "reconditioning_pct": 5.0,
+    "transfer_status": "ok",
+    "jurisdiction": [
+     "caba"
+    ],
+    "as_of": "2026-10-30"
+   },
+   "line": "Margen bruto estimado: USD 1.210 a 1.230 (contra la mediana de USD 18.000 a la que publican las agencias este modelo, n = 6; descuenta acondicionamiento del 5 % y transferencia; sin impuestos)"
+  },
+  {
+   "name": "sin localidad",
+   "margin_ref": {
+    "v": 1,
+    "status": "ok",
+    "dealer_median": 18000.0,
+    "dealer_n": 6,
+    "n": 10,
+    "level_used": "transmission",
+    "asking_usd": 15384.62,
+    "price_label": "published",
+    "currency": "ARS",
+    "fx": null,
+    "reconditioning": {
+     "pct": 5.0,
+     "min_usd": 300.0,
+     "usd": 769.23
+    },
+    "transfer": {
+     "status": "no_zone",
+     "usd": null,
+     "terms": [
+      "arancel",
+      "sellos",
+      "formularios"
+     ],
+     "jurisdiction": null,
+     "seller": "private"
+    },
+    "est_costs_usd": {
+     "min": 769.23,
+     "max": 769.23
+    },
+    "acquisition_usd": {
+     "min": 16153.85,
+     "max": 16153.85
+    },
+    "gross_margin_usd": {
+     "min": 1846.15,
+     "max": 1846.15
+    },
+    "gross_margin_pct": {
+     "min": 11.43,
+     "max": 11.43
+    },
+    "as_of": {
+     "dealer_margin": "2026-11-02"
+    }
+   },
+   "payload": {
+    "status": "ok",
+    "usd_min": 1850,
+    "usd_max": 1850,
+    "pct_min": 11,
+    "pct_max": 11,
+    "dealer_median": 18000,
+    "dealer_n": 6,
+    "reconditioning_pct": 5.0,
+    "transfer_status": "no_zone",
+    "jurisdiction": null,
+    "as_of": "2026-11-02"
+   },
+   "line": "Margen bruto estimado: USD 1.850 (contra la mediana de USD 18.000 a la que publican las agencias este modelo, n = 6; descuenta acondicionamiento del 5 %; no descuenta la transferencia porque tu búsqueda no tiene localidad; sin impuestos)"
+  },
+  {
+   "name": "AMBA",
+   "margin_ref": {
+    "v": 1,
+    "status": "ok",
+    "dealer_median": 18000.0,
+    "dealer_n": 6,
+    "n": 10,
+    "level_used": "transmission",
+    "asking_usd": 15384.62,
+    "price_label": "published",
+    "currency": "ARS",
+    "fx": {
+     "rate": 1299.9996,
+     "kind": "listing",
+     "date": null
+    },
+    "reconditioning": {
+     "pct": 5.0,
+     "min_usd": 300.0,
+     "usd": 769.23
+    },
+    "transfer": {
+     "status": "ok",
+     "usd": {
+      "min": 621.54,
+      "max": 629.88
+     },
+     "terms": [
+      "arancel",
+      "sellos",
+      "formularios"
+     ],
+     "jurisdiction": [
+      "caba",
+      "ba"
+     ],
+     "seller": "private"
+    },
+    "est_costs_usd": {
+     "min": 1390.77,
+     "max": 1399.11
+    },
+    "acquisition_usd": {
+     "min": 16775.39,
+     "max": 16783.73
+    },
+    "gross_margin_usd": {
+     "min": 1216.27,
+     "max": 1224.61
+    },
+    "gross_margin_pct": {
+     "min": 7.25,
+     "max": 7.3
+    },
+    "as_of": {
+     "dealer_margin": "2026-11-02",
+     "cost_estimator": "2026-10-30"
+    }
+   },
+   "payload": {
+    "status": "ok",
+    "usd_min": 1210,
+    "usd_max": 1230,
+    "pct_min": 7,
+    "pct_max": 8,
+    "dealer_median": 18000,
+    "dealer_n": 6,
+    "reconditioning_pct": 5.0,
+    "transfer_status": "ok",
+    "jurisdiction": [
+     "caba",
+     "ba"
+    ],
+    "as_of": "2026-10-30"
+   },
+   "line": "Margen bruto estimado: USD 1.210 a 1.230 (contra la mediana de USD 18.000 a la que publican las agencias este modelo, n = 6; descuenta acondicionamiento del 5 % y transferencia; sin impuestos)"
+  },
+  {
+   "name": "resto del país",
+   "margin_ref": {
+    "v": 1,
+    "status": "ok",
+    "dealer_median": 18000.0,
+    "dealer_n": 6,
+    "n": 10,
+    "level_used": "transmission",
+    "asking_usd": 15384.62,
+    "price_label": "published",
+    "currency": "ARS",
+    "fx": null,
+    "reconditioning": {
+     "pct": 5.0,
+     "min_usd": 300.0,
+     "usd": 769.23
+    },
+    "transfer": {
+     "status": "no_official",
+     "usd": null,
+     "terms": [
+      "arancel",
+      "sellos",
+      "formularios"
+     ],
+     "jurisdiction": [
+      "rest"
+     ],
+     "seller": "private"
+    },
+    "est_costs_usd": {
+     "min": 769.23,
+     "max": 769.23
+    },
+    "acquisition_usd": {
+     "min": 16153.85,
+     "max": 16153.85
+    },
+    "gross_margin_usd": {
+     "min": 1846.15,
+     "max": 1846.15
+    },
+    "gross_margin_pct": {
+     "min": 11.43,
+     "max": 11.43
+    },
+    "as_of": {
+     "dealer_margin": "2026-11-02"
+    }
+   },
+   "payload": {
+    "status": "ok",
+    "usd_min": 1850,
+    "usd_max": 1850,
+    "pct_min": 11,
+    "pct_max": 11,
+    "dealer_median": 18000,
+    "dealer_n": 6,
+    "reconditioning_pct": 5.0,
+    "transfer_status": "no_official",
+    "jurisdiction": [
+     "rest"
+    ],
+    "as_of": "2026-11-02"
+   },
+   "line": "Margen bruto estimado: USD 1.850 (contra la mediana de USD 18.000 a la que publican las agencias este modelo, n = 6; descuenta acondicionamiento del 5 %; no descuenta la transferencia porque no tenemos los valores oficiales de tu provincia; sin impuestos)"
+  },
+  {
+   "name": "CABA y Córdoba",
+   "margin_ref": {
+    "v": 1,
+    "status": "ok",
+    "dealer_median": 18000.0,
+    "dealer_n": 6,
+    "n": 10,
+    "level_used": "transmission",
+    "asking_usd": 15384.62,
+    "price_label": "published",
+    "currency": "ARS",
+    "fx": null,
+    "reconditioning": {
+     "pct": 5.0,
+     "min_usd": 300.0,
+     "usd": 769.23
+    },
+    "transfer": {
+     "status": "no_official_some",
+     "usd": null,
+     "terms": [
+      "arancel",
+      "sellos",
+      "formularios"
+     ],
+     "jurisdiction": [
+      "caba",
+      "rest"
+     ],
+     "seller": "private"
+    },
+    "est_costs_usd": {
+     "min": 769.23,
+     "max": 769.23
+    },
+    "acquisition_usd": {
+     "min": 16153.85,
+     "max": 16153.85
+    },
+    "gross_margin_usd": {
+     "min": 1846.15,
+     "max": 1846.15
+    },
+    "gross_margin_pct": {
+     "min": 11.43,
+     "max": 11.43
+    },
+    "as_of": {
+     "dealer_margin": "2026-11-02"
+    }
+   },
+   "payload": {
+    "status": "ok",
+    "usd_min": 1850,
+    "usd_max": 1850,
+    "pct_min": 11,
+    "pct_max": 11,
+    "dealer_median": 18000,
+    "dealer_n": 6,
+    "reconditioning_pct": 5.0,
+    "transfer_status": "no_official_some",
+    "jurisdiction": [
+     "caba",
+     "rest"
+    ],
+    "as_of": "2026-11-02"
+   },
+   "line": "Margen bruto estimado: USD 1.850 (contra la mediana de USD 18.000 a la que publican las agencias este modelo, n = 6; descuenta acondicionamiento del 5 %; no descuenta la transferencia porque no tenemos los valores oficiales de todas las provincias de tu búsqueda; sin impuestos)"
+  },
+  {
+   "name": "USD sin dólar",
+   "margin_ref": {
+    "v": 1,
+    "status": "ok",
+    "dealer_median": 18000.0,
+    "dealer_n": 6,
+    "n": 10,
+    "level_used": "transmission",
+    "asking_usd": 15000.0,
+    "price_label": "published",
+    "currency": "USD",
+    "fx": null,
+    "reconditioning": {
+     "pct": 5.0,
+     "min_usd": 300.0,
+     "usd": 750.0
+    },
+    "transfer": {
+     "status": "no_fx",
+     "usd": null,
+     "terms": [
+      "arancel",
+      "sellos",
+      "formularios"
+     ],
+     "jurisdiction": [
+      "caba"
+     ],
+     "seller": "private"
+    },
+    "est_costs_usd": {
+     "min": 750.0,
+     "max": 750.0
+    },
+    "acquisition_usd": {
+     "min": 15750.0,
+     "max": 15750.0
+    },
+    "gross_margin_usd": {
+     "min": 2250.0,
+     "max": 2250.0
+    },
+    "gross_margin_pct": {
+     "min": 14.29,
+     "max": 14.29
+    },
+    "as_of": {
+     "dealer_margin": "2026-11-02"
+    }
+   },
+   "payload": {
+    "status": "ok",
+    "usd_min": 2250,
+    "usd_max": 2250,
+    "pct_min": 14,
+    "pct_max": 14,
+    "dealer_median": 18000,
+    "dealer_n": 6,
+    "reconditioning_pct": 5.0,
+    "transfer_status": "no_fx",
+    "jurisdiction": [
+     "caba"
+    ],
+    "as_of": "2026-11-02"
+   },
+   "line": "Margen bruto estimado: USD 2.250 (contra la mediana de USD 18.000 a la que publican las agencias este modelo, n = 6; descuenta acondicionamiento del 5 %; no descuenta la transferencia porque falta el dólar del día; sin impuestos)"
+  },
+  {
+   "name": "sin parámetros de costo",
+   "margin_ref": {
+    "v": 1,
+    "status": "ok",
+    "dealer_median": 18000.0,
+    "dealer_n": 6,
+    "n": 10,
+    "level_used": "transmission",
+    "asking_usd": 15384.62,
+    "price_label": "published",
+    "currency": "ARS",
+    "fx": null,
+    "reconditioning": {
+     "pct": 5.0,
+     "min_usd": 300.0,
+     "usd": 769.23
+    },
+    "transfer": {
+     "status": "params",
+     "usd": null,
+     "terms": [
+      "arancel",
+      "sellos",
+      "formularios"
+     ],
+     "jurisdiction": null,
+     "seller": null
+    },
+    "est_costs_usd": {
+     "min": 769.23,
+     "max": 769.23
+    },
+    "acquisition_usd": {
+     "min": 16153.85,
+     "max": 16153.85
+    },
+    "gross_margin_usd": {
+     "min": 1846.15,
+     "max": 1846.15
+    },
+    "gross_margin_pct": {
+     "min": 11.43,
+     "max": 11.43
+    },
+    "as_of": {
+     "dealer_margin": "2026-11-02"
+    }
+   },
+   "payload": {
+    "status": "ok",
+    "usd_min": 1850,
+    "usd_max": 1850,
+    "pct_min": 11,
+    "pct_max": 11,
+    "dealer_median": 18000,
+    "dealer_n": 6,
+    "reconditioning_pct": 5.0,
+    "transfer_status": "params",
+    "jurisdiction": null,
+    "as_of": "2026-11-02"
+   },
+   "line": "Margen bruto estimado: USD 1.850 (contra la mediana de USD 18.000 a la que publican las agencias este modelo, n = 6; descuenta acondicionamiento del 5 %; no descuenta la transferencia porque faltan parámetros cargados; sin impuestos)"
+  },
+  {
+   "name": "transferencia desactivada",
+   "margin_ref": {
+    "v": 1,
+    "status": "ok",
+    "dealer_median": 18000.0,
+    "dealer_n": 6,
+    "n": 10,
+    "level_used": "transmission",
+    "asking_usd": 15384.62,
+    "price_label": "published",
+    "currency": "ARS",
+    "fx": null,
+    "reconditioning": {
+     "pct": 5.0,
+     "min_usd": 300.0,
+     "usd": 769.23
+    },
+    "transfer": {
+     "status": "disabled",
+     "usd": null,
+     "terms": [
+      "arancel",
+      "sellos",
+      "formularios"
+     ],
+     "jurisdiction": null,
+     "seller": null
+    },
+    "est_costs_usd": {
+     "min": 769.23,
+     "max": 769.23
+    },
+    "acquisition_usd": {
+     "min": 16153.85,
+     "max": 16153.85
+    },
+    "gross_margin_usd": {
+     "min": 1846.15,
+     "max": 1846.15
+    },
+    "gross_margin_pct": {
+     "min": 11.43,
+     "max": 11.43
+    },
+    "as_of": {
+     "dealer_margin": "2026-11-02"
+    }
+   },
+   "payload": {
+    "status": "ok",
+    "usd_min": 1850,
+    "usd_max": 1850,
+    "pct_min": 11,
+    "pct_max": 11,
+    "dealer_median": 18000,
+    "dealer_n": 6,
+    "reconditioning_pct": 5.0,
+    "transfer_status": "disabled",
+    "jurisdiction": null,
+    "as_of": "2026-11-02"
+   },
+   "line": "Margen bruto estimado: USD 1.850 (contra la mediana de USD 18.000 a la que publican las agencias este modelo, n = 6; descuenta acondicionamiento del 5 %; no descuenta la transferencia porque no está activada; sin impuestos)"
+  },
+  {
+   "name": "sin acondicionamiento",
+   "margin_ref": {
+    "v": 1,
+    "status": "ok",
+    "dealer_median": 18000.0,
+    "dealer_n": 6,
+    "n": 10,
+    "level_used": "transmission",
+    "asking_usd": 15384.62,
+    "price_label": "published",
+    "currency": "ARS",
+    "fx": {
+     "rate": 1299.9996,
+     "kind": "listing",
+     "date": null
+    },
+    "reconditioning": null,
+    "transfer": {
+     "status": "ok",
+     "usd": {
+      "min": 621.54,
+      "max": 629.88
+     },
+     "terms": [
+      "arancel",
+      "sellos",
+      "formularios"
+     ],
+     "jurisdiction": [
+      "caba"
+     ],
+     "seller": "private"
+    },
+    "est_costs_usd": {
+     "min": 621.54,
+     "max": 629.88
+    },
+    "acquisition_usd": {
+     "min": 16006.16,
+     "max": 16014.5
+    },
+    "gross_margin_usd": {
+     "min": 1985.5,
+     "max": 1993.84
+    },
+    "gross_margin_pct": {
+     "min": 12.4,
+     "max": 12.46
+    },
+    "as_of": {
+     "dealer_margin": "2026-11-02",
+     "cost_estimator": "2026-10-30"
+    }
+   },
+   "payload": {
+    "status": "ok",
+    "usd_min": 1980,
+    "usd_max": 2000,
+    "pct_min": 12,
+    "pct_max": 13,
+    "dealer_median": 18000,
+    "dealer_n": 6,
+    "reconditioning_pct": null,
+    "transfer_status": "ok",
+    "jurisdiction": [
+     "caba"
+    ],
+    "as_of": "2026-10-30"
+   },
+   "line": "Margen bruto estimado: USD 1.980 a 2.000 (contra la mediana de USD 18.000 a la que publican las agencias este modelo, n = 6; descuenta transferencia; no descuenta acondicionamiento porque faltan sus parámetros; sin impuestos)"
+  },
+  {
+   "name": "sin acondicionamiento ni localidad",
+   "margin_ref": {
+    "v": 1,
+    "status": "ok",
+    "dealer_median": 18000.0,
+    "dealer_n": 6,
+    "n": 10,
+    "level_used": "transmission",
+    "asking_usd": 15384.62,
+    "price_label": "published",
+    "currency": "ARS",
+    "fx": null,
+    "reconditioning": null,
+    "transfer": {
+     "status": "no_zone",
+     "usd": null,
+     "terms": [
+      "arancel",
+      "sellos",
+      "formularios"
+     ],
+     "jurisdiction": null,
+     "seller": "private"
+    },
+    "est_costs_usd": {
+     "min": 0.0,
+     "max": 0.0
+    },
+    "acquisition_usd": {
+     "min": 15384.62,
+     "max": 15384.62
+    },
+    "gross_margin_usd": {
+     "min": 2615.38,
+     "max": 2615.38
+    },
+    "gross_margin_pct": {
+     "min": 17.0,
+     "max": 17.0
+    },
+    "as_of": {
+     "dealer_margin": "2026-11-02"
+    }
+   },
+   "payload": {
+    "status": "ok",
+    "usd_min": 2620,
+    "usd_max": 2620,
+    "pct_min": 17,
+    "pct_max": 17,
+    "dealer_median": 18000,
+    "dealer_n": 6,
+    "reconditioning_pct": null,
+    "transfer_status": "no_zone",
+    "jurisdiction": null,
+    "as_of": "2026-11-02"
+   },
+   "line": "Margen bruto estimado: USD 2.620 (contra la mediana de USD 18.000 a la que publican las agencias este modelo, n = 6; sin descontar costos: faltan los parámetros de acondicionamiento y no descuenta la transferencia porque tu búsqueda no tiene localidad; sin impuestos)"
+  },
+  {
+   "name": "negativo",
+   "margin_ref": {
+    "v": 1,
+    "status": "ok",
+    "dealer_median": 15000.0,
+    "dealer_n": 6,
+    "n": 10,
+    "level_used": "transmission",
+    "asking_usd": 15384.62,
+    "price_label": "published",
+    "currency": "ARS",
+    "fx": {
+     "rate": 1299.9996,
+     "kind": "listing",
+     "date": null
+    },
+    "reconditioning": {
+     "pct": 5.0,
+     "min_usd": 300.0,
+     "usd": 769.23
+    },
+    "transfer": {
+     "status": "ok",
+     "usd": {
+      "min": 621.54,
+      "max": 629.88
+     },
+     "terms": [
+      "arancel",
+      "sellos",
+      "formularios"
+     ],
+     "jurisdiction": [
+      "caba"
+     ],
+     "seller": "private"
+    },
+    "est_costs_usd": {
+     "min": 1390.77,
+     "max": 1399.11
+    },
+    "acquisition_usd": {
+     "min": 16775.39,
+     "max": 16783.73
+    },
+    "gross_margin_usd": {
+     "min": -1783.73,
+     "max": -1775.39
+    },
+    "gross_margin_pct": {
+     "min": -10.63,
+     "max": -10.58
+    },
+    "as_of": {
+     "dealer_margin": "2026-11-02",
+     "cost_estimator": "2026-10-30"
+    }
+   },
+   "payload": {
+    "status": "ok",
+    "usd_min": -1790,
+    "usd_max": -1770,
+    "pct_min": -11,
+    "pct_max": -10,
+    "dealer_median": 15000,
+    "dealer_n": 6,
+    "reconditioning_pct": 5.0,
+    "transfer_status": "ok",
+    "jurisdiction": [
+     "caba"
+    ],
+    "as_of": "2026-10-30"
+   },
+   "line": "Margen bruto estimado: USD -1.790 a -1.770 (contra la mediana de USD 15.000 a la que publican las agencias este modelo, n = 6; descuenta acondicionamiento del 5 % y transferencia; sin impuestos)"
+  },
+  {
+   "name": "de contado",
+   "margin_ref": {
+    "v": 1,
+    "status": "ok",
+    "dealer_median": 18000.0,
+    "dealer_n": 6,
+    "n": 10,
+    "level_used": "transmission",
+    "asking_usd": 15384.62,
+    "price_label": "cash",
+    "currency": "ARS",
+    "fx": {
+     "rate": 1299.9996,
+     "kind": "listing",
+     "date": null
+    },
+    "reconditioning": {
+     "pct": 5.0,
+     "min_usd": 300.0,
+     "usd": 769.23
+    },
+    "transfer": {
+     "status": "ok",
+     "usd": {
+      "min": 621.54,
+      "max": 629.88
+     },
+     "terms": [
+      "arancel",
+      "sellos",
+      "formularios"
+     ],
+     "jurisdiction": [
+      "caba"
+     ],
+     "seller": "private"
+    },
+    "est_costs_usd": {
+     "min": 1390.77,
+     "max": 1399.11
+    },
+    "acquisition_usd": {
+     "min": 16775.39,
+     "max": 16783.73
+    },
+    "gross_margin_usd": {
+     "min": 1216.27,
+     "max": 1224.61
+    },
+    "gross_margin_pct": {
+     "min": 7.25,
+     "max": 7.3
+    },
+    "as_of": {
+     "dealer_margin": "2026-11-02",
+     "cost_estimator": "2026-10-30"
+    }
+   },
+   "payload": {
+    "status": "ok",
+    "usd_min": 1210,
+    "usd_max": 1230,
+    "pct_min": 7,
+    "pct_max": 8,
+    "dealer_median": 18000,
+    "dealer_n": 6,
+    "reconditioning_pct": 5.0,
+    "transfer_status": "ok",
+    "jurisdiction": [
+     "caba"
+    ],
+    "as_of": "2026-10-30"
+   },
+   "line": "Margen bruto estimado: USD 1.210 a 1.230 (contra la mediana de USD 18.000 a la que publican las agencias este modelo, n = 6; descuenta acondicionamiento del 5 % y transferencia; sin impuestos)"
+  },
+  {
+   "name": "pocas agencias",
+   "margin_ref": {
+    "v": 1,
+    "status": "few_dealers",
+    "dealer_n": 2,
+    "min_n": 5,
+    "n": 10,
+    "level_used": "transmission"
+   },
+   "payload": {
+    "status": "few_dealers",
+    "dealer_n": 2,
+    "min_n": 5
+   },
+   "line": "Margen estimado: no hay suficientes agencias publicando este modelo para estimarlo (n = 2, mínimo 5)"
+  }
+ ]
+}
