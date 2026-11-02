@@ -116,6 +116,24 @@ OPPORTUNITY_CONTACT_MESSAGE = notification("opportunity", {**OPPORTUNITY.payload
 # filter let a listing without a known seller through.
 OPPORTUNITY_SELLER_UNKNOWN = notification("opportunity", {**OPPORTUNITY.payload, "seller_unknown": True})
 
+# PAR-02 resto: the email's two flags cut by app_config.red_flags.order, from
+# the stored flags as intelligence/red_flags.py builds them.
+def _cut(*flags: tuple[str, str, str]) -> list[str]:
+    from intelligence.config import DEFAULT_FLAG_ORDER
+    from notifications.service import flag_texts
+    return flag_texts([{"id": i, "text": t, "severity": s} for i, t, s in flags], DEFAULT_FLAG_ORDER)
+
+
+_MUCH_CHEAPER = ("much_cheaper", RED_FLAG["much_cheaper"].format(pct="28"), "warning")
+OPPORTUNITY_PRIVATE_MANY = notification("opportunity", {**OPPORTUNITY.payload, "red_flags": _cut(
+    ("no_owners", RED_FLAG["no_owners"], "info"),
+    _MUCH_CHEAPER,
+    ("private_many_listings", RED_FLAG["private_many_listings"].format(n="7"), "info"))})
+OPPORTUNITY_DUPLICATE_PHOTOS = notification("opportunity", {**OPPORTUNITY.payload, "red_flags": _cut(
+    ("short_description", RED_FLAG["short_description"], "info"),
+    _MUCH_CHEAPER,
+    ("duplicate_photos", RED_FLAG["duplicate_photos"].format(source="Rosario Garage"), "warning"))})
+
 CASES = {"opportunity": OPPORTUNITY, "new_match": NEW_MATCH, "price_drop": PRICE_DROP, "digest": DIGEST,
          "opportunity_1_drop": OPPORTUNITY_1_DROP, "opportunity_3_drops": OPPORTUNITY_3_DROPS,
          "opportunity_ars": OPPORTUNITY_ARS, "opportunity_much_cheaper_verify": OPPORTUNITY_MUCH_CHEAPER,
@@ -125,4 +143,6 @@ CASES = {"opportunity": OPPORTUNITY, "new_match": NEW_MATCH, "price_drop": PRICE
          "opportunity_seller_unknown": OPPORTUNITY_SELLER_UNKNOWN,
          "opportunity_margin": OPPORTUNITY_MARGIN, "opportunity_margin_no_zone": OPPORTUNITY_MARGIN_NO_ZONE,
          "opportunity_margin_few_dealers": OPPORTUNITY_MARGIN_FEW_DEALERS,
-         "price_drop_margin": PRICE_DROP_MARGIN}
+         "price_drop_margin": PRICE_DROP_MARGIN,
+         "opportunity_private_many_listings": OPPORTUNITY_PRIVATE_MANY,
+         "opportunity_duplicate_photos": OPPORTUNITY_DUPLICATE_PHOTOS}

@@ -24,7 +24,8 @@ def question_keys(listing: Mapping[str, Any], flags: Iterable[RedFlag], *,
                   timing_belt: bool | None, now: datetime) -> list[str]:
     ids = {f.id for f in flags}
     facts = listing.get("description_facts") or {}
-    keys = ["greeting", "available", "holder"]
+    # PAR-02 resto: a «particular» with many listings gets the holder question in full.
+    keys = ["greeting", "available", "holder_detail" if "private_many_listings" in ids else "holder"]
     if "no_owners" in ids or claim(facts, "single_owner") is False:
         keys.append("owners")
     if claim(facts, "timing_belt_changed") is True:
