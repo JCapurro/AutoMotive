@@ -86,7 +86,7 @@ describe("red flags of the listing page (PAR-02 resto)", () => {
   });
 
   it("renders a stored flag without link exactly as before", () => {
-    const html = renderToStaticMarkup(createElement(RedFlagList, { listingId: 42, flags: [OLD], present: new Set() }));
+    const html = renderToStaticMarkup(createElement(RedFlagList, { listingId: 42, flags: [OLD], present: new Set<number>() }));
     expect(html).not.toContain("duplicate-link");
     expect(html).toContain(OLD.text);
   });
