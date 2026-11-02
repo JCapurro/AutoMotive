@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { AdminLifecycleInput, AdminOfferInput, AdminPlanLimitsInput, configDifferences, configFieldLabel, LIFECYCLE_KINDS, MAX_OFFER_ARS, sameConfig, SourceUpdateInput, validateConfigChange } from "@/lib/admin-config";
+import { AdminLifecycleInput, AdminOfferInput, AdminPlanLimitsInput, configDifferences, configFieldLabel, LIFECYCLE_KINDS, MAX_OFFER_ARS, sameConfig, SourceUpdateInput, validateConfigChange, visibleConfigRows } from "@/lib/admin-config";
 import { DEFAULT_PRO_OFFER } from "@/lib/pro";
 
 describe("guided config validators", () => {
@@ -132,4 +132,14 @@ it("compares JSON independent of object ordering and previews field deletions", 
   expect(configDifferences({ a: 1, nested: { b: true } }, { nested: { b: false } })).toEqual([
     { path: "a", before: 1, after: undefined }, { path: "nested.b", before: true, after: false },
   ]);
+});
+
+describe("retired config keys (X-01 notes removed, Juan 02/11)", () => {
+  it("hides listing_tracking from /admin/config and keeps the rest in order", () => {
+    const rows = [{ key: "comparables" }, { key: "listing_tracking" }, { key: "risk" }];
+    expect(visibleConfigRows(rows)).toEqual([{ key: "comparables" }, { key: "risk" }]);
+  });
+  it("refuses to save listing_tracking", () => {
+    expect(validateConfigChange("listing_tracking", { note_max_chars: 300 }, { note_max_chars: 500 })).toMatch(/ya no se usa/);
+  });
 });

@@ -131,7 +131,7 @@ El backlog de producto del 26/10 parte de los dolores de cada público y detalla
 | PAR-05 | Particular | "¿A cuánto publicarlo?" + captación de vendedores con consentimiento | P2; abre el canal del que vende para comprar |
 | PRO-01 | Pro | Filtro duro "solo particulares", push y mensaje listo para pegar | Es el argumento de demo de 4.2.2: lo que el revendedor hace a mano |
 | PRO-02 | Pro | Margen bruto estimado y umbral de alerta en USD | Completa 4.2: "oportunidades" en la unidad que usa la agencia |
-| X-01 | Pro | Estados de seguimiento (contactado, visita, comprado) y notas | S; reemplaza la planilla de WhatsApp |
+| X-01 | Pro | Estados de seguimiento (contactado, visita, comprado); sin notas (Juan, 02/11) | S; reemplaza la planilla de WhatsApp |
 | PRO-03 / PRO-04 / PRO-05 | Pro | Monitor de stock, radar de mercado por zona, vendedores antes de publicar | P2, después de 5 Pro pagos; necesitan F-01/F-03 |
 | F-02 / F-03 / F-04 | base | Vendedor v2, agregados de mercado, canal push | Fundaciones; F-02 es P0 porque PRO-01 y PRO-02 dependen de ella |
 
