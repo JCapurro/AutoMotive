@@ -26,13 +26,18 @@ import {
 // PRO-02: the vectors shared with worker/tests/test_margin.py (GoldenTests).
 const GOLDEN = JSON.parse(
   readFileSync(path.resolve(__dirname, "../../worker/tests/fixtures/margin/golden.json"), "utf-8"),
-) as { cases: { name: string; margin_ref: MarginRef; payload: Record<string, unknown>; line: string }[] };
+) as {
+  cases: { name: string; implausible?: boolean; margin_ref: MarginRef; payload: Record<string, unknown> | null; line: string | null }[];
+};
 const byName = (name: string) => GOLDEN.cases.find((c) => c.name === name)!.margin_ref;
-const MARGINS = GOLDEN.cases.filter((c) => c.payload.status === "ok");
+const MARGINS = GOLDEN.cases.filter((c) => c.payload?.status === "ok");
+// Shown: a margin or «not enough dealers»; the implausible ones are stored refs from before the guard.
+const SHOWN = GOLDEN.cases.filter((c) => !c.implausible);
+const IMPLAUSIBLE = GOLDEN.cases.filter((c) => c.implausible);
 
 describe("margin line (the worker's, byte for byte)", () => {
   it.each(GOLDEN.cases.map((c) => [c.name, c] as const))("%s", (_, c) => {
-    if (c.payload.status === "ok") expect(marginPayload(c.margin_ref)).toEqual(c.payload);
+    if (c.payload?.status === "ok") expect(marginPayload(c.margin_ref)).toEqual(c.payload);
     expect(marginLine(c.margin_ref)).toBe(c.line);
   });
 
@@ -90,10 +95,10 @@ describe("margin card line (Juan, 02/11: short in the result cards)", () => {
   });
 
   it("starts like the full line, which keeps the median, the costs and «sin impuestos»", () => {
-    for (const c of GOLDEN.cases) {
+    for (const c of SHOWN) {
       const card = marginCardLine(c.margin_ref)!;
-      if (c.payload.status === "ok") expect(c.line.startsWith(card.replace(/ \(n\u00a0=\u00a0\d+\u00a0agencias\)$/, " ("))).toBe(true);
-      expect(card.length).toBeLessThan(c.line.length);
+      if (c.payload?.status === "ok") expect(c.line!.startsWith(card.replace(/ \(n\u00a0=\u00a0\d+\u00a0agencias\)$/, " ("))).toBe(true);
+      expect(card.length).toBeLessThan(c.line!.length);
     }
     expect(marginLine(byName("pool CABA"))).toContain("contra la mediana de USD 18.000");
     expect(marginCardLine(byName("pool CABA"))).not.toContain("mediana");
@@ -115,10 +120,57 @@ describe("margin card line (Juan, 02/11: short in the result cards)", () => {
   });
 });
 
+describe("an implausible price has no margin (asking above 3x or below 0,4x the dealers' median)", () => {
+  it("the golden has the cases above, below and on the bounds", () => {
+    expect(IMPLAUSIBLE.map((c) => c.name)).toEqual([
+      "implausible: ARS cargado como USD",
+      "implausible: apenas arriba de 3x",
+      "implausible: abajo de 0,4x",
+    ]);
+    expect(byName("en el borde de arriba (3x)").asking_usd).toBe(3 * byName("en el borde de arriba (3x)").dealer_median);
+    expect(byName("en el borde de abajo (0,4x)").asking_usd).toBe(0.4 * byName("en el borde de abajo (0,4x)").dealer_median);
+  });
+
+  it.each(IMPLAUSIBLE.map((c) => [c.name, c] as const))("%s: no line, no card line, no detail, nothing rendered", (_, c) => {
+    expect(c.payload).toBeNull();
+    expect(c.line).toBeNull();
+    expect(asMarginRef(c.margin_ref)).toBeNull();
+    expect(asStoredMargin(c.margin_ref)).toBeNull();
+    expect(marginLine(c.margin_ref)).toBeNull();
+    expect(marginCardLine(c.margin_ref)).toBeNull();
+    expect(marginDetail(c.margin_ref)).toEqual([]);
+    expect(renderToStaticMarkup(createElement(MarginEstimate, { margin: c.margin_ref }))).toBe("");
+  });
+
+  it("the bounds are plausible: their margin is shown", () => {
+    expect(marginCardLine(byName("en el borde de arriba (3x)"))).toBe("Margen bruto estimado: USD -38.700 (n\u00a0=\u00a06\u00a0agencias)");
+    expect(marginCardLine(byName("en el borde de abajo (0,4x)"))).toBe("Margen bruto estimado: USD 10.440 (n\u00a0=\u00a06\u00a0agencias)");
+    expect(marginDetail(byName("en el borde de abajo (0,4x)")).length).toBeGreaterThan(0);
+  });
+
+  it("the production case: a VW Bora «USD 600.000» against a median of USD 8.038", () => {
+    const bora = byName("implausible: ARS cargado como USD");
+    expect([bora.asking_usd, bora.dealer_median]).toEqual([600000, 8038]);
+    expect(bora.gross_margin_usd.min).toBeLessThan(-600000);
+    expect(marginLine(bora)).toBeNull();
+  });
+
+  it("a ref with its own bounds is checked against them; without, against 0,4 and 3", () => {
+    const top = byName("en el borde de arriba (3x)");
+    expect(top.plausible_ratio).toEqual({ min: 0.4, max: 3 });
+    expect(marginLine({ ...top, plausible_ratio: { min: 0.4, max: 2.5 } })).toBeNull();
+    expect(marginLine({ ...top, plausible_ratio: undefined })).not.toBeNull();
+    expect(marginLine({ ...top, plausible_ratio: { min: 0, max: 99 } })).not.toBeNull(); // invalid bounds: the default
+    expect(marginLine({ ...top, asking_usd: 54000.02 })).toBeNull();
+    expect(marginLine({ ...top, asking_usd: 54000.01 })).not.toBeNull(); // the worker's cent of slack
+    expect(marginLine({ ...top, asking_usd: undefined })).toBeNull();
+  });
+});
+
 describe("margin copy lint over every rendered variant", () => {
   it("never promises a result", () => {
     const fold = (t: string) => t.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().replace("no con precios de venta", "");
-    const texts = [...GOLDEN.cases.map((c) => c.line), ...GOLDEN.cases.map((c) => marginCardLine(c.margin_ref)!), ...MARGINS.flatMap((c) => marginDetail(c.margin_ref))];
+    const texts = [...SHOWN.map((c) => c.line!), ...SHOWN.map((c) => marginCardLine(c.margin_ref)!), ...MARGINS.flatMap((c) => marginDetail(c.margin_ref))];
     for (const text of texts) {
       for (const term of ["vale", "ganancia", "garantiz", "rentab", "asegur", "seguro que", "vas a ganar", "precio de venta", "precios de venta"]) {
         expect(fold(text).includes(term), `${text}: ${term}`).toBe(false);

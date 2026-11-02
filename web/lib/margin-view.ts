@@ -4,6 +4,12 @@
  * the cards' short line, and the listing page's detail. Pure; the same rounding as the
  * worker's margin.email_payload (outward to USD 10, floor/ceil with EPS, the
  * median to the nearest 10), so the web and the alerts print the same line.
+ *
+ * An implausible price has no margin (worker margin.plausible): asking_usd
+ * above 3x or below 0,4x the dealers' median (an ARS price loaded as USD, a
+ * down payment not detected). compute() no longer stores one, and the refs
+ * stored before that guard are not shown here (no line, no card line, no
+ * detail) until the worker's rescore recomputes them to null.
  */
 import { COMPARABLE_LEVEL, MARGIN } from "@/lib/copy";
 import { jurisdictionNames } from "@/lib/cost-estimate-view";
@@ -30,6 +36,8 @@ export type MarginRef = {
   acquisition_usd?: MarginRange;
   gross_margin_usd: MarginRange;
   gross_margin_pct: MarginRange;
+  /** The asking_usd / dealer_median bounds it passed (absent in refs from before the guard). */
+  plausible_ratio?: MarginRange;
   as_of: { dealer_margin?: string | null; cost_estimator?: string | null };
 };
 
@@ -79,13 +87,38 @@ export function asStoredMargin(value: unknown): StoredMargin | null {
   return asFewDealers(value) ?? asMarginRef(value);
 }
 
-/** A stored margin_ref with a margin, or null when it is not one (an unknown shape is never shown). */
+/** The worker's margin.PLAUSIBLE_RATIO (app_config.dealer_margin.plausible_ratio's default) and PLAUSIBLE_EPS. */
+export const PLAUSIBLE_RATIO: MarginRange = { min: 0.4, max: 3 };
+const PLAUSIBLE_EPS = 0.01;
+
+/** The worker's margin.parse_ratio: {min, max} with 0 < min < 1 < max, else PLAUSIBLE_RATIO. */
+function parseRatio(value: unknown): MarginRange {
+  const r = value && typeof value === "object" ? (value as Partial<MarginRange>) : null;
+  return r && isNum(r.min) && isNum(r.max) && r.min > 0 && r.min < 1 && r.max > 1 ? { min: r.min, max: r.max } : PLAUSIBLE_RATIO;
+}
+
+/**
+ * The worker's margin.plausible: min x median <= asking_usd <= max x median
+ * (inclusive), with the ref's own bounds or, before the guard, PLAUSIBLE_RATIO.
+ */
+export function plausiblePrice(ref: Pick<MarginRef, "asking_usd" | "dealer_median"> & { plausible_ratio?: unknown }): boolean {
+  const { asking_usd: asking, dealer_median: median } = ref;
+  if (!isNum(asking) || !isNum(median) || median <= 0) return false;
+  const r = parseRatio(ref.plausible_ratio);
+  return r.min * median - PLAUSIBLE_EPS <= asking && asking <= r.max * median + PLAUSIBLE_EPS;
+}
+
+/**
+ * A stored margin_ref with a margin, or null when it is not one (an unknown
+ * shape is never shown) or its price is implausible (plausiblePrice).
+ */
 export function asMarginRef(value: unknown): MarginRef | null {
   if (!value || typeof value !== "object") return null;
   const r = value as Partial<MarginRef> & { status?: unknown };
   if (r.status !== undefined && r.status !== "ok") return null;
   const g = r.gross_margin_usd;
   if (!g || !isNum(g.min) || !isNum(g.max) || !isNum(r.dealer_median) || !isNum(r.dealer_n)) return null;
+  if (!plausiblePrice(r as MarginRef)) return null;
   return r as MarginRef;
 }
 
@@ -188,8 +221,9 @@ function usdRange(r: MarginRange): string {
   return Math.abs(r.max - r.min) < ROUNDING_EPS ? fill(MARGIN.single, { v: signed(round10(r.min)) }) : usdText(lo, hi);
 }
 
-/** The listing page's detail: what the margin subtracts, in numbers, and what it is not. */
+/** The listing page's detail: what the margin subtracts, in numbers, and what it is not (nothing for an implausible price). */
 export function marginDetail(ref: MarginRef): string[] {
+  if (!asMarginRef(ref)) return [];
   const p = marginPayload(ref);
   const out: string[] = [];
   out.push(fill(MARGIN.median, {
