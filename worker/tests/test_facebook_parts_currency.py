@@ -432,6 +432,29 @@ class MergeDoubtfulTests(unittest.TestCase):
         self.assertIsNone(price_drop_pct(published_view(stored), published_view(out)))
         self.assertTrue(published_partial(stored))
 
+    def test_no_price_read_after_an_unreadable_one_keeps_the_flag(self):
+        # A detail page or a card that shows no price: the listing stays out of matching.
+        first, _ = merge(self.stored(), self.card(600_000), detail=False)
+        stored = {**self.stored(), **first}
+        for detail in (False, True):
+            with self.subTest(detail=detail):
+                out, changes = merge(stored, self.card(None), detail=detail)
+                self.assertEqual((out["price"], out["price_partial"], out["price_partial_reason"]),
+                                 (None, True, "precio de Facebook no interpretable: $ 600.000"))
+                self.assertNotIn("price", changes)
+
+    def test_an_enriched_row_keeps_the_latest_unreadable_read(self):
+        # Non-authoritative merge: the stored attributes win, but not an older read's note.
+        stored = self.stored(enriched_at="2026-11-01",
+                             attributes={"moneda": "USD", "_currency_read": {"amount": 1_990_000, "currency": "USD",
+                                                                             "as": "ARS"}})
+        out, _ = merge(stored, self.card(600_000), detail=False)
+        self.assertEqual(out["attributes"]["_currency_read"]["as"], None)
+        self.assertEqual(doubtful_price(out["attributes"]["_currency_read"]),
+                         "precio de Facebook no interpretable: $ 600.000")
+        again, _ = merge({**stored, **out}, self.card(None), detail=True)
+        self.assertEqual((again["price"], again["price_partial"]), (None, True))
+
 
 if __name__ == "__main__":
     unittest.main()

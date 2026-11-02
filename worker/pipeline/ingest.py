@@ -276,6 +276,10 @@ def merge(existing: dict[str, Any], incoming: dict[str, Any], *,
         # (incoming's published_partial_reason); no 'price' change, no drop.
         pub, pub_cur = None, None
     out["price_published"], out["price_published_currency"] = pub, pub_cur
+    if pub is None and doubtful_price(attrs_new.get("_currency_read")):
+        # The unreadable read is the latest word on the price, whichever
+        # side's attributes stood (an enriched row read by card).
+        out["attributes"]["_currency_read"] = attrs_new["_currency_read"]
     if pub is not None and doubtful_price(out["attributes"].get("_currency_read")):
         # Read again with a credible price: the unreadable one is history.
         out["attributes"].pop("_currency_read")
@@ -292,6 +296,10 @@ def merge(existing: dict[str, Any], incoming: dict[str, Any], *,
     if not published_changed and partial_reason is None and "published_partial_reason" not in incoming:
         # A legacy row without the reason: keep what was stored.
         partial_reason = existing.get("price_partial_reason") if existing.get("price_partial") else None
+    if pub is None and (doubtful := doubtful_price(out["attributes"].get("_currency_read"))):
+        # Still no price since the unreadable one (a detail page or a card
+        # that shows none): the flag stands, or it would match as a car.
+        partial_reason = doubtful
     price = resolve_price(pub, pub_cur, partial_reason=partial_reason, facts=facts, usd_rate=rate)
     if facts is not None:
         out["description_facts"] = {**facts_json, "price_check": price.check()}

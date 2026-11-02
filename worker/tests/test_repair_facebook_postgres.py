@@ -285,6 +285,59 @@ class RepairToolTests(Case):
         row = await self.listing("12")
         self.assertEqual((float(row["price"]), row["currency"], row["price_partial"]), (7_500, "USD", False))
 
+    async def test_a_peso_reading_of_73_is_left_without_a_price(self):
+        # #73's crawl stored «Ford ecosport porton trasero» as ARS 600.000 (a
+        # car at ~USD 430) and the 1.990.000 one as ARS: only the first changes.
+        porton = await self.store("12", "Ford ecosport porton trasero", 600_000, "ARS")
+        ars = await self.store("4", "FORD ECOSPORT XLS 1.6 GNC FULL", 1_990_000, "ARS")
+        bmw = await self.store("10", "BMW X5 xDrive40i M Sport", 600_000, "ARS", make="BMW", model="X5")
+        async with db.connection() as cx:
+            for lid, amount in ((porton, 600_000), (ars, 1_990_000), (bmw, 600_000)):
+                await cx.execute("UPDATE listings SET attributes = attributes || %s WHERE id = %s",
+                                 (db_json({"_currency_read": {"amount": amount, "currency": "USD", "as": "ARS"}}),
+                                  lid))
+        await self.match(porton)
+        p = await repair_facebook.repair(write=False, sources=["facebook"])
+        self.assertEqual(dict(p.counts), {("facebook", repair_facebook.DOUBTFUL): 1,
+                                          ("facebook", repair_facebook.DOUBTFUL_MATCHES): 1})
+        p = await repair_facebook.repair(write=True, sources=["facebook"])
+        self.assertEqual(p.counts[("*", repair_facebook.DELETED)], 1)
+        row = await self.listing("12")
+        self.assertEqual((row["price"], row["currency"], row["price_usd"], row["price_partial"]),
+                         (None, None, None, True))
+        self.assertEqual(row["attributes"]["_currency_read"]["as"], None)
+        self.assertEqual((float((await self.listing("4"))["price"]), (await self.listing("4"))["currency"]),
+                         (1_990_000, "ARS"))
+        self.assertEqual((await self.listing("10"))["currency"], "ARS")
+        self.assertEqual(await self.rows("SELECT * FROM matches"), [])
+        self.assertEqual(await self.rows("SELECT * FROM notifications"), [])
+        self.assertEqual(dict((await repair_facebook.repair(write=True, sources=["facebook"])).counts), {})
+
+    async def test_the_matches_of_a_listing_the_crawl_flagged_are_deleted(self):
+        # The crawl flags it; its match would stay until the nightly re-score.
+        lid = await self.store("12", "Ford ecosport porton trasero", 9_500, "USD")
+        await self.match(lid)
+        await ingest([fb("12", "Ford ecosport porton trasero", 600_000)], geocode=None)
+        self.assertEqual(((await self.listing("12"))["price_partial"], len(await self.rows("SELECT * FROM matches"))),
+                         (True, 1))
+        p = await repair_facebook.repair(write=False, sources=["facebook"])
+        self.assertEqual(dict(p.counts), {("facebook", repair_facebook.DOUBTFUL_MATCHES): 1})
+        self.assertEqual(len(await self.rows("SELECT * FROM matches")), 1)
+        p = await repair_facebook.repair(write=True, sources=["facebook"])
+        self.assertEqual(p.counts[("*", repair_facebook.DELETED)], 1)
+        self.assertEqual(await self.rows("SELECT * FROM matches"), [])
+        self.assertEqual(await self.rows("SELECT * FROM notifications"), [])
+        self.assertEqual(dict((await repair_facebook.repair(write=False, sources=["facebook"])).counts), {})
+
+    async def test_a_flagged_listing_whose_detail_shows_no_price_stays_flagged(self):
+        await ingest([fb("30", "Ford ecosport porton trasero", 600_000)], geocode=None)
+        result = await ingest([fb("30", "Ford ecosport porton trasero", None, None,
+                                  descripcion="Portón trasero completo")], geocode=None, detail=True)
+        self.assertNotIn("price_drop", [e.kind for e in result.events])
+        row = await self.listing("30")
+        self.assertEqual((row["price"], row["price_partial"], row["price_partial_reason"]),
+                         (None, True, "precio de Facebook no interpretable: $ 600.000"))
+
     async def test_only_the_named_sources(self):
         await self.seed()
         p = await repair_facebook.repair(write=False, sources=["mercadolibre"])

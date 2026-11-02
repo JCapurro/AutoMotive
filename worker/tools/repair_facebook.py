@@ -20,8 +20,12 @@ transaction:
   flagged partial («precio de Facebook no interpretable: $ 600.000»), which
   keeps it out of matching, comparables, the preview and market stats; what
   was read is kept in attributes._currency_read; its matches are deleted
-  without notifying. The rows a previous version left without a price but
-  not partial (attributes._currency_read with "as": null) are flagged too;
+  without notifying. The same goes for the rows #73 read as pesos from such a
+  figure (ARS 100.000-999.999, attributes._currency_read with "as": "ARS"),
+  and for the ones it left without a price but not partial
+  (attributes._currency_read with "as": null). A row the crawl already
+  flagged keeps its matches until the nightly re-score: they are deleted
+  here too, in the same category;
 * a "USD" bare-"$" price of a million or more (stored before the collector
   read those as ARS) becomes ARS: the effective price is resolved again with
   the stored description facts and today's dollar, and its matches re-scored
@@ -86,6 +90,7 @@ class Plan:
     parts: list[tuple[int, str]] = field(default_factory=list)
     prices: list[tuple[dict[str, Any], dict[str, Any]]] = field(default_factory=list)  # (row, new values)
     doubtful: list[int] = field(default_factory=list)  # listings left without a price: their matches go
+    stale: list[int] = field(default_factory=list)  # already without a price, flagged, still matched
     monedas: list[tuple[int, str]] = field(default_factory=list)
     counts: Counter = field(default_factory=Counter)
     examples: dict[tuple[str, str], list[str]] = field(default_factory=lambda: defaultdict(list))
@@ -130,8 +135,18 @@ def reprice(row: dict[str, Any], fx: FxQuote | None) -> dict[str, Any] | None:
         if reason is None or (row.get("price_partial") and row.get("price_partial_reason") == reason):
             return None
         return _without_price(row, {**note, "reason": reason}, reason)
-    amount, currency, note = facebook_price(row["source"], pub, cur, make=row.get("make"), model=row.get("model"),
-                                            sign=attrs.get("_price_sign"))
+    read = attrs.get("_currency_read") or {}
+    if cur == "ARS" and read.get("as") == "ARS" and read.get("currency") == "USD" \
+            and read.get("amount") is not None and abs(float(read["amount"]) - pub) < 0.5:
+        # Read as pesos by #73 from a bare-"$" "USD" figure (ARS 600.000 for
+        # «Ford ecosport porton trasero»): what the rule says of that read now.
+        amount, currency, note = facebook_price(row["source"], pub, "USD", make=row.get("make"),
+                                                model=row.get("model"), sign=attrs.get("_price_sign"))
+        if note is None or amount is not None:
+            return None                     # still ARS (a million or more), or high-end: as stored
+    else:
+        amount, currency, note = facebook_price(row["source"], pub, cur, make=row.get("make"),
+                                                model=row.get("model"), sign=attrs.get("_price_sign"))
     if note is None:
         return None
     note = {**note, "by": "tools.repair_facebook"}
@@ -176,7 +191,13 @@ def plan(rows: list[dict[str, Any]], fx: FxQuote | None, *, examples: int = 5) -
                 after = _money(values["price"], values["currency"])
                 out.note(source, TO_ARS, f"{label} {price} -> {after} ({n} matches)", keep=examples)
             continue
-        _, cur = _published(row)
+        pub, cur = _published(row)
+        if pub is None and row.get("n_matches") and row.get("price_partial") \
+                and doubtful_price((row.get("attributes") or {}).get("_currency_read")):
+            # Flagged by the crawl, whose matches stay until the nightly re-score.
+            out.stale.append(row["id"])
+            out.note(source, DOUBTFUL_MATCHES, f"{label}: {row['n_matches']}", row["n_matches"], keep=examples)
+            continue
         moneda = (row.get("attributes") or {}).get("moneda")
         if cur and moneda and moneda != cur:
             out.monedas.append((row["id"], cur))
@@ -211,8 +232,11 @@ async def apply(p: Plan) -> tuple[list[int], int]:
                 (unpriced if v["price"] is None else repriced).append(row["id"])
         # Without a price (partial) they match no search: their matches go
         # now, as a part's do. Deleting a match notifies nobody.
-        deleted = (await cx.execute("DELETE FROM matches WHERE listing_id = ANY(%s)", (unpriced,))).rowcount \
-            if unpriced else 0
+        gone = unpriced + p.stale
+        deleted = (await cx.execute(
+            "DELETE FROM matches m USING listings l "
+            " WHERE m.listing_id = l.id AND l.id = ANY(%s) AND l.price IS NULL AND l.price_partial",
+            (gone,))).rowcount if gone else 0
         async with cx.cursor() as cur:
             await cur.executemany(
                 "UPDATE listings SET attributes = jsonb_set(attributes, '{moneda}', to_jsonb(%s::text)) "
