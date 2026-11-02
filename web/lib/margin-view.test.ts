@@ -5,9 +5,9 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { MarginEstimate } from "@/components/app/margin-estimate";
+import { MarginEstimate, MarginTeaser } from "@/components/app/margin-estimate";
 
-import { MARGIN } from "@/lib/copy";
+import { MARGIN, MARGIN_TEASER } from "@/lib/copy";
 import {
   asFewDealers,
   asMarginRef,
@@ -123,6 +123,29 @@ describe("margin card line (Juan, 02/11: short in the result cards)", () => {
   });
 });
 
+describe("the other plans' preview (Juan, 02/11: in view, unreadable in any way)", () => {
+  const html = renderToStaticMarkup(createElement(MarginTeaser));
+  const text = (markup: string) => markup.replace(/<[^>]+>/g, "");
+
+  it("has no figure to read: every digit is an X, blur or not", () => {
+    expect(html).toContain('data-testid="margin-teaser"');
+    expect(text(html)).not.toMatch(/\d/);
+    expect(Object.values(MARGIN_TEASER).join(" ")).not.toMatch(/\d/);
+  });
+
+  it("the placeholder is blurred, not selectable and hidden from screen readers, which hear why", () => {
+    const blurred = html.match(/<span aria-hidden="true" class="([^"]*)">([\s\S]*?)<\/span><\/p>/)!;
+    expect(blurred[1].split(" ")).toEqual(expect.arrayContaining(["blur-[5px]", "select-none", "pointer-events-none"]));
+    expect(text(blurred[2])).toBe(`${MARGIN_TEASER.figure}${MARGIN_TEASER.note}`);
+    expect(html).toContain(`<span class="sr-only">: ${MARGIN_TEASER.hidden}</span>`);
+  });
+
+  it("says what Pro shows and links to the plans", () => {
+    expect(html).toContain(MARGIN_TEASER.line);
+    expect(html).toMatch(new RegExp(`<a [^>]*href="/app/pro"[^>]*>${MARGIN_TEASER.cta}</a>`));
+  });
+});
+
 describe("an implausible price has no margin (asking above 3x or below 0,4x the dealers' median)", () => {
   it("the golden has the cases above, below and on the bounds", () => {
     expect(IMPLAUSIBLE.map((c) => c.name)).toEqual([
@@ -173,7 +196,12 @@ describe("an implausible price has no margin (asking above 3x or below 0,4x the 
 describe("margin copy lint over every rendered variant", () => {
   it("never promises a result", () => {
     const fold = (t: string) => t.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().replace("no con precios de venta", "");
-    const texts = [...SHOWN.map((c) => c.line!), ...SHOWN.map((c) => marginCardLine(c.margin_ref)!), ...MARGINS.flatMap((c) => marginDetail(c.margin_ref))];
+    const texts = [
+      ...SHOWN.map((c) => c.line!),
+      ...SHOWN.map((c) => marginCardLine(c.margin_ref)!),
+      ...MARGINS.flatMap((c) => marginDetail(c.margin_ref)),
+      ...Object.values(MARGIN_TEASER),
+    ];
     for (const text of texts) {
       for (const term of ["vale", "ganancia", "garantiz", "rentab", "asegur", "seguro que", "vas a ganar", "precio de venta", "precios de venta"]) {
         expect(fold(text).includes(term), `${text}: ${term}`).toBe(false);

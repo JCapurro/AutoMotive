@@ -7,7 +7,7 @@ import { ListingStatusSelect } from "@/components/app/listing-status-select";
 import { requireUser } from "@/lib/auth";
 import { webConfig } from "@/lib/config";
 import { costLinesFor } from "@/lib/cost-estimate-data";
-import { marginAccess, marginLinesFor } from "@/lib/margin-data";
+import { marginAccess, marginLinesFor, marginTeasersFor } from "@/lib/margin-data";
 import { FOLLOW_EMPTY, FOLLOW_FILTERS, FOLLOW_LABEL, type FollowFilter, type InteractionStatus, type Level } from "@/lib/copy";
 import { daysSince, dayMonth, money, pct } from "@/lib/format";
 import { strictSellerFilterOn, strictSellerUnknown } from "@/lib/seller";
@@ -130,15 +130,16 @@ export default async function SavedPage({ searchParams }: PageProps<"/app/saved"
     }
   }
   // PAR-01: the best match's search, or the account's default place for a listing without one.
-  // PRO-02: the best match's margin, only for Pro.
-  const [costLines, marginLines] = await Promise.all([
+  // PRO-02: the best match's margin, only for Pro; the other plans, where it would be (Juan, 02/11).
+  const marginCards = ids.map((id) => ({ listing_id: id, match_id: bestMatch.get(id)?.id ?? null }));
+  const [costLines, [marginLines, marginTeasers]] = await Promise.all([
     costLinesFor(
       supabase,
       user.id,
       ids.map((id) => ({ listing_id: id, search_profile_id: bestMatch.get(id)?.profileId ?? null })),
     ),
     marginAccess(supabase).then((access) =>
-      marginLinesFor(supabase, access, ids.map((id) => ({ listing_id: id, match_id: bestMatch.get(id)?.id ?? null }))),
+      Promise.all([marginLinesFor(supabase, access, marginCards), marginTeasersFor(user.id, access, marginCards)]),
     ),
   ]);
 
@@ -167,6 +168,7 @@ export default async function SavedPage({ searchParams }: PageProps<"/app/saved"
               }}
               costLine={costLines.get(l.id)}
               marginLine={marginLines.get(l.id)}
+              marginTeaser={marginTeasers.has(l.id)}
               footer={
                 <>
                   {/* Above the card's stretched link, so picking a status doesn't open the detail. */}

@@ -6,7 +6,7 @@ import type { PlanLimits } from "./pro";
 const state = vi.hoisted(() => ({ used: 50, count: 50, plan: "free" as PlanLimits["plan"] }));
 // PAR-01: the cards' total cost line has its own tests (lib/cost-estimate.test.ts).
 vi.mock("@/lib/cost-estimate-data", () => ({ costLinesFor: async () => new Map() }));
-vi.mock("@/lib/margin-data", () => ({ marginAccess: async () => null, marginLinesFor: async () => new Map() }));
+vi.mock("@/lib/margin-data", () => ({ marginAccess: async () => null, marginLinesFor: async () => new Map(), marginTeasersFor: async () => new Set() }));
 vi.mock("@/lib/auth", () => ({ requireUser: async () => ({ id: "account" }) }));
 vi.mock("@/lib/config", () => ({ webConfig: async () => ({ proOffer: {}, automaticPayments: true, commercialPilot: true }) }));
 vi.mock("@/lib/search-collection-server", () => ({ loadSearchCollection: async () => [] }));

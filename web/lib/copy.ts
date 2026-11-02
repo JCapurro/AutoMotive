@@ -468,3 +468,17 @@ export const MARGIN = {
   thresholdMin: "Desde USD {min}.",
   thresholdNoMargin: "Lo que no tiene suficientes agencias comparables para estimar el margen va al resumen diario.",
 } as const;
+
+// Juan, 02/11: the other plans see where Pro has a margin, never the margin. The
+// figure and the note are fixed placeholders (X for every digit), shown blurred:
+// nothing of the listing's margin reaches the page.
+export const MARGIN_TEASER = {
+  label: "Margen bruto estimado",
+  figure: "USD X.XXX a X.XXX",
+  note: "(contra la mediana de USD XX.XXX a la que publican las agencias este modelo, n = X; descuenta acondicionamiento y transferencia; sin impuestos)",
+  cardFigure: "USD X.XXX",
+  hidden: "disponible con Pro",
+  badge: "Pro",
+  line: "Con Pro ves el margen bruto estimado de este auto frente a lo que publican las agencias.",
+  cta: "Ver planes",
+} as const;

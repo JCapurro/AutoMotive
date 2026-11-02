@@ -1,4 +1,7 @@
-import { MARGIN } from "@/lib/copy";
+import { Lock } from "lucide-react";
+import Link from "next/link";
+
+import { MARGIN, MARGIN_TEASER } from "@/lib/copy";
 import { figureLine } from "@/lib/format";
 import { marginDetail, marginLine, marginPayload, type StoredMargin } from "@/lib/margin-view";
 import { cn } from "@/lib/utils";
@@ -44,6 +47,38 @@ export function MarginEstimate({ margin, className }: { margin: StoredMargin | n
           ))}
         </ul>
       </details>
+    </div>
+  );
+}
+
+/**
+ * Juan, 02/11: where a Pro user would see the margin, the other plans see the
+ * same block unreadable, and how to get it. It takes no data: the figure and
+ * the note are MARGIN_TEASER's fixed placeholders, blurred and hidden from
+ * screen readers, which read MARGIN_TEASER.hidden instead.
+ */
+export function MarginTeaser({ className }: { className?: string }) {
+  return (
+    <div data-testid="margin-teaser" className={cn("min-w-0 text-[13px] leading-snug", className)}>
+      <p className="break-words">
+        <span className="block text-muted-foreground">
+          {MARGIN_TEASER.label}
+          <span className="sr-only">: {MARGIN_TEASER.hidden}</span>
+        </span>
+        <span aria-hidden className="pointer-events-none block blur-[5px] select-none">
+          <span className="type-figure block text-[21px] leading-tight">{MARGIN_TEASER.figure}</span>
+          <span className="block text-[12px] text-muted-foreground">{MARGIN_TEASER.note}</span>
+        </span>
+      </p>
+      <p className="mt-2 flex items-start gap-1.5">
+        <Lock className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+        <span>
+          {MARGIN_TEASER.line}{" "}
+          <Link href="/app/pro" className="font-semibold whitespace-nowrap underline underline-offset-2">
+            {MARGIN_TEASER.cta}
+          </Link>
+        </span>
+      </p>
     </div>
   );
 }

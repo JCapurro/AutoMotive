@@ -11,7 +11,7 @@ import { requireUser } from "@/lib/auth";
 import type { ProCtaState } from "@/lib/pro";
 import { describeVehicle, filterParts } from "@/lib/search";
 import { costLinesFor } from "@/lib/cost-estimate-data";
-import { marginAccess, marginLinesFor } from "@/lib/margin-data";
+import { marginAccess, marginLinesFor, marginTeasersFor } from "@/lib/margin-data";
 import { createClient } from "@/lib/supabase/server";
 import type { Filters } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -29,12 +29,14 @@ export default async function Dashboard() {
   ]);
   // §52: "Ver planes" after real activity or a plan limit.
   const pro = (cta ?? null) as ProCtaState | null;
-  const [{ data: radii }, costLines, marginLines] = await Promise.all([
+  const [{ data: radii }, costLines, [marginLines, marginTeasers]] = await Promise.all([
     supabase.from("search_profiles").select("id, radius_km"),
     // PAR-01: the total cost line of each opportunity, with its own search's zones.
     costLinesFor(supabase, user.id, opportunities ?? []),
-    // PRO-02: the estimated dealer margin, only for Pro.
-    marginAccess(supabase).then((access) => marginLinesFor(supabase, access, opportunities ?? [])),
+    // PRO-02: the estimated dealer margin, only for Pro; the other plans, where it would be (Juan, 02/11).
+    marginAccess(supabase).then((access) =>
+      Promise.all([marginLinesFor(supabase, access, opportunities ?? []), marginTeasersFor(user.id, access, opportunities ?? [])]),
+    ),
   ]);
   const radius = new Map((radii ?? []).map((r) => [r.id, r.radius_km]));
   const hasPending = searches?.some((s) => s.enabled && s.pending) ?? false;
@@ -153,7 +155,7 @@ export default async function Dashboard() {
         {opportunities?.length ? (
           <div className={cn(LISTING_ROWS, "mt-4")}>
             {opportunities.map((card) => (
-              <ListingCard key={card.listing_id} card={card} showProfile costLine={card.listing_id != null ? costLines.get(card.listing_id) : null} marginLine={card.listing_id != null ? marginLines.get(card.listing_id) : null} />
+              <ListingCard key={card.listing_id} card={card} showProfile costLine={card.listing_id != null ? costLines.get(card.listing_id) : null} marginLine={card.listing_id != null ? marginLines.get(card.listing_id) : null} marginTeaser={card.listing_id != null && marginTeasers.has(card.listing_id)} />
             ))}
           </div>
         ) : (
