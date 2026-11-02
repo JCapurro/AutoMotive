@@ -144,6 +144,36 @@ Dos pasos, se pueden desplegar juntos o por separado:
 3. **Cambio de plan con filtro guardado.** Recomiendo **no forzar rematch**: al subir a Pro, el filtro se aplica a los avisos nuevos y el nocturno limpia los existentes; al bajar, el filtro pasa a preferencia blanda (tu decisión para Particular), el valor queda guardado con el aviso «solo Pro» y el usuario lo puede quitar en cualquier plan. Lo que el estricto excluyó antes vuelve si edita la búsqueda o si el aviso se vuelve a ver. La alternativa (marcar `rematch_requested_at` en cada cambio de plan) toca webhook de pagos, admin y vencimientos, que hoy no saben de búsquedas. *Asumido, a confirmar por Juan: implementado con la recomendación.*
 4. **«Sin dato» con el filtro estricto: ¿alcanza la penalización de siempre?** Un aviso sin tipo de vendedor pasa con 0,15 menos en el componente de match (como cualquier hard filter sin dato). Antes de desplegar te paso `seller_unknown_pct` por fuente de `/admin/sources`. Recomiendo **mantener la regla** si ninguna fuente con volumen pasa del 50 % de «sin dato»; si alguna pasa, decidir con los números (por ejemplo, no penalizar esa fuente o mostrarla aparte), sin cambiar la fórmula para nadie más. *Asumido, a confirmar por Juan: implementado con la recomendación.*
 
+## Respuestas de Juan 02/11
+
+1. **Mensaje y plantilla: todos los planes; bloque del email: solo Pro.** Queda como está. Juan lo quiere **ver**: capturas de la ficha (bloque «Mensaje listo para mandar»), de Ajustes (plantilla) y del email Pro, en escritorio y teléfono, generadas por `web/e2e/pro01-contact.spec.ts` (`pro01-ficha-mensaje-listo.png`, `pro01-ajustes-plantilla.png`) y por el snapshot `opportunity_contact_message.txt`.
+2. **Asistido: un Pro que escribe «particular» recibe el filtro estricto con la nota visible.** Queda como está.
+3. **Cambio de plan: recalcular.** Cuando cambia `plan_feature(user, 'seller_filter')`, las búsquedas de ese usuario con `filters.seller_types` quedan marcadas para rematch (`rematch_requested_at`) y el estricto se aplica o se quita enseguida. Implementado en `20261129120000_pro01_plan_change_rematch.sql` (ver «Recalcular al cambiar de plan»).
+4. **Opción C.** Con el filtro estricto («Solo particulares» / «Solo agencias»), un aviso cuyo vendedor efectivo es desconocido sigue pasando con la penalización de siempre, y la tarjeta, la ficha y el email de oportunidad Pro dicen **«vendedor sin dato»**. Solo con el estricto activo; sin él no cambia nada.
+
+### Recalcular al cambiar de plan (respuesta 3)
+
+**Qué decide el flag.** `plan_feature(u, 'seller_filter')` = admin, o `plan_limits_for(u).limits.seller_filter`. Sus únicas entradas son `profiles.role`, `profiles.plan`, `profiles.plan_expires_at` (y `now()`), y `app_config.plan_limits`. El estado de la prueba gratis no cambia los límites (salen del plan efectivo).
+
+**Quién cambia esas entradas hoy** (grep de escritores de `plan`/`plan_expires_at`/`role`): `record_commercial_payment` (pago manual, `/admin/billing`), `refund_commercial_payment` (reintegro, `/admin/billing`), `apply_mercadopago_payment` (webhook de Mercado Pago, `web/lib/mercadopago-server.ts`, incluye aprobación, reintegro y contracargo vía `refresh_paid_access`), `link_telegram` (fusión de una cuenta de Telegram: copia el plan y **mueve búsquedas** de usuario), un admin por SQL (plan o rol), `admin_update_setting` sobre `plan_limits` (`/admin/config`), y **el reloj**: `plan_expires_at` pasa sin que nadie escriba. La web y el worker no escriben el plan directamente: todo pasa por esas funciones SQL.
+
+**Mecanismo elegido: uno solo, en la base.** Un trigger por camino de código se olvida del próximo camino; un trigger sobre las entradas del flag no. Pero el reloj no escribe, así que hace falta recordar el último valor visto:
+
+- `profiles.seller_filter_access` (bool): el flag tal como se vio la última vez (backfill en la migración, solo los `true`).
+- `sync_seller_filter_access(p_user, p_everyone)`: recalcula el flag (un usuario, todos, o — sin argumentos — los que lo tienen guardado y cuyo `plan_expires_at` ya pasó), lo guarda y marca `rematch_requested_at = now()` en las búsquedas con `filters.seller_types` (array) de los usuarios cuyo flag cambió. Comparar contra el valor guardado hace que una renovación Pro→Pro, Free→Particular o un cambio de otra columna no marquen nada.
+- Trigger `profiles_sync_seller_filter` (after insert o update de `plan`, `plan_expires_at`, `role`): cubre pago manual, reintegro, webhook, fusión y SQL de admin, sin tocar esas funciones.
+- Trigger `app_config_sync_seller_filter`: `plan_limits` editado con el `seller_filter` de algún plan cambiado (incluye quitar la clave) → sincroniza a todos. Otra clave → nada.
+- Trigger `search_profiles_owner_seller_rematch` (before update de `user_id`): una búsqueda que cambia de dueño (`link_telegram`) con flag distinto queda marcada.
+- `expire_commercial_access(p_user)` llama a la sincronización primero. Sin usuario la llama el worker en cada tick (`enabled_profiles()`, justo antes de `rematch.run_pending()` en `pipeline/scheduler.py`): **el vencimiento por tiempo** se detecta y se rematchea en el mismo tick. Con usuario la llaman el reintegro y la fusión.
+
+**Semántica (la del rematch de siempre, `worker/pipeline/rematch.py`, sin cambios):** lo que deja de coincidir se borra sin aviso; lo que pasa a coincidir entra como backfill (nunca se notifica, lo haya visto antes o no); lo que sigue coincidiendo conserva su fila, `is_backfill`, `generated_at` y sus notificaciones; un crawl posterior no vuelve a avisar (dedupe `match:<listing_id>`). Mientras el rematch está pendiente la búsqueda se ve «preparando» y el job de pocos resultados la saltea, como después de una edición.
+
+**Límites conocidos.** Entre el vencimiento y el próximo tick, el matching ya lee el flag nuevo (lo pide por consulta), pero las coincidencias viejas esperan al rematch. Una búsqueda pausada por falta de acceso conserva la marca y se rematchea cuando vuelve a tener acceso.
+
+### Opción C (respuesta 4)
+
+La regla es una sola: `matches.match_reasons.seller` con `result = unknown` y `kind = hard` (el estricto corrió y no supo el vendedor). La exponen `match_cards.seller_unknown` (tarjetas: `search_results`, `recent_opportunities`), `strictSellerUnknown()` en `web/lib/seller.ts` (ficha y Guardados, sobre `match_reasons`) y `strict_seller_unknown()` en `worker/intelligence/matching.py` (email). Texto: `SELLER_UNKNOWN = "vendedor sin dato"` en `web/lib/copy.ts` y `worker/intelligence/copy.py` (pasa los lints de copy). Dónde: en la tarjeta, en la línea de km/carrocería/ubicación; en la ficha, en «Vendedor» (en lugar de «No informado», con el nombre del vendedor si lo hay; manda la mejor coincidencia); en el email de oportunidad, después del km y el precio, solo email (Telegram y el inbox no cambian). Como sale del `match_reasons`, sigue al plan: el rematch de la respuesta 3 lo pone o lo saca. Sin cambio de puntaje ni de `SCORING_VERSION`.
+
 ## Notas de implementación (31/10/2026)
 
 Ninguna pregunta bloquea: las cuatro se implementaron con su recomendación, **asumido, a confirmar por Juan**. Cambiarlas después es local: (1) el plan del bloque de Ajustes y la ficha se gatea en `app/app/settings/page.tsx` y `SellerQuestions`; (2) `draftToValues(..., sellerFilter)` en `web/lib/assisted.ts`; (3) sin código: no hay rematch por cambio de plan; (4) la regla del hard `unknown` es la de siempre (`scoring.match_component`).
@@ -160,3 +190,11 @@ Commits: `c9767c1` (puntajes fijados antes de tocar `matching.py`), `edfe796` (p
 - **Bajo resultado.** `llm_context` suma `vendedor: "solo particulares"` a la búsqueda cuando el estricto está activo, para que la explicación del LLM no lo ignore.
 - **Resumen y formulario.** La fila «Vendedor» del estricto va entre los datos principales si hay lugar (6), si no en «Ver más criterios»; con el check, la pista del campo dice «Estricto» en vez de «Preferido».
 - **Email.** El bloque va con borde a la izquierda, línea por línea escapada; snapshot nuevo `opportunity_contact_message.txt`, los 11 anteriores sin cambios.
+
+## Notas de implementación (02/11/2026, respuestas 3 y 4)
+
+- Migración `20261129120000_pro01_plan_change_rematch.sql`; pgTAP `supabase/tests/pro01_plan_change_test.sql` (rojo antes de aplicarla); `body_type_test.sql` ajusta el orden de columnas de `match_cards` (`seller_unknown` al final, como pasó con la nota de X-01).
+- Tests `-m db` por camino en `worker/tests/test_pro01_plan_change_postgres.py`: sin los triggers, 8 de 10 fallan (los 2 que pasan son los negativos: Particular y renovación Pro no marcan).
+- `my_plan_limits()` ya no llama a `expire_commercial_access` (lo cambió `20261111120000`), así que el camino «el usuario abre la web» no sincroniza; el tick del worker sí.
+- `LowResultsFlagTests` cambia: tras bajar a Particular la búsqueda espera su rematch antes de volver al job de pocos resultados.
+- Capturas para Juan (respuesta 1 y opción C) las deja el e2e en `web/test-results/` (no se commitean).
