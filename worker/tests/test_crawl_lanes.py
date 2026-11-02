@@ -309,8 +309,10 @@ class BlockedRunTargetTests(unittest.IsolatedAsyncioTestCase):
         self.addCleanup(breaker.clear)
         outcomes = []
         scraper = MagicMock(search=AsyncMock(side_effect=lambda filters: outcomes.pop(0)()))
-        target = {"id": 1, "source": "facebook", "make": "Volkswagen", "model": "Scirocco",
-                  "first_run_done": True, "crawl_interval_seconds": 3600}
+
+        def target(i):
+            return {"id": i, "source": "facebook", "make": "Volkswagen", "model": f"Modelo {i}",
+                    "first_run_done": True, "crawl_interval_seconds": 3600}
 
         def empty():
             raise FeedUnconfirmed("facebook: empty feed without a confirmed no-results message")
@@ -322,18 +324,36 @@ class BlockedRunTargetTests(unittest.IsolatedAsyncioTestCase):
                 patch.object(crawl.runs, "start_run", AsyncMock(return_value=1)), \
                 patch.object(crawl.runs, "finish_run", AsyncMock()), \
                 patch.object(crawl.targets_repo, "publication_dates", AsyncMock(return_value={})), \
-                patch.object(crawl.targets_repo, "finish_target", AsyncMock()), \
+                patch.object(crawl.targets_repo, "finish_target", AsyncMock()) as finish_target, \
                 patch.object(crawl, "ingest", AsyncMock(side_effect=Exception("stop after the search"))), \
                 patch.object(crawl.runs, "log_error", AsyncMock()), \
                 patch.object(crawl, "run_collector", on_collector):
             outcomes[:] = [empty, empty, SearchResults, empty, empty]
-            for _ in range(5):
-                self.assertIsNone(await crawl.run_target(target))
+            for i in (1, 2, 3, 4, 5):
+                self.assertIsNone(await crawl.run_target(target(i)))
             self.assertFalse(breaker.paused("facebook"))       # the good run cleared the streak
+            # Targets 4 and 5 are empty again: really empty, not counted, retried at their interval.
+            outcomes[:] = [empty, empty]
+            for i in (4, 5):
+                self.assertIsNone(await crawl.run_target(target(i)))
+            self.assertFalse(breaker.paused("facebook"))
+            self.assertEqual(finish_target.await_args.kwargs["retry_seconds"], 3600)
             outcomes[:] = [empty]
-            with self.assertRaises(crawl.SourceBlocked):
-                await crawl.run_target(target)
+            with self.assertRaises(crawl.SourceBlocked):        # a third target, new to the streak
+                await crawl.run_target(target(6))
         self.assertTrue(breaker.paused("facebook"))
+
+    def test_suspicions_expire(self):
+        from pipeline import breaker
+
+        breaker.clear()
+        self.addCleanup(breaker.clear)
+        with patch.object(breaker.time, "monotonic", return_value=0.0):
+            breaker.suspect("facebook", 1, "empty")
+            breaker.suspect("facebook", 2, "empty")
+        with patch.object(breaker.time, "monotonic", return_value=breaker.SUSPECT_WINDOW_SECONDS + 1.0):
+            self.assertFalse(breaker.suspect("facebook", 3, "empty"))
+        self.assertFalse(breaker.paused("facebook"))
 
 
 class EnrichBreakerTests(unittest.IsolatedAsyncioTestCase):

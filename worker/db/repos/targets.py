@@ -162,9 +162,11 @@ async def publication_dates(target: dict[str, Any]) -> dict[str, int]:
     return {r["external_id"]: int(r["published_at"].timestamp()) for r in rows}
 
 
-# id_floors: how many stored ads a series needs before its floor is trusted ...
-ID_FLOOR_MIN_RECENT = 20
-# ... and before a series with none since the cut counts as all older.
+# id_floors: the start of the window its stored ads must cover ...
+ID_FLOOR_EDGE_SECONDS = 12 * 3600
+# ... with this many of a series' ads before its floor is trusted ...
+ID_FLOOR_MIN_EDGE = 20
+# ... and before a series with no ad since the cut counts as all older.
 ID_FLOOR_MIN_OLD = 100
 
 
@@ -172,24 +174,38 @@ async def id_floors(source: str, since: int) -> dict[int, int | None]:
     """Per ID series (the number's billions: Mercado Libre numbers its ads in
     increasing series, MLA22… and MLA41… in 2026-11), the lowest number among
     the stored ads published since `since`; None for a series whose stored ads
-    are all older. A series with too few ads isn't there. The crawl dates no
-    card below its series' floor (mercadolibre._older_by_id); a backtest over
-    25 days skipped 83-96 % of the older ads and missed 0.1 % of the newer
-    ones (2026-11-01)."""
+    are all older. The crawl dates no card below its series' floor
+    (mercadolibre._older_by_id); a backtest over 25 days skipped 83-96 % of
+    the older ads and missed 0.1 % of the newer ones (2026-11-01).
+
+    A floor counts only with ID_FLOOR_MIN_EDGE of the series' stored ads in
+    the window's first ID_FLOOR_EDGE_SECONDS: the ads come in undated and get
+    their date later, so after a gap (the worker down, the source paused) the
+    lowest dated ad can be from its end, and its floor would skip the gap's
+    ads. A series with none since the cut is all older only when another
+    series covers that start. Without that, the series isn't there."""
     async with connection() as cx:
         rows = await (await cx.execute(
             "SELECT num / 1000000000 AS series, count(*) AS n, "
             "       count(*) FILTER (WHERE published_at >= to_timestamp(%s)) AS recent, "
+            "       count(*) FILTER (WHERE published_at >= to_timestamp(%s) "
+            "                          AND published_at < to_timestamp(%s)) AS edge, "
             "       min(num) FILTER (WHERE published_at >= to_timestamp(%s)) AS floor "
             "  FROM (SELECT substring(external_id FROM '[0-9]{7,}')::bigint AS num, published_at "
             "          FROM listings WHERE source = %s AND published_at IS NOT NULL) l "
             " WHERE num IS NOT NULL GROUP BY 1",
-            (since, since, source))).fetchall()
+            (since, since, since + ID_FLOOR_EDGE_SECONDS, since, source))).fetchall()
+    return floors_from(rows)
+
+
+def floors_from(rows: list[dict[str, Any]]) -> dict[int, int | None]:
+    """id_floors from its per-series counts."""
     floors: dict[int, int | None] = {}
+    covered = any(r["edge"] >= ID_FLOOR_MIN_EDGE for r in rows)
     for r in rows:
-        if r["recent"] >= ID_FLOOR_MIN_RECENT:
+        if r["edge"] >= ID_FLOOR_MIN_EDGE:
             floors[int(r["series"])] = int(r["floor"])
-        elif r["recent"] == 0 and r["n"] >= ID_FLOOR_MIN_OLD:
+        elif covered and r["recent"] == 0 and r["n"] >= ID_FLOOR_MIN_OLD:
             floors[int(r["series"])] = None
     return floors
 

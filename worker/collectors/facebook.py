@@ -70,8 +70,7 @@ _CARDS_JS = """els => els.map(a => {
 _CARD_SELECTOR = "a[href*='/marketplace/item/']"
 # How an empty search says so, lowercased and without accents (_plain).
 _NO_RESULTS = ("no se encontraron resultados", "no se encontraron publicaciones",
-               "no hay resultados", "no results found", "no listings found",
-               "no hay publicaciones", "no pudimos encontrar")
+               "no hay resultados", "no results found", "no listings found")
 
 
 async def _cards(page) -> list[tuple[str, str, str, str | None]]:
@@ -924,7 +923,14 @@ class FacebookMarketplaceScraper(BaseScraper):
                             if not reloaded:
                                 # Often a feed that didn't render: one more load before failing.
                                 reloaded, stalls = True, 0
-                                await page.reload(timeout=45_000, wait_until="domcontentloaded")
+                                try:
+                                    response = await page.reload(timeout=45_000, wait_until="domcontentloaded")
+                                except Exception as exc:
+                                    raise FeedUnconfirmed(f"facebook: empty feed, then the reload failed: "
+                                                          f"{type(exc).__name__}") from exc
+                                await probe.document(response)     # the first batch's feed dates
+                                if response and response.status >= 400:
+                                    raise FeedUnconfirmed(f"facebook: empty feed, then reload HTTP {response.status}")
                                 await page.wait_for_timeout(3_500)
                                 continue
                             raise FeedUnconfirmed("facebook: empty feed without a confirmed no-results message")
