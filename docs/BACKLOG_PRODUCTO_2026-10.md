@@ -126,7 +126,7 @@ Criterios de aceptación:
 
 ### PAR-02 · Señales de riesgo y checklist antes de señar
 
-**Estado al 30/10:** tramo 1 (checklist «Antes de señar» y copy de `much_cheaper`) en PR #56, con textos aprobados por Juan. Migraciones aplicadas en producción y links oficiales cargados en `risk.links` el 30/10; falta mergear #56. El resto (pHash, duplicados, `private_many_listings`) va en la Fase 3.
+**Estado al 02/11:** tramo 1 (checklist «Antes de señar» y copy de `much_cheaper`) en producción. Resto (pHash, `duplicate_photos`, `cross_source_duplicate`, `private_many_listings`, orden de red flags en `app_config.red_flags.order`, `duplicate_link_clicked`): diseño en [2026-11-02-par02-resto-design.md](superpowers/specs/2026-11-02-par02-resto-design.md), esperando respuestas de Juan; nada implementado. Propuesto: pHash solo con Pillow y apagado (`risk.photo_hash.enabled = false`), Facebook e Instagram sin descarga, duplicado sin fotos en sombra.
 
 Dolor: seña por transferencia, fotos robadas, «particular» que es revendedor, vendedor que no es el titular.
 
