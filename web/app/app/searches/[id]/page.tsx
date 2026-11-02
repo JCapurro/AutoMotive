@@ -20,7 +20,7 @@ import { costLinesFor } from "@/lib/cost-estimate-data";
 import { FOLLOW_EMPTY, FOLLOW_LABEL } from "@/lib/copy";
 import { marginAccess, marginLinesFor, marginTeasersFor } from "@/lib/margin-data";
 import { fetchPriceTracks } from "@/lib/price-track";
-import { accessDate, freeResultQuota, includesImmediateAlerts, type PlanLimits, visibleResults } from "@/lib/pro";
+import { accessDate, freeResultQuota, includesImmediateAlerts, type PlanLimits, visibleResults, withoutPro } from "@/lib/pro";
 import { describeVehicle } from "@/lib/search";
 import { collectionPending } from "@/lib/search-collection";
 import { loadSearchCollection } from "@/lib/search-collection-server";
@@ -114,6 +114,8 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
   const retryCollection = profile.enabled && collectionSources?.some((source) => source.collectionState === "failed" || source.collectionState === "unknown");
   const count = { ...(counts?.[0] ?? {}), ...followCounts(follow?.data) } as Record<string, number>;
   const access = (planLimits ?? null) as PlanLimits | null;
+  // Juan, 02/11: without Pro, «Mayor margen estimado» in view and disabled, when Pro has it.
+  const lockedSorts: Sort[] = margin == null && withoutPro(access) && (await webConfig()).planLimits.pro.dealerMargin ? ["margin"] : [];
   // The diagnosis still applies: not hidden, the search still short of results
   // and not prepared again (edited filters) since it was written.
   const showDiagnosis =
@@ -218,7 +220,7 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
               </Link>
             ))}
           </nav>
-          <SortSelect value={sort} options={sortsFor(margin != null)} profileId={profileId} />
+          <SortSelect value={sort} options={sortsFor(margin != null)} locked={lockedSorts} profileId={profileId} />
         </div>
       ) : null}
 

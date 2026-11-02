@@ -24,20 +24,22 @@ export const PLAN_COPY: Record<WaitlistPlan, { name: string; period: string; pit
  * maxVisibleResults null = all of them; immediateAlertsPerDay 0 = digest only.
  * thresholdAlerts: the per-search opportunity threshold (3.2), Pro's.
  * modelLessSearch: searching by body type without a model (docs/CARROCERIA.md).
+ * sellerFilter: the strict seller filter (PRO-01); dealerMargin: the estimated
+ * dealer margin, its threshold and its order (PRO-02). Both Pro's.
  */
 export type PlanCaps = {
   maxProfiles: number; maxVisibleResults: number | null; immediateAlertsPerDay: number;
   /** Distinct publications across the whole free trial, including recreated searches. */
   maxTotalResults?: number;
-  thresholdAlerts: boolean; modelLessSearch: boolean;
+  thresholdAlerts: boolean; modelLessSearch: boolean; sellerFilter: boolean; dealerMargin: boolean;
   /** Places one search may look in (its own and the ones it adds); null = no cap. */
   maxLocations: number | null;
 };
 export type PlanLimitsConfig = Record<PlanTier, PlanCaps>;
 export const DEFAULT_PLAN_LIMITS: PlanLimitsConfig = {
-  free: { maxProfiles: 1, maxVisibleResults: 50, maxTotalResults: 50, immediateAlertsPerDay: 3, thresholdAlerts: false, modelLessSearch: false, maxLocations: 3 },
-  pass: { maxProfiles: 3, maxVisibleResults: null, immediateAlertsPerDay: 10, thresholdAlerts: false, modelLessSearch: true, maxLocations: null },
-  pro: { maxProfiles: 20, maxVisibleResults: null, immediateAlertsPerDay: 50, thresholdAlerts: true, modelLessSearch: true, maxLocations: null },
+  free: { maxProfiles: 1, maxVisibleResults: 50, maxTotalResults: 50, immediateAlertsPerDay: 3, thresholdAlerts: false, modelLessSearch: false, sellerFilter: false, dealerMargin: false, maxLocations: 3 },
+  pass: { maxProfiles: 3, maxVisibleResults: null, immediateAlertsPerDay: 10, thresholdAlerts: false, modelLessSearch: true, sellerFilter: false, dealerMargin: false, maxLocations: null },
+  pro: { maxProfiles: 20, maxVisibleResults: null, immediateAlertsPerDay: 50, thresholdAlerts: true, modelLessSearch: true, sellerFilter: true, dealerMargin: true, maxLocations: null },
 };
 function whole(value: unknown, min: number): number | null {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= min ? value : null;
@@ -62,6 +64,8 @@ export function planLimits(value: unknown, globalCap = 10): PlanLimitsConfig {
       immediateAlertsPerDay: alertCap(limits, globalCap),
       thresholdAlerts: limits.threshold_alerts === true,
       modelLessSearch: limits.model_less_search === true,
+      sellerFilter: limits.seller_filter === true,
+      dealerMargin: limits.dealer_margin === true,
       // Absent keeps the plan's default (the free plan's 3); present and not a count = no cap.
       maxLocations: "max_locations" in limits ? whole(limits.max_locations, 1) : DEFAULT_PLAN_LIMITS[tier].maxLocations,
     };
@@ -168,6 +172,29 @@ export const CUSTOM_PLAN = {
   href: `https://wa.me/${CUSTOM_WHATSAPP}?text=${encodeURIComponent("Hola, me interesa un plan Custom de Ese Auto.\n\nNecesito buscar:\nCantidad de búsquedas:\nModelos y zonas:\nDuración estimada:\n")}`,
 };
 export type PlanChoice = WaitlistPlan | typeof CUSTOM_PLAN.id;
+/** No running Pro: the account sees Pro's settings locked (Juan, 02/11). False without the snapshot. */
+export function withoutPro(access: PlanLimits | null): boolean {
+  return access != null && !(access.plan === "pro" && access.active !== false);
+}
+/** The search form's Pro settings an account sees locked, with the plans next to them. */
+export type ProLocked = { opportunity: boolean; margin: boolean; seller: boolean };
+/**
+ * Juan, 02/11: Pro's settings in view on the other plans — the ones Pro
+ * includes (plan_limits.pro) and the account doesn't have. None with a
+ * running Pro: a flag that failed to load hides its control, as before.
+ */
+export function proLocked(
+  access: PlanLimits | null,
+  pro: PlanCaps,
+  has: { thresholdAlerts: boolean; margin: boolean; sellerFilter: boolean },
+): ProLocked {
+  const locked = withoutPro(access);
+  return {
+    opportunity: locked && pro.thresholdAlerts && !has.thresholdAlerts,
+    margin: locked && pro.dealerMargin && !has.margin,
+    seller: locked && pro.sellerFilter && !has.sellerFilter,
+  };
+}
 /** The snapshot resolves expiry; a stored plan name alone doesn't prove paid access. */
 export function canAcquirePlan(access: PlanLimits | null): boolean {
   if (!access) return false;

@@ -5,8 +5,9 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 import { type SaveOrigin, saveSearch } from "@/app/app/searches/actions";
-import { OpportunityThreshold } from "@/components/app/opportunity-threshold";
+import { OPPORTUNITY_TITLE, OpportunityThreshold } from "@/components/app/opportunity-threshold";
 import { OpportunityThresholdUsd } from "@/components/app/opportunity-threshold-usd";
+import { ProBadge, ProLockedSwitch, ProPlansLink } from "@/components/app/pro-locked";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,7 +24,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import type { Catalog } from "@/lib/catalog";
-import { BODY_TYPE, BODY_TYPE_CODES, type BodyType, FREQUENCY, FUEL, MIN_LEVEL_OPTIONS, SELLER, SELLER_FORM_HINT, SELLER_STRICT, TRANSMISSION, isBodyType } from "@/lib/copy";
+import { BODY_TYPE, BODY_TYPE_CODES, type BodyType, FREQUENCY, FUEL, MARGIN, MIN_LEVEL_OPTIONS, PRO_LOCKED, SELLER, SELLER_FORM_HINT, SELLER_STRICT, TRANSMISSION, isBodyType } from "@/lib/copy";
 import { number } from "@/lib/format";
 import { PROVINCES, citiesInProvince, cityById, cityByLocation } from "@/lib/argentina-locations";
 import {
@@ -36,7 +37,7 @@ import {
   modelBodyTypes,
   selectedTrims,
 } from "@/lib/search-form";
-import { locationCapText } from "@/lib/pro";
+import { type ProLocked, locationCapText } from "@/lib/pro";
 import { cn } from "@/lib/utils";
 import { analyticsEvent } from "@/lib/google-analytics";
 import { detectDeviceLocation, type DetectedLocation } from "@/lib/search-location";
@@ -256,6 +257,7 @@ export function SearchForm({
   modelLessSearch = false,
   maxLocations = null,
   sellerFilter = false,
+  lockedPro = {},
 }: {
   catalog: Catalog;
   sources: Source[];
@@ -279,6 +281,8 @@ export function SearchForm({
   maxLocations?: number | null;
   /** The plan has the strict seller filter (Pro, PRO-01). */
   sellerFilter?: boolean;
+  /** Juan, 02/11: Pro's settings the plan doesn't include, shown locked with the plans (lib/pro.ts proLocked). */
+  lockedPro?: Partial<ProLocked>;
 }) {
   const fid = (key: string) => (idPrefix ? `${idPrefix}-${key}` : key);
   const isNew = profileId == null && !initial.location;
@@ -746,6 +750,20 @@ export function SearchForm({
               {sellerFilter && d.seller_strict ? (
                 <p className="text-[13px] text-muted-foreground" data-testid="seller-strict-hint">{SELLER_STRICT.hint}</p>
               ) : null}
+              {/* Juan, 02/11: where Pro gets the check, the other plans see it locked (a stored one keeps its own note below). */}
+              {!sellerFilter && lockedPro.seller && d.seller_type && !d.seller_strict ? (
+                <div className="space-y-1" data-testid="seller-strict-locked">
+                  <label className="flex items-start gap-2 text-sm text-muted-foreground">
+                    <Checkbox className="mt-0.5" checked={false} disabled />
+                    <span className="flex flex-wrap items-center gap-2">
+                      {SELLER_STRICT.check} <ProBadge />
+                    </span>
+                  </label>
+                  <p className="text-[13px] text-muted-foreground">
+                    {PRO_LOCKED.seller} <ProPlansLink />
+                  </p>
+                </div>
+              ) : null}
               {!sellerFilter && d.seller_strict ? (
                 <div className="space-y-1.5" data-testid="seller-strict-pro-only">
                   <p className="text-[13px] text-muted-foreground">{SELLER_STRICT.proOnly}</p>
@@ -977,6 +995,8 @@ export function SearchForm({
                 onChange={(v) => set("opportunity_threshold_pct", v)}
                 error={fieldError("opportunity_threshold_pct")}
               />
+            ) : lockedPro.opportunity ? (
+              <ProLockedSwitch id={fid("opportunity_threshold_pct")} title={OPPORTUNITY_TITLE} text={PRO_LOCKED.opportunity} testId="opportunity-threshold-locked" />
             ) : null}
             {marginThreshold ? (
               <OpportunityThresholdUsd
@@ -986,6 +1006,8 @@ export function SearchForm({
                 onChange={(v) => set("opportunity_threshold_usd", v)}
                 error={fieldError("opportunity_threshold_usd")}
               />
+            ) : lockedPro.margin ? (
+              <ProLockedSwitch id={fid("opportunity_threshold_usd")} title={MARGIN.thresholdTitle} text={PRO_LOCKED.margin} testId="margin-threshold-locked" />
             ) : null}
             <Field id={fid("name")} label="Nombre de la búsqueda" className="sm:col-span-2">
               <Input

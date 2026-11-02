@@ -6,6 +6,7 @@ export const THRESHOLD_MIN = 5;
 export const THRESHOLD_MAX = 45;
 export const THRESHOLD_STEP = 5;
 export const THRESHOLD_DEFAULT = "10";
+export const OPPORTUNITY_TITLE = "Avisos al instante por oportunidad";
 const TICKS = [5, 15, 25, 35, 45];
 
 /**
@@ -34,7 +35,7 @@ export function OpportunityThreshold({
     <fieldset className="space-y-3 rounded-lg border p-4 sm:col-span-2">
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-1">
-          <legend className="float-left w-full text-sm font-medium">Avisos al instante por oportunidad</legend>
+          <legend className="float-left w-full text-sm font-medium">{OPPORTUNITY_TITLE}</legend>
           <p id={`${id}-hint`} className="clear-both text-xs text-muted-foreground">
             {on
               ? `Te avisamos al instante cuando un auto está ${shown} % o más por debajo del precio de mercado. El resto va al resumen diario.`
@@ -45,7 +46,7 @@ export function OpportunityThreshold({
           type="button"
           role="switch"
           aria-checked={on}
-          aria-label="Avisos al instante por oportunidad"
+          aria-label={OPPORTUNITY_TITLE}
           aria-describedby={`${id}-hint`}
           onClick={() => onChange(on ? "" : THRESHOLD_DEFAULT)}
           className={cn(

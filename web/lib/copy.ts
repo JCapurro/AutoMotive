@@ -478,7 +478,17 @@ export const MARGIN_TEASER = {
   note: "(contra la mediana de USD XX.XXX a la que publican las agencias este modelo, n = X; descuenta acondicionamiento y transferencia; sin impuestos)",
   cardFigure: "USD X.XXX",
   hidden: "disponible con Pro",
-  badge: "Pro",
   line: "Con Pro ves el margen bruto estimado de este auto frente a lo que publican las agencias.",
   cta: "Ver planes",
+} as const;
+
+// Juan, 02/11: Pro's settings in view on the other plans, locked (lib/pro.ts
+// proLocked): the tag, what each one does and the way to the plans.
+export const PRO_LOCKED = {
+  badge: "Pro",
+  cta: "Ver planes",
+  opportunity: "Con Pro te avisamos al instante cuando un auto está por debajo del precio de mercado en el porcentaje que elijas.",
+  margin: "Con Pro te avisamos al instante cuando el margen bruto estimado contra la mediana de agencias llega al monto que elijas.",
+  seller: "Con Pro descartamos los otros tipos de vendedor.",
+  sort: "{sort} (Pro)",
 } as const;

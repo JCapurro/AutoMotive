@@ -8,6 +8,7 @@ import type { MatchCard } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 import { LevelBadge, StatusBadge } from "./badges";
+import { ProBadge } from "./pro-locked";
 
 /** The ruled list the rows below sit in: one column, two from `lg`. */
 export const LISTING_ROWS = "grid grid-cols-1 border-t-2 border-foreground lg:grid-cols-2 lg:gap-x-10";
@@ -122,7 +123,7 @@ export function ListingCard({
           {/* One piece, so a narrow card wraps it whole instead of leaving the badge alone. */}
           <span aria-hidden className="inline-flex items-center gap-1.5">
             <span className="blur-[4px] select-none">{MARGIN_TEASER.cardFigure}</span>
-            <span className="rounded bg-foreground px-1.5 py-px text-[11px] leading-4 font-semibold text-background">{MARGIN_TEASER.badge}</span>
+            <ProBadge />
           </span>
         </p>
       ) : null}
