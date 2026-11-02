@@ -94,7 +94,7 @@ async def mark_seen(alert_id: int, items: Iterable[dict], *, backfill: bool = Fa
 
 
 _EVALUATED = ("score", "level", "score_breakdown", "match_reasons", "price_ref", "red_flags",
-              "seller_questions", "scoring_version")
+              "seller_questions", "scoring_version", "margin_ref")
 
 
 async def upsert_scored(cx: AsyncConnection, profile_id: int,
@@ -106,9 +106,10 @@ async def upsert_scored(cx: AsyncConnection, profile_id: int,
         return {}
     inserted: dict[int, int] = {}
     for listing_id, row in rows:
-        # seller_questions is optional (rows built before F4 stored it).
+        # seller_questions and margin_ref (PRO-02) are optional.
         values = [Jsonb(row[c]) if c in ("score_breakdown", "match_reasons", "red_flags")
-                  or (c == "price_ref" and row[c] is not None) else row.get(c) for c in _EVALUATED]
+                  or (c in ("price_ref", "margin_ref") and row.get(c) is not None) else row.get(c)
+                  for c in _EVALUATED]
         rec = await (await cx.execute(
             "INSERT INTO matches (search_profile_id, listing_id, is_backfill, "
             f"                     {', '.join(_EVALUATED)}) "
@@ -133,11 +134,24 @@ async def delete_matches(cx: AsyncConnection, profile_id: int, listing_ids: list
     return cur.rowcount
 
 
-async def rescore_queue(*, days: int, scoring_version: str,
+# PRO-02: a match that should have a margin and has none (stored before
+# margin_ref existed; SCORING_VERSION was not bumped). Re-scoring it either
+# fills margin_ref or writes a price_ref with dealer_n < min_n, so it leaves
+# this condition: the fill converges and re-scoring sends no alert.
+WITHOUT_MARGIN = ("(m.margin_ref IS NULL AND l.price_usd > 0 "
+                  " AND m.price_ref->>'dealer_median' IS NOT NULL "
+                  " AND (m.price_ref->>'dealer_n')::int >= %(min_n)s)")
+
+
+async def rescore_queue(*, days: int, scoring_version: str, min_n: int | None = None,
                         outdated_only: bool = False) -> list[dict[str, Any]]:
     """(match_id, search_profile_id, listing_id) to re-score (sección 6.1): the
-    matches of active listings seen in the last `days` (the median moves), and
-    every match scored by another scoring_version."""
+    matches of active listings seen in the last `days` (the median moves),
+    every match scored by another scoring_version, and (PRO-02) those with
+    enough dealer comparables and no margin_ref yet (WITHOUT_MARGIN)."""
+    if min_n is None:
+        from intelligence.config import DEFAULT_COMPARABLES
+        min_n = int(DEFAULT_COMPARABLES["min_n"])
     recent = "" if outdated_only else (
         " OR l.last_seen_at >= now() - make_interval(days => %(days)s)")
     async with connection() as cx:
@@ -146,9 +160,9 @@ async def rescore_queue(*, days: int, scoring_version: str,
             "  JOIN listings l ON l.id = m.listing_id "
             "  JOIN search_profiles sp ON sp.id = m.search_profile_id "
             " WHERE l.status = 'active' AND public.search_access_active(sp.id) "
-            f"  AND (m.scoring_version <> %(version)s{recent}) "
+            f"  AND (m.scoring_version <> %(version)s OR {WITHOUT_MARGIN}{recent}) "
             " ORDER BY m.search_profile_id, m.listing_id",
-            {"days": days, "version": scoring_version})).fetchall()
+            {"days": days, "version": scoring_version, "min_n": min_n})).fetchall()
 
 
 async def matches_of_profile(profile_id: int) -> list[dict[str, Any]]:

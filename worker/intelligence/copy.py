@@ -202,3 +202,29 @@ TOTAL_COST = {
     "email_no_fx": "{line}.",
     "names": {"arancel": "arancel", "sellos": "sellos", "formularios": "formularios", "patente": "patente"},
 }
+
+# ---------------------------------------------------------------------------
+# PRO-02: the estimated gross margin against the dealers' median
+# (intelligence/margin.py returns numbers and codes; these are the words). The
+# same text as web/lib/copy.ts MARGIN. An estimate to orient a dealer, never a
+# promise: the copy lint (tests/test_intelligence_copy.py) forbids the words
+# of a guaranteed result in this block.
+# {usd} is MARGIN["single"] or MARGIN["range"]; {costs} one of the costs_*.
+# ---------------------------------------------------------------------------
+
+MARGIN = {
+    "line": ("Margen bruto estimado: {usd} (contra la mediana de {median} a la que publican las agencias "
+             "este modelo, n = {n}; {costs}; sin impuestos)"),
+    "single": "USD {v}",
+    "range": "USD {lo} a {hi}",
+    "costs_both": "descuenta acondicionamiento del {pct} % y transferencia",
+    "costs_no_transfer": "descuenta acondicionamiento del {pct} %; no descuenta la transferencia porque {why}",
+    "costs_no_reconditioning": "descuenta transferencia; no descuenta acondicionamiento porque faltan sus parámetros",
+    "costs_none": ("sin descontar costos: faltan los parámetros de acondicionamiento y "
+                   "no descuenta la transferencia porque {why}"),
+    "why": {"no_zone": "tu búsqueda no tiene localidad", "no_fx": "falta el dólar del día",
+            "params": "faltan parámetros cargados", "base": "faltan parámetros cargados",
+            "no_price": "no pudimos leer la moneda del precio", "disabled": "no está activada"},
+    "email": "{line}. Parámetros al {date}.",
+    "email_no_date": "{line}.",
+}

@@ -27,6 +27,9 @@ class Evaluation:
     price_ref: PriceRef | None
     red_flags: list[RedFlag]
     questions: str
+    # PRO-02: matches.margin_ref (intelligence/margin.py), filled by
+    # pipeline/scoring.Scorer, which has the config and the search's zones.
+    margin_ref: dict[str, Any] | None = None
 
     @property
     def level(self) -> str:
@@ -43,6 +46,7 @@ class Evaluation:
             "red_flags": [f.to_json() for f in self.red_flags],
             "seller_questions": self.questions,
             "scoring_version": SCORING_VERSION,
+            "margin_ref": self.margin_ref,
         }
 
 
