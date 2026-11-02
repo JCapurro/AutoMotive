@@ -145,8 +145,10 @@ def _parse_price_sign(txt: str) -> tuple[float | None, str | None, str | None]:
     else:
         # FB Argentina commonly renders USD listings as "$ 11,900" and ARS
         # vehicle listings as "$ 11,900,000". Treat plain "$" in millions as ARS.
-        # Between FACEBOOK_USD_CEILING and a million it is ARS too ("$ 350.000"
-        # a part), which needs the make: normalization.listing.facebook_price.
+        # Between FACEBOOK_USD_CEILING and a million it is no credible price in
+        # either currency ("$ 350.000" a part, a down payment): the listing is
+        # left without a price and flagged partial, which needs the make
+        # (high-end cars keep their dollars): normalization.listing.facebook_price.
         moneda = plain_dollar_currency(amount)
     if moneda == "USD" and amount < MIN_USD_VEHICLE_PRICE:
         return None, None, None

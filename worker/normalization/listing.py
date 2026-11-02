@@ -17,7 +17,7 @@ from normalization import transmission as tx
 from normalization.description_facts import DescriptionFacts, parse as parse_facts, resolve_price
 from normalization.fx import FxQuote
 from normalization.geo import is_not_a_place, normalize_location_query
-from normalization.money import MIN_ARS_VEHICLE_PRICE, facebook_currency
+from normalization.money import doubtful_reason, facebook_currency
 from normalization.normalize import normalize_text
 from normalization.price_check import keyword_partial
 from normalization.vehicle import CatalogModel, resolve_trim, resolve_vehicle
@@ -90,19 +90,30 @@ def facebook_price(source: str | None, amount: float | None, currency: str | Non
                    make: str | None = None, model: str | None = None, sign: str | None = None
                    ) -> tuple[float | None, str | None, dict[str, Any] | None]:
     """A Facebook price with money.facebook_currency applied: (amount,
-    currency, what was read when it changed). An amount that becomes ARS below
-    MIN_ARS_VEHICLE_PRICE is no car's price, as the collector would have
-    dropped it: (None, None, note). `sign`: the symbol the price was written
-    with (attributes._price_sign), None when unknown."""
+    currency, what was read when it changed). A bare "$" amount that is no
+    credible price of a car in either currency (FB_USD_CEILING <= amount < a
+    million, not high-end) is no price: (None, None, note with "as": None and
+    the price_partial_reason, doubtful_price). `sign`: the symbol the price
+    was written with (attributes._price_sign), None when unknown."""
     if source != "facebook" or not amount or not currency:
         return amount, currency, None
     fixed = facebook_currency(amount, currency, make=make, model=model, sign=sign)
     if fixed == currency:
         return amount, currency, None
     note = {"amount": amount, "currency": currency, "as": fixed}
-    if fixed == "ARS" and amount < MIN_ARS_VEHICLE_PRICE:
-        return None, None, {**note, "as": None}
+    if fixed is None:
+        return None, None, {**note, "reason": doubtful_reason(amount)}
     return amount, fixed, note
+
+
+def doubtful_price(note: dict[str, Any] | None) -> str | None:
+    """The price_partial_reason of a Facebook price facebook_price could not
+    read (attributes._currency_read with "as": None), else None. Notes stored
+    before the reason was (the peso amounts too small for a car) are the same
+    case."""
+    if not note or note.get("as") is not None or not note.get("amount"):
+        return None
+    return note.get("reason") or doubtful_reason(float(note["amount"]))
 
 
 def catalog_entry(catalog: list[CatalogModel], make: str | None,
@@ -200,8 +211,10 @@ def normalize_listing(item: Listing, *, catalog: list[CatalogModel], target: Tar
     elif currency_note:
         attributes.pop("moneda", None)
     # Why the title or the page's structure (Autocosmos' "Anticipo" block)
-    # already say the published number isn't the total.
-    partial_reason = (item.price_partial_reason or "parcial") if item.price_partial         else keyword_partial(item.titulo)
+    # already say the published number isn't the total. A Facebook price that
+    # can't be read leaves no price, flagged partial: no match, no comparable.
+    partial_reason = doubtful_price(currency_note) or (
+        (item.price_partial_reason or "parcial") if item.price_partial else keyword_partial(item.titulo))
     usd_rate = fx.rate if fx and fx.rate > 0 else None
     price = resolve_price(published, currency, partial_reason=partial_reason, facts=facts,
                           usd_rate=usd_rate)
