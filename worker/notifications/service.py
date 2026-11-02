@@ -19,7 +19,7 @@ import db
 from db.repos import fx as fx_repo
 from db.repos import listings as listings_repo
 from db.repos import notifications as repo
-from intelligence import cost_estimator
+from intelligence import cost_estimator, margin
 from intelligence.config import DEFAULT_COMPARABLES
 from intelligence.seller_questions import question_texts
 from notifications import dispatch
@@ -171,6 +171,14 @@ def total_cost_payload(listing: Mapping[str, Any], audience: Mapping[str, Any], 
     return cost_estimator.email_payload(est) if est else None
 
 
+def margin_payload(margin_ref: Mapping[str, Any] | None, audience: Mapping[str, Any]) -> dict[str, Any] | None:
+    """PRO-02: what an alert keeps of matches.margin_ref (margin.email_payload,
+    rounded and frozen), only when the plan has dealer_margin."""
+    if not audience.get("dealer_margin") or not isinstance(margin_ref, Mapping):
+        return None
+    return margin.email_payload(margin_ref)
+
+
 async def _min_n() -> int:
     cfg = await db.get_config("comparables", {}) or {}
     return int(cfg.get("min_n", DEFAULT_COMPARABLES["min_n"]))
@@ -194,7 +202,8 @@ class Notifier:
                         frequency=row.get("frequency") or "immediate",
                         min_level=row.get("min_level") or "good",
                         profile_id=row.get("profile_id"),
-                        threshold_pct=row.get("threshold_pct"))
+                        threshold_pct=row.get("threshold_pct"),
+                        threshold_usd=row.get("threshold_usd"))
 
     async def on_matches(self, candidates: list[MatchCandidate], rows: Mapping[int, Mapping[str, Any]], *,
                          now: datetime | None = None) -> list[int]:
@@ -231,12 +240,15 @@ class Notifier:
             track = price_track_payload(tracks.get(c.listing_id)) if _with_track(c, listing) else None
             cost = (total_cost_payload(listing, a, cost_cfg, fx_latest, now or datetime.now(timezone.utc))
                     if cost_cfg and _opportunity(c) and a.get("total_cost") else None)
+            # PRO-02: the margin line (and the USD threshold) only with the plan's flag.
+            dealer = margin_payload(ev.get("margin_ref"), a)
             events.append(Event(
                 MATCH, c.listing_id, self._audience(a), level=ev["level"], score=ev["score"],
                 match_id=c.match_id, repost=c.repost, saved=bool(state.get("saved")),
                 status=state.get("status"),
                 payload=payload(listing, ev, min_n=min_n, profile_name=a["profile_name"],
-                                questions=questions or None, price_track=track, total_cost=cost)))
+                                questions=questions or None, price_track=track, total_cost=cost,
+                                margin=dealer)))
         return await self._commit(events, now=now)
 
     async def on_listing_events(self, listing_events: Iterable[Any], *, now: datetime | None = None,
@@ -275,7 +287,8 @@ class Notifier:
                     match_id=a.get("match_id"), saved=bool(a.get("saved")), status=a.get("status"),
                     snapshot_id=e.snapshot_id, drop_pct=e.drop_pct,
                     payload=payload(listing, a, min_n=min_n, profile_name=a.get("profile_name"),
-                                    price_drop=drop)))
+                                    price_drop=drop,
+                                    margin=margin_payload(a.get("margin_ref"), a) if e.kind == PRICE_DROP else None)))
         return await self._commit(events, now=now)
 
     async def _commit(self, events: list[Event], *, now: datetime | None = None) -> list[int]:

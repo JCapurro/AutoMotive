@@ -28,6 +28,7 @@ from typing import Any, Mapping
 
 from intelligence import copy
 from intelligence import cost_estimator
+from intelligence import margin
 from notifications.channels.base import Notification
 from notifications.email_html import render as render_email_html
 from notifications.links import Links
@@ -148,6 +149,21 @@ def total_cost_line(cost: Mapping[str, Any] | None) -> str | None:
     return copy.TOTAL_COST["email"].format(line=line, date=cost_estimator.day_month(as_of))
 
 
+def margin_line(m: Mapping[str, Any] | None) -> str | None:
+    """PRO-02: "Margen bruto estimado: USD 1.210 a 1.230 (contra la mediana …;
+    sin impuestos). Parámetros al 30/10." from payload["margin"]
+    (margin.email_payload: rounded, frozen when the row was created). None
+    without it: an old payload, or a plan without dealer_margin."""
+    if not m or any(not isinstance(m.get(k), int) or isinstance(m.get(k), bool)
+                    for k in ("usd_min", "usd_max", "dealer_median", "dealer_n")):
+        return None
+    line = margin.headline(m)
+    as_of = m.get("as_of")
+    if not isinstance(as_of, str):
+        return copy.MARGIN["email_no_date"].format(line=line)
+    return copy.MARGIN["email"].format(line=line, date=cost_estimator.day_month(as_of))
+
+
 def km(listing: Mapping[str, Any]) -> str | None:
     value = listing.get("mileage_km")
     return None if value is None else f"{copy.number(value)} km"
@@ -265,6 +281,8 @@ def content(n: Notification, links: Links, now: datetime, *, owner: str | None =
                 c.lines.insert(0, REPOST)
             if match.get("level"):
                 c.notes.insert(0, f"{copy.LEVEL_LABEL[match['level']]} · {match.get('score')}/100")
+        if dealer := margin_line(p.get("margin")):
+            c.lines.append(dealer)
         c.questions = list(p.get("questions") or [])
     elif n.kind == "price_drop":
         drop = p.get("price_drop") or {}
@@ -272,6 +290,8 @@ def content(n: Notification, links: Links, now: datetime, *, owner: str | None =
         c.price, c.previous_price = after, before
         c.lines += [f"Antes: {before}", f"Ahora: {after}", f"-{pct(drop.get('drop_pct') or 0)}%"]
         c.subject += f" (-{pct(drop.get('drop_pct') or 0)}%)"
+        if dealer := margin_line(p.get("margin")):
+            c.lines.append(dealer)
         if match.get("score") is not None:
             c.notes.insert(0, f"Opportunity Score {match['score']}/100")
     elif n.kind == "listing_gone":

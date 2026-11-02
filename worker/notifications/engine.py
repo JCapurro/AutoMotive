@@ -26,6 +26,11 @@ Rules:
     (payload.threshold_pct); whatever doesn't reach it, or has no
     comparables, goes to the digest. Reaching it alerts even below
     notify_min_level. A saved listing's price_drop stays always immediate.
+  * threshold by margin (PRO-02, Pro): the same rule with
+    opportunity_threshold_usd against the estimated margin's low end
+    (payload.margin.usd_min); with both thresholds set, reaching either one
+    is enough (payload.threshold_usd and/or threshold_pct). Without a margin
+    (not enough dealer comparables) it is not reached.
   * dedupe_key: match:<listing_id> for new_match and opportunity (a listing is
     announced once, whatever its level), price_drop:<listing_id>:<snapshot_id>,
     listing_gone:<listing_id>. The table enforces it per (user, channel).
@@ -57,6 +62,7 @@ class Audience:
     min_level: str = "good"                   # search_profiles.notify_min_level
     profile_id: int | None = None
     threshold_pct: int | None = None          # search_profiles.opportunity_threshold_pct, if the plan has it
+    threshold_usd: int | None = None          # PRO-02: opportunity_threshold_usd, if the plan has dealer_margin
 
 
 @dataclass(frozen=True)
@@ -118,9 +124,26 @@ def below_comparables(event: Event) -> float | None:
     return float(diff) if isinstance(diff, (int, float)) and not isinstance(diff, bool) else None
 
 
+def margin_low(event: Event) -> float | None:
+    """PRO-02: the estimated margin's low end in USD (payload.margin.usd_min), or None."""
+    low = (event.payload.get("margin") or {}).get("usd_min")
+    return float(low) if isinstance(low, (int, float)) and not isinstance(low, bool) else None
+
+
+def _has_threshold(a: Audience) -> bool:
+    return a.threshold_pct is not None or a.threshold_usd is not None
+
+
+def _reached(event: Event) -> tuple[bool, bool]:
+    """Whether the event reaches the search's threshold in %, and in USD."""
+    a = event.audience
+    diff, low = below_comparables(event), margin_low(event)
+    return (a.threshold_pct is not None and diff is not None and diff >= a.threshold_pct,
+            a.threshold_usd is not None and low is not None and low >= a.threshold_usd)
+
+
 def _reaches(event: Event) -> bool:
-    diff = below_comparables(event)
-    return diff is not None and diff >= event.audience.threshold_pct
+    return any(_reached(event))
 
 
 def classify(event: Event, rules: Rules) -> _Plan | None:
@@ -135,11 +158,11 @@ def classify(event: Event, rules: Rules) -> _Plan | None:
             return None
         kind = "opportunity" if event.level == "high" and not event.repost else "new_match"
         key = f"match:{event.listing_id}"
-        if a.threshold_pct is not None and _reaches(event):
+        if _has_threshold(a) and _reaches(event):
             return _Plan(kind, key, by_frequency, False, threshold=True)
         if not at_least(event.level, a.min_level):
             return None
-        return _Plan(kind, key, DIGEST if a.threshold_pct is not None else by_frequency, True)
+        return _Plan(kind, key, DIGEST if _has_threshold(a) else by_frequency, True)
 
     if event.kind == PRICE_DROP:
         if event.drop_pct is None or event.drop_pct < rules.price_drop_min_pct:
@@ -150,7 +173,7 @@ def classify(event: Event, rules: Rules) -> _Plan | None:
         key = f"price_drop:{event.listing_id}:{event.snapshot_id or 0}"
         if event.saved:
             return _Plan("price_drop", key, QUEUED, False)
-        if a.threshold_pct is not None:
+        if _has_threshold(a):
             if _reaches(event):
                 return _Plan("price_drop", key, by_frequency, False, threshold=True)
             return _Plan("price_drop", key, DIGEST, True)
@@ -180,7 +203,11 @@ def decide(event: Event, rules: Rules, *, sent_today: int = 0, cap: int | None =
     if event.kind == MATCH and event.repost:
         payload["repost"] = True
     if plan.threshold:
-        payload["threshold_pct"] = event.audience.threshold_pct
+        by_pct, by_usd = _reached(event)
+        if by_pct:
+            payload["threshold_pct"] = event.audience.threshold_pct
+        if by_usd:
+            payload["threshold_usd"] = event.audience.threshold_usd
     a = event.audience
     return [Decision(a.user_id, plan.kind, ch, status, plan.dedupe_key, event.listing_id,
                      event.match_id, a.profile_id, payload)
