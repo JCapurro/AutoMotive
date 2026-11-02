@@ -215,6 +215,22 @@ class MercadoLibreWindowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([l.listing_id for l in results], ["MLA1", "MLA2"])
         self.assertEqual(detail.await_count, 2)
 
+    async def test_ads_numbered_below_their_series_floor_are_not_dated(self):
+        """Long windows spent 11.7 h in 48 h dating ads one by one (2026-11-01);
+        an ad numbered before the window's stored ads is older than it."""
+        detail = AsyncMock(return_value=NOW - DAY)
+        floors = {2: 2_240_000_000, 4: 4_130_000_000, 1: None}
+        page = (f"{BASE}/ford/fiesta/_NoIndex_True",
+                card("2230000000") + card("2239000000") + card("4100000000") + card("4131000000")
+                + card("1820000000") + card("3000000001"), 200)
+        with patch.object(ml.MercadoLibreScraper, "_publication_date", detail), \
+                patch.object(ml.config, "RECENT_ML_DETAIL_SECONDS", 0):
+            results, _ = await self.search([page], page_size=48, id_floors=floors)
+        # 2239… is within the margin of its floor; series 3 has no floor.
+        self.assertEqual([l.listing_id for l in results], ["MLA2239000000", "MLA4131000000", "MLA3000000001"])
+        self.assertEqual(detail.await_count, 3)
+        self.assertTrue(results.complete)
+
     async def test_today_s_results_are_kept_without_reading_each_ad(self):
         """The ad's page says "hace 1 día" for an ad Mercado Libre lists as published today."""
         detail = AsyncMock(return_value=NOW - DAY)
@@ -240,6 +256,16 @@ class MercadoLibreWindowTests(unittest.IsolatedAsyncioTestCase):
         results, _ = await self.search([first, first])
         self.assertFalse(results.complete)
         self.assertIn("repeated", results.reason)
+
+    async def test_a_repeated_page_after_every_result_ends_a_complete_read(self):
+        # Amarok (2026-11-01): exactly a page of results, and page 2 served page 1.
+        state = '<script>{"event_data":{"total":2}}</script>'
+        first = (f"{BASE}/ford/fiesta/_NoIndex_True", state + card("8", 2) + card("9", 2), 200)
+        repeat = (f"{BASE}/ford/fiesta/_Desde_3_NoIndex_True", state + card("8", 2) + card("9", 2), 200)
+        results, _ = await self.search([first, repeat], page_size=2)
+        self.assertEqual([l.listing_id for l in results], ["MLA8", "MLA9"])
+        self.assertTrue(results.complete)
+        self.assertIsNone(results.reason)
 
     async def test_a_wall_on_the_first_page_fails_the_run(self):
         with self.assertRaisesRegex(ml.CollectorBlocked, "security challenge"):
@@ -270,11 +296,13 @@ class MercadoLibreWindowTests(unittest.IsolatedAsyncioTestCase):
 class FacebookPage:
     """A virtualized feed: each scroll replaces, rather than appends, cards.
     `html` is the search page's first HTML; answers[n], the GraphQL answer
-    the scroll to batch n downloads; the cards in `vanish` leave the page
-    while the first batch they're in is being read."""
-    def __init__(self, batches, *, expire_after=None, body="Marketplace", html=None, answers=None, vanish=()):
+    the scroll to batch n downloads; `after_reload`, the batches a reload
+    shows (None: the same ones)."""
+    def __init__(self, batches, *, expire_after=None, body="Marketplace", html=None, answers=None,
+                 after_reload=None):
         self.batches, self.index = batches, 0
-        self.vanish = set(vanish)
+        self.after_reload = after_reload
+        self.reloads = self.card_reads = 0
         self.url = ""
         self.expire_after = expire_after
         self.body = body
@@ -303,22 +331,19 @@ class FacebookPage:
             if self.expire_after <= 0:
                 self.url = "https://www.facebook.com/checkpoint/"
 
+    async def reload(self, **kwargs):
+        self.reloads += 1
+        if self.after_reload is not None:
+            self.batches, self.index = self.after_reload, 0
+
     def locator(self, selector):
         if selector == "body":
             return MagicMock(inner_text=AsyncMock(return_value=self.body))
-        anchors = []
-        for identifier, age in self.batches[self.index]:
-            a = MagicMock(inner_text=AsyncMock(return_value=(
-                "$10.000\nFord Fiesta 2016" + (f"\nHace {age} días" if age is not None else ""))))
-            attributes = {"href": f"/marketplace/item/{identifier}", "aria-label": ""}
-            a.get_attribute = AsyncMock(side_effect=lambda key, values=attributes, **kwargs: values.get(key))
-            if identifier in self.vanish:
-                self.vanish.discard(identifier)
-                a.get_attribute.side_effect = fb.PlaywrightTimeoutError(
-                    f"Locator.get_attribute: Timeout {fb.CARD_READ_MS}ms exceeded.")
-            a.locator.return_value.first = MagicMock(count=AsyncMock(return_value=0))
-            anchors.append(a)
-        return MagicMock(all=AsyncMock(return_value=anchors))
+        rows = [[f"/marketplace/item/{identifier}",
+                 "$10.000\nFord Fiesta 2016" + (f"\nHace {age} días" if age is not None else ""), "", None]
+                for identifier, age in self.batches[self.index]]
+        self.card_reads += 1
+        return MagicMock(evaluate_all=AsyncMock(return_value=rows))
 
 
 class FacebookWindowTests(unittest.IsolatedAsyncioTestCase):
@@ -346,13 +371,22 @@ class FacebookWindowTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("daysSinceListed=30", page.url)
         self.assertIn("sortBy=creation_time_descend", page.url)
 
-    async def test_a_card_gone_while_reading_does_not_end_the_scan(self):
-        # Chevrolet Prisma (2026-11-01): waiting 30 s for nth(39) ended every scan as partial.
-        page = FacebookPage([[("1", 2), ("2", 2), ("3", 2)], [("4", 2)]], vanish={"2"})
+    async def test_each_batch_of_cards_is_read_in_one_call(self):
+        # Chevrolet Prisma (2026-11-01): reading card by card, waiting 30 s for
+        # nth(39) ended every scan as partial.
+        page = FacebookPage([[("1", 2), ("2", 2), ("3", 2)], [("4", 2)]])
         results = await self.search(page)
         self.assertEqual([l.listing_id for l in results], ["1", "2", "3", "4"])
         self.assertTrue(results.complete)
         self.assertIsNone(results.reason)
+        self.assertEqual(page.card_reads, page.mouse.wheel.await_count + 1)
+
+    async def test_an_empty_feed_is_loaded_again_once_before_failing(self):
+        page = FacebookPage([[]], after_reload=[[("1", 2)]])
+        results = await self.search(page)
+        self.assertEqual(page.reloads, 1)
+        self.assertEqual([l.listing_id for l in results], ["1"])
+        self.assertTrue(results.complete)
 
     async def test_date_fetch_limit_ends_the_scan_and_the_retry_resumes(self):
         # Cards in English show no age: a first run of a popular model read
@@ -408,13 +442,15 @@ class FacebookWindowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(results, [])
         self.assertTrue(results.complete)
 
-    async def test_unconfirmed_empty_feed_is_still_blocked(self):
+    async def test_unconfirmed_empty_feed_fails_without_blocking(self):
         for body in ("Marketplace", "Marketplace\nCargando...",
                      "Iniciar sesión\nCorreo electrónico\nContraseña"):
             with self.subTest(body=body):
                 page = FacebookPage([[]], body=body)
-                with self.assertRaisesRegex(fb.CollectorBlocked, "empty feed"):
+                with self.assertRaisesRegex(fb.FeedUnconfirmed, "empty feed") as caught:
                     await self.search(page)
+                self.assertNotIsInstance(caught.exception, fb.CollectorBlocked)
+                self.assertEqual(page.reloads, 1)
                 page.close.assert_awaited_once()
 
     async def test_expired_session_is_not_mistaken_for_no_publications(self):

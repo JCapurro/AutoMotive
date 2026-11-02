@@ -157,6 +157,34 @@ def _to_int(s: str) -> int | None:
     return int(digits) if digits else None
 
 
+_ID_NUMBER = re.compile(r"\d{7,}")
+# Below its series' floor by more than this, a card is older than the window.
+# About half a day of new ads in each series (MLA22… ~3 M a day, MLA41… ~4 M,
+# 2026-11): an ad numbered just under the lowest stored one may still be inside.
+ID_FLOOR_MARGIN = 2_000_000
+
+
+def _read_all(seen: set[str], total: int | None) -> bool:
+    """Whether a page that repeats the last one ends a read that already has
+    all the results the search says it has: with exactly PAGE_SIZE of them, the
+    next page serves the first again (Amarok, 5 partial runs in a row, 2026-11-01)."""
+    return total is not None and len(seen) >= total
+
+
+def _older_by_id(listing_id: str, floors: dict) -> bool:
+    """Whether the ad's number puts it before the window: below its series'
+    floor (targets_repo.id_floors), or in a series with no stored ad since."""
+    m = _ID_NUMBER.search(listing_id or "")
+    if m is None:
+        return False
+    number = int(m.group())
+    series = number // 1_000_000_000
+    if series not in floors:
+        return False
+    floor = floors[series]
+    return floor is None or number < floor - ID_FLOOR_MARGIN
+
+
 def _extract_id(href: str) -> str | None:
     if not href:
         return None
@@ -529,7 +557,9 @@ class MercadoLibreScraper(BaseScraper):
         seen: set[str] = set()
         known = filters.get("known_publication_dates") or {}
         today = _recency.one_request_read(self.name, filters, window)
-        fetched = 0
+        # The cards numbered before the window aren't dated (_older_by_id).
+        floors = filters.get("id_floors") or {}
+        fetched = older_by_id = 0
         pages = 0
         dating_ends = time.monotonic() + DATE_FETCH_SECONDS
         try:
@@ -540,13 +570,17 @@ class MercadoLibreScraper(BaseScraper):
                 if pages:
                     await _page_pause()
                 url = _build_url(filters, page=pages + 1, today=today)
-                cards = _results((await _get(url, "search")).html)
+                html = (await _get(url, "search")).html
+                cards = _results(html)
                 if not cards:
                     break
+                if not pages:
+                    total = search_state(html).total
                 pages += 1
                 fresh = [c for c in cards if c.listing_id not in seen]
                 if not fresh:
-                    results.complete, results.reason = False, "mercadolibre: pagination repeated a page"
+                    if not _read_all(seen, total):
+                        results.complete, results.reason = False, "mercadolibre: pagination repeated a page"
                     break
                 for listing in fresh:
                     seen.add(listing.listing_id)
@@ -560,6 +594,9 @@ class MercadoLibreScraper(BaseScraper):
                         continue
                     if listing.published_at is None and listing.listing_id in _dates:
                         listing.published_at = _dates[listing.listing_id]
+                    elif listing.published_at is None and _older_by_id(listing.listing_id, floors):
+                        older_by_id += 1
+                        continue
                     elif listing.published_at is None and (fetched >= config.RECENT_ML_MAX_DATE_FETCHES
                                                            or time.monotonic() >= dating_ends):
                         results.complete, results.reason = False, DATE_FETCH_LIMIT
@@ -583,9 +620,9 @@ class MercadoLibreScraper(BaseScraper):
             if not seen:
                 raise
             results.complete, results.reason = False, f"mercadolibre: {type(exc).__name__}: {exc}"
-        log.info("mercadolibre publication window: today=%s pages=%d dates_read=%d kept=%d unknown_dates=%d "
-                 "complete=%s reason=%s", today, pages, fetched, len(results), results.unknown_dates,
-                 results.complete, results.reason)
+        log.info("mercadolibre publication window: today=%s pages=%d dates_read=%d older_by_id=%d kept=%d "
+                 "unknown_dates=%d complete=%s reason=%s", today, pages, fetched, older_by_id, len(results),
+                 results.unknown_dates, results.complete, results.reason)
         return results
 
     async def _search_body_type(self, filters: dict, code: str) -> SearchResults:

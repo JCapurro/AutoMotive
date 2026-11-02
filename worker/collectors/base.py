@@ -62,6 +62,14 @@ class CollectorBlocked(RuntimeError):
     session. The run fails (collector_runs) instead of looking like "0 results"."""
 
 
+class FeedUnconfirmed(RuntimeError):
+    """The source showed no results and didn't say so: a block, or a page that
+    didn't render. The run fails, but one of them doesn't pause the source:
+    pipeline/breaker.py pauses it after SOURCE_SUSPECT_STREAK in a row with no
+    good run between them (Facebook, 26 pauses of 30 min in 2 days for rare
+    models such as Scirocco or Up, 2026-10-31)."""
+
+
 # How a run that read only part of the source is recorded in collector_runs.error:
 # "partial: <the collector's reason>". Not a failure of the collector, so
 # tools/platform_health.py alerts only past PARTIAL_RUNS of them in a row.

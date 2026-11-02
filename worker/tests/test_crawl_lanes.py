@@ -299,6 +299,42 @@ class BlockedRunTargetTests(unittest.IsolatedAsyncioTestCase):
         finish_target.assert_awaited_once()
         self.assertTrue(breaker.paused("facebook"))
 
+    async def test_unconfirmed_empty_feeds_pause_the_source_only_in_a_row(self):
+        # 26 pauses of 30 min in 2 days, one rare model each (2026-10-31).
+        from unittest.mock import AsyncMock, MagicMock
+        from collectors.base import FeedUnconfirmed, SearchResults
+        from pipeline import breaker
+
+        breaker.clear()
+        self.addCleanup(breaker.clear)
+        outcomes = []
+        scraper = MagicMock(search=AsyncMock(side_effect=lambda filters: outcomes.pop(0)()))
+        target = {"id": 1, "source": "facebook", "make": "Volkswagen", "model": "Scirocco",
+                  "first_run_done": True, "crawl_interval_seconds": 3600}
+
+        def empty():
+            raise FeedUnconfirmed("facebook: empty feed without a confirmed no-results message")
+
+        async def on_collector(coroutine, timeout=None):
+            return await coroutine
+
+        with patch.dict(crawl.REGISTRY, {"facebook": lambda: scraper}), \
+                patch.object(crawl.runs, "start_run", AsyncMock(return_value=1)), \
+                patch.object(crawl.runs, "finish_run", AsyncMock()), \
+                patch.object(crawl.targets_repo, "publication_dates", AsyncMock(return_value={})), \
+                patch.object(crawl.targets_repo, "finish_target", AsyncMock()), \
+                patch.object(crawl, "ingest", AsyncMock(side_effect=Exception("stop after the search"))), \
+                patch.object(crawl.runs, "log_error", AsyncMock()), \
+                patch.object(crawl, "run_collector", on_collector):
+            outcomes[:] = [empty, empty, SearchResults, empty, empty]
+            for _ in range(5):
+                self.assertIsNone(await crawl.run_target(target))
+            self.assertFalse(breaker.paused("facebook"))       # the good run cleared the streak
+            outcomes[:] = [empty]
+            with self.assertRaises(crawl.SourceBlocked):
+                await crawl.run_target(target)
+        self.assertTrue(breaker.paused("facebook"))
+
 
 class EnrichBreakerTests(unittest.IsolatedAsyncioTestCase):
     async def test_a_paused_source_is_skipped_and_its_pages_stay_unchecked(self):
