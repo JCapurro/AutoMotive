@@ -4,8 +4,8 @@ import { cn } from "@/lib/utils";
 
 /**
  * PRO-02: the estimated gross margin against the dealers' median in the
- * listing page's price block, under the total cost: the line (the same as the
- * cards and the Pro emails) and a closed detail of what it subtracts and what
+ * listing page's price block, under the total cost: the full line (the same as the
+ * Pro emails; the cards carry marginCardLine) and a closed detail of what it subtracts and what
  * it is not. Rendered only for Pro with a stored margin (lib/margin-data.ts).
  * Without enough dealers, only the line that says so (no detail to give).
  */

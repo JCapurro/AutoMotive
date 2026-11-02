@@ -1,7 +1,11 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+
+import { MarginEstimate } from "@/components/app/margin-estimate";
 
 import { MARGIN } from "@/lib/copy";
 import {
@@ -9,6 +13,7 @@ import {
   asMarginRef,
   asStoredMargin,
   marginDetail,
+  marginCardLine,
   marginHeadline,
   marginLine,
   marginPayload,
@@ -66,10 +71,54 @@ describe("margin line (the worker's, byte for byte)", () => {
   });
 });
 
+describe("margin card line (Juan, 02/11: short in the result cards)", () => {
+  it("a range: the same USD range as the full line and the dealers' n", () => {
+    expect(marginCardLine(byName("pool CABA"))).toBe("Margen bruto estimado: USD 1.210 a 1.230 (n = 6 agencias)");
+  });
+
+  it("a single value", () => {
+    expect(marginCardLine(byName("sin localidad"))).toBe("Margen bruto estimado: USD 1.850 (n = 6 agencias)");
+  });
+
+  it("a negative margin keeps its sign", () => {
+    expect(marginCardLine(byName("negativo"))).toBe("Margen bruto estimado: USD -1.790 a -1.770 (n = 6 agencias)");
+  });
+
+  it("few dealers: short and honest", () => {
+    expect(marginCardLine(byName("pocas agencias"))).toBe("Margen estimado: pocas agencias para estimarlo (n = 2)");
+    expect(marginCardLine({ status: "few_dealers", dealer_n: 2 })).toBeNull();
+  });
+
+  it("starts like the full line, which keeps the median, the costs and «sin impuestos»", () => {
+    for (const c of GOLDEN.cases) {
+      const card = marginCardLine(c.margin_ref)!;
+      if (c.payload.status === "ok") expect(c.line.startsWith(card.replace(/ \(n = \d+ agencias\)$/, " ("))).toBe(true);
+      expect(card.length).toBeLessThan(c.line.length);
+    }
+    expect(marginLine(byName("pool CABA"))).toContain("contra la mediana de USD 18.000");
+    expect(marginCardLine(byName("pool CABA"))).not.toContain("mediana");
+  });
+
+  it("the listing page keeps the full line, with or without enough dealers", () => {
+    const html = renderToStaticMarkup(createElement(MarginEstimate, { margin: byName("pool CABA") }));
+    expect(html).toContain(marginLine(byName("pool CABA"))!);
+    expect(html).not.toContain("agencias)");
+    const few = renderToStaticMarkup(createElement(MarginEstimate, { margin: asFewDealers(byName("pocas agencias")) }));
+    expect(few).toContain("Margen estimado: no hay suficientes agencias publicando este modelo para estimarlo (n = 2, mínimo 5)");
+    expect(few).not.toContain("pocas agencias para estimarlo");
+  });
+
+  it("nothing for a missing or unknown margin", () => {
+    for (const value of [null, undefined, {}, { gross_margin_usd: { min: 1 } }, "x", { ...byName("pool CABA"), status: "other" }]) {
+      expect(marginCardLine(value)).toBeNull();
+    }
+  });
+});
+
 describe("margin copy lint over every rendered variant", () => {
   it("never promises a result", () => {
     const fold = (t: string) => t.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().replace("no con precios de venta", "");
-    const texts = [...GOLDEN.cases.map((c) => c.line), ...MARGINS.flatMap((c) => marginDetail(c.margin_ref))];
+    const texts = [...GOLDEN.cases.map((c) => c.line), ...GOLDEN.cases.map((c) => marginCardLine(c.margin_ref)!), ...MARGINS.flatMap((c) => marginDetail(c.margin_ref))];
     for (const text of texts) {
       for (const term of ["vale", "ganancia", "garantiz", "rentab", "asegur", "seguro que", "vas a ganar", "precio de venta", "precios de venta"]) {
         expect(fold(text).includes(term), `${text}: ${term}`).toBe(false);
