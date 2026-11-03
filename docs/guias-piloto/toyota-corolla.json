@@ -1,0 +1,147 @@
+{
+  "make": "Toyota",
+  "model": "Corolla",
+  "generation_label": "XI (E170)",
+  "year_from": 2014,
+  "year_to": 2019,
+  "slug_make": "toyota",
+  "slug_model": "corolla",
+  "body": {
+    "known_issues": [
+      {
+        "text": "En 2020 la prensa informó que Toyota Argentina estaba avisando por carta a dueños de Corolla, Hilux y Etios fabricados entre 2005 y 2017 por un llamado a revisión de airbags. Conviene consultar con el VIN si la unidad está alcanzada y si se hizo.",
+        "applies_to": "fabricados hasta 2017"
+      },
+      {
+        "text": "La caja CVT no tiene fama de fallas generalizadas en esta generación, pero conviene revisar que no dé tirones ni sacudidas a baja velocidad y preguntar por el cambio de su fluido.",
+        "applies_to": "CVT"
+      },
+      {
+        "text": "Con kilometraje alto se reportaron problemas menores: bomba de agua con ruido o pérdida, rulemanes delanteros ruidosos, bobinas de encendido que provocan fallas de encendido y algo de consumo de aceite.",
+        "applies_to": "reportes en otros mercados"
+      },
+      {
+        "text": "También se reportaron pantallas multimedia que se tildan o no responden en algunas zonas, y parlantes delanteros que dejan de andar por humedad en las puertas.",
+        "applies_to": "reportes en otros mercados"
+      }
+    ],
+    "visit_checklist": [
+      {
+        "text": "Si es CVT, probalo con el motor frío y en tránsito: la aceleración tiene que ser pareja, sin sacudidas ni demoras al salir."
+      },
+      {
+        "text": "Pedí que escaneen el motor para ver si hay códigos de falla guardados, por ejemplo de encendido o del sensor de oxígeno."
+      },
+      {
+        "text": "Consultá con el VIN en un concesionario oficial Toyota si tiene pendiente el llamado a revisión de airbags."
+      },
+      {
+        "text": "Probá toda la pantalla táctil y que suenen los cuatro parlantes."
+      },
+      {
+        "text": "Mirá el nivel y el estado del aceite, y escuchá la zona de la bomba de agua con el motor en marcha."
+      },
+      {
+        "text": "Al dar contacto, mirá que los testigos de airbag, ABS y control de estabilidad se enciendan y después se apaguen."
+      }
+    ],
+    "versions_equipment": [
+      {
+        "text": "Llegó en abril de 2014 desde la planta de Indaiatuba (Brasil), con motor 1.8 de 16 válvulas Dual VVT-i de unos 140 CV y caja manual de seis o CVT con modo secuencial de siete marchas simuladas."
+      },
+      {
+        "text": "Según la prensa del lanzamiento en el Mercosur, traía airbags frontales, laterales y de rodilla, con cortina opcional, y no tenía control de estabilidad ni como opción.",
+        "applies_to": "2014–2016"
+      },
+      {
+        "text": "Con el restyling de abril de 2017, todas las versiones (XLi, XEi y SEG, manual o CVT) sumaron siete airbags, control de estabilidad, control de tracción y asistente de arranque en pendiente.",
+        "applies_to": "2017–2019"
+      },
+      {
+        "text": "Desde XEi, el restyling trajo pantalla táctil de 4,2 pulgadas; según la versión, sensor de lluvia, climatizador de dos zonas, tapizado de cuero y llantas de 16 o 17 pulgadas.",
+        "applies_to": "2017–2019, según versión"
+      }
+    ],
+    "maintenance_costs": [
+      {
+        "text": "El 1.8 usa cadena de distribución, que normalmente dura toda la vida del motor si se respetan los cambios y el nivel de aceite."
+      },
+      {
+        "text": "La guía consultada recomienda aceite SAE 0W-20 para este motor; usá el que indique el manual de la unidad."
+      },
+      {
+        "text": "En la CVT, en uso severo (mucho ralentí, tránsito lento, taxi o reparto) conviene cambiar el fluido; preguntá si se hizo.",
+        "applies_to": "CVT"
+      },
+      {
+        "text": "Bujías, filtro de aire y correa auxiliar tienen reemplazo o revisión periódica; seguí el plan del manual y pedí las facturas de services."
+      }
+    ],
+    "generations": [
+      {
+        "label": "E170",
+        "year_from": 2014,
+        "year_to": 2016,
+        "text": "Undécima generación, presentada en Argentina en abril de 2014 e importada de Brasil."
+      },
+      {
+        "label": "E170 restyling",
+        "year_from": 2017,
+        "year_to": 2019,
+        "text": "Presentado en abril de 2017: frente y multimedia nuevos, siete airbags y control de estabilidad de serie, sin cambios mecánicos."
+      }
+    ]
+  },
+  "questions": [
+    {
+      "text": "¿Es manual o CVT? Si es CVT, ¿se le cambió alguna vez el fluido de la caja?",
+      "why": "En uso severo se recomienda cambiar el fluido de la CVT."
+    },
+    {
+      "text": "¿Hiciste el llamado a revisión de airbags de Toyota?",
+      "why": "Toyota Argentina convocó a Corolla fabricados entre 2005 y 2017."
+    },
+    {
+      "text": "¿Se usó como taxi, remís o para reparto?",
+      "why": "Ese uso cuenta como severo para el mantenimiento de motor y caja."
+    },
+    {
+      "text": "¿Tenés los services al día, con facturas o registro del concesionario?",
+      "why": "Sirve para ver si se respetaron los cambios de aceite."
+    },
+    {
+      "text": "¿Consume aceite entre un service y otro?",
+      "why": "Con kilometraje alto se reportó algo de consumo."
+    },
+    {
+      "text": "¿Es anterior o posterior al restyling de 2017?",
+      "why": "Desde 2017 trae de serie control de estabilidad y siete airbags."
+    }
+  ],
+  "sources": [
+    {
+      "title": "Bienvenido al Mercosur: Toyota presentó el nuevo Corolla (Autoblog Uruguay, 13/03/2014)",
+      "url": "https://www.autoblog.com.uy/2014/03/bienvenido-al-mercosur-toyota-presento.html",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Así es el nuevo Toyota Corolla (Parabrisas, 20/04/2017)",
+      "url": "https://parabrisas.perfil.com/noticias/noticias/2017-04-20-asi-es-el-nuevo-toyota-corolla.phtml",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Recall: 10 automotrices piden revisión de sus autos vendidos en Argentina (BAE Negocios, 09/11/2020)",
+      "url": "https://www.baenegocios.com/negocios/Recall-10-automotrices-piden-revision-de-sus-autos-vendidos-en-Argentina-por-desperfectos-20201109-0051.html",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Toyota Corolla sedan 2014-2019: pros and cons, common problems (Samarins)",
+      "url": "https://www.samarins.com/reviews/corolla.html",
+      "kind": "otra",
+      "verified": true
+    }
+  ]
+}
