@@ -7,6 +7,7 @@ prompt, and the prompts tell the model it is data.
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import json
 from collections.abc import Sequence
 from functools import cache
@@ -15,6 +16,12 @@ from pathlib import Path
 from normalization.vehicle import CatalogModel
 
 _DIR = Path(__file__).resolve().parent
+
+# PAR-04: the guide prompt's version goes into the worker's cache key and into
+# model_guides.llm_version. Editing model_guide.md means a new version and its
+# hash here (tests/test_model_guide_contract.py fails otherwise).
+MODEL_GUIDE_PROMPT_VERSION = "model_guide-v1"
+MODEL_GUIDE_PROMPT_SHA256 = "5686bc852d98b1443dbc086f87549a0927fec85f9ce17166453b320f64bade06"
 
 
 @cache
@@ -53,3 +60,23 @@ def polish_questions_user(questions: list[str], context: dict) -> str:
 
 def low_results_user(context: dict) -> str:
     return f"<datos>\n{json.dumps(context, ensure_ascii=False, default=str)}\n</datos>"
+
+
+def prompt_sha256(name: str) -> str:
+    return hashlib.sha256(load(name).encode("utf-8")).hexdigest()
+
+
+def model_guide_user(context: dict) -> str:
+    """PAR-04: the model and its catalog data, never listings, prices or users."""
+    return f"<modelo>\n{json.dumps(context, ensure_ascii=False, sort_keys=True)}\n</modelo>"
+
+
+def model_guide_context_from_user(message: str) -> dict | None:
+    """The context back from a model_guide user message (the replay keys on it)."""
+    if not message.startswith("<modelo>\n") or not message.endswith("\n</modelo>"):
+        return None
+    try:
+        data = json.loads(message[len("<modelo>\n"):-len("\n</modelo>")])
+    except json.JSONDecodeError:
+        return None
+    return data if isinstance(data, dict) else None

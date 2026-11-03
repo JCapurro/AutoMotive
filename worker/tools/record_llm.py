@@ -3,6 +3,12 @@
     python -m tools.record_llm                  # every phrase in parse_search_golden.json
     python -m tools.record_llm --only fiesta-titanium kangoo-palos
     python -m tools.record_llm --text "Busco un Ka SE 2018"   # try one text, record nothing
+    python -m tools.record_llm --kind model_guide --guide Toyota Corolla   # PAR-04: one guide
+
+PAR-04: `--kind model_guide` records a guide draft into
+tests/fixtures/llm/model_guide_recorded.json (key "make|model|generation").
+Not run until Juan approves the provider: the file holds hand-written,
+synthetic answers until then, and recording calls the real CLI.
 
 Needs Claude Code installed and logged in on this host. The catalog comes
 from supabase/seed.sql, the same one the contract tests use. The recordings
@@ -21,7 +27,7 @@ import time
 import config
 from aio import run
 from llm.claude_cli import ClaudeCliProvider, run_cli
-from llm.replay import FIXTURES, RECORDINGS, trim_envelope
+from llm.replay import FIXTURES, GUIDE_RECORDINGS, RECORDINGS, guide_key, trim_envelope
 from normalization.drafts import normalize_drafts
 
 # The contract tests' catalog (supabase/seed.sql), so recordings and tests agree.
@@ -43,6 +49,9 @@ async def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--only", nargs="+", metavar="ID")
     parser.add_argument("--text")
+    parser.add_argument("--kind", choices=("parse_search", "model_guide"), default="parse_search")
+    parser.add_argument("--guide", nargs="+", metavar=("MAKE", "MODEL"),
+                        help="--kind model_guide: make, model and optionally the generation label")
     args = parser.parse_args(argv)
     models = seed_catalog()
 
@@ -55,6 +64,9 @@ async def main(argv: list[str]) -> int:
 
     provider = ClaudeCliProvider(cli_path=config.CLAUDE_CLI_PATH, model=config.CLAUDE_CLI_MODEL,
                                  timeout=config.LLM_TIMEOUT_SECONDS, runner=recording_runner)
+
+    if args.kind == "model_guide":
+        return await record_guide(provider, captured, args.guide or [])
 
     if args.text:
         started = time.monotonic()
@@ -89,6 +101,35 @@ async def main(argv: list[str]) -> int:
     }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"{len(responses)} respuestas en {RECORDINGS}", file=sys.stderr)
     return 1 if failures else 0
+
+
+async def record_guide(provider: ClaudeCliProvider, captured: dict[str, str], guide: list[str]) -> int:
+    if len(guide) < 2:
+        print("--guide MAKE MODEL [GENERATION]", file=sys.stderr)
+        return 2
+    make, model, generation = guide[0], guide[1], (" ".join(guide[2:]) or None)
+    context = {"marca": make, "modelo": model, "generacion": generation,
+               "anio_desde": None, "anio_hasta": None, "versiones": []}
+    started = time.monotonic()
+    failed = False
+    try:
+        await provider.model_guide(context)
+    except Exception as e:  # keep the envelope anyway: the contract test reports it
+        failed = True
+        print(f"x {make} {model}: {e}", file=sys.stderr)
+    existing = json.loads(GUIDE_RECORDINGS.read_text(encoding="utf-8")) if GUIDE_RECORDINGS.exists() else {}
+    responses = dict(existing.get("responses", {}))
+    if "stdout" in captured:
+        responses[guide_key(make, model, generation)] = trim_envelope(captured["stdout"])
+    GUIDE_RECORDINGS.write_text(json.dumps({
+        "recorded_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
+        "cli_version": _cli_version(),
+        "model": config.CLAUDE_CLI_MODEL,
+        "synthetic": False,
+        "responses": responses,
+    }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print(f"{(time.monotonic() - started) * 1000:.0f} ms", file=sys.stderr)
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

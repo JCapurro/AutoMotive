@@ -26,7 +26,7 @@ from pydantic import BaseModel, ValidationError
 
 from llm import prompts
 from llm.provider import LLMError, LLMTimeout
-from llm.schemas import ListingFacts, LowResultsExplanation, PolishedQuestions, SearchDraft, SearchDrafts
+from llm.schemas import ListingFacts, LowResultsExplanation, ModelGuideDraft, PolishedQuestions, SearchDraft, SearchDrafts
 from normalization.vehicle import CatalogModel
 
 log = logging.getLogger(__name__)
@@ -35,6 +35,8 @@ M = TypeVar("M", bound=BaseModel)
 
 # A few vehicles' drafts, a facts object or a short message: plenty of room.
 _MAX_TOKENS = 4096
+# PAR-04: a guide is several sections long.
+_GUIDE_MAX_TOKENS = 8192
 
 
 class AnthropicApiProvider:
@@ -47,17 +49,20 @@ class AnthropicApiProvider:
         self.client = client or anthropic.AsyncAnthropic(api_key=api_key, timeout=timeout, max_retries=1)
         self.name = f"anthropic:{model}"
 
-    async def _structured(self, system_prompt: str, user: str, out: type[M]) -> M:
+    async def _structured(self, system_prompt: str, user: str, out: type[M], *,
+                          timeout: float | None = None, max_tokens: int = _MAX_TOKENS) -> M:
+        budget = timeout or self.timeout
         try:
             response = await self.client.messages.create(
                 model=self.model,
-                max_tokens=_MAX_TOKENS,
+                max_tokens=max_tokens,
+                timeout=budget,
                 system=system_prompt,
                 messages=[{"role": "user", "content": user}],
                 output_config={"format": {"type": "json_schema", "schema": anthropic.transform_schema(out)}},
             )
         except anthropic.APITimeoutError:
-            raise LLMTimeout(f"la API de Claude no respondió en {self.timeout:.0f} s") from None
+            raise LLMTimeout(f"la API de Claude no respondió en {budget:.0f} s") from None
         except anthropic.AuthenticationError:
             raise LLMError("la API de Claude rechazó la API key (ANTHROPIC_API_KEY)") from None
         except anthropic.RateLimitError:
@@ -100,3 +105,7 @@ class AnthropicApiProvider:
     async def explain_low_results(self, context: dict) -> LowResultsExplanation:
         return await self._structured(prompts.load("explain_low_results"),
                                       prompts.low_results_user(context), LowResultsExplanation)
+
+    async def model_guide(self, context: dict, *, timeout: float | None = None) -> ModelGuideDraft:
+        return await self._structured(prompts.load("model_guide"), prompts.model_guide_user(context),
+                                      ModelGuideDraft, timeout=timeout, max_tokens=_GUIDE_MAX_TOKENS)

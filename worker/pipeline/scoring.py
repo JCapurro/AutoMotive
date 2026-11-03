@@ -15,12 +15,14 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable
 
 import db
+from db.repos import guides as guides_repo
 from db.repos import listings as listings_repo
 from db.repos.fx import latest_stored, quote_for_today
 from intelligence import comparables, cost_estimator, margin
 from intelligence.comparables import PriceRef
 from intelligence.config import IntelligenceConfig
 from intelligence.engine import Evaluation, evaluate
+from intelligence.guides import DEFAULT_MAX_QUESTIONS_IN_LISTING, MAX_QUESTIONS_IN_LISTING, GuideIndex, pick
 
 # America/Argentina/Buenos_Aires (no DST since 2009): "today" for fx.max_age_days.
 _AR = timezone(timedelta(hours=-3))
@@ -37,17 +39,24 @@ class Scorer:
     margin_cfg: dict[str, Any] | None = None
     cost_cfg: dict[str, Any] | None = None
     fx_latest: dict[str, Any] | None = None
+    # PAR-04: the published guides' questions (db/repos/guides.published_index)
+    # and how many a listing gets (llm_limits.model_guide.max_questions_in_listing).
+    guides: GuideIndex = field(default_factory=dict)
+    guide_limit: int = DEFAULT_MAX_QUESTIONS_IN_LISTING
 
     @classmethod
     async def create(cls, now: datetime | None = None) -> "Scorer":
         cfg = await IntelligenceConfig.load()
         margin_cfg = margin.parse_config(await db.get_config("dealer_margin"))
         cost_cfg = cost_estimator.parse_config(await db.get_config("cost_estimator"))
+        guide_limit = guide_questions_limit(await db.get_config("llm_limits"))
         async with db.connection() as cx:
             quote = await quote_for_today(cx)
             fx_latest = await latest_stored(cx)
+            guides = await guides_repo.published_index(cx)
         return cls(cfg, quote.rate, now or datetime.now(timezone.utc),
-                   margin_cfg=margin_cfg, cost_cfg=cost_cfg, fx_latest=fx_latest)
+                   margin_cfg=margin_cfg, cost_cfg=cost_cfg, fx_latest=fx_latest,
+                   guides=guides, guide_limit=guide_limit)
 
     async def prepare(self, listing_ids: Iterable[int], *,
                       refs_limit: int | None = None) -> dict[int, dict[str, Any]]:
@@ -73,7 +82,8 @@ class Scorer:
             return None
         ref = self.refs.get(listing_id)
         ev = evaluate(row, profile, price_ref=ref, cfg=self.cfg,
-                      now=self.now, fx_rate=self.fx_rate, timing_belt=row.get("timing_belt"))
+                      now=self.now, fx_rate=self.fx_rate, timing_belt=row.get("timing_belt"),
+                      guide=pick(self.guides, row), guide_limit=self.guide_limit)
         if ev is not None:
             ev.margin_ref = margin.compute(row, ref, profile_zones(profile), self.margin_cfg, self.cost_cfg,
                                            self.fx_latest, self.cfg.min_n, self.now.astimezone(_AR).date())
@@ -85,3 +95,15 @@ def profile_zones(profile: dict[str, Any]) -> list[dict[str, Any]]:
     f = profile.get("filters") if isinstance(profile.get("filters"), dict) else {}
     return cost_estimator.search_zones({"lat": profile.get("origin_lat"), "lon": profile.get("origin_lon"),
                                         "label": f.get("location_label"), "extra_locations": f.get("extra_locations")})
+
+
+def guide_questions_limit(llm_limits: Any) -> int:
+    """llm_limits.model_guide.max_questions_in_listing, 0 to 3 (3 without it).
+
+    The backlog's rule is «hasta 3» questions of the guide per listing: a
+    larger value is clamped (/admin/config refuses it too, lib/admin-config.ts)."""
+    cfg = llm_limits.get("model_guide") if isinstance(llm_limits, dict) else None
+    value = cfg.get("max_questions_in_listing") if isinstance(cfg, dict) else None
+    if isinstance(value, bool) or not isinstance(value, int):
+        return DEFAULT_MAX_QUESTIONS_IN_LISTING
+    return max(0, min(MAX_QUESTIONS_IN_LISTING, value))

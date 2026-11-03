@@ -1,5 +1,5 @@
 -- PAR-04 (migrations 20261204120000_par04_model_guides, 20261204120100_par04_guide_events,
--- 20261204120200_par04_question_origins): who reads model_guides, who writes,
+-- 20261204120200_par04_question_origins, 20261204120300_par04_guide_review_fixes): who reads model_guides, who writes,
 -- what can be published, the guide jobs in llm_jobs and log_guide_event.
 begin;
 create extension if not exists pgtap with schema extensions;
@@ -241,6 +241,34 @@ set local role service_role;
 select is((select viewed::int + cta_clicked::int from public.admin_guide_event_counts(30)
             where guide_id = (select id from public.model_guides where model = 'Fiesta')), 2, 'the admin counts them');
 reset role;
+
+-- 20261204120300: the anon key cannot fill events. Past the cap per guide
+-- and minute nothing is written, and nothing is said.
+update public.app_config set value = jsonb_set(value, '{events}', '{"per_guide_minute": 3, "per_guide_hour": 300}')
+ where key = 'model_guides';
+set local request.jwt.claims = '{"role": "anon"}';
+set local role anon;
+select lives_ok($$select public.log_guide_event('guide_viewed', 'ford', 'fiesta') from generate_series(1, 10)$$,
+                'a burst does not fail');
+reset role;
+select is((select count(*)::int from public.events where name like 'guide\_%'), 3, 'only the cap is written');
+
+-- Publishing and unpublishing are not content edits (content_updated_at).
+select ok((select content_updated_at < now() + interval '1 second' from public.model_guides where model = 'Fiesta'),
+          'content_updated_at is set');
+update public.model_guides set content_updated_at = now() - interval '1 day' where model = 'Fiesta';
+update public.model_guides set status = 'published', reviewed_at = now(), published_at = now() where model = 'Fiesta';
+select ok((select content_updated_at < now() - interval '1 hour' from public.model_guides where model = 'Fiesta'),
+          'a status change keeps content_updated_at');
+update public.model_guides set questions = questions where model = 'Fiesta';
+select ok((select content_updated_at < now() - interval '1 hour' from public.model_guides where model = 'Fiesta'),
+          'an update without changes keeps it');
+update public.model_guides set year_to = 2018 where model = 'Fiesta';
+select ok((select content_updated_at = now() from public.model_guides where model = 'Fiesta'), 'a content change moves it');
+select ok(not has_function_privilege('anon', 'public.model_guide_withdraw_questions(bigint, text[])', 'execute'),
+          'anon cannot withdraw questions');
+select ok(not has_function_privilege('authenticated', 'public.model_guide_withdraw_questions(bigint, text[])', 'execute'),
+          'authenticated cannot withdraw questions');
 
 -- Unpublishing goes back to draft and keeps the review.
 set local role service_role;
