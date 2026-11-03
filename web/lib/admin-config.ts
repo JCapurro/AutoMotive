@@ -87,6 +87,32 @@ export const SellerClassificationInput = z.object({
   window_days: z.number().int().min(1).max(180),
 }).strict();
 
+/**
+ * PAR-04: llm_limits.model_guide, the guide generation's switch and caps
+ * (admin_request_model_guide and worker pipeline/llm_jobs.py read them). At most
+ * 3 guide questions per listing: the backlog's «hasta 3» (the worker clamps too).
+ */
+export const MODEL_GUIDE_LIMITS_MESSAGE = "model_guide necesita enabled (true/false), per_day y per_month enteros de 0 a 10.000 (per_day no mayor que per_month), queued_ttl_minutes de 1 a 1.440, timeout_seconds de 10 a 900 y max_questions_in_listing de 0 a 3.";
+export const ModelGuideLimitsInput = z.object({
+  enabled: z.boolean(),
+  per_day: z.number().int().min(0).max(10_000),
+  per_month: z.number().int().min(0).max(10_000),
+  queued_ttl_minutes: z.number().int().min(1).max(1_440).optional(),
+  timeout_seconds: z.number().int().min(10).max(900).optional(),
+  max_questions_in_listing: z.number().int().min(0).max(3).optional(),
+}).passthrough().refine((v) => v.per_day <= v.per_month, { path: ["per_day"] });
+export const LlmLimitsInput = z.object({
+  per_user_hour: count.optional(),
+  email_only_per_user_hour: count.optional(),
+  model_guide: ModelGuideLimitsInput.optional(),
+}).passthrough();
+/** PAR-04: app_config.model_guides, the pilot's guide ids and the public events' caps (log_guide_event). */
+export const MODEL_GUIDES_MESSAGE = "model_guides necesita pilot (lista de ids de guías) y, si está, events.per_guide_minute y events.per_guide_hour enteros de 1 a 100.000.";
+export const ModelGuidesConfigInput = z.object({
+  pilot: z.array(z.number().int().positive()).max(100),
+  events: z.object({ per_guide_minute: z.number().int().min(1).max(100_000), per_guide_hour: z.number().int().min(1).max(100_000) }).passthrough().optional(),
+}).passthrough();
+
 export function configObject(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
@@ -121,6 +147,13 @@ export function validateConfigChange(key: string, value: unknown, current: unkno
       return "min_drop_pct tiene que ser un número entre 0 y 100.";
     }
   }
+  if (key === "llm_limits" && !LlmLimitsInput.safeParse(value).success) {
+    const guide = configObject(value).model_guide;
+    return guide !== undefined && !ModelGuideLimitsInput.safeParse(guide).success
+      ? MODEL_GUIDE_LIMITS_MESSAGE
+      : "per_user_hour y email_only_per_user_hour son enteros de 0 o más.";
+  }
+  if (key === "model_guides" && !ModelGuidesConfigInput.safeParse(value).success) return MODEL_GUIDES_MESSAGE;
   if (key === "seller_classification" && !SellerClassificationInput.safeParse(value).success) return SELLER_CLASSIFICATION_MESSAGE;
   if (key === "dealer_margin" && !DealerMarginInput.safeParse(value).success) return DEALER_MARGIN_MESSAGE;
   // PAR-01: every block with source and as_of, valid ranges and scales (lib/cost-estimator.ts, the parser's own rules).
@@ -176,6 +209,10 @@ export function configFieldLabel(key: string, path: string): string {
     // PAR-02 resto: the duplicate signals and the photo hash.
     if (group === "photo_hash" && name === "enabled") return "Hash de fotos prendido (descarga imágenes)";
     if (group === "signals" && name) return `Señal ${name} (on, shadow u off)`;
+  }
+  if (key === "llm_limits") {
+    const label = ({ per_user_hour: "Jobs por usuario y hora", email_only_per_user_hour: "Jobs por hora (cuentas solo email)", "model_guide.enabled": "Guías: generación con IA prendida", "model_guide.per_day": "Guías: borradores por día", "model_guide.per_month": "Guías: borradores por mes", "model_guide.queued_ttl_minutes": "Guías: minutos en cola", "model_guide.timeout_seconds": "Guías: segundos por borrador", "model_guide.max_questions_in_listing": "Guías: preguntas por aviso (hasta 3)" } as Record<string, string>)[path];
+    if (label) return label;
   }
   if (key === "lifecycle_emails") {
     if (path.startsWith("kinds.")) return LIFECYCLE_KINDS[path.slice(6) as keyof typeof LIFECYCLE_KINDS]?.label ?? path;

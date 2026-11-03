@@ -6,6 +6,7 @@ import { useEffect, useId, useRef, useState, useSyncExternalStore, useTransition
 
 import { enterForFreeSearch, type FreeSearchResult, linkForFreeSearch, startFreeSearch } from "@/app/actions";
 import { SearchPromptInput } from "@/components/search-prompt-input";
+import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -46,13 +47,42 @@ function forgetSignupCode() {
 }
 
 /**
+ * Whether this browser has a session, read from the cookie on the client
+ * (PAR-04: the guide pages are static and never read the session on the
+ * server). null until known.
+ */
+function useClientSession(skip: boolean): boolean | null {
+  const [signedIn, setSignedIn] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (skip) return;
+    let live = true;
+    createClient().auth.getSession()
+      .then(({ data }) => { if (live) setSignedIn(Boolean(data.session)); })
+      .catch(() => { if (live) setSignedIn(false); });
+    return () => { live = false; };
+  }, [skip]);
+  return signedIn;
+}
+
+/**
  * The landing's search. Signed in, it goes straight to the search. Signed
  * out, "Crear mi búsqueda" opens a pop-up that asks only for an email (no
  * password, no confirmation, no login page: startFreeSearch). An email that
  * already has a password is asked for it in the same pop-up.
+ *
+ * PAR-04: a guide page passes `initialText` (the prefilled search), leaves
+ * `signedIn` out (the session is read here, in the browser) and `onStart`
+ * (guide_cta_clicked).
  */
-export function LandingSearch({ signedIn }: { signedIn: boolean }) {
-  const [text, setText] = useState("");
+export function LandingSearch({ signedIn: serverSignedIn, initialText = "", onStart }: {
+  signedIn?: boolean;
+  initialText?: string;
+  onStart?: () => void;
+}) {
+  const clientSignedIn = useClientSession(serverSignedIn !== undefined);
+  const signedIn = serverSignedIn ?? Boolean(clientSignedIn);
+  const sessionKnown = serverSignedIn !== undefined || clientSignedIn !== null;
+  const [text, setText] = useState(initialText);
   const [promptError, setPromptError] = useState("");
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
@@ -118,7 +148,8 @@ export function LandingSearch({ signedIn }: { signedIn: boolean }) {
     <>
       <form id="landing-search" className="mt-6 space-y-4" onSubmit={(event) => {
         event.preventDefault();
-        if (pending) return;
+        if (pending || !sessionKnown) return;
+        onStart?.();
         if (signedIn) {
           start(() => router.push(searchStartHref(true, text)));
           return;
@@ -139,7 +170,7 @@ export function LandingSearch({ signedIn }: { signedIn: boolean }) {
           invalid={Boolean(promptError)} describedBy={promptError ? promptErrorId : undefined} />
         {promptError ? <p id={promptErrorId} role="alert" className="-mt-2 text-sm text-destructive">{promptError}</p> : null}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
-          <Button type="submit" disabled={pending || !hydrated} className="h-11 px-4.5 text-[15px]">
+          <Button type="submit" disabled={pending || !hydrated || !sessionKnown} className="h-11 px-4.5 text-[15px]">
             {pending && signedIn ? "Continuando…" : "Crear mi búsqueda"}
           </Button>
           <Link href="/planes" className="inline-flex min-h-11 items-center text-[15px] font-medium underline underline-offset-4">Ver planes</Link>

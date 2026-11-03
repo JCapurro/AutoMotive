@@ -371,9 +371,25 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"model_guides": {
+                  // PAR-04 (20261204120000_par04_model_guides, 20261204120300_par04_guide_review_fixes).
+                  // anon/authenticated read only published rows and only the public columns; writes go
+                  // through the admin_* RPCs (service role).
+                  Row: {
+                    "id": number,"make": string,"model": string,"generation_label": string | null,"year_from": number | null,"year_to": number | null,"slug_make": string,"slug_model": string,"body": Json,"questions": Json,"sources": Json,"status": string,"origin": string,"llm_job_id": number | null,"llm_version": string | null,"generated_at": string | null,"reviewed_by": string | null,"reviewed_at": string | null,"published_at": string | null,"created_at": string,"updated_at": string,"content_updated_at": string
+                  }
+                  Insert: {
+                    "id"?: never,"make": string,"model": string,"generation_label"?: string | null,"year_from"?: number | null,"year_to"?: number | null,"slug_make": string,"slug_model": string,"body"?: Json,"questions"?: Json,"sources"?: Json,"status"?: string,"origin"?: string,"llm_job_id"?: number | null,"llm_version"?: string | null,"generated_at"?: string | null,"reviewed_by"?: string | null,"reviewed_at"?: string | null,"published_at"?: string | null,"created_at"?: string,"updated_at"?: string,"content_updated_at"?: string
+                  }
+                  Update: {
+                    "id"?: never,"make"?: string,"model"?: string,"generation_label"?: string | null,"year_from"?: number | null,"year_to"?: number | null,"slug_make"?: string,"slug_model"?: string,"body"?: Json,"questions"?: Json,"sources"?: Json,"status"?: string,"origin"?: string,"llm_job_id"?: number | null,"llm_version"?: string | null,"generated_at"?: string | null,"reviewed_by"?: string | null,"reviewed_at"?: string | null,"published_at"?: string | null,"created_at"?: string,"updated_at"?: string,"content_updated_at"?: string
+                  }
+                  Relationships: []
                 },"matches": {
                   Row: {
                     "contact_questions": (string)[] | null,"generated_at": string,"id": number,"is_backfill": boolean,"level": Database["public"]['Enums']["match_level"],"listing_id": number,"margin_ref": Json | null,"match_reasons": NonNullable<Json>,"price_ref": Json | null,"red_flags": NonNullable<Json>,"score": number,"score_breakdown": NonNullable<Json>,"scoring_version": string,"search_profile_id": number,"seller_questions": string | null,"updated_at": string
+                    /** PAR-04 (20261204120200_par04_question_origins): absent on a base without the migration. */
+                    "question_origins"?: Json | null
                   }
                   Insert: {
                     "contact_questions"?: (string)[] | null,"generated_at"?: string,"id"?: never,"is_backfill"?: boolean,"level": Database["public"]['Enums']["match_level"],"listing_id": number,"margin_ref"?: Json | null,"match_reasons": NonNullable<Json>,"price_ref"?: Json | null,"red_flags"?: NonNullable<Json>,"score": number,"score_breakdown": NonNullable<Json>,"scoring_version": string,"search_profile_id": number,"seller_questions"?: string | null,"updated_at"?: string
@@ -1139,6 +1155,14 @@ isOneToOne: false
         Args: { p_target_type: string; p_target_key: string; p_expected: Json; p_value: Json; p_actor_id: string }
         Returns: number
       }
+            // PAR-04: model guides (service role, except log_guide_event: anon and authenticated).
+            admin_save_model_guide: { Args: { p_id: number | null; p_values: Json; p_expected_updated_at: string | null; p_actor_id: string }; Returns: Json },
+            admin_set_model_guide_status: { Args: { p_id: number; p_status: string; p_actor_id: string }; Returns: Json },
+            admin_request_model_guide: { Args: { p_guide_id: number; p_force: boolean; p_actor_id: string }; Returns: number },
+            admin_guide_candidates: { Args: { p_limit?: number }; Returns: { make: string; model: string; year_from: number | null; year_to: number | null; active_searches: number; guide_id: number | null; guide_status: string | null }[] },
+            admin_guide_event_counts: { Args: { p_days?: number }; Returns: { guide_id: number; viewed: number; cta_clicked: number; questions_copied: number }[] },
+            model_guide_jobs_since: { Args: { p_since: string }; Returns: number },
+            log_guide_event: { Args: { p_name: string; p_slug_make: string; p_slug_model: string }; Returns: undefined },
             begin_billing_checkout: { Args: { p_user: string; p_offer: string; p_email: string; p_version: string; p_expected_amount: number }; Returns: Json },
             apply_mercadopago_payment: { Args: { p_checkout: string; p_reference: string; p_status: string; p_amount: number; p_currency: string; p_paid_at: string; p_start: string; p_end: string }; Returns: number },
             claim_auth_throttle: { Args: { p_kind: string; p_key: string; p_limit: number; p_window_seconds: number }; Returns: boolean },

@@ -220,6 +220,8 @@ export function Inspector({ data }: { data: Inspection }) {
             </Section>
           </div>
 
+          <SellerQuestions questions={match.seller_questions} origins={match.question_origins} />
+
           <Section title="Red flags">
             {flags.length ? (
               <ul className="space-y-2 rounded-xl bg-card p-4 ring-1 ring-foreground/10">
@@ -402,5 +404,50 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
       <dt className="text-muted-foreground">{label}</dt>
       <dd className="min-w-0 break-words">{children}</dd>
     </>
+  );
+}
+
+type QuestionOrigin = { key: string; origin: string; guide_id?: number; text?: string };
+
+function questionOrigins(value: unknown): QuestionOrigin[] | null {
+  if (!Array.isArray(value)) return null;
+  return value.filter((o): o is QuestionOrigin => Boolean(o) && typeof o === "object" && typeof (o as QuestionOrigin).key === "string");
+}
+
+/**
+ * PAR-04: the seller questions as stored, and where each one came from
+ * (matches.question_origins: the template or a published guide). A base
+ * without the column, or a match scored before it, shows only the text.
+ */
+function SellerQuestions({ questions, origins }: { questions: string | null; origins: unknown }) {
+  const items = questionOrigins(origins);
+  return (
+    <Section title="Preguntas al vendedor" description="seller_questions y, por pregunta, su origen (question_origins): plantilla o guía publicada.">
+      {questions ? <p className="rounded-xl bg-card p-4 text-sm ring-1 ring-foreground/10">{questions}</p> : <p className="rounded-xl bg-muted p-4 text-sm text-muted-foreground">Sin preguntas guardadas.</p>}
+      {items ? (
+        <Table>
+          <thead>
+            <tr>
+              <Th>Clave</Th>
+              <Th>Origen</Th>
+              <Th>Detalle</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((o) => (
+              <tr key={o.key} data-origin={o.origin}>
+                <Td><span className="font-mono text-xs">{o.key}</span></Td>
+                <Td>{o.origin === "guide" ? <Pill tone="ok">guía</Pill> : <Pill>plantilla</Pill>}</Td>
+                <Td className="text-muted-foreground">
+                  {o.origin === "guide" && o.guide_id ? <TextLink href={`/admin/guides/${o.guide_id}`}>Guía #{o.guide_id}</TextLink> : null}
+                  {o.text ? <span className="block">{o.text}</span> : null}
+                </Td>
+              </tr>
+            ))}
+            {!items.length ? <EmptyRow colSpan={3} /> : null}
+          </tbody>
+        </Table>
+      ) : null}
+    </Section>
   );
 }

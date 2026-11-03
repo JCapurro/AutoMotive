@@ -6,6 +6,9 @@ create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
 select no_plan();
 
+-- Guide events other runs left (the e2e) would count against the assertions and the caps.
+delete from public.events where name in ('guide_viewed', 'guide_cta_clicked', 'guide_questions_copied');
+
 insert into auth.users (id, email) values
   ('9a1de000-0000-4000-8000-000000000001', 'guides-admin@example.test'),
   ('9a1de000-0000-4000-8000-000000000002', 'guides-user@example.test');
