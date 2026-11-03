@@ -20,19 +20,26 @@ vi.mock("next/navigation", async (original) => ({
 
 import GuidePage, { generateMetadata, generateStaticParams, revalidate } from "@/app/guias/[marca]/[modelo]/page";
 import GuidesIndex, { metadata as indexMetadata } from "@/app/guias/page";
+import robots from "@/app/robots";
 import sitemap from "@/app/sitemap";
 import { GUIDE_COPY } from "@/lib/guides";
 import {
+  articleJsonLd,
+  breadcrumbJsonLd,
   copyProblem,
   ctaPrompt,
   emptyBody,
   faqJsonLd,
   generationAnchor,
+  guideBreadcrumb,
+  guideIndexJsonLd,
+  guideSummary,
   GuideValuesInput,
   hasMoney,
   isSlug,
   jsonLdScript,
   lintGuide,
+  modelDateRange,
   modelYears,
   publishProblem,
   questionsText,
@@ -170,6 +177,74 @@ describe("FAQ JSON-LD", () => {
     expect(JSON.parse(script)).toEqual(faq);
   });
 
+  it("Article: headline, dates of publishing and content, the site as author and the car with its years", () => {
+    const guide = toPublicGuide({ ...ROW, published_at: "2026-11-01T12:00:00Z", content_updated_at: "2026-11-05T12:00:00Z" });
+    const later = toPublicGuide({ ...ROW, id: 9, year_from: 2020, year_to: 2024, published_at: "2026-11-10T12:00:00Z", content_updated_at: "2026-11-20T12:00:00Z" });
+    const ld = articleJsonLd([guide, later], "https://eseauto.com.ar")!;
+    expect(ld).toMatchObject({
+      "@context": "https://schema.org",
+      "@type": "Article",
+      headline: "Toyota Corolla usado: guía orientativa para revisarlo",
+      url: "https://eseauto.com.ar/guias/toyota/corolla",
+      inLanguage: "es-AR",
+      datePublished: "2026-11-01T12:00:00Z",
+      dateModified: "2026-11-20T12:00:00Z",
+      author: { "@type": "Organization", name: "Ese Auto", url: "https://eseauto.com.ar/" },
+      publisher: { "@type": "Organization", name: "Ese Auto" },
+      about: { "@type": "Car", brand: { "@type": "Brand", name: "Toyota" }, model: "Corolla", vehicleModelDate: "2014/2024" },
+    });
+    expect(String(ld.description)).toContain("2014 a 2024");
+    // Without published_at (never published) there is no datePublished; without years no vehicleModelDate.
+    const bare = articleJsonLd([toPublicGuide({ ...ROW, published_at: null, year_from: null, year_to: null })], "https://x.test")!;
+    expect(bare).not.toHaveProperty("datePublished");
+    expect(bare.about).not.toHaveProperty("vehicleModelDate");
+    expect(articleJsonLd([], "https://x.test")).toBeNull();
+    expect([modelDateRange(2014, 2019), modelDateRange(2020, 2020), modelDateRange(null, 2017), modelDateRange(null, null)]).toEqual(["2014/2019", "2020", "2017", null]);
+  });
+
+  it("BreadcrumbList: Inicio › Guías › the model, with positions", () => {
+    const ld = guideBreadcrumb("Toyota", "Corolla", "toyota", "corolla", "https://eseauto.com.ar");
+    expect(ld["@type"]).toBe("BreadcrumbList");
+    expect(ld.itemListElement).toEqual([
+      { "@type": "ListItem", position: 1, name: "Inicio", item: "https://eseauto.com.ar/" },
+      { "@type": "ListItem", position: 2, name: GUIDE_COPY.indexTitle, item: "https://eseauto.com.ar/guias" },
+      { "@type": "ListItem", position: 3, name: "Toyota Corolla", item: "https://eseauto.com.ar/guias/toyota/corolla" },
+    ]);
+    expect(breadcrumbJsonLd([]).itemListElement).toEqual([]);
+  });
+
+  it("CollectionPage of /guias lists every model in an ItemList, and «<» is escaped", () => {
+    const ld = guideIndexJsonLd([
+      { make: "Toyota", model: "Corolla", slugMake: "toyota", slugModel: "corolla" },
+      { make: "Ford", model: "Ka <b>", slugMake: "ford", slugModel: "ka" },
+    ], "https://eseauto.com.ar");
+    expect(ld).toMatchObject({ "@type": "CollectionPage", url: "https://eseauto.com.ar/guias", inLanguage: "es-AR" });
+    expect(ld.mainEntity).toEqual({
+      "@type": "ItemList",
+      numberOfItems: 2,
+      itemListElement: [
+        { "@type": "ListItem", position: 1, name: "Toyota Corolla", url: "https://eseauto.com.ar/guias/toyota/corolla" },
+        { "@type": "ListItem", position: 2, name: "Ford Ka <b>", url: "https://eseauto.com.ar/guias/ford/ka" },
+      ],
+    });
+    expect(jsonLdScript(ld)).not.toContain("<");
+  });
+
+  it("«En resumen» quotes the first known issue and the first thing to check, with the notice's caveat", () => {
+    const summary = guideSummary([toPublicGuide(ROW)])!;
+    expect(summary).toBe(
+      "Una falla conocida del Toyota Corolla (2014 a 2019): Caja automática: tirones entre primera y segunda. " +
+      "En la visita, revisá primero esto: Probar la caja en frío y en subida. " +
+      "Es información general del modelo: no reemplaza la revisión de un mecánico de confianza.",
+    );
+    expect(copyProblem(summary)).toBeNull();
+    expect(hasMoney(summary)).toBe(false);
+    const noYears = guideSummary([toPublicGuide({ ...ROW, year_from: null, year_to: null, body: { ...BODY, known_issues: [] } })])!;
+    expect(noYears.startsWith("En la visita, revisá primero esto: Probar la caja")).toBe(true);
+    expect(guideSummary([toPublicGuide({ ...ROW, body: { ...BODY, known_issues: [], visit_checklist: [] } })])).toBeNull();
+    expect(guideSummary([])).toBeNull();
+  });
+
   it("the CTA's text names the model and the years", () => {
     expect(ctaPrompt("Toyota", "Corolla", 2014, 2019)).toBe("Busco un Toyota Corolla 2014 a 2019");
     expect(ctaPrompt("Ford", "Ka")).toBe("Busco un Ford Ka");
@@ -230,6 +305,22 @@ describe("/guias/<marca>/<modelo>", () => {
     }
   });
 
+  it("puts «En resumen» and a «Crear mi búsqueda» link before the sections, and the FAQ, Article and breadcrumb JSON-LD", async () => {
+    vi.mocked(createPublicClient).mockReturnValue(client({ data: [ROW], error: null }).client);
+    const html = renderToStaticMarkup(await GuidePage(params("toyota", "corolla")));
+    const summary = html.indexOf('data-testid="guide-summary"');
+    const top = html.indexOf('data-testid="guide-cta-top"');
+    const sections = html.indexOf("Fallas conocidas</h2>");
+    expect(summary).toBeGreaterThan(-1);
+    expect(summary).toBeLessThan(sections);
+    expect(top).toBeLessThan(sections);
+    expect(html).toMatch(/<a href="#crear-busqueda"[^>]*>Crear mi búsqueda<\/a>/);
+    expect(html).toContain('id="crear-busqueda"');
+    const scripts = [...html.matchAll(/<script type="application\/ld\+json">(.*?)<\/script>/g)].map((m) => JSON.parse(m[1]) as { "@type": string });
+    expect(scripts.map((ld) => ld["@type"])).toEqual(["FAQPage", "Article", "BreadcrumbList"]);
+    expect(scripts[1]).toMatchObject({ datePublished: ROW.published_at, dateModified: ROW.content_updated_at });
+  });
+
   it("asks for content_updated_at, never updated_at", async () => {
     const { client: c, calls } = client({ data: [ROW], error: null });
     vi.mocked(createPublicClient).mockReturnValue(c);
@@ -250,6 +341,7 @@ describe("/guias/<marca>/<modelo>", () => {
     const meta = await generateMetadata(params("toyota", "corolla"));
     expect(meta.title).toBe("Toyota Corolla usado: guía orientativa para revisarlo");
     expect(meta.alternates?.canonical).toBe("/guias/toyota/corolla");
+    expect(meta.openGraph).toMatchObject({ type: "article", url: "/guias/toyota/corolla", modifiedTime: ROW.content_updated_at, publishedTime: ROW.published_at });
     expect(String(meta.description)).toContain("2014 a 2019");
   });
 
@@ -274,6 +366,9 @@ describe("/guias and the sitemap", () => {
     vi.mocked(createPublicClient).mockReturnValue(client({ data: [{ make: "Toyota", model: "Corolla", slug_make: "toyota", slug_model: "corolla", content_updated_at: ROW.content_updated_at }], error: null }).client);
     const html = renderToStaticMarkup(await GuidesIndex());
     expect(html).toContain('href="/guias/toyota/corolla"');
+    const ld = JSON.parse(/<script type="application\/ld\+json">(.*?)<\/script>/.exec(html)![1]) as { "@type": string; mainEntity: { itemListElement: { url: string }[] } };
+    expect(ld["@type"]).toBe("CollectionPage");
+    expect(ld.mainEntity.itemListElement.map((i) => i.url)).toEqual([expect.stringMatching(/\/guias\/toyota\/corolla$/)]);
     vi.mocked(createPublicClient).mockReturnValue(client({ data: null, error: { code: "PGRST205", message: "x" } }).client);
     expect(renderToStaticMarkup(await GuidesIndex())).toContain(GUIDE_COPY.indexEmpty);
   });
@@ -369,6 +464,23 @@ describe("a model with several generations", () => {
     expect(html).not.toContain('aria-label="Generaciones"');
     expect(html).toMatch(/<h2 id="guia-known_issues"[^>]*>Fallas conocidas<\/h2>/);
     expect(html).toContain('data-prompt="Busco un Toyota Corolla"');
+  });
+});
+
+describe("robots", () => {
+  it("allows /guias to every crawler and names the AI crawlers, keeping the private areas out for all", () => {
+    const { rules, sitemap: map } = robots();
+    const list = Array.isArray(rules) ? rules : [rules];
+    const agents = list.flatMap((r) => (Array.isArray(r.userAgent) ? r.userAgent : [r.userAgent]));
+    for (const bot of ["*", "GPTBot", "OAI-SearchBot", "ChatGPT-User", "ClaudeBot", "Claude-SearchBot", "Claude-User", "PerplexityBot", "Perplexity-User", "Google-Extended", "Applebot-Extended", "CCBot", "Bingbot"]) {
+      expect(agents, bot).toContain(bot);
+    }
+    for (const rule of list) {
+      expect(rule.allow).toEqual(expect.arrayContaining(["/guias", "/llms.txt"]));
+      expect(rule.disallow).toEqual(expect.arrayContaining(["/app", "/admin", "/api/", "/auth/", "/r/", "/m/", "/baja"]));
+      expect(rule.disallow).not.toContain("/guias");
+    }
+    expect(map).toMatch(/\/sitemap\.xml$/);
   });
 });
 

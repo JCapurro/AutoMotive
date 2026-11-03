@@ -52,7 +52,17 @@ export const GUIDE_COPY = {
   indexEmpty: "Todavía no hay guías publicadas.",
   indexBack: "Volver al inicio",
   allGuides: "Todas las guías",
+  summaryTitle: "En resumen",
+  summaryIssue: "Una falla conocida del {name}{years}: {text}.",
+  summaryCheck: "En la visita, revisá primero esto: {text}.",
+  summaryClose: "Es información general del modelo: no reemplaza la revisión de un mecánico de confianza.",
+  ctaTop: "Crear mi búsqueda",
+  ctaTopText: "¿Ya sabés que querés un {name}? Te avisamos cuando aparezca uno publicado.",
+  home: "Inicio",
 } as const;
+
+/** Who publishes the guides (schema.org Organization). */
+export const SITE_NAME = "Ese Auto";
 
 export function guideName(make: string, model: string): string {
   return `${make} ${model}`;
@@ -288,6 +298,8 @@ export type PublicGuide = {
   sources: GuideSource[];
   /** model_guides.content_updated_at: «Última actualización» and the sitemap's lastModified. */
   updatedAt: string;
+  /** model_guides.published_at: the Article's datePublished. */
+  publishedAt: string | null;
 };
 
 export function toPublicGuide(row: PublicGuideRow): PublicGuide {
@@ -304,6 +316,7 @@ export function toPublicGuide(row: PublicGuideRow): PublicGuide {
     questions: readQuestions(row.questions),
     sources: readSources(row.sources).filter((s) => s.verified),
     updatedAt: row.content_updated_at,
+    publishedAt: row.published_at,
   };
 }
 
@@ -367,6 +380,120 @@ export function faqJsonLd(guides: PublicGuide[], url: string): Record<string, un
 /** JSON for a <script type="application/ld+json">, with «<» escaped (Next's JSON-LD guide). */
 export function jsonLdScript(value: unknown): string {
   return JSON.stringify(value).replace(/</g, "\\u003c");
+}
+
+/** A guide line as the end of a sentence: no trailing period or spaces. */
+function clause(text: string): string {
+  return text.trim().replace(/[.\s]+$/, "");
+}
+
+/**
+ * «En resumen»: the answer-first paragraph at the top of the page, built from
+ * the guide's own lines (the first known issue and the first thing to check),
+ * so a search or answer engine can quote it as it stands. null without either.
+ */
+export function guideSummary(guides: PublicGuide[]): string | null {
+  if (!guides.length) return null;
+  const name = guideName(guides[0].make, guides[0].model);
+  const years = modelYears(guides);
+  const span = yearsText(years.from, years.to);
+  const issue = guides.flatMap((g) => g.body.known_issues)[0]?.text;
+  const check = guides.flatMap((g) => g.body.visit_checklist)[0]?.text;
+  if (!issue && !check) return null;
+  const parts: string[] = [];
+  if (issue) parts.push(GUIDE_COPY.summaryIssue.replace("{name}", name).replace("{years}", span ? ` (${span})` : "").replace("{text}", clause(issue)));
+  if (check) parts.push(GUIDE_COPY.summaryCheck.replace("{text}", clause(check)));
+  parts.push(GUIDE_COPY.summaryClose);
+  return parts.join(" ");
+}
+
+/** schema.org Organization: the site, author and publisher of the guides. */
+export function organizationJsonLd(site: string): Record<string, unknown> {
+  return { "@type": "Organization", name: SITE_NAME, url: `${site}/` };
+}
+
+/** «2014/2019» (an ISO 8601 interval), «2014», or null: the years a page covers. */
+export function modelDateRange(from: number | null, to: number | null): string | null {
+  if (from && to) return from === to ? String(from) : `${from}/${to}`;
+  if (from || to) return String(from ?? to);
+  return null;
+}
+
+/**
+ * schema.org Article for a model's page: the headline and description of its
+ * metadata, published when its first guide was, modified when its content
+ * last changed, about the model (Car: brand, model and its years).
+ */
+export function articleJsonLd(guides: PublicGuide[], site: string): Record<string, unknown> | null {
+  if (!guides.length) return null;
+  const { make, model, slugMake, slugModel } = guides[0];
+  const years = modelYears(guides);
+  const url = `${site}${guidePath(slugMake, slugModel)}`;
+  const published = guides.map((g) => g.publishedAt).filter((v): v is string => Boolean(v)).sort()[0];
+  const modified = guides.map((g) => g.updatedAt).sort().at(-1);
+  const range = modelDateRange(years.from, years.to);
+  const org = organizationJsonLd(site);
+  return {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    headline: guideTitle(make, model),
+    description: guideDescription(make, model, yearsText(years.from, years.to)),
+    url,
+    mainEntityOfPage: { "@type": "WebPage", "@id": url },
+    inLanguage: "es-AR",
+    ...(published ? { datePublished: published } : {}),
+    ...(modified ? { dateModified: modified } : {}),
+    author: org,
+    publisher: org,
+    about: {
+      "@type": "Car",
+      name: guideName(make, model),
+      brand: { "@type": "Brand", name: make },
+      model,
+      ...(range ? { vehicleModelDate: range } : {}),
+    },
+  };
+}
+
+/** schema.org BreadcrumbList: Inicio › Guías › the model. */
+export function breadcrumbJsonLd(items: { name: string; url: string }[]): Record<string, unknown> {
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: items.map((item, n) => ({ "@type": "ListItem", position: n + 1, name: item.name, item: item.url })),
+  };
+}
+
+/** The breadcrumb of a model's page. */
+export function guideBreadcrumb(make: string, model: string, slugMake: string, slugModel: string, site: string) {
+  return breadcrumbJsonLd([
+    { name: GUIDE_COPY.home, url: `${site}/` },
+    { name: GUIDE_COPY.indexTitle, url: `${site}/guias` },
+    { name: guideName(make, model), url: `${site}${guidePath(slugMake, slugModel)}` },
+  ]);
+}
+
+/** schema.org CollectionPage of /guias, with an ItemList of every published model. */
+export function guideIndexJsonLd(entries: { make: string; model: string; slugMake: string; slugModel: string }[], site: string): Record<string, unknown> {
+  return {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: GUIDE_COPY.indexTitle,
+    description: GUIDE_COPY.indexIntro,
+    url: `${site}/guias`,
+    inLanguage: "es-AR",
+    publisher: organizationJsonLd(site),
+    mainEntity: {
+      "@type": "ItemList",
+      numberOfItems: entries.length,
+      itemListElement: entries.map((e, n) => ({
+        "@type": "ListItem",
+        position: n + 1,
+        name: guideName(e.make, e.model),
+        url: `${site}${guidePath(e.slugMake, e.slugModel)}`,
+      })),
+    },
+  };
 }
 
 /** «12 de noviembre de 2026», Argentina's calendar. */

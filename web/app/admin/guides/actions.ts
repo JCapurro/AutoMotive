@@ -42,6 +42,8 @@ function revalidateGuide(slugMake: unknown, slugModel: unknown) {
   if (typeof slugMake === "string" && typeof slugModel === "string") revalidatePath(guidePath(slugMake, slugModel));
   revalidatePath("/guias");
   revalidatePath("/sitemap.xml");
+  revalidatePath("/llms.txt");
+  revalidatePath("/llms-full.txt");
 }
 
 const Id = z.number().int().positive();

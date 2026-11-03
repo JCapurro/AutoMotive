@@ -54,3 +54,25 @@ export const publishedGuideIndex = cache(async (): Promise<GuideIndexEntry[]> =>
   }
   return [...byModel.values()];
 });
+
+/**
+ * Every published guide, one array per model (by make and model, each by
+ * year), read as anon: llms.txt and llms-full.txt. [] on a base without the table.
+ */
+export const publishedGuidesByModel = cache(async (): Promise<PublicGuide[][]> => {
+  const { data, error } = await createPublicClient()
+    .from("model_guides")
+    .select(PUBLIC_GUIDE_COLUMNS)
+    .order("make")
+    .order("model")
+    .order("year_from", { ascending: true, nullsFirst: true })
+    .order("id");
+  if (missingTable(error)) return [];
+  if (error) throw new Error(`model_guides: ${error.message}`);
+  const byModel = new Map<string, PublicGuide[]>();
+  for (const row of (data ?? []) as PublicGuideRow[]) {
+    const key = `${row.slug_make}/${row.slug_model}`;
+    byModel.set(key, [...(byModel.get(key) ?? []), toPublicGuide(row)]);
+  }
+  return [...byModel.values()].map(sortGenerations);
+});

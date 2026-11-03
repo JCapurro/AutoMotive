@@ -3,7 +3,8 @@ import Link from "next/link";
 
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
-import { GUIDE_COPY, guideName, guidePath } from "@/lib/guides";
+import { siteUrl } from "@/lib/env";
+import { GUIDE_COPY, guideIndexJsonLd, guideName, guidePath, jsonLdScript } from "@/lib/guides";
 import { type GuideIndexEntry, publishedGuideIndex } from "@/lib/guides-data";
 
 // PAR-04: static, regenerated at most once an hour and at once on publishing.
@@ -41,6 +42,7 @@ export default async function GuidesIndex() {
     <div className="flex min-h-dvh flex-col">
       <SiteHeader signedIn={false} page="guias" />
       <main className="mx-auto w-full max-w-3xl flex-1 space-y-8 px-4 pt-8 pb-16 sm:px-6 md:pt-12">
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdScript(guideIndexJsonLd(entries, siteUrl)) }} />
         <header className="space-y-4">
           <h1 className="type-display text-[2.1rem] leading-[1.05] text-balance md:text-5xl">{GUIDE_COPY.indexTitle}</h1>
           <p className="text-[17px] leading-snug text-muted-foreground">{GUIDE_COPY.indexIntro}</p>

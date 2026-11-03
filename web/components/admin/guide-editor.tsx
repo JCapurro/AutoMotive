@@ -198,7 +198,7 @@ export function GuideEditor({ id, initial, updatedAt, status }: { id: number; in
           <GuideContent guides={[{
             id, make: values.make, model: values.model, generationLabel: values.generation_label, yearFrom: values.year_from, yearTo: values.year_to,
             slugMake: "", slugModel: "", body: values.body, questions: values.questions.filter((q) => q.text.trim()), sources: values.sources.filter((s) => s.verified),
-            updatedAt: expected,
+            updatedAt: expected, publishedAt: null,
           }]} />
         </div>
       </section>

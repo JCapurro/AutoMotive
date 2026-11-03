@@ -9,12 +9,15 @@ import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { siteUrl } from "@/lib/env";
 import {
+  articleJsonLd,
   ctaPrompt,
   faqJsonLd,
   GUIDE_COPY,
+  guideBreadcrumb,
   guideDescription,
   guideName,
   guidePath,
+  guideSummary,
   guideTitle,
   jsonLdScript,
   modelYears,
@@ -47,7 +50,16 @@ export async function generateMetadata({ params }: PageProps<"/guias/[marca]/[mo
     title,
     description,
     alternates: { canonical: path },
-    openGraph: { type: "article", locale: "es_AR", siteName: "eseauto.com.ar", title, description, url: path },
+    openGraph: {
+      type: "article",
+      locale: "es_AR",
+      siteName: "eseauto.com.ar",
+      title,
+      description,
+      url: path,
+      modifiedTime: guides.map((g) => g.updatedAt).sort().at(-1),
+      ...(guides.some((g) => g.publishedAt) ? { publishedTime: guides.map((g) => g.publishedAt).filter((v): v is string => Boolean(v)).sort()[0] } : {}),
+    },
   };
 }
 
@@ -61,13 +73,18 @@ export default async function GuidePage({ params }: PageProps<"/guias/[marca]/[m
   const { make, model } = guides[0];
   const name = guideName(make, model);
   const years = modelYears(guides);
+  // Everything an engine reads is in the HTML (server-rendered): the FAQ first,
+  // then the Article and the breadcrumb, and the «En resumen» paragraph on top.
   const faq = faqJsonLd(guides, `${siteUrl}${guidePath(marca, modelo)}`);
+  const article = articleJsonLd(guides, siteUrl);
+  const breadcrumb = guideBreadcrumb(make, model, marca, modelo, siteUrl);
+  const summary = guideSummary(guides);
 
   return (
     <div className="flex min-h-dvh flex-col">
       <SiteHeader signedIn={false} page="guias" />
       <main className="flex-1 pt-8 pb-16 md:pt-12">
-        {faq ? <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdScript(faq) }} /> : null}
+        {[faq, article, breadcrumb].map((ld, n) => ld ? <script key={n} type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdScript(ld) }} /> : null)}
         <GuideTracker slugMake={marca} slugModel={modelo} name={name} />
         <div className={`${WRAP} space-y-8`}>
           <nav aria-label="Ruta" className="text-sm text-muted-foreground">
@@ -78,6 +95,19 @@ export default async function GuidePage({ params }: PageProps<"/guias/[marca]/[m
             <h1 className="type-display text-[2.1rem] leading-[1.05] text-balance md:text-5xl">{guideTitle(make, model)}</h1>
             <GuideNotice />
           </header>
+          {summary ? (
+            <section aria-labelledby="guide-summary" data-testid="guide-summary" className="space-y-2">
+              <h2 id="guide-summary" className="text-xl font-semibold tracking-tight">{GUIDE_COPY.summaryTitle}</h2>
+              <p className="text-[17px] leading-relaxed">{summary}</p>
+            </section>
+          ) : null}
+          <p className="flex flex-wrap items-center gap-x-3 gap-y-2 text-[15px] text-muted-foreground">
+            <span>{GUIDE_COPY.ctaTopText.replace("{name}", name)}</span>
+            {/* The form is the one at the bottom (a single signup form per page). */}
+            <a href="#crear-busqueda" data-testid="guide-cta-top" className="inline-flex min-h-11 items-center rounded-md bg-primary px-4 font-medium text-primary-foreground">
+              {GUIDE_COPY.ctaTop}
+            </a>
+          </p>
           <GuideContent guides={guides} slugMake={marca} slugModel={modelo} />
           <section id="crear-busqueda" aria-labelledby="guide-cta" className="scroll-mt-24 rounded-xl border p-4 sm:p-6">
             <h2 id="guide-cta" className="text-xl font-semibold tracking-tight">{GUIDE_COPY.ctaTitle.replace("{name}", name)}</h2>

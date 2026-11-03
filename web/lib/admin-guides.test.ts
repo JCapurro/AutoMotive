@@ -61,7 +61,7 @@ describe("/admin/guides actions", () => {
   it("saving a published guide invalidates its page, /guias and the sitemap", async () => {
     expect(await saveGuide({ id: 3, expectedUpdatedAt: "t1", values: VALUES })).toEqual({ ok: true, id: 3, updatedAt: "t2" });
     expect(mocks.rpc).toHaveBeenCalledWith("admin_save_model_guide", expect.objectContaining({ p_id: 3, p_expected_updated_at: "t1", p_actor_id: "session-admin" }));
-    expect(mocks.revalidatePath.mock.calls.map((c) => c[0])).toEqual(["/guias/ford/fiesta", "/guias", "/sitemap.xml"]);
+    expect(mocks.revalidatePath.mock.calls.map((c) => c[0])).toEqual(["/guias/ford/fiesta", "/guias", "/sitemap.xml", "/llms.txt", "/llms-full.txt"]);
   });
 
   it("a conflict says so", async () => {
@@ -96,7 +96,7 @@ describe("/admin/guides actions", () => {
     // A change between the read and the RPC: the RPC refuses it.
     mocks.rpc.mockResolvedValue({ data: null, error: { message: "guide_changed" } });
     expect((await setGuideStatus({ id: 3, status: "published", expectedUpdatedAt: SEEN })).error).toContain("Recargá y revisala");
-    expect(mocks.revalidatePath).toHaveBeenCalledTimes(3);
+    expect(mocks.revalidatePath).toHaveBeenCalledTimes(5);
   });
 
   it("publishing and unpublishing invalidate the public pages", async () => {
