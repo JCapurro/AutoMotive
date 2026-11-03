@@ -116,6 +116,12 @@ OPPORTUNITY_CONTACT_MESSAGE = notification("opportunity", {**OPPORTUNITY.payload
 # filter let a listing without a known seller through.
 OPPORTUNITY_SELLER_UNKNOWN = notification("opportunity", {**OPPORTUNITY.payload, "seller_unknown": True})
 
+# Juan, 03/11: the other plans' emails show Pro locked (service.margin_teaser, contact_teaser).
+OPPORTUNITY_PRO_TEASER = notification("opportunity", {**OPPORTUNITY.payload, "listing": _ARS_LISTING,
+                                                      "margin_teaser": True, "contact_teaser": True})
+NEW_MATCH_MARGIN_TEASER = notification("new_match", {**NEW_MATCH.payload, "margin_teaser": True})
+PRICE_DROP_MARGIN_TEASER = notification("price_drop", {**PRICE_DROP.payload, "margin_teaser": True})
+
 # PAR-02 resto: the email's two flags cut by app_config.red_flags.order, from
 # the stored flags as intelligence/red_flags.py builds them.
 def _cut(*flags: tuple[str, str, str]) -> list[str]:
@@ -159,6 +165,8 @@ CASES = {"opportunity": OPPORTUNITY, "new_match": NEW_MATCH, "price_drop": PRICE
          "opportunity_margin": OPPORTUNITY_MARGIN, "opportunity_margin_no_zone": OPPORTUNITY_MARGIN_NO_ZONE,
          "opportunity_margin_few_dealers": OPPORTUNITY_MARGIN_FEW_DEALERS,
          "price_drop_margin": PRICE_DROP_MARGIN,
+         "opportunity_pro_teaser": OPPORTUNITY_PRO_TEASER, "new_match_margin_teaser": NEW_MATCH_MARGIN_TEASER,
+         "price_drop_margin_teaser": PRICE_DROP_MARGIN_TEASER,
          "opportunity_private_many_listings": OPPORTUNITY_PRIVATE_MANY,
          "opportunity_duplicate_photos": OPPORTUNITY_DUPLICATE_PHOTOS,
          "opportunity_guide_questions": OPPORTUNITY_GUIDE_QUESTIONS}

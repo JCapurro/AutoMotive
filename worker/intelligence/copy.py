@@ -279,3 +279,19 @@ MARGIN = {
     "email": "{line}. Parámetros al {date}.",
     "email_no_date": "{line}.",
 }
+
+# ---------------------------------------------------------------------------
+# Juan, 03/11: Pro in view in the other plans' alert emails, never Pro's data
+# (the same words as web/lib/copy.ts MARGIN_TEASER and PRO_LOCKED). An email
+# can't blur, so the margin is a fixed placeholder, an X for every digit.
+# ---------------------------------------------------------------------------
+
+PRO_TEASER = {
+    "badge": "Pro",
+    "locked": "{label} (Pro)",
+    "cta": "Ver planes",
+    "margin_label": "Margen bruto estimado",
+    "margin_figure": "USD X.XXX",
+    "margin_note": "Con Pro ves el margen bruto estimado de este auto frente a lo que publican las agencias.",
+    "contact_note": "Con Pro, el mensaje para el vendedor te llega listo en este email.",
+}

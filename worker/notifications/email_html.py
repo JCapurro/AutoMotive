@@ -9,7 +9,7 @@ from datetime import date, datetime, timedelta, timezone
 from html import escape
 from typing import TYPE_CHECKING
 
-from intelligence.copy import CONTACT_MESSAGE, QUESTIONS_FOOTER, QUESTIONS_TITLE
+from intelligence.copy import CONTACT_MESSAGE, PRO_TEASER, QUESTIONS_FOOTER, QUESTIONS_TITLE
 from notifications.email_assets import LOGO_CONTENT_ID
 
 if TYPE_CHECKING:
@@ -107,6 +107,18 @@ def _digest_card(item: DigestItem) -> str:
         + '</td></tr><tr><td height="16" style="font-size:0;line-height:0">&nbsp;</td></tr>')
 
 
+def _pro_badge() -> str:
+    return (f'<span style="display:inline-block;margin-left:6px;padding:1px 7px;background:{INK};color:#ffffff;'
+            f'font-size:11px;line-height:17px;font-weight:bold;border-radius:9px">{escape(PRO_TEASER["badge"])}</span>')
+
+
+def _plans_note(note: str, url: str | None) -> str:
+    """Juan, 03/11: what Pro adds, and the way to the plans page."""
+    cta = (f' <a href="{escape(url)}" style="color:{INK};font-weight:bold;text-decoration:underline">'
+           f'{escape(PRO_TEASER["cta"])}</a>') if url else ""
+    return (f'<p style="margin:6px 0 0;font-size:12px;line-height:19px;color:{MUTED}">{escape(note)}{cta}</p>')
+
+
 def _email_note(note: str) -> str:
     # The information remains legible in mail clients without an emoji font.
     for old, new in (("🔎 ", "Búsqueda: "), ("📍 ", ""), ("🏷 ", "Fuente: "),
@@ -121,7 +133,7 @@ def render(c: Content, *, kind: str, now: datetime, day: str | None,
            footer: str, unsubscribe_label: str, eyebrow: str | None = None,
            title: str | None = None, preheader: str | None = None,
            open_pixel_url: str | None = None, secondary: Link | None = None,
-           question: tuple[str, tuple[Link, ...]] | None = None) -> str:
+           question: tuple[str, tuple[Link, ...]] | None = None, plans_url: str | None = None) -> str:
     """An alert, the digest or (with eyebrow/title/preheader) any other
     account email, such as the free-trial reminder. `secondary` is a small
     text link under the button; `question` is one short question with its
@@ -189,6 +201,13 @@ def render(c: Content, *, kind: str, now: datetime, day: str | None,
             line = line.replace("Opportunity Score ", "Puntaje de oportunidad: ", 1)
         emphasis = f"padding:10px 12px;background:{YELLOW};font-weight:bold;color:{INK};" if "debajo de publicaciones comparables" in line else ""
         body.append(_p(line, style=f"margin-top:10px;font-size:14px;line-height:22px;color:{MUTED};{emphasis}"))
+    if c.margin_teaser:
+        # Juan, 03/11: Pro's margin locked; a fixed placeholder, never the figure.
+        body.append(f'<p style="margin:10px 0 0;font-size:14px;line-height:22px;color:{MUTED}">'
+                    f'{escape(PRO_TEASER["margin_label"])}: <span style="padding:1px 8px;background:{PANEL};'
+                    f'color:#8a93a6;font-weight:bold;letter-spacing:1px">{escape(PRO_TEASER["margin_figure"])}</span>'
+                    f'{_pro_badge()}</p>')
+        body.append(_plans_note(PRO_TEASER["margin_note"], plans_url))
     if c.questions:
         body.append(_p(QUESTIONS_TITLE, style=f"margin-top:22px;font-size:14px;line-height:22px;font-weight:bold;color:{INK}"))
         body += [_p(f"• {q}", style=f"margin-top:6px;font-size:14px;line-height:22px;color:{MUTED}") for q in c.questions]
@@ -202,6 +221,10 @@ def render(c: Content, *, kind: str, now: datetime, day: str | None,
                  for line in c.contact_message.splitlines()]
         body.append(f'<div style="margin-top:8px;padding:10px 12px;border-left:3px solid {MUTED}">' + "".join(lines) + "</div>")
         body.append(_p(CONTACT_MESSAGE["email_note"], style=f"margin-top:8px;font-size:12px;line-height:19px;color:{MUTED}"))
+    elif c.contact_teaser:
+        body.append(f'<p style="margin:22px 0 0;font-size:14px;line-height:22px;font-weight:bold;color:{INK}">'
+                    f'{escape(CONTACT_MESSAGE["email_title"])}{_pro_badge()}</p>')
+        body.append(_plans_note(PRO_TEASER["contact_note"], plans_url))
     if c.link:
         body.append('<div style="margin-top:24px">' + _button(c.link.label, c.link.url) + '</div>')
         if detail_url:
