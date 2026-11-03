@@ -53,16 +53,19 @@ export function CreateOtherGuide() {
   const [make, setMake] = useState("");
   const [model, setModel] = useState("");
   return (
-    <div className="flex flex-wrap items-end gap-2">
-      <label className="space-y-1 text-sm">
-        <span className="block text-xs text-muted-foreground">Marca</span>
-        <input value={make} onChange={(e) => setMake(e.target.value)} className="h-8 w-40 rounded-md border bg-background px-2" name="make" />
-      </label>
-      <label className="space-y-1 text-sm">
-        <span className="block text-xs text-muted-foreground">Modelo</span>
-        <input value={model} onChange={(e) => setModel(e.target.value)} className="h-8 w-40 rounded-md border bg-background px-2" name="model" />
-      </label>
-      {make.trim() && model.trim() ? <CreateGuideButton make={make} model={model} label="Crear guía" /> : null}
+    <div className="mt-4 space-y-2">
+      <p className="text-sm font-medium">Crear una guía a mano para otro modelo</p>
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="space-y-1 text-sm">
+          <span className="block text-xs text-muted-foreground">Marca</span>
+          <input value={make} onChange={(e) => setMake(e.target.value)} className="h-8 w-40 rounded-md border bg-background px-2" name="make" />
+        </label>
+        <label className="space-y-1 text-sm">
+          <span className="block text-xs text-muted-foreground">Modelo</span>
+          <input value={model} onChange={(e) => setModel(e.target.value)} className="h-8 w-40 rounded-md border bg-background px-2" name="model" />
+        </label>
+        {make.trim() && model.trim() ? <CreateGuideButton make={make} model={model} label="Crear guía" /> : null}
+      </div>
     </div>
   );
 }
