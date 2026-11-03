@@ -379,7 +379,7 @@ isOneToOne: false
     }
                   ]
                 },"model_guides": {
-                  // PAR-04 (20261205120000_par04_model_guides, 20261204120300_par04_guide_review_fixes).
+                  // PAR-04 (20261205120000_par04_model_guides, 20261205120300_par04_guide_review_fixes).
                   // anon/authenticated read only published rows and only the public columns; writes go
                   // through the admin_* RPCs (service role).
                   Row: {
@@ -395,7 +395,7 @@ isOneToOne: false
                 },"matches": {
                   Row: {
                     "contact_questions": (string)[] | null,"generated_at": string,"id": number,"is_backfill": boolean,"level": Database["public"]['Enums']["match_level"],"listing_id": number,"margin_ref": Json | null,"match_reasons": NonNullable<Json>,"price_ref": Json | null,"red_flags": NonNullable<Json>,"score": number,"score_breakdown": NonNullable<Json>,"scoring_version": string,"search_profile_id": number,"seller_questions": string | null,"updated_at": string
-                    /** PAR-04 (20261204120200_par04_question_origins): absent on a base without the migration. */
+                    /** PAR-04 (20261205120200_par04_question_origins): absent on a base without the migration. */
                     "question_origins"?: Json | null
                   }
                   Insert: {

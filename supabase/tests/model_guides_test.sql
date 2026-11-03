@@ -1,6 +1,6 @@
--- PAR-04 (migrations 20261205120000_par04_model_guides, 20261204120100_par04_guide_events,
--- 20261204120200_par04_question_origins, 20261204120300_par04_guide_review_fixes,
--- 20261204120400_par04_guide_publish_guards): who reads model_guides, who writes,
+-- PAR-04 (migrations 20261205120000_par04_model_guides, 20261205120100_par04_guide_events,
+-- 20261205120200_par04_question_origins, 20261205120300_par04_guide_review_fixes,
+-- 20261205120400_par04_guide_publish_guards): who reads model_guides, who writes,
 -- what can be published, the guide jobs in llm_jobs and log_guide_event.
 begin;
 create extension if not exists pgtap with schema extensions;
@@ -268,7 +268,7 @@ select is((select viewed::int + cta_clicked::int from public.admin_guide_event_c
             where guide_id = (select id from public.model_guides where model = 'Fiesta')), 2, 'the admin counts them');
 reset role;
 
--- 20261204120300: the anon key cannot fill events. Past the cap per guide
+-- 20261205120300: the anon key cannot fill events. Past the cap per guide
 -- and minute nothing is written, and nothing is said.
 update public.app_config set value = jsonb_set(value, '{events}', '{"per_guide_minute": 3, "per_guide_hour": 300}')
  where key = 'model_guides';

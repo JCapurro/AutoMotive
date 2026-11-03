@@ -19,7 +19,7 @@
 --   and the sitemap's lastModified are the content's date, not the last
 --   publish or unpublish.
 --
--- Needs 20261205120000..20261204120300.
+-- Needs 20261205120000..20261205120300.
 
 -- ---------------------------------------------------------------------------
 -- Publishing rules

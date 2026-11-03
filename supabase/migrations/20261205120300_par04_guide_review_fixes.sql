@@ -20,7 +20,7 @@
 --   (app_config.model_guides.events, 30 and 300 by default). Past it the call
 --   does nothing and says nothing; the anon key cannot fill public.events.
 --
--- Needs 20261205120000..20261204120200. Does not apply or depend on
+-- Needs 20261205120000..20261205120200. Does not apply or depend on
 -- 20261107130000_timing_chain_catalog.sql. Applies on an empty base after the
 -- earlier migrations; the web of main does not read any of it.
 

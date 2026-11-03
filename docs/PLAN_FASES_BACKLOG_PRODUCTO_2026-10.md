@@ -61,7 +61,7 @@ Un solo bump de `SCORING_VERSION` por deploy (un único rescore masivo; evita ma
 | 2 | PRO-01 push | Canal por búsqueda, solo si F-04 lo justifica (pospuesto con F-04, 03/11) |
 | 3 | PAR-02 resto | pHash + `duplicate_photos`, `private_many_listings` (tras F-02), `cross_source_duplicate` con backfill |
 | 4 | PAR-03 bloque del modelo + PRO-02 rotación | Ya con 4+ semanas de `market_stats`; gating `model_stats` |
-| 5 | PAR-04 | En cualquier hueco y en paralelo: tabla + prompt + panel admin con 5 guías piloto → páginas `/guias` + sitemap → preguntas en `seller_questions`. **Arrancado el 03/11** (Juan): [diseño](superpowers/specs/2026-11-03-par04-guias-design.md), rama `claude/par04-guias`; implementado en la rama (migraciones `20261205120000` a `20261204120300`, worker y web), esperando la aprobación de Juan, sin pushear y con la generación con IA apagada |
+| 5 | PAR-04 | En cualquier hueco y en paralelo: tabla + prompt + panel admin con 5 guías piloto → páginas `/guias` + sitemap → preguntas en `seller_questions`. **Arrancado el 03/11** (Juan): [diseño](superpowers/specs/2026-11-03-par04-guias-design.md), rama `claude/par04-guias`; implementado en la rama (migraciones `20261205120000` a `20261205120300`, worker y web), esperando la aprobación de Juan, sin pushear y con la generación con IA apagada |
 
 ### Fase 4 · Validación comercial primero
 
