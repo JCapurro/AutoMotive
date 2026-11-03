@@ -13,6 +13,9 @@
 -- nothing changes. events.assisted_review_shown.preview_count comes from this
 -- function, so its meaning changes once this is applied (docs/AVISO_ZONA.md
 -- records when).
+-- Also app_config.zone_notice = {"enabled": true}: the notice's switch,
+-- which /admin/config turns off without a deploy (web/lib/zone-notice.ts;
+-- without the row the notice stays off). An existing row is left alone.
 create or replace function public.preview_search(
   p_filters    jsonb,
   p_origin_lat double precision default null,
@@ -147,5 +150,9 @@ as $$
            'sample', coalesce((select jsonb_agg(to_jsonb(s) order by s.first_seen_at desc) from sample s),
                               '[]'::jsonb))
 $$;
+
+insert into public.app_config(key, value)
+values ('zone_notice', jsonb_build_object('enabled', true))
+on conflict (key) do nothing;
 
 notify pgrst, 'reload schema';
