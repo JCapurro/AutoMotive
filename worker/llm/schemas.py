@@ -154,6 +154,53 @@ class LowResultsExplanation(_Strict):
                                                "cada uno con cuántos agregaría según el embudo; vacío si no hay.")
 
 
+# ---------------------------------------------------------------------------
+# PAR-04: a model guide's draft (llm/prompts/model_guide.md). Every line is a
+# statement of the guide, not a check of any car. intelligence/guides.py
+# validates the content (sections, 3 to 8 questions, copy lint, no money)
+# and marks every source unverified: the bounds here are only generous caps.
+# ---------------------------------------------------------------------------
+
+GuideSourceKind = Literal["ficha técnica", "manual", "prensa", "foro", "otra"]
+
+
+class GuideLine(_Strict):
+    text: str = Field(min_length=1, max_length=500, description="Una afirmación corta y concreta de la guía.")
+    applies_to: str | None = Field(max_length=160, description="A qué motor, versión o años aplica; null si a todo el modelo.")
+
+
+class GuideGeneration(_Strict):
+    label: str = Field(min_length=1, max_length=80, description="Nombre corriente de la generación o del restyling.")
+    year_from: int | None = Field(description="Primer año modelo, si lo sabés con seguridad.")
+    year_to: int | None = Field(description="Último año modelo, si lo sabés con seguridad.")
+    text: str = Field(min_length=1, max_length=500, description="Qué cambia en esa generación.")
+
+
+class GuideBody(_Strict):
+    known_issues: list[GuideLine] = Field(max_length=15, description="Fallas conocidas del modelo.")
+    visit_checklist: list[GuideLine] = Field(max_length=15, description="Qué revisar al ir a ver el auto.")
+    versions_equipment: list[GuideLine] = Field(max_length=15, description="Versiones y equipamiento.")
+    maintenance_costs: list[GuideLine] = Field(max_length=15, description="Mantenimiento y qué suele ser caro, sin cifras de dinero.")
+    generations: list[GuideGeneration] = Field(max_length=10, description="Generaciones y restylings.")
+
+
+class GuideQuestion(_Strict):
+    text: str = Field(min_length=1, max_length=300, description="Pregunta para el vendedor, terminada en «?».")
+    why: str = Field(max_length=300, description="Por qué conviene preguntarlo.")
+
+
+class GuideSource(_Strict):
+    title: str = Field(min_length=1, max_length=200)
+    url: str = Field(min_length=1, max_length=500, description="URL https de la fuente sugerida.")
+    kind: GuideSourceKind
+
+
+class ModelGuideDraft(_Strict):
+    body: GuideBody
+    questions: list[GuideQuestion] = Field(max_length=20, description="De 3 a 8 preguntas para hacerle al vendedor.")
+    sources: list[GuideSource] = Field(max_length=10, description="Fuentes sugeridas, que el redactor humano va a verificar.")
+
+
 def json_schema(model: type[BaseModel]) -> dict[str, Any]:
     """The model's JSON Schema, self-contained: `$defs` inlined and titles dropped.
 

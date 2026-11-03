@@ -16,6 +16,7 @@ from psycopg import AsyncConnection
 from psycopg.types.json import Jsonb
 
 from db.pool import connection
+from intelligence.seller_questions import without_guides
 from normalization.description_facts import PARTIAL_KINDS
 
 
@@ -96,6 +97,45 @@ async def mark_seen(alert_id: int, items: Iterable[dict], *, backfill: bool = Fa
 
 _EVALUATED = ("score", "level", "score_breakdown", "match_reasons", "price_ref", "red_flags",
               "seller_questions", "contact_questions", "scoring_version", "margin_ref")
+# PAR-04: written only where the migration added the column (checked once per process).
+_QUESTION_ORIGINS = "question_origins"
+_has_question_origins: bool | None = None
+
+
+async def _evaluated_columns(cx: AsyncConnection) -> tuple[str, ...]:
+    global _has_question_origins
+    if _has_question_origins is None:
+        row = await (await cx.execute(
+            "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' "
+            "  AND table_name = 'matches' AND column_name = %s) AS ok", (_QUESTION_ORIGINS,))).fetchone()
+        _has_question_origins = bool(row and row["ok"])
+    return _EVALUATED + ((_QUESTION_ORIGINS,) if _has_question_origins else ())
+
+
+def forget_columns() -> None:
+    """Tests: check the columns again."""
+    global _has_question_origins
+    _has_question_origins = None
+
+
+async def _without_unpublished_guides(cx: AsyncConnection,
+                                      rows: list[tuple[int, dict[str, Any]]]) -> list[tuple[int, dict[str, Any]]]:
+    """PAR-04: the run loaded the published guides once (Scorer.create); a
+    guide unpublished since then must not come back into the matches after
+    model_guide_withdraw_questions took it out. Its rows are locked FOR SHARE
+    until this transaction commits: an unpublish that commits first is seen
+    here, one that comes later waits and then withdraws what this wrote."""
+    ids = sorted({int(o["guide_id"]) for _, row in rows for o in (row.get(_QUESTION_ORIGINS) or [])
+                  if isinstance(o, dict) and o.get("guide_id") is not None})
+    if not ids:
+        return rows
+    live = {r["id"] for r in await (await cx.execute(
+        "SELECT id FROM model_guides WHERE id = ANY(%s) AND status = 'published' ORDER BY id FOR SHARE",
+        (ids,))).fetchall()}
+    gone = set(ids) - live
+    if not gone:
+        return rows
+    return [(listing_id, without_guides(row, gone)) for listing_id, row in rows]
 
 
 async def upsert_scored(cx: AsyncConnection, profile_id: int,
@@ -106,17 +146,21 @@ async def upsert_scored(cx: AsyncConnection, profile_id: int,
     if not rows:
         return {}
     inserted: dict[int, int] = {}
+    columns = await _evaluated_columns(cx)
+    if _QUESTION_ORIGINS in columns:
+        rows = await _without_unpublished_guides(cx, rows)
     for listing_id, row in rows:
-        # seller_questions, contact_questions (PRO-01) and margin_ref (PRO-02) are optional.
+        # seller_questions, contact_questions (PRO-01), margin_ref (PRO-02) and
+        # question_origins (PAR-04) are optional.
         values = [Jsonb(row[c]) if c in ("score_breakdown", "match_reasons", "red_flags")
-                  or (c in ("price_ref", "margin_ref") and row.get(c) is not None) else row.get(c)
-                  for c in _EVALUATED]
+                  or (c in ("price_ref", "margin_ref", _QUESTION_ORIGINS) and row.get(c) is not None) else row.get(c)
+                  for c in columns]
         rec = await (await cx.execute(
             "INSERT INTO matches (search_profile_id, listing_id, is_backfill, "
-            f"                     {', '.join(_EVALUATED)}) "
-            f"VALUES (%s, %s, %s, {', '.join(['%s'] * len(_EVALUATED))}) "
+            f"                     {', '.join(columns)}) "
+            f"VALUES (%s, %s, %s, {', '.join(['%s'] * len(columns))}) "
             "ON CONFLICT (search_profile_id, listing_id) DO UPDATE SET "
-            + ", ".join(f"{c} = excluded.{c}" for c in _EVALUATED) +
+            + ", ".join(f"{c} = excluded.{c}" for c in columns) +
             " RETURNING id, (xmax = 0) AS inserted",
             (profile_id, listing_id, backfill, *values))).fetchone()
         if rec and rec["inserted"]:

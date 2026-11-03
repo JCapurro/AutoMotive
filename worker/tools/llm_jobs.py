@@ -3,7 +3,9 @@
     python -m tools.llm_jobs              # with LLM_PROVIDER (claude_cli by default)
     python -m tools.llm_jobs --replay     # recorded answers (tests/fixtures/llm/), no CLI
 
-The web e2e uses --replay to answer the assisted-mode jobs it creates.
+The web e2e uses --replay to answer the assisted-mode jobs it creates. It
+also processes the guide drafts (PAR-04, 'model_guide'), from
+tests/fixtures/llm/model_guide_recorded.json with --replay.
 """
 from __future__ import annotations
 
