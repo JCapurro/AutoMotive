@@ -517,12 +517,23 @@ LIFECYCLE_FOOTER = {
 # search_activated: the first email an account gets, 45 minutes after its first search.
 WELCOME_SUBJECT = "Tu búsqueda de {model} ya está activa"
 WELCOME_SUBJECT_ANY = "Tu búsqueda ya está activa"
-WELCOME_FOUND = {1: "Ya encontramos 1 auto que coincide con tu búsqueda{model}{below}. Te avisamos de los nuevos apenas aparezcan.",
-                 "n": "Ya encontramos {n} autos que coinciden con tu búsqueda{model}{below}. Te avisamos de los nuevos apenas aparezcan."}
+# Counts are what the person sees: with a free trial's quota, payload.found
+# is the visible results and payload.hidden what the trial hides
+# (20261207120000_trial_reserve.sql); trial_limit and trial_left say what's left.
+WELCOME_FOUND = {1: "Ya encontramos 1 auto que coincide con tu búsqueda{model}{below}.",
+                 "n": "Ya encontramos {n} autos que coinciden con tu búsqueda{model}{below}."}
 WELCOME_BELOW = {1: ", y 1 está por debajo de publicaciones comparables",
                  "n": ", y {n} están por debajo de publicaciones comparables"}
-WELCOME_NONE = ("Ya estamos revisando las publicaciones{model}. Todavía no apareció ninguno que coincida: "
-                "te avisamos apenas aparezca.")
+WELCOME_HIDDEN = {1: "Hay 1 más que coincide y tu prueba no muestra.",
+                  "n": "Hay {n} más que coinciden y tu prueba no muestra."}
+WELCOME_ONLY_HIDDEN = {1: "Encontramos 1 auto que coincide con tu búsqueda{model}, pero tu prueba no lo muestra.",
+                       "n": "Encontramos {n} autos que coinciden con tu búsqueda{model}, pero tu prueba no los muestra."}
+WELCOME_NONE = "Ya estamos revisando las publicaciones{model}. Todavía no apareció ninguno que coincida."
+WELCOME_NEXT = "De los nuevos que coincidan te avisamos por email."
+WELCOME_TRIAL_LEFT = {1: "Tu prueba muestra hasta {limit} resultados y te queda 1: de los nuevos que coincidan te avisamos por email.",
+                      "n": "Tu prueba muestra hasta {limit} resultados y te quedan {n}: de los nuevos que coincidan te avisamos por email."}
+WELCOME_TRIAL_FULL = ("Tu prueba ya usó sus {limit} resultados, así que no vamos a avisarte de los nuevos. "
+                      "Con Particular los ves todos y seguimos avisándote.")
 WELCOME_INBOX = ("Para que nuestras alertas no terminen en Spam o Promociones, agregá este remitente a tus "
                  "contactos o mové este email a Principal.")
 WELCOME_CTA = "Ver mis resultados"
@@ -541,6 +552,10 @@ TRIAL_ENDED_SUBJECT = "Terminó tu prueba: encontramos {found} para tu búsqueda
 TRIAL_ENDED_TITLE = "Terminó tu prueba"
 TRIAL_ENDED_FOUND = "En 3 días encontramos {found} para tu búsqueda{model}{below}."
 TRIAL_ENDED_BELOW = ", y {n} {verb} por debajo de publicaciones comparables"
+TRIAL_ENDED_HIDDEN = {1: "Hay 1 más que coincidía y tu prueba no mostraba: podés verla con Particular.",
+                      "n": "Hay {n} más que coincidían y tu prueba no mostraba: podés verlas con Particular."}
+TRIAL_ENDED_ONLY_HIDDEN = {1: "En 3 días encontramos 1 auto para tu búsqueda{model} que tu prueba no mostraba: podés verlo con Particular.",
+                           "n": "En 3 días encontramos {n} autos para tu búsqueda{model} que tu prueba no mostraba: podés verlos con Particular."}
 TRIAL_ENDED_OFFER = ("Para seguir recibiendo avisos, Particular sale {price} por {days} días, "
                      "con {searches} búsquedas y pago único.")
 TRIAL_ENDED_OFFER_FALLBACK = "Para seguir recibiendo avisos, elegí Particular."
@@ -569,7 +584,7 @@ MISSED_BELOW = "Por debajo de publicaciones comparables."
 MISSED_GONE = {1: "Estuvo publicado 1 día y ya no está.", "n": "Estuvo publicado {n} días y ya no está."}
 MISSED_GONE_ANY = "Ya no está publicado."
 MISSED_ACTIVE = "Todavía está publicado: reactivá tu búsqueda para verlo."
-MISSED_ALERT = "Con tu búsqueda activa, te hubiéramos avisado apenas apareció."
+MISSED_ALERT = "Con tu búsqueda activa, te hubiéramos avisado."
 MISSED_MORE = "Y no fue el único: desde que venció tu acceso aparecieron {n} autos nuevos para tu búsqueda{below}."
 MISSED_MORE_BELOW = ", {n} por debajo de comparables"
 COUNT_SUBJECT = {1: "Apareció 1 auto nuevo para tu búsqueda{model}",
@@ -707,22 +722,41 @@ def lifecycle_content(kind: str, payload: Mapping[str, Any], url: str, *,
     model = payload.get("model") if isinstance(payload.get("model"), str) and payload["model"].strip() else None
     if kind == "search_activated":
         found, below = _count(payload.get("found")), _count(payload.get("below"))
+        hidden = _count(payload.get("hidden"))
         subject = WELCOME_SUBJECT.format(model=model) if model else WELCOME_SUBJECT_ANY
         of_model = f" de {model}" if model else ""
-        first = (_plural(WELCOME_FOUND, found, model=of_model, below=_plural(WELCOME_BELOW, below) if below else "")
-                 if found else WELCOME_NONE.format(model=f" para tu búsqueda{of_model}"))
-        return Content(subject, subject, lines=[first, WELCOME_INBOX], link=Link(WELCOME_CTA, url)), subject
+        if found:
+            lines = [_plural(WELCOME_FOUND, found, model=of_model, below=_plural(WELCOME_BELOW, below) if below else "")]
+            if hidden:
+                lines.append(_plural(WELCOME_HIDDEN, hidden))
+        elif hidden:
+            lines = [_plural(WELCOME_ONLY_HIDDEN, hidden, model=of_model)]
+        else:
+            lines = [WELCOME_NONE.format(model=f" para tu búsqueda{of_model}")]
+        limit = _count(payload.get("trial_limit"))
+        if not limit:
+            lines.append(WELCOME_NEXT)
+        elif left := _count(payload.get("trial_left")):
+            lines.append(_plural(WELCOME_TRIAL_LEFT, left, limit=limit))
+        else:
+            lines.append(WELCOME_TRIAL_FULL.format(limit=limit))
+        return Content(subject, subject, lines=[*lines, WELCOME_INBOX], link=Link(WELCOME_CTA, url)), subject
     if kind == "trial_no_matches":
         subject = NO_MATCHES_SUBJECT.format(model=model) if model else NO_MATCHES_SUBJECT_ANY
         return Content(subject, subject, lines=[NO_MATCHES_BODY], link=Link(NO_MATCHES_CTA, url)), subject
     if kind == "trial_ended":
         found, below = _count(payload.get("found")), _count(payload.get("below"))
+        hidden = _count(payload.get("hidden"))
         lines = []
         if found:
             below_text = (TRIAL_ENDED_BELOW.format(n=below, verb="estaba" if below == 1 else "estaban")
                           if below else "")
             lines.append(TRIAL_ENDED_FOUND.format(found=_cars(found), model=f" de {model}" if model else "",
                                                   below=below_text))
+            if hidden:
+                lines.append(_plural(TRIAL_ENDED_HIDDEN, hidden))
+        elif hidden:
+            lines.append(_plural(TRIAL_ENDED_ONLY_HIDDEN, hidden, model=f" de {model}" if model else ""))
         lines += [particular_offer(offer, limits), TRIAL_ENDED_KEEP]
         subject = TRIAL_ENDED_SUBJECT.format(found=_cars(found)) if found else TRIAL_ENDED_TITLE
         return Content(TRIAL_ENDED_TITLE, subject, lines=lines, link=Link(TRIAL_ENDED_CTA, url)), TRIAL_ENDED_TITLE

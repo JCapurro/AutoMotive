@@ -172,6 +172,20 @@ class PlanCapTests(NotificationsCase):
         self.assertEqual([r["status"] for r in rows], ["queued", "queued", "queued", "digest"])
         self.assertEqual(rows[3]["payload"]["degraded"], "daily_cap")
 
+    async def test_what_the_trial_hides_is_never_announced_nor_takes_an_alert(self):
+        # docs/PRUEBA_HONESTA.md: one slot left in the quota; the hidden matches never reach the engine.
+        await self.set_config("plan_limits", self.LIMITS)
+        async with db.connection() as cx:
+            await cx.execute("UPDATE profiles SET free_trial_started_at = now() WHERE id = %s", (self.user,))
+            await cx.execute("INSERT INTO free_trial_results (user_id, listing_id) "
+                             "SELECT %s, -g FROM generate_series(1, 49) g", (self.user,))
+        await self.high_matches(4)
+        rows = await self.emailed()
+        self.assertEqual([r["status"] for r in rows], ["queued"])
+        [admitted] = await self.rows("SELECT listing_id FROM free_trial_results WHERE user_id = %s AND listing_id > 0",
+                                     self.user)
+        self.assertEqual(rows[0]["listing_id"], admitted["listing_id"])
+
     async def test_an_agency_gets_fifty_immediate_alerts_a_day(self):
         await self.set_config("plan_limits", self.LIMITS)
         async with db.connection() as cx:

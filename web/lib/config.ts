@@ -8,6 +8,7 @@ import { type RiskConfig, riskConfig } from "@/lib/risk-checklist";
 import { type SellIntentConfig, sellIntentConfig } from "@/lib/sell-intent";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { paymentsEnabled } from "@/lib/mercadopago-server";
+import { type TrialReserveConfig, trialReserveConfig } from "@/lib/trial-reserve";
 import { type ZoneNoticeConfig, zoneNoticeConfig } from "@/lib/zone-notice";
 
 /**
@@ -34,6 +35,8 @@ export type WebConfig = {
   sellIntent: SellIntentConfig;
   /** app_config.zone_notice (docs/AVISO_ZONA.md): the zone notice's switch, off without the row; null when app_config couldn't be read (the notice waits, as with any failed read). */
   zoneNotice: ZoneNoticeConfig | null;
+  /** app_config.trial_reserve (docs/PRUEBA_HONESTA.md): room in the trial for new listings, off without the row; null when app_config couldn't be read. */
+  trialReserve: TrialReserveConfig | null;
 };
 
 export type EmailOnlySignup = {
@@ -69,7 +72,7 @@ export const webConfig = cache(async (): Promise<WebConfig> => {
   const { data, error } = await createAdminClient()
     .from("app_config")
     .select("key, value")
-    .in("key", ["comparables", "watchlist_stale_days", "pro_offer", "commercial_pilot", "plan_limits", "alerts_max_per_user_day", "email_only_signup", "risk", "cost_estimator", "sell_intent", "zone_notice"]);
+    .in("key", ["comparables", "watchlist_stale_days", "pro_offer", "commercial_pilot", "plan_limits", "alerts_max_per_user_day", "email_only_signup", "risk", "cost_estimator", "sell_intent", "zone_notice", "trial_reserve"]);
   const values = Object.fromEntries((data ?? []).map((row) => [row.key, row.value]));
   const comparables = (values.comparables ?? {}) as { min_n?: number; year_tol?: number; km_tol_pct?: number; max_age_days?: number };
   return {
@@ -89,5 +92,6 @@ export const webConfig = cache(async (): Promise<WebConfig> => {
     costEstimator: parseCostEstimator(values.cost_estimator),
     sellIntent: sellIntentConfig(values.sell_intent),
     zoneNotice: error ? null : zoneNoticeConfig(values.zone_notice),
+    trialReserve: error ? null : trialReserveConfig(values.trial_reserve),
   };
 });

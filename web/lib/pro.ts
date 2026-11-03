@@ -83,8 +83,12 @@ function counted(n: number, one: string, many: string): string {
 export function searchesText(caps: PlanCaps, upTo = true): string {
   return `${upTo ? "Hasta " : ""}${counted(caps.maxProfiles, "búsqueda activa", "búsquedas activas")}`;
 }
-export function resultsText(caps: PlanCaps): string {
-  if (caps.maxTotalResults != null) return `Hasta ${caps.maxTotalResults} resultados en total durante la prueba`;
+/** `stockMax`: the trial's reserve on (app_config.trial_reserve), at most this many already published. */
+export function resultsText(caps: PlanCaps, stockMax: number | null = null): string {
+  if (caps.maxTotalResults != null) {
+    const stock = stockMax != null && stockMax < caps.maxTotalResults ? `, hasta ${stockMax} ya publicados y el resto, autos nuevos` : "";
+    return `Hasta ${caps.maxTotalResults} resultados en total durante la prueba${stock}`;
+  }
   return caps.maxVisibleResults == null ? "Todos los resultados disponibles" : `Hasta ${caps.maxVisibleResults} resultados`;
 }
 /** "Particular incluye hasta 10 avisos inmediatos … y Pro, hasta 50 …; …" */
@@ -146,6 +150,8 @@ export type PlanLimits = {
   expires_at?: string | null; trial_started_at?: string | null; trial_expires_at?: string | null;
   active_searches?: number;
   free_results_used?: number; free_results_limit?: number | null;
+  /** Prueba gratis: stock admitted, and the reserve's cap on it (null with app_config.trial_reserve off). */
+  free_backfill_used?: number; free_backfill_max?: number | null;
   limits: {
     max_profiles?: number; max_visible_results?: number; max_total_results?: number; immediate_alerts_per_day?: number; immediate_alerts?: boolean;
     threshold_alerts?: boolean; model_less_search?: boolean; max_locations?: number;
@@ -262,12 +268,19 @@ export function visibleResults(total: number, limits: PlanLimits | null): { cap:
   if (max == null) return { cap: null, over: false };
   return { cap: limits?.enforced ? max : null, over: total > max };
 }
-/** Account usage, independent of this search's current filters, sort, or count. */
-export function freeResultQuota(access: PlanLimits | null): { used: number; limit: number; reached: boolean } | null {
+/**
+ * Account usage, independent of this search's current filters, sort, or count.
+ * `stockLeft`: what the trial still admits of listings already published —
+ * the quota left, or less with the reserve on (docs/PRUEBA_HONESTA.md).
+ */
+export function freeResultQuota(access: PlanLimits | null): { used: number; limit: number; reached: boolean; stockLeft: number } | null {
   if (!access?.enforced || access.plan !== "free" || access.free_results_limit == null) return null;
   const limit = access.free_results_limit;
   const used = access.free_results_used ?? 0;
-  return { used, limit, reached: used >= limit };
+  const left = Math.max(limit - used, 0);
+  const stockMax = access.free_backfill_max;
+  const stockLeft = stockMax == null ? left : Math.min(left, Math.max(stockMax - (access.free_backfill_used ?? 0), 0));
+  return { used, limit, reached: used >= limit, stockLeft };
 }
 export function accessDate(value: string): string {
   return new Intl.DateTimeFormat("es-AR", { dateStyle: "medium", timeStyle: "short",

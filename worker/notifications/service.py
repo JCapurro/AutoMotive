@@ -356,6 +356,10 @@ class Notifier:
         return await self._commit(events, now=now)
 
     async def _commit(self, events: list[Event], *, now: datetime | None = None) -> list[int]:
+        # What the trial hides is never announced: drop it before the engine
+        # shares out the alerts of the day.
+        hidden = await repo.hidden_pairs((e.audience.user_id, e.listing_id) for e in events)
+        events = [e for e in events if (e.audience.user_id, e.listing_id) not in hidden]
         if not events:
             return []
         now = now or datetime.now(timezone.utc)

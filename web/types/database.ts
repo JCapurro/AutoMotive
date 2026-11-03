@@ -1257,6 +1257,9 @@ isOneToOne: false
 "my_plan_snapshot":
 { Args: Record<PropertyKey, never>; Returns: Json
                            },
+"my_search_hidden_results":
+{ Args: { "p_profile_id": number }; Returns: number
+                           },
 "submit_product_feedback":
 { Args: { "p_message": string,"p_profile": number | null,"p_request": string }; Returns: string
                            },

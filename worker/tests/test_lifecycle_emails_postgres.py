@@ -109,8 +109,10 @@ class LifecycleCase(PostgresTestCase):
                 (user, f"{make} {model}", Jsonb({"make": make, "model": model})))).fetchall()
         return row["id"]
 
-    async def match(self, profile: int, *, level: str = "good", hours_ago: float = 1, backfill: bool = False) -> None:
-        """A stored match, without the plan guard (its time is set by the test)."""
+    async def match(self, profile: int, *, level: str = "good", hours_ago: float = 1, backfill: bool = False,
+                    admitted: bool = True) -> None:
+        """A stored match, without the plan guard (its time is set by the test); `admitted`:
+        in the trial's quota (free_trial_results), so the trial shows it."""
         async with db.connection() as cx:
             await cx.execute("SET LOCAL session_replication_role = replica")
             n = uuid4().hex[:10]
@@ -123,6 +125,9 @@ class LifecycleCase(PostgresTestCase):
                 "                     scoring_version, is_backfill, generated_at) "
                 "VALUES (%s, %s, 80, %s, '{}', '{}', 'test', %s, now() - make_interval(secs => %s))",
                 (profile, listing["id"], level, backfill, hours_ago * 3600))
+            if admitted:
+                await cx.execute("INSERT INTO free_trial_results (user_id, listing_id) "
+                                 "SELECT user_id, %s FROM search_profiles WHERE id = %s", (listing["id"], profile))
 
     async def config(self, key: str = "lifecycle_emails", **values) -> None:
         await self.rows("UPDATE app_config SET value = value || %s WHERE key = %s", Jsonb(values), key)
@@ -200,11 +205,33 @@ class TrialEndedTests(LifecycleCase):
         self.assertEqual(await self.send(), 1)
         row = await self.ledger(user)
         self.assertEqual((row["search_profile_id"], row["payload"]),
-                         (profile, {"model": "Ford Focus", "found": 3, "below": 2}))
+                         (profile, {"model": "Ford Focus", "found": 3, "below": 2, "hidden": 0}))
         [body] = self.emails()
         self.assertEqual(body["subject"], "Terminó tu prueba: encontramos 3 autos para tu búsqueda")
         self.assertIn("En 3 días encontramos 3 autos para tu búsqueda de Ford Focus, y 2 estaban por debajo "
                       "de publicaciones comparables.", body["text"])
+
+    async def test_counts_what_the_trial_showed_and_what_it_hid(self):
+        # docs/PRUEBA_HONESTA.md: «found» is what the trial showed; the rest, «y N más con Particular».
+        user = await self.account(trial_ended_hours_ago=2)
+        shown = await self.search(user, "Focus")
+        for level in ("high", "good"):
+            await self.match(shown, level=level, hours_ago=3)
+        for _ in range(4):
+            await self.match(shown, level="high", hours_ago=3, admitted=False)
+        hid_all = await self.search(user, "Ka")
+        for _ in range(9):
+            await self.match(hid_all, hours_ago=3, admitted=False)     # more matches, none shown
+
+        self.assertEqual(await self.send(), 1)
+        row = await self.ledger(user)
+        self.assertEqual((row["search_profile_id"], row["payload"]),
+                         (shown, {"model": "Ford Focus", "found": 2, "below": 1, "hidden": 4}))
+        [body] = self.emails()
+        self.assertEqual(body["subject"], "Terminó tu prueba: encontramos 2 autos para tu búsqueda")
+        self.assertIn("En 3 días encontramos 2 autos para tu búsqueda de Ford Focus, y 1 estaba por debajo de "
+                      "publicaciones comparables.\nHay 4 más que coincidían y tu prueba no mostraba: podés verlas "
+                      "con Particular.", body["text"])
 
     async def test_never_twice_not_even_after_a_restart(self):
         user = await self.account()
@@ -733,7 +760,8 @@ class SearchActivatedTests(LifecycleCase):
         row = await self.ledger(user, "search_activated")
         self.assertEqual((row["status"], row["event_key"], row["search_profile_id"], row["target"], row["payload"]),
                          ("sent", "first", profile, f"/app/searches/{profile}",
-                          {"model": "Ford Focus", "found": 3, "below": 1}))
+                          {"model": "Ford Focus", "found": 3, "below": 1, "hidden": 0,
+                           "trial_limit": 50, "trial_left": 47}))
         [body] = self.emails()
         self.assertEqual((body["to"], body["subject"]), ([await self.email_of(user)], "Tu búsqueda de Ford Focus ya está activa"))
         self.assertIn(f"Ver mis resultados: https://automotive.app/m/{row['id']}", body["text"])
@@ -741,6 +769,26 @@ class SearchActivatedTests(LifecycleCase):
 
         await self.first_search(user, minutes_ago=50, model="Ka")     # a second search: no second welcome
         self.assertEqual(await self.send(), 0)
+
+    async def test_a_used_up_trial_is_told_so_with_what_it_hides(self):
+        # docs/PRUEBA_HONESTA.md: the search that shows the most, never «nothing yet» over hidden matches.
+        user = await self.account(trial_ended_hours_ago=None)
+        hidden = await self.first_search(user, minutes_ago=50)
+        for _ in range(6):
+            await self.match(hidden, admitted=False)
+        shown = await self.first_search(user, minutes_ago=50, model="Ka")
+        await self.match(shown)
+        await self.rows("INSERT INTO free_trial_results (user_id, listing_id) "
+                        "SELECT %s, -g FROM generate_series(1, 49) g", user)     # the rest of the quota, elsewhere
+
+        self.assertEqual(await self.send(), 1)
+        row = await self.ledger(user, "search_activated")
+        self.assertEqual((row["search_profile_id"], row["target"], row["payload"]),
+                         (shown, f"/app/searches/{shown}",
+                          {"model": "Ford Ka", "found": 1, "below": 0, "hidden": 0, "trial_limit": 50, "trial_left": 0}))
+        [body] = self.emails()
+        self.assertIn("Tu prueba ya usó sus 50 resultados, así que no vamos a avisarte de los nuevos.", body["text"])
+        self.assertNotIn("apenas", body["text"])
 
     async def test_not_before_45_minutes_nor_for_a_paused_search_or_an_admin(self):
         early = await self.account(trial_ended_hours_ago=None)

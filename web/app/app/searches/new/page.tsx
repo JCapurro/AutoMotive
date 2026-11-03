@@ -9,7 +9,7 @@ import type { SearchLimit } from "@/lib/assisted";
 import { isEmailOnly, requireUser } from "@/lib/auth";
 import { webConfig } from "@/lib/config";
 import { track } from "@/lib/events";
-import { type PlanLimits, locationCap, planPrice, searchCapacity } from "@/lib/pro";
+import { type PlanLimits, freeResultQuota, locationCap, planPrice, searchCapacity } from "@/lib/pro";
 import type { SearchValues } from "@/lib/search-form";
 import { searchIntentPrompt } from "@/lib/search-intent";
 import { approximateLocationFromHeaders } from "@/lib/search-location";
@@ -26,7 +26,8 @@ export default async function NewSearchPage({ searchParams }: PageProps<"/app/se
   const supabase = await createClient();
   const [{ catalog, sources, defaultFrequency, thresholdAlerts, marginThreshold, modelLessSearch, sellerFilter, lockedPro }, { data: snapshot }, cfg, emailOnly] = await Promise.all([
     loadFormData(supabase),
-    supabase.rpc("my_plan_snapshot"),
+    // The plan and the trial's quota (my_plan_snapshot plus free_results_used).
+    supabase.rpc("my_plan_limits"),
     webConfig(),
     isEmailOnly(),
   ]);
@@ -36,6 +37,9 @@ export default async function NewSearchPage({ searchParams }: PageProps<"/app/se
   const access = (snapshot ?? null) as PlanLimits | null;
   const capacity = searchCapacity(access);
   const maxLocations = locationCap(access);
+  // A trial that used its quota gets no new alerts: the forms don't promise them (docs/PRUEBA_HONESTA.md).
+  const quota = freeResultQuota(access);
+  const trialFull = quota?.reached ? quota.limit : null;
   const limit: SearchLimit | null = access && capacity != null ? {
     capacity,
     maxProfiles: access.limits.max_profiles ?? capacity,
@@ -101,6 +105,7 @@ export default async function NewSearchPage({ searchParams }: PageProps<"/app/se
             maxLocations={maxLocations}
             sellerFilter={sellerFilter}
             lockedPro={lockedPro}
+            trialFull={trialFull}
           />
         </TabsContent>
         <TabsContent value="assisted" forceMount className="pt-3 data-[state=inactive]:hidden">
@@ -111,6 +116,7 @@ export default async function NewSearchPage({ searchParams }: PageProps<"/app/se
             initialText={prompt}
             approximateLocation={approximateLocation}
             limit={limit}
+            trialFull={trialFull}
             thresholdAlerts={thresholdAlerts}
             modelLessSearch={modelLessSearch}
             maxLocations={maxLocations}

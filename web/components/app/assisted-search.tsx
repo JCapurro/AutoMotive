@@ -105,6 +105,7 @@ export function AssistedSearch({
   initialText = "",
   approximateLocation = null,
   limit = null,
+  trialFull = null,
   thresholdAlerts = false,
   modelLessSearch = false,
   maxLocations = null,
@@ -117,6 +118,8 @@ export function AssistedSearch({
   initialText?: string;
   approximateLocation?: DetectedLocation | null;
   limit?: SearchLimit | null;
+  /** The trial's quota, once used up: no new listing is announced (docs/PRUEBA_HONESTA.md). */
+  trialFull?: number | null;
   /** The plan's features, for every form below (as the structured tab's). */
   thresholdAlerts?: boolean;
   modelLessSearch?: boolean;
@@ -416,7 +419,9 @@ export function AssistedSearch({
               <div className="space-y-1">
                 <h2 ref={activeTitle} tabIndex={-1} className="text-base font-semibold outline-none">Búsqueda guardada y activa</h2>
                 <p aria-live="polite" className="text-sm">
-                  {notice ? cardLead(notice) : <>Ya estamos buscando «{draft.title}». Te avisamos apenas aparezca una publicación que coincida.</>}
+                  {notice ? cardLead(notice) : <>Ya estamos buscando «{draft.title}». {trialFull != null
+                    ? `Tu prueba ya usó sus ${trialFull} resultados, así que no vamos a avisarte de los autos nuevos.`
+                    : "Te avisamos por email cuando aparezca una publicación que coincida."}</>}
                 </p>
                 {/* Always there, so what a tap changed is announced when it appears. */}
                 <p role="status" className="text-sm font-medium">{answered?.text ?? ""}</p>
