@@ -184,6 +184,8 @@ Criterios de aceptación:
 
 ### PAR-05 · «¿A cuánto publicarlo?»
 
+**Estado al 03/11:** Prueba B en PR, sin aplicar en prod. Pregunta «¿Tenés que vender tu auto actual para comprar?» en el email de bienvenida (links Sí/No firmados a `/vender-mi-auto`, que pide confirmar) y en una línea de la ficha para cuentas con email que no respondieron. «Sí» ofrece avisar cuando esté la referencia de precios publicados (sin prometer precios); la casilla «También me interesa que agencias me contacten para comprarlo» y su línea en Privacidad quedan detrás de `app_config.sell_intent.agencies_contact` (apagado hasta que Juan apruebe el texto). Migración `20261204120000_par05_sell_intent` (tabla `sell_intent` con RLS, `admin_sell_intent_metrics`, sección en `/admin/metrics/diagnostic`). Nada se comparte con nadie.
+
 Dolor: tiene que vender el suyo para comprar y no sabe a cuánto publicarlo ni cuánto va a tardar.
 
 Qué existe: nada; solo visión en el PRD (§4, §39, §56). `owned_vehicles` es otra cosa (compras registradas para un futuro Garage, hoy sin uso). El motor de comparables sirve tal cual con F-01.

@@ -3,13 +3,19 @@ import Link from "next/link";
 
 import { Contact, LegalPage } from "@/components/legal-page";
 import { ConsentSettings } from "@/components/meta-pixel";
+import { webConfig } from "@/lib/config";
 import { contactEmail } from "@/lib/env";
+import { SELL_INTENT_PRIVACY_LINE } from "@/lib/sell-intent";
 
 export const metadata: Metadata = { title: "Política de privacidad" };
+// PAR-05, Prueba B: one line depends on app_config.sell_intent.agencies_contact.
+export const dynamic = "force-dynamic";
 
 // F7, punto 7 (Ley 25.326). A first version for the pilot: have it reviewed
 // before a public launch.
-export default function PrivacyPage() {
+export default async function PrivacyPage() {
+  // The agencies line is a draft for Juan: it shows only with the same flag as the checkbox.
+  const { sellIntent } = await webConfig();
   return (
     <LegalPage title="Política de privacidad" updated="2 de noviembre de 2026">
       <p>
@@ -42,6 +48,11 @@ export default function PrivacyPage() {
           de 1 píxel que lo marca abierto cuando se cargan las imágenes) y respuestas a encuestas. Lo usamos para
           mejorar las alertas y medir si el servicio es útil.
         </li>
+        {sellIntent.agenciesContact ? (
+          <li data-testid="privacy-sell-intent">
+            <strong>Si tenés que vender tu auto</strong>. {SELL_INTENT_PRIVACY_LINE}
+          </li>
+        ) : null}
         <li>
           <strong>Lo que escribís en el modo asistido</strong>, para convertirlo en filtros que después revisás.
         </li>
