@@ -13,7 +13,7 @@ vi.mock("@/lib/search-collection-server", () => ({ loadSearchCollection: async (
   })) }));
 vi.mock("@/components/app/auto-refresh", () => ({ AutoRefresh: ({ every = 3000 }: { every?: number }) => createElement("span", { "data-refresh-every": every }) }));
 vi.mock("@/lib/auth", () => ({ requireUser: vi.fn().mockResolvedValue({ id: "user" }) }));
-vi.mock("@/lib/config", () => ({ webConfig: vi.fn() }));
+vi.mock("@/lib/config", () => ({ webConfig: async () => ({ zoneNotice: { enabled: true } }) }));
 vi.mock("@/components/app/free-result-limit", () => ({ FreeResultLimit: () => null }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }), notFound: () => { throw Error("not-found"); } }));
 // The low-results bot imports the searches' server actions, which are server-only.

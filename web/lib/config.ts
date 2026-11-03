@@ -8,6 +8,7 @@ import { type RiskConfig, riskConfig } from "@/lib/risk-checklist";
 import { type SellIntentConfig, sellIntentConfig } from "@/lib/sell-intent";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { paymentsEnabled } from "@/lib/mercadopago-server";
+import { type ZoneNoticeConfig, zoneNoticeConfig } from "@/lib/zone-notice";
 
 /**
  * app_config is server-only (sección 4.4): read with the service role. Only
@@ -31,6 +32,8 @@ export type WebConfig = {
   costEstimator: CostConfig | null;
   /** app_config.sell_intent (PAR-05, Prueba B): the question, and the agencies checkbox (off until Juan approves its Privacy line). */
   sellIntent: SellIntentConfig;
+  /** app_config.zone_notice (docs/AVISO_ZONA.md): the zone notice's switch, off without the row; null when app_config couldn't be read (the notice waits, as with any failed read). */
+  zoneNotice: ZoneNoticeConfig | null;
 };
 
 export type EmailOnlySignup = {
@@ -63,10 +66,10 @@ export function emailOnlySignup(raw: unknown): EmailOnlySignup {
 }
 
 export const webConfig = cache(async (): Promise<WebConfig> => {
-  const { data } = await createAdminClient()
+  const { data, error } = await createAdminClient()
     .from("app_config")
     .select("key, value")
-    .in("key", ["comparables", "watchlist_stale_days", "pro_offer", "commercial_pilot", "plan_limits", "alerts_max_per_user_day", "email_only_signup", "risk", "cost_estimator", "sell_intent"]);
+    .in("key", ["comparables", "watchlist_stale_days", "pro_offer", "commercial_pilot", "plan_limits", "alerts_max_per_user_day", "email_only_signup", "risk", "cost_estimator", "sell_intent", "zone_notice"]);
   const values = Object.fromEntries((data ?? []).map((row) => [row.key, row.value]));
   const comparables = (values.comparables ?? {}) as { min_n?: number; year_tol?: number; km_tol_pct?: number; max_age_days?: number };
   return {
@@ -85,5 +88,6 @@ export const webConfig = cache(async (): Promise<WebConfig> => {
     risk: riskConfig(values.risk),
     costEstimator: parseCostEstimator(values.cost_estimator),
     sellIntent: sellIntentConfig(values.sell_intent),
+    zoneNotice: error ? null : zoneNoticeConfig(values.zone_notice),
   };
 });

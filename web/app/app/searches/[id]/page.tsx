@@ -142,6 +142,8 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
   const reach = limit.cap != null ? Math.min(PAGE_SIZE * page, limit.cap) : PAGE_SIZE * page;
   const more = rows.length > reach && reach === PAGE_SIZE * page;
   const shown = rows.slice(0, reach);
+  // Aviso de zona's switch (app_config.zone_notice): off, the page neither counts nor shows it.
+  const zoneSwitch = (await webConfig()).zoneNotice;
   // PAR-03: the drops of the listings on this page only, in one call; on error, no drop line.
   // PAR-01: the total cost line, with the plan's flag only (one listings query for the page).
   // PRO-02: the margin line for Pro; the other plans, where it would be (Juan, 02/11).
@@ -154,10 +156,12 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
     costLinesFor(supabase, user.id, shown),
     marginLinesFor(supabase, margin, shown),
     marginTeasersFor(user.id, margin, shown),
-    // Without the plan's limits the trial's quota and cap are unknown: not now.
-    limitsError
-      ? { state: "pending" as const }
-      : zoneNotice(supabase, { profile, count: allCount(counts), access, sources: collectionSources, dismissed }),
+    // The switch unread, or the plan's limits (the trial's quota and cap): not now.
+    zoneSwitch?.enabled === false
+      ? { state: "none" as const }
+      : zoneSwitch == null || limitsError
+        ? { state: "pending" as const }
+        : zoneNotice(supabase, { profile, count: allCount(counts), access, sources: collectionSources, dismissed }),
   ]);
   const href = (next: Partial<{ f: Filter; s: Sort; p: number }>) => {
     const qs = new URLSearchParams({ f: next.f ?? filter, s: next.s ?? sort });

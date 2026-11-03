@@ -4,6 +4,7 @@ Juan, 02/11/2026: una búsqueda no se amplía sola a todo el país. Si su zona c
 
 ## Cuándo aparece
 
+- Su interruptor está prendido: `app_config.zone_notice.enabled` es `true`. Sin la fila, el aviso queda apagado. En producción la fila está prendida desde la migración. Una base que aplicó la copia que entró a `main` con #83 no la tiene (ver «Cambios que acompañan»).
 - La búsqueda está activa, tiene marca y modelo, y una sola zona propia (origen + radio > 0, sin `extra_locations`).
 - Muestra 3 resultados o menos (`search_result_counts.all_count`).
 - Ya está lista: tiene `bootstrapped_at` y no tiene `rematch_requested_at`, y ninguna fuente está leyendo el mercado para ella (`onFirstRead`, `lib/search-collection.ts`).
@@ -12,7 +13,7 @@ Juan, 02/11/2026: una búsqueda no se amplía sola a todo el país. Si su zona c
   - Se espera mientras esa corrida está en curso, y 3 minutos después de que termina, mientras el worker cruza su lote con las búsquedas.
   - Si la corrida no arrancó, se espera como máximo 5 minutos desde que la búsqueda necesita la fuente: lo más tarde entre su creación y la de la fuente.
   - Una lectura fallida o vacía no frena el aviso más que eso. Las fuentes sin fecha dejan `first_run_done` apagado después de una lectura vacía, y lo frenarían por horas.
-- Lo que no se pudo leer responde «todavía no»: el perfil, el conteo, los límites del plan, las fuentes, las zonas descartadas o un `preview_search`. La tarjeta vuelve a preguntar y la página no muestra el aviso.
+- Lo que no se pudo leer responde «todavía no»: la configuración, el perfil, el conteo, los límites del plan, las fuentes, las zonas descartadas o un `preview_search`. La tarjeta vuelve a preguntar y la página no muestra el aviso.
 - No aparece si se agotó el cupo de la prueba gratis, porque ahí ya está `FreeResultLimit`.
 - No aparece si la persona tocó «Dejar así» para esa misma zona (evento `zone_notice_dismissed`).
 - Además, tiene que haber al menos una opción que llegue a 4 resultados.
@@ -63,6 +64,8 @@ Juan, 02/11/2026: una búsqueda no se amplía sola a todo el país. Si su zona c
 
 Siete días contra la semana del 26/10, leídos el día 8 y contados desde que están las tres partes: la migración, la web y el worker. Sin cuentas admin.
 
+Las tres están en producción desde el 03/11 a las 13:11:24 UTC: la web desde las 12:59, la migración desde las 13:02:59 y el worker desde las 13:11:24. La semana va del 03/11 a las 13:11 al 10/11 a las 13:11 UTC, y se lee desde el 11/11 a las 13:11, cuando las últimas búsquedas cumplen 24 h.
+
 - **Cohorte**, fija al crear la búsqueda: autoguardadas del modo asistido cuyo borrador no traía zona.
   - Se sacan de `search_profile_created` con `mode = 'assisted_auto'`, unido a `llm_jobs` por `llm_job_id`, con `drafts[0].values.location` y `locations` vacíos.
   - Esas búsquedas se guardaron con la zona de la conexión, a 30 km. La semana del 26/10 fueron 102.
@@ -70,13 +73,24 @@ Siete días contra la semana del 26/10, leídos el día 8 y contados desde que e
 - **Adelantada:** 30% o más de los avisos de la tarjeta seguidos de una ampliación dentro de los 10 minutos. El bot logró 0 de 52.
 - **Resguardo:** cupo de la prueba lleno dentro de la hora de creada. Base 18/81, sobre las búsquedas creadas desde el 29/10 11:33 UTC; tiene que quedar en 30% o menos.
 - **Ojo al comparar:** el mismo cambio del worker hace que toda búsqueda nueva complete su backfill de 30 días. Antes, un lote que llegaba primero lo cortaba. Eso sube la principal y el gasto del cupo aunque nadie toque el aviso. Para separar los dos efectos, comparar también las búsquedas de la cohorte que no vieron el aviso.
-- **Corte de `preview_search`:** _fecha y hora UTC en que se aplique la migración en producción_. Desde ahí cambia el significado de `assisted_review_shown.preview_count`.
+- **Interruptor:** mientras está apagado, ni la tarjeta ni la página muestran el aviso. Al prenderlo de nuevo, la página puede mostrárselo a las búsquedas de ese rato. Para separar quién lo vio, usar el evento `zone_notice_shown`, no la hora de creación. Cada cambio del interruptor queda en el historial de `/admin/config` (`admin_config_audit`).
+- **Corte de `preview_search`:** 2026-11-03 13:02:59 UTC, cuando se aplicó la migración en producción. Desde ahí cambia el significado de `assisted_review_shown.preview_count`.
 
 ## Cambios que acompañan
 
 - **Migración `20261206120000_preview_zone_rule.sql`:** `preview_search` cuenta la zona como matching.
   - Las zonas inválidas se saltean. Antes, un lugar extra no numérico daba error, y un radio 0 (o un lugar extra sin radio) dejaba afuera toda publicación con coordenadas.
   - Con zona, una publicación sin coordenadas no pasa.
+  - También crea `app_config.zone_notice = {"enabled": true}`, el interruptor del aviso. Si la fila ya existe, no la toca.
+  - Aplicada en producción el 03/11/2026 a las 13:02:59 UTC, con el OK de Juan.
+  - La copia que entró a `main` con #83 (`a6f1d7d`) no tenía la fila. La que se aplicó en producción sí, y el PR del interruptor dejó el archivo igual a esa.
+  - Una base que aplicó la copia de `main` tiene la versión registrada y no vuelve a correr el archivo. Le falta la fila, así que el aviso queda apagado hasta insertarla: `insert into public.app_config(key, value) values ('zone_notice', '{"enabled": true}');`.
+- **Interruptor (`app_config.zone_notice`):** con `enabled` en `false` desde `/admin/config`, el aviso desaparece sin deploy.
+  - La página no cuenta ni muestra nada. Donde corresponda, vuelve la tarjeta del bot de pocos resultados.
+  - `zoneNoticeFor` responde «no» antes de leer nada, y la tarjeta del modo asistido deja de preguntar.
+  - Si `app_config` no se puede leer, la página y la tarjeta responden «todavía no», como con cualquier lectura fallida: no muestran el aviso, la tarjeta vuelve a preguntar y, donde corresponda, la página deja la tarjeta del bot de pocos resultados.
+  - Las zonas que se dejaron así se siguen respetando: la página no muestra la tarjeta del bot y el bot no avisa por ellas.
+  - Los botones de un aviso que ya estaba en pantalla siguen funcionando.
 - **Worker (`scheduler.py`):**
   - Con un rematch pendiente, lo que un lote encuentra y ya estaba guardado antes del pedido es backfill, no novedad. Lo que se guarda por primera vez después del pedido sí es novedad.
   - Ejemplo: una publicación de hace días que la zona ampliada ahora alcanza.
@@ -88,7 +102,7 @@ Siete días contra la semana del 26/10, leídos el día 8 y contados desde que e
 ## Efectos conocidos
 
 - Pasar a todo el país puede mover la ciudad de Facebook del modelo. La elige la búsqueda más vieja con lugar entre las que siguen ese modelo, de cualquier cuenta (`pipeline/crawl.py`).
-- Ampliar gasta cupo de la prueba con el rematch, porque `admit_free_result` corre con cada match, también los de backfill. El rematch va de lo más nuevo a lo más viejo, no por cercanía, y «Todo el país» puede llenar el cupo de una vez. El cupo es por cuenta y no se repone: lleno, la cuenta no recibe más alertas de publicaciones nuevas en ninguna de sus búsquedas. Por eso es el resguardo de la medición. No hay interruptor: si el resguardo se pasa, la salida es revertir la web.
+- Ampliar gasta cupo de la prueba con el rematch, porque `admit_free_result` corre con cada match, también los de backfill. El rematch va de lo más nuevo a lo más viejo, no por cercanía, y «Todo el país» puede llenar el cupo de una vez. El cupo es por cuenta y no se repone: lleno, la cuenta no recibe más alertas de publicaciones nuevas en ninguna de sus búsquedas. Por eso es el resguardo de la medición. Si el resguardo se pasa, el aviso se apaga con su interruptor, sin deploy. Las ampliaciones ya hechas y el cupo gastado quedan como están.
 - Una búsqueda nueva queda lista solo con su rematch. Si el rematch falla siempre, la búsqueda sigue en preparación (sin alertas, sin bot y sin aviso), y `run_pending` la reintenta cada 15 s con una fila nueva en `pipeline_errors`. Antes, el primer lote la daba por lista sin su backfill.
 - El umbral de 3 está fijo en el código (`ZONE_NOTICE_MAX_RESULTS`) y no sigue a `app_config.low_results.max_results`: si se cambia ahí, el aviso y el bot dejan de coincidir.
 
@@ -103,7 +117,9 @@ Siete días contra la semana del 26/10, leídos el día 8 y contados desde que e
 - La tarjeta mantiene «Búsqueda guardada y activa» y cambia solo el texto de abajo.
 - El aviso cuenta lo que se ve en la búsqueda: `count_source` queda fijo en `all_count`.
 - El bot no manda su aviso para una zona que se dejó así.
-- Los textos nuevos, aprobados:
+- El aviso tiene un interruptor para apagarlo sin revertir (`app_config.zone_notice`).
+- La migración se aplicó en producción el 03/11 a las 13:02:59 UTC.
+- Los textos nuevos que sumó la revisión, aprobados:
   - «Listo: dejamos la zona como está.»
   - «No pudimos ampliar la zona. Probá de nuevo.»
   - «No pudimos guardar tu elección. Probá de nuevo.»
@@ -111,3 +127,7 @@ Siete días contra la semana del 26/10, leídos el día 8 y contados desde que e
   - «Tenés cambios sin guardar abajo: guardalos primero.» (tarjeta, mientras el formulario de abajo tiene cambios)
   - «Reanudá la búsqueda para ampliar la zona.»
   - la nota de Ubicación del formulario: «Si elegís una zona, quedan afuera las publicaciones que no informan dónde están.»
+- También aprobó los tres que faltaban:
+  - el título de la página con resultados: «En tu zona hay solo N publicaciones ahora.»;
+  - la línea de zona: «Buscamos a 30 km de Laferrere.»;
+  - las confirmaciones: «Listo: ahora buscamos a 200 km de Laferrere.» y «Listo: ahora buscamos en todo el país.».

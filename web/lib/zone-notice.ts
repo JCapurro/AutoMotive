@@ -50,6 +50,14 @@ export type ZoneNoticeData = {
 };
 /** `pending`: the search isn't ready to be counted yet (the card asks again). */
 export type ZoneNoticeAnswer = { state: "pending" } | { state: "none" } | { state: "show"; notice: ZoneNoticeData };
+/** app_config.zone_notice: the notice's switch, which /admin/config turns off without a deploy. */
+export type ZoneNoticeConfig = { enabled: boolean };
+
+/** On only when `enabled` is explicitly true: without the row, or with anything else, off. */
+export function zoneNoticeConfig(raw: unknown): ZoneNoticeConfig {
+  const value = raw !== null && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
+  return { enabled: value.enabled === true };
+}
 
 export function isWidenTo(value: unknown): value is WidenTo {
   return value === "pais" || (WIDER_RADII as readonly unknown[]).includes(value);

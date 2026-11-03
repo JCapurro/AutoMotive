@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 
 import { ASSISTED_MAX_CHARS, ASSISTED_MIN_CHARS, ASSISTED_WORKER_STALE_MS, AssistedOutput } from "@/lib/assisted";
 import { requireUser } from "@/lib/auth";
+import { webConfig } from "@/lib/config";
 import type { Frequency } from "@/lib/copy";
 import { track } from "@/lib/events";
 import { thousands } from "@/lib/format";
@@ -482,6 +483,11 @@ export async function dismissDiagnosis(id: number): Promise<void> {
 export async function zoneNoticeFor(id: number): Promise<ZoneNoticeAnswer> {
   const user = await requireUser();
   if (!Number.isSafeInteger(id) || id <= 0) return { state: "none" };
+  // Its switch (app_config.zone_notice): off, none before any other read, which ends the
+  // card's polling; unread, pending, so the card asks again.
+  const zoneSwitch = (await webConfig()).zoneNotice;
+  if (zoneSwitch == null) return { state: "pending" };
+  if (!zoneSwitch.enabled) return { state: "none" };
   const supabase = await createClient();
   const [{ data: profile, error: profileError }, { data: counts }, { data: access, error: limitsError }, dismissed] = await Promise.all([
     supabase.from("search_profiles").select("*").eq("id", id).maybeSingle(),

@@ -19,6 +19,7 @@ import {
   withoutPlace,
   zoneKind,
   zoneLine,
+  zoneNoticeConfig,
   zoneOf,
   zoneOptions,
   zonePlace,
@@ -63,6 +64,15 @@ describe("noticeGate", () => {
     expect(gate({ dismissed: [[-34.75, -58.58, 30]] })).toBe("none");
     // Another zone (a radius changed since) asks again.
     expect(gate({ dismissed: [[-34.75, -58.58, 20]] })).toBe("count");
+  });
+});
+
+describe("the switch (app_config.zone_notice)", () => {
+  it("is on only with enabled true: without the row, or with anything else, off", () => {
+    expect(zoneNoticeConfig({ enabled: true })).toEqual({ enabled: true });
+    for (const raw of [undefined, null, {}, { enabled: false }, { enabled: "true" }, { enabled: 1 }, [true], true]) {
+      expect(zoneNoticeConfig(raw)).toEqual({ enabled: false });
+    }
   });
 });
 

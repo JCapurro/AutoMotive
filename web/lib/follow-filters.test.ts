@@ -9,7 +9,7 @@ const state = vi.hoisted(() => ({
 }));
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/auth", () => ({ requireUser: async () => ({ id: "account" }) }));
-vi.mock("@/lib/config", () => ({ webConfig: async () => ({ proOffer: {}, automaticPayments: false, commercialPilot: false, planLimits: { pro: { dealerMargin: true } } }) }));
+vi.mock("@/lib/config", () => ({ webConfig: async () => ({ proOffer: {}, automaticPayments: false, commercialPilot: false, planLimits: { pro: { dealerMargin: true } }, zoneNotice: { enabled: true } }) }));
 vi.mock("@/lib/search-collection-server", () => ({ loadSearchCollection: async () => [] }));
 // Aviso de zona: its own page test (lib/zone-notice-page.test.ts).
 vi.mock("@/lib/zone-notice-server", () => ({ allCount: () => null, dismissedZones: async () => [], zoneNotice: async () => ({ state: "none" }) }));

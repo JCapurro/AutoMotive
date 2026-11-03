@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { AdminLifecycleInput, AdminOfferInput, AdminPlanLimitsInput, configDifferences, configFieldLabel, DEALER_MARGIN_MESSAGE, LIFECYCLE_KINDS, MAX_OFFER_ARS, sameConfig, SourceUpdateInput, validateConfigChange, visibleConfigRows } from "@/lib/admin-config";
+import { AdminLifecycleInput, AdminOfferInput, AdminPlanLimitsInput, configDifferences, configFieldLabel, DEALER_MARGIN_MESSAGE, LIFECYCLE_KINDS, MAX_OFFER_ARS, sameConfig, SourceUpdateInput, validateConfigChange, visibleConfigRows, ZONE_NOTICE_CONFIG_MESSAGE } from "@/lib/admin-config";
 import { DEFAULT_PRO_OFFER } from "@/lib/pro";
 
 describe("guided config validators", () => {
@@ -91,6 +91,13 @@ describe("guided config validators", () => {
     expect(configFieldLabel("risk", "links.dnrpa.url")).toBe("Link oficial: informe de dominio (DNRPA) (url)");
     expect(configFieldLabel("risk", "links.patentes")).toBe("Link oficial: patentes");
     expect(configFieldLabel("risk", "other")).toBe("other");
+  });
+  it("keeps zone_notice a true/false switch and names it (aviso de zona)", () => {
+    expect(validateConfigChange("zone_notice", { enabled: false }, { enabled: true })).toBeNull();
+    for (const value of [{}, { enabled: "false" }, { enabled: null }]) {
+      expect(validateConfigChange("zone_notice", value, { enabled: true })).toBe(ZONE_NOTICE_CONFIG_MESSAGE);
+    }
+    expect(configFieldLabel("zone_notice", "enabled")).toBe("Aviso de zona visible (resultados y modo asistido)");
   });
   it("keeps the much_cheaper bands reachable in red_flags (PAR-02)", () => {
     const current = { much_cheaper_pct: 25, anticipo_pct: 50, min_km_per_year: 5000, min_description_chars: 150 };

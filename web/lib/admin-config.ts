@@ -119,6 +119,9 @@ export const SellIntentConfigInput = z.object({
   agencies_contact: z.boolean(),
   since: z.string().refine((v) => /^\d{4}-\d{2}-\d{2}/.test(v) && Number.isFinite(Date.parse(v))),
 }).passthrough();
+/** Aviso de zona: app_config.zone_notice, the notice's switch (lib/zone-notice.ts zoneNoticeConfig). */
+export const ZONE_NOTICE_CONFIG_MESSAGE = "zone_notice necesita enabled (true/false).";
+export const ZoneNoticeConfigInput = z.object({ enabled: z.boolean() }).passthrough();
 
 export function configObject(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -164,6 +167,7 @@ export function validateConfigChange(key: string, value: unknown, current: unkno
   if (key === "seller_classification" && !SellerClassificationInput.safeParse(value).success) return SELLER_CLASSIFICATION_MESSAGE;
   if (key === "dealer_margin" && !DealerMarginInput.safeParse(value).success) return DEALER_MARGIN_MESSAGE;
   if (key === "sell_intent" && !SellIntentConfigInput.safeParse(value).success) return SELL_INTENT_CONFIG_MESSAGE;
+  if (key === "zone_notice" && !ZoneNoticeConfigInput.safeParse(value).success) return ZONE_NOTICE_CONFIG_MESSAGE;
   // PAR-01: every block with source and as_of, valid ranges and scales (lib/cost-estimator.ts, the parser's own rules).
   if (key === "cost_estimator") return costEstimatorProblem(value);
   if (key === "risk") {
@@ -225,6 +229,7 @@ export function configFieldLabel(key: string, path: string): string {
   if (key === "sell_intent") {
     return ({ ask: "Pregunta «¿Tenés que vender tu auto?» (bienvenida y ficha)", agencies_contact: "Casilla «agencias me contacten» y su línea en Privacidad (solo con OK de Juan)", since: "Inicio de la prueba (métricas)" } as Record<string, string>)[path] ?? path;
   }
+  if (key === "zone_notice" && path === "enabled") return "Aviso de zona visible (resultados y modo asistido)";
   if (key === "lifecycle_emails") {
     if (path.startsWith("kinds.")) return LIFECYCLE_KINDS[path.slice(6) as keyof typeof LIFECYCLE_KINDS]?.label ?? path;
     return ({ enabled: "Envío de emails del plan", send_from: "Enviar desde (hora argentina)", send_until: "Enviar hasta (hora argentina)", window_hours: "Vigencia del evento (horas)", max_per_day: "Emails del plan por día" } as Record<string, string>)[path] ?? path;
