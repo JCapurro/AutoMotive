@@ -5,6 +5,7 @@ import { cache } from "react";
 import { type CostConfig, parseCostEstimator } from "@/lib/cost-estimator";
 import { type PlanLimitsConfig, planLimits, type ProOffer, proOffer } from "@/lib/pro";
 import { type RiskConfig, riskConfig } from "@/lib/risk-checklist";
+import { type SellIntentConfig, sellIntentConfig } from "@/lib/sell-intent";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { paymentsEnabled } from "@/lib/mercadopago-server";
 
@@ -28,6 +29,8 @@ export type WebConfig = {
   risk: RiskConfig;
   /** app_config.cost_estimator (PAR-01), parsed tolerantly: null without the row or its root as_of; an invalid block is null. */
   costEstimator: CostConfig | null;
+  /** app_config.sell_intent (PAR-05, Prueba B): the question, and the agencies checkbox (off until Juan approves its Privacy line). */
+  sellIntent: SellIntentConfig;
 };
 
 export type EmailOnlySignup = {
@@ -63,7 +66,7 @@ export const webConfig = cache(async (): Promise<WebConfig> => {
   const { data } = await createAdminClient()
     .from("app_config")
     .select("key, value")
-    .in("key", ["comparables", "watchlist_stale_days", "pro_offer", "commercial_pilot", "plan_limits", "alerts_max_per_user_day", "email_only_signup", "risk", "cost_estimator"]);
+    .in("key", ["comparables", "watchlist_stale_days", "pro_offer", "commercial_pilot", "plan_limits", "alerts_max_per_user_day", "email_only_signup", "risk", "cost_estimator", "sell_intent"]);
   const values = Object.fromEntries((data ?? []).map((row) => [row.key, row.value]));
   const comparables = (values.comparables ?? {}) as { min_n?: number; year_tol?: number; km_tol_pct?: number; max_age_days?: number };
   return {
@@ -81,5 +84,6 @@ export const webConfig = cache(async (): Promise<WebConfig> => {
     emailOnlySignup: emailOnlySignup(values.email_only_signup),
     risk: riskConfig(values.risk),
     costEstimator: parseCostEstimator(values.cost_estimator),
+    sellIntent: sellIntentConfig(values.sell_intent),
   };
 });

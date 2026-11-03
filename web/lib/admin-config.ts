@@ -87,6 +87,14 @@ export const SellerClassificationInput = z.object({
   window_days: z.number().int().min(1).max(180),
 }).strict();
 
+/** PAR-05, Prueba B: app_config.sell_intent (lib/sell-intent.ts, worker/notifications/templates.py). */
+export const SELL_INTENT_CONFIG_MESSAGE = "sell_intent necesita ask y agencies_contact true/false, y since una fecha ISO (AAAA-MM-DD o con hora).";
+export const SellIntentConfigInput = z.object({
+  ask: z.boolean(),
+  agencies_contact: z.boolean(),
+  since: z.string().refine((v) => /^\d{4}-\d{2}-\d{2}/.test(v) && Number.isFinite(Date.parse(v))),
+}).passthrough();
+
 export function configObject(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
@@ -123,6 +131,7 @@ export function validateConfigChange(key: string, value: unknown, current: unkno
   }
   if (key === "seller_classification" && !SellerClassificationInput.safeParse(value).success) return SELLER_CLASSIFICATION_MESSAGE;
   if (key === "dealer_margin" && !DealerMarginInput.safeParse(value).success) return DEALER_MARGIN_MESSAGE;
+  if (key === "sell_intent" && !SellIntentConfigInput.safeParse(value).success) return SELL_INTENT_CONFIG_MESSAGE;
   // PAR-01: every block with source and as_of, valid ranges and scales (lib/cost-estimator.ts, the parser's own rules).
   if (key === "cost_estimator") return costEstimatorProblem(value);
   if (key === "risk") {
@@ -176,6 +185,9 @@ export function configFieldLabel(key: string, path: string): string {
     // PAR-02 resto: the duplicate signals and the photo hash.
     if (group === "photo_hash" && name === "enabled") return "Hash de fotos prendido (descarga imágenes)";
     if (group === "signals" && name) return `Señal ${name} (on, shadow u off)`;
+  }
+  if (key === "sell_intent") {
+    return ({ ask: "Pregunta «¿Tenés que vender tu auto?» (bienvenida y ficha)", agencies_contact: "Casilla «agencias me contacten» y su línea en Privacidad (solo con OK de Juan)", since: "Inicio de la prueba (métricas)" } as Record<string, string>)[path] ?? path;
   }
   if (key === "lifecycle_emails") {
     if (path.startsWith("kinds.")) return LIFECYCLE_KINDS[path.slice(6) as keyof typeof LIFECYCLE_KINDS]?.label ?? path;

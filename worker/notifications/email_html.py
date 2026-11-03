@@ -120,10 +120,12 @@ def render(c: Content, *, kind: str, now: datetime, day: str | None,
            detail_url: str | None, app_url: str | None, unsubscribe_url: str | None,
            footer: str, unsubscribe_label: str, eyebrow: str | None = None,
            title: str | None = None, preheader: str | None = None,
-           open_pixel_url: str | None = None, secondary: Link | None = None) -> str:
+           open_pixel_url: str | None = None, secondary: Link | None = None,
+           question: tuple[str, tuple[Link, ...]] | None = None) -> str:
     """An alert, the digest or (with eyebrow/title/preheader) any other
     account email, such as the free-trial reminder. `secondary` is a small
-    text link under the button."""
+    text link under the button; `question` is one short question with its
+    answers as text links, under everything else (PAR-05, Prueba B)."""
     try:
         when = date.fromisoformat(day) if day else now.astimezone(AR).date()
     except (TypeError, ValueError):
@@ -208,6 +210,14 @@ def render(c: Content, *, kind: str, now: datetime, day: str | None,
     if secondary:
         body.append(f'<p style="margin:16px 0 0;font-size:13px;line-height:20px"><a href="{escape(secondary.url)}" '
                     f'style="color:{MUTED};text-decoration:underline">{escape(secondary.label)}</a></p>')
+    if question:
+        text, answers = question
+        links = " &nbsp;&middot;&nbsp; ".join(
+            f'<a href="{escape(a.url)}" style="color:{INK};font-weight:bold;text-decoration:underline">{escape(a.label)}</a>'
+            for a in answers)
+        body.append('<div style="margin-top:24px;padding-top:14px;border-top:1px solid ' + BORDER + '">'
+                    + _p(text, style=f"font-size:14px;line-height:22px;color:{INK}")
+                    + f'<p style="margin:8px 0 0;font-size:14px;line-height:22px">{links}</p></div>')
     if c.vehicle and len(c.images) > 1:
         body.append(_p("Otras fotos de la publicación", style=f"margin-top:24px;font-size:12px;color:{MUTED}"))
         body.append(_thumbnails(c.images[1:], c.vehicle, detail_url or (c.link.url if c.link else None)))
