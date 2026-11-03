@@ -32,6 +32,7 @@ import {
   faqJsonLd,
   generationAnchor,
   guideBreadcrumb,
+  guideDates,
   guideIndexJsonLd,
   guideSummary,
   GuideValuesInput,
@@ -39,7 +40,6 @@ import {
   isSlug,
   jsonLdScript,
   lintGuide,
-  modelDateRange,
   modelYears,
   publishProblem,
   questionsText,
@@ -191,15 +191,39 @@ describe("FAQ JSON-LD", () => {
       dateModified: "2026-11-20T12:00:00Z",
       author: { "@type": "Organization", name: "Ese Auto", url: "https://eseauto.com.ar/" },
       publisher: { "@type": "Organization", name: "Ese Auto" },
-      about: { "@type": "Car", brand: { "@type": "Brand", name: "Toyota" }, model: "Corolla", vehicleModelDate: "2014/2024" },
+      about: { "@type": "Car", name: "Toyota Corolla 2014 a 2024", brand: { "@type": "Brand", name: "Toyota" }, model: "Corolla" },
     });
+    // A span of years is not a schema.org Date: it goes in the name, never in vehicleModelDate.
+    expect(ld.about).not.toHaveProperty("vehicleModelDate");
     expect(String(ld.description)).toContain("2014 a 2024");
     // Without published_at (never published) there is no datePublished; without years no vehicleModelDate.
     const bare = articleJsonLd([toPublicGuide({ ...ROW, published_at: null, year_from: null, year_to: null })], "https://x.test")!;
     expect(bare).not.toHaveProperty("datePublished");
     expect(bare.about).not.toHaveProperty("vehicleModelDate");
     expect(articleJsonLd([], "https://x.test")).toBeNull();
-    expect([modelDateRange(2014, 2019), modelDateRange(2020, 2020), modelDateRange(null, 2017), modelDateRange(null, null)]).toEqual(["2014/2019", "2020", "2017", null]);
+    const about = (from: number | null, to: number | null) =>
+      articleJsonLd([toPublicGuide({ ...ROW, year_from: from, year_to: to })], "https://x.test")!.about as Record<string, unknown>;
+    expect(about(2020, 2020)).toMatchObject({ name: "Toyota Corolla 2020", vehicleModelDate: "2020" });
+    expect(about(2020, null)).toMatchObject({ name: "Toyota Corolla desde 2020" });
+    expect(about(2020, null)).not.toHaveProperty("vehicleModelDate");
+    expect(about(null, 2019)).toMatchObject({ name: "Toyota Corolla hasta 2019" });
+    expect(about(null, 2019)).not.toHaveProperty("vehicleModelDate");
+    expect(about(null, null).name).toBe("Toyota Corolla");
+  });
+
+  it("dateModified is never before datePublished (publishing moves published_at, not content_updated_at)", () => {
+    // Written on 05/11, first published on 20/11: modified is the publishing date.
+    const fresh = toPublicGuide({ ...ROW, published_at: "2026-11-20T12:00:00+00:00", content_updated_at: "2026-11-05T12:00:00+00:00" });
+    expect(guideDates([fresh])).toEqual({ published: "2026-11-20T12:00:00+00:00", modified: "2026-11-20T12:00:00+00:00" });
+    const ld = articleJsonLd([fresh], "https://x.test")!;
+    expect(Date.parse(String(ld.dateModified))).toBeGreaterThanOrEqual(Date.parse(String(ld.datePublished)));
+    // Edited after publishing: the content's date.
+    const edited = toPublicGuide({ ...ROW, published_at: "2026-11-01T12:00:00Z", content_updated_at: "2026-11-05T12:00:00Z" });
+    expect(guideDates([edited])).toEqual({ published: "2026-11-01T12:00:00Z", modified: "2026-11-05T12:00:00Z" });
+    // Compared as times, not as strings with different offsets.
+    const offsets = toPublicGuide({ ...ROW, published_at: "2026-11-05T10:00:00-03:00", content_updated_at: "2026-11-05T12:30:00Z" });
+    expect(guideDates([offsets]).modified).toBe("2026-11-05T10:00:00-03:00");
+    expect(guideDates([toPublicGuide({ ...ROW, published_at: null })])).toEqual({ published: null, modified: ROW.content_updated_at });
   });
 
   it("BreadcrumbList: Inicio › Guías › the model, with positions", () => {
@@ -233,7 +257,7 @@ describe("FAQ JSON-LD", () => {
   it("«En resumen» quotes the first known issue and the first thing to check, with the notice's caveat", () => {
     const summary = guideSummary([toPublicGuide(ROW)])!;
     expect(summary).toBe(
-      "Una falla conocida del Toyota Corolla (2014 a 2019): Caja automática: tirones entre primera y segunda. " +
+      "Una falla conocida del Toyota Corolla (2014 a 2019): Caja automática: tirones entre primera y segunda (Aplica a: 1.8 CVT, 2014–2016). " +
       "En la visita, revisá primero esto: Probar la caja en frío y en subida. " +
       "Es información general del modelo: no reemplaza la revisión de un mecánico de confianza.",
     );
@@ -243,6 +267,25 @@ describe("FAQ JSON-LD", () => {
     expect(noYears.startsWith("En la visita, revisá primero esto: Probar la caja")).toBe(true);
     expect(guideSummary([toPublicGuide({ ...ROW, body: { ...BODY, known_issues: [], visit_checklist: [] } })])).toBeNull();
     expect(guideSummary([])).toBeNull();
+  });
+
+  it("«En resumen» with several generations labels each line with its own guide, not the page's years", () => {
+    // The whole model has no known issues; E170 has the first one; E210 is later.
+    const whole = toPublicGuide({ ...ROW, id: 1, generation_label: null, year_from: null, year_to: null,
+      body: { ...BODY, known_issues: [], visit_checklist: [{ text: "Mirar el historial de services.", applies_to: "todas las versiones" }] } });
+    const e170 = toPublicGuide({ ...ROW, id: 2, generation_label: "E170", year_from: 2014, year_to: 2019 });
+    const e210 = toPublicGuide({ ...ROW, id: 3, generation_label: "E210", year_from: 2020, year_to: null,
+      body: { ...BODY, known_issues: [{ text: "Híbrido: revisar la batería.", applies_to: null }] } });
+    const summary = guideSummary([whole, e170, e210])!;
+    expect(summary).toBe(
+      "Una falla conocida del Toyota Corolla (E170, 2014 a 2019): Caja automática: tirones entre primera y segunda (Aplica a: 1.8 CVT, 2014–2016). " +
+      "En la visita, revisá primero esto: Mirar el historial de services (Aplica a: todas las versiones). " +
+      "Es información general del modelo: no reemplaza la revisión de un mecánico de confianza.",
+    );
+    expect(summary).not.toContain("2014 a 2020");
+    // Only E210 has an issue: its own label and open range.
+    const only = guideSummary([toPublicGuide({ ...ROW, body: { ...BODY, known_issues: [] } }), e210])!;
+    expect(only.startsWith("Una falla conocida del Toyota Corolla (E210, desde 2020): Híbrido: revisar la batería.")).toBe(true);
   });
 
   it("the CTA's text names the model and the years", () => {

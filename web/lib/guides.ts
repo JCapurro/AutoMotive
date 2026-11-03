@@ -395,16 +395,37 @@ function clause(text: string): string {
 export function guideSummary(guides: PublicGuide[]): string | null {
   if (!guides.length) return null;
   const name = guideName(guides[0].make, guides[0].model);
-  const years = modelYears(guides);
-  const span = yearsText(years.from, years.to);
-  const issue = guides.flatMap((g) => g.body.known_issues)[0]?.text;
-  const check = guides.flatMap((g) => g.body.visit_checklist)[0]?.text;
+  // Each line with the guide it comes from: its label and years are that guide's, not the page's.
+  const first = (key: "known_issues" | "visit_checklist") => {
+    for (const g of guides) if (g.body[key].length) return { guide: g, line: g.body[key][0] };
+    return null;
+  };
+  const withApplies = (line: GuideLine) =>
+    line.applies_to ? `${clause(line.text)} (${GUIDE_COPY.appliesTo.replace("{text}", clause(line.applies_to))})` : clause(line.text);
+  const issue = first("known_issues");
+  const check = first("visit_checklist");
   if (!issue && !check) return null;
   const parts: string[] = [];
-  if (issue) parts.push(GUIDE_COPY.summaryIssue.replace("{name}", name).replace("{years}", span ? ` (${span})` : "").replace("{text}", clause(issue)));
-  if (check) parts.push(GUIDE_COPY.summaryCheck.replace("{text}", clause(check)));
+  if (issue) {
+    const scope = [issue.guide.generationLabel, yearsText(issue.guide.yearFrom, issue.guide.yearTo)].filter(Boolean).join(", ");
+    parts.push(GUIDE_COPY.summaryIssue.replace("{name}", name).replace("{years}", scope ? ` (${scope})` : "").replace("{text}", withApplies(issue.line)));
+  }
+  if (check) parts.push(GUIDE_COPY.summaryCheck.replace("{text}", withApplies(check.line)));
   parts.push(GUIDE_COPY.summaryClose);
   return parts.join(" ");
+}
+
+/**
+ * The page's datePublished (its first guide's published_at) and dateModified:
+ * the latest content_updated_at, but never before datePublished (publishing
+ * sets published_at to now and leaves content_updated_at as it was).
+ */
+export function guideDates(guides: PublicGuide[]): { published: string | null; modified: string | null } {
+  const time = (v: string) => Date.parse(v);
+  const published = guides.map((g) => g.publishedAt).filter((v): v is string => Boolean(v)).sort((a, b) => time(a) - time(b))[0] ?? null;
+  const updated = guides.map((g) => g.updatedAt).filter(Boolean).sort((a, b) => time(a) - time(b)).at(-1) ?? null;
+  const modified = updated && published ? (time(published) > time(updated) ? published : updated) : (updated ?? published);
+  return { published, modified };
 }
 
 /** schema.org Organization: the site, author and publisher of the guides. */
@@ -412,26 +433,19 @@ export function organizationJsonLd(site: string): Record<string, unknown> {
   return { "@type": "Organization", name: SITE_NAME, url: `${site}/` };
 }
 
-/** «2014/2019» (an ISO 8601 interval), «2014», or null: the years a page covers. */
-export function modelDateRange(from: number | null, to: number | null): string | null {
-  if (from && to) return from === to ? String(from) : `${from}/${to}`;
-  if (from || to) return String(from ?? to);
-  return null;
-}
-
 /**
  * schema.org Article for a model's page: the headline and description of its
  * metadata, published when its first guide was, modified when its content
- * last changed, about the model (Car: brand, model and its years).
+ * last changed (never before it was published), about the model (Car: brand,
+ * model, its years in the name; vehicleModelDate only for a single year).
  */
 export function articleJsonLd(guides: PublicGuide[], site: string): Record<string, unknown> | null {
   if (!guides.length) return null;
   const { make, model, slugMake, slugModel } = guides[0];
   const years = modelYears(guides);
   const url = `${site}${guidePath(slugMake, slugModel)}`;
-  const published = guides.map((g) => g.publishedAt).filter((v): v is string => Boolean(v)).sort()[0];
-  const modified = guides.map((g) => g.updatedAt).sort().at(-1);
-  const range = modelDateRange(years.from, years.to);
+  const { published, modified } = guideDates(guides);
+  const span = yearsText(years.from, years.to);
   const org = organizationJsonLd(site);
   return {
     "@context": "https://schema.org",
@@ -447,10 +461,11 @@ export function articleJsonLd(guides: PublicGuide[], site: string): Record<strin
     publisher: org,
     about: {
       "@type": "Car",
-      name: guideName(make, model),
+      // The years in words, as the page says them: schema.org's vehicleModelDate is a single date.
+      name: span ? `${guideName(make, model)} ${span}` : guideName(make, model),
       brand: { "@type": "Brand", name: make },
       model,
-      ...(range ? { vehicleModelDate: range } : {}),
+      ...(years.from && years.from === years.to ? { vehicleModelDate: String(years.from) } : {}),
     },
   };
 }

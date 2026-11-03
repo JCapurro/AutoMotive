@@ -14,6 +14,7 @@ import {
   faqJsonLd,
   GUIDE_COPY,
   guideBreadcrumb,
+  guideDates,
   guideDescription,
   guideName,
   guidePath,
@@ -46,6 +47,7 @@ export async function generateMetadata({ params }: PageProps<"/guias/[marca]/[mo
   const title = guideTitle(make, model);
   const description = guideDescription(make, model, yearsText(years.from, years.to));
   const path = guidePath(marca, modelo);
+  const dates = guideDates(guides);
   return {
     title,
     description,
@@ -57,8 +59,8 @@ export async function generateMetadata({ params }: PageProps<"/guias/[marca]/[mo
       title,
       description,
       url: path,
-      modifiedTime: guides.map((g) => g.updatedAt).sort().at(-1),
-      ...(guides.some((g) => g.publishedAt) ? { publishedTime: guides.map((g) => g.publishedAt).filter((v): v is string => Boolean(v)).sort()[0] } : {}),
+      ...(dates.modified ? { modifiedTime: dates.modified } : {}),
+      ...(dates.published ? { publishedTime: dates.published } : {}),
     },
   };
 }
