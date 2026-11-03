@@ -8,7 +8,7 @@ import { startPayment } from "@/app/app/pro/billing-actions";
 import { Button } from "@/components/ui/button";
 import { pixel } from "@/lib/meta-pixel";
 import { analyticsEvent } from "@/lib/google-analytics";
-import { CUSTOM_PLAN, OFFER_TIER, PLAN_COPY, type PlanLimitsConfig, planPrice, type Placement, type PlanChoice, type ProOffer, searchesText, WAITLIST_PLANS, type WaitlistPlan } from "@/lib/pro";
+import { CUSTOM_PLAN, OFFER_TIER, PLAN_COPY, type PlanLimitsConfig, planPrice, type Placement, type PlanChoice, type ProOffer, planFeatures, WAITLIST_PLANS, type WaitlistPlan } from "@/lib/pro";
 import { cn } from "@/lib/utils";
 export function ProPlans({ offer, limits, current, placement, pilot = false, recommended, automatic = false }: {
   offer: ProOffer; limits: PlanLimitsConfig; current: WaitlistPlan | null; placement: Placement | null; pilot?: boolean; recommended?: PlanChoice; automatic?: boolean;
@@ -52,7 +52,9 @@ export function ProPlans({ offer, limits, current, placement, pilot = false, rec
               <span data-plan-price className="text-2xl font-semibold tracking-tight">{planPrice(offer[p].amount)}</span>
               <span className="text-sm text-muted-foreground">{copy.period} · pesos argentinos</span>
               <span className="text-sm text-muted-foreground">{copy.pitch}</span>
-              <span className="text-sm font-medium">{searchesText(limits[OFFER_TIER[p]])} · una cuenta</span>
+              <span className="grid content-start gap-1.5 text-sm font-medium">
+                {planFeatures(limits[OFFER_TIER[p]]).map((feature, i) => <span key={feature}>{i === 0 ? `${feature} · una cuenta` : feature}</span>)}
+              </span>
               <span className="text-sm text-muted-foreground">
                 {p === "pro_monthly" ? automatic ? "Renovación mensual automática. Podés cancelar desde Ajustes." : "En este piloto: períodos de 30 días con renovación manual. Si pagás con una suscripción de Mercado Pago, la cancelás ahí." : "Sin renovación automática."}
               </span>
