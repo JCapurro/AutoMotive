@@ -59,6 +59,7 @@ export const GUIDE_COPY = {
   ctaTop: "Crear mi búsqueda",
   ctaTopText: "¿Ya sabés que querés un {name}? Te avisamos cuando aparezca uno publicado.",
   home: "Inicio",
+  listingLink: "Ver la guía del {name}",
 } as const;
 
 /** Who publishes the guides (schema.org Organization). */
@@ -103,6 +104,23 @@ export function isSlug(value: unknown): value is string {
 
 export function guidePath(slugMake: string, slugModel: string): string {
   return `/guias/${slugMake}/${slugModel}`;
+}
+
+/**
+ * The published model whose guide a listing links to (the ficha's «Ver la
+ * guía del …»), or null. The worker's match (worker/intelligence/guides.py
+ * pick): same make and the catalog's model (the listing's own model without
+ * one), case-insensitive. The years don't matter: the model's page covers
+ * every generation.
+ */
+export function guideForListing<T extends { make: string; model: string }>(
+  index: readonly T[],
+  make: string | null | undefined,
+  model: string | null | undefined,
+): T | null {
+  const key = (v: string) => v.trim().toLowerCase();
+  if (!make?.trim() || !model?.trim()) return null;
+  return index.find((e) => key(e.make) === key(make) && key(e.model) === key(model)) ?? null;
 }
 
 // ---------------------------------------------------------------------------

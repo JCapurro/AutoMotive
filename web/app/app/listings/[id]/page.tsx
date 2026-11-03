@@ -46,6 +46,8 @@ import { sellerFact, strictSellerFilterOn } from "@/lib/seller";
 import { showFichaQuestion } from "@/lib/sell-intent";
 import { hasAnswered } from "@/lib/sell-intent-server";
 import { contactSubject, renderContactMessage } from "@/lib/contact-message";
+import { GUIDE_COPY, guideForListing, guideName, guidePath } from "@/lib/guides";
+import { type GuideIndexEntry, publishedGuideIndex } from "@/lib/guides-data";
 import { createClient } from "@/lib/supabase/server";
 import type { Component, Listing, PriceRef, Reason, RedFlag } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -66,6 +68,16 @@ async function catalogModelOf(supabase: Awaited<ReturnType<typeof createClient>>
   const { data } = await supabase.from("vehicle_catalog").select("model")
     .ilike("make", escapeLike(listing.make)).ilike("model", escapeLike(listing.model)).is("trim", null).limit(1).maybeSingle();
   return data?.model ?? null;
+}
+
+/** PAR-04: the published models (one anon read); a failed read only drops the guide link. */
+async function guideIndexOrEmpty(): Promise<GuideIndexEntry[]> {
+  try {
+    return await publishedGuideIndex();
+  } catch (error) {
+    console.error("listing page: published guides", error);
+    return [];
+  }
 }
 
 export default async function ListingPage({ params, searchParams }: PageProps<"/app/listings/[id]">) {
@@ -127,7 +139,7 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
   // A down payment or an installment that moved is no price history (PAR-03).
   const showHistory = history.length >= 2 && !publishedIsPartial(listing);
   const linked = linkedListingIds(flags);
-  const [similar, cost, ownProfile, catalogModel, margins, marginTeaser, present, sellAnswered] = await Promise.all([
+  const [similar, cost, ownProfile, catalogModel, margins, marginTeaser, present, sellAnswered, guideIndex] = await Promise.all([
     gone ? Promise.resolve([]) : similarListings(supabase, listing, priceRef),
     // PAR-01: with the plan's total_cost flag, the jurisdiction of the best match's search.
     gone ? Promise.resolve(null) : costEstimateFor(supabase, user.id, listing, best?.search_profile_id ?? null),
@@ -148,7 +160,11 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
       : Promise.resolve(new Set<number>()),
     // PAR-05, Prueba B: the question line only until the account answers (and only with an email, never anonymous).
     showFichaQuestion(cfg.sellIntent, user, false) ? hasAnswered(user.id) : Promise.resolve(true),
+    // PAR-04: whether the listing's make and catalog model have a published guide.
+    guideIndexOrEmpty(),
   ]);
+  // The worker's match (guides.pick): the catalog's model, else the listing's own.
+  const guide = guideForListing(guideIndex, listing.make, catalogModel ?? listing.model);
   const margin = best ? (margins.get(best.id) ?? null) : null;
   const contactTemplate = ownProfile?.contact_template ?? null;
   // PRO-01, option C: «vendedor sin dato» only while the best match's search has the strict filter.
@@ -352,6 +368,17 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
             <div className="mt-3">
               <SellerQuestions listingId={listingId} text={best?.seller_questions ?? BASE_SELLER_QUESTIONS} contact={contact} />
             </div>
+            {guide ? (
+              <p className="mt-3 text-sm">
+                <Link
+                  href={guidePath(guide.slugMake, guide.slugModel)}
+                  data-testid="listing-guide-link"
+                  className="font-medium underline underline-offset-4 hover:text-foreground"
+                >
+                  {GUIDE_COPY.listingLink.replace("{name}", guideName(guide.make, guide.model))}
+                </Link>
+              </p>
+            ) : null}
           </Section>
 
           {!gone && cfg.risk.checklistEnabled ? (
