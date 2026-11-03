@@ -1,0 +1,178 @@
+{
+  "make": "Ford",
+  "model": "Focus",
+  "generation_label": "Focus III",
+  "year_from": 2013,
+  "year_to": 2019,
+  "slug_make": "ford",
+  "slug_model": "focus",
+  "body": {
+    "known_issues": [
+      {
+        "text": "En las versiones con caja automática PowerShift (doble embrague, seis marchas) se reportaron vibraciones, sobre todo al pasar de marcha. Según jefes de taller de concesionarios oficiales Ford consultados por la prensa en 2017, la reprogramación de la caja no lo resolvía y, tras cambiar el embrague, el problema volvía en promedio a los seis meses.",
+        "applies_to": "2.0 con caja PowerShift"
+      },
+      {
+        "text": "Ford lanzó campañas en otros mercados: en Brasil (2016), reparación sin cargo para Focus 2013-2014 con PowerShift y más garantía para los 2014; en EE.UU. y Canadá (2019), más cobertura del embrague y actualización de software y reemplazo del módulo con cobertura extendida, para Focus 2014-2016 hechos para Norteamérica. Para un auto argentino, conviene consultar en un concesionario oficial.",
+        "applies_to": "PowerShift"
+      },
+      {
+        "text": "Las versiones manuales (cajas de cinco marchas) no tienen la PowerShift; revisá el embrague como en cualquier usado.",
+        "applies_to": "versiones manuales"
+      },
+      {
+        "text": "El 1.6 Sigma usa correa de distribución, que tiene reemplazo programado; si no hay comprobante del último cambio, conviene tomarlo como pendiente. El 2.0 usa cadena.",
+        "applies_to": "1.6 Sigma"
+      }
+    ],
+    "visit_checklist": [
+      {
+        "text": "Si es PowerShift, probalo en tránsito lento: arrancá varias veces desde parado y fijate si vibra, sobre todo en los cambios de marcha."
+      },
+      {
+        "text": "Pedí que escaneen motor y caja con un equipo de diagnóstico para ver si hay códigos de falla guardados."
+      },
+      {
+        "text": "Al dar contacto, mirá que se enciendan y después se apaguen los testigos de motor, airbag, ABS y control de estabilidad, y que no aparezcan avisos de la transmisión durante la prueba."
+      },
+      {
+        "text": "Probá lo que traiga la versión: pantalla y SYNC, cámara y sensores de estacionamiento, estacionamiento asistido y frenado autónomo en ciudad."
+      },
+      {
+        "text": "Consultá con el número de chasis (VIN) en un concesionario oficial Ford si el auto tiene campañas o llamados a revisión pendientes."
+      },
+      {
+        "text": "Mirá el vano motor y debajo del auto: pérdidas de aceite o de refrigerante, y el estado de mangueras y correas."
+      }
+    ],
+    "versions_equipment": [
+      {
+        "text": "Se fabricó en General Pacheco (Buenos Aires), en sedán y hatchback."
+      },
+      {
+        "text": "Motores: 1.6 Sigma de 125 CV con caja manual de cinco marchas, y 2.0 Duratec de inyección directa de 170 CV con manual de cinco o automática PowerShift de seis.",
+        "applies_to": "según la presentación del restyling, 2015"
+      },
+      {
+        "text": "En la actualización de 2016 la gama quedó en S (1.6), SE, SE Plus y Titanium (2.0); la PowerShift figuraba en SE Plus y Titanium, y el control de estabilidad pasó a ser de serie en todas.",
+        "applies_to": "2016 en adelante"
+      },
+      {
+        "text": "Según la versión, puede traer SYNC con pantalla táctil, cámara trasera, asistente de estacionamiento y frenado autónomo en ciudad (Active City Stop). Confirmá qué tiene la unidad puntual.",
+        "applies_to": "según versión"
+      }
+    ],
+    "maintenance_costs": [
+      {
+        "text": "El plan de mantenimiento de Ford Argentina (edición 2016) pide cambiar aceite y filtro cada 1 año o 15.000 km, lo que ocurra primero. En autos anteriores, confirmalo en el libro de la unidad."
+      },
+      {
+        "text": "La correa de distribución del 1.6 Sigma y la correa auxiliar (todos los motores) se reemplazan cada 8 años o 120.000 km según el plan de Ford Argentina (edición 2016); confirmalo en el libro de la unidad. Es un trabajo para presupuestar si no hay comprobante.",
+        "applies_to": "1.6 Sigma (correa auxiliar: todos los motores)"
+      },
+      {
+        "text": "Líquido de frenos cada 2 años y refrigerante cada 6 años o 105.000 km, según el mismo plan de 2016; en autos anteriores, ver el libro de la unidad."
+      },
+      {
+        "text": "En la PowerShift el plan pide controlar el nivel de aceite de la caja en cada service. Si la caja necesita embrague o módulo nuevos, pedí presupuesto antes de comprar y tenelo en cuenta al comparar con una versión manual.",
+        "applies_to": "PowerShift"
+      }
+    ],
+    "generations": [
+      {
+        "label": "Focus III",
+        "year_from": 2013,
+        "year_to": 2015,
+        "text": "Presentado en el Salón de Buenos Aires de junio de 2013 y fabricado en Pacheco, en sedán y hatchback."
+      },
+      {
+        "label": "Focus III restyling",
+        "year_from": 2015,
+        "year_to": 2019,
+        "text": "Renovado en 2015 con frente nuevo, SYNC de segunda generación y frenado autónomo en ciudad, sin cambios mecánicos. Actualizado otra vez en 2016. La producción en Pacheco terminó en 2019 (estaba prevista para mayo). Los autos 2015 pueden ser de cualquiera de las dos etapas: mirá el diseño del frente o la generación del SYNC."
+      }
+    ]
+  },
+  "questions": [
+    {
+      "text": "¿La caja es manual o PowerShift? Si es PowerShift, ¿alguna vez le cambiaron el embrague o el módulo?",
+      "why": "En la PowerShift se reportaron vibraciones que, según concesionarios, volvían meses después de cambiar el embrague."
+    },
+    {
+      "text": "¿Tenés las facturas u órdenes de trabajo de las reparaciones de la caja?",
+      "why": "Sirven para saber qué se cambió y cuándo."
+    },
+    {
+      "text": "¿Cuándo se cambió la correa de distribución y tenés el comprobante?",
+      "why": "El 1.6 Sigma usa correa con reemplazo programado por kilometraje y antigüedad."
+    },
+    {
+      "text": "¿Los services se hicieron en concesionario oficial o en taller? ¿Tenés el libro o las facturas?",
+      "why": "El plan de Ford (edición 2016) pide service cada 1 año o 15.000 km."
+    },
+    {
+      "text": "¿Te llegó algún aviso de Ford por un llamado a revisión, y lo hiciste?",
+      "why": "Conviene saber si quedó alguna campaña pendiente."
+    },
+    {
+      "text": "¿Vibra al pasar de marcha o al arrancar?",
+      "why": "En la PowerShift se reportaron vibraciones, sobre todo en los cambios de marcha."
+    }
+  ],
+  "sources": [
+    {
+      "title": "¿Qué pasa con la caja Powershift de Ford? (Parabrisas, 02/06/2017)",
+      "url": "https://parabrisas.perfil.com/noticias/general/2017-06-02-que-pasa-con-la-caja-powershift-de-ford.phtml",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Ford fará reparo gratuito em EcoSport, Fiesta e Focus com câmbio PowerShift (Motor Show, 26/01/2016)",
+      "url": "https://motorshow.com.br/ford-fara-reparo-gratuito-em-ecosport-fiesta-e-focus-com-cambio-powershift",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Ford extends PowerShift transmission warranty (CarComplaints, 2019)",
+      "url": "https://www.carcomplaints.com/news/2019/ford-powershift-transmission-warranty-extension.shtml",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Ford Focus: Garantía y Mantenimiento (Ford Argentina, publicado por el concesionario Forcor)",
+      "url": "https://www.forcor.com.ar/wp-content/uploads/2019/09/Focus_Garantia.pdf",
+      "kind": "manual",
+      "verified": true
+    },
+    {
+      "title": "Ford presentó en Buenos Aires al nuevo Focus (Autoblog Uruguay, junio 2013)",
+      "url": "https://www.autoblog.com.uy/2013/06/ford-presento-en-buenos-aires-al-nuevo.html",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Salón de Buenos Aires 2015: Ford Focus 2016 (Autoblog Uruguay)",
+      "url": "https://www.autoblog.com.uy/2015/06/salon-de-buenos-aires-2015-ford-focus.html",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Ford Focus (2017): versiones, motor y equipamiento (Monkey Motor, 12/07/2016)",
+      "url": "https://www.monkeymotor.net/2016/07/ford-focus-my2017.html",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Ford deja de producir autos en la Argentina luego de 57 años (Autoweb, 06/05/2019)",
+      "url": "https://www.autoweb.com.ar/2019/05/06/ford-deja-de-producir-autos-en-la-argentina-luego-de-57-anos/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Ford deja de fabricar el Fiesta: hasta cuándo habrá stock en Argentina (Diario de Cuyo, 20/02/2019)",
+      "url": "https://www.diariodecuyo.com.ar/tecnologia/Ford-deja-de-fabricar-el-Fiesta-hasta-cuando-habra-stock-en-Argentina-20190220-0027.html",
+      "kind": "prensa",
+      "verified": true
+    }
+  ]
+}

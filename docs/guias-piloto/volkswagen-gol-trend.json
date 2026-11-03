@@ -1,0 +1,190 @@
+{
+  "make": "Volkswagen",
+  "model": "Gol Trend",
+  "generation_label": "Gol Trend",
+  "year_from": 2008,
+  "year_to": 2022,
+  "slug_make": "volkswagen",
+  "slug_model": "gol-trend",
+  "body": {
+    "known_issues": [
+      {
+        "text": "La caja automatizada I-Motion es una manual con embrague robotizado, no una automática convencional. La prensa argentina dice que dio varios dolores de cabeza; según prensa brasileña, se reportaron tirones, cambios imprecisos, embrague que patina y pérdidas de fluido del actuador.",
+        "applies_to": "versiones I-Motion"
+      },
+      {
+        "text": "Volkswagen Argentina convocó a revisión por un posible defecto en el generador de gas de los airbags a unidades de Gol y otros modelos fabricadas entre 2006 y 2018. Las notas nombran al Gol sin separar al Trend, así que conviene consultar el VIN en la web de Volkswagen o en un concesionario oficial.",
+        "applies_to": "fabricados 2006–2018"
+      },
+      {
+        "text": "La prensa indica que el Gol no tenía control de estabilidad y que por eso dejó de venderse 0 km cuando el ESP pasó a ser obligatorio. Conviene confirmarlo en la unidad."
+      },
+      {
+        "text": "Conviene confirmar en el manual si el motor de la unidad usa correa de distribución y cada cuánto se cambia; si la usa y no hay comprobante del último cambio, tomalo como pendiente."
+      }
+    ],
+    "visit_checklist": [
+      {
+        "text": "Si es I-Motion, probala en tránsito y en subida: los cambios tienen que entrar sin golpes, el auto no tiene que patinar al salir y no deberían aparecer avisos en el tablero."
+      },
+      {
+        "text": "La prensa menciona el doble airbag solo en la Pack III de los primeros años; confirmá airbags y ABS en la unidad. Mirá que el testigo de airbag se encienda al dar contacto y después se apague."
+      },
+      {
+        "text": "Consultá con el VIN si tiene pendiente el llamado a revisión por airbags de Volkswagen."
+      },
+      {
+        "text": "Si tiene equipo de GNC, pedí la documentación del equipo y la oblea, y revisá la instalación en el baúl."
+      },
+      {
+        "text": "Pedí que escaneen motor y caja para ver si hay códigos de falla guardados."
+      },
+      {
+        "text": "En la manual, probá el embrague: que no patine en cuarta o quinta al acelerar y que los cambios entren sin ruido."
+      }
+    ],
+    "versions_equipment": [
+      {
+        "text": "2008 a 2012: motor 1.6 de ocho válvulas con caja manual de cinco; versiones Base, Pack I, Pack II (desde 2011, Pack I Plus) y Pack III. La I-Motion era poco común. La prensa menciona el doble airbag en la Pack III.",
+        "applies_to": "2008–2012"
+      },
+      {
+        "text": "Restyling de fines de 2012: según La Nación, la Pack III traía doble airbag, ABS, radio con Bluetooth y USB y volante multifunción; seguía la opción I-Motion.",
+        "applies_to": "2013 en adelante"
+      },
+      {
+        "text": "2019: versiones Trendline y Comfortline con el 1.6 de ocho válvulas y 101 CV y manual de cinco; doble airbag e ISOFIX de serie, sin control de estabilidad. Se fabricaba en Brasil.",
+        "applies_to": "2019"
+      },
+      {
+        "text": "Desde julio de 2019 hubo una Comfortline automática con 1.6 de 16 válvulas de 110 CV y caja automática convencional Tiptronic de seis marchas, distinta de la I-Motion.",
+        "applies_to": "2019 en adelante, automática"
+      }
+    ],
+    "maintenance_costs": [
+      {
+        "text": "Si el motor usa correa de distribución (confirmalo en el manual), pedí el comprobante del último cambio. El intervalo lo marca el plan de mantenimiento del manual."
+      },
+      {
+        "text": "En la I-Motion, el embrague y el actuador aparecen entre los reclamos reportados; si se cambiaron, pedí la factura.",
+        "applies_to": "versiones I-Motion"
+      },
+      {
+        "text": "En la Tiptronic de seis, preguntá si se cambió alguna vez el aceite de la caja y seguí lo que indique el manual.",
+        "applies_to": "automática 2019 en adelante"
+      },
+      {
+        "text": "Si tiene GNC, sumá el mantenimiento del equipo y consultá en un taller habilitado qué controles le corresponden.",
+        "applies_to": "con GNC"
+      }
+    ],
+    "generations": [
+      {
+        "label": "Gol Trend",
+        "year_from": 2008,
+        "year_to": 2012,
+        "text": "Lanzado en Argentina en 2008 como la nueva generación del Gol, con motor transversal y diseño renovado."
+      },
+      {
+        "label": "Restyling",
+        "year_from": 2013,
+        "year_to": 2015,
+        "text": "Primer rediseño, con faros, parrilla, paragolpes y capó nuevos."
+      },
+      {
+        "label": "Renovación 2016",
+        "year_from": 2016,
+        "year_to": 2018,
+        "text": "Cambios en paragolpes y antiniebla, sin tocar los faros."
+      },
+      {
+        "label": "Última actualización",
+        "year_from": 2019,
+        "year_to": 2022,
+        "text": "Trompa tomada de la Saveiro y opción automática Tiptronic. Según la prensa, dejó de venderse 0 km en Argentina en 2022 por la exigencia de control de estabilidad."
+      }
+    ]
+  },
+  "questions": [
+    {
+      "text": "¿La caja es manual, I-Motion o automática Tiptronic?",
+      "why": "La I-Motion es la que la prensa señala con problemas."
+    },
+    {
+      "text": "¿El motor usa correa de distribución? Si la usa, ¿cuándo se cambió y tenés el comprobante?",
+      "why": "Si usa correa, el intervalo de cambio lo marca el plan de mantenimiento del manual."
+    },
+    {
+      "text": "¿Hiciste el llamado a revisión de airbags de Volkswagen?",
+      "why": "Volkswagen convocó a unidades de Gol fabricadas entre 2006 y 2018."
+    },
+    {
+      "text": "¿Tiene airbags y ABS? ¿Qué versión es exactamente?",
+      "why": "La prensa menciona el doble airbag solo en la Pack III de los primeros años, así que conviene confirmarlo en la unidad."
+    },
+    {
+      "text": "¿Tiene GNC? ¿Está la oblea vigente y la documentación del equipo al día?",
+      "why": "Conviene confirmar que el equipo tenga la documentación en regla."
+    },
+    {
+      "text": "¿Alguna vez se reparó el embrague o la caja?",
+      "why": "La I-Motion tiene reportes de problemas de embrague y caja."
+    }
+  ],
+  "sources": [
+    {
+      "title": "Usados: Volkswagen Gol Trend 2008-2012 (Autotest)",
+      "url": "https://autotest.com.ar/noticias/usados-volkswagen-gol-trend-2008-2012/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Los nuevos VW Gol Trend y Voyage (La Nación, 22/12/2012)",
+      "url": "https://www.lanacion.com.ar/autos/al-volante/los-nuevos-vw-gol-trend-y-voyage-nid1539059",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Se despide el Volkswagen Gol: las 11 trompas que tuvo en sus 42 años (Autoweb)",
+      "url": "https://www.autoweb.com.ar/?p=32806",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Diez datos a tener en cuenta sobre el Volkswagen Gol 2019 (Parabrisas)",
+      "url": "https://parabrisas.perfil.com/noticias/noticias/diez-datos-a-tener-en-cuenta-sobre-el-volkswagen-gol-2019.phtml",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Volkswagen lanza la versión automática del Gol (Autoweb, 17/07/2019)",
+      "url": "https://www.autoweb.com.ar/?p=9427",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Si sos dueño de un Volkswagen fabricado entre 2006 y 2018, la marca te está buscando (El Economista, 18/12/2023)",
+      "url": "https://eleconomista.com.ar/autos/si-sos-dueno-volkswagen-fabricado-2006-2018-marca-te-esta-buscando-n69427",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Volkswagen llama a revisión a sus propietarios por fallas en los airbags (Parabrisas, 14/12/2023)",
+      "url": "https://parabrisas.perfil.com/noticias/noticias/volkswagen-llama-a-revision-a-sus-propietarios-por-fallas-en-los-airbags.phtml",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Além do Powershift: carros automáticos famosos por darem problemas no câmbio (Vrum, 12/2024)",
+      "url": "https://www.vrum.com.br/aceleradas/2024/12/7008662-alem-do-powershift-carros-automaticos-famosos-por-darem-problemas-no-cambio.html",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "El Volkswagen Gol dejó de venderse acá pero lo siguen comprando usado (El Cronista)",
+      "url": "https://www.cronista.com/autos/el-volkswagen-gol-el-auto-mas-amado-por-los-argentinos-dejo-de-venderse-aca-pero-lo-siguen-comprando-usado",
+      "kind": "prensa",
+      "verified": true
+    }
+  ]
+}
