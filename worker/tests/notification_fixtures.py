@@ -134,6 +134,21 @@ OPPORTUNITY_DUPLICATE_PHOTOS = notification("opportunity", {**OPPORTUNITY.payloa
     _MUCH_CHEAPER,
     ("duplicate_photos", RED_FLAG["duplicate_photos"].format(source="Rosario Garage"), "warning"))})
 
+# PAR-04: the email's questions with a published guide of the model: the
+# listing raises one (owners), the guide adds two before the generic ones.
+def _guide_questions() -> list[str]:
+    from intelligence.guides import GuideEntry
+    from intelligence.red_flags import RedFlag
+    from intelligence.seller_questions import question_texts
+    guide = GuideEntry(12, None, 2011, 2019, ("¿La caja hace tirones o patina al arrancar en frío?",
+                                              "¿Le cambiaron bujes o bieletas del tren delantero?"))
+    listing = {**FIESTA, "description": "Impecable", "transmission": "automatic"}
+    flags = [RedFlag("no_owners", RED_FLAG["no_owners"], "info")]
+    return question_texts(listing, flags, timing_belt=False, now=NOW, guide=guide)
+
+
+OPPORTUNITY_GUIDE_QUESTIONS = notification("opportunity", {**OPPORTUNITY.payload, "questions": _guide_questions()})
+
 CASES = {"opportunity": OPPORTUNITY, "new_match": NEW_MATCH, "price_drop": PRICE_DROP, "digest": DIGEST,
          "opportunity_1_drop": OPPORTUNITY_1_DROP, "opportunity_3_drops": OPPORTUNITY_3_DROPS,
          "opportunity_ars": OPPORTUNITY_ARS, "opportunity_much_cheaper_verify": OPPORTUNITY_MUCH_CHEAPER,
@@ -145,4 +160,5 @@ CASES = {"opportunity": OPPORTUNITY, "new_match": NEW_MATCH, "price_drop": PRICE
          "opportunity_margin_few_dealers": OPPORTUNITY_MARGIN_FEW_DEALERS,
          "price_drop_margin": PRICE_DROP_MARGIN,
          "opportunity_private_many_listings": OPPORTUNITY_PRIVATE_MANY,
-         "opportunity_duplicate_photos": OPPORTUNITY_DUPLICATE_PHOTOS}
+         "opportunity_duplicate_photos": OPPORTUNITY_DUPLICATE_PHOTOS,
+         "opportunity_guide_questions": OPPORTUNITY_GUIDE_QUESTIONS}

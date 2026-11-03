@@ -1,0 +1,658 @@
+{
+  "recorded_at": null,
+  "cli_version": null,
+  "model": "synthetic",
+  "synthetic": true,
+  "note": "Respuestas SINTÉTICAS escritas a mano con el formato de los sobres de claude -p (PAR-04): ninguna salió de un proveedor real. Se vuelven a grabar con `python -m tools.record_llm --kind model_guide` cuando Juan apruebe el proveedor. Las URLs son de example.test a propósito: las fuentes que sugiere la IA se verifican a mano antes de publicar.",
+  "responses": {
+    "ford|fiesta|": {
+      "type": "result",
+      "subtype": "success",
+      "is_error": false,
+      "result": "{\"body\": {\"known_issues\": [{\"text\": \"La caja automática de doble embrague (Powershift) puede dar tirones o patinar al arrancar.\", \"applies_to\": \"caja automática Powershift, 2011–2019\"}, {\"text\": \"Ruidos en el tren delantero (bujes y bieletas) con el uso en calles rotas.\", \"applies_to\": null}, {\"text\": \"El sistema multimedia puede quedar lento o perder la conexión Bluetooth.\", \"applies_to\": \"versiones con SYNC\"}], \"visit_checklist\": [{\"text\": \"Probar la caja en frío, en subida y en maniobras lentas.\", \"applies_to\": null}, {\"text\": \"Escuchar el tren delantero pasando por lomos de burro y empedrado.\", \"applies_to\": null}, {\"text\": \"Revisar que el aire acondicionado enfríe en menos de cinco minutos.\", \"applies_to\": null}, {\"text\": \"Controlar el desgaste parejo de las cubiertas delanteras.\", \"applies_to\": null}], \"versions_equipment\": [{\"text\": \"Las versiones S, SE y Titanium cambian sobre todo en equipamiento de confort y seguridad.\", \"applies_to\": null}, {\"text\": \"La Titanium suele traer climatizador y control de estabilidad.\", \"applies_to\": \"Titanium\"}], \"maintenance_costs\": [{\"text\": \"La distribución es por correa: conviene saber cuándo se cambió por última vez.\", \"applies_to\": \"motor 1.6 Sigma\"}, {\"text\": \"El embrague de la caja automática es la reparación más cara del modelo.\", \"applies_to\": \"caja automática Powershift\"}], \"generations\": [{\"label\": \"Kinetic (Mk7)\", \"year_from\": 2011, \"year_to\": 2019, \"text\": \"Diseño Kinetic, fabricado en México y luego en Brasil; restyling en 2014.\"}]}, \"questions\": [{\"text\": \"¿La caja hace tirones o patina al arrancar en frío?\", \"why\": \"Es la falla más conocida de la caja automática del modelo.\"}, {\"text\": \"¿Cuándo se hizo el último cambio de correa de distribución?\", \"why\": \"El motor usa correa y un corte puede ser una reparación grande.\"}, {\"text\": \"¿Le cambiaron bujes o bieletas del tren delantero?\", \"why\": \"Los ruidos del tren delantero son frecuentes en este modelo.\"}, {\"text\": \"¿El multimedia y el Bluetooth funcionan bien?\", \"why\": \"Algunas unidades tienen fallas en el sistema multimedia.\"}], \"sources\": [{\"title\": \"Manual del propietario Ford Fiesta\", \"url\": \"https://example.test/ford-fiesta-manual\", \"kind\": \"manual\"}, {\"title\": \"Ficha técnica Ford Fiesta Kinetic\", \"url\": \"https://example.test/ford-fiesta-ficha\", \"kind\": \"ficha técnica\"}]}",
+      "structured_output": {
+        "body": {
+          "known_issues": [
+            {
+              "text": "La caja automática de doble embrague (Powershift) puede dar tirones o patinar al arrancar.",
+              "applies_to": "caja automática Powershift, 2011–2019"
+            },
+            {
+              "text": "Ruidos en el tren delantero (bujes y bieletas) con el uso en calles rotas.",
+              "applies_to": null
+            },
+            {
+              "text": "El sistema multimedia puede quedar lento o perder la conexión Bluetooth.",
+              "applies_to": "versiones con SYNC"
+            }
+          ],
+          "visit_checklist": [
+            {
+              "text": "Probar la caja en frío, en subida y en maniobras lentas.",
+              "applies_to": null
+            },
+            {
+              "text": "Escuchar el tren delantero pasando por lomos de burro y empedrado.",
+              "applies_to": null
+            },
+            {
+              "text": "Revisar que el aire acondicionado enfríe en menos de cinco minutos.",
+              "applies_to": null
+            },
+            {
+              "text": "Controlar el desgaste parejo de las cubiertas delanteras.",
+              "applies_to": null
+            }
+          ],
+          "versions_equipment": [
+            {
+              "text": "Las versiones S, SE y Titanium cambian sobre todo en equipamiento de confort y seguridad.",
+              "applies_to": null
+            },
+            {
+              "text": "La Titanium suele traer climatizador y control de estabilidad.",
+              "applies_to": "Titanium"
+            }
+          ],
+          "maintenance_costs": [
+            {
+              "text": "La distribución es por correa: conviene saber cuándo se cambió por última vez.",
+              "applies_to": "motor 1.6 Sigma"
+            },
+            {
+              "text": "El embrague de la caja automática es la reparación más cara del modelo.",
+              "applies_to": "caja automática Powershift"
+            }
+          ],
+          "generations": [
+            {
+              "label": "Kinetic (Mk7)",
+              "year_from": 2011,
+              "year_to": 2019,
+              "text": "Diseño Kinetic, fabricado en México y luego en Brasil; restyling en 2014."
+            }
+          ]
+        },
+        "questions": [
+          {
+            "text": "¿La caja hace tirones o patina al arrancar en frío?",
+            "why": "Es la falla más conocida de la caja automática del modelo."
+          },
+          {
+            "text": "¿Cuándo se hizo el último cambio de correa de distribución?",
+            "why": "El motor usa correa y un corte puede ser una reparación grande."
+          },
+          {
+            "text": "¿Le cambiaron bujes o bieletas del tren delantero?",
+            "why": "Los ruidos del tren delantero son frecuentes en este modelo."
+          },
+          {
+            "text": "¿El multimedia y el Bluetooth funcionan bien?",
+            "why": "Algunas unidades tienen fallas en el sistema multimedia."
+          }
+        ],
+        "sources": [
+          {
+            "title": "Manual del propietario Ford Fiesta",
+            "url": "https://example.test/ford-fiesta-manual",
+            "kind": "manual"
+          },
+          {
+            "title": "Ficha técnica Ford Fiesta Kinetic",
+            "url": "https://example.test/ford-fiesta-ficha",
+            "kind": "ficha técnica"
+          }
+        ]
+      },
+      "duration_ms": 0,
+      "models": [
+        "synthetic"
+      ]
+    },
+    "volkswagen|gol trend|": {
+      "type": "result",
+      "subtype": "success",
+      "is_error": false,
+      "result": "{\"body\": {\"known_issues\": [{\"text\": \"Pérdidas de aceite por la junta de la tapa de válvulas con los años.\", \"applies_to\": \"motor 1.6 8v\"}, {\"text\": \"Desgaste prematuro de los amortiguadores traseros.\", \"applies_to\": null}], \"visit_checklist\": [{\"text\": \"Probar la caja en frío, en subida y en maniobras lentas.\", \"applies_to\": null}, {\"text\": \"Escuchar el tren delantero pasando por lomos de burro y empedrado.\", \"applies_to\": null}, {\"text\": \"Revisar que el aire acondicionado enfríe en menos de cinco minutos.\", \"applies_to\": null}, {\"text\": \"Controlar el desgaste parejo de las cubiertas delanteras.\", \"applies_to\": null}], \"versions_equipment\": [{\"text\": \"Las versiones S, SE y Titanium cambian sobre todo en equipamiento de confort y seguridad.\", \"applies_to\": null}, {\"text\": \"La Titanium suele traer climatizador y control de estabilidad.\", \"applies_to\": \"Titanium\"}], \"maintenance_costs\": [{\"text\": \"La distribución es por correa: conviene saber cuándo se cambió por última vez.\", \"applies_to\": \"motor 1.6 Sigma\"}, {\"text\": \"El embrague de la caja automática es la reparación más cara del modelo.\", \"applies_to\": \"caja automática Powershift\"}], \"generations\": [{\"label\": \"Gol Trend\", \"year_from\": 2008, \"year_to\": 2023, \"text\": \"Restylings en 2013 y 2017.\"}]}, \"questions\": [{\"text\": \"¿Tiene pérdidas de aceite en el motor?\", \"why\": \"La junta de la tapa de válvulas suele perder con los años.\"}, {\"text\": \"¿Cuándo se cambiaron los amortiguadores?\", \"why\": \"Los traseros se gastan pronto.\"}, {\"text\": \"¿Cuándo se hizo el último cambio de correa de distribución?\", \"why\": \"El motor usa correa.\"}], \"sources\": [{\"title\": \"Manual Volkswagen Gol Trend\", \"url\": \"https://example.test/vw-gol-trend-manual\", \"kind\": \"manual\"}]}",
+      "structured_output": {
+        "body": {
+          "known_issues": [
+            {
+              "text": "Pérdidas de aceite por la junta de la tapa de válvulas con los años.",
+              "applies_to": "motor 1.6 8v"
+            },
+            {
+              "text": "Desgaste prematuro de los amortiguadores traseros.",
+              "applies_to": null
+            }
+          ],
+          "visit_checklist": [
+            {
+              "text": "Probar la caja en frío, en subida y en maniobras lentas.",
+              "applies_to": null
+            },
+            {
+              "text": "Escuchar el tren delantero pasando por lomos de burro y empedrado.",
+              "applies_to": null
+            },
+            {
+              "text": "Revisar que el aire acondicionado enfríe en menos de cinco minutos.",
+              "applies_to": null
+            },
+            {
+              "text": "Controlar el desgaste parejo de las cubiertas delanteras.",
+              "applies_to": null
+            }
+          ],
+          "versions_equipment": [
+            {
+              "text": "Las versiones S, SE y Titanium cambian sobre todo en equipamiento de confort y seguridad.",
+              "applies_to": null
+            },
+            {
+              "text": "La Titanium suele traer climatizador y control de estabilidad.",
+              "applies_to": "Titanium"
+            }
+          ],
+          "maintenance_costs": [
+            {
+              "text": "La distribución es por correa: conviene saber cuándo se cambió por última vez.",
+              "applies_to": "motor 1.6 Sigma"
+            },
+            {
+              "text": "El embrague de la caja automática es la reparación más cara del modelo.",
+              "applies_to": "caja automática Powershift"
+            }
+          ],
+          "generations": [
+            {
+              "label": "Gol Trend",
+              "year_from": 2008,
+              "year_to": 2023,
+              "text": "Restylings en 2013 y 2017."
+            }
+          ]
+        },
+        "questions": [
+          {
+            "text": "¿Tiene pérdidas de aceite en el motor?",
+            "why": "La junta de la tapa de válvulas suele perder con los años."
+          },
+          {
+            "text": "¿Cuándo se cambiaron los amortiguadores?",
+            "why": "Los traseros se gastan pronto."
+          },
+          {
+            "text": "¿Cuándo se hizo el último cambio de correa de distribución?",
+            "why": "El motor usa correa."
+          }
+        ],
+        "sources": [
+          {
+            "title": "Manual Volkswagen Gol Trend",
+            "url": "https://example.test/vw-gol-trend-manual",
+            "kind": "manual"
+          }
+        ]
+      },
+      "duration_ms": 0,
+      "models": [
+        "synthetic"
+      ]
+    },
+    "ford|fiesta|falta-seccion": {
+      "type": "result",
+      "subtype": "success",
+      "is_error": false,
+      "result": "{\"body\": {\"known_issues\": [], \"visit_checklist\": [{\"text\": \"Probar la caja en frío, en subida y en maniobras lentas.\", \"applies_to\": null}, {\"text\": \"Escuchar el tren delantero pasando por lomos de burro y empedrado.\", \"applies_to\": null}, {\"text\": \"Revisar que el aire acondicionado enfríe en menos de cinco minutos.\", \"applies_to\": null}, {\"text\": \"Controlar el desgaste parejo de las cubiertas delanteras.\", \"applies_to\": null}], \"versions_equipment\": [{\"text\": \"Las versiones S, SE y Titanium cambian sobre todo en equipamiento de confort y seguridad.\", \"applies_to\": null}, {\"text\": \"La Titanium suele traer climatizador y control de estabilidad.\", \"applies_to\": \"Titanium\"}], \"maintenance_costs\": [{\"text\": \"La distribución es por correa: conviene saber cuándo se cambió por última vez.\", \"applies_to\": \"motor 1.6 Sigma\"}, {\"text\": \"El embrague de la caja automática es la reparación más cara del modelo.\", \"applies_to\": \"caja automática Powershift\"}], \"generations\": [{\"label\": \"Kinetic (Mk7)\", \"year_from\": 2011, \"year_to\": 2019, \"text\": \"Diseño Kinetic, fabricado en México y luego en Brasil; restyling en 2014.\"}]}, \"questions\": [{\"text\": \"¿La caja hace tirones o patina al arrancar en frío?\", \"why\": \"Es la falla más conocida de la caja automática del modelo.\"}, {\"text\": \"¿Cuándo se hizo el último cambio de correa de distribución?\", \"why\": \"El motor usa correa y un corte puede ser una reparación grande.\"}, {\"text\": \"¿Le cambiaron bujes o bieletas del tren delantero?\", \"why\": \"Los ruidos del tren delantero son frecuentes en este modelo.\"}, {\"text\": \"¿El multimedia y el Bluetooth funcionan bien?\", \"why\": \"Algunas unidades tienen fallas en el sistema multimedia.\"}], \"sources\": [{\"title\": \"Manual del propietario Ford Fiesta\", \"url\": \"https://example.test/ford-fiesta-manual\", \"kind\": \"manual\"}, {\"title\": \"Ficha técnica Ford Fiesta Kinetic\", \"url\": \"https://example.test/ford-fiesta-ficha\", \"kind\": \"ficha técnica\"}]}",
+      "structured_output": {
+        "body": {
+          "known_issues": [],
+          "visit_checklist": [
+            {
+              "text": "Probar la caja en frío, en subida y en maniobras lentas.",
+              "applies_to": null
+            },
+            {
+              "text": "Escuchar el tren delantero pasando por lomos de burro y empedrado.",
+              "applies_to": null
+            },
+            {
+              "text": "Revisar que el aire acondicionado enfríe en menos de cinco minutos.",
+              "applies_to": null
+            },
+            {
+              "text": "Controlar el desgaste parejo de las cubiertas delanteras.",
+              "applies_to": null
+            }
+          ],
+          "versions_equipment": [
+            {
+              "text": "Las versiones S, SE y Titanium cambian sobre todo en equipamiento de confort y seguridad.",
+              "applies_to": null
+            },
+            {
+              "text": "La Titanium suele traer climatizador y control de estabilidad.",
+              "applies_to": "Titanium"
+            }
+          ],
+          "maintenance_costs": [
+            {
+              "text": "La distribución es por correa: conviene saber cuándo se cambió por última vez.",
+              "applies_to": "motor 1.6 Sigma"
+            },
+            {
+              "text": "El embrague de la caja automática es la reparación más cara del modelo.",
+              "applies_to": "caja automática Powershift"
+            }
+          ],
+          "generations": [
+            {
+              "label": "Kinetic (Mk7)",
+              "year_from": 2011,
+              "year_to": 2019,
+              "text": "Diseño Kinetic, fabricado en México y luego en Brasil; restyling en 2014."
+            }
+          ]
+        },
+        "questions": [
+          {
+            "text": "¿La caja hace tirones o patina al arrancar en frío?",
+            "why": "Es la falla más conocida de la caja automática del modelo."
+          },
+          {
+            "text": "¿Cuándo se hizo el último cambio de correa de distribución?",
+            "why": "El motor usa correa y un corte puede ser una reparación grande."
+          },
+          {
+            "text": "¿Le cambiaron bujes o bieletas del tren delantero?",
+            "why": "Los ruidos del tren delantero son frecuentes en este modelo."
+          },
+          {
+            "text": "¿El multimedia y el Bluetooth funcionan bien?",
+            "why": "Algunas unidades tienen fallas en el sistema multimedia."
+          }
+        ],
+        "sources": [
+          {
+            "title": "Manual del propietario Ford Fiesta",
+            "url": "https://example.test/ford-fiesta-manual",
+            "kind": "manual"
+          },
+          {
+            "title": "Ficha técnica Ford Fiesta Kinetic",
+            "url": "https://example.test/ford-fiesta-ficha",
+            "kind": "ficha técnica"
+          }
+        ]
+      },
+      "duration_ms": 0,
+      "models": [
+        "synthetic"
+      ]
+    },
+    "ford|fiesta|dolares": {
+      "type": "result",
+      "subtype": "success",
+      "is_error": false,
+      "result": "{\"body\": {\"known_issues\": [{\"text\": \"La caja automática de doble embrague (Powershift) puede dar tirones o patinar al arrancar.\", \"applies_to\": \"caja automática Powershift, 2011–2019\"}, {\"text\": \"Ruidos en el tren delantero (bujes y bieletas) con el uso en calles rotas.\", \"applies_to\": null}, {\"text\": \"El sistema multimedia puede quedar lento o perder la conexión Bluetooth.\", \"applies_to\": \"versiones con SYNC\"}], \"visit_checklist\": [{\"text\": \"Probar la caja en frío, en subida y en maniobras lentas.\", \"applies_to\": null}, {\"text\": \"Escuchar el tren delantero pasando por lomos de burro y empedrado.\", \"applies_to\": null}, {\"text\": \"Revisar que el aire acondicionado enfríe en menos de cinco minutos.\", \"applies_to\": null}, {\"text\": \"Controlar el desgaste parejo de las cubiertas delanteras.\", \"applies_to\": null}], \"versions_equipment\": [{\"text\": \"Las versiones S, SE y Titanium cambian sobre todo en equipamiento de confort y seguridad.\", \"applies_to\": null}, {\"text\": \"La Titanium suele traer climatizador y control de estabilidad.\", \"applies_to\": \"Titanium\"}], \"maintenance_costs\": [{\"text\": \"La distribución es por correa: conviene saber cuándo se cambió por última vez.\", \"applies_to\": \"motor 1.6 Sigma\"}, {\"text\": \"El embrague de la caja automática es la reparación más cara del modelo.\", \"applies_to\": \"caja automática Powershift\"}, {\"text\": \"Cambiar el embrague sale unos USD 1.500.\", \"applies_to\": null}], \"generations\": [{\"label\": \"Kinetic (Mk7)\", \"year_from\": 2011, \"year_to\": 2019, \"text\": \"Diseño Kinetic, fabricado en México y luego en Brasil; restyling en 2014.\"}]}, \"questions\": [{\"text\": \"¿La caja hace tirones o patina al arrancar en frío?\", \"why\": \"Es la falla más conocida de la caja automática del modelo.\"}, {\"text\": \"¿Cuándo se hizo el último cambio de correa de distribución?\", \"why\": \"El motor usa correa y un corte puede ser una reparación grande.\"}, {\"text\": \"¿Le cambiaron bujes o bieletas del tren delantero?\", \"why\": \"Los ruidos del tren delantero son frecuentes en este modelo.\"}, {\"text\": \"¿El multimedia y el Bluetooth funcionan bien?\", \"why\": \"Algunas unidades tienen fallas en el sistema multimedia.\"}], \"sources\": [{\"title\": \"Manual del propietario Ford Fiesta\", \"url\": \"https://example.test/ford-fiesta-manual\", \"kind\": \"manual\"}, {\"title\": \"Ficha técnica Ford Fiesta Kinetic\", \"url\": \"https://example.test/ford-fiesta-ficha\", \"kind\": \"ficha técnica\"}]}",
+      "structured_output": {
+        "body": {
+          "known_issues": [
+            {
+              "text": "La caja automática de doble embrague (Powershift) puede dar tirones o patinar al arrancar.",
+              "applies_to": "caja automática Powershift, 2011–2019"
+            },
+            {
+              "text": "Ruidos en el tren delantero (bujes y bieletas) con el uso en calles rotas.",
+              "applies_to": null
+            },
+            {
+              "text": "El sistema multimedia puede quedar lento o perder la conexión Bluetooth.",
+              "applies_to": "versiones con SYNC"
+            }
+          ],
+          "visit_checklist": [
+            {
+              "text": "Probar la caja en frío, en subida y en maniobras lentas.",
+              "applies_to": null
+            },
+            {
+              "text": "Escuchar el tren delantero pasando por lomos de burro y empedrado.",
+              "applies_to": null
+            },
+            {
+              "text": "Revisar que el aire acondicionado enfríe en menos de cinco minutos.",
+              "applies_to": null
+            },
+            {
+              "text": "Controlar el desgaste parejo de las cubiertas delanteras.",
+              "applies_to": null
+            }
+          ],
+          "versions_equipment": [
+            {
+              "text": "Las versiones S, SE y Titanium cambian sobre todo en equipamiento de confort y seguridad.",
+              "applies_to": null
+            },
+            {
+              "text": "La Titanium suele traer climatizador y control de estabilidad.",
+              "applies_to": "Titanium"
+            }
+          ],
+          "maintenance_costs": [
+            {
+              "text": "La distribución es por correa: conviene saber cuándo se cambió por última vez.",
+              "applies_to": "motor 1.6 Sigma"
+            },
+            {
+              "text": "El embrague de la caja automática es la reparación más cara del modelo.",
+              "applies_to": "caja automática Powershift"
+            },
+            {
+              "text": "Cambiar el embrague sale unos USD 1.500.",
+              "applies_to": null
+            }
+          ],
+          "generations": [
+            {
+              "label": "Kinetic (Mk7)",
+              "year_from": 2011,
+              "year_to": 2019,
+              "text": "Diseño Kinetic, fabricado en México y luego en Brasil; restyling en 2014."
+            }
+          ]
+        },
+        "questions": [
+          {
+            "text": "¿La caja hace tirones o patina al arrancar en frío?",
+            "why": "Es la falla más conocida de la caja automática del modelo."
+          },
+          {
+            "text": "¿Cuándo se hizo el último cambio de correa de distribución?",
+            "why": "El motor usa correa y un corte puede ser una reparación grande."
+          },
+          {
+            "text": "¿Le cambiaron bujes o bieletas del tren delantero?",
+            "why": "Los ruidos del tren delantero son frecuentes en este modelo."
+          },
+          {
+            "text": "¿El multimedia y el Bluetooth funcionan bien?",
+            "why": "Algunas unidades tienen fallas en el sistema multimedia."
+          }
+        ],
+        "sources": [
+          {
+            "title": "Manual del propietario Ford Fiesta",
+            "url": "https://example.test/ford-fiesta-manual",
+            "kind": "manual"
+          },
+          {
+            "title": "Ficha técnica Ford Fiesta Kinetic",
+            "url": "https://example.test/ford-fiesta-ficha",
+            "kind": "ficha técnica"
+          }
+        ]
+      },
+      "duration_ms": 0,
+      "models": [
+        "synthetic"
+      ]
+    },
+    "ford|fiesta|garantizado": {
+      "type": "result",
+      "subtype": "success",
+      "is_error": false,
+      "result": "{\"body\": {\"known_issues\": [{\"text\": \"La caja automática de doble embrague (Powershift) puede dar tirones o patinar al arrancar.\", \"applies_to\": \"caja automática Powershift, 2011–2019\"}, {\"text\": \"Ruidos en el tren delantero (bujes y bieletas) con el uso en calles rotas.\", \"applies_to\": null}, {\"text\": \"El sistema multimedia puede quedar lento o perder la conexión Bluetooth.\", \"applies_to\": \"versiones con SYNC\"}], \"visit_checklist\": [{\"text\": \"Probar la caja en frío, en subida y en maniobras lentas.\", \"applies_to\": null}, {\"text\": \"Escuchar el tren delantero pasando por lomos de burro y empedrado.\", \"applies_to\": null}, {\"text\": \"Revisar que el aire acondicionado enfríe en menos de cinco minutos.\", \"applies_to\": null}, {\"text\": \"Controlar el desgaste parejo de las cubiertas delanteras.\", \"applies_to\": null}, {\"text\": \"Con los services al día el motor está garantizado.\", \"applies_to\": null}], \"versions_equipment\": [{\"text\": \"Las versiones S, SE y Titanium cambian sobre todo en equipamiento de confort y seguridad.\", \"applies_to\": null}, {\"text\": \"La Titanium suele traer climatizador y control de estabilidad.\", \"applies_to\": \"Titanium\"}], \"maintenance_costs\": [{\"text\": \"La distribución es por correa: conviene saber cuándo se cambió por última vez.\", \"applies_to\": \"motor 1.6 Sigma\"}, {\"text\": \"El embrague de la caja automática es la reparación más cara del modelo.\", \"applies_to\": \"caja automática Powershift\"}], \"generations\": [{\"label\": \"Kinetic (Mk7)\", \"year_from\": 2011, \"year_to\": 2019, \"text\": \"Diseño Kinetic, fabricado en México y luego en Brasil; restyling en 2014.\"}]}, \"questions\": [{\"text\": \"¿La caja hace tirones o patina al arrancar en frío?\", \"why\": \"Es la falla más conocida de la caja automática del modelo.\"}, {\"text\": \"¿Cuándo se hizo el último cambio de correa de distribución?\", \"why\": \"El motor usa correa y un corte puede ser una reparación grande.\"}, {\"text\": \"¿Le cambiaron bujes o bieletas del tren delantero?\", \"why\": \"Los ruidos del tren delantero son frecuentes en este modelo.\"}, {\"text\": \"¿El multimedia y el Bluetooth funcionan bien?\", \"why\": \"Algunas unidades tienen fallas en el sistema multimedia.\"}], \"sources\": [{\"title\": \"Manual del propietario Ford Fiesta\", \"url\": \"https://example.test/ford-fiesta-manual\", \"kind\": \"manual\"}, {\"title\": \"Ficha técnica Ford Fiesta Kinetic\", \"url\": \"https://example.test/ford-fiesta-ficha\", \"kind\": \"ficha técnica\"}]}",
+      "structured_output": {
+        "body": {
+          "known_issues": [
+            {
+              "text": "La caja automática de doble embrague (Powershift) puede dar tirones o patinar al arrancar.",
+              "applies_to": "caja automática Powershift, 2011–2019"
+            },
+            {
+              "text": "Ruidos en el tren delantero (bujes y bieletas) con el uso en calles rotas.",
+              "applies_to": null
+            },
+            {
+              "text": "El sistema multimedia puede quedar lento o perder la conexión Bluetooth.",
+              "applies_to": "versiones con SYNC"
+            }
+          ],
+          "visit_checklist": [
+            {
+              "text": "Probar la caja en frío, en subida y en maniobras lentas.",
+              "applies_to": null
+            },
+            {
+              "text": "Escuchar el tren delantero pasando por lomos de burro y empedrado.",
+              "applies_to": null
+            },
+            {
+              "text": "Revisar que el aire acondicionado enfríe en menos de cinco minutos.",
+              "applies_to": null
+            },
+            {
+              "text": "Controlar el desgaste parejo de las cubiertas delanteras.",
+              "applies_to": null
+            },
+            {
+              "text": "Con los services al día el motor está garantizado.",
+              "applies_to": null
+            }
+          ],
+          "versions_equipment": [
+            {
+              "text": "Las versiones S, SE y Titanium cambian sobre todo en equipamiento de confort y seguridad.",
+              "applies_to": null
+            },
+            {
+              "text": "La Titanium suele traer climatizador y control de estabilidad.",
+              "applies_to": "Titanium"
+            }
+          ],
+          "maintenance_costs": [
+            {
+              "text": "La distribución es por correa: conviene saber cuándo se cambió por última vez.",
+              "applies_to": "motor 1.6 Sigma"
+            },
+            {
+              "text": "El embrague de la caja automática es la reparación más cara del modelo.",
+              "applies_to": "caja automática Powershift"
+            }
+          ],
+          "generations": [
+            {
+              "label": "Kinetic (Mk7)",
+              "year_from": 2011,
+              "year_to": 2019,
+              "text": "Diseño Kinetic, fabricado en México y luego en Brasil; restyling en 2014."
+            }
+          ]
+        },
+        "questions": [
+          {
+            "text": "¿La caja hace tirones o patina al arrancar en frío?",
+            "why": "Es la falla más conocida de la caja automática del modelo."
+          },
+          {
+            "text": "¿Cuándo se hizo el último cambio de correa de distribución?",
+            "why": "El motor usa correa y un corte puede ser una reparación grande."
+          },
+          {
+            "text": "¿Le cambiaron bujes o bieletas del tren delantero?",
+            "why": "Los ruidos del tren delantero son frecuentes en este modelo."
+          },
+          {
+            "text": "¿El multimedia y el Bluetooth funcionan bien?",
+            "why": "Algunas unidades tienen fallas en el sistema multimedia."
+          }
+        ],
+        "sources": [
+          {
+            "title": "Manual del propietario Ford Fiesta",
+            "url": "https://example.test/ford-fiesta-manual",
+            "kind": "manual"
+          },
+          {
+            "title": "Ficha técnica Ford Fiesta Kinetic",
+            "url": "https://example.test/ford-fiesta-ficha",
+            "kind": "ficha técnica"
+          }
+        ]
+      },
+      "duration_ms": 0,
+      "models": [
+        "synthetic"
+      ]
+    },
+    "ford|fiesta|doce-preguntas": {
+      "type": "result",
+      "subtype": "success",
+      "is_error": false,
+      "result": "{\"body\": {\"known_issues\": [{\"text\": \"La caja automática de doble embrague (Powershift) puede dar tirones o patinar al arrancar.\", \"applies_to\": \"caja automática Powershift, 2011–2019\"}, {\"text\": \"Ruidos en el tren delantero (bujes y bieletas) con el uso en calles rotas.\", \"applies_to\": null}, {\"text\": \"El sistema multimedia puede quedar lento o perder la conexión Bluetooth.\", \"applies_to\": \"versiones con SYNC\"}], \"visit_checklist\": [{\"text\": \"Probar la caja en frío, en subida y en maniobras lentas.\", \"applies_to\": null}, {\"text\": \"Escuchar el tren delantero pasando por lomos de burro y empedrado.\", \"applies_to\": null}, {\"text\": \"Revisar que el aire acondicionado enfríe en menos de cinco minutos.\", \"applies_to\": null}, {\"text\": \"Controlar el desgaste parejo de las cubiertas delanteras.\", \"applies_to\": null}], \"versions_equipment\": [{\"text\": \"Las versiones S, SE y Titanium cambian sobre todo en equipamiento de confort y seguridad.\", \"applies_to\": null}, {\"text\": \"La Titanium suele traer climatizador y control de estabilidad.\", \"applies_to\": \"Titanium\"}], \"maintenance_costs\": [{\"text\": \"La distribución es por correa: conviene saber cuándo se cambió por última vez.\", \"applies_to\": \"motor 1.6 Sigma\"}, {\"text\": \"El embrague de la caja automática es la reparación más cara del modelo.\", \"applies_to\": \"caja automática Powershift\"}], \"generations\": [{\"label\": \"Kinetic (Mk7)\", \"year_from\": 2011, \"year_to\": 2019, \"text\": \"Diseño Kinetic, fabricado en México y luego en Brasil; restyling en 2014.\"}]}, \"questions\": [{\"text\": \"¿Pregunta número 1 sobre el auto?\", \"why\": \"x\"}, {\"text\": \"¿Pregunta número 2 sobre el auto?\", \"why\": \"x\"}, {\"text\": \"¿Pregunta número 3 sobre el auto?\", \"why\": \"x\"}, {\"text\": \"¿Pregunta número 4 sobre el auto?\", \"why\": \"x\"}, {\"text\": \"¿Pregunta número 5 sobre el auto?\", \"why\": \"x\"}, {\"text\": \"¿Pregunta número 6 sobre el auto?\", \"why\": \"x\"}, {\"text\": \"¿Pregunta número 7 sobre el auto?\", \"why\": \"x\"}, {\"text\": \"¿Pregunta número 8 sobre el auto?\", \"why\": \"x\"}, {\"text\": \"¿Pregunta número 9 sobre el auto?\", \"why\": \"x\"}, {\"text\": \"¿Pregunta número 10 sobre el auto?\", \"why\": \"x\"}, {\"text\": \"¿Pregunta número 11 sobre el auto?\", \"why\": \"x\"}, {\"text\": \"¿Pregunta número 12 sobre el auto?\", \"why\": \"x\"}], \"sources\": [{\"title\": \"Manual del propietario Ford Fiesta\", \"url\": \"https://example.test/ford-fiesta-manual\", \"kind\": \"manual\"}, {\"title\": \"Ficha técnica Ford Fiesta Kinetic\", \"url\": \"https://example.test/ford-fiesta-ficha\", \"kind\": \"ficha técnica\"}]}",
+      "structured_output": {
+        "body": {
+          "known_issues": [
+            {
+              "text": "La caja automática de doble embrague (Powershift) puede dar tirones o patinar al arrancar.",
+              "applies_to": "caja automática Powershift, 2011–2019"
+            },
+            {
+              "text": "Ruidos en el tren delantero (bujes y bieletas) con el uso en calles rotas.",
+              "applies_to": null
+            },
+            {
+              "text": "El sistema multimedia puede quedar lento o perder la conexión Bluetooth.",
+              "applies_to": "versiones con SYNC"
+            }
+          ],
+          "visit_checklist": [
+            {
+              "text": "Probar la caja en frío, en subida y en maniobras lentas.",
+              "applies_to": null
+            },
+            {
+              "text": "Escuchar el tren delantero pasando por lomos de burro y empedrado.",
+              "applies_to": null
+            },
+            {
+              "text": "Revisar que el aire acondicionado enfríe en menos de cinco minutos.",
+              "applies_to": null
+            },
+            {
+              "text": "Controlar el desgaste parejo de las cubiertas delanteras.",
+              "applies_to": null
+            }
+          ],
+          "versions_equipment": [
+            {
+              "text": "Las versiones S, SE y Titanium cambian sobre todo en equipamiento de confort y seguridad.",
+              "applies_to": null
+            },
+            {
+              "text": "La Titanium suele traer climatizador y control de estabilidad.",
+              "applies_to": "Titanium"
+            }
+          ],
+          "maintenance_costs": [
+            {
+              "text": "La distribución es por correa: conviene saber cuándo se cambió por última vez.",
+              "applies_to": "motor 1.6 Sigma"
+            },
+            {
+              "text": "El embrague de la caja automática es la reparación más cara del modelo.",
+              "applies_to": "caja automática Powershift"
+            }
+          ],
+          "generations": [
+            {
+              "label": "Kinetic (Mk7)",
+              "year_from": 2011,
+              "year_to": 2019,
+              "text": "Diseño Kinetic, fabricado en México y luego en Brasil; restyling en 2014."
+            }
+          ]
+        },
+        "questions": [
+          {
+            "text": "¿Pregunta número 1 sobre el auto?",
+            "why": "x"
+          },
+          {
+            "text": "¿Pregunta número 2 sobre el auto?",
+            "why": "x"
+          },
+          {
+            "text": "¿Pregunta número 3 sobre el auto?",
+            "why": "x"
+          },
+          {
+            "text": "¿Pregunta número 4 sobre el auto?",
+            "why": "x"
+          },
+          {
+            "text": "¿Pregunta número 5 sobre el auto?",
+            "why": "x"
+          },
+          {
+            "text": "¿Pregunta número 6 sobre el auto?",
+            "why": "x"
+          },
+          {
+            "text": "¿Pregunta número 7 sobre el auto?",
+            "why": "x"
+          },
+          {
+            "text": "¿Pregunta número 8 sobre el auto?",
+            "why": "x"
+          },
+          {
+            "text": "¿Pregunta número 9 sobre el auto?",
+            "why": "x"
+          },
+          {
+            "text": "¿Pregunta número 10 sobre el auto?",
+            "why": "x"
+          },
+          {
+            "text": "¿Pregunta número 11 sobre el auto?",
+            "why": "x"
+          },
+          {
+            "text": "¿Pregunta número 12 sobre el auto?",
+            "why": "x"
+          }
+        ],
+        "sources": [
+          {
+            "title": "Manual del propietario Ford Fiesta",
+            "url": "https://example.test/ford-fiesta-manual",
+            "kind": "manual"
+          },
+          {
+            "title": "Ficha técnica Ford Fiesta Kinetic",
+            "url": "https://example.test/ford-fiesta-ficha",
+            "kind": "ficha técnica"
+          }
+        ]
+      },
+      "duration_ms": 0,
+      "models": [
+        "synthetic"
+      ]
+    },
+    "ford|fiesta|json-roto": {
+      "type": "result",
+      "subtype": "success",
+      "is_error": false,
+      "result": "{\"body\": {\"known_issues\": [ esto no es JSON",
+      "structured_output": null,
+      "duration_ms": 0,
+      "models": [
+        "synthetic"
+      ]
+    }
+  }
+}

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Logo } from "@/components/logo";
 import { cn } from "@/lib/utils";
 
-export function SiteHeader({ signedIn, page }: { signedIn: boolean; page: "home" | "planes" }) {
+export function SiteHeader({ signedIn, page }: { signedIn: boolean; page: "home" | "planes" | "guias" }) {
   return (
     <header className="border-b">
       <div className="mx-auto grid w-full max-w-6xl grid-cols-2 items-center gap-x-4 gap-y-3 px-4 py-4 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:px-6 lg:px-10">

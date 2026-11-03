@@ -17,7 +17,8 @@ from intelligence.config import SCORING_VERSION, IntelligenceConfig
 from intelligence.matching import MatchResult, evaluate as evaluate_filters
 from intelligence.red_flags import RedFlag, red_flags
 from intelligence.scoring import Score, score as compute_score
-from intelligence.seller_questions import question_texts, seller_questions
+from intelligence.guides import DEFAULT_MAX_QUESTIONS_IN_LISTING, GuideEntry
+from intelligence.seller_questions import GENERIC_KEYS, question_items
 
 
 @dataclass
@@ -32,6 +33,8 @@ class Evaluation:
     # PRO-02: matches.margin_ref (intelligence/margin.py), filled by
     # pipeline/scoring.Scorer, which has the config and the search's zones.
     margin_ref: dict[str, Any] | None = None
+    # PAR-04: where each question of `questions` came from (matches.question_origins).
+    question_origins: list[dict[str, Any]] = field(default_factory=list)
 
     @property
     def level(self) -> str:
@@ -50,27 +53,34 @@ class Evaluation:
             "contact_questions": self.contact_questions,
             "scoring_version": SCORING_VERSION,
             "margin_ref": self.margin_ref,
+            "question_origins": self.question_origins,
         }
 
 
 def assess(listing: Mapping[str, Any], profile: Mapping[str, Any], *,
            price_ref: PriceRef | None, cfg: IntelligenceConfig, now: datetime,
-           fx_rate: float | None = None, timing_belt: bool | None = None) -> tuple[MatchResult, Score, Evaluation]:
-    """Match, score, flags and questions whether or not it matches (explain_match)."""
+           fx_rate: float | None = None, timing_belt: bool | None = None, guide: GuideEntry | None = None,
+           guide_limit: int = DEFAULT_MAX_QUESTIONS_IN_LISTING) -> tuple[MatchResult, Score, Evaluation]:
+    """Match, score, flags and questions whether or not it matches (explain_match).
+    `guide`: the published model guide whose questions the listing gets (PAR-04)."""
     result = evaluate_filters(listing, profile, fx_rate=fx_rate)
     s = compute_score(listing, profile, result, price_ref, cfg, now=now)
     flags = red_flags(listing, diff_pct=s.extra.get("diff_pct"), guard=s.guard,
                       timing_belt=timing_belt, cfg=cfg, now=now)
-    questions = seller_questions(listing, flags, timing_belt=timing_belt, now=now)
-    contact = question_texts(listing, flags, timing_belt=timing_belt, now=now, limit=3)
-    return result, s, Evaluation(result, s, price_ref, flags, questions, contact_questions=contact)
+    items = question_items(listing, flags, timing_belt=timing_belt, now=now, guide=guide, guide_limit=guide_limit)
+    questions = " ".join(q.text for q in items)
+    # question_texts: the specific ones, without the questions every seller gets.
+    contact = [q.text for q in items if q.key not in GENERIC_KEYS][:3]
+    return result, s, Evaluation(result, s, price_ref, flags, questions, contact_questions=contact,
+                                 question_origins=[q.origin_json() for q in items])
 
 
 def evaluate(listing: Mapping[str, Any], profile: Mapping[str, Any], *,
              price_ref: PriceRef | None, cfg: IntelligenceConfig, now: datetime,
-             fx_rate: float | None = None, timing_belt: bool | None = None) -> Evaluation | None:
+             fx_rate: float | None = None, timing_belt: bool | None = None, guide: GuideEntry | None = None,
+             guide_limit: int = DEFAULT_MAX_QUESTIONS_IN_LISTING) -> Evaluation | None:
     result, s, ev = assess(listing, profile, price_ref=price_ref, cfg=cfg, now=now,
-                           fx_rate=fx_rate, timing_belt=timing_belt)
+                           fx_rate=fx_rate, timing_belt=timing_belt, guide=guide, guide_limit=guide_limit)
     if not result.is_match or s.excluded:
         return None
     return ev

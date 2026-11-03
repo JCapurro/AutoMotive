@@ -31,7 +31,8 @@ from pydantic import BaseModel, ValidationError
 from collectors._loop import run_collector
 from llm import prompts
 from llm.provider import LLMError, LLMTimeout
-from llm.schemas import ListingFacts, LowResultsExplanation, PolishedQuestions, SearchDraft, SearchDrafts, json_schema
+from llm.schemas import (ListingFacts, LowResultsExplanation, ModelGuideDraft, PolishedQuestions, SearchDraft,
+                         SearchDrafts, json_schema)
 from normalization.vehicle import CatalogModel
 
 log = logging.getLogger(__name__)
@@ -139,9 +140,10 @@ class ClaudeCliProvider:
             "--model", self.model,
         ]
 
-    async def _structured(self, system_prompt: str, user: str, out: type[M]) -> M:
+    async def _structured(self, system_prompt: str, user: str, out: type[M], *,
+                          timeout: float | None = None) -> M:
         argv = self.argv(system_prompt, json_schema(out))
-        deadline = time.monotonic() + self.timeout
+        deadline = time.monotonic() + (timeout or self.timeout)
         last: LLMError | None = None
         for attempt in (1, 2):
             remaining = deadline - time.monotonic()
@@ -179,3 +181,7 @@ class ClaudeCliProvider:
     async def explain_low_results(self, context: dict) -> LowResultsExplanation:
         return await self._structured(prompts.load("explain_low_results"),
                                       prompts.low_results_user(context), LowResultsExplanation)
+
+    async def model_guide(self, context: dict, *, timeout: float | None = None) -> ModelGuideDraft:
+        return await self._structured(prompts.load("model_guide"), prompts.model_guide_user(context),
+                                      ModelGuideDraft, timeout=timeout)

@@ -32,7 +32,8 @@ const HINTS: Record<string, string> = {
   price_drop_min_pct: "Baja mínima para alertar «Bajó de precio».",
   price_track:
     "Bajas de precio por aviso (PAR-03). min_drop_pct: baja mínima en % para contarla en tarjeta, ficha y emails (distinta de price_drop_min_pct, que decide si se avisa).",
-  llm_limits: "Jobs del LLM por usuario y hora.",
+  llm_limits: "Jobs del LLM por usuario y hora. model_guide: la generación de guías con IA (apagada hasta que Juan apruebe proveedor y tope), sus topes por día y mes y cuántas preguntas de la guía suma un aviso (hasta 3).",
+  model_guides: "Guías (PAR-04): pilot, los ids de las guías del piloto; events, el tope de eventos públicos por guía.",
   cost_estimator:
     "Parámetros del costo total estimado (PAR-01). Cada bloque necesita source y as_of. as_of de la raíz: fecha en que revisaste todo; se muestra como «parámetros al dd/mm». Porcentajes en %, montos en ARS, rangos {min, max}. Sin un bloque válido, ese concepto se muestra como faltante.",
   dealer_margin:

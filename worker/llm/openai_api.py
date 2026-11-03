@@ -17,13 +17,16 @@ from pydantic import BaseModel, ValidationError
 
 from llm import prompts
 from llm.provider import LLMError, LLMTimeout
-from llm.schemas import ListingFacts, LowResultsExplanation, PolishedQuestions, SearchDraft, SearchDrafts, json_schema
+from llm.schemas import (ListingFacts, LowResultsExplanation, ModelGuideDraft, PolishedQuestions, SearchDraft,
+                         SearchDrafts, json_schema)
 from normalization.vehicle import CatalogModel
 
 log = logging.getLogger(__name__)
 M = TypeVar("M", bound=BaseModel)
 _URL = "https://api.openai.com/v1/responses"
 _MAX_OUTPUT_TOKENS = 4096
+# A guide is several sections long.
+_GUIDE_MAX_OUTPUT_TOKENS = 8192
 
 
 class OpenAIApiProvider:
@@ -35,11 +38,11 @@ class OpenAIApiProvider:
         self.client = client
         self.name = f"openai:{model}"
 
-    async def _post(self, client: httpx.AsyncClient, body: dict) -> httpx.Response:
+    async def _post(self, client: httpx.AsyncClient, body: dict, timeout: float | None = None) -> httpx.Response:
         for attempt in range(2):
             try:
                 response = await client.post(
-                    _URL, json=body, timeout=self.timeout,
+                    _URL, json=body, timeout=timeout or self.timeout,
                     headers={"Authorization": f"Bearer {self.api_key}"},
                 )
             except httpx.TimeoutException:
@@ -60,7 +63,8 @@ class OpenAIApiProvider:
             return response
         raise AssertionError("unreachable")
 
-    async def _structured(self, system_prompt: str, user: str, out: type[M]) -> M:
+    async def _structured(self, system_prompt: str, user: str, out: type[M], *,
+                          timeout: float | None = None, max_output_tokens: int = _MAX_OUTPUT_TOKENS) -> M:
         # Check on use, so preparing a blank key does not stop crawl/alerts.
         if not self.api_key:
             raise LLMError("falta OPENAI_API_KEY para LLM_PROVIDER=openai")
@@ -69,20 +73,21 @@ class OpenAIApiProvider:
             "instructions": system_prompt,
             "input": [{"role": "user", "content": user}],
             "reasoning": {"effort": "none"},
-            "max_output_tokens": _MAX_OUTPUT_TOKENS,
+            "max_output_tokens": max_output_tokens,
             "store": False,
             "text": {"format": {"type": "json_schema", "name": out.__name__,
                                 "strict": True, "schema": json_schema(out)}},
         }
+        budget = timeout or self.timeout
         try:
-            async with asyncio.timeout(self.timeout):
+            async with asyncio.timeout(budget):
                 if self.client is None:
                     async with httpx.AsyncClient() as client:
-                        response = await self._post(client, body)
+                        response = await self._post(client, body, budget)
                 else:
-                    response = await self._post(self.client, body)
+                    response = await self._post(self.client, body, budget)
         except (TimeoutError, httpx.TimeoutException):
-            raise LLMTimeout(f"la API de OpenAI no respondió en {self.timeout:.0f} s") from None
+            raise LLMTimeout(f"la API de OpenAI no respondió en {budget:.0f} s") from None
         except httpx.HTTPStatusError as e:
             status = e.response.status_code
             if status == 401:
@@ -152,3 +157,7 @@ class OpenAIApiProvider:
     async def explain_low_results(self, context: dict) -> LowResultsExplanation:
         return await self._structured(prompts.load("explain_low_results"),
                                       prompts.low_results_user(context), LowResultsExplanation)
+
+    async def model_guide(self, context: dict, *, timeout: float | None = None) -> ModelGuideDraft:
+        return await self._structured(prompts.load("model_guide"), prompts.model_guide_user(context),
+                                      ModelGuideDraft, timeout=timeout, max_output_tokens=_GUIDE_MAX_OUTPUT_TOKENS)

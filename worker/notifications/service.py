@@ -17,6 +17,7 @@ from typing import Any, Iterable, Mapping, Sequence
 
 import db
 from db.repos import fx as fx_repo
+from db.repos import guides as guides_repo
 from db.repos import listings as listings_repo
 from db.repos import notifications as repo
 from intelligence import cost_estimator, margin
@@ -24,6 +25,7 @@ from intelligence import config
 from intelligence.config import DEFAULT_COMPARABLES
 from intelligence import contact_message
 from intelligence.matching import strict_seller_unknown
+from intelligence.guides import GuideIndex, pick as pick_guide
 from intelligence.seller_questions import question_texts
 from notifications import dispatch
 from notifications.channels.base import Channel
@@ -201,6 +203,20 @@ def margin_payload(margin_ref: Mapping[str, Any] | None, audience: Mapping[str, 
     return out
 
 
+async def _guides() -> tuple[GuideIndex, int]:
+    """PAR-04: the published guides' questions and how many a listing gets,
+    as the scorer reads them (the email's questions follow matches'). Never
+    fails an alert: without them the email keeps the template questions."""
+    from pipeline.scoring import guide_questions_limit
+    try:
+        limit = guide_questions_limit(await db.get_config("llm_limits"))
+        async with db.connection() as cx:
+            return await guides_repo.published_index(cx), limit
+    except Exception:
+        log.exception("notifications: model guides")
+        return {}, 0
+
+
 async def _min_n() -> int:
     cfg = await db.get_config("comparables", {}) or {}
     return int(cfg.get("min_n", DEFAULT_COMPARABLES["min_n"]))
@@ -250,6 +266,7 @@ class Notifier:
             fx_latest = await _latest_fx()
         min_n = await _min_n()
         order = await flag_order()
+        guides, guide_limit = await _guides() if candidates else ({}, 0)
         events = []
         for c in candidates:
             a = audiences.get(c.profile_id)
@@ -259,7 +276,8 @@ class Notifier:
             state = states.get((str(a["user_id"]), c.listing_id)) or {}
             ev = c.evaluation
             questions = question_texts(listing, ev.get("red_flags") or [], timing_belt=listing.get("timing_belt"),
-                                       now=now or datetime.now(timezone.utc))
+                                       now=now or datetime.now(timezone.utc),
+                                       guide=pick_guide(guides, listing), guide_limit=guide_limit)
             track = price_track_payload(tracks.get(c.listing_id)) if _with_track(c, listing) else None
             cost = (total_cost_payload(listing, a, cost_cfg, fx_latest, now or datetime.now(timezone.utc))
                     if cost_cfg and _opportunity(c) and a.get("total_cost") else None)

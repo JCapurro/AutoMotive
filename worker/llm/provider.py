@@ -17,7 +17,7 @@ from collections.abc import Sequence
 from typing import Protocol, runtime_checkable
 
 import config
-from llm.schemas import ListingFacts, LowResultsExplanation, SearchDraft
+from llm.schemas import ListingFacts, LowResultsExplanation, ModelGuideDraft, SearchDraft
 from normalization.vehicle import CatalogModel
 
 
@@ -53,6 +53,12 @@ class LLMProvider(Protocol):
     async def explain_low_results(self, context: dict) -> LowResultsExplanation:
         """Optional: why a search brings few results, from its filter funnel
         (intelligence/low_results.py). The worker falls back to a fixed text."""
+        ...
+
+    async def model_guide(self, context: dict, *, timeout: float | None = None) -> ModelGuideDraft:
+        """PAR-04: the draft of a model guide (llm/prompts/model_guide.md), with
+        its own time budget (llm_limits.model_guide.timeout_seconds). Only a
+        draft: intelligence/guides.py validates it and Juan reviews it."""
         ...
 
 
