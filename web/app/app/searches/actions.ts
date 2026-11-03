@@ -10,7 +10,7 @@ import { track } from "@/lib/events";
 import { thousands } from "@/lib/format";
 import { marginAccess } from "@/lib/margin-data";
 import { queuePixel } from "@/lib/meta-pixel-server";
-import { type PlanLimits, locationCap, locationCapText } from "@/lib/pro";
+import { type PlanLimits, freeResultQuota, locationCap, locationCapText } from "@/lib/pro";
 import {
   MODEL_LESS_UNAVAILABLE,
   SearchInput,
@@ -24,10 +24,29 @@ import {
   toColumns,
   toFilters,
 } from "@/lib/search-form";
+import { loadSearchCollection } from "@/lib/search-collection-server";
 import { type RelaxSuggestion, applyRelax, bestSuggestions, relaxVariants } from "@/lib/search-relax";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { Filters } from "@/lib/types";
+import {
+  type WidenTo,
+  type ZoneNoticeAnswer,
+  type ZoneNoticeData,
+  type Zone,
+  type ZonePlacement,
+  KEEP_FAILED,
+  WIDEN_FAILED,
+  ZONE_CHANGED,
+  isWidenTo,
+  noticeGate,
+  parseZone,
+  sameZone,
+  withoutPlace,
+  zoneKind,
+  zoneOf,
+} from "@/lib/zone-notice";
+import { allCount, dismissedZones, zoneNotice } from "@/lib/zone-notice-server";
 import type { Json } from "@/types/database";
 
 export type SaveResult = { error?: string; fields?: Record<string, string>; savedId?: number };
@@ -452,6 +471,131 @@ export async function dismissDiagnosis(id: number): Promise<void> {
   const supabase = await createClient();
   await supabase.from("search_diagnoses").update({ dismissed_at: new Date().toISOString() }).eq("search_profile_id", id);
   refresh();
+}
+
+/**
+ * Aviso de zona on the modo asistido's card (docs/AVISO_ZONA.md): asked
+ * every few seconds after the autosave until the search is ready to count.
+ * The results page works it out in its own render (zoneNotice). A read that
+ * fails answers `pending`, so the card asks again; `none` ends its polling.
+ */
+export async function zoneNoticeFor(id: number): Promise<ZoneNoticeAnswer> {
+  const user = await requireUser();
+  if (!Number.isSafeInteger(id) || id <= 0) return { state: "none" };
+  const supabase = await createClient();
+  const [{ data: profile, error: profileError }, { data: counts }, { data: access, error: limitsError }, dismissed] = await Promise.all([
+    supabase.from("search_profiles").select("*").eq("id", id).maybeSingle(),
+    supabase.rpc("search_result_counts", { p_profile_id: id }),
+    supabase.rpc("my_plan_limits"),
+    dismissedZones(supabase, id),
+  ]);
+  // Without the plan's limits the trial's quota and cap are unknown.
+  if (profileError || limitsError) return { state: "pending" };
+  if (!profile) return { state: "none" };
+  const input = { profile, count: allCount(counts), access: (access ?? null) as PlanLimits | null, dismissed };
+  // The sources' first reads (an admin read) only once nothing else rules the notice out.
+  const quotaReached = freeResultQuota(input.access)?.reached ?? false;
+  const gate = noticeGate({ profile, count: input.count, quotaReached, dismissed: dismissed ?? [], reading: dismissed == null });
+  if (gate !== "count") return { state: gate };
+  const { data: catalog } = await supabase.from("sources").select("id,name,enabled").order("priority");
+  return zoneNotice(supabase, { ...input, sources: await loadSearchCollection(profile, user.id, catalog) });
+}
+
+/**
+ * The notice's «Ampliá tu rango»: a wider radius around the same place, or
+ * the whole country (no place, as the form saves «Todo el país»), for a
+ * search with one zone of its own. The worker redoes the backfill
+ * (rematch_requested_at). `shown`: what the notice said: its zone, which
+ * the search must still have (the counts were for it), and the counts for
+ * the event. The bot's card for the old zone goes too
+ * (search_diagnoses.dismissed_at).
+ */
+export async function widenSearchZone(
+  id: number, to: WidenTo, place: ZonePlacement, shown: { zone: Zone; count: number; options: number },
+): Promise<SaveResult> {
+  const user = await requireUser();
+  const shownZone = parseZone(shown?.zone);
+  if (!Number.isSafeInteger(id) || id <= 0 || !isWidenTo(to) || (place !== "card" && place !== "page") || !shownZone) {
+    return { error: WIDEN_FAILED };
+  }
+  const supabase = await createClient();
+  const { data: profile, error: readError } = await supabase.from("search_profiles")
+    .select("enabled, filters, origin_lat, origin_lon, radius_km").eq("id", id).maybeSingle();
+  if (readError) return { error: WIDEN_FAILED };
+  if (!profile) return { error: "La búsqueda no existe." };
+  if (!profile.enabled) return { error: "Reanudá la búsqueda para ampliar la zona." };
+  const filters = (profile.filters ?? {}) as Filters;
+  const zone = zoneOf(profile);
+  // Edited since the notice (another tab or device): its counts aren't this search's.
+  if (!zone || !sameZone(zone, shownZone) || filters.extra_locations?.length) return { error: ZONE_CHANGED };
+  if (to !== "pais" && to <= zone[2]) return { error: WIDEN_FAILED };
+  const now = new Date().toISOString();
+  const change = to === "pais"
+    ? { origin_lat: null, origin_lon: null, radius_km: null, filters: withoutPlace(filters) as { [key: string]: Json } }
+    : { radius_km: to };
+  const { data, error } = await supabase.from("search_profiles")
+    .update({ ...change, rematch_requested_at: now }).eq("id", id).select("id");
+  if (error && isDuplicate(error)) return { error: DUPLICATE_ACTIVE };
+  if (error?.message.includes("plan_access_expired")) return { error: "Tu acceso venció. Elegí un plan para volver a buscar." };
+  if (error || !data?.length) return { error: WIDEN_FAILED };
+  await supabase.from("search_diagnoses").update({ dismissed_at: now }).eq("search_profile_id", id);
+  await track(supabase, user.id, "search_zone_widened", {
+    profile_id: id, place, zone_kind: zoneKind(filters.location_label), from_radius: zone[2], to,
+    all_count: Number.isSafeInteger(shown?.count) ? shown.count : null,
+    option_count: Number.isSafeInteger(shown?.options) ? shown.options : null,
+  });
+  // Admin metrics count edits by this name (search_profile_updated); via tells this one apart.
+  await track(supabase, user.id, "search_profile_updated", { profile_id: id, filters_changed: true, via: "zone_notice" });
+  if (place === "page") refresh();
+  return {};
+}
+
+/**
+ * «Dejar así»: the notice stays hidden for the zone it showed (events), and
+ * so does the bot's card. A search whose zone changed since keeps both, and
+ * the page shows it as it is now. A read or an event that fails says so: the
+ * notice would come back.
+ */
+export async function dismissZoneNotice(id: number, place: ZonePlacement, shownZone: Zone): Promise<SaveResult> {
+  const user = await requireUser();
+  const shown = parseZone(shownZone);
+  if (!Number.isSafeInteger(id) || id <= 0 || !shown) return { error: KEEP_FAILED };
+  const supabase = await createClient();
+  const { data: profile, error } = await supabase.from("search_profiles")
+    .select("origin_lat, origin_lon, radius_km").eq("id", id).maybeSingle();
+  if (error) return { error: KEEP_FAILED };
+  const zone = profile ? zoneOf(profile) : null;
+  if (zone && sameZone(zone, shown)) {
+    const kept = await track(supabase, user.id, "zone_notice_dismissed", { profile_id: id, zone, place: place === "card" ? "card" : "page" });
+    if (!kept) return { error: KEEP_FAILED };
+    await supabase.from("search_diagnoses").update({ dismissed_at: new Date().toISOString() }).eq("search_profile_id", id);
+  }
+  if (place === "page") refresh();
+  return {};
+}
+
+/** zone_notice_shown, once per search and zone whatever the placement and the re-renders. */
+export async function trackZoneNoticeShown(place: ZonePlacement, notice: ZoneNoticeData): Promise<void> {
+  const user = await requireUser();
+  const id = notice?.profileId;
+  const zone = parseZone(notice?.zone);
+  if (!Number.isSafeInteger(id) || id <= 0 || !zone) return;
+  const supabase = await createClient();
+  const { data: seen } = await supabase.from("events").select("props")
+    .eq("name", "zone_notice_shown").eq("props->>profile_id", String(id));
+  if (seen?.some((row) => sameZone(parseZone((row.props as { zone?: unknown } | null)?.zone), zone))) return;
+  await track(supabase, user.id, "zone_notice_shown", {
+    profile_id: id,
+    place: place === "card" ? "card" : "page",
+    zone,
+    zone_kind: notice.kind,
+    cold: notice.cold === true,
+    count_source: "all_count",
+    all_count: notice.count,
+    options: Array.isArray(notice.options)
+      ? notice.options.map((o) => `${o.to}:${o.count}${o.capped ? "+" : ""}`)
+      : [],
+  });
 }
 
 export async function deleteSearch(id: number): Promise<void> {

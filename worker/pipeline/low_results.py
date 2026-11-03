@@ -4,7 +4,8 @@
       → their make/model's market of the last 30 days through the hard filters
         (intelligence/low_results.funnel)
       → LLM: why so few, from the funnel (fixed text if it fails)
-      → search_diagnoses + one notice per set of filters (notifications/low_results.py)
+      → search_diagnoses + one notice per set of filters (notifications/low_results.py),
+        none for a zone kept with the zone notice's «Dejar así» (docs/AVISO_ZONA.md)
 
 Runs every LOW_RESULTS_TICK_SECONDS; app_config.low_results rules the rest.
 A search is judged again when its filters change or after recheck_days, and
@@ -44,6 +45,21 @@ def due(row: Mapping[str, Any], fingerprint: str, cfg: Mapping[str, Any], now: d
     if row.get("fingerprint") != fingerprint or row.get("diagnosed_at") is None:
         return True
     return row["diagnosed_at"] <= now - timedelta(days=cfg["recheck_days"])
+
+
+async def zone_kept(row: Mapping[str, Any]) -> bool:
+    """Whether its owner kept the search's zone with the zone notice's «Dejar
+    así», which already answered «ampliá la zona». A zone that isn't three
+    numbers is skipped; 1e-6 absorbs the radius' real column."""
+    own = [row.get(k) for k in ("origin_lat", "origin_lon", "radius_km")]
+    if any(v is None for v in own):
+        return False
+    for zone in await repo.kept_zones(row["id"], row["user_id"]):
+        if isinstance(zone, list) and len(zone) == 3 and all(
+                isinstance(v, (int, float)) and not isinstance(v, bool) and abs(v - w) < 1e-6
+                for v, w in zip(zone, own)):
+            return True
+    return False
 
 
 async def explain(provider: LLMProvider | None, context: dict[str, Any], fun: lr.Funnel,
@@ -102,7 +118,7 @@ async def run_low_results(provider: LLMProvider | None, channels: Mapping[str, A
             done += 1
             log.info("low_results: profile=%s, %d resultados, mercado %d, %s", row["id"], row["result_count"],
                      diagnosis["funnel"]["market"], diagnosis["provider"] or "texto fijo")
-            if cfg["notify"] and row.get("notified_fingerprint") != fp:
+            if cfg["notify"] and row.get("notified_fingerprint") != fp and not await zone_kept(row):
                 if await notice.notify(row, diagnosis, channels, links, now):
                     await repo.mark_notified(row["id"], fp)
         except Exception:

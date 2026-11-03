@@ -115,6 +115,31 @@ class LowResultsTests(PostgresTestCase):
         self.assertEqual(await self.tick(provider), 1)
         self.assertEqual(len(self.telegram.bot.sent), 2)
 
+    async def test_a_zone_kept_with_the_zone_notice_gets_no_notice(self):
+        # Aviso de zona (docs/AVISO_ZONA.md): «Dejar así» already answered «ampliá la zona».
+        await self.rows("UPDATE search_profiles SET origin_lat = -32.88284, origin_lon = -68.87011, radius_km = 33.3 "
+                        "WHERE id = %s", self.profile)
+        kept = {"profile_id": self.profile, "zone": [-32.88284, -68.87011, 33.3], "place": "card"}
+        await self.rows("INSERT INTO events(user_id,name,props) VALUES (%s,'zone_notice_dismissed',%s), "
+                        "(%s,'zone_notice_dismissed',%s)",
+                        self.user, Jsonb(kept), self.user, Jsonb({**kept, "zone": ["x", None, 1e300]}))
+        self.assertEqual(await self.tick(Provider()), 1)
+        self.assertEqual(self.telegram.bot.sent, [])
+        d = (await self.rows("SELECT notified_at FROM search_diagnoses WHERE search_profile_id = %s", self.profile))[0]
+        self.assertIsNone(d["notified_at"])
+
+        # Another zone is a new question, and another account can't keep one for this search.
+        stranger = (await self.rows(
+            "INSERT INTO auth.users(instance_id,id,aud,role,email,created_at,updated_at) "
+            "VALUES ('00000000-0000-0000-0000-000000000000',gen_random_uuid(),"
+            "'authenticated','authenticated',%s,now(),now()) RETURNING id::text AS id",
+            f"{uuid4()}@automotive.test"))[0]['id']
+        await self.rows("UPDATE search_profiles SET radius_km = 100 WHERE id = %s", self.profile)
+        await self.rows("INSERT INTO events(user_id,name,props) VALUES (%s,'zone_notice_dismissed',%s)",
+                        stranger, Jsonb({**kept, "zone": [-32.88284, -68.87011, 100]}))
+        self.assertEqual(await self.tick(Provider()), 1)
+        self.assertEqual(len(self.telegram.bot.sent), 1)
+
     async def test_skips_young_full_and_pending_searches(self):
         await self.rows("DELETE FROM search_profiles")
         await self.search(FILTERS, age="1 hour")

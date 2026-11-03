@@ -5,11 +5,14 @@ import {
   type CollectionState,
   collectionState,
   DEFAULT_BODY_TYPE_SOURCES,
+  onFirstRead,
   type SearchSource,
+  staleAt,
 } from "@/lib/search-collection";
 import { isModelLess } from "@/lib/search-form";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Filters, SearchProfile } from "@/lib/types";
+import { FIRST_READ_GRACE_MS } from "@/lib/zone-notice";
 
 // One source, several targets (a model-less search with several body types): the state shown.
 const BUSIEST: CollectionState[] = ["loading", "waiting", "failed", "unknown", "done"];
@@ -17,7 +20,7 @@ const BUSIEST: CollectionState[] = ["loading", "waiting", "failed", "unknown", "
 /** Only call with the profile read through the signed-in user's RLS client.
  * Private run logs stay on the server; the browser receives only a status. */
 export async function loadSearchCollection(
-  profile: Pick<SearchProfile, "id" | "user_id" | "filters" | "enabled">,
+  profile: Pick<SearchProfile, "id" | "user_id" | "filters" | "enabled" | "created_at">,
   userId: string,
   catalog: SearchSource[] | null,
 ): Promise<SearchSource[] | null> {
@@ -47,16 +50,22 @@ export async function loadSearchCollection(
     }
     // Membership is written by derive_targets for model, inventory and body
     // type targets; never substitute an unrelated source-wide success for this search.
+    // The latest two runs: the zone notice's staleAt looks behind the latest.
     const { data, error } = await admin.from("crawl_targets")
-      .select("source,make,model,body_type,query,collector_runs(status,finished_at)")
+      .select("source,make,model,body_type,query,first_run_done,last_run_at,created_at,collector_runs(status,started_at,finished_at)")
       .contains("query", { profile_ids: [profile.id] })
       .in("source", activeIds)
       .eq("active", true)
       .order("started_at", { referencedTable: "collector_runs", ascending: false })
       .order("id", { referencedTable: "collector_runs", ascending: false })
-      .limit(1, { referencedTable: "collector_runs" });
+      .limit(2, { referencedTable: "collector_runs" });
     if (error || !data) return fallback("unknown");
     const same = (a: string | null, b: string | undefined) => (a ?? "").trim().toLowerCase() === (b ?? "").trim().toLowerCase();
+    // The zone notice's readiness (onFirstRead), from the later of the search's
+    // creation and the target's; an unreadable date counts as old.
+    const created = Date.parse(profile.created_at);
+    const sinceOf = (target?: { created_at: string }) =>
+      Math.max(...[created, Date.parse(target?.created_at ?? "")].map((t) => (Number.isFinite(t) ? t : -Infinity)));
     return sources.map((source) => {
       const targets = data.filter((target) => {
         const vehicleless = target.make === null && target.model === null;
@@ -83,6 +92,13 @@ export async function loadSearchCollection(
         if (!states.length) return { ...source, collectionState: "done" as const };
       } else {
         states = targets.length ? targets.map((target) => collectionState(target.collector_runs[0])) : [collectionState(undefined)];
+        return {
+          ...source,
+          collectionState: BUSIEST.find((state) => states.includes(state)) ?? states[0],
+          firstRead: targets.length ? targets.some((target) => onFirstRead(target, sinceOf(target))) : onFirstRead(null, sinceOf()),
+          newTarget: targets.some((target) => Date.parse(target.created_at) > created - FIRST_READ_GRACE_MS
+            || (target.first_run_done && staleAt(target, sinceOf(target)))),
+        };
       }
       return { ...source, collectionState: BUSIEST.find((state) => states.includes(state)) ?? states[0] };
     });

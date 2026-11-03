@@ -80,12 +80,18 @@ async def _stage(alert: dict, listing_ids: list[int], scorer: Scorer) -> _Staged
     return _Staged(alert, evaluations, fresh, elsewhere)
 
 
-def _seller_rematch_pending(alert: dict) -> bool:
-    """A search with a seller type whose rematch is pending (a plan flip
-    marks those, sync_seller_filter_access): until run_pending() rematches it,
-    what its batches find for the first time is backfill, never notified."""
-    filters = (alert.get("profile") or {}).get("filters") or {}
-    return bool(alert.get("rematch_requested") and filters.get("seller_types"))
+def _rematch_backfill(alert: dict, fresh: list[int], rows: dict[int, dict]) -> set[int]:
+    """What a search whose rematch is pending finds for the first time and was
+    stored before the request: the web changed its filters or its zone, or a
+    plan flip changed its seller filter (sync_seller_filter_access). Until
+    run_pending() rematches the search, that is backfill, never notified, as
+    the rematch would store it; a listing first stored after the request is
+    news as usual. Without the request's time, all of it."""
+    if not alert.get("rematch_requested"):
+        return set()
+    asked = alert.get("rematch_requested_at")
+    return {lid for lid in fresh
+            if asked is None or rows[lid].get("first_seen_at") is None or rows[lid]["first_seen_at"] < asked}
 
 
 async def match_alert(staged: _Staged, scorer: Scorer, *, first_run: bool,
@@ -129,21 +135,21 @@ async def match_alert(staged: _Staged, scorer: Scorer, *, first_run: bool,
         log.info("profile=%s %s first run: %d recent publications, %d backfill", alert["id"],
                  "another target's" if foreign_first_run else "a held", len(dated), len(fresh) - len(dated))
     # A target's first run, or an alert not bootstrapped yet: everything is
-    # backfill, nothing is notified (sección 5.7).
+    # backfill, nothing is notified (sección 5.7). Only the search's own
+    # bootstrap marks it (rematch.rematch_profile, through run_pending), after
+    # its 30-day backfill: a batch that got there first would leave the rest
+    # of that stock out for good (docs/AVISO_ZONA.md).
     elif first_run or not alert.get("bootstrapped"):
         await store(fresh, backfill=True)
-        if not alert.get("bootstrapped"):
-            await db.mark_bootstrapped(alert["id"], alert.get("rematch_requested_at"))
         log.info("profile=%s %s: %d backfill, no notifications", alert["id"],
-                 "first target run" if first_run else "bootstrap", len(fresh))
+                 "first target run" if first_run else "bootstrap pending", len(fresh))
         return []
 
-    if _seller_rematch_pending(alert):
-        # PRO-01, answer 3: a plan flip's rematch is pending. The lane read
-        # the new seller_filter, but a listing the old one had matched (and
-        # the strict rematch deleted) has no match row, so it looks fresh: it
-        # goes back as backfill, as the rematch would store it, not as news.
-        backfill_ids = {*backfill_ids, *fresh}
+    # The lane read the new filters, so what they let in looks fresh: a
+    # listing published days ago that a wider zone now reaches (the zone
+    # notice, docs/AVISO_ZONA.md), or one the old seller filter had matched
+    # and the strict rematch deleted (PRO-01, answer 3).
+    backfill_ids = {*backfill_ids, *_rematch_backfill(alert, fresh, rows)}
     quiet = {*backfill_ids, *(lid for lid in fresh if news.muted(rows[lid]))} & set(fresh)
     if quiet:
         await store([lid for lid in fresh if lid in quiet], backfill=True)

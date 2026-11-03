@@ -66,6 +66,18 @@ async def save(row: dict[str, Any]) -> None:
             {**row, "funnel": Jsonb(row["funnel"]), "suggestions": Jsonb(row["suggestions"])})
 
 
+async def kept_zones(profile_id: int, user_id: str) -> list[Any]:
+    """The zones this search's owner kept with the zone notice's «Dejar así»
+    (docs/AVISO_ZONA.md): each event's props.zone, as written. Events are the
+    owner's own rows, so a zone may be anything: the caller checks it."""
+    async with connection() as cx:
+        rows = await (await cx.execute(
+            "SELECT props->'zone' AS zone FROM events "
+            " WHERE user_id = %s AND name = 'zone_notice_dismissed' AND props->>'profile_id' = %s",
+            (user_id, str(profile_id)))).fetchall()
+    return [r["zone"] for r in rows]
+
+
 async def mark_notified(profile_id: int, fingerprint: str) -> None:
     async with connection() as cx:
         await cx.execute("UPDATE search_diagnoses SET notified_at = now(), notified_fingerprint = %s "
