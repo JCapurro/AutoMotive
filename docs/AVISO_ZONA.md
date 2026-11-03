@@ -74,7 +74,7 @@ Siete días contra la semana del 26/10, leídos el día 8 y contados desde que e
 
 ## Cambios que acompañan
 
-- **Migración `20261205120000_preview_zone_rule.sql`:** `preview_search` cuenta la zona como matching.
+- **Migración `20261206120000_preview_zone_rule.sql`:** `preview_search` cuenta la zona como matching.
   - Las zonas inválidas se saltean. Antes, un lugar extra no numérico daba error, y un radio 0 (o un lugar extra sin radio) dejaba afuera toda publicación con coordenadas.
   - Con zona, una publicación sin coordenadas no pasa.
 - **Worker (`scheduler.py`):**
