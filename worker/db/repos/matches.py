@@ -16,6 +16,7 @@ from psycopg import AsyncConnection
 from psycopg.types.json import Jsonb
 
 from db.pool import connection
+from intelligence.seller_questions import without_guides
 from normalization.description_facts import PARTIAL_KINDS
 
 
@@ -117,6 +118,26 @@ def forget_columns() -> None:
     _has_question_origins = None
 
 
+async def _without_unpublished_guides(cx: AsyncConnection,
+                                      rows: list[tuple[int, dict[str, Any]]]) -> list[tuple[int, dict[str, Any]]]:
+    """PAR-04: the run loaded the published guides once (Scorer.create); a
+    guide unpublished since then must not come back into the matches after
+    model_guide_withdraw_questions took it out. Its rows are locked FOR SHARE
+    until this transaction commits: an unpublish that commits first is seen
+    here, one that comes later waits and then withdraws what this wrote."""
+    ids = sorted({int(o["guide_id"]) for _, row in rows for o in (row.get(_QUESTION_ORIGINS) or [])
+                  if isinstance(o, dict) and o.get("guide_id") is not None})
+    if not ids:
+        return rows
+    live = {r["id"] for r in await (await cx.execute(
+        "SELECT id FROM model_guides WHERE id = ANY(%s) AND status = 'published' ORDER BY id FOR SHARE",
+        (ids,))).fetchall()}
+    gone = set(ids) - live
+    if not gone:
+        return rows
+    return [(listing_id, without_guides(row, gone)) for listing_id, row in rows]
+
+
 async def upsert_scored(cx: AsyncConnection, profile_id: int,
                         rows: list[tuple[int, dict[str, Any]]], *, backfill: bool) -> dict[int, int]:
     """Write (listing_id, Evaluation.row()) pairs. New rows get `backfill`;
@@ -126,6 +147,8 @@ async def upsert_scored(cx: AsyncConnection, profile_id: int,
         return {}
     inserted: dict[int, int] = {}
     columns = await _evaluated_columns(cx)
+    if _QUESTION_ORIGINS in columns:
+        rows = await _without_unpublished_guides(cx, rows)
     for listing_id, row in rows:
         # seller_questions, contact_questions (PRO-01), margin_ref (PRO-02) and
         # question_origins (PAR-04) are optional.

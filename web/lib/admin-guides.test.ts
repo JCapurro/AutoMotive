@@ -22,13 +22,16 @@ const QUESTIONS = [
   { text: "¿Cuándo se cambió la correa?", why: "" },
   { text: "¿La caja hace tirones en frío?", why: "" },
 ];
+const SOURCES = [{ title: "Manual", url: "https://example.test/manual", kind: "manual", verified: true }];
+// The updated_at of the page the admin has open (PostgREST and the page may format it differently).
+const SEEN = "2026-11-05T12:00:00.123456+00:00";
 const VALUES = { make: "Ford", model: "Fiesta", generation_label: null, year_from: 2011, year_to: 2019, body: BODY, questions: QUESTIONS, sources: [] };
 
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.requireAdmin.mockResolvedValue({ id: "session-admin", email: "juan@example.test" });
   mocks.rpc.mockResolvedValue({ data: { id: 3, updated_at: "t2", status: "published", slug_make: "ford", slug_model: "fiesta" }, error: null });
-  mocks.single.mockResolvedValue({ data: { body: BODY, questions: QUESTIONS, sources: [] }, error: null });
+  mocks.single.mockResolvedValue({ data: { body: BODY, questions: QUESTIONS, sources: SOURCES, updated_at: SEEN }, error: null });
   mocks.client.mockReturnValue({ rpc: mocks.rpc, from: vi.fn(() => ({ select: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: mocks.single })) })) })) });
 });
 
@@ -36,7 +39,7 @@ describe("/admin/guides actions", () => {
   it("every action checks the admin first", async () => {
     mocks.requireAdmin.mockRejectedValue(new Error("admin_required"));
     await expect(saveGuide({ id: 3, expectedUpdatedAt: "t1", values: VALUES })).rejects.toThrow("admin_required");
-    await expect(setGuideStatus({ id: 3, status: "published" })).rejects.toThrow("admin_required");
+    await expect(setGuideStatus({ id: 3, status: "published", expectedUpdatedAt: SEEN })).rejects.toThrow("admin_required");
     await expect(requestGuide({ id: 3 })).rejects.toThrow("admin_required");
     expect(mocks.client).not.toHaveBeenCalled();
   });
@@ -67,17 +70,41 @@ describe("/admin/guides actions", () => {
   });
 
   it("publishing refuses an unchecked source before calling the RPC", async () => {
-    mocks.single.mockResolvedValue({ data: { body: BODY, questions: QUESTIONS, sources: [{ title: "x", url: "https://x.test", kind: "otra", verified: false }] }, error: null });
-    expect((await setGuideStatus({ id: 3, status: "published" })).error).toContain("La revisé");
+    mocks.single.mockResolvedValue({ data: { body: BODY, questions: QUESTIONS, sources: [{ title: "x", url: "https://x.test", kind: "otra", verified: false }], updated_at: SEEN }, error: null });
+    expect((await setGuideStatus({ id: 3, status: "published", expectedUpdatedAt: SEEN })).error).toContain("La revisé");
     expect(mocks.rpc).not.toHaveBeenCalled();
   });
 
+  it("publishing refuses a guide without sources: none is not «all checked»", async () => {
+    mocks.single.mockResolvedValue({ data: { body: BODY, questions: QUESTIONS, sources: [], updated_at: SEEN }, error: null });
+    expect((await setGuideStatus({ id: 3, status: "published", expectedUpdatedAt: SEEN })).error).toContain("al menos una fuente");
+    expect(mocks.rpc).not.toHaveBeenCalled();
+    mocks.single.mockResolvedValue({ data: null, error: null });
+    mocks.rpc.mockResolvedValue({ data: null, error: { message: "guide_sources_missing" } });
+    expect((await setGuideStatus({ id: 3, status: "published", expectedUpdatedAt: SEEN })).error).toContain("al menos una fuente");
+  });
+
+  it("publishing needs the version on screen: a guide the worker rewrote since is not published", async () => {
+    expect((await setGuideStatus({ id: 3, status: "published" })).error).toBe("Datos inválidos.");
+    // «Regenerar» on this page, the worker wrote a new draft, «Publicar» on the stale page.
+    mocks.single.mockResolvedValue({ data: { body: BODY, questions: QUESTIONS, sources: SOURCES, updated_at: "2026-11-05T12:09:00+00:00" }, error: null });
+    expect((await setGuideStatus({ id: 3, status: "published", expectedUpdatedAt: SEEN })).error).toContain("cambió desde que abriste esta página");
+    expect(mocks.rpc).not.toHaveBeenCalled();
+    // Same instant, other format: the same version.
+    mocks.single.mockResolvedValue({ data: { body: BODY, questions: QUESTIONS, sources: SOURCES, updated_at: "2026-11-05T12:00:00.123456Z" }, error: null });
+    expect((await setGuideStatus({ id: 3, status: "published", expectedUpdatedAt: SEEN })).ok).toBe(true);
+    // A change between the read and the RPC: the RPC refuses it.
+    mocks.rpc.mockResolvedValue({ data: null, error: { message: "guide_changed" } });
+    expect((await setGuideStatus({ id: 3, status: "published", expectedUpdatedAt: SEEN })).error).toContain("Recargá y revisala");
+    expect(mocks.revalidatePath).toHaveBeenCalledTimes(3);
+  });
+
   it("publishing and unpublishing invalidate the public pages", async () => {
-    expect((await setGuideStatus({ id: 3, status: "published" })).ok).toBe(true);
-    expect(mocks.rpc).toHaveBeenCalledWith("admin_set_model_guide_status", { p_id: 3, p_status: "published", p_actor_id: "session-admin" });
+    expect((await setGuideStatus({ id: 3, status: "published", expectedUpdatedAt: SEEN })).ok).toBe(true);
+    expect(mocks.rpc).toHaveBeenCalledWith("admin_set_model_guide_status", { p_id: 3, p_status: "published", p_actor_id: "session-admin", p_expected_updated_at: SEEN });
     expect(mocks.revalidatePath).toHaveBeenCalledWith("/guias/ford/fiesta");
     await setGuideStatus({ id: 3, status: "draft" });
-    expect(mocks.rpc).toHaveBeenLastCalledWith("admin_set_model_guide_status", { p_id: 3, p_status: "draft", p_actor_id: "session-admin" });
+    expect(mocks.rpc).toHaveBeenLastCalledWith("admin_set_model_guide_status", { p_id: 3, p_status: "draft", p_actor_id: "session-admin", p_expected_updated_at: null });
   });
 
   it("asking for a draft with the generation off says it is off", async () => {

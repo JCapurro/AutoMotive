@@ -1157,7 +1157,7 @@ isOneToOne: false
       }
             // PAR-04: model guides (service role, except log_guide_event: anon and authenticated).
             admin_save_model_guide: { Args: { p_id: number | null; p_values: Json; p_expected_updated_at: string | null; p_actor_id: string }; Returns: Json },
-            admin_set_model_guide_status: { Args: { p_id: number; p_status: string; p_actor_id: string }; Returns: Json },
+            admin_set_model_guide_status: { Args: { p_id: number; p_status: string; p_actor_id: string; p_expected_updated_at?: string | null }; Returns: Json },
             admin_request_model_guide: { Args: { p_guide_id: number; p_force: boolean; p_actor_id: string }; Returns: number },
             admin_guide_candidates: { Args: { p_limit?: number }; Returns: { make: string; model: string; year_from: number | null; year_to: number | null; active_searches: number; guide_id: number | null; guide_status: string | null }[] },
             admin_guide_event_counts: { Args: { p_days?: number }; Returns: { guide_id: number; viewed: number; cta_clicked: number; questions_copied: number }[] },

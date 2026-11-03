@@ -12,7 +12,8 @@ import { magicLink } from "./support/mail";
  *     prefilled (signed out) and goes to /app/searches/new?prompt=… (signed in);
  *   * a draft is a 404 and /guias lists only the published one;
  *   * /admin/guides creates, edits and publishes a guide by hand with the
- *     generation switched off.
+ *     generation switched off; «Publicar» on a page older than the guide
+ *     publishes nothing.
  * On desktop and on a 375 px phone (the `mobile` project).
  */
 
@@ -152,6 +153,12 @@ test("PAR-04: /admin/guides crea, edita y publica una guía a mano con la genera
     await questions.getByRole("button", { name: "Agregar pregunta" }).click();
     await questions.getByLabel(`Pregunta ${n + 1}`, { exact: true }).fill(q);
   }
+  // Publishing needs at least one source, checked.
+  const sources = editor.locator('fieldset[data-section="sources"]');
+  await sources.getByRole("button", { name: "Agregar fuente" }).click();
+  await sources.getByLabel("Fuente 1: título").fill("Manual del usuario");
+  await sources.getByLabel("Fuente 1: URL").fill("https://example.test/manual");
+  await sources.getByLabel("La revisé").check();
   // The money rule says which row fails before saving.
   await editor.getByLabel("Mantenimiento y costos típicos, renglón 1", { exact: true }).fill("El service sale USD 300.");
   await expect(editor.getByLabel("Problemas de copy")).toContainText("Mantenimiento y costos típicos, renglón 1: tiene una cifra de dinero");
@@ -163,6 +170,13 @@ test("PAR-04: /admin/guides crea, edita y publica una guía a mano con la genera
   // A draft is not public yet.
   expect((await page.request.get(`/guias/ford/${slug}`)).status()).toBe(404);
 
+  // The guide changes behind this page (a draft the worker wrote after «Regenerar»):
+  // «Publicar» on the stale page publishes nothing.
+  await query(`update public.model_guides set questions = questions || '[{"text": "¿Le hicieron el service de los 60.000 km?", "why": ""}]'::jsonb where make = 'Ford' and model = $1`, [model]);
+  await page.getByRole("button", { name: "Publicar" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "cambió desde que abriste esta página" })).toBeVisible();
+  expect((await query<{ status: string }>(`select status from public.model_guides where make = 'Ford' and model = $1`, [model]))[0].status).toBe("draft");
+  await page.reload();
   await page.getByRole("button", { name: "Publicar" }).click();
   await expect(page.getByText("publicada", { exact: true })).toBeVisible();
   const [row] = await query<{ status: string; reviewed: boolean }>(

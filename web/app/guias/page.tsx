@@ -13,6 +13,8 @@ export const metadata: Metadata = {
   title: GUIDE_COPY.indexTitle,
   description: GUIDE_COPY.indexIntro,
   alternates: { canonical: "/guias" },
+  // Its own: without it the layout's (the landing's) title and description are shared.
+  openGraph: { type: "website", locale: "es_AR", siteName: "eseauto.com.ar", title: GUIDE_COPY.indexTitle, description: GUIDE_COPY.indexIntro, url: "/guias" },
 };
 
 /** /guias: the published guides by make. Without any it is still a page (the sitemap links it). */

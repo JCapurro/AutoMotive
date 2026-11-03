@@ -190,6 +190,7 @@ export function publishProblem(v: Pick<GuideValues, "body" | "questions" | "sour
   const missing = GUIDE_SECTIONS.filter((key) => !v.body[key].length);
   if (missing.length) return `Falta completar: ${missing.map((k) => GUIDE_SECTION_NAME[k]).join(", ")}.`;
   if (v.questions.length < MIN_QUESTIONS || v.questions.length > MAX_QUESTIONS) return `Van de ${MIN_QUESTIONS} a ${MAX_QUESTIONS} preguntas.`;
+  if (!v.sources.length) return "Agregá al menos una fuente y marcá «La revisé».";
   if (v.sources.some((s) => !s.verified)) return "Marcá «La revisé» en cada fuente, o borrá la que no exista.";
   return null;
 }
@@ -266,10 +267,11 @@ export type PublicGuideRow = {
   questions: unknown;
   sources: unknown;
   published_at: string | null;
-  updated_at: string;
+  /** The content's last change (publishing or unpublishing doesn't move it). */
+  content_updated_at: string;
 };
 export const PUBLIC_GUIDE_COLUMNS =
-  "id, make, model, generation_label, year_from, year_to, slug_make, slug_model, body, questions, sources, published_at, updated_at";
+  "id, make, model, generation_label, year_from, year_to, slug_make, slug_model, body, questions, sources, published_at, content_updated_at";
 
 export type PublicGuide = {
   id: number;
@@ -284,6 +286,7 @@ export type PublicGuide = {
   questions: GuideQuestion[];
   /** Only the sources Juan checked (publishing requires all of them checked). */
   sources: GuideSource[];
+  /** model_guides.content_updated_at: «Última actualización» and the sitemap's lastModified. */
   updatedAt: string;
 };
 
@@ -300,7 +303,7 @@ export function toPublicGuide(row: PublicGuideRow): PublicGuide {
     body: readBody(row.body),
     questions: readQuestions(row.questions),
     sources: readSources(row.sources).filter((s) => s.verified),
-    updatedAt: row.updated_at,
+    updatedAt: row.content_updated_at,
   };
 }
 
@@ -343,11 +346,12 @@ export function faqJsonLd(guides: PublicGuide[], url: string): Record<string, un
   if (!guides.length) return null;
   const name = guideName(guides[0].make, guides[0].model);
   const lines = (key: "known_issues" | "visit_checklist") => guides.flatMap((g) => g.body[key].map((l) => l.text));
-  const questions = guides.flatMap((g) => g.questions.map((q) => q.text));
+  // The page's own list: each question once across the generations.
+  const questions = questionsText(guides).split("\n").filter(Boolean);
   const entries: [string, string[]][] = [
     [`¿Qué fallas conocidas tiene el ${name}?`, lines("known_issues")],
     [`¿Qué revisar al ver un ${name} usado?`, lines("visit_checklist")],
-    [`¿Qué preguntarle al vendedor de un ${name}?`, [...new Set(questions)]],
+    [`¿Qué preguntarle al vendedor de un ${name}?`, questions],
   ];
   const mainEntity = entries
     .filter(([, answer]) => answer.length)

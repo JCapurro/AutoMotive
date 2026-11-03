@@ -161,7 +161,7 @@ export function GuideEditor({ id, initial, updatedAt, status }: { id: number; in
         </fieldset>
 
         <fieldset className="space-y-2" data-section="sources">
-          <legend className="text-sm font-semibold">Fuentes (para publicar, cada una con «La revisé»)</legend>
+          <legend className="text-sm font-semibold">Fuentes (para publicar, al menos una y cada una con «La revisé»)</legend>
           {values.sources.map((s, n) => (
             <div key={n} className="grid gap-2 rounded-lg bg-card p-2 ring-1 ring-foreground/10 sm:grid-cols-[1fr_1fr_8rem_auto_auto]">
               <input aria-label={`Fuente ${n + 1}: título`} placeholder="Título" className={SMALL} value={s.title} onChange={(e) => setSource(n, { title: e.target.value })} />

@@ -9,9 +9,10 @@ from datetime import datetime, timezone
 
 from intelligence.copy import QUESTION
 from intelligence.engine import assess
-from intelligence.guides import GuideEntry, build_index, pick
+from intelligence.guides import GuideEntry, build_index, pick, same_question
 from intelligence.red_flags import RedFlag
-from intelligence.seller_questions import question_items, question_keys, question_texts, seller_questions
+from intelligence.seller_questions import (question_items, question_keys, question_texts, seller_questions,
+                                           without_guides)
 
 NOW = datetime(2026, 11, 3, 12, tzinfo=timezone.utc)
 Q = ("¿La caja hace tirones al arrancar en frío?", "¿Le cambiaron los bujes del tren delantero?",
@@ -42,7 +43,10 @@ def test_order_listing_then_guide_then_generic():
                            "guide:12:0", "guide:12:1", "guide:12:2", "vtv", "crashes", "trim"]
     assert [q.origin for q in items][4:7] == ["guide"] * 3
     assert items[4].origin_json() == {"key": "guide:12:0", "origin": "guide", "guide_id": 12, "text": Q[0]}
-    assert items[0].origin_json() == {"key": "greeting", "origin": "template"}
+    # Every entry carries its text, in seller_questions' order (the withdrawal rebuilds the message).
+    assert items[0].origin_json() == {"key": "greeting", "origin": "template", "text": QUESTION["greeting"]}
+    assert " ".join(q.origin_json()["text"] for q in items) == seller_questions(
+        LISTING, [OWNERS], timing_belt=False, now=NOW, guide=GUIDE)
 
 
 def test_the_limit_is_configurable():
@@ -68,6 +72,58 @@ def test_a_guide_question_repeating_a_template_one_is_skipped():
     guide = GuideEntry(5, None, None, None, (QUESTION["vtv"].upper().replace("?", " ?"), Q[0]))
     items = question_items(LISTING, [], timing_belt=False, now=NOW, guide=guide)
     assert [q.text for q in items if q.origin == "guide"] == [Q[0]]
+
+
+def test_almost_the_same_question_is_skipped_too():
+    # No description and the belt: the template asks about the timing belt and
+    # the VTV; the guide asks the same with other words.
+    listing = {**LISTING, "year": 2015, "description": None, "trim": "SE"}
+    guide = GuideEntry(5, None, None, None, ("¿Cuándo se cambió la distribución por última vez?",
+                                             "¿Tiene la VTV vigente?", "¿Hace ruido la caja en frío?"))
+    items = question_items(listing, [], timing_belt=True, now=NOW, guide=guide)
+    assert "timing_belt" in keys(items) and "vtv" in keys(items)
+    assert [q.text for q in items if q.origin == "guide"] == ["¿Hace ruido la caja en frío?"]
+    assert "¿Hace ruido la caja en frío?" in question_texts(listing, [], timing_belt=True, now=NOW, guide=guide)
+
+
+def test_same_question():
+    assert same_question("¿Tiene VTV vigente?", "¿tiene vtv vigente ?")
+    assert same_question("¿Tiene la VTV vigente?", "¿Tiene VTV vigente?")
+    assert same_question("¿Cuándo se hizo la distribución por última vez?",
+                         "¿Cuándo se cambió la distribución por última vez?")
+    assert same_question("¿Tenés historial de services?", "¿Hay historial de service?")
+    # Different questions stay apart.
+    assert not same_question("¿Tiene VTV?", "¿Tiene VTV vigente?")
+    assert not same_question("¿Cuándo se cambió el aceite?", "¿Cuándo se cambió la distribución?")
+    assert not same_question("¿Tenés el comprobante?", QUESTION["timing_proof"])
+    assert not same_question("¿Es manual o automático?", "¿La caja automática hace tirones?")
+    # No two template questions are «the same».
+    texts = list(QUESTION.values())
+    assert not [(a, b) for i, a in enumerate(texts) for b in texts[i + 1:] if same_question(a, b)]
+
+
+def test_without_guides_rebuilds_the_message_from_what_stays():
+    profile = {"filters": {"make": "Ford", "model": "Fiesta"}, "preferences": {}}
+    from intelligence.config import IntelligenceConfig
+    listing = {**LISTING, "price": 9000, "currency": "USD", "price_usd": 9000}
+    cfg = IntelligenceConfig.from_app_config({})
+    _, _, with_guide = assess(listing, profile, price_ref=None, cfg=cfg, now=NOW, guide=GUIDE)
+    row = with_guide.row()
+    out = without_guides(row, {12})
+    assert all(o["origin"] == "template" for o in out["question_origins"])
+    assert out["seller_questions"] == " ".join(o["text"] for o in out["question_origins"])
+    assert not any(q in out["seller_questions"] for q in Q)
+    assert not any(q in (out["contact_questions"] or []) for q in Q)
+    assert (out["score"], out["level"]) == (row["score"], row["level"])
+    # Another guide's id: nothing changes.
+    assert without_guides(row, {99}) == row
+    # A template question with the text of a dropped guide question stays.
+    twin = {"seller_questions": "Hola ¿A? ¿A?", "contact_questions": ["¿A?"],
+            "question_origins": [{"key": "greeting", "origin": "template", "text": "Hola"},
+                                 {"key": "owners", "origin": "template", "text": "¿A?"},
+                                 {"key": "guide:3:0", "origin": "guide", "guide_id": 3, "text": "¿A?"}]}
+    assert without_guides(twin, {3})["seller_questions"] == "Hola ¿A?"
+    assert without_guides(twin, {3})["contact_questions"] == ["¿A?"]
 
 
 def test_question_texts_takes_the_guide_only_after_the_listing_s_own():

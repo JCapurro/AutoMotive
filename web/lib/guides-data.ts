@@ -32,13 +32,14 @@ export const publishedModelGuides = cache(async (slugMake: string, slugModel: st
   return guides.length ? sortGenerations(guides) : null;
 });
 
+/** `updatedAt`: the latest content_updated_at of the model's published guides. */
 export type GuideIndexEntry = { make: string; model: string; slugMake: string; slugModel: string; updatedAt: string };
 
 /** One entry per published model (for /guias and the sitemap); [] on a base without the table. */
 export const publishedGuideIndex = cache(async (): Promise<GuideIndexEntry[]> => {
   const { data, error } = await createPublicClient()
     .from("model_guides")
-    .select("make, model, slug_make, slug_model, updated_at")
+    .select("make, model, slug_make, slug_model, content_updated_at")
     .order("make")
     .order("model");
   if (missingTable(error)) return [];
@@ -47,8 +48,8 @@ export const publishedGuideIndex = cache(async (): Promise<GuideIndexEntry[]> =>
   for (const row of data ?? []) {
     const key = `${row.slug_make}/${row.slug_model}`;
     const prev = byModel.get(key);
-    if (!prev || row.updated_at > prev.updatedAt) {
-      byModel.set(key, { make: row.make, model: row.model, slugMake: row.slug_make, slugModel: row.slug_model, updatedAt: row.updated_at });
+    if (!prev || row.content_updated_at > prev.updatedAt) {
+      byModel.set(key, { make: row.make, model: row.model, slugMake: row.slug_make, slugModel: row.slug_model, updatedAt: row.content_updated_at });
     }
   }
   return [...byModel.values()];

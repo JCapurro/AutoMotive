@@ -42,7 +42,7 @@ export default async function GuideAdmin({ params }: PageProps<"/admin/guides/[i
       <div className="flex flex-wrap items-start gap-3 text-sm">
         {guide.status === "published" ? <Pill tone="ok">publicada</Pill> : <Pill tone="warn">borrador</Pill>}
         {guide.reviewed_at ? <span className="text-muted-foreground">Última revisión: {when(guide.reviewed_at)}</span> : null}
-        <GuideStatusButton id={guide.id} status={guide.status} />
+        <GuideStatusButton id={guide.id} status={guide.status} updatedAt={guide.updated_at} />
         {guide.status === "published" ? <TextLink href={guidePath(guide.slug_make, guide.slug_model)}>Ver página</TextLink> : null}
         {generation.enabled && guide.status === "draft" ? (
           <>

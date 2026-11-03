@@ -70,7 +70,8 @@ export function CreateOtherGuide() {
   );
 }
 
-export function GuideStatusButton({ id, status }: { id: number; status: string }) {
+/** «Publicar» publishes the version this page shows (`updatedAt`), or says it changed. */
+export function GuideStatusButton({ id, status, updatedAt }: { id: number; status: string; updatedAt: string }) {
   const { error, note, pending, run } = useGuideAction();
   const publish = status !== "published";
   return (
@@ -78,7 +79,7 @@ export function GuideStatusButton({ id, status }: { id: number; status: string }
       <Button type="button" size="sm" variant={publish ? "default" : "outline"} disabled={pending}
         onClick={() => {
           if (!publish && !window.confirm("¿Despublicar? La página deja de verse y sus preguntas salen de los avisos.")) return;
-          run(() => setGuideStatus({ id, status: publish ? "published" : "draft" }));
+          run(() => setGuideStatus(publish ? { id, status: "published", expectedUpdatedAt: updatedAt } : { id, status: "draft" }));
         }}>
         {pending ? "Guardando…" : publish ? "Publicar" : "Despublicar"}
       </Button>

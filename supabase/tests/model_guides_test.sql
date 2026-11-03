@@ -1,5 +1,6 @@
 -- PAR-04 (migrations 20261204120000_par04_model_guides, 20261204120100_par04_guide_events,
--- 20261204120200_par04_question_origins, 20261204120300_par04_guide_review_fixes): who reads model_guides, who writes,
+-- 20261204120200_par04_question_origins, 20261204120300_par04_guide_review_fixes,
+-- 20261204120400_par04_guide_publish_guards): who reads model_guides, who writes,
 -- what can be published, the guide jobs in llm_jobs and log_guide_event.
 begin;
 create extension if not exists pgtap with schema extensions;
@@ -46,8 +47,16 @@ select ok(has_column_privilege('authenticated', 'public.matches', 'question_orig
           'question_origins is readable like the other columns of matches (RLS: own rows)');
 select ok(not has_function_privilege('authenticated', 'public.admin_save_model_guide(bigint,jsonb,timestamptz,uuid)', 'execute'),
           'authenticated cannot call admin_save_model_guide');
-select ok(not has_function_privilege('anon', 'public.admin_set_model_guide_status(bigint,text,uuid)', 'execute'),
+select ok(not has_function_privilege('anon', 'public.admin_set_model_guide_status(bigint,text,uuid,timestamptz)', 'execute'),
           'anon cannot publish');
+select ok(not has_function_privilege('authenticated', 'public.admin_set_model_guide_status(bigint,text,uuid,timestamptz)', 'execute'),
+          'authenticated cannot publish');
+select hasnt_function('public', 'admin_set_model_guide_status', array['bigint', 'text', 'uuid'],
+                      'the old signature without the version is gone');
+select ok(has_column_privilege('anon', 'public.model_guides', 'content_updated_at', 'select'),
+          'anon reads content_updated_at (the page''s «Última actualización»)');
+select ok(not has_function_privilege('anon', 'public.match_questions_without(text,text[],jsonb,bigint[],text[])', 'execute'),
+          'anon cannot call match_questions_without');
 select ok(not has_function_privilege('authenticated', 'public.admin_request_model_guide(bigint,boolean,uuid)', 'execute'),
           'authenticated cannot request a guide job');
 select ok(not has_function_privilege('authenticated', 'public.admin_guide_candidates(integer)', 'execute'),
@@ -76,14 +85,28 @@ select throws_ok($$select public.admin_save_model_guide(null, (select values fro
 select throws_ok($$select public.admin_save_model_guide((select id from public.model_guides), (select values from v),
                    '2000-01-01', '9a1de000-0000-4000-8000-000000000001')$$,
                  '40001', 'guide_conflict', 'an outdated updated_at does not overwrite');
+select throws_ok($$select public.admin_set_model_guide_status(g.id, 'published', '9a1de000-0000-4000-8000-000000000001', g.updated_at)
+                     from public.model_guides g$$,
+                 '22023', 'guide_sources_unverified', 'not published with an unchecked source');
 select throws_ok($$select public.admin_set_model_guide_status((select id from public.model_guides), 'published',
                    '9a1de000-0000-4000-8000-000000000001')$$,
-                 '22023', 'guide_sources_unverified', 'not published with an unchecked source');
+                 '40001', 'guide_changed', 'publishing needs the version the admin saw');
+select throws_ok($$select public.admin_set_model_guide_status((select id from public.model_guides), 'published',
+                   '9a1de000-0000-4000-8000-000000000001', '2000-01-01')$$,
+                 '40001', 'guide_changed', 'a guide that changed since the page was loaded is not published');
+select lives_ok($$select public.admin_save_model_guide(g.id, jsonb_set((select values from v), '{sources}', '[]'),
+                  g.updated_at, '9a1de000-0000-4000-8000-000000000001') from public.model_guides g$$,
+                'a draft may be saved without sources');
+select throws_ok($$select public.admin_set_model_guide_status(g.id, 'published', '9a1de000-0000-4000-8000-000000000001', g.updated_at)
+                     from public.model_guides g$$,
+                 '22023', 'guide_sources_missing', 'no source is not «every source checked»');
+select is(public.model_guide_problem((select values -> 'body' from v), (select values -> 'questions' from v), '[]'),
+          'guide_sources_missing', 'model_guide_problem: an empty list of sources');
 select lives_ok($$select public.admin_save_model_guide(g.id, jsonb_set((select values from v), '{body,generations}', '[]'),
                   g.updated_at, '9a1de000-0000-4000-8000-000000000001') from public.model_guides g$$,
                 'a draft may be saved incomplete');
-select throws_ok($$select public.admin_set_model_guide_status((select id from public.model_guides), 'published',
-                   '9a1de000-0000-4000-8000-000000000001')$$,
+select throws_ok($$select public.admin_set_model_guide_status(g.id, 'published', '9a1de000-0000-4000-8000-000000000001', g.updated_at)
+                     from public.model_guides g$$,
                  '22023', 'guide_incomplete', 'not published with an empty section');
 reset role;
 
@@ -95,8 +118,8 @@ set local role service_role;
 select lives_ok($$select public.admin_save_model_guide(g.id, jsonb_set((select values from v), '{sources,0,verified}', 'true'),
                   g.updated_at, '9a1de000-0000-4000-8000-000000000001') from public.model_guides g$$,
                 'the reviewer checks the source');
-select lives_ok($$select public.admin_set_model_guide_status((select id from public.model_guides), 'published',
-                  '9a1de000-0000-4000-8000-000000000001')$$, 'then publishes');
+select lives_ok($$select public.admin_set_model_guide_status(g.id, 'published', '9a1de000-0000-4000-8000-000000000001', g.updated_at)
+                    from public.model_guides g$$, 'then publishes the version it saw');
 reset role;
 select ok((select reviewed_by = '9a1de000-0000-4000-8000-000000000001' and reviewed_at is not null and published_at is not null
              from public.model_guides), 'publishing records the reviewer');
@@ -273,10 +296,69 @@ select ok(not has_function_privilege('anon', 'public.model_guide_withdraw_questi
 select ok(not has_function_privilege('authenticated', 'public.model_guide_withdraw_questions(bigint, text[])', 'execute'),
           'authenticated cannot withdraw questions');
 
+-- ---------------------------------------------------------------------------
+-- match_questions_without: only what the guide wrote, whole questions
+-- ---------------------------------------------------------------------------
+
+-- A template question with the same text as one of the guide's stays (the
+-- worker kept the template's and skipped the guide's copy).
+select is((select row(seller_questions, contact_questions, question_origins)::text
+             from public.match_questions_without(
+               'Hola, ¿cómo estás? ¿Cuántos dueños tuvo? ¿Hace ruido la caja en frío?',
+               array['¿Cuántos dueños tuvo?', '¿Hace ruido la caja en frío?'],
+               '[{"key": "greeting", "origin": "template", "text": "Hola, ¿cómo estás?"},
+                 {"key": "owners", "origin": "template", "text": "¿Cuántos dueños tuvo?"},
+                 {"key": "guide:5:1", "origin": "guide", "guide_id": 5, "text": "¿Hace ruido la caja en frío?"}]',
+               array[5::bigint], null)),
+          row('Hola, ¿cómo estás? ¿Cuántos dueños tuvo?', array['¿Cuántos dueños tuvo?'],
+              '[{"key": "greeting", "origin": "template", "text": "Hola, ¿cómo estás?"},
+                {"key": "owners", "origin": "template", "text": "¿Cuántos dueños tuvo?"}]'::jsonb)::text,
+          'a template question with the guide''s text stays');
+
+-- A guide question that is a piece of a template one is removed whole, and only it.
+select is((select seller_questions
+             from public.match_questions_without(
+               'Hola, ¿cómo estás? ¿En qué fecha y kilometraje se hizo la distribución? ¿Tenés el comprobante? ¿Tenés el comprobante?',
+               null,
+               '[{"key": "greeting", "origin": "template", "text": "Hola, ¿cómo estás?"},
+                 {"key": "timing_proof", "origin": "template", "text": "¿En qué fecha y kilometraje se hizo la distribución? ¿Tenés el comprobante?"},
+                 {"key": "guide:5:0", "origin": "guide", "guide_id": 5, "text": "¿Tenés el comprobante?"}]',
+               array[5::bigint], null)),
+          'Hola, ¿cómo estás? ¿En qué fecha y kilometraje se hizo la distribución? ¿Tenés el comprobante?',
+          'the template question that contains the guide''s text keeps it');
+
+-- A row scored before every entry had its text: a text that is also inside
+-- another question is left alone; one that appears once goes.
+select is((select seller_questions
+             from public.match_questions_without(
+               'Hola, ¿cómo estás? ¿En qué fecha y kilometraje se hizo la distribución? ¿Tenés el comprobante? ¿Tenés el comprobante? ¿Hace ruido la caja?',
+               null,
+               '[{"key": "greeting", "origin": "template"}, {"key": "timing_proof", "origin": "template"},
+                 {"key": "guide:5:0", "origin": "guide", "guide_id": 5, "text": "¿Tenés el comprobante?"},
+                 {"key": "guide:5:1", "origin": "guide", "guide_id": 5, "text": "¿Hace ruido la caja?"}]',
+               array[5::bigint], null)),
+          'Hola, ¿cómo estás? ¿En qué fecha y kilometraje se hizo la distribución? ¿Tenés el comprobante? ¿Tenés el comprobante?',
+          'without every text, a question is removed only where it cannot be part of another');
+
+-- p_keep and other guides.
+select is((select question_origins
+             from public.match_questions_without('Hola ¿A? ¿B?', array['¿A?', '¿B?'],
+               '[{"key": "greeting", "origin": "template", "text": "Hola"},
+                 {"key": "guide:5:0", "origin": "guide", "guide_id": 5, "text": "¿A?"},
+                 {"key": "guide:5:1", "origin": "guide", "guide_id": 5, "text": "¿B?"}]',
+               array[5::bigint], array['¿B?'])),
+          '[{"key": "greeting", "origin": "template", "text": "Hola"},
+            {"key": "guide:5:1", "origin": "guide", "guide_id": 5, "text": "¿B?"}]'::jsonb,
+          'a kept question stays');
+select is((select seller_questions from public.match_questions_without('Hola ¿A?', array['¿A?'],
+             '[{"key": "greeting", "origin": "template", "text": "Hola"},
+               {"key": "guide:6:0", "origin": "guide", "guide_id": 6, "text": "¿A?"}]', array[5::bigint], null)),
+          'Hola ¿A?', 'another guide''s questions are not touched');
+
 -- Unpublishing goes back to draft and keeps the review.
 set local role service_role;
 select lives_ok($$select public.admin_set_model_guide_status((select id from public.model_guides where model = 'Fiesta'), 'draft',
-                  '9a1de000-0000-4000-8000-000000000001')$$, 'unpublish');
+                  '9a1de000-0000-4000-8000-000000000001')$$, 'unpublish (no version needed)');
 reset role;
 set local role anon;
 select is((select count(*)::int from public.model_guides), 0, 'an unpublished guide disappears for anon');

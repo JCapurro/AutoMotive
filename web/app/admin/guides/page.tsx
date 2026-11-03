@@ -38,7 +38,7 @@ function Actions({ guide, generationOn }: { guide: GuideRow; generationOn: boole
   return (
     <div className="flex flex-wrap items-start gap-2">
       <TextLink href={`/admin/guides/${guide.id}`} className="inline-flex h-7 items-center text-sm">Editar</TextLink>
-      <GuideStatusButton id={guide.id} status={guide.status} />
+      <GuideStatusButton id={guide.id} status={guide.status} updatedAt={guide.updated_at} />
       {guide.status === "published" ? <TextLink href={guidePath(guide.slug_make, guide.slug_model)} className="inline-flex h-7 items-center text-sm">Ver página</TextLink> : null}
       {generationOn && guide.status === "draft" ? <RequestGuideButton id={guide.id} /> : null}
     </div>

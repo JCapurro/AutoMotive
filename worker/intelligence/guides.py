@@ -184,7 +184,33 @@ def pick(index: GuideIndex | None, listing: Mapping[str, Any]) -> GuideEntry | N
     return min(covering, key=lambda e: (e.span(), e.generation_label is None, e.guide_id))
 
 
+# Words that don't change what a question asks: articles, prepositions,
+# pronouns and the generic verbs («¿Cuándo se hizo / se cambió la
+# distribución?» ask the same). Folded.
+_FILLER = frozenset("""
+a al algun alguna alguno con de del el en es esta este fue ha la las le lo los me o por que se su sus te
+un una uno y ya hay hace hizo hicieron hecho realizo realizaron realizado cambio cambiaron cambiado
+tiene tenes tenia tuvo esta estan
+""".split())
+_NEAR = 0.8
+
+
+def question_words(text: str) -> frozenset[str]:
+    """What a question asks: its folded words without the filler (a plural
+    «s» dropped)."""
+    words = re.sub(r"[^\w]+", " ", fold(text)).split()
+    return frozenset(w[:-1] if len(w) > 3 and w.endswith("s") else w for w in words if w not in _FILLER)
+
+
 def same_question(a: str, b: str) -> bool:
-    """Equal after folding accents, case, punctuation and spaces."""
+    """Equal after folding accents, case, punctuation and spaces, or almost
+    the same: the words that matter (question_words) overlap by 80 % or more
+    (Jaccard). «¿Tiene la VTV vigente?» and «¿Tiene VTV vigente?» are one
+    question; «¿Tiene VTV?» and «¿Tiene VTV vigente?» are not."""
     norm = lambda t: re.sub(r"[^\w]+", " ", fold(t)).strip()  # noqa: E731
-    return norm(a) == norm(b)
+    if norm(a) == norm(b):
+        return True
+    wa, wb = question_words(a), question_words(b)
+    if not wa or not wb:
+        return False
+    return len(wa & wb) / len(wa | wb) >= _NEAR

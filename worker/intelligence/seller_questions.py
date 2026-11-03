@@ -35,13 +35,36 @@ class QuestionItem:
     guide_id: int | None = None
 
     def origin_json(self) -> dict[str, Any]:
+        # Every entry carries its text, in seller_questions' order: unpublishing
+        # a guide rebuilds the message from the entries that stay and removes
+        # exactly what the guide wrote (public.match_questions_without).
         out: dict[str, Any] = {"key": self.key, "origin": self.origin}
         if self.guide_id is not None:
-            # The text too: unpublishing the guide removes exactly what was
-            # written (public.model_guide_withdraw_questions).
             out["guide_id"] = self.guide_id
-            out["text"] = self.text
+        out["text"] = self.text
         return out
+
+
+def without_guides(row: Mapping[str, Any], guide_ids: Iterable[int]) -> dict[str, Any]:
+    """An Evaluation.row() without the questions of these guides (unpublished
+    after the run loaded them): question_origins without their entries,
+    seller_questions rebuilt from the entries that stay, contact_questions
+    without their texts. Same rule as public.match_questions_without."""
+    ids = set(guide_ids)
+    origins = list(row.get("question_origins") or [])
+    dropped = [o for o in origins if o.get("guide_id") in ids]
+    if not dropped:
+        return dict(row)
+    kept = [o for o in origins if o.get("guide_id") not in ids]
+    kept_texts = {o.get("text") for o in kept}
+    gone = {o.get("text") for o in dropped if o.get("text")}
+    out = dict(row, question_origins=kept)
+    if all(isinstance(o.get("text"), str) for o in origins) and row.get("seller_questions") == " ".join(
+            o["text"] for o in origins):
+        out["seller_questions"] = " ".join(o["text"] for o in kept)
+    if row.get("contact_questions") is not None:
+        out["contact_questions"] = [c for c in row["contact_questions"] if c not in gone or c in kept_texts]
+    return out
 
 
 # VTV is mandatory from the third year on in most jurisdictions.

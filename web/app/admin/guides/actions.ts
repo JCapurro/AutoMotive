@@ -22,6 +22,8 @@ const ERRORS: [string, string][] = [
   ["guide_unknown_model", "Ese modelo no está en el catálogo."],
   ["guide_not_found", "La guía ya no existe. Recargá la página."],
   ["guide_incomplete", "Para publicar hacen falta las cinco secciones con al menos un renglón y de 3 a 8 preguntas."],
+  ["guide_changed", "La guía cambió desde que abriste esta página (por ejemplo, llegó un borrador nuevo). Recargá y revisala antes de publicar."],
+  ["guide_sources_missing", "Para publicar hace falta al menos una fuente, con «La revisé»."],
   ["guide_sources_unverified", "Marcá «La revisé» en cada fuente, o borrá la que no exista, antes de publicar."],
   ["guide_generation_off", "La generación con IA está apagada (llm_limits.model_guide.enabled)."],
   ["guide_daily_cap", "Llegaste al tope de borradores de hoy (llm_limits.model_guide.per_day)."],
@@ -83,22 +85,34 @@ export async function saveGuide(input: unknown): Promise<GuideActionResult> {
   return { ok: true, id: row.id, updatedAt: row.updated_at };
 }
 
-/** «Publicar» / «Despublicar». Unpublishing also withdraws its questions from the matches. */
+/**
+ * «Publicar» / «Despublicar». Publishing sends the updated_at of the page the
+ * admin has open: a guide that changed since (a draft the worker rewrote
+ * after «Regenerar», another edit) is not published (guide_changed).
+ * Unpublishing also withdraws its questions from the matches.
+ */
 export async function setGuideStatus(input: unknown): Promise<GuideActionResult> {
   const actor = await requireAdmin();
-  const parsed = z.object({ id: Id, status: z.enum(["draft", "published"]) }).safeParse(input);
+  const parsed = z.discriminatedUnion("status", [
+    z.object({ id: Id, status: z.literal("published"), expectedUpdatedAt: z.string().min(1) }),
+    z.object({ id: Id, status: z.literal("draft"), expectedUpdatedAt: z.string().nullish() }),
+  ]).safeParse(input);
   if (!parsed.success) return { error: "Datos inválidos." };
   const admin = createAdminClient();
   if (parsed.data.status === "published") {
     // Same rules as the RPC, with the message of the editor.
-    const { data: g } = await admin.from("model_guides").select("body, questions, sources").eq("id", parsed.data.id).maybeSingle();
+    const { data: g } = await admin.from("model_guides").select("body, questions, sources, updated_at").eq("id", parsed.data.id).maybeSingle();
+    if (g && Date.parse(g.updated_at) !== Date.parse(parsed.data.expectedUpdatedAt)) return { error: guideError("guide_changed") };
     const values = g ? GuideContentInput.safeParse(g) : null;
     if (values?.success) {
       const problem = publishProblem(values.data) ?? (lintGuide(values.data)[0] ? `${lintGuide(values.data)[0].where}: ${lintGuide(values.data)[0].message}.` : null);
       if (problem) return { error: problem };
     }
   }
-  const { data, error } = await admin.rpc("admin_set_model_guide_status", { p_id: parsed.data.id, p_status: parsed.data.status, p_actor_id: actor.id });
+  const { data, error } = await admin.rpc("admin_set_model_guide_status", {
+    p_id: parsed.data.id, p_status: parsed.data.status, p_actor_id: actor.id,
+    p_expected_updated_at: parsed.data.status === "published" ? parsed.data.expectedUpdatedAt : null,
+  });
   if (error) return { error: guideError(error.message) };
   const row = data as { slug_make: string; slug_model: string; updated_at: string };
   revalidateGuide(row.slug_make, row.slug_model);

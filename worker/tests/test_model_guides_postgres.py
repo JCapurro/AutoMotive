@@ -16,10 +16,14 @@ from psycopg.types.json import Jsonb
 
 import db
 from db.repos import guides as guides_repo
+from intelligence.copy import QUESTION
 from db.repos import llm_jobs as jobs_repo
 from llm.replay import replay_provider
 from pgcase import PostgresTestCase, requires_db
+from db.repos import matches as matches_repo
 from pipeline import llm_jobs
+from pipeline.rescore import rescore
+from pipeline.scoring import Scorer
 from test_pro01_postgres import Pro01Case
 
 pytestmark = [pytest.mark.db, requires_db]
@@ -311,7 +315,7 @@ class GuideQuestionsInMatchesTests(Pro01Case):
         m = await self.match_of(lid)
         self.assertIn(q, m["seller_questions"])
         self.assertIn({"key": f"guide:{gid}:0", "origin": "guide", "guide_id": gid, "text": q}, m["question_origins"])
-        self.assertEqual(m["question_origins"][0], {"key": "greeting", "origin": "template"})
+        self.assertEqual(m["question_origins"][0], {"key": "greeting", "origin": "template", "text": QUESTION["greeting"]})
 
     async def test_a_draft_guide_is_ignored(self):
         q = "¿La caja hace tirones o patina al arrancar en frío?"
@@ -343,15 +347,21 @@ class WithdrawOnUnpublishTests(Pro01Case):
             self.gid = (await (await cx.execute(
                 "INSERT INTO model_guides (make, model, slug_make, slug_model, year_from, year_to, body, questions, "
                 "                          sources, status, reviewed_at, published_at) "
-                "VALUES ('Ford', 'Fiesta', 'ford', 'fiesta', 2011, 2019, %s, %s, '[]', 'published', now(), now()) "
+                "VALUES ('Ford', 'Fiesta', 'ford', 'fiesta', 2011, 2019, %s, %s, %s, 'published', now(), now()) "
                 "RETURNING id",
                 (Jsonb(body), Jsonb([{"text": self.Q1, "why": ""}, {"text": self.Q2, "why": ""},
-                                     {"text": "¿Tiene la rueda de auxilio original?", "why": ""}])))).fetchone())["id"]
+                                     {"text": "¿Tiene la rueda de auxilio original?", "why": ""}]),
+                 Jsonb(self.SOURCES)))).fetchone())["id"]
+
+    SOURCES = [{"title": "Manual", "url": "https://example.test/manual", "kind": "manual", "verified": True}]
 
     async def set_status(self, status: str) -> dict:
+        """As «Publicar» / «Despublicar» on a page loaded now."""
         async with db.connection() as cx:
-            return (await (await cx.execute("SELECT public.admin_set_model_guide_status(%s, %s, %s) AS r",
-                                            (self.gid, status, self.user))).fetchone())["r"]
+            seen = (await (await cx.execute("SELECT updated_at FROM model_guides WHERE id = %s",
+                                            (self.gid,))).fetchone())["updated_at"]
+            return (await (await cx.execute("SELECT public.admin_set_model_guide_status(%s, %s, %s, %s) AS r",
+                                            (self.gid, status, self.user, seen))).fetchone())["r"]
 
     async def test_unpublishing_withdraws_at_once_even_from_old_matches(self):
         lid = await self.seller_listing("private", description="Impecable, papeles al día", transmission="manual")
@@ -393,7 +403,7 @@ class WithdrawOnUnpublishTests(Pro01Case):
         async with db.connection() as cx:
             g = await (await cx.execute("SELECT * FROM model_guides WHERE id = %s", (self.gid,))).fetchone()
             values = {"make": "Ford", "model": "Fiesta", "slug_make": "ford", "slug_model": "fiesta",
-                      "year_from": 2011, "year_to": 2019, "body": g["body"], "sources": [],
+                      "year_from": 2011, "year_to": 2019, "body": g["body"], "sources": self.SOURCES,
                       "questions": [q for q in g["questions"] if q["text"] != self.Q1]
                       + [{"text": "¿El aire acondicionado enfría bien?", "why": ""}]}
             await cx.execute("SELECT public.admin_save_model_guide(%s, %s, %s, %s)",
@@ -403,6 +413,59 @@ class WithdrawOnUnpublishTests(Pro01Case):
         self.assertIn(self.Q2, m["seller_questions"])
         self.assertEqual([o["text"] for o in m["question_origins"] if o["origin"] == "guide"],
                          [self.Q2, "¿Tiene la rueda de auxilio original?"])
+
+    async def test_a_rescore_that_loaded_the_guide_before_the_unpublish_does_not_bring_it_back(self):
+        lid = await self.seller_listing("private", description="Impecable, papeles al día", transmission="manual")
+        await self.rematch()
+        self.assertIn(self.Q1, (await self.match_of(lid))["seller_questions"])
+        # The nightly run loads the published guides once, then the admin unpublishes.
+        scorer = await Scorer.create()
+        self.assertTrue(scorer.guides)
+        await self.set_status("draft")
+        self.assertEqual(await rescore(await matches_repo.matches_of_listings([lid]), scorer), 1)
+        m = await self.match_of(lid)
+        self.assertNotIn(self.Q1, m["seller_questions"])
+        self.assertNotIn(self.Q1, m["contact_questions"] or [])
+        self.assertTrue(all(o["origin"] == "template" for o in m["question_origins"]))
+        self.assertEqual(m["seller_questions"], " ".join(o["text"] for o in m["question_origins"]))
+        # Still published: the same stale scorer writes them.
+        await self.set_status("published")
+        self.assertEqual(await rescore(await matches_repo.matches_of_listings([lid]), scorer), 1)
+        self.assertIn(self.Q1, (await self.match_of(lid))["seller_questions"])
+
+    async def test_a_template_question_with_the_guide_s_text_stays(self):
+        lid = await self.seller_listing("private", description="Impecable, papeles al día", transmission="manual")
+        await self.rematch()
+        before = await self.match_of(lid)
+        template = next(o for o in before["question_origins"] if o["origin"] == "template" and o["key"] != "greeting")
+        # The guide also has that question: the worker kept the template's.
+        async with db.connection() as cx:
+            await cx.execute("UPDATE model_guides SET questions = questions || %s WHERE id = %s",
+                             (Jsonb([{"text": template["text"], "why": ""}]), self.gid))
+        await self.set_status("draft")
+        after = await self.match_of(lid)
+        self.assertIn(template["text"], after["seller_questions"])
+        self.assertIn(template, after["question_origins"])
+        self.assertEqual(after["seller_questions"], " ".join(o["text"] for o in after["question_origins"]))
+
+    async def test_publishing_needs_the_version_on_screen_and_a_source(self):
+        await self.set_status("draft")
+        async with db.connection() as cx:
+            seen = (await (await cx.execute("SELECT updated_at FROM model_guides WHERE id = %s",
+                                            (self.gid,))).fetchone())["updated_at"]
+        # The worker rewrites the draft (after «Regenerar»), with no sources.
+        async with db.connection() as cx:
+            await cx.execute("UPDATE model_guides SET sources = '[]', origin = 'llm' WHERE id = %s", (self.gid,))
+        for expected, code in ((seen, "guide_changed"), (None, "guide_changed")):
+            with self.assertRaises(psycopg.Error) as ctx:
+                async with db.connection() as cx:
+                    await cx.execute("SELECT public.admin_set_model_guide_status(%s, 'published', %s, %s)",
+                                     (self.gid, self.user, expected))
+            self.assertIn(code, str(ctx.exception))
+        # Reloaded: still not publishable without a source.
+        with self.assertRaises(psycopg.Error) as ctx:
+            await self.set_status("published")
+        self.assertIn("guide_sources_missing", str(ctx.exception))
 
     async def test_publishing_and_unpublishing_is_not_a_hand_edit(self):
         async with db.connection() as cx:
