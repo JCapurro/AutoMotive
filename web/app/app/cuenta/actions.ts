@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 
 import { liveAccount } from "@/lib/auth";
-import { linkError, sendEntryLink } from "@/lib/email-only";
+import { hasFreshProof, linkError, sendEntryLink } from "@/lib/email-only";
 import { safeNext } from "@/lib/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -34,6 +34,11 @@ export async function completeAccount(next: string, _prev: AccountState, form: F
   const account = await liveAccount();
   if (!account?.sessionId) return { error: "Tu sesión venció. Volvé a entrar con un link desde el login." };
   if (!account.emailOnly) redirect(target);
+  // A direct action call must prove ownership before it can revoke anyone else's session.
+  // The completion RPC rechecks this proof and the live session in its own transaction.
+  if (!(await hasFreshProof(account.id, account.sessionId))) {
+    return { expired: true, error: "El link ya venció. Pedí uno nuevo para elegir tu contraseña." };
+  }
   const supabase = await createClient();
   // Nobody else may still be signed in when the account stops being email-only.
   const { error: signOutError } = await supabase.auth.signOut({ scope: "others" });

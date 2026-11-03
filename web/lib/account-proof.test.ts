@@ -22,6 +22,7 @@ beforeEach(() => {
   m.claims = { sub: "user", session_id: "session" };
   m.profile = { email_only: true };
   m.rpc.mockResolvedValue({ data: true, error: null });
+  m.signOut.mockResolvedValue({ error: null });
 });
 
 describe("a used recovery link", () => {
@@ -44,6 +45,29 @@ describe("a used recovery link", () => {
     expect(m.recordProof).not.toHaveBeenCalled();
     expect(m.signOut).not.toHaveBeenCalled();
   });
+
+  it("asks to retry recovery without recording proof when other sessions cannot be closed", async () => {
+    m.signOut.mockResolvedValue({ error: { message: "internal auth detail" } });
+    const destination = new URL(await afterRecoveryLink(client(), next), "https://example.com");
+    expect(destination.pathname).toBe("/app/cuenta");
+    expect(destination.searchParams.get("next")).toBe("/app/pro?plan=pass_30");
+    expect(destination.searchParams.get("error")).toBe("security");
+    expect(destination.href).not.toContain("internal auth detail");
+    expect(m.recordProof).not.toHaveBeenCalled();
+    expect(m.rpc).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { data: null, error: { message: "internal database detail" } },
+    { data: false, error: null },
+  ])("does not prove ownership when email-only footholds could not be cleared: %j", async (result) => {
+    m.rpc.mockResolvedValue(result);
+    const destination = new URL(await afterRecoveryLink(client(), next), "https://example.com");
+    expect(destination.pathname).toBe("/app/cuenta");
+    expect(destination.searchParams.get("error")).toBe("security");
+    expect(m.recordProof).not.toHaveBeenCalled();
+    expect(m.rpc).not.toHaveBeenCalledWith("complete_email_only_account", expect.anything());
+  });
 });
 
 describe("Google over an email-only account", () => {
@@ -65,6 +89,18 @@ describe("Google over an email-only account", () => {
   it("doesn't complete it while the other sessions couldn't be closed", async () => {
     m.signOut.mockResolvedValue({ error: { message: "network" } });
     await completeWithGoogle(client(), google("persona@gmail.com", true));
+    expect(m.rpc).not.toHaveBeenCalledWith("complete_email_only_account", expect.anything());
+    expect(m.recordProof).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { data: null, error: { message: "internal database detail" } },
+    { data: false, error: null },
+  ])("does not record proof or complete the account when foothold cleanup fails: %j", async (result) => {
+    m.rpc.mockResolvedValue(result);
+    await completeWithGoogle(client(), google("persona@gmail.com", true));
+    expect(m.rpc).toHaveBeenCalledWith("secure_email_only_account", { p_user: "user" });
+    expect(m.recordProof).not.toHaveBeenCalled();
     expect(m.rpc).not.toHaveBeenCalledWith("complete_email_only_account", expect.anything());
   });
 

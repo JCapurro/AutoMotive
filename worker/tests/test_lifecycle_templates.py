@@ -508,14 +508,18 @@ class RemarketingEmailTests(unittest.TestCase):
         self.assertEqual(msg.subject, "Tu próximo auto te está esperando")
         self.assertIn("Empezar mi búsqueda:", msg.text)
 
-    def test_signed_links_sign_the_feedback_link_too(self):
+    def test_only_feedback_is_signed_in_the_follow_up_email(self):
         links = Links("https://automotive.app", "s" * 32)
         row = {"id": 41, "kind": "search_feedback", "payload": {}, "unsubscribe_token": TOKEN, "user_id": "u-1"}
         msg = templates.lifecycle_email(row, links, NOW)
         button = links.lifecycle(41, owner="u-1")
-        signature = button.split("s=")[1]
+        self.assertEqual(button, "https://automotive.app/m/41")
         self.assertIn(button, msg.text)
-        self.assertIn(f"/f/41?s={signature}", msg.text)
+        self.assertIn(f'href="{button}"', msg.html)
+        feedback = links.feedback(41, owner="u-1")
+        self.assertIn("?s=", feedback)
+        self.assertIn(feedback, msg.text)
+        self.assertIn(f'href="{feedback}"', msg.html)
 
     def test_no_banned_or_forbidden_words(self):
         for kind, payload in (("search_abandoned", ABANDONED), ("search_not_started", {}),

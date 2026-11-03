@@ -22,8 +22,13 @@ export async function afterRecoveryLink(supabase: SupabaseClient<Database>, next
   if (!userId) return `${RESET_PASSWORD_PATH}?${new URLSearchParams({ next: destination })}`;
   const { data: profile } = await supabase.from("profiles").select("email_only").eq("id", userId).maybeSingle();
   if (!profile?.email_only) return `${RESET_PASSWORD_PATH}?${new URLSearchParams({ next: destination })}`;
-  await supabase.auth.signOut({ scope: "others" });
-  await secureFootholds(userId);
+  const retry = `/app/cuenta?${new URLSearchParams({ next: destination, error: "security" })}`;
+  const { error: signOutError } = await supabase.auth.signOut({ scope: "others" });
+  if (signOutError) {
+    console.error("email-only recovery blocked: other_sessions_not_revoked");
+    return retry;
+  }
+  if (!(await secureFootholds(userId))) return retry;
   if (sessionId) await recordProof(userId, sessionId, "email_link");
   // "Sin contraseña": only paying (or asking for it) needs the password step; anyone else goes straight on.
   const wantsPassword = destination.startsWith("/app/pro") || destination.startsWith("/app/cuenta");
@@ -51,17 +56,21 @@ export async function completeWithGoogle(supabase: SupabaseClient<Database>, use
   if (!profile?.email_only || !sessionId) return;
   const { error: signOutError } = await supabase.auth.signOut({ scope: "others" });
   if (signOutError) {
-    console.error("google account completion skipped, other sessions still open:", signOutError.message);
+    console.error("google account completion blocked: other_sessions_not_revoked");
     return;
   }
-  await secureFootholds(user.id);
+  if (!(await secureFootholds(user.id))) return;
   await recordProof(user.id, sessionId, "google");
   const { error } = await createAdminClient().rpc("complete_email_only_account", { p_user: user.id, p_session: sessionId, p_method: "google" });
-  if (error) console.error("google account completion failed:", error.message);
+  if (error) console.error("google account completion blocked: completion_failed");
 }
 
 /** MFA factors and the Telegram link someone may have left while the account was email-only. */
-async function secureFootholds(userId: string): Promise<void> {
-  const { error } = await createAdminClient().rpc("secure_email_only_account", { p_user: userId });
-  if (error) console.error("email-only footholds not cleared:", error.message);
+async function secureFootholds(userId: string): Promise<boolean> {
+  const { data, error } = await createAdminClient().rpc("secure_email_only_account", { p_user: userId });
+  if (error || data !== true) {
+    console.error("email-only account proof blocked: foothold_cleanup_not_confirmed");
+    return false;
+  }
+  return true;
 }

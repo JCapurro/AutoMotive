@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const m = vi.hoisted(() => ({
-  liveAccount: vi.fn(), sendEntryLink: vi.fn(), rpc: vi.fn(), updateUser: vi.fn(), signOut: vi.fn(),
+  liveAccount: vi.fn(), sendEntryLink: vi.fn(), hasFreshProof: vi.fn(), rpc: vi.fn(), updateUser: vi.fn(), signOut: vi.fn(),
 }));
 vi.mock("@/lib/auth", () => ({ liveAccount: m.liveAccount }));
-vi.mock("@/lib/email-only", () => ({ sendEntryLink: m.sendEntryLink, linkError: () => "Ya te mandamos un link hace un momento." }));
+vi.mock("@/lib/email-only", () => ({ sendEntryLink: m.sendEntryLink, hasFreshProof: m.hasFreshProof, linkError: () => "Ya te mandamos un link hace un momento." }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({ rpc: m.rpc }) }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ auth: { updateUser: m.updateUser, signOut: m.signOut } }) }));
 vi.mock("next/navigation", () => ({ redirect: (path: string) => { throw new Error(`redirect:${path}`); } }));
@@ -26,6 +26,7 @@ beforeEach(() => {
   m.updateUser.mockResolvedValue({ error: null });
   m.signOut.mockResolvedValue({ error: null });
   m.sendEntryLink.mockResolvedValue("sent");
+  m.hasFreshProof.mockResolvedValue(true);
 });
 
 describe("choosing the password", () => {
@@ -46,6 +47,14 @@ describe("choosing the password", () => {
   });
 
   it("asks for a new link when this session has no fresh proof", async () => {
+    m.hasFreshProof.mockResolvedValue(false);
+    expect(await completeAccount("/app", {}, form("good-password"))).toMatchObject({ expired: true });
+    expect(m.signOut).not.toHaveBeenCalled();
+    expect(m.rpc).not.toHaveBeenCalled();
+    expect(m.updateUser).not.toHaveBeenCalled();
+  });
+
+  it("rechecks proof transactionally after closing other sessions", async () => {
     m.rpc.mockResolvedValue({ data: null, error: { message: "proof_required" } });
     expect(await completeAccount("/app", {}, form("good-password"))).toMatchObject({ expired: true });
     expect(m.updateUser).not.toHaveBeenCalled();
