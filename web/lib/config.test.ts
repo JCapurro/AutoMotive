@@ -1,6 +1,6 @@
 import { beforeEach, expect, it, vi } from "vitest";
 
-const mock = vi.hoisted(() => ({ rows: [] as { key: string; value: unknown }[], keys: [] as string[] }));
+const mock = vi.hoisted(() => ({ rows: [] as { key: string; value: unknown }[], keys: [] as string[], error: null as { message: string } | null }));
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/mercadopago-server", () => ({ paymentsEnabled: () => false }));
 vi.mock("@/lib/supabase/admin", () => ({
@@ -9,7 +9,7 @@ vi.mock("@/lib/supabase/admin", () => ({
       select: () => ({
         in: async (_column: string, keys: string[]) => {
           mock.keys = keys;
-          return { data: mock.rows.filter((r) => keys.includes(r.key)) };
+          return mock.error ? { data: null, error: mock.error } : { data: mock.rows.filter((r) => keys.includes(r.key)), error: null };
         },
       }),
     }),
@@ -21,6 +21,7 @@ import { webConfig } from "@/lib/config";
 beforeEach(() => {
   mock.rows = [];
   mock.keys = [];
+  mock.error = null;
 });
 
 // webConfig is wrapped in React's cache(), a no-op outside a request: each call reads again.
@@ -43,4 +44,14 @@ it("reads app_config.cost_estimator: null without the row or a valid as_of, part
   expect(cfg?.as_of).toBe("2026-10-30");
   expect(cfg?.blocks.fx).toEqual({ max_age_days: 3, source: "x", as_of: "2026-10-30" });
   expect(cfg?.blocks.dnrpa).toBeNull();
+});
+
+// Aviso de zona (docs/AVISO_ZONA.md): the switch, on only when enabled is true.
+it("reads app_config.zone_notice: off without the row, null when app_config can't be read", async () => {
+  expect((await webConfig()).zoneNotice).toEqual({ enabled: false });
+  expect(mock.keys).toContain("zone_notice");
+  mock.rows = [{ key: "zone_notice", value: { enabled: true } }];
+  expect((await webConfig()).zoneNotice).toEqual({ enabled: true });
+  mock.error = { message: "timeout" };
+  expect((await webConfig()).zoneNotice).toBeNull();
 });

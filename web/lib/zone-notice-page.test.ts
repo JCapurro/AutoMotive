@@ -12,6 +12,8 @@ const state = vi.hoisted(() => ({
   diagnosis: null as Record<string, unknown> | null,
   limitsError: false,
   firstRead: false,
+  /** app_config.zone_notice as webConfig reads it; null: unread. */
+  zoneSwitch: { enabled: true } as { enabled: boolean } | null,
 }));
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/cost-estimate-data", () => ({ costLinesFor: async () => new Map() }));
@@ -20,7 +22,7 @@ vi.mock("@/lib/search-collection-server", () => ({
   loadSearchCollection: async () => [{ id: "mercadolibre", name: "MercadoLibre", enabled: true, collectionState: "done", firstRead: state.firstRead }],
 }));
 vi.mock("@/lib/auth", () => ({ requireUser: async () => ({ id: "user", email: "persona@example.com" }) }));
-vi.mock("@/lib/config", () => ({ webConfig: vi.fn() }));
+vi.mock("@/lib/config", () => ({ webConfig: async () => ({ zoneNotice: state.zoneSwitch }) }));
 vi.mock("@/components/app/auto-refresh", () => ({ AutoRefresh: ({ every }: { every?: number }) => createElement("i", { "data-refresh": every }) }));
 vi.mock("@/components/app/free-result-limit", () => ({ FreeResultLimit: () => null }));
 vi.mock("@/components/app/search-actions", () => ({ FrequencySelect: () => null, PauseButton: () => null }));
@@ -76,6 +78,7 @@ beforeEach(() => {
   state.dismissed = [];
   state.limitsError = false;
   state.firstRead = false;
+  state.zoneSwitch = { enabled: true };
   state.diagnosis = { explanation: "Hay pocas publicaciones cerca.", suggestions: [], max_results: 3, created_at: "2026-10-30T13:00:00Z", dismissed_at: null };
 });
 
@@ -130,6 +133,26 @@ describe("the zone notice on the results page", () => {
     state.firstRead = false;
     state.answer = { state: "pending" };
     expect(await render()).not.toContain("data-refresh");
+  });
+  it("neither counts nor shows it with its switch off: the bot's card comes back, except for a zone kept", async () => {
+    state.zoneSwitch = { enabled: false };
+    state.answer = { state: "show", notice: NOTICE };
+    const html = await render();
+    expect(html).not.toContain('data-testid="zone-notice"');
+    expect(html).toContain('data-testid="low-results"');
+    expect(state.zoneNotice).not.toHaveBeenCalled();
+    state.dismissed = [[-34.6, -58.4, 30]];
+    expect(await render()).not.toContain('data-testid="low-results"');
+  });
+  it("waits when the switch can't be read: no notice, the bot's card stays, and it keeps asking during a first read", async () => {
+    state.zoneSwitch = null;
+    state.answer = { state: "show", notice: NOTICE };
+    state.firstRead = true;
+    const html = await render();
+    expect(html).not.toContain('data-testid="zone-notice"');
+    expect(html).toContain('data-testid="low-results"');
+    expect(html).toContain('data-refresh="15000"');
+    expect(state.zoneNotice).not.toHaveBeenCalled();
   });
   it("counts nothing without the plan's limits: the trial's quota and cap are unknown", async () => {
     state.limitsError = true;

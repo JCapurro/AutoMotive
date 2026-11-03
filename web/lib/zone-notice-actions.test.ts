@@ -14,6 +14,8 @@ const state = vi.hoisted(() => ({
   events: [] as { props: unknown }[],
   rpc: [] as [string, Record<string, unknown> | undefined][],
   counts: [{ all_count: 1 }] as unknown,
+  /** app_config.zone_notice as webConfig reads it; null: unread. */
+  zoneSwitch: { enabled: true } as { enabled: boolean } | null,
   /** Whether the event was recorded. */
   track: vi.fn<(...args: unknown[]) => Promise<boolean>>(async () => true),
   refresh: vi.fn(),
@@ -23,6 +25,7 @@ vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ refresh: state.refresh }));
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 vi.mock("@/lib/auth", () => ({ requireUser: vi.fn().mockResolvedValue({ id: "account" }) }));
+vi.mock("@/lib/config", () => ({ webConfig: async () => ({ zoneNotice: state.zoneSwitch }) }));
 vi.mock("@/lib/events", () => ({ track: state.track }));
 vi.mock("@/lib/meta-pixel-server", () => ({ queuePixel: vi.fn() }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
@@ -85,6 +88,7 @@ beforeEach(() => {
   state.events = [];
   state.rpc = [];
   state.counts = [{ all_count: 1 }];
+  state.zoneSwitch = { enabled: true };
   state.track.mockClear();
   state.refresh.mockClear();
   state.collection.mockReset();
@@ -226,6 +230,21 @@ describe("trackZoneNoticeShown", () => {
 });
 
 describe("zoneNoticeFor", () => {
+  it("answers none before reading anything with the switch off, which ends the card's polling", async () => {
+    state.zoneSwitch = { enabled: false };
+    expect(await zoneNoticeFor(7)).toEqual({ state: "none" });
+    expect([state.reads, state.rpc]).toEqual([[], []]);
+    expect(state.collection).not.toHaveBeenCalled();
+    // A notice already on screen still works: both of its buttons.
+    expect(await widenSearchZone(7, 100, "card", SHOWN)).toEqual({});
+    expect(await dismissZoneNotice(7, "page", ZONE)).toEqual({});
+    expect(tracked().map(([, name]) => name)).toEqual(["search_zone_widened", "search_profile_updated", "zone_notice_dismissed"]);
+  });
+  it("waits without reading the search when the switch can't be read, so the card asks again", async () => {
+    state.zoneSwitch = null;
+    expect(await zoneNoticeFor(7)).toEqual({ state: "pending" });
+    expect([state.reads, state.rpc]).toEqual([[], []]);
+  });
   it("waits for a search still being prepared without reading its sources", async () => {
     state.profile = { ...PROFILE, bootstrapped_at: null };
     expect(await zoneNoticeFor(7)).toEqual({ state: "pending" });

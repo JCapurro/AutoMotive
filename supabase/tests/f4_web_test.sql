@@ -1,7 +1,7 @@
 -- F4 web reads and writes (migration 20261001120000_f4_web.sql). Run with: supabase test db
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(39);
+select plan(40);
 
 insert into auth.users (instance_id, id, aud, role, email, created_at, updated_at) values
   ('00000000-0000-0000-0000-000000000000', '33333333-3333-3333-3333-333333333333',
@@ -48,6 +48,10 @@ insert into public.fx_rates (date, kind, rate, source) values ('2999-01-01', 'bl
 
 update public.profiles set telegram_user_id = 424242, telegram_chat_id = 424242
  where id = '33333333-3333-3333-3333-333333333333';
+
+-- The zone notice's switch (docs/AVISO_ZONA.md): without the row the web keeps the notice off.
+select is((select value from public.app_config where key = 'zone_notice'), '{"enabled": true}'::jsonb,
+          'zone notice: the migration turns its switch on');
 
 -- ---------------------------------------------------------------- user A
 set local role authenticated;
