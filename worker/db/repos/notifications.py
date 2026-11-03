@@ -35,6 +35,17 @@ _TOTAL_COST = ("public.plan_feature(sp.user_id, 'total_cost') AS total_cost, sp.
 _CONTACT_EMAIL = "public.plan_feature(sp.user_id, 'contact_email') AS contact_email, p.contact_template "
 
 
+def _locked(feature: str, alias: str) -> str:
+    """Juan, 03/11: a feature the user's plan lacks and Pro includes; the
+    alert email shows it locked, never its data (templates.email)."""
+    return (f"NOT public.plan_feature(sp.user_id, '{feature}') AND coalesce((SELECT c.value->'pro'->'{feature}' = 'true'::jsonb "
+            f"FROM public.app_config c WHERE c.key = 'plan_limits'), false) AS {alias} ")
+
+
+_MARGIN_LOCKED = _locked("dealer_margin", "margin_locked")
+_CONTACT_LOCKED = _locked("contact_email", "contact_locked")
+
+
 async def profile_audiences(profile_ids: Iterable[int]) -> dict[int, dict[str, Any]]:
     """Search profiles with their notification settings and the user's contacts
     (and, PAR-01, the total_cost flag and the search's zones; PRO-01, the
@@ -48,7 +59,7 @@ async def profile_audiences(profile_ids: Iterable[int]) -> dict[int, dict[str, A
             "SELECT sp.id AS profile_id, sp.name AS profile_name, sp.user_id, "
             "       public.effective_search_frequency(sp.user_id, sp.notification_frequency)::text AS frequency, "
             "       sp.notify_min_level::text AS min_level, sp.channels, " + _THRESHOLD + ", " + _TOTAL_COST + ", "
-            + _CONTACT_EMAIL + ", " + _MARGIN + ", "
+            + _CONTACT_EMAIL + ", " + _MARGIN + ", " + _MARGIN_LOCKED + ", " + _CONTACT_LOCKED + ", "
             + _CONTACT +
             "  FROM search_profiles sp JOIN profiles p ON p.id = sp.user_id "
             " WHERE sp.id = ANY(%s) AND public.search_access_active(sp.id)", (ids,))).fetchall()
@@ -102,7 +113,7 @@ async def listing_audiences(listing_ids: Iterable[int], *,
             "         m.id AS match_id, m.level::text AS level, m.score, m.price_ref, m.red_flags, m.margin_ref, "
             "         sp.id AS profile_id, sp.name AS profile_name, "
             "         public.effective_search_frequency(sp.user_id, sp.notification_frequency)::text AS frequency, "
-            "         sp.notify_min_level::text AS min_level, sp.channels, " + _THRESHOLD + ", " + _MARGIN +
+            "         sp.notify_min_level::text AS min_level, sp.channels, " + _THRESHOLD + ", " + _MARGIN + ", " + _MARGIN_LOCKED +
             "    FROM matches m JOIN search_profiles sp ON sp.id = m.search_profile_id "
             "   WHERE m.listing_id = ANY(%(ids)s) AND public.search_access_active(sp.id) "
             "     AND (%(before)s::timestamptz IS NULL OR m.generated_at < %(before)s OR NOT m.is_backfill) "
@@ -116,6 +127,7 @@ async def listing_audiences(listing_ids: Iterable[int], *,
             "       best.match_id, best.level, best.score, best.price_ref, best.red_flags, "
             "       best.profile_id, best.profile_name, best.threshold_pct, "
             "       best.margin_ref, coalesce(best.dealer_margin, false) AS dealer_margin, best.threshold_usd, "
+            "       coalesce(best.margin_locked, false) AS margin_locked, "
             "       coalesce(best.frequency, public.effective_search_frequency(p.id, 'immediate')::text) AS frequency, "
             "       coalesce(best.min_level, 'good') AS min_level, "
             "       coalesce(best.channels, "

@@ -241,6 +241,8 @@ class Content:
     notes: list[str] = field(default_factory=list)       # what explains it
     questions: list[str] = field(default_factory=list)   # for the seller (email only)
     contact_message: str | None = None                   # PRO-01: ready to send (email only)
+    margin_teaser: bool = False                          # Pro's margin, locked (email only)
+    contact_teaser: bool = False                         # Pro's ready message, locked (email only)
     sections: list[tuple[str, list[DigestItem]]] = field(default_factory=list)   # digest
     images: list[str] = field(default_factory=list)
     price: str | None = None
@@ -292,9 +294,13 @@ def content(n: Notification, links: Links, now: datetime, *, owner: str | None =
                 c.notes.insert(0, f"{copy.LEVEL_LABEL[match['level']]} · {match.get('score')}/100")
         if dealer := margin_line(p.get("margin")):
             c.lines.append(dealer)
+        else:
+            c.margin_teaser = p.get("margin_teaser") is True
         c.questions = list(p.get("questions") or [])
         if n.kind == "opportunity" and p.get("contact_message"):
             c.contact_message = str(p["contact_message"])
+        elif n.kind == "opportunity":
+            c.contact_teaser = p.get("contact_teaser") is True
     elif n.kind == "price_drop":
         drop = p.get("price_drop") or {}
         before, after = before_after(drop, listing)
@@ -303,6 +309,8 @@ def content(n: Notification, links: Links, now: datetime, *, owner: str | None =
         c.subject += f" (-{pct(drop.get('drop_pct') or 0)}%)"
         if dealer := margin_line(p.get("margin")):
             c.lines.append(dealer)
+        else:
+            c.margin_teaser = p.get("margin_teaser") is True
         if match.get("score") is not None:
             c.notes.insert(0, f"Opportunity Score {match['score']}/100")
     elif n.kind == "listing_gone":
@@ -432,6 +440,13 @@ def email(n: Notification, links: Links, now: datetime) -> EmailMessage:
     if c.vehicle:
         text.append(c.vehicle)
     text += c.lines
+    plans = links.plans()
+    see_plans = f" {copy.PRO_TEASER['cta']}: {plans}" if plans else ""
+    if c.margin_teaser:
+        # Juan, 03/11: Pro's margin in view, locked; the figure is a fixed placeholder.
+        text += [copy.PRO_TEASER["locked"].format(
+                     label=f"{copy.PRO_TEASER['margin_label']}: {copy.PRO_TEASER['margin_figure']}"),
+                 copy.PRO_TEASER["margin_note"] + see_plans]
     if c.questions:
         # With the block below, the footer («copiá el mensaje desde la ficha») would repeat it.
         text += ["", copy.QUESTIONS_TITLE] + [f"- {q}" for q in c.questions]
@@ -439,6 +454,9 @@ def email(n: Notification, links: Links, now: datetime) -> EmailMessage:
     if c.contact_message:
         text += ["", copy.CONTACT_MESSAGE["email_title"], *c.contact_message.splitlines(),
                  copy.CONTACT_MESSAGE["email_note"]]
+    elif c.contact_teaser:
+        text += ["", copy.PRO_TEASER["locked"].format(label=copy.CONTACT_MESSAGE["email_title"]),
+                 copy.PRO_TEASER["contact_note"] + see_plans]
     if c.link:
         text.append(f"{c.link.label}: {c.link.url}")
     for title, rows in c.sections:
@@ -458,7 +476,7 @@ def email(n: Notification, links: Links, now: datetime) -> EmailMessage:
                              detail_url=detail, app_url=app_url,
                              unsubscribe_url=unsubscribe, footer=footer,
                              unsubscribe_label=UNSUBSCRIBE_ALERTS,
-                             open_pixel_url=links.open_pixel("n", n.id))
+                             open_pixel_url=links.open_pixel("n", n.id), plans_url=plans)
     return EmailMessage(c.subject, "\n".join(text), html)
 
 

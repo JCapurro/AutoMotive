@@ -203,6 +203,16 @@ def margin_payload(margin_ref: Mapping[str, Any] | None, audience: Mapping[str, 
     return out
 
 
+def margin_teaser(margin_ref: Mapping[str, Any] | None, audience: Mapping[str, Any]) -> bool | None:
+    """Juan, 03/11: True when the plan lacks dealer_margin (Pro has it) and Pro
+    would see a figure here; the email shows the line locked. Nothing of the
+    margin itself reaches the payload."""
+    if not audience.get("margin_locked") or not isinstance(margin_ref, Mapping):
+        return None
+    out = margin.email_payload(margin_ref)
+    return True if out is not None and out.get("status") == margin.OK else None
+
+
 async def _guides() -> tuple[GuideIndex, int]:
     """PAR-04: the published guides' questions and how many a listing gets,
     as the scorer reads them (the email's questions follow matches'). Never
@@ -287,6 +297,9 @@ class Notifier:
             contact = (contact_message.render(a.get("contact_template"), listing.get("catalog_model"),
                                               listing.get("year"), questions)
                        if _opportunity(c) and a.get("contact_email") else None)
+            # Juan, 03/11: the other plans see both locked, never their data.
+            locked_margin = margin_teaser(ev.get("margin_ref"), a)
+            locked_contact = True if _opportunity(c) and a.get("contact_locked") else None
             # PRO-01, option C: «vendedor sin dato» in the opportunity email.
             seller_unknown = True if _opportunity(c) and strict_seller_unknown(ev.get("match_reasons")) else None
             events.append(Event(
@@ -295,7 +308,8 @@ class Notifier:
                 status=state.get("status"),
                 payload=payload(listing, ev, min_n=min_n, profile_name=a["profile_name"], order=order,
                                 questions=questions or None, price_track=track, total_cost=cost,
-                                margin=dealer, contact_message=contact, seller_unknown=seller_unknown)))
+                                margin=dealer, contact_message=contact, seller_unknown=seller_unknown,
+                                margin_teaser=locked_margin, contact_teaser=locked_contact)))
         return await self._commit(events, now=now)
 
     async def on_listing_events(self, listing_events: Iterable[Any], *, now: datetime | None = None,
@@ -336,7 +350,9 @@ class Notifier:
                     snapshot_id=e.snapshot_id, drop_pct=e.drop_pct,
                     payload=payload(listing, a, min_n=min_n, profile_name=a.get("profile_name"), order=order,
                                     price_drop=drop,
-                                    margin=margin_payload(a.get("margin_ref"), a) if e.kind == PRICE_DROP else None)))
+                                    margin=margin_payload(a.get("margin_ref"), a) if e.kind == PRICE_DROP else None,
+                                    margin_teaser=margin_teaser(a.get("margin_ref"), a)
+                                    if e.kind == PRICE_DROP else None)))
         return await self._commit(events, now=now)
 
     async def _commit(self, events: list[Event], *, now: datetime | None = None) -> list[int]:

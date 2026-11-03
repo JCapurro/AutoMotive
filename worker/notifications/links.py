@@ -17,6 +17,9 @@ and the user's unsubscribe link (F7, punto 7):
     <WEB_BASE_URL>/baja?t=<token>           → a page with a confirm button
     <WEB_BASE_URL>/api/baja?t=<token>       → one-click POST (RFC 8058)
 
+The other plans' alerts show Pro locked with a way to the public plans page,
+<WEB_BASE_URL>/planes: untracked and unsigned, it needs no session.
+
 With ALERT_LINK_SECRET, the email links that lead into the app (to=detail and
 /m/<id>) also carry &s=<signature>: the web may sign an email-only account in
 from them (docs/AUTENTICACION.md, «Links firmados»). Telegram links and links
@@ -100,6 +103,10 @@ class Links:
         """The 1 px image that marks an email opened: kind "n" (notifications)
         or "m" (lifecycle_emails). Unsigned: it only ever sets opened_at."""
         return f"{self.base_url}/o/{item_id}?{urlencode({'k': kind})}" if self.tracked else None
+
+    def plans(self) -> str | None:
+        """The public plans page, where the other plans' Pro preview leads (Juan, 03/11)."""
+        return f"{self.base_url}/planes" if self.tracked else None
 
     def unsubscribe(self, token: str | None) -> str | None:
         return f"{self.base_url}/baja?{urlencode({'t': token})}" if self.tracked and token else None
