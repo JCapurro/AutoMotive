@@ -57,11 +57,11 @@ Un solo bump de `SCORING_VERSION` por deploy (un único rescore masivo; evita ma
 
 | Orden | Ítem | Entrega |
 |---|---|---|
-| 1 | F-04 | PWA + suscripción + Ajustes sin envío; luego `channels/push.py` con endpoint falso; luego activación para Pro con respaldo email |
-| 2 | PRO-01 push | Canal por búsqueda, solo si F-04 lo justifica |
+| 1 | F-04 | **POSPUESTO (Juan, 03/11).** PWA + suscripción + Ajustes sin envío; luego `channels/push.py` con endpoint falso; luego activación para Pro con respaldo email |
+| 2 | PRO-01 push | Canal por búsqueda, solo si F-04 lo justifica (pospuesto con F-04, 03/11) |
 | 3 | PAR-02 resto | pHash + `duplicate_photos`, `private_many_listings` (tras F-02), `cross_source_duplicate` con backfill |
 | 4 | PAR-03 bloque del modelo + PRO-02 rotación | Ya con 4+ semanas de `market_stats`; gating `model_stats` |
-| 5 | PAR-04 | En cualquier hueco y en paralelo: tabla + prompt + panel admin con 5 guías piloto → páginas `/guias` + sitemap → preguntas en `seller_questions` |
+| 5 | PAR-04 | En cualquier hueco y en paralelo: tabla + prompt + panel admin con 5 guías piloto → páginas `/guias` + sitemap → preguntas en `seller_questions`. **Arrancado el 03/11** (Juan): [diseño](superpowers/specs/2026-11-03-par04-guias-design.md), rama `claude/par04-guias` |
 
 ### Fase 4 · Validación comercial primero
 
@@ -84,7 +84,7 @@ Toda migración debe ser mayor a `20261118130000` y hay que releer `max(version)
 9. PAR-04: `model_guides`, CHECK de `llm_jobs.kind`, solución al `user_id` NOT NULL
 10. F-01, PAR-05, PRO-05, PRO-03, PRO-04
 
-Pendiente de resolver antes de PAR-04: `20261107130000_timing_chain_catalog.sql` sigue NOT APPLIED.
+Pendiente de resolver antes de PAR-04: `20261107130000_timing_chain_catalog.sql` sigue NOT APPLIED. Al 03/11 PAR-04 se diseñó para **no** aplicarla ni depender de ella (el prompt, la página y las preguntas de la guía no leen `vehicle_catalog.timing_belt`); sigue pendiente de la revisión de Juan, aparte. Las migraciones de PAR-04 van desde `20261204120000` (producción en `20261203120200`).
 
 ## 4. Conflictos de archivos (qué serializar)
 
@@ -150,3 +150,8 @@ Producción: el 30/10 `max(version)` era `20261118130000`. Con OK de Juan se apl
 - **PRO-01:** el filtro estricto por tipo de vendedor es **solo Pro**; el plan Particular conserva la preferencia blanda. Mensaje listo para copiar: corto, de vos, cordial y directo (3–4 líneas con las preguntas del aviso); plantilla editable en Ajustes; nunca se envía solo.
 - **PRO-02:** acondicionamiento **5 % con mínimo USD 300**; umbral por margen con mínimo **USD 500**; OK al bump de `SCORING_VERSION` (un rescore, sin reenviar alertas). Todo **solo Pro**.
 - **PAR-01:** solo números reales, basados en documentación oficial, con fecha y fuente. Si un valor no se conoce con certeza, se propone un **rango**, se dice explícitamente y el rango se lleva al cálculo final (el costo total se muestra como rango). El cálculo **reemplaza** el aviso fijo «8–10 %».
+
+## 9. Decisiones de Juan del 03/11/2026
+
+- **F-04 (push): POSPUESTO.** No se arranca en este ciclo; PRO-01 push queda pospuesto con él.
+- **PAR-04: se arranca.** Diseño en [2026-11-03-par04-guias-design.md](superpowers/specs/2026-11-03-par04-guias-design.md). La generación con IA queda apagada por config hasta que Juan apruebe proveedor y tope.

@@ -88,6 +88,8 @@ Criterios de aceptación:
 
 ### F-04 · Canal push
 
+**Estado al 03/11:** **POSPUESTO** por decisión de Juan (03/11). No se arranca en este ciclo; PRO-01 sigue sin push. Se retoma cuando Juan lo pida.
+
 `notifications.channel` ya admite `push` como valor del enum, pero no hay manifest, service worker ni suscripciones. El email tiene minutos de latencia y las agencias miran el celular.
 
 Reutilizar `worker/notifications/{engine,service,dispatch}.py`, `channels/`, `search_profiles.channels`, `/app/settings`, `web/proxy.ts`.
@@ -165,6 +167,8 @@ Criterios de aceptación:
 - Tests: snapshots de email con 0, 1 y 3 bajas; pgTAP de la consulta de tendencia.
 
 ### PAR-04 · Guías por modelo y preguntas específicas
+
+**Estado al 03/11:** en diseño, arrancado por decisión de Juan (03/11) en la rama `claude/par04-guias` ([diseño](superpowers/specs/2026-11-03-par04-guias-design.md)), esperando su aprobación; sin código, sin pushear y nada aplicado en producción. La generación con IA queda **apagada** por config (`app_config.llm_limits.model_guide.enabled = false`) hasta que Juan apruebe proveedor y tope; el admin puede crear y editar guías a mano. `llm_jobs.user_id` NOT NULL se resuelve con jobs pedidos por el admin (no de sistema). No depende de `20261107130000_timing_chain_catalog.sql`, que sigue NOT APPLIED. Pendientes de Juan: proveedor, tope diario y mensual, tono «Guía orientativa» y revisión del piloto de 5 y de la tanda de 30 (ver «Preguntas para Juan» del diseño).
 
 Dolor: compra a ciegas, no sabe qué revisar de ese modelo y esa generación.
 
