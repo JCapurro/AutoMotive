@@ -127,7 +127,7 @@ def _skip(reason: str) -> int:
 async def _send(channel: Any, row: Mapping[str, Any], links: Links, now: datetime,
                 context: Mapping[str, Any]) -> SendResult:
     msg = templates.lifecycle_email(row, links, now, offer=context.get("offer"), limits=context.get("limits"),
-                                    remarketing=context.get("remarketing"))
+                                    remarketing=context.get("remarketing"), sell_intent=context.get("sell_intent"))
     try:
         return await channel.send_message(row["email"], msg, idempotency_key=f"lifecycle-{row['id']}",
                                           unsubscribe_token=row["unsubscribe_token"])
@@ -181,7 +181,8 @@ async def run_lifecycle_emails(channel: Any, links: Links, *, now: datetime | No
     rows = await repo.pending(cfg["max_per_day"]) if cfg["max_per_day"] > 0 else []
     context = ({"offer": await db.get_config("pro_offer", None),
                 "limits": await db.get_config("plan_limits", None),
-                "remarketing": await db.get_config("remarketing", None)} if rows else {})
+                "remarketing": await db.get_config("remarketing", None),
+                "sell_intent": await db.get_config("sell_intent", None)} if rows else {})
     window = timedelta(hours=cfg["window_hours"])
     sent = 0
     for row in rows:

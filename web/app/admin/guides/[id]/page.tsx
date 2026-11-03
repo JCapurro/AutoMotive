@@ -23,7 +23,7 @@ export default async function GuideAdmin({ params }: PageProps<"/admin/guides/[i
   if (!/^\d+$/.test(id)) notFound();
   const data = await loadGuide(Number(id));
   if (!data) notFound();
-  if (data.missing) return <p className="rounded-xl bg-muted p-4 text-sm">Falta aplicar la migración <code>20261204120000_par04_model_guides</code>.</p>;
+  if (data.missing) return <p className="rounded-xl bg-muted p-4 text-sm">Falta aplicar la migración <code>20261205120000_par04_model_guides</code>.</p>;
   const { guide, job, timingBelt, generation } = data;
   const [provider, prompt] = (guide.llm_version ?? "").split("|");
   const origin = guide.origin === "llm"

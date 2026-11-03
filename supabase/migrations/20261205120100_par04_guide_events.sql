@@ -11,7 +11,7 @@
 --   (its latest definition) with the three guide events in the closed list of
 --   human_events. Same signature, security invoker, empty search_path and grants.
 --
--- Needs 20261204120000_par04_model_guides. Applies on an empty base after the
+-- Needs 20261205120000_par04_model_guides. Applies on an empty base after the
 -- earlier migrations; the web of main does not depend on it.
 
 create function public.log_guide_event(p_name text, p_slug_make text, p_slug_model text)

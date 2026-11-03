@@ -5,7 +5,7 @@ import { cache } from "react";
 import { isSlug, PUBLIC_GUIDE_COLUMNS, type PublicGuide, type PublicGuideRow, sortGenerations, toPublicGuide } from "@/lib/guides";
 import { createPublicClient } from "@/lib/supabase/public";
 
-/** A base without 20261204120000_par04_model_guides (the web of main runs on it). */
+/** A base without 20261205120000_par04_model_guides (the web of main runs on it). */
 export function missingTable(error: { code?: string; message?: string } | null | undefined): boolean {
   if (!error) return false;
   return error.code === "PGRST205" || error.code === "42P01" || (/model_guides/.test(error.message ?? "") && /does not exist|could not find/i.test(error.message ?? ""));

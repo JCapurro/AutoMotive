@@ -57,7 +57,7 @@ export default async function GuidesAdmin() {
     return (
       <>
         <PageHeader title="Guías" />
-        <p className="rounded-xl bg-muted p-4 text-sm">Falta aplicar la migración <code>20261204120000_par04_model_guides</code>.</p>
+        <p className="rounded-xl bg-muted p-4 text-sm">Falta aplicar la migración <code>20261205120000_par04_model_guides</code>.</p>
       </>
     );
   }

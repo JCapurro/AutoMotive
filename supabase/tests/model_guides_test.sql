@@ -1,4 +1,4 @@
--- PAR-04 (migrations 20261204120000_par04_model_guides, 20261204120100_par04_guide_events,
+-- PAR-04 (migrations 20261205120000_par04_model_guides, 20261204120100_par04_guide_events,
 -- 20261204120200_par04_question_origins, 20261204120300_par04_guide_review_fixes,
 -- 20261204120400_par04_guide_publish_guards): who reads model_guides, who writes,
 -- what can be published, the guide jobs in llm_jobs and log_guide_event.

@@ -1,6 +1,6 @@
 # PAR-04 · Guías por modelo y preguntas específicas
 
-Ítem PAR-04 del [backlog de producto](../../BACKLOG_PRODUCTO_2026-10.md) y Fase 3, fila 5, del [plan por fases](../../PLAN_FASES_BACKLOG_PRODUCTO_2026-10.md) (nota 5 de la sección 1 y «Pendiente» de la sección 3). Fecha: 2026-11-03. Rama `claude/par04-guias`, creada desde `origin/main` en `187096f`. Estado: **implementado en la rama, esperando que Juan lo apruebe**. Hay código (migraciones `20261204120000` a `20261204120400`, worker y web; ver «Archivos»), nada se pusheó y nada se aplicó en producción. Al publicar la primera guía cambian `matches.seller_questions` y `contact_questions` de los avisos de ese modelo.
+Ítem PAR-04 del [backlog de producto](../../BACKLOG_PRODUCTO_2026-10.md) y Fase 3, fila 5, del [plan por fases](../../PLAN_FASES_BACKLOG_PRODUCTO_2026-10.md) (nota 5 de la sección 1 y «Pendiente» de la sección 3). Fecha: 2026-11-03. Rama `claude/par04-guias`, creada desde `origin/main` en `187096f`. Estado: **implementado en la rama, esperando que Juan lo apruebe**. Hay código (migraciones `20261205120000` a `20261204120400`, worker y web; ver «Archivos»), nada se pusheó y nada se aplicó en producción. Al publicar la primera guía cambian `matches.seller_questions` y `contact_questions` de los avisos de ese modelo.
 
 Decisión de Juan del 03/11: el push (F-04) queda **pospuesto**; se arranca PAR-04. PAR-04 no depende de F-04.
 
@@ -208,16 +208,16 @@ PAR-04 **no aplica** `20261107130000_timing_chain_catalog.sql` ni depende de ell
 - `/guias/<marca>/<modelo>`: el error de tabla inexistente (`PGRST205` / `42P01`) se trata como «no existe» → 404.
 - `/guias`: «Todavía no hay guías publicadas».
 - `sitemap.ts`: pasa a ser `async` con `revalidate = 3600`; si la consulta falla, devuelve las entradas estáticas de siempre.
-- `/admin/guides`: «Falta aplicar la migración `20261204120000_par04_model_guides`» y nada más.
+- `/admin/guides`: «Falta aplicar la migración `20261205120000_par04_model_guides`» y nada más.
 - `log_guide_event` inexistente: el componente cliente ignora el error.
 - La ficha y el inspector no leen `question_origins` si no existe (el select se arma sin la columna y el inspector muestra las preguntas sin origen).
 - Worker: decisión 8.
 
 ## Migraciones
 
-Todas con versión ≥ `20261204120000` (producción está en `20261203120200`), aplicables desde una base vacía (después de toda la cadena) y con inserts idempotentes. Encabezado `--` que cita el backlog y PAR-04. **No se aplican en producción** sin el OK de Juan.
+Todas con versión ≥ `20261205120000` (producción está en `20261204120000`), aplicables desde una base vacía (después de toda la cadena) y con inserts idempotentes. Encabezado `--` que cita el backlog y PAR-04. **No se aplican en producción** sin el OK de Juan.
 
-1. `20261204120000_par04_model_guides.sql`: `model_guides` con RLS, grants por columna y trigger; `admin_save_model_guide`, `admin_set_model_guide_status`, `admin_guide_candidates`; CHECK de `llm_jobs.kind` con `model_guide`, CHECK de input, política «enqueue own» con `kind <> 'model_guide'`, `enforce_llm_rate_limit` que ignora `model_guide`, `admin_request_model_guide`, índice de cache; `llm_limits.model_guide` (merge sin pisar) y `app_config.model_guides` (`{"pilot": []}`).
+1. `20261205120000_par04_model_guides.sql`: `model_guides` con RLS, grants por columna y trigger; `admin_save_model_guide`, `admin_set_model_guide_status`, `admin_guide_candidates`; CHECK de `llm_jobs.kind` con `model_guide`, CHECK de input, política «enqueue own» con `kind <> 'model_guide'`, `enforce_llm_rate_limit` que ignora `model_guide`, `admin_request_model_guide`, índice de cache; `llm_limits.model_guide` (merge sin pisar) y `app_config.model_guides` (`{"pilot": []}`).
 2. `20261204120100_par04_guide_events.sql`: `log_guide_event` y los tres eventos en `admin_decision_metrics.human_events` (partiendo de su última definición, `20261203120100_par02_decision_metrics_duplicate.sql`).
 3. `20261204120200_par04_question_origins.sql`: `matches.question_origins jsonb`.
 4. `20261204120300_par04_guide_review_fixes.sql` (arreglos de la revisión): `model_guides.content_updated_at` con su trigger; `model_guide_withdraw_questions` y su uso al despublicar y al guardar una guía publicada; `guard_match_access` que deja pasar el retiro; `log_guide_event` con tope por guía (`app_config.model_guides.events`).

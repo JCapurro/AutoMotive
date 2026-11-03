@@ -20,7 +20,7 @@
 --   (app_config.model_guides.events, 30 and 300 by default). Past it the call
 --   does nothing and says nothing; the anon key cannot fill public.events.
 --
--- Needs 20261204120000..20261204120200. Does not apply or depend on
+-- Needs 20261205120000..20261204120200. Does not apply or depend on
 -- 20261107130000_timing_chain_catalog.sql. Applies on an empty base after the
 -- earlier migrations; the web of main does not read any of it.
 
@@ -133,7 +133,7 @@ create index if not exists matches_question_origins_idx on public.matches using 
   where question_origins is not null;
 
 -- ---------------------------------------------------------------------------
--- Admin writes (as in 20261204120000, plus the withdrawal)
+-- Admin writes (as in 20261205120000, plus the withdrawal)
 -- ---------------------------------------------------------------------------
 
 create or replace function public.admin_save_model_guide(
@@ -237,7 +237,7 @@ begin
 end;
 $$;
 
--- As in 20261204120000, comparing content_updated_at (not updated_at) with generated_at.
+-- As in 20261205120000, comparing content_updated_at (not updated_at) with generated_at.
 create or replace function public.admin_request_model_guide(p_guide_id bigint, p_force boolean, p_actor_id uuid)
 returns bigint
 language plpgsql security definer set search_path = '' as $$

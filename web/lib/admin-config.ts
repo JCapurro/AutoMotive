@@ -112,6 +112,13 @@ export const ModelGuidesConfigInput = z.object({
   pilot: z.array(z.number().int().positive()).max(100),
   events: z.object({ per_guide_minute: z.number().int().min(1).max(100_000), per_guide_hour: z.number().int().min(1).max(100_000) }).passthrough().optional(),
 }).passthrough();
+/** PAR-05, Prueba B: app_config.sell_intent (lib/sell-intent.ts, worker/notifications/templates.py). */
+export const SELL_INTENT_CONFIG_MESSAGE = "sell_intent necesita ask y agencies_contact true/false, y since una fecha ISO (AAAA-MM-DD o con hora).";
+export const SellIntentConfigInput = z.object({
+  ask: z.boolean(),
+  agencies_contact: z.boolean(),
+  since: z.string().refine((v) => /^\d{4}-\d{2}-\d{2}/.test(v) && Number.isFinite(Date.parse(v))),
+}).passthrough();
 
 export function configObject(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -156,6 +163,7 @@ export function validateConfigChange(key: string, value: unknown, current: unkno
   if (key === "model_guides" && !ModelGuidesConfigInput.safeParse(value).success) return MODEL_GUIDES_MESSAGE;
   if (key === "seller_classification" && !SellerClassificationInput.safeParse(value).success) return SELLER_CLASSIFICATION_MESSAGE;
   if (key === "dealer_margin" && !DealerMarginInput.safeParse(value).success) return DEALER_MARGIN_MESSAGE;
+  if (key === "sell_intent" && !SellIntentConfigInput.safeParse(value).success) return SELL_INTENT_CONFIG_MESSAGE;
   // PAR-01: every block with source and as_of, valid ranges and scales (lib/cost-estimator.ts, the parser's own rules).
   if (key === "cost_estimator") return costEstimatorProblem(value);
   if (key === "risk") {
@@ -213,6 +221,9 @@ export function configFieldLabel(key: string, path: string): string {
   if (key === "llm_limits") {
     const label = ({ per_user_hour: "Jobs por usuario y hora", email_only_per_user_hour: "Jobs por hora (cuentas solo email)", "model_guide.enabled": "Guías: generación con IA prendida", "model_guide.per_day": "Guías: borradores por día", "model_guide.per_month": "Guías: borradores por mes", "model_guide.queued_ttl_minutes": "Guías: minutos en cola", "model_guide.timeout_seconds": "Guías: segundos por borrador", "model_guide.max_questions_in_listing": "Guías: preguntas por aviso (hasta 3)" } as Record<string, string>)[path];
     if (label) return label;
+  }
+  if (key === "sell_intent") {
+    return ({ ask: "Pregunta «¿Tenés que vender tu auto?» (bienvenida y ficha)", agencies_contact: "Casilla «agencias me contacten» y su línea en Privacidad (solo con OK de Juan)", since: "Inicio de la prueba (métricas)" } as Record<string, string>)[path] ?? path;
   }
   if (key === "lifecycle_emails") {
     if (path.startsWith("kinds.")) return LIFECYCLE_KINDS[path.slice(6) as keyof typeof LIFECYCLE_KINDS]?.label ?? path;
