@@ -27,4 +27,7 @@ it("PAR-05: the agencies line stays hidden until its flag is on", async () => {
   const on = renderToStaticMarkup(await PrivacyPage());
   expect(on).toContain(SELL_INTENT_PRIVACY_LINE);
   expect(on).toContain("No compartimos tus datos con ninguna agencia sin que lo marques");
+  // The date moves with the line (approved by Juan, 03/11).
+  expect(off).toContain("2 de noviembre de 2026");
+  expect(on).toContain("3 de noviembre de 2026");
 });

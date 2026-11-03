@@ -14,10 +14,11 @@ export const dynamic = "force-dynamic";
 // F7, punto 7 (Ley 25.326). A first version for the pilot: have it reviewed
 // before a public launch.
 export default async function PrivacyPage() {
-  // The agencies line is a draft for Juan: it shows only with the same flag as the checkbox.
+  // The agencies line (approved by Juan, 03/11) shows only with the same flag as the checkbox.
   const { sellIntent } = await webConfig();
   return (
-    <LegalPage title="Política de privacidad" updated="2 de noviembre de 2026">
+    // The agencies line was approved by Juan on 03/11: the date moves with it.
+    <LegalPage title="Política de privacidad" updated={sellIntent.agenciesContact ? "3 de noviembre de 2026" : "2 de noviembre de 2026"}>
       <p>
         Ese Auto es un servicio en etapa de piloto que monitorea publicaciones de autos usados y te avisa cuando
         aparece una que coincide con tu búsqueda. Esta política explica qué datos tuyos usamos, para qué y cómo
