@@ -61,7 +61,7 @@ Juan, 02/11/2026: una búsqueda no se amplía sola a todo el país. Si su zona c
 
 ## Medición
 
-Siete días contra la semana del 26/10, leídos el día 8. Sin cuentas admin.
+Siete días contra la semana del 26/10, leídos el día 8 y contados desde que están las tres partes: la migración, la web y el worker. Sin cuentas admin.
 
 - **Cohorte**, fija al crear la búsqueda: autoguardadas del modo asistido cuyo borrador no traía zona.
   - Se sacan de `search_profile_created` con `mode = 'assisted_auto'`, unido a `llm_jobs` por `llm_job_id`, con `drafts[0].values.location` y `locations` vacíos.
@@ -69,6 +69,7 @@ Siete días contra la semana del 26/10, leídos el día 8. Sin cuentas admin.
 - **Principal:** 4 resultados o más a las 24 h de creada. Base 57/102 (56%); objetivo 65% o más. Con 0 resultados a las 24 h: 30/102.
 - **Adelantada:** 30% o más de los avisos de la tarjeta seguidos de una ampliación dentro de los 10 minutos. El bot logró 0 de 52.
 - **Resguardo:** cupo de la prueba lleno dentro de la hora de creada. Base 18/81, sobre las búsquedas creadas desde el 29/10 11:33 UTC; tiene que quedar en 30% o menos.
+- **Ojo al comparar:** el mismo cambio del worker hace que toda búsqueda nueva complete su backfill de 30 días. Antes, un lote que llegaba primero lo cortaba. Eso sube la principal y el gasto del cupo aunque nadie toque el aviso. Para separar los dos efectos, comparar también las búsquedas de la cohorte que no vieron el aviso.
 - **Corte de `preview_search`:** _fecha y hora UTC en que se aplique la migración en producción_. Desde ahí cambia el significado de `assisted_review_shown.preview_count`.
 
 ## Cambios que acompañan
@@ -86,8 +87,10 @@ Siete días contra la semana del 26/10, leídos el día 8. Sin cuentas admin.
 
 ## Efectos conocidos
 
-- Pasar a todo el país puede mover la ciudad de Facebook del modelo.
-- Ampliar llena el cupo de la prueba con el rematch, porque `admit_free_result` corre con cada match, también los de backfill. «Todo el país» puede llenarlo de una vez. Por eso es el resguardo de la medición.
+- Pasar a todo el país puede mover la ciudad de Facebook del modelo. La elige la búsqueda más vieja con lugar entre las que siguen ese modelo, de cualquier cuenta (`pipeline/crawl.py`).
+- Ampliar gasta cupo de la prueba con el rematch, porque `admit_free_result` corre con cada match, también los de backfill. El rematch va de lo más nuevo a lo más viejo, no por cercanía, y «Todo el país» puede llenar el cupo de una vez. El cupo es por cuenta y no se repone: lleno, la cuenta no recibe más alertas de publicaciones nuevas en ninguna de sus búsquedas. Por eso es el resguardo de la medición. No hay interruptor: si el resguardo se pasa, la salida es revertir la web.
+- Una búsqueda nueva queda lista solo con su rematch. Si el rematch falla siempre, la búsqueda sigue en preparación (sin alertas, sin bot y sin aviso), y `run_pending` la reintenta cada 15 s con una fila nueva en `pipeline_errors`. Antes, el primer lote la daba por lista sin su backfill.
+- El umbral de 3 está fijo en el código (`ZONE_NOTICE_MAX_RESULTS`) y no sigue a `app_config.low_results.max_results`: si se cambia ahí, el aviso y el bot dejan de coincidir.
 
 ## Fuera de alcance
 
