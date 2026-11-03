@@ -12,6 +12,7 @@ import { FrequencySelect, PauseButton } from "@/components/app/search-actions";
 import { SearchCriteriaSummary } from "@/components/app/search-criteria-summary";
 import { SearchPreparation } from "@/components/app/search-preparation";
 import { SortSelect } from "@/components/app/sort-select";
+import { ZoneNoticePanel } from "@/components/app/zone-notice";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth";
@@ -29,6 +30,8 @@ import { effectiveSort, type Sort, sortsFor } from "@/lib/sorts";
 import { createClient } from "@/lib/supabase/server";
 import type { Filters, Preferences } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { SEARCH_TITLE_ID, sameZone, zoneOf } from "@/lib/zone-notice";
+import { allCount, dismissedZones, zoneNotice } from "@/lib/zone-notice-server";
 
 export const metadata: Metadata = { title: "Resultados" };
 
@@ -85,7 +88,7 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
   const margin = await marginAccess(supabase);
   const sort: Sort = effectiveSort(query.s, margin != null);
   const profileId = Number(id);
-  const [{ data: profile }, { data: results }, { data: counts }, follow, { data: planLimits }, { data: sources }, { data: diagnosis }] = await Promise.all([
+  const [{ data: profile }, { data: results }, { data: counts }, follow, { data: planLimits, error: limitsError }, { data: sources }, { data: diagnosis }, dismissed] = await Promise.all([
     supabase.from("search_profiles").select("*").eq("id", profileId).maybeSingle(),
     supabase.rpc("search_results", {
       p_profile_id: profileId,
@@ -100,6 +103,8 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
     supabase.from("sources").select("id,name,enabled").order("priority"),
     // Bot de pocos resultados; null (no row, or a database without the table) hides the card.
     supabase.from("search_diagnoses").select("explanation,suggestions,max_results,created_at,dismissed_at").eq("search_profile_id", profileId).maybeSingle(),
+    // Aviso de zona: the zones «Dejar así» hid.
+    dismissedZones(supabase, profileId),
   ]);
   if (!profile) notFound();
 
@@ -117,10 +122,14 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
   // Juan, 02/11: without Pro, «Mayor margen estimado» in view and disabled, when Pro has it.
   const lockedSorts: Sort[] = margin == null && withoutPro(access) && (await webConfig()).planLimits.pro.dealerMargin ? ["margin"] : [];
   // The diagnosis still applies: not hidden, the search still short of results
-  // and not prepared again (edited filters) since it was written.
+  // and not prepared again (edited filters) since it was written. A zone kept
+  // with the zone notice's «Dejar así» hides it too: on the card that happens
+  // before the bot writes it (docs/AVISO_ZONA.md).
+  const kept = dismissed?.some((zone) => sameZone(zone, zoneOf(profile))) ?? false;
   const showDiagnosis =
     diagnosis != null &&
     !diagnosis.dismissed_at &&
+    !kept &&
     !needsPreparation &&
     (count.all_count ?? 0) <= diagnosis.max_results &&
     (!profile.bootstrapped_at || Date.parse(profile.bootstrapped_at) <= Date.parse(diagnosis.created_at));
@@ -136,7 +145,8 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
   // PAR-03: the drops of the listings on this page only, in one call; on error, no drop line.
   // PAR-01: the total cost line, with the plan's flag only (one listings query for the page).
   // PRO-02: the margin line for Pro; the other plans, where it would be (Juan, 02/11).
-  const [tracks, costLines, marginLines, marginTeasers] = await Promise.all([
+  // Aviso de zona: counted only when nothing else rules it out (lib/zone-notice-server.ts).
+  const [tracks, costLines, marginLines, marginTeasers, zone] = await Promise.all([
     fetchPriceTracks(
       (fn, args) => supabase.rpc(fn, args),
       shown.map((card) => card.listing_id).filter((lid): lid is number => lid != null),
@@ -144,6 +154,10 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
     costLinesFor(supabase, user.id, shown),
     marginLinesFor(supabase, margin, shown),
     marginTeasersFor(user.id, margin, shown),
+    // Without the plan's limits the trial's quota and cap are unknown: not now.
+    limitsError
+      ? { state: "pending" as const }
+      : zoneNotice(supabase, { profile, count: allCount(counts), access, sources: collectionSources, dismissed }),
   ]);
   const href = (next: Partial<{ f: Filter; s: Sort; p: number }>) => {
     const qs = new URLSearchParams({ f: next.f ?? filter, s: next.s ?? sort });
@@ -154,9 +168,15 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
   return (
     <div className="space-y-5">
       {!pending && retryCollection ? <AutoRefresh every={10_000} /> : null}
+      {/* Aviso de zona: once the preparation's refresher goes, a first read's batch is still being
+          matched (or a source hasn't started), and the page asks again until the notice can decide. */}
+      {!pending && !retryCollection && zone.state === "pending" && collectionSources?.some((source) => source.firstRead)
+        ? <AutoRefresh every={15_000} />
+        : null}
       <header className="space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <h1 className="type-heading flex min-w-0 max-w-full items-center gap-2 text-[28px] leading-tight">
+          {/* Where focus goes after the zone notice's buttons, which go with the refresh. */}
+          <h1 id={SEARCH_TITLE_ID} tabIndex={-1} className="type-heading flex min-w-0 max-w-full items-center gap-2 text-[28px] leading-tight outline-none">
             <span className="truncate">{profile.name.trim() || describeVehicle(filters) || "Búsqueda"}</span>
             {!profile.enabled ? <Badge variant="secondary">Pausada</Badge> : null}
           </h1>
@@ -194,7 +214,10 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
         </p>
       ) : null}
 
-      {showDiagnosis ? (
+      {/* The zone notice takes the bot's place while it shows: both would say «widen the zone». */}
+      {zone.state === "show" ? (
+        <ZoneNoticePanel notice={zone.notice} />
+      ) : showDiagnosis ? (
         <LowResultsNotice
           profileId={profileId}
           explanation={diagnosis.explanation}

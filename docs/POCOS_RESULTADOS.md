@@ -17,7 +17,7 @@ Se rehace si cambian los filtros (fingerprint) o pasados `recheck_days` (7). Si 
 1. Toma el mercado del modelo: publicaciones activas de los últimos 30 días, todas las fuentes.
 2. Lo pasa por los filtros duros del matching (`intelligence/low_results.py`): por filtro, cuántas descarta (`fails`) y cuántas descarta él solo (`only`, lo que sumaría aflojarlo); además años, precios, km y fuentes.
 3. El LLM (`explain_low_results`, prompt `llm/prompts/explain_low_results.md`) escribe la explicación y hasta 3 sugerencias. Si falla, se usa un texto fijo con los mismos números.
-4. Se guarda en `search_diagnoses` y se avisa una vez por juego de filtros por los canales de la búsqueda (Telegram, email). La web lo muestra en `/app/searches/<id>` como «¿Por qué hay pocos resultados?»; la persona puede ocultarlo.
+4. Se guarda en `search_diagnoses` y se avisa una vez por juego de filtros por los canales de la búsqueda (Telegram, email). La web lo muestra en `/app/searches/<id>` como «¿Por qué hay pocos resultados?»; la persona puede ocultarlo. Mientras se muestra el aviso de zona ([AVISO_ZONA.md](AVISO_ZONA.md)), este lo reemplaza; ampliar la zona o «Dejar así» lo descartan, y para una zona que se dejó así no se muestra ni se avisa.
 
 ## Configuración
 

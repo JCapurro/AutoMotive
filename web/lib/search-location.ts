@@ -7,6 +7,11 @@ export type DetectedLocation = {
 
 const round = (value: number) => Math.round(value * 100) / 100;
 
+/** The labels a detected place is saved with (filters.location_label): the zone notice tells them apart. */
+export const APPROXIMATE_SUFFIX = " (zona aproximada)";
+export const APPROXIMATE_LABEL = "Mi zona aproximada";
+export const DEVICE_LABEL = "Mi ubicación actual";
+
 /** Vercel supplies this estimate with the request; no external lookup or IP storage. */
 export function approximateLocationFromHeaders(headers: Pick<Headers, "get">): DetectedLocation | null {
   if (headers.get("x-vercel-ip-country") !== "AR") return null;
@@ -21,7 +26,7 @@ export function approximateLocationFromHeaders(headers: Pick<Headers, "get">): D
     city = decodeURIComponent(headers.get("x-vercel-ip-city") ?? "").trim();
   } catch { /* A malformed city name must not prevent using valid coordinates. */ }
   return {
-    label: (city ? `${city} (zona aproximada)` : "Mi zona aproximada").slice(0, 80),
+    label: (city ? `${city}${APPROXIMATE_SUFFIX}` : APPROXIMATE_LABEL).slice(0, 80),
     lat: round(lat),
     lon: round(lon),
     approximate: true,
@@ -54,7 +59,7 @@ function positionAttempt(geolocation: Geolocation, highAccuracy: boolean, timeou
             return;
           }
           finish({ location: {
-            label: "Mi ubicación actual", lat: round(latitude), lon: round(longitude), approximate: false,
+            label: DEVICE_LABEL, lat: round(latitude), lon: round(longitude), approximate: false,
           } });
         },
         (error) => finish({ location: null, reason: error.code === 1 ? "denied" : error.code === 3 ? "timeout" : "unavailable" }),

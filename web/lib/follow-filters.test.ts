@@ -11,6 +11,9 @@ vi.mock("server-only", () => ({}));
 vi.mock("@/lib/auth", () => ({ requireUser: async () => ({ id: "account" }) }));
 vi.mock("@/lib/config", () => ({ webConfig: async () => ({ proOffer: {}, automaticPayments: false, commercialPilot: false, planLimits: { pro: { dealerMargin: true } } }) }));
 vi.mock("@/lib/search-collection-server", () => ({ loadSearchCollection: async () => [] }));
+// Aviso de zona: its own page test (lib/zone-notice-page.test.ts).
+vi.mock("@/lib/zone-notice-server", () => ({ allCount: () => null, dismissedZones: async () => [], zoneNotice: async () => ({ state: "none" }) }));
+vi.mock("@/components/app/zone-notice", () => ({ ZoneNoticePanel: () => null }));
 vi.mock("@/components/app/auto-refresh", () => ({ AutoRefresh: () => null }));
 vi.mock("@/components/app/search-actions", () => ({ FrequencySelect: () => null, PauseButton: () => null }));
 vi.mock("@/components/app/sort-select", () => ({ SortSelect: () => null }));

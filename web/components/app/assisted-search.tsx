@@ -8,6 +8,7 @@ import { toast } from "sonner";
 
 import { type SaveResult, finishAssisted, saveSearch, startAssisted, trackAssistedView } from "@/app/app/searches/actions";
 import { SearchForm } from "@/components/app/search-form";
+import { ZoneNoticeOptions, useZoneNoticePoll } from "@/components/app/zone-notice";
 import { SearchPromptInput } from "@/components/search-prompt-input";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -37,6 +38,7 @@ import { roughDraft } from "@/lib/assisted-fallback";
 import { analyticsEvent } from "@/lib/google-analytics";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import { type WidenTo, cardLead, searchFormKey, widenedDraft, widenedText } from "@/lib/zone-notice";
 
 type Source = { id: string; name: string };
 
@@ -367,6 +369,21 @@ export function AssistedSearch({
     }
   }, [done, savedCount, reviewJob, router]);
 
+  // Aviso de zona (docs/AVISO_ZONA.md): the saved search's zone has almost
+  // nothing. A tap answers it for good (`zoneDone`: what changed, or null for
+  // «Dejar así»); the form below must be saved first (`formBusy`).
+  const activeId = phase.kind === "active" ? phase.savedId : null;
+  const zoneNotice = useZoneNoticePoll(activeId);
+  const [zoneDone, setZoneDone] = useState<{ id: number; text: string | null } | null>(null);
+  const [formBusy, setFormBusy] = useState(false);
+  // While a tap is saved the form waits: its save would undo the widening.
+  const [zonePending, setZonePending] = useState(false);
+  // The options go away after a tap: focus stays on the card, on its title.
+  const activeTitle = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (zoneDone) activeTitle.current?.focus();
+  }, [zoneDone]);
+
   if (phase.kind === "autosaving") {
     return (
       <div className="space-y-4">
@@ -381,6 +398,15 @@ export function AssistedSearch({
   }
 
   if (phase.kind === "active") {
+    const { savedId, draft } = phase;
+    const answered = zoneDone?.id === savedId ? zoneDone : null;
+    const notice = answered ? null : zoneNotice;
+    const location = draft.values.location;
+    // The saved zone changed: the chips and the form below show the new one.
+    const widened = (to: WidenTo) => {
+      setPhase((prev) => (prev.kind === "active" && prev.savedId === savedId ? { ...prev, draft: widenedDraft(prev.draft, to) } : prev));
+      setZoneDone({ id: savedId, text: widenedText(to, zoneNotice?.place ?? "") });
+    };
     return (
       <div className="space-y-4">
         <Card data-testid="assisted-active" className="border-emerald-600/30">
@@ -388,20 +414,32 @@ export function AssistedSearch({
             <div className="flex items-start gap-3">
               <CheckCircle2 className="mt-0.5 size-6 shrink-0 text-emerald-600" aria-hidden />
               <div className="space-y-1">
-                <h2 className="text-base font-semibold">Búsqueda guardada y activa</h2>
-                <p className="text-sm">
-                  Ya estamos buscando «{phase.draft.title}». Te avisamos apenas aparezca una publicación que coincida.
+                <h2 ref={activeTitle} tabIndex={-1} className="text-base font-semibold outline-none">Búsqueda guardada y activa</h2>
+                <p aria-live="polite" className="text-sm">
+                  {notice ? cardLead(notice) : <>Ya estamos buscando «{draft.title}». Te avisamos apenas aparezca una publicación que coincida.</>}
                 </p>
+                {/* Always there, so what a tap changed is announced when it appears. */}
+                <p role="status" className="text-sm font-medium">{answered?.text ?? ""}</p>
               </div>
             </div>
             <ul aria-label="Lo que guardamos" className="flex flex-wrap gap-2">
-              {filterParts(toFilters(phase.draft.values, sources.map((s) => s.id)), phase.draft.values.location?.radius_km).map((part) => (
+              {[...filterParts(toFilters(draft.values, sources.map((s) => s.id)), location?.radius_km), ...(location ? [] : ["Todo el país"])].map((part) => (
                 <li key={part} className="rounded-full border bg-muted/40 px-3 py-1 text-xs">{part}</li>
               ))}
             </ul>
+            {notice ? (
+              <ZoneNoticeOptions
+                notice={notice}
+                placement="card"
+                disabled={formBusy}
+                onWidened={widened}
+                onKept={() => setZoneDone({ id: savedId, text: null })}
+                onPendingChange={setZonePending}
+              />
+            ) : null}
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-              <Button asChild>
-                <Link href={`/app/searches/${phase.savedId}`}>Ver mi búsqueda</Link>
+              <Button asChild variant={notice ? "outline" : "default"}>
+                <Link href={`/app/searches/${savedId}`}>Ver mi búsqueda</Link>
               </Button>
               <p className="text-xs text-muted-foreground">¿Querés cambiar algo? Editá los datos de abajo y tocá «Guardar cambios».</p>
             </div>
@@ -410,19 +448,24 @@ export function AssistedSearch({
         <RequestSummary text={text} onEdit={() => setPhase({ kind: "idle" })}>
           Así leímos tu pedido. Escribir otro crea una búsqueda nueva.
         </RequestSummary>
-        <SearchForm
-          catalog={catalog}
-          sources={sources}
-          initial={phase.draft.values}
-          profileId={phase.savedId}
-          approximateLocation={approximateLocation}
-          notes={phase.draft.notes}
-          thresholdAlerts={thresholdAlerts}
-          sellerFilter={sellerFilter}
-          lockedPro={lockedPro}
-          modelLessSearch={modelLessSearch}
-          maxLocations={maxLocations}
-        />
+        <div inert={zonePending}>
+          <SearchForm
+            // A widened zone opens the form again with it.
+            key={searchFormKey(location)}
+            onBusyChange={setFormBusy}
+            catalog={catalog}
+            sources={sources}
+            initial={phase.draft.values}
+            profileId={phase.savedId}
+            approximateLocation={approximateLocation}
+            notes={phase.draft.notes}
+            thresholdAlerts={thresholdAlerts}
+            sellerFilter={sellerFilter}
+            lockedPro={lockedPro}
+            modelLessSearch={modelLessSearch}
+            maxLocations={maxLocations}
+          />
+        </div>
       </div>
     );
   }

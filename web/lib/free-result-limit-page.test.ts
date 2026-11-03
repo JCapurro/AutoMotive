@@ -10,6 +10,9 @@ vi.mock("@/lib/margin-data", () => ({ marginAccess: async () => null, marginLine
 vi.mock("@/lib/auth", () => ({ requireUser: async () => ({ id: "account" }) }));
 vi.mock("@/lib/config", () => ({ webConfig: async () => ({ proOffer: {}, automaticPayments: true, commercialPilot: true, planLimits: { pro: { dealerMargin: true } } }) }));
 vi.mock("@/lib/search-collection-server", () => ({ loadSearchCollection: async () => [] }));
+// Aviso de zona: its own page test (lib/zone-notice-page.test.ts).
+vi.mock("@/lib/zone-notice-server", () => ({ allCount: () => null, dismissedZones: async () => [], zoneNotice: async () => ({ state: "none" }) }));
+vi.mock("@/components/app/zone-notice", () => ({ ZoneNoticePanel: () => null }));
 vi.mock("@/components/app/auto-refresh", () => ({ AutoRefresh: () => null }));
 // The low-results bot imports the searches' server actions, which are server-only.
 vi.mock("@/components/app/low-results-notice", () => ({ LowResultsNotice: () => null }));

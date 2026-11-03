@@ -1,7 +1,7 @@
 -- F4 web reads and writes (migration 20261001120000_f4_web.sql). Run with: supabase test db
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(34);
+select plan(39);
 
 insert into auth.users (instance_id, id, aud, role, email, created_at, updated_at) values
   ('00000000-0000-0000-0000-000000000000', '33333333-3333-3333-3333-333333333333',
@@ -99,8 +99,22 @@ select is((public.preview_search('{"make": "Pgtap", "model": "Uno", "year_min": 
           'preview: year and USD cap (an ARS listing compared in USD), partial prices out');
 select is((public.preview_search('{"make": "pgtap", "model": "UNO", "transmission": "manual"}')->>'count')::int, 2,
           'preview: case-insensitive; an unknown transmission doesn''t discard');
-select is((public.preview_search('{"make": "Pgtap", "model": "Uno"}', -34.6037, -58.3816, 60)->>'count')::int, 2,
-          'preview: radius drops Córdoba, keeps the listing without coordinates');
+select is((public.preview_search('{"make": "Pgtap", "model": "Uno"}', -34.6037, -58.3816, 60)->>'count')::int, 1,
+          'preview: a radius drops Córdoba and the listing without coordinates, as matching does');
+select is((public.preview_search('{"make": "Pgtap", "model": "Uno"}', -34.6037, -58.3816, 0)->>'count')::int, 3,
+          'preview: the own place with radius 0 is no zone, as in matching');
+select is((public.preview_search('{"make": "Pgtap", "model": "Uno"}', -34.6037, null, 60)->>'count')::int, 3,
+          'preview: the own place without a coordinate is no zone');
+select is((public.preview_search('{"make": "Pgtap", "model": "Uno",
+                                   "extra_locations": [{"lat": -31.42, "lon": -64.19, "radius_km": 50}]}',
+                                 -34.6037, -58.3816, 60)->>'count')::int, 2,
+          'preview: an extra place adds Córdoba');
+select is((public.preview_search('{"make": "Pgtap", "model": "Uno",
+                                   "extra_locations": [{"lat": -54.80, "lon": -68.30, "radius_km": 0}]}')->>'count')::int, 3,
+          'preview: an extra place with radius 0 is no zone, as in matching');
+select is((public.preview_search('{"make": "Pgtap", "model": "Uno",
+                                   "extra_locations": [{"lat": "x", "lon": -58.38, "radius_km": 50}]}')->>'count')::int, 3,
+          'preview: an extra place that isn''t numbers is skipped, not an error');
 select is((public.preview_search('{"make": "Pgtap", "model": "Uno"}')->>'count')::int, 3,
           'preview: no location, the whole country');
 select is((public.preview_search('{"make": "Pgtap", "model": "Uno", "price_max": 9500000,

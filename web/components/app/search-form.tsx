@@ -258,6 +258,7 @@ export function SearchForm({
   maxLocations = null,
   sellerFilter = false,
   lockedPro = {},
+  onBusyChange,
 }: {
   catalog: Catalog;
   sources: Source[];
@@ -283,6 +284,8 @@ export function SearchForm({
   sellerFilter?: boolean;
   /** Juan, 02/11: Pro's settings the plan doesn't include, shown locked with the plans (lib/pro.ts proLocked). */
   lockedPro?: Partial<ProLocked>;
+  /** Whether the form has unsaved changes or is saving: the zone notice above waits (modo asistido). */
+  onBusyChange?: (busy: boolean) => void;
 }) {
   const fid = (key: string) => (idPrefix ? `${idPrefix}-${key}` : key);
   const isNew = profileId == null && !initial.location;
@@ -346,6 +349,10 @@ export function SearchForm({
     [d, versionText, offered],
   );
   const autoName = defaultName(input);
+  const busy = onBusyChange ? saving || JSON.stringify(input) !== pristine : false;
+  useEffect(() => {
+    onBusyChange?.(busy);
+  }, [busy, onBusyChange]);
   const locationReady = d.place === "current" ? Boolean(d.current) : d.place === "manual" ? d.zones.length > 0 && d.zones.every(zoneReady) : true;
 
   function chooseMake(make: string) {
@@ -848,7 +855,7 @@ export function SearchForm({
         <Card>
           <CardHeader>
             <CardTitle>Ubicación</CardTitle>
-            <CardDescription>Las publicaciones sin ubicación no se descartan: se muestran como «no informado».</CardDescription>
+            <CardDescription>Si elegís una zona, quedan afuera las publicaciones que no informan dónde están.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
             <fieldset className="space-y-2 sm:col-span-2">
