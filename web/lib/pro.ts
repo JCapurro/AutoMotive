@@ -121,7 +121,8 @@ export function alertsText(caps: PlanCaps): string {
   return n > 0 ? `Hasta ${counted(n, "aviso inmediato", "avisos inmediatos")} por día y resumen diario` : "Resumen diario de coincidencias";
 }
 export const PRO_BENEFITS = ["Avisos cuando detectamos coincidencias", "Comparación de precios publicados",
-  "Puntaje explicado y señales para revisar", "Historial, favoritos y varias búsquedas"];
+  "Puntaje explicado y señales para revisar", "Historial, favoritos y varias búsquedas",
+  "Búsqueda por carrocería, sin elegir modelo", "Aviso inmediato de bajas de precio en tus favoritos"];
 export type OfferPrice = { amount: number; currency: "ARS"; days: 30 };
 export type ProOffer = Record<WaitlistPlan, OfferPrice> & { version: string };
 /** As app_config.pro_offer since fase 3 (20261026120000_pro_price): only a fallback. */
