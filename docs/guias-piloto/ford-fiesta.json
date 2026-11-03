@@ -9,23 +9,23 @@
   "body": {
     "known_issues": [
       {
-        "text": "En las versiones con caja automática PowerShift (doble embrague, seis marchas) se reportaron vibraciones fuertes al arrancar y al pasar de marcha. La prensa local informó que el problema afectaba a Focus, Fiesta y EcoSport con esa caja y que podía volver después de repararla.",
+        "text": "En las versiones con caja automática PowerShift (doble embrague, seis marchas) se reportaron vibraciones, sobre todo al pasar de marcha. La prensa local informó que el problema afectaba a Focus, Fiesta y EcoSport con esa caja y que podía volver después de repararla.",
         "applies_to": "versiones PowerShift"
       },
       {
-        "text": "En Brasil Ford anunció en 2016 reparación sin cargo y más años de garantía para New Fiesta 2013 y 2014 con PowerShift; en EE.UU. y Canadá amplió en 2019 la cobertura del embrague para Fiesta 2014 y 2015 con esa caja. Esas campañas no se aplican solas a los autos vendidos en Argentina.",
+        "text": "En Brasil Ford anunció en 2016 reparación sin cargo y más años de garantía para New Fiesta 2013 y 2014 con PowerShift; en EE.UU. y Canadá amplió en 2019 la cobertura del embrague para Fiesta 2014 y 2015 con esa caja fabricados para ese mercado. Esas campañas no se aplican solas a los autos vendidos en Argentina.",
         "applies_to": "PowerShift"
       },
       {
-        "text": "El manual de Ford Argentina explica que, en ciertas condiciones de manejo, los embragues de la PowerShift pueden recalentarse; el tablero avisa con mensajes como «Transmisión caliente» o «Transmisión sobrecalentada». Si aparecen seguido, conviene que revisen la caja.",
+        "text": "El manual de Ford Argentina explica que, en ciertas condiciones de manejo, los embragues de la PowerShift pueden recalentarse; el tablero avisa con mensajes como «Transmisión caliente» o «Transmisión sobrecalentada», y el manual indica detener el auto con cuidado y dejar que se enfríe. Si aparecen seguido, conviene que revisen la caja.",
         "applies_to": "PowerShift"
       },
       {
-        "text": "En 2020 la prensa informó un llamado a revisión de Ford Argentina por problemas en las cerraduras de Fiesta 2014. Conviene consultar con el VIN si quedó hecho.",
+        "text": "Según la prensa de 2020, Ford Argentina hizo un llamado a revisión por problemas en las cerraduras de Fiesta 2014. Conviene consultar con el VIN si quedó hecho.",
         "applies_to": "2014"
       },
       {
-        "text": "El 1.6 Sigma Ti-VCT usa correa de distribución, que tiene reemplazo programado; si no hay comprobante del último cambio, conviene tomarlo como pendiente."
+        "text": "El 1.6 Sigma Ti-VCT usa correa de distribución según el plan de mantenimiento del mismo motor en el Focus, con reemplazo programado; conviene confirmarlo en el libro del Fiesta. Si no hay comprobante del último cambio, conviene tomarlo como pendiente."
       }
     ],
     "visit_checklist": [
@@ -50,18 +50,19 @@
     ],
     "versions_equipment": [
       {
-        "text": "Llegó a fines de 2010 como hatchback de cinco puertas importado de México, con motor 1.6 Sigma Ti-VCT de 120 CV y caja manual de cinco; el sedán se sumó en 2011 con versiones Trend y Trend Plus, y la Titanium era solo cinco puertas.",
-        "applies_to": "2011–2013"
+        "text": "Llegó a fines de 2010 como hatchback de cinco puertas importado de México, con motor 1.6 Sigma Ti-VCT de 120 CV y caja manual de cinco; el sedán se sumó en 2011. El hatch se vendía como Titanium y el sedán en Trend y Trend Plus.",
+        "applies_to": "2011–2013 (años modelo)"
       },
       {
-        "text": "Desde el lanzamiento traía de serie siete airbags y control de estabilidad, algo poco común en su segmento en ese momento."
+        "text": "Desde el lanzamiento traía de serie siete airbags y control de estabilidad, y la prensa destacó que elevó el equipamiento de seguridad. En unidades 2018–2019 conviene confirmarlo en el auto.",
+        "applies_to": "2011–2017"
       },
       {
-        "text": "Con el rediseño de 2013 se sumó la PowerShift de seis marchas; el sedán se ofrecía en S, S Plus, SE Plus y Titanium, y el hatch en SE Plus y Titanium, con PowerShift en SE Plus y Titanium.",
-        "applies_to": "2014–2017"
+        "text": "En el lanzamiento del Fiesta KD 2014 el sedán se ofrecía en S, S Plus, SE Plus y Titanium, y el hatch en SE Plus y Titanium; la PowerShift de seis marchas se ofrecía en SE Plus y Titanium. En los años siguientes la oferta pudo cambiar.",
+        "applies_to": "lanzamiento 2014"
       },
       {
-        "text": "Desde diciembre de 2017 quedó solo el hatchback, en S Plus, SE, SE Plus y Titanium, con manual de cinco o PowerShift. Desde SE trae SYNC 3 con pantalla de 6,5 pulgadas, y desde SE Plus cámara y sensores traseros.",
+        "text": "Desde diciembre de 2017 quedó solo el hatchback, en S Plus, SE, SE Plus y Titanium: manual de cinco en todas y PowerShift en SE, SE Plus y Titanium. Desde SE trae SYNC 3 con pantalla de 6,5 pulgadas, y desde SE Plus cámara y sensores traseros.",
         "applies_to": "2018–2019"
       }
     ],
@@ -74,7 +75,7 @@
         "text": "Seguí el libro de garantía y mantenimiento para aceite, filtros, líquido de frenos y refrigerante; si el dueño no lo tiene, pedí las facturas de los services."
       },
       {
-        "text": "En la PowerShift, si hubo cambio de embrague o del módulo de la caja, pedí la orden de trabajo. Es la reparación cara que más conviene tener en cuenta al elegir entre manual y automático.",
+        "text": "En la PowerShift, si hubo cambio de embrague o de componentes electrónicos de la caja, pedí la orden de trabajo. El cambio de embrague es la reparación que más se reportó en esta caja (Parabrisas).",
         "applies_to": "PowerShift"
       }
     ],
@@ -83,19 +84,19 @@
         "label": "Kinetic Design",
         "year_from": 2011,
         "year_to": 2013,
-        "text": "Sexta generación en Argentina. Llegó a fines de 2010 desde México: primero el hatchback y en 2011 el sedán."
+        "text": "Sexta generación en Argentina. Llegó a fines de 2010 desde México: primero el hatchback y en 2011 el sedán. Los años de las etapas son años modelo aproximados."
       },
       {
         "label": "Kinetic Design rediseño",
         "year_from": 2014,
         "year_to": 2017,
-        "text": "Rediseño de 2013, con producción también en Brasil; se vendieron versiones de México y de Brasil, y apareció la caja PowerShift."
+        "text": "Rediseño presentado en agosto de 2013 (año modelo 2014), con producción también en Brasil; se vendieron versiones de México y de Brasil. En el lanzamiento la PowerShift se ofrecía en SE Plus y Titanium."
       },
       {
         "label": "Kinetic Design actualización",
         "year_from": 2018,
         "year_to": 2019,
-        "text": "Actualización de diciembre de 2017: solo hatchback, sin las versiones mexicanas. Ford anunció en 2019 el fin de la producción en Brasil, y en Argentina se esperaba vender stock hasta 2020."
+        "text": "Actualización de diciembre de 2017 (año modelo 2018): solo hatchback, sin las versiones mexicanas. Según la prensa de 2019, Ford terminaba la producción en Brasil ese año y en Argentina habría stock hasta 2020; otra fuente ubica el fin en 2018."
       }
     ]
   },
@@ -110,19 +111,19 @@
     },
     {
       "text": "¿Cuándo se cambió la correa de distribución y tenés el comprobante?",
-      "why": "El motor 1.6 usa correa con reemplazo programado."
+      "why": "Según el plan de Ford para el mismo motor 1.6 (en el Focus), la correa tiene reemplazo programado."
     },
     {
       "text": "¿Te llegó algún aviso de Ford por un llamado a revisión, y lo hiciste?",
-      "why": "Hubo un llamado por cerraduras en Fiesta 2014."
+      "why": "Hubo llamados a revisión; por ejemplo, uno por cerraduras en Fiesta 2014."
     },
     {
       "text": "¿Tenés el libro de services o las facturas de los mantenimientos?",
       "why": "Sirve para ver si se respetaron los intervalos."
     },
     {
-      "text": "¿Es de origen mexicano o brasileño? ¿Figura en la cédula o en la documentación?",
-      "why": "La versión y el equipamiento cambian según el origen y el año."
+      "text": "¿Es de origen mexicano o brasileño? ¿Lo podés confirmar con el VIN o la documentación de fabricación o importación?",
+      "why": "Se vendieron versiones de México y de Brasil."
     }
   ],
   "sources": [

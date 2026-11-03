@@ -3,13 +3,13 @@
   "model": "Gol Trend",
   "generation_label": "Gol Trend",
   "year_from": 2008,
-  "year_to": 2023,
+  "year_to": 2022,
   "slug_make": "volkswagen",
   "slug_model": "gol-trend",
   "body": {
     "known_issues": [
       {
-        "text": "La caja automatizada I-Motion es una manual con embrague robotizado, no una automática convencional. La prensa la menciona como fuente de dolores de cabeza: se reportaron tirones, cambios imprecisos, embrague que patina y pérdidas de fluido del actuador.",
+        "text": "La caja automatizada I-Motion es una manual con embrague robotizado, no una automática convencional. La prensa argentina dice que dio varios dolores de cabeza; según prensa brasileña, se reportaron tirones, cambios imprecisos, embrague que patina y pérdidas de fluido del actuador.",
         "applies_to": "versiones I-Motion"
       },
       {
@@ -17,10 +17,10 @@
         "applies_to": "fabricados 2006–2018"
       },
       {
-        "text": "No tiene control de estabilidad en ninguna versión; esa fue la razón por la que dejó de venderse 0 km cuando el ESP pasó a ser obligatorio."
+        "text": "La prensa indica que el Gol no tenía control de estabilidad y que por eso dejó de venderse 0 km cuando el ESP pasó a ser obligatorio. Conviene confirmarlo en la unidad."
       },
       {
-        "text": "El motor 1.6 usa correa de distribución; si no hay comprobante del último cambio, conviene tomarlo como pendiente."
+        "text": "Conviene confirmar en el manual si el motor de la unidad usa correa de distribución y cada cuánto se cambia; si la usa y no hay comprobante del último cambio, tomalo como pendiente."
       }
     ],
     "visit_checklist": [
@@ -28,13 +28,13 @@
         "text": "Si es I-Motion, probala en tránsito y en subida: los cambios tienen que entrar sin golpes, el auto no tiene que patinar al salir y no deberían aparecer avisos en el tablero."
       },
       {
-        "text": "Confirmá si la unidad tiene airbags y ABS: en los primeros años dependían de la versión. Mirá que el testigo de airbag se encienda al dar contacto y después se apague."
+        "text": "La prensa menciona el doble airbag solo en la Pack III de los primeros años; confirmá airbags y ABS en la unidad. Mirá que el testigo de airbag se encienda al dar contacto y después se apague."
       },
       {
         "text": "Consultá con el VIN si tiene pendiente el llamado a revisión por airbags de Volkswagen."
       },
       {
-        "text": "Si tiene equipo de GNC, pedí la documentación del equipo y la oblea vigente, y revisá la instalación en el baúl."
+        "text": "Si tiene equipo de GNC, pedí la documentación del equipo y la oblea, y revisá la instalación en el baúl."
       },
       {
         "text": "Pedí que escaneen motor y caja para ver si hay códigos de falla guardados."
@@ -45,11 +45,11 @@
     ],
     "versions_equipment": [
       {
-        "text": "2008 a 2012: motor 1.6 de ocho válvulas y 101 CV con caja manual de cinco; versiones Base, Pack I, Pack II (desde 2011, Pack I Plus) y Pack III. La I-Motion era poco común. La prensa menciona el doble airbag en la Pack III.",
+        "text": "2008 a 2012: motor 1.6 de ocho válvulas con caja manual de cinco; versiones Base, Pack I, Pack II (desde 2011, Pack I Plus) y Pack III. La I-Motion era poco común. La prensa menciona el doble airbag en la Pack III.",
         "applies_to": "2008–2012"
       },
       {
-        "text": "Restyling de fines de 2012: las versiones tope sumaban doble airbag, ABS, radio con Bluetooth y USB y volante multifunción; seguía la opción I-Motion.",
+        "text": "Restyling de fines de 2012: según La Nación, la Pack III traía doble airbag, ABS, radio con Bluetooth y USB y volante multifunción; seguía la opción I-Motion.",
         "applies_to": "2013 en adelante"
       },
       {
@@ -63,10 +63,10 @@
     ],
     "maintenance_costs": [
       {
-        "text": "Correa de distribución del 1.6: pedí el comprobante del último cambio (correa, tensor y, si se hizo, bomba de agua). El intervalo lo marca el plan de mantenimiento del manual."
+        "text": "Si el motor usa correa de distribución (confirmalo en el manual), pedí el comprobante del último cambio. El intervalo lo marca el plan de mantenimiento del manual."
       },
       {
-        "text": "En la I-Motion, el embrague y el actuador son las piezas más reportadas; si se cambiaron, pedí la factura.",
+        "text": "En la I-Motion, el embrague y el actuador aparecen entre los reclamos reportados; si se cambiaron, pedí la factura.",
         "applies_to": "versiones I-Motion"
       },
       {
@@ -74,7 +74,7 @@
         "applies_to": "automática 2019 en adelante"
       },
       {
-        "text": "Si tiene GNC, sumá el mantenimiento del equipo y sus controles periódicos obligatorios.",
+        "text": "Si tiene GNC, sumá el mantenimiento del equipo y consultá en un taller habilitado qué controles le corresponden.",
         "applies_to": "con GNC"
       }
     ],
@@ -100,19 +100,19 @@
       {
         "label": "Última actualización",
         "year_from": 2019,
-        "year_to": 2023,
-        "text": "Trompa tomada de la Saveiro y opción automática Tiptronic. Dejó de venderse 0 km en Argentina en 2022 por la exigencia de control de estabilidad; puede haber unidades patentadas después."
+        "year_to": 2022,
+        "text": "Trompa tomada de la Saveiro y opción automática Tiptronic. Según la prensa, dejó de venderse 0 km en Argentina en 2022 por la exigencia de control de estabilidad."
       }
     ]
   },
   "questions": [
     {
       "text": "¿La caja es manual, I-Motion o automática Tiptronic?",
-      "why": "La I-Motion tiene más reportes de problemas que la manual y que la automática convencional."
+      "why": "La I-Motion es la que la prensa señala con problemas."
     },
     {
-      "text": "¿Cuándo se cambió la correa de distribución y tenés el comprobante?",
-      "why": "El motor 1.6 usa correa con reemplazo programado."
+      "text": "¿El motor usa correa de distribución? Si la usa, ¿cuándo se cambió y tenés el comprobante?",
+      "why": "Si usa correa, el intervalo de cambio lo marca el plan de mantenimiento del manual."
     },
     {
       "text": "¿Hiciste el llamado a revisión de airbags de Volkswagen?",
@@ -120,15 +120,15 @@
     },
     {
       "text": "¿Tiene airbags y ABS? ¿Qué versión es exactamente?",
-      "why": "En los primeros años dependían de la versión."
+      "why": "La prensa menciona el doble airbag solo en la Pack III de los primeros años, así que conviene confirmarlo en la unidad."
     },
     {
       "text": "¿Tiene GNC? ¿Está la oblea vigente y la documentación del equipo al día?",
-      "why": "Sin esa documentación el equipo no puede circular en regla."
+      "why": "Conviene confirmar que el equipo tenga la documentación en regla."
     },
     {
       "text": "¿Alguna vez se reparó el embrague o la caja?",
-      "why": "Es lo más reportado, sobre todo en la I-Motion."
+      "why": "La I-Motion tiene reportes de problemas de embrague y caja."
     }
   ],
   "sources": [

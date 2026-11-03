@@ -13,20 +13,20 @@
         "applies_to": "2019, chasis KYH76316 a KYH82562"
       },
       {
-        "text": "En julio de 2018 Fiat lanzó una campaña para reemplazar los relés de encendido e inyección en Argo 2017 a 2019 de ciertos chasis: una falla podía hacer que el motor funcione irregular o se apague.",
-        "applies_to": "2017–2019, según chasis"
+        "text": "En julio de 2018 Fiat lanzó una campaña para reemplazar los relés de encendido e inyección en varios modelos Fiat 2017 a 2019, entre ellos el Argo, según un rango de chasis común a todos: una falla podía hacer que el motor funcione irregular o se apague. Conviene confirmar con el VIN si la unidad está alcanzada.",
+        "applies_to": "según chasis (confirmar con el VIN)"
       },
       {
-        "text": "En Brasil se reportaron reclamos por la caja de dirección: ruidos o juego en el volante.",
+        "text": "Un propietario en Brasil reportó problemas recurrentes en la caja de dirección (Vrum, sobre reclamos en Reclame Aqui). Conviene revisar si la dirección hace ruidos o tiene juego.",
         "applies_to": "reportes en Brasil"
       },
       {
-        "text": "En unidades con start-stop se reportaron fallas del sistema; la prensa brasileña señala que necesita una batería específica.",
-        "applies_to": "con start-stop"
+        "text": "En Brasil se reportaron casos de fallas del start-stop, y Motor Show (Brasil) señala que el sistema necesita una batería específica. No está confirmado qué versiones vendidas en Argentina traen start-stop.",
+        "applies_to": "con start-stop (reportes en Brasil)"
       },
       {
-        "text": "En el 1.8 E.torQ, un mecánico consultado advierte que a veces se colocan bujías del E.torQ anterior, que exigen más a la bobina. Además, la bomba de agua tuvo una debilidad en los primeros años que después se corrigió.",
-        "applies_to": "1.8 E.torQ"
+        "text": "En el 1.8 E.torQ, según un mecánico citado por la prensa brasileña, a veces se colocan bujías del E.torQ anterior, que exigen más a la bobina. El mismo mecánico señala que la bomba de agua del E.torQ tuvo una debilidad que después se mejoró.",
+        "applies_to": "1.8 E.torQ (reportes en Brasil)"
       }
     ],
     "visit_checklist": [
@@ -73,7 +73,7 @@
         "applies_to": "con start-stop"
       },
       {
-        "text": "En la automática de seis marchas, la prensa brasileña recomienda cambiar el fluido de la caja cada 50.000 km si el auto se usó mucho en tránsito; preguntá si se hizo.",
+        "text": "En la automática de seis marchas, un mecánico citado por la prensa brasileña recomienda cambiar el fluido de la caja cada 50.000 km si el auto se usó mucho en tránsito; no es el plan del fabricante, así que confirmalo con el manual y preguntá si se hizo.",
         "applies_to": "1.8 automático"
       },
       {
@@ -88,14 +88,14 @@
       {
         "label": "Primera etapa",
         "year_from": 2017,
-        "year_to": 2022,
-        "text": "Lanzado en Argentina en octubre de 2017 con Drive, Precision y HGT; desde septiembre de 2022, solo Drive 1.3 manual."
+        "year_to": null,
+        "text": "Lanzado en Argentina en octubre de 2017 con Drive, Precision y HGT; desde septiembre de 2022 siguió solo la Drive 1.3 manual. No está documentado cuándo dejó de venderse."
       },
       {
         "label": "Regreso",
         "year_from": 2025,
         "year_to": null,
-        "text": "Volvió en abril de 2025, después de unos años sin venderse, como Drive 1.3; en enero de 2026 se sumó la caja CVT."
+        "text": "Volvió en abril de 2025, luego de unos años de ausencia según Autocosmos, como Drive 1.3; en enero de 2026 se sumó la caja CVT."
       }
     ]
   },
@@ -106,11 +106,11 @@
     },
     {
       "text": "¿Le hicieron las campañas de Fiat del eje de dirección o de los relés? ¿Tenés la constancia?",
-      "why": "Hubo llamados a revisión para Argo 2017 a 2019 según el chasis."
+      "why": "Hubo un llamado a revisión del eje de dirección en Argo 2019 y una campaña de relés para varios modelos Fiat 2017 a 2019, según el chasis."
     },
     {
       "text": "¿Notaste ruidos o juego en la dirección?",
-      "why": "Se reportaron reclamos por la caja de dirección."
+      "why": "En Brasil se reportaron reclamos por la caja de dirección."
     },
     {
       "text": "¿El start-stop funciona bien? ¿Cuándo se cambió la batería y de qué tipo es?",

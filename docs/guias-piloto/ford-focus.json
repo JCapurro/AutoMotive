@@ -9,15 +9,15 @@
   "body": {
     "known_issues": [
       {
-        "text": "En las versiones con caja automática PowerShift (doble embrague, seis marchas) se reportaron vibraciones fuertes al arrancar y al pasar de marcha. Según talleres consultados por la prensa local, el problema podía volver meses después de cambiar el embrague o de reprogramar la caja.",
+        "text": "En las versiones con caja automática PowerShift (doble embrague, seis marchas) se reportaron vibraciones, sobre todo al pasar de marcha. Según jefes de taller de concesionarios oficiales Ford consultados por la prensa en 2017, la reprogramación de la caja no lo resolvía y, tras cambiar el embrague, el problema volvía en promedio a los seis meses.",
         "applies_to": "2.0 con caja PowerShift"
       },
       {
-        "text": "Ford reconoció el problema en otros mercados: en Brasil anunció en 2016 reparación sin cargo y más años de garantía para Focus 2014 con PowerShift, y en EE.UU. y Canadá amplió en 2019 la cobertura del embrague y del módulo de la caja. Esas campañas no se aplican solas a los autos vendidos en Argentina.",
+        "text": "Ford lanzó campañas en otros mercados: en Brasil (2016), reparación sin cargo para Focus 2013-2014 con PowerShift y más garantía para los 2014; en EE.UU. y Canadá (2019), más cobertura del embrague y actualización de software y reemplazo del módulo con cobertura extendida, para Focus 2014-2016 hechos para Norteamérica. Para un auto argentino, conviene consultar en un concesionario oficial.",
         "applies_to": "PowerShift"
       },
       {
-        "text": "Las versiones manuales usan otra caja, de cinco marchas, así que lo de la PowerShift no les aplica; en ellas conviene revisar el embrague como en cualquier usado.",
+        "text": "Las versiones manuales (cajas de cinco marchas) no tienen la PowerShift; revisá el embrague como en cualquier usado.",
         "applies_to": "versiones manuales"
       },
       {
@@ -27,7 +27,7 @@
     ],
     "visit_checklist": [
       {
-        "text": "Si es PowerShift, probalo con el motor frío y en tránsito lento: arrancá varias veces desde parado, en subida y en marcha atrás, y fijate si vibra, patina o da tirones."
+        "text": "Si es PowerShift, probalo en tránsito lento: arrancá varias veces desde parado y fijate si vibra, sobre todo en los cambios de marcha."
       },
       {
         "text": "Pedí que escaneen motor y caja con un equipo de diagnóstico para ver si hay códigos de falla guardados."
@@ -47,7 +47,7 @@
     ],
     "versions_equipment": [
       {
-        "text": "Se fabricó en General Pacheco (Buenos Aires), en sedán y hatchback de cinco puertas."
+        "text": "Se fabricó en General Pacheco (Buenos Aires), en sedán y hatchback."
       },
       {
         "text": "Motores: 1.6 Sigma de 125 CV con caja manual de cinco marchas, y 2.0 Duratec de inyección directa de 170 CV con manual de cinco o automática PowerShift de seis.",
@@ -64,17 +64,17 @@
     ],
     "maintenance_costs": [
       {
-        "text": "El plan de mantenimiento de Ford Argentina pide cambiar aceite y filtro cada 1 año o 15.000 km, lo que ocurra primero."
+        "text": "El plan de mantenimiento de Ford Argentina (edición 2016) pide cambiar aceite y filtro cada 1 año o 15.000 km, lo que ocurra primero. En autos anteriores, confirmalo en el libro de la unidad."
       },
       {
-        "text": "En el 1.6 Sigma, el plan indica reemplazar la correa de distribución y la correa auxiliar cada 8 años o 120.000 km. Es un trabajo para presupuestar si no hay comprobante.",
-        "applies_to": "1.6 Sigma"
+        "text": "La correa de distribución del 1.6 Sigma y la correa auxiliar (todos los motores) se reemplazan cada 8 años o 120.000 km según el plan de Ford Argentina (edición 2016); confirmalo en el libro de la unidad. Es un trabajo para presupuestar si no hay comprobante.",
+        "applies_to": "1.6 Sigma (correa auxiliar: todos los motores)"
       },
       {
-        "text": "Líquido de frenos cada 2 años y refrigerante cada 6 años o 105.000 km, según el mismo plan."
+        "text": "Líquido de frenos cada 2 años y refrigerante cada 6 años o 105.000 km, según el mismo plan de 2016; en autos anteriores, ver el libro de la unidad."
       },
       {
-        "text": "En la PowerShift el plan pide controlar el nivel de aceite de la caja en cada service. Si la caja necesita embrague o módulo nuevos, es una reparación cara: tenelo en cuenta al comparar con una versión manual.",
+        "text": "En la PowerShift el plan pide controlar el nivel de aceite de la caja en cada service. Si la caja necesita embrague o módulo nuevos, pedí presupuesto antes de comprar y tenelo en cuenta al comparar con una versión manual.",
         "applies_to": "PowerShift"
       }
     ],
@@ -89,14 +89,14 @@
         "label": "Focus III restyling",
         "year_from": 2015,
         "year_to": 2019,
-        "text": "Renovado en 2015 con frente nuevo, SYNC de segunda generación y frenado autónomo en ciudad, sin cambios mecánicos. Actualizado otra vez en 2016. La producción en Pacheco terminó en mayo de 2019."
+        "text": "Renovado en 2015 con frente nuevo, SYNC de segunda generación y frenado autónomo en ciudad, sin cambios mecánicos. Actualizado otra vez en 2016. La producción en Pacheco terminó en 2019 (estaba prevista para mayo). Los autos 2015 pueden ser de cualquiera de las dos etapas: mirá el diseño del frente o la generación del SYNC."
       }
     ]
   },
   "questions": [
     {
       "text": "¿La caja es manual o PowerShift? Si es PowerShift, ¿alguna vez le cambiaron el embrague o el módulo?",
-      "why": "En la PowerShift se reportaron vibraciones y tirones que podían volver después de repararla."
+      "why": "En la PowerShift se reportaron vibraciones que, según concesionarios, volvían meses después de cambiar el embrague."
     },
     {
       "text": "¿Tenés las facturas u órdenes de trabajo de las reparaciones de la caja?",
@@ -108,15 +108,15 @@
     },
     {
       "text": "¿Los services se hicieron en concesionario oficial o en taller? ¿Tenés el libro o las facturas?",
-      "why": "El plan de Ford pide service cada 1 año o 15.000 km."
+      "why": "El plan de Ford (edición 2016) pide service cada 1 año o 15.000 km."
     },
     {
       "text": "¿Te llegó algún aviso de Ford por un llamado a revisión, y lo hiciste?",
       "why": "Conviene saber si quedó alguna campaña pendiente."
     },
     {
-      "text": "¿Vibra o da tirones al arrancar en frío o en subida?",
-      "why": "Es el síntoma más reportado en la PowerShift."
+      "text": "¿Vibra al pasar de marcha o al arrancar?",
+      "why": "En la PowerShift se reportaron vibraciones, sobre todo en los cambios de marcha."
     }
   ],
   "sources": [
