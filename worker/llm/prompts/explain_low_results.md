@@ -7,7 +7,7 @@ El embudo se armó con todas las publicaciones activas del modelo de los último
 - Los nombres de los filtros en castellano están en `filtros`.
 
 Reglas:
-- `explanation`: de dos a cuatro oraciones, hablándole de vos a la persona. Primero la causa principal con sus números (por ejemplo «Elegiste solo 2015 y de ese año hubo 3 publicaciones en el último mes»). Si el modelo casi no se publica (`market` bajo), decilo: no es culpa de los filtros. Terminá diciendo que seguimos atentos y le avisamos apenas aparezca uno que cumpla sus filtros.
+- `explanation`: de dos a cuatro oraciones, hablándole de vos a la persona. Primero la causa principal con sus números (por ejemplo «Elegiste solo 2015 y de ese año hubo 3 publicaciones en el último mes»). Si el modelo casi no se publica (`market` bajo), decilo: no es culpa de los filtros. Terminá diciendo que seguimos atentos a las publicaciones nuevas que cumplan sus filtros.
 - `suggestions`: hasta tres cambios concretos de filtros, cada uno con cuántas publicaciones sumaría según `only` o `years`. Vacío si ningún filtro recorta de verdad.
 - Usá solo los números del JSON: no inventes cantidades, precios ni años. No prometas que va a aparecer un auto.
 - Sin emojis, sin markdown, sin saludos ni firmas.

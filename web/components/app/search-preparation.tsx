@@ -18,7 +18,14 @@ export function SearchLoadingButton() {
  * pass as the whole value and nobody feels they must watch the page.
  * `email`: where its alerts go. `trialEnds`: the free trial's end, already formatted.
  */
-export function SearchPreparation({ email = null, trialEnds = null }: { email?: string | null; trialEnds?: string | null } = {}) {
+export function SearchPreparation({ email = null, trialEnds = null, trialFull = null, immediate = true }: {
+  email?: string | null; trialEnds?: string | null;
+  /** The plan includes immediate alerts (lib/pro.ts includesImmediateAlerts); without them, only the daily digest. */
+  immediate?: boolean;
+  /** The trial's quota, once used up: no new listing is announced (docs/PRUEBA_HONESTA.md). */
+  trialFull?: number | null;
+} = {}) {
+  const to = email ? <>a <span className="[overflow-wrap:anywhere]">{email}</span></> : "por email";
   return (
     <section role="status" aria-label="Preparación de resultados" data-testid="search-preparation" className="rounded-lg border bg-muted/50 p-5 sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-5">
@@ -35,8 +42,16 @@ export function SearchPreparation({ email = null, trialEnds = null }: { email?: 
             <li className="flex gap-3">
               <BellRing className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
               <span>
-                <strong className="font-semibold">Desde ahora:</strong> cada auto nuevo que encaje te llega{" "}
-                {email ? <>a <span className="[overflow-wrap:anywhere]">{email}</span></> : "por email"}. No hace falta que vuelvas a entrar.
+                <strong className="font-semibold">Desde ahora:</strong>{" "}
+                {trialFull != null ? (
+                  <>tu prueba ya usó sus {trialFull} resultados, así que no vamos a avisarte de los autos nuevos.</>
+                ) : trialEnds && !immediate ? (
+                  <>los autos nuevos que encajen te llegan {to} en un resumen diario. No hace falta que vuelvas a entrar.</>
+                ) : trialEnds ? (
+                  <>de los autos nuevos que encajen, los mejores te llegan {to} en el momento y otros, en un resumen diario. No hace falta que vuelvas a entrar.</>
+                ) : (
+                  <>cada auto nuevo que encaje te llega {to}. No hace falta que vuelvas a entrar.</>
+                )}
               </span>
             </li>
           </ul>

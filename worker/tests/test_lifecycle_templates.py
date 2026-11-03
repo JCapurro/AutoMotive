@@ -82,6 +82,12 @@ class PlanEmailSnapshotTests(unittest.TestCase):
                           "lifecycle_count_after_expiry_missed": email("count_after_expiry", MISSED),
                           "lifecycle_search_activated": email("search_activated",
                                                               {"model": "Ford Focus", "found": 14, "below": 2}),
+                          "lifecycle_search_activated_trial_full": email(
+                              "search_activated", {"model": "Ford Focus", "found": 50, "below": 2, "hidden": 17,
+                                                   "trial_limit": 50, "trial_left": 0}),
+                          "lifecycle_trial_ended_hidden": email("trial_ended",
+                                                                {"model": "Ford Focus", "found": 30, "below": 3,
+                                                                 "hidden": 37}),
                           "lifecycle_search_activated_sell_intent": email(
                               "search_activated", {"model": "Ford Focus", "found": 14, "below": 2},
                               sell_intent={"ask": True}),
@@ -117,7 +123,8 @@ class SearchActivatedEmailTests(unittest.TestCase):
         self.assertEqual(self.lines(msg), [
             "Tu búsqueda de Ford Focus ya está activa",
             "Ya encontramos 14 autos que coinciden con tu búsqueda de Ford Focus, y 2 están por debajo de "
-            "publicaciones comparables. Te avisamos de los nuevos apenas aparezcan.",
+            "publicaciones comparables.",
+            "De los nuevos que coincidan te avisamos por email.",
             "Para que nuestras alertas no terminen en Spam o Promociones, agregá este remitente a tus contactos "
             "o mové este email a Principal.",
             "Ver mis resultados: https://automotive.app/m/41",
@@ -126,11 +133,41 @@ class SearchActivatedEmailTests(unittest.TestCase):
     def test_nothing_found_yet_and_no_model(self):
         msg = email("search_activated", {"found": 0, "below": 0})
         self.assertEqual(msg.subject, "Tu búsqueda ya está activa")
-        self.assertEqual(self.lines(msg)[1], "Ya estamos revisando las publicaciones para tu búsqueda. "
-                                             "Todavía no apareció ninguno que coincida: te avisamos apenas aparezca.")
+        self.assertEqual(self.lines(msg)[1:3], ["Ya estamos revisando las publicaciones para tu búsqueda. "
+                                                "Todavía no apareció ninguno que coincida.",
+                                                "De los nuevos que coincidan te avisamos por email."])
         self.assertEqual(email("search_activated", {"model": "Ford Ka", "found": 1})
-                         .text.splitlines()[1], "Ya encontramos 1 auto que coincide con tu búsqueda de Ford Ka. "
-                         "Te avisamos de los nuevos apenas aparezcan.")
+                         .text.splitlines()[1], "Ya encontramos 1 auto que coincide con tu búsqueda de Ford Ka.")
+
+    def test_a_free_trial_counts_what_it_shows_and_says_what_is_left(self):
+        # payload.found is what the trial shows; trial_left what it still admits.
+        left = email("search_activated", {"model": "Ford Ka", "found": 20, "hidden": 0,
+                                          "trial_limit": 50, "trial_left": 30})
+        self.assertEqual(self.lines(left)[1:3], [
+            "Ya encontramos 20 autos que coinciden con tu búsqueda de Ford Ka.",
+            "Tu prueba muestra hasta 50 resultados y te quedan 30: de los nuevos que coincidan te avisamos por email.",
+        ])
+        one = email("search_activated", {"found": 49, "trial_limit": 50, "trial_left": 1})
+        self.assertIn("y te queda 1: de los nuevos", one.text)
+        full = email("search_activated", {"model": "Ford Ka", "found": 50, "hidden": 17,
+                                          "trial_limit": 50, "trial_left": 0})
+        self.assertEqual(self.lines(full)[1:4], [
+            "Ya encontramos 50 autos que coinciden con tu búsqueda de Ford Ka.",
+            "Hay 17 más que coinciden y tu prueba no muestra.",
+            "Tu prueba ya usó sus 50 resultados, así que no vamos a avisarte de los nuevos. "
+            "Con Particular los ves todos y seguimos avisándote.",
+        ])
+        self.assertNotIn("apenas", full.text)
+
+    def test_matches_the_trial_hides_are_never_none(self):
+        # Another search used the quota: this one has matches, all hidden.
+        msg = email("search_activated", {"model": "Ford Ka", "found": 0, "hidden": 1,
+                                         "trial_limit": 50, "trial_left": 0})
+        self.assertEqual(self.lines(msg)[1],
+                         "Encontramos 1 auto que coincide con tu búsqueda de Ford Ka, pero tu prueba no lo muestra.")
+        self.assertNotIn("Todavía no apareció", msg.text)
+        self.assertIn("Encontramos 3 autos que coinciden con tu búsqueda, pero tu prueba no los muestra.",
+                      email("search_activated", {"found": 0, "hidden": 3, "trial_limit": 50, "trial_left": 0}).text)
 
 
 class SellIntentQuestionTests(unittest.TestCase):
@@ -246,6 +283,19 @@ class TrialEndedEmailTests(unittest.TestCase):
     def test_without_a_model(self):
         self.assertIn("En 3 días encontramos 2 autos para tu búsqueda.", email("trial_ended", {"found": 2}).text)
 
+    def test_trial_end_tells_what_the_trial_hid(self):
+        msg = email("trial_ended", {"model": "Gol", "found": 30, "below": 0, "hidden": 37})
+        self.assertIn("En 3 días encontramos 30 autos para tu búsqueda de Gol.\n"
+                      "Hay 37 más que coincidían y tu prueba no mostraba: podés verlas con Particular.", msg.text)
+        self.assertIn("Hay 1 más que coincidía y tu prueba no mostraba: podés verla con Particular.",
+                      email("trial_ended", {"found": 3, "hidden": 1}).text)
+        self.assertEqual(msg.subject, "Terminó tu prueba: encontramos 30 autos para tu búsqueda")
+        only = email("trial_ended", {"model": "Gol", "found": 0, "hidden": 1})
+        self.assertIn("En 3 días encontramos 1 auto para tu búsqueda de Gol que tu prueba no mostraba: "
+                      "podés verlo con Particular.", only.text)
+        self.assertEqual(only.subject, "Terminó tu prueba")
+        self.assertIn("podés verlos con Particular.", email("trial_ended", {"found": 0, "hidden": 4}).text)
+
 
 class PassExpiryEmailTests(unittest.TestCase):
     """2.3: before Particular ends."""
@@ -338,7 +388,7 @@ class MissedCarEmailTests(unittest.TestCase):
             "18% debajo de publicaciones comparables.",
             "68.000 km · San Isidro",
             "Estuvo publicado 3 días y ya no está.",
-            "Con tu búsqueda activa, te hubiéramos avisado apenas apareció.",
+            "Con tu búsqueda activa, te hubiéramos avisado.",
             "Y no fue el único: desde que venció tu acceso aparecieron 9 autos nuevos para tu búsqueda, "
             "2 por debajo de comparables.",
             "Reactivar por $15.000: https://automotive.app/m/41",
@@ -361,7 +411,7 @@ class MissedCarEmailTests(unittest.TestCase):
         self.assertEqual(msg.subject, "Te perdiste este Ford Focus SE 2017")
         self.assertEqual(self.lines(msg)[3:], [
             "Ya no está publicado.",
-            "Con tu búsqueda activa, te hubiéramos avisado apenas apareció.",
+            "Con tu búsqueda activa, te hubiéramos avisado.",
             "Reactivar por $15.000: https://automotive.app/m/41",
         ])
         self.assertNotIn("comparables", msg.text)

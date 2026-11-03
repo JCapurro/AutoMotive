@@ -1,9 +1,20 @@
 import { describe, expect, it } from "vitest";
 
-import { AdminLifecycleInput, AdminOfferInput, AdminPlanLimitsInput, configDifferences, configFieldLabel, DEALER_MARGIN_MESSAGE, LIFECYCLE_KINDS, MAX_OFFER_ARS, sameConfig, SourceUpdateInput, validateConfigChange, visibleConfigRows, ZONE_NOTICE_CONFIG_MESSAGE } from "@/lib/admin-config";
+import { AdminLifecycleInput, AdminOfferInput, AdminPlanLimitsInput, configDifferences, configFieldLabel, DEALER_MARGIN_MESSAGE, LIFECYCLE_KINDS, MAX_OFFER_ARS, sameConfig, SourceUpdateInput, TRIAL_RESERVE_CONFIG_MESSAGE, validateConfigChange, visibleConfigRows, ZONE_NOTICE_CONFIG_MESSAGE } from "@/lib/admin-config";
 import { DEFAULT_PRO_OFFER } from "@/lib/pro";
 
 describe("guided config validators", () => {
+  it("keeps trial_reserve a switch with a whole backfill_max and names both (prueba gratis)", () => {
+    const seeded = { enabled: false, backfill_max: 30 };
+    expect(validateConfigChange("trial_reserve", { enabled: true, backfill_max: 30 }, seeded)).toBeNull();
+    expect(validateConfigChange("trial_reserve", { enabled: false, backfill_max: 0 }, seeded)).toBeNull();
+    for (const bad of [{ enabled: true }, { enabled: "true", backfill_max: 30 }, { enabled: true, backfill_max: -1 },
+      { enabled: true, backfill_max: 1.5 }, { enabled: true, backfill_max: 2_147_483_648 }]) {
+      expect(validateConfigChange("trial_reserve", bad, seeded)).toBe(TRIAL_RESERVE_CONFIG_MESSAGE);
+    }
+    expect(configFieldLabel("trial_reserve", "enabled")).toBe("Reserva de la prueba para autos nuevos");
+    expect(configFieldLabel("trial_reserve", "backfill_max")).toBe("Máximo de resultados ya publicados");
+  });
   it.each([-1, 1.5, NaN, Infinity, 2_147_483_648, "3"])("rejects invalid plan counts: %s", (n) => {
     expect(AdminPlanLimitsInput.safeParse({ free: { max_profiles: n } }).success).toBe(false);
   });

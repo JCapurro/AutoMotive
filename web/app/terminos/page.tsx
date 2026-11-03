@@ -20,7 +20,10 @@ function alerts(caps: PlanCaps): string {
 }
 
 export default async function TermsPage() {
-  const { proOffer, planLimits, automaticPayments } = await webConfig();
+  const { proOffer, planLimits, automaticPayments, trialReserve } = await webConfig();
+  // Prueba gratis (docs/PRUEBA_HONESTA.md): with the reserve on, part of the quota waits for new listings.
+  const total = planLimits.free.maxTotalResults;
+  const stockMax = trialReserve?.enabled && total != null && trialReserve.backfillMax < total ? trialReserve.backfillMax : null;
   const { free, pass, pro } = planLimits;
   return (
     <LegalPage title="Términos de uso" updated="28 de octubre de 2026">
@@ -39,7 +42,7 @@ export default async function TermsPage() {
       <h2>Prueba y planes</h2>
       <p>La prueba gratis permite {searches(free)} durante 72 horas corridas desde su primera activación,
         una sola vez por email o cuenta, {resultsText(free).toLowerCase()}
-        {free.immediateAlertsPerDay > 0 ? `, ${alerts(free)} y resumen diario` : " y resumen diario"}. Cada publicación cuenta una sola vez. Editar, pausar o reemplazar la búsqueda no reinicia el plazo ni el cupo de resultados. Al completar el cupo podés consultar los resultados recibidos y adquirir un plan para recibir nuevas coincidencias.</p>
+        {free.immediateAlertsPerDay > 0 ? `, ${alerts(free)} y resumen diario` : " y resumen diario"}. Cada publicación cuenta una sola vez.{stockMax != null ? ` De ese cupo, como máximo ${stockMax} son publicaciones que ya estaban al activar la búsqueda; el resto queda para las nuevas.` : ""} Editar, pausar o reemplazar la búsqueda no reinicia el plazo ni el cupo de resultados. Al completar el cupo podés consultar los resultados recibidos y adquirir un plan para recibir nuevas coincidencias.</p>
       <p>Particular cuesta {planPrice(proOffer.pass_30.amount)} ARS por 30 días, permite {searches(pass)} y {alerts(pass)}, y no se renueva automáticamente.
         Si lo comprás con el acceso vigente, los 30 días se suman a tu vencimiento; si lo comprás después de vencer, rigen desde
         la aprobación del pago y reactivamos tus búsquedas anteriores, hasta {pass.maxProfiles}.

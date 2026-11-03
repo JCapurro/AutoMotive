@@ -7,7 +7,7 @@ USD 15.900
 18% debajo de publicaciones comparables.
 68.000 km · San Isidro
 Estuvo publicado 3 días y ya no está.
-Con tu búsqueda activa, te hubiéramos avisado apenas apareció.
+Con tu búsqueda activa, te hubiéramos avisado.
 Y no fue el único: desde que venció tu acceso aparecieron 9 autos nuevos para tu búsqueda, 2 por debajo de comparables.
 Reactivar por $15.000: https://automotive.app/m/41
 
@@ -32,7 +32,7 @@ Dejar de recibir estos emails: https://automotive.app/baja?t=3f0c1a52-6c55-4a43-
 <p style="margin:0;margin-top:10px;font-size:14px;line-height:22px;color:#4e5a73;padding:10px 12px;background:#ffe14d;font-weight:bold;color:#14213d;">18% debajo de publicaciones comparables.</p>
 <p style="margin:0;margin-top:10px;font-size:14px;line-height:22px;color:#4e5a73;">68.000 km · San Isidro</p>
 <p style="margin:0;margin-top:10px;font-size:14px;line-height:22px;color:#4e5a73;">Estuvo publicado 3 días y ya no está.</p>
-<p style="margin:0;margin-top:10px;font-size:14px;line-height:22px;color:#4e5a73;">Con tu búsqueda activa, te hubiéramos avisado apenas apareció.</p>
+<p style="margin:0;margin-top:10px;font-size:14px;line-height:22px;color:#4e5a73;">Con tu búsqueda activa, te hubiéramos avisado.</p>
 <p style="margin:0;margin-top:10px;font-size:14px;line-height:22px;color:#4e5a73;">Y no fue el único: desde que venció tu acceso aparecieron 9 autos nuevos para tu búsqueda, 2 por debajo de comparables.</p>
 <div style="margin-top:24px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;font-family:Arial,Helvetica,sans-serif;"><tr><td bgcolor="#ffe14d" style="padding:16px 18px;border-radius:5px;text-align:center"><a href="https://automotive.app/m/41" style="color:#14213d;text-decoration:none;font-size:15px;line-height:22px;font-weight:bold;display:block">Reactivar por $15.000 &rarr;</a></td></tr></table></div>
 <p style="margin:0;margin-top:24px;font-size:12px;color:#4e5a73">Otras fotos de la publicación</p>

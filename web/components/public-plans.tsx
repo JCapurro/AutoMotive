@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import type { WebConfig } from "@/lib/config";
 import { alertsText, CUSTOM_PLAN, inWords, modelLessText, OFFER_TIER, PLAN_COPY, planFeatures, planPrice, resultsText, searchesText, WAITLIST_PLANS } from "@/lib/pro";
 
-type PricingConfig = Pick<WebConfig, "proOffer" | "planLimits" | "automaticPayments" | "commercialPilot">;
+type PricingConfig = Pick<WebConfig, "proOffer" | "planLimits" | "automaticPayments" | "commercialPilot"> & Partial<Pick<WebConfig, "trialReserve">>;
 type PublicPlan = {
   id: string;
   name: string;
@@ -35,7 +35,7 @@ export function PublicPlans({ cfg, signedIn }: { cfg: PricingConfig; signedIn: b
       price: "Gratis",
       period: "por 3 días · sin tarjeta",
       pitch: "Probá cómo buscamos y comparamos autos antes de elegir un plan.",
-      features: [searchesText(trial, false), resultsText(trial), alertsText(trial), "Historial y favoritos"],
+      features: [searchesText(trial, false), resultsText(trial, cfg.trialReserve?.enabled ? cfg.trialReserve.backfillMax : null), alertsText(trial), "Historial y favoritos"],
       terms: "Las 72 horas empiezan al activar tu búsqueda. Sin contraseña: solo tu email. Una prueba por email, sin cobro automático. Al terminar te podemos escribir con opciones para seguir; te das de baja con un clic.",
       cta: "Probar gratis",
       href: start,

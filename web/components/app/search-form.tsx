@@ -258,6 +258,7 @@ export function SearchForm({
   maxLocations = null,
   sellerFilter = false,
   lockedPro = {},
+  trialFull = null,
   onBusyChange,
 }: {
   catalog: Catalog;
@@ -284,6 +285,8 @@ export function SearchForm({
   sellerFilter?: boolean;
   /** Juan, 02/11: Pro's settings the plan doesn't include, shown locked with the plans (lib/pro.ts proLocked). */
   lockedPro?: Partial<ProLocked>;
+  /** The trial's quota, once used up: no new listing is announced (docs/PRUEBA_HONESTA.md). */
+  trialFull?: number | null;
   /** Whether the form has unsaved changes or is saving: the zone notice above waits (modo asistido). */
   onBusyChange?: (busy: boolean) => void;
 }) {
@@ -1042,7 +1045,10 @@ export function SearchForm({
         </Button>
         <p className="text-xs text-muted-foreground">
           Al guardar buscamos coincidencias entre las publicaciones de los últimos 30 días. Esas no se notifican: las
-          ves acá. Desde entonces te avisamos de las nuevas.
+          ves acá.{" "}
+          {trialFull != null
+            ? `Tu prueba ya usó sus ${trialFull} resultados, así que no vamos a avisarte de las nuevas.`
+            : "Desde entonces te avisamos de las nuevas."}
         </p>
       </aside>
     </form>

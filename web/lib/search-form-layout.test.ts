@@ -18,6 +18,14 @@ it("a plan without the threshold never sees it, even on a search that has one", 
   expect(html).not.toContain("Avisame al instante si está");
 });
 
+it("never promises new alerts to a trial that used its quota (docs/PRUEBA_HONESTA.md)", () => {
+  const props = { catalog: [], sources: [{ id: "mercadolibre", name: "MercadoLibre" }], initial, profileId: null };
+  expect(renderToStaticMarkup(createElement(SearchForm, props))).toContain("Desde entonces te avisamos de las nuevas.");
+  const full = renderToStaticMarkup(createElement(SearchForm, { ...props, trialFull: 50 }));
+  expect(full).toContain("Tu prueba ya usó sus 50 resultados, así que no vamos a avisarte de las nuevas.");
+  expect(full).not.toContain("Desde entonces te avisamos");
+});
+
 it("keeps the submit button in the side column, next to the form", () => {
   const html = renderToStaticMarkup(createElement(SearchForm, {
     catalog: [], sources: [{ id: "mercadolibre", name: "MercadoLibre" }], initial, profileId: null,

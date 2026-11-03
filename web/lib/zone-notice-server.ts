@@ -83,10 +83,11 @@ export async function zoneNotice(supabase: Client, { profile, count, access, sou
     ...radii.map((radius) => previewCount(supabase, filters, [zone[0], zone[1], radius])),
   ]);
   if (current == null || country == null || wider.some((n) => n == null)) return { state: "pending" };
-  // What an enforced free trial can still show: the admitted results plus the quota left, within its visible cap.
+  // What an enforced free trial can still show: the admitted results plus what it still admits of
+  // listings already published (with the reserve on, less than the quota left), within its visible cap.
   const visibleCap = visibleResults(count, access).cap;
   const cap = quota
-    ? Math.min(count + Math.max(quota.limit - quota.used, 0), visibleCap ?? Infinity)
+    ? Math.min(count + quota.stockLeft, visibleCap ?? Infinity)
     : visibleCap;
   const options = zoneOptions({
     count, current, country, cap,

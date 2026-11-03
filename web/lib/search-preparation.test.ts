@@ -164,6 +164,20 @@ describe("first search preparation", () => {
   });
 });
 
+it("tells a trial what it will get, and a used-up trial that nothing new will come (docs/PRUEBA_HONESTA.md)", () => {
+  const trial = renderToStaticMarkup(SearchPreparation({ email: "a@b.com", trialEnds: "5 nov 2026" }));
+  expect(trial).toContain("los mejores te llegan");
+  expect(trial).toContain("en un resumen diario");
+  expect(trial).not.toContain("cada auto nuevo");
+  const full = renderToStaticMarkup(SearchPreparation({ email: "a@b.com", trialEnds: "5 nov 2026", trialFull: 50 }));
+  expect(full).toContain("tu prueba ya usó sus 50 resultados, así que no vamos a avisarte de los autos nuevos.");
+  expect(renderToStaticMarkup(SearchPreparation({ email: "a@b.com" }))).toContain("cada auto nuevo que encaje te llega");
+  // A trial plan without immediate alerts: only the digest.
+  const daily = renderToStaticMarkup(SearchPreparation({ email: "a@b.com", trialEnds: "5 nov 2026", immediate: false }));
+  expect(daily).toContain("te llegan a <span");
+  expect(daily).toContain("en un resumen diario");
+  expect(daily).not.toContain("en el momento");
+});
 it("renders an accessible loading state with brief guidance and no timer", () => {
   const html = renderToStaticMarkup(createElement(SearchPreparation));
   expect(html).toContain('role="status"');

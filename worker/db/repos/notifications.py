@@ -170,6 +170,22 @@ async def sent_today(user_ids: Iterable[str], since: datetime) -> dict[str, int]
     return {r["user_id"]: r["n"] for r in rows}
 
 
+async def hidden_pairs(pairs: Iterable[tuple[str, int]]) -> set[tuple[str, int]]:
+    """The (user, listing) pairs a free trial's quota hides
+    (public.free_result_allowed false): their alerts would be skipped at
+    delivery, so they never reach the engine or take an alert of the day."""
+    pairs = list(dict.fromkeys(pairs))
+    if not pairs:
+        return set()
+    async with connection() as cx:
+        rows = await (await cx.execute(
+            "SELECT p.u::text AS user_id, p.l AS listing_id "
+            "  FROM unnest(%s::uuid[], %s::bigint[]) AS p(u, l) "
+            " WHERE NOT public.free_result_allowed(p.u, p.l)",
+            ([u for u, _ in pairs], [lid for _, lid in pairs]))).fetchall()
+    return {(r["user_id"], r["listing_id"]) for r in rows}
+
+
 async def alert_caps(user_ids: Iterable[str]) -> dict[str, int]:
     """Each user's daily limit of immediate alerts (public.immediate_alert_cap:
     the plan's, or alerts_max_per_user_day in the open pilot)."""

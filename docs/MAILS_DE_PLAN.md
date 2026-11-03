@@ -36,6 +36,7 @@ Son los mails de la fase 2 de [planes](PLANES_2026-10.md), los que llevan a paga
 - **Cuerpo.** «En 3 días encontramos {X} autos para tu búsqueda de {modelo}, y {Y} estaban por debajo de publicaciones comparables. Para seguir recibiendo avisos, Particular sale $15.000 por 30 días, con 3 búsquedas y pago único. Tu historial y tus favoritos quedan guardados.»
   - X son las coincidencias de la búsqueda de la prueba hasta el fin de la prueba; Y, las de nivel `high`.
   - El precio sale de `app_config.pro_offer` y las búsquedas de `plan_limits.pass`. Si la oferta no sirve, la frase nombra Particular sin precio: nunca un precio equivocado.
+- **Lo que la prueba ocultó** (docs/PRUEBA_HONESTA.md). X cuenta solo lo que la prueba mostró. Si ocultó coincidencias que siguen publicadas, sigue la línea «Hay {N} más que coincidían y tu prueba no mostraba: podés verlas con Particular.». Si no mostró ninguna: «En 3 días encontramos {N} autos para tu búsqueda de {modelo} que tu prueba no mostraba: podés verlos con Particular.»
 - **Botón.** «Seguir con Particular», a `/app/pro?plan=pass_30`: la pantalla de planes con Particular elegido, a un clic de Mercado Pago.
 
 ## 2.3 Vencimiento de Particular
@@ -64,7 +65,7 @@ Son los mails de la fase 2 de [planes](PLANES_2026-10.md), los que llevan a paga
 - **La oportunidad que se perdió.** Desde el 26/10/2026 (decisión de Juan) el mail muestra el mejor auto que apareció desde el vencimiento, con la plantilla de marca de las alertas: foto, modelo, precio publicado y el % por debajo de comparables resaltado en amarillo. Lo elige `missed_car` al reservar el mail y queda en `payload.car`: primero las de nivel `high`, después la mayor diferencia contra comparables (`diff_pct`), el mejor puntaje y la más nueva. Nunca una con precio parcial. Si la búsqueda tiene radio, el auto tiene que tener coordenadas dentro de ese radio: los que pasan el filtro de ubicación como «desconocido» se cuentan, pero no se muestran.
   - **Asunto.** «Te perdiste este {auto}, {D}% debajo de comparables». Si sigue publicado: «Apareció este {auto} y tu búsqueda estaba pausada, …». Sin D, el asunto termina en el auto.
   - **Título.** «La oportunidad que te perdiste». Si sigue publicado no se habla de pérdida: «Esto apareció mientras tu búsqueda estaba pausada».
-  - **Líneas.** «{D}% debajo de publicaciones comparables.» (o «Por debajo de publicaciones comparables.» sin porcentaje), kilómetros y zona, «Estuvo publicado {días} días y ya no está.» (o «Todavía está publicado: reactivá tu búsqueda para verlo.»), «Con tu búsqueda activa, te hubiéramos avisado apenas apareció.» y, si N es mayor que 1, «Y no fue el único: desde que venció tu acceso aparecieron {N} autos nuevos para tu búsqueda, {M} por debajo de comparables.». Las frases con un número en 0 no aparecen.
+  - **Líneas.** «{D}% debajo de publicaciones comparables.» (o «Por debajo de publicaciones comparables.» sin porcentaje), kilómetros y zona, «Estuvo publicado {días} días y ya no está.» (o «Todavía está publicado: reactivá tu búsqueda para verlo.»), «Con tu búsqueda activa, te hubiéramos avisado.» y, si N es mayor que 1, «Y no fue el único: desde que venció tu acceso aparecieron {N} autos nuevos para tu búsqueda, {M} por debajo de comparables.». Las frases con un número en 0 no aparecen.
   - **Días publicado.** Desde la publicación (o la primera vez que se vio) hasta la última vez que se vio; solo cuando ya no está.
   - La foto lleva al mismo destino que el botón.
 - **Sin auto para mostrar.** Si ninguno tiene precio completo, el mail sale con el conteo: asunto «Aparecieron {N} autos nuevos para tu búsqueda de {modelo}» (con uno solo, «Apareció 1 auto nuevo…») y el cuerpo «Desde que venció tu acceso aparecieron {N} autos nuevos que coinciden con tu búsqueda, y {M} están por debajo de comparables. Reactivá para verlos.» Si M da 0, la frase termina en «tu búsqueda».
@@ -88,8 +89,13 @@ No lleva a pagar: es el primer mail que recibe la cuenta y existe para que los q
 
 - **A quién.** Una vez por cuenta (`event_key = 'first'`), 45 minutos después de su primera búsqueda, si esa cuenta recibe emails y tiene una búsqueda activa. Los 45 minutos dejan que el primer rastreo cuente coincidencias. Si la búsqueda se pausó antes del envío, la fila queda `skipped`.
 - **Asunto.** «Tu búsqueda de {modelo} ya está activa».
-- **Cuerpo.** «Ya encontramos {X} autos que coinciden con tu búsqueda de {modelo}, y {Y} están por debajo de publicaciones comparables. Te avisamos de los nuevos apenas aparezcan.» Con X en 0: «Ya estamos revisando las publicaciones para tu búsqueda de {modelo}. Todavía no apareció ninguno que coincida: te avisamos apenas aparezca.» Después: «Para que nuestras alertas no terminen en Spam o Promociones, agregá este remitente a tus contactos o mové este email a Principal.»
-- **Botón.** «Ver mis resultados», a `/app/searches/<id>` (la búsqueda activa que más encontró).
+- **Cuerpo.** «Ya encontramos {X} autos que coinciden con tu búsqueda de {modelo}, y {Y} están por debajo de publicaciones comparables.» Con X en 0: «Ya estamos revisando las publicaciones para tu búsqueda de {modelo}. Todavía no apareció ninguno que coincida.» Después, una línea sobre los avisos (docs/PRUEBA_HONESTA.md):
+  - sin prueba con cupo: «De los nuevos que coincidan te avisamos por email.»;
+  - en la prueba, con lugar: «Tu prueba muestra hasta {L} resultados y te quedan {R}: de los nuevos que coincidan te avisamos por email.»;
+  - en la prueba, sin lugar: «Tu prueba ya usó sus {L} resultados, así que no vamos a avisarte de los nuevos. Con Particular los ves todos y seguimos avisándote.»
+- **Lo que la prueba oculta.** X cuenta solo lo que la prueba muestra, en la búsqueda que más muestra. Si oculta coincidencias que siguen publicadas: «Hay {N} más que coinciden y tu prueba no muestra.» Si no muestra ninguna: «Encontramos {N} autos que coinciden con tu búsqueda de {modelo}, pero tu prueba no los muestra.», nunca «Todavía no apareció ninguno».
+- **Al final:** «Para que nuestras alertas no terminen en Spam o Promociones, agregá este remitente a tus contactos o mové este email a Principal.»
+- **Botón.** «Ver mis resultados», a `/app/searches/<id>` (la búsqueda activa que más muestra).
 - **Código.** [`20261109130000_search_activated_email.sql`](../supabase/migrations/20261109130000_search_activated_email.sql): las funciones de reserva y re-chequeo de los demás tipos quedan como `*_base` y las nuevas las llaman.
 
 ## Remarketing: cuentas sin búsqueda

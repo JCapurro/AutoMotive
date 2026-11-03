@@ -74,6 +74,12 @@ const EMPTY: Record<Filter, string> = {
   ...FOLLOW_EMPTY,
 };
 const PAGE_SIZE = 50;
+/** Prueba gratis: an empty list whose matches the trial hides (my_search_hidden_results). */
+function hiddenText(n: number): string {
+  return n === 1
+    ? "Hay 1 publicación que coincide y tu prueba no muestra."
+    : `Hay ${n} publicaciones que coinciden y tu prueba no muestra.`;
+}
 
 export default async function SearchResultsPage({ params, searchParams }: PageProps<"/app/searches/[id]">) {
   const user = await requireUser();
@@ -88,7 +94,7 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
   const margin = await marginAccess(supabase);
   const sort: Sort = effectiveSort(query.s, margin != null);
   const profileId = Number(id);
-  const [{ data: profile }, { data: results }, { data: counts }, follow, { data: planLimits, error: limitsError }, { data: sources }, { data: diagnosis }, dismissed] = await Promise.all([
+  const [{ data: profile }, { data: results }, { data: counts }, follow, { data: planLimits, error: limitsError }, { data: sources }, { data: diagnosis }, dismissed, { data: hiddenData }] = await Promise.all([
     supabase.from("search_profiles").select("*").eq("id", profileId).maybeSingle(),
     supabase.rpc("search_results", {
       p_profile_id: profileId,
@@ -105,6 +111,8 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
     supabase.from("search_diagnoses").select("explanation,suggestions,max_results,created_at,dismissed_at").eq("search_profile_id", profileId).maybeSingle(),
     // Aviso de zona: the zones «Dejar así» hid.
     dismissedZones(supabase, profileId),
+    // Prueba gratis: this search's matches the trial hides (0 without a trial quota; on error, 0).
+    supabase.rpc("my_search_hidden_results", { p_profile_id: profileId }),
   ]);
   if (!profile) notFound();
 
@@ -126,7 +134,10 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
   // with the zone notice's «Dejar así» hides it too: on the card that happens
   // before the bot writes it (docs/AVISO_ZONA.md).
   const kept = dismissed?.some((zone) => sameZone(zone, zoneOf(profile))) ?? false;
+  const hidden = typeof hiddenData === "number" && hiddenData > 0 ? hiddenData : 0;
+  // With matches the trial hides, «few results» isn't the zone or the filters.
   const showDiagnosis =
+    hidden === 0 &&
     diagnosis != null &&
     !diagnosis.dismissed_at &&
     !kept &&
@@ -211,6 +222,8 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
         <SearchPreparation
           email={user.email}
           trialEnds={access?.state === "trial" && access.expires_at ? accessDate(access.expires_at) : null}
+          trialFull={quota?.reached ? quota.limit : null}
+          immediate={includesImmediateAlerts(planLimits as PlanLimits | null)}
         />
       ) : needsPreparation ? (
         <p role="status" className="rounded-lg border bg-muted p-5 text-sm">
@@ -264,11 +277,23 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
             />
           ))}
         </div>
-      ) : needsPreparation ? null : (
+      ) : needsPreparation ? null : filter === "all" && hidden > 0 ? (
+        <p data-testid="trial-hidden" className="rounded-lg bg-muted p-8 text-center text-sm text-muted-foreground">
+          {hiddenText(hidden)}{" "}
+          <Link href="/app/pro?plan=pass_30" className="font-medium underline underline-offset-3">Con Particular ves todas</Link>.
+        </p>
+      ) : (
         <p className="rounded-lg bg-muted p-8 text-center text-sm text-muted-foreground">
-          {EMPTY[filter]}
+          {filter === "all" && quota?.reached ? `Todavía no hay publicaciones que coincidan. Tu prueba ya usó sus ${quota.limit} resultados: con Particular te avisamos de las nuevas.` : EMPTY[filter]}
         </p>
       )}
+
+      {shown.length > 0 && filter === "all" && hidden > 0 && !more ? (
+        <p data-testid="trial-hidden" className="text-center text-sm text-muted-foreground">
+          {hidden === 1 ? "Y 1 más que coincide y tu prueba no muestra." : `Y ${hidden} más que coinciden y tu prueba no muestra.`}{" "}
+          <Link href="/app/pro?plan=pass_30" className="font-medium underline underline-offset-3">Con Particular ves todas</Link>.
+        </p>
+      ) : null}
 
       {limit.over ? (
         <>
