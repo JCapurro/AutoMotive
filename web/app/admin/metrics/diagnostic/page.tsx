@@ -7,6 +7,7 @@ import { count, percent, when } from "@/lib/admin-format";
 import { CHANNEL, INFLUENCE, LEVEL, type Level } from "@/lib/copy";
 import { FEEDBACK_REASONS, type FeedbackReason } from "@/lib/email-feedback-reasons";
 import { dayMonth, money } from "@/lib/format";
+import { type SellIntentCounts, sellIntentMetrics } from "@/lib/sell-intent";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const metadata: Metadata = { title: "Diagnóstico" };
@@ -34,7 +35,7 @@ function day(value: string | null): string {
 export default async function DiagnosticPage() {
   await requireAdmin();
   const admin = createAdminClient();
-  const [northStar, activation, firstValue, funnel, engagement, perDay, outcomes, llm, waitlist, feedback, ...cta] = await Promise.all([
+  const [northStar, activation, firstValue, funnel, engagement, perDay, outcomes, llm, waitlist, feedback, sellIntent, ...cta] = await Promise.all([
     admin.from("v_north_star_weekly").select("*").order("week", { ascending: false }).limit(12),
     admin.from("v_activation").select("*"),
     admin.from("v_first_value").select("*").order("created_at", { ascending: false }).limit(1000),
@@ -46,6 +47,8 @@ export default async function DiagnosticPage() {
     admin.from("pro_waitlist").select("plan"),
     admin.from("email_feedback").select("id, reason, comment, created_at, lifecycle_emails(kind)")
       .order("created_at", { ascending: false }).limit(200),
+    // PAR-05, Prueba B: since app_config.sell_intent.since.
+    admin.rpc("admin_sell_intent_metrics", {}),
     ...CTA_EVENTS.map((name) => admin.from("events").select("id", { count: "exact", head: true }).eq("name", name)),
   ]);
   const fv = firstValue.data ?? [];
@@ -327,7 +330,53 @@ export default async function DiagnosticPage() {
           </tbody>
         </Table>
       </Section>
+
+      <SellIntentSection error={sellIntent.error?.message} raw={sellIntent.data} />
     </>
+  );
+}
+
+/** PAR-05, Prueba B: «¿Tenés que vender tu auto actual para comprar?». */
+function SellIntentSection({ error, raw }: { error?: string; raw: unknown }) {
+  const m = sellIntentMetrics(raw);
+  const row = (label: string, asked: string, c: SellIntentCounts) => (
+    <tr key={label}>
+      <Td>{label}</Td>
+      <Td numeric>{asked}</Td>
+      <Td numeric>{count(c.answered)}</Td>
+      <Td numeric>{count(c.yes)}</Td>
+      <Td numeric>{percent(c.pctYes)}</Td>
+      <Td numeric>{count(c.wantsNotice)}</Td>
+      <Td numeric>{count(c.agenciesContactOk)}</Td>
+    </tr>
+  );
+  return (
+    <Section
+      error={error ?? (m ? undefined : "sin datos")}
+      title="Prueba B: ¿tenés que vender tu auto?"
+      description={`Desde ${m?.since ? when(m.since) : "el inicio"} (app_config.sell_intent.since). Cuentas nuevas: ${count(m?.newAccounts)}. Preguntados por email: bienvenidas enviadas; en la ficha: cuentas que abrieron una publicación (aproximado). Sin admins.`}
+    >
+      {m ? (
+        <Table>
+          <thead>
+            <tr>
+              <Th>Origen</Th>
+              <Th numeric>Preguntados</Th>
+              <Th numeric>Respondieron</Th>
+              <Th numeric>Sí</Th>
+              <Th numeric>% Sí</Th>
+              <Th numeric>Quieren el aviso</Th>
+              <Th numeric>Agencias OK</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {row("Email", count(m.askedByEmail), m.bySource.email)}
+            {row("Ficha", count(m.listingViewers), m.bySource.ficha)}
+            {row("Total", "—", m)}
+          </tbody>
+        </Table>
+      ) : null}
+    </Section>
   );
 }
 

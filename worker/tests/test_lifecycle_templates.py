@@ -47,7 +47,7 @@ REMARKETING = {"reply_to": "juan@automotive.test"}
 def email(kind: str, payload: dict, **kw) -> templates.EmailMessage:
     row = {"id": 41, "kind": kind, "payload": payload, "unsubscribe_token": TOKEN}
     return templates.lifecycle_email(row, LINKS, NOW, offer=kw.get("offer", OFFER), limits=kw.get("limits", LIMITS),
-                                     remarketing=kw.get("remarketing", REMARKETING))
+                                     remarketing=kw.get("remarketing", REMARKETING), sell_intent=kw.get("sell_intent"))
 
 
 ABANDONED = {"text": "Toyota hilux 2.5 de 2013 a 2016", "model": "Toyota Hilux",
@@ -82,6 +82,9 @@ class PlanEmailSnapshotTests(unittest.TestCase):
                           "lifecycle_count_after_expiry_missed": email("count_after_expiry", MISSED),
                           "lifecycle_search_activated": email("search_activated",
                                                               {"model": "Ford Focus", "found": 14, "below": 2}),
+                          "lifecycle_search_activated_sell_intent": email(
+                              "search_activated", {"model": "Ford Focus", "found": 14, "below": 2},
+                              sell_intent={"ask": True}),
                           "lifecycle_search_abandoned": email("search_abandoned", ABANDONED),
                           "lifecycle_search_not_started": email("search_not_started", {}),
                           "lifecycle_search_feedback": email("search_feedback",
@@ -128,6 +131,53 @@ class SearchActivatedEmailTests(unittest.TestCase):
         self.assertEqual(email("search_activated", {"model": "Ford Ka", "found": 1})
                          .text.splitlines()[1], "Ya encontramos 1 auto que coincide con tu búsqueda de Ford Ka. "
                          "Te avisamos de los nuevos apenas aparezcan.")
+
+
+class SellIntentQuestionTests(unittest.TestCase):
+    """PAR-05, Prueba B: «¿Tenés que vender tu auto actual para comprar?» in the welcome."""
+
+    def test_the_welcome_asks_with_one_link_per_answer(self):
+        msg = email("search_activated", {"model": "Ford Focus", "found": 14}, sell_intent={"ask": True})
+        body = msg.text.split("\n—\n")[0]
+        self.assertIn("¿Tenés que vender tu auto actual para comprar?\n"
+                      "Sí: https://automotive.app/vender-mi-auto?e=41&r=si\n"
+                      "No: https://automotive.app/vender-mi-auto?e=41&r=no", body)
+        self.assertIn('href="https://automotive.app/vender-mi-auto?e=41&amp;r=si"', msg.html)
+        self.assertIn('href="https://automotive.app/vender-mi-auto?e=41&amp;r=no"', msg.html)
+        self.assertIn("¿Tenés que vender tu auto actual para comprar?", msg.html)
+
+    def test_off_without_the_row_or_with_ask_off(self):
+        for cfg in (None, {}, {"ask": False}, {"ask": "true"}, ["ask"]):
+            with self.subTest(cfg=cfg):
+                msg = email("search_activated", {"found": 1}, sell_intent=cfg)
+                self.assertNotIn("vender-mi-auto", msg.text + msg.html)
+                self.assertNotIn("vender tu auto", msg.text + msg.html)
+
+    def test_only_the_welcome_asks(self):
+        for kind, payload in (("trial_no_matches", {"model": "Ford Focus"}), ("search_not_started", {}),
+                              ("trial_ended", {"found": 2})):
+            with self.subTest(kind=kind):
+                msg = email(kind, payload, sell_intent={"ask": True})
+                self.assertNotIn("vender-mi-auto", msg.text + msg.html)
+
+    def test_untracked_links_never_ask(self):
+        row = {"id": 41, "kind": "search_activated", "payload": {}, "unsubscribe_token": TOKEN}
+        msg = templates.lifecycle_email(row, Links(""), NOW, sell_intent={"ask": True})
+        self.assertNotIn("vender tu auto", msg.text + msg.html)
+
+    def test_signed_like_the_button(self):
+        links = Links("https://automotive.app", "s" * 32)
+        row = {"id": 41, "kind": "search_activated", "payload": {}, "unsubscribe_token": TOKEN, "user_id": "u-1"}
+        msg = templates.lifecycle_email(row, links, NOW, sell_intent={"ask": True})
+        signature = links.lifecycle(41, owner="u-1").split("s=")[1]
+        self.assertIn(f"/vender-mi-auto?e=41&r=si&s={signature}", msg.text)
+        self.assertIn(f"/vender-mi-auto?e=41&r=no&s={signature}", msg.text)
+
+    def test_never_promises_a_price(self):
+        msg = email("search_activated", {"model": "Ford Focus", "found": 14}, sell_intent={"ask": True})
+        text = normalize_text(f"{msg.subject} {msg.text} {msg.html}")
+        for term in BANNED + FORBIDDEN_TERMS + ("cuanto vale", "te pagamos", "ganar"):
+            self.assertNotRegex(text, rf"\b{normalize_text(term)}\b", term)
 
 
 class TrialNoMatchesEmailTests(unittest.TestCase):

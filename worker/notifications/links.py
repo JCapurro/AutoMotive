@@ -6,6 +6,8 @@
 
 the button of a plan email (docs/MAILS_DE_PLAN.md) is /m/<lifecycle_email_id>,
 the feedback link of a remarketing email is /f/<lifecycle_email_id>,
+the Sí / No of the welcome email's question (PAR-05, Prueba B) is
+/vender-mi-auto?e=<lifecycle_email_id>&r=si|no,
 every email carries a 1 px image that marks it opened,
 
     <WEB_BASE_URL>/o/<id>?k=n|m             → notifications | lifecycle_emails
@@ -85,6 +87,14 @@ class Links:
         button (scope "m"): same email, same owner."""
         query = self._signed({"r": reason} if reason else {}, "m", email_id, owner)
         return f"{self.base_url}/f/{email_id}" + (f"?{urlencode(query)}" if query else "")
+
+    def sell_intent(self, email_id: int, answer: str, *, owner: str | None = None) -> str:
+        """PAR-05, Prueba B: one answer (`answer` "si" or "no") to «¿Tenés que
+        vender tu auto actual para comprar?» in the welcome email. The page
+        asks to confirm (mail scanners open every link). Signed like the
+        email's button (scope "m"): same email, same owner."""
+        query = self._signed({"e": str(email_id), "r": answer}, "m", email_id, owner)
+        return f"{self.base_url}/vender-mi-auto?{urlencode(query)}"
 
     def open_pixel(self, kind: str, item_id: int) -> str | None:
         """The 1 px image that marks an email opened: kind "n" (notifications)

@@ -71,6 +71,13 @@ export type Database = {
         Update: { id?: never; listing_id?: number | null; finished_at?: string | null; images_hashed?: number | null; error?: string | null }
         Relationships: [{ foreignKeyName: "photo_hash_runs_listing_id_fkey"; columns: ["listing_id"]; isOneToOne: false; referencedRelation: "listings"; referencedColumns: ["id"] }]
       }
+      // PAR-05 Prueba B (20261204120000_par05_sell_intent): each account its own row; timestamps set by a trigger.
+      sell_intent: {
+        Row: { user_id: string; answer: "yes" | "no"; source: "email" | "ficha"; answered_at: string; wants_notice: boolean; wants_notice_at: string | null; agencies_contact_ok: boolean; agencies_contact_at: string | null; created_at: string; updated_at: string }
+        Insert: { user_id: string; answer: "yes" | "no"; source: "email" | "ficha"; wants_notice?: boolean; agencies_contact_ok?: boolean }
+        Update: { answer?: "yes" | "no"; source?: "email" | "ficha"; wants_notice?: boolean; agencies_contact_ok?: boolean }
+        Relationships: []
+      }
       platform_health_checks: {
         Row: { id: number; checked_at: string; checks: Json; email_pending: boolean; last_email_at: string | null }
         Insert: { id: number; checked_at: string; checks: Json; email_pending?: boolean; last_email_at?: string | null }
@@ -1133,6 +1140,11 @@ isOneToOne: false
           Functions: {
       admin_decision_metrics: {
         Args: { p_start: string; p_end: string; p_as_of: string }
+        Returns: Json
+      }
+      // PAR-05 Prueba B: service role only.
+      admin_sell_intent_metrics: {
+        Args: { p_since?: string | null }
         Returns: Json
       }
       admin_update_setting: {

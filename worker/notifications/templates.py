@@ -508,6 +508,10 @@ WELCOME_NONE = ("Ya estamos revisando las publicaciones{model}. Todavía no apar
 WELCOME_INBOX = ("Para que nuestras alertas no terminen en Spam o Promociones, agregá este remitente a tus "
                  "contactos o mové este email a Principal.")
 WELCOME_CTA = "Ver mis resultados"
+# PAR-05, Prueba B: one question under the button, while app_config.sell_intent.ask
+# is on. Each answer opens /vender-mi-auto, which asks to confirm it.
+SELL_INTENT_QUESTION = "¿Tenés que vender tu auto actual para comprar?"
+SELL_INTENT_ANSWERS = (("si", "Sí"), ("no", "No"))
 
 NO_MATCHES_SUBJECT = "Tu búsqueda de {model} todavía no tuvo coincidencias nuevas"
 NO_MATCHES_SUBJECT_ANY = "Tu búsqueda todavía no tuvo coincidencias nuevas"
@@ -748,11 +752,20 @@ def lifecycle_content(kind: str, payload: Mapping[str, Any], url: str, *,
     raise ValueError(f"unknown plan email kind: {kind}")
 
 
+def sell_intent_settings(raw: Any) -> dict[str, bool]:
+    """app_config.sell_intent: `ask` only when explicitly true (no row, no question)."""
+    cfg = raw if isinstance(raw, Mapping) else {}
+    return {"ask": cfg.get("ask") is True}
+
+
 def lifecycle_email(row: Mapping[str, Any], links: Links, now: datetime, *,
                     offer: Mapping[str, Any] | None = None,
                     limits: Mapping[str, Any] | None = None,
-                    remarketing: Mapping[str, Any] | None = None) -> EmailMessage:
-    """A plan email for a lifecycle_emails row (id, kind, payload, unsubscribe_token)."""
+                    remarketing: Mapping[str, Any] | None = None,
+                    sell_intent: Mapping[str, Any] | None = None) -> EmailMessage:
+    """A plan email for a lifecycle_emails row (id, kind, payload, unsubscribe_token).
+    The welcome (search_activated) adds the PAR-05 question while
+    app_config.sell_intent.ask is on and the links are tracked."""
     kind = row["kind"]
     if kind in REMARKETING_KINDS:
         return remarketing_email(row, links, now, remarketing=remarketing)
@@ -760,15 +773,23 @@ def lifecycle_email(row: Mapping[str, Any], links: Links, now: datetime, *,
                                  offer=offer, limits=limits)
     footer = LIFECYCLE_FOOTER[kind]
     unsubscribe = links.unsubscribe(row.get("unsubscribe_token"))
+    question = None
+    if kind == "search_activated" and links.tracked and sell_intent_settings(sell_intent)["ask"]:
+        question = (SELL_INTENT_QUESTION,
+                    tuple(Link(label, links.sell_intent(row["id"], answer, owner=row.get("user_id")))
+                          for answer, label in SELL_INTENT_ANSWERS))
 
-    text = [c.header, *[x for x in (c.vehicle, c.price) if x], *c.lines, f"{c.link.label}: {c.link.url}", "", "—", footer]
+    text = [c.header, *[x for x in (c.vehicle, c.price) if x], *c.lines, f"{c.link.label}: {c.link.url}"]
+    if question:
+        text += ["", question[0], *[f"{a.label}: {a.url}" for a in question[1]]]
+    text += ["", "—", footer]
     if unsubscribe:
         text.append(f"{UNSUBSCRIBE}: {unsubscribe}")
 
     html = render_email_html(c, kind=kind, now=now, day=None, detail_url=None, app_url=None,
                              unsubscribe_url=unsubscribe, footer=footer, unsubscribe_label=UNSUBSCRIBE,
                              eyebrow=LIFECYCLE_EYEBROW[kind], title=title, preheader=_preheader(c, title),
-                             open_pixel_url=links.open_pixel("m", row["id"]))
+                             open_pixel_url=links.open_pixel("m", row["id"]), question=question)
     return EmailMessage(c.subject, "\n".join(text), html)
 
 

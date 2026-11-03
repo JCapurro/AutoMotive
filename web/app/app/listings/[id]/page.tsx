@@ -14,6 +14,7 @@ import { PriceHistoryDetails } from "@/components/app/price-history-details";
 import { RedFlagList } from "@/components/app/red-flag-list";
 import { RiskChecklist } from "@/components/app/risk-checklist";
 import { SellerQuestions } from "@/components/app/seller-questions";
+import { SellIntentLine } from "@/components/app/sell-intent-line";
 import { ViewTracker } from "@/components/app/view-tracker";
 import { requireUser } from "@/lib/auth";
 import { type WebConfig, webConfig } from "@/lib/config";
@@ -42,6 +43,8 @@ import { priceGap, priceGapLine } from "@/lib/price-gap";
 import { linkedListingIds, sortFlags } from "@/lib/red-flags";
 import { emphasize, RISK_HINT, RISK_TITLE } from "@/lib/risk-checklist";
 import { sellerFact, strictSellerFilterOn } from "@/lib/seller";
+import { showFichaQuestion } from "@/lib/sell-intent";
+import { hasAnswered } from "@/lib/sell-intent-server";
 import { contactSubject, renderContactMessage } from "@/lib/contact-message";
 import { createClient } from "@/lib/supabase/server";
 import type { Component, Listing, PriceRef, Reason, RedFlag } from "@/lib/types";
@@ -124,7 +127,7 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
   // A down payment or an installment that moved is no price history (PAR-03).
   const showHistory = history.length >= 2 && !publishedIsPartial(listing);
   const linked = linkedListingIds(flags);
-  const [similar, cost, ownProfile, catalogModel, margins, marginTeaser, present] = await Promise.all([
+  const [similar, cost, ownProfile, catalogModel, margins, marginTeaser, present, sellAnswered] = await Promise.all([
     gone ? Promise.resolve([]) : similarListings(supabase, listing, priceRef),
     // PAR-01: with the plan's total_cost flag, the jurisdiction of the best match's search.
     gone ? Promise.resolve(null) : costEstimateFor(supabase, user.id, listing, best?.search_profile_id ?? null),
@@ -143,6 +146,8 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
     linked.length
       ? supabase.from("listings").select("id").in("id", linked).then(({ data }) => new Set((data ?? []).map((r) => r.id)))
       : Promise.resolve(new Set<number>()),
+    // PAR-05, Prueba B: the question line only until the account answers (and only with an email, never anonymous).
+    showFichaQuestion(cfg.sellIntent, user, false) ? hasAnswered(user.id) : Promise.resolve(true),
   ]);
   const margin = best ? (margins.get(best.id) ?? null) : null;
   const contactTemplate = ownProfile?.contact_template ?? null;
@@ -268,6 +273,8 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
           <div className="mt-3 border-t pt-3 lg:mt-0 lg:border-t-0 lg:pt-0">
             <ListingTracking listingId={listingId} status={status} profileId={best?.search_profile_id ?? null} />
           </div>
+
+          {showFichaQuestion(cfg.sellIntent, user, sellAnswered) ? <SellIntentLine listingId={listingId} className="mt-3 border-t pt-3" /> : null}
         </aside>
 
         <dl className="mt-6 grid grid-cols-2 gap-x-6 border-t-2 border-foreground sm:grid-cols-3 lg:col-start-1 lg:row-start-3 lg:mt-8">
