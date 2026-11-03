@@ -12,6 +12,7 @@ export function SiteHeader({ signedIn, page }: { signedIn: boolean; page: "home"
           {[
             { href: "/", label: "Inicio", key: "home" },
             { href: "/planes", label: "Planes", key: "planes" },
+            { href: "/guias", label: "Guías", key: "guias" },
           ].map((item) => (
             <Link
               key={item.key}

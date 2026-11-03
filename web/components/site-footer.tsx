@@ -10,6 +10,9 @@ export function SiteFooter() {
           Comparamos precios publicados contra publicaciones comparables del mercado observado.
         </span>
         <nav className="flex gap-5 sm:ml-auto">
+          <Link href="/guias" className="underline-offset-4 hover:underline">
+            Guías
+          </Link>
           <Link href="/privacidad" className="underline-offset-4 hover:underline">
             Privacidad
           </Link>
