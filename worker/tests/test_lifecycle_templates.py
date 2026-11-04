@@ -202,11 +202,12 @@ class SellIntentQuestionTests(unittest.TestCase):
         msg = templates.lifecycle_email(row, Links(""), NOW, sell_intent={"ask": True})
         self.assertNotIn("vender tu auto", msg.text + msg.html)
 
-    def test_signed_like_the_button(self):
+    def test_sell_intent_stays_signed_while_navigation_is_unsigned(self):
         links = Links("https://automotive.app", "s" * 32)
         row = {"id": 41, "kind": "search_activated", "payload": {}, "unsubscribe_token": TOKEN, "user_id": "u-1"}
         msg = templates.lifecycle_email(row, links, NOW, sell_intent={"ask": True})
-        signature = links.lifecycle(41, owner="u-1").split("s=")[1]
+        self.assertEqual(links.lifecycle(41, owner="u-1"), "https://automotive.app/m/41")
+        signature = links.sell_intent(41, "si", owner="u-1").split("s=")[1]
         self.assertIn(f"/vender-mi-auto?e=41&r=si&s={signature}", msg.text)
         self.assertIn(f"/vender-mi-auto?e=41&r=no&s={signature}", msg.text)
 
