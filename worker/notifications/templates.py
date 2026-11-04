@@ -259,7 +259,7 @@ def _notes(p: Mapping[str, Any], listing: Mapping[str, Any]) -> list[str]:
 
 
 def content(n: Notification, links: Links, now: datetime, *, owner: str | None = None) -> Content:
-    """`owner` signs the links into the app (emails only, notifications/links.py)."""
+    """Build notification content; navigation links never grant account access."""
     p = n.payload
     if n.kind == "digest":
         return _digest(n, links, now, owner)

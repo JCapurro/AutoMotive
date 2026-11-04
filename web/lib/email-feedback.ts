@@ -2,8 +2,8 @@
  * The reason links of the remarketing emails (docs/MAILS_DE_PLAN.md,
  * «Remarketing»): /f/<id>?r=<reason>&s=<signature>. Opening one records
  * nothing (mail scanners open every link); the page asks to confirm and lets
- * the person add a comment. The signature is the email's button one (scope
- * "m"): same email, same owner.
+ * the person add a comment. The signature keeps the legacy scope
+ * "m": same email, same owner, only feedback and never authentication.
  */
 import { alertLinkSecrets, validAlertLinkSignature } from "@/lib/alert-session";
 import { REMARKETING_KINDS } from "@/lib/email-feedback-reasons";

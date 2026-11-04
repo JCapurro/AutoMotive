@@ -46,7 +46,7 @@ export type EmailOnlySignup = {
   linksPerUserHour: number;
   linksPerIpHour: number;
   lookupsPerIpHour: number;
-  /** Sessions a signed email link may start per account and hour (lib/alert-session.ts); 0 turns them off. */
+  /** Legacy config retained for compatibility; email navigation never starts sessions. */
   alertSessionsPerUserHour: number;
 };
 

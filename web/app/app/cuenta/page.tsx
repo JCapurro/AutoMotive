@@ -43,6 +43,11 @@ export default async function AccountPage({ searchParams }: PageProps<"/app/cuen
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {params.error === "security" ? (
+            <p role="alert" className="mb-4 text-sm text-destructive">
+              No pudimos terminar de proteger tu cuenta. Pedí un nuevo link para volver a intentarlo.
+            </p>
+          ) : null}
           <AccountSteps email={account.email} next={next} proven={proven} paying={paying} />
         </CardContent>
       </Card>

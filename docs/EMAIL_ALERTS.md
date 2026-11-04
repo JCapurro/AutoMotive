@@ -36,10 +36,11 @@ y acceder al aviso original.
   las imágenes y puede contar de más. La política de privacidad lo informa.
 - Sin `WEB_BASE_URL`, los enlaces de autos conservan el destino externo y el
   resumen no oculta resultados: no hay web configurada donde consultar el resto.
-- Con `ALERT_LINK_SECRET`, «Ver auto en Ese Auto» (y cada auto del resumen) y el
-  botón de los mails de plan llevan `&s=<firma>`: una cuenta solo-email los abre
-  con sesión aunque el navegador no la tenga ([AUTENTICACION.md](AUTENTICACION.md#links-firmados-en-los-emails)).
-  Sin el secreto salen sin firma, como antes.
+- Los enlaces de alertas y mails de plan solo navegan: nunca crean una sesión,
+  incluso si un correo anterior conserva `s=<firma>`. Para contenido privado
+  se usa la autenticación normal. `ALERT_LINK_SECRET` se conserva para el
+  feedback de alcance limitado, sin acceso a cuenta
+  ([AUTENTICACION.md](AUTENTICACION.md#enlaces-de-correo-e-identidad)).
 
 ## Activación
 

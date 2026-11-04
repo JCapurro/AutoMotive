@@ -20,10 +20,9 @@ and the user's unsubscribe link (F7, punto 7):
 The other plans' alerts show Pro locked with a way to the public plans page,
 <WEB_BASE_URL>/planes: untracked and unsigned, it needs no session.
 
-With ALERT_LINK_SECRET, the email links that lead into the app (to=detail and
-/m/<id>) also carry &s=<signature>: the web may sign an email-only account in
-from them (docs/AUTENTICACION.md, «Links firmados»). Telegram links and links
-to the source are never signed.
+Navigation links (/r and /m) are unsigned and never grant account access.
+With ALERT_LINK_SECRET, feedback and sell-intent links carry signatures for
+only their limited action, without creating an account session.
 
 Without WEB_BASE_URL links go straight to the listing, untracked, and there is
 no "Ver en Ese Auto".
@@ -36,14 +35,14 @@ import hashlib
 import hmac
 from urllib.parse import urlencode
 
-# Shorter secrets are ignored (the web ignores them too): links go unsigned.
+# Shorter secrets are ignored (the web ignores them too): feedback goes unsigned.
 MIN_SECRET_LENGTH = 32
 
 
 def signature(secret: str, scope: str, item_id: int, user_id: str) -> str:
     """HMAC-SHA256 of v1:<scope>:<id>:<user_id>, truncated to 128 bits, base64url.
-    `scope` is "r" (notifications) or "m" (lifecycle_emails). Same as
-    web/lib/alert-session.ts."""
+    Feedback keeps the existing "m" scope for compatibility with sent links.
+    Same as web/lib/alert-session.ts; this is not a login credential."""
     message = f"v1:{scope}:{item_id}:{user_id}".encode()
     mac = hmac.new(secret.encode(), message, hashlib.sha256).digest()[:16]
     return base64.urlsafe_b64encode(mac).rstrip(b"=").decode()
@@ -65,30 +64,32 @@ class Links:
     def _signed(self, query: dict[str, str], scope: str, item_id: int, owner: str | None) -> dict[str, str]:
         return {**query, "s": signature(self.secret, scope, item_id, owner)} if owner and self.signs else query
 
-    def _r(self, notification_id: int, to: str, listing_id: int | None = None, owner: str | None = None) -> str:
+    def _r(self, notification_id: int, to: str, listing_id: int | None = None) -> str:
         query = {"to": to}
         if listing_id is not None:
             query["l"] = str(listing_id)
-        return f"{self.base_url}/r/{notification_id}?{urlencode(self._signed(query, 'r', notification_id, owner))}"
+        return f"{self.base_url}/r/{notification_id}?{urlencode(query)}"
 
     def listing(self, notification_id: int, url: str, listing_id: int | None = None) -> str:
         return self._r(notification_id, "listing", listing_id) if self.tracked else url
 
     def detail(self, notification_id: int, listing_id: int | None = None, *, owner: str | None = None) -> str | None:
-        """`owner` (the notification's user_id) signs the link: only for emails."""
-        return self._r(notification_id, "detail", listing_id, owner) if self.tracked else None
+        """Unsigned navigation; `owner` is accepted for caller compatibility."""
+        return self._r(notification_id, "detail", listing_id) if self.tracked else None
 
     def lifecycle(self, email_id: int, *, owner: str | None = None) -> str:
         """The button of a plan email (lifecycle_emails): /m/<id> records the
-        click and redirects to the email's target. `owner` signs it."""
-        query = self._signed({}, "m", email_id, owner)
-        return f"{self.base_url}/m/{email_id}" + (f"?{urlencode(query)}" if query else "")
+        click and redirects to the email's target without granting a session.
+        `owner` is accepted for caller compatibility."""
+        return f"{self.base_url}/m/{email_id}"
 
     def feedback(self, email_id: int, reason: str | None = None, *, owner: str | None = None) -> str:
         """The feedback link of a remarketing email: /f/<id> lists the reasons
-        (`reason` comes marked) and asks to confirm. Signed like the email's
-        button (scope "m"): same email, same owner."""
-        query = self._signed({"r": reason} if reason else {}, "m", email_id, owner)
+        (`reason` comes marked) and asks to confirm. Keeps the legacy "m"
+        signature for the email and owner, scoped only to feedback."""
+        query = {"r": reason} if reason else {}
+        if owner and self.signs:
+            query["s"] = signature(self.secret, "m", email_id, owner)
         return f"{self.base_url}/f/{email_id}" + (f"?{urlencode(query)}" if query else "")
 
     def sell_intent(self, email_id: int, answer: str, *, owner: str | None = None) -> str:
