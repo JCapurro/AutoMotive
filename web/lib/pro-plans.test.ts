@@ -126,6 +126,9 @@ it("follows app_config.plan_limits instead of fixed numbers", () => {
   const internal = renderToStaticMarkup(createElement(ProPlans, { offer: DEFAULT_PRO_OFFER, limits: planLimits, current: null, placement: "plans" }));
   expect(internal).toContain("Hasta 15 búsquedas activas · una cuenta");
   expect(internal).toContain("Hasta 3 búsquedas activas · una cuenta");
+  expect(internal).toContain("Todos los resultados disponibles");
+  expect(internal).toContain("Hasta 50 avisos inmediatos por día, sin tope para las oportunidades que superan tu umbral");
+  expect(internal).toContain("Búsqueda por carrocería, sin modelo");
 });
 
 it("offers a running Particular to extend it, with the days adding up to its end", async () => {
