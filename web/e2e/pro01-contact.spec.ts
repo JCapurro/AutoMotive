@@ -168,7 +168,8 @@ test("mensaje listo: ficha, copiar, correo sin destinatario y plantilla en Ajust
     await expect(block.getByTestId("contact-message")).toHaveText(DEFAULT_MESSAGE);
     await expect(block).not.toContainText("5555");                       // never the title
     await block.getByRole("button", { name: "Copiar", exact: true }).click();
-    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(DEFAULT_MESSAGE);
+    // Chrome on Windows hands the clipboard back with CRLF line breaks: compare the lines.
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText()).then((text) => text.replace(/\r\n/g, "\n"))).toBe(DEFAULT_MESSAGE);
     await expect.poll(async () => (await copiedEvents(email)).map((e) => e.props))
       .toEqual([{ listing_id: listingId, via: "clipboard", custom_template: false }]);
     const href = await block.getByTestId("contact-message-mailto").getAttribute("href");
