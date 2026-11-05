@@ -1,10 +1,10 @@
 "use client";
 
-import { useId, useState, useTransition } from "react";
+import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Building2, CarFront, Check, MessageSquare, SlidersHorizontal } from "lucide-react";
 import { startPayment } from "@/app/app/pro/billing-actions";
-import { joinWaitlist } from "@/app/app/pro/actions";
+import { joinWaitlist, trackQuotaPopup } from "@/app/app/pro/actions";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { analyticsEvent } from "@/lib/google-analytics";
@@ -15,7 +15,7 @@ import { ProductFeedback } from "@/components/app/product-feedback";
 type CheckoutOptions = { offer: ProOffer; automatic: boolean; pilot: boolean };
 
 /** Each choice starts the existing acquisition flow, without another plan picker. */
-export function FreeResultPlans({ offer, automatic, pilot }: CheckoutOptions) {
+export function FreeResultPlans({ offer, automatic, pilot, onSelect }: CheckoutOptions & { onSelect?: (plan: WaitlistPlan) => void }) {
   const router = useRouter();
   const id = useId();
   const [pending, start] = useTransition();
@@ -27,6 +27,7 @@ export function FreeResultPlans({ offer, automatic, pilot }: CheckoutOptions) {
   function choose(plan: WaitlistPlan) {
     setSelected(plan);
     setError(null);
+    onSelect?.(plan);
     start(async () => {
       try {
         if (automatic) {
@@ -83,6 +84,30 @@ export function FreeResultPlans({ offer, automatic, pilot }: CheckoutOptions) {
 export function FreeResultLimit({ limit, profileId, ...checkout }: { limit: number; profileId: number } & CheckoutOptions) {
   const [open, setOpen] = useState(true);
   const [feedback, setFeedback] = useState(false);
+  const chosen = useRef(false);
+  const viewed = useRef(false);
+  // Opened (also when it is reopened with «Elegir un plan»): once per tab session and search.
+  useEffect(() => {
+    if (!open || viewed.current) return;
+    viewed.current = true;
+    const key = `quota_popup_viewed:${profileId}`;
+    try {
+      if (sessionStorage.getItem(key)) return;
+      sessionStorage.setItem(key, "1");
+    } catch {
+      // No storage (private mode): count it every time rather than never.
+    }
+    void trackQuotaPopup("viewed", profileId);
+  }, [open, profileId]);
+  function changeOpen(next: boolean) {
+    // Closing without having picked a plan is the signal; picking one navigates away.
+    if (!next && !chosen.current) void trackQuotaPopup("dismissed", profileId);
+    setOpen(next);
+  }
+  function selectPlan(plan: WaitlistPlan) {
+    chosen.current = true;
+    void trackQuotaPopup("plan_selected", profileId, plan);
+  }
   return <>
     <aside aria-label="Límite de la prueba gratis" className="flex flex-wrap items-center justify-between gap-4 rounded-xl border bg-card px-5 py-4 text-sm">
       <div className="space-y-1">
@@ -91,7 +116,7 @@ export function FreeResultLimit({ limit, profileId, ...checkout }: { limit: numb
       </div>
       <Button onClick={() => setOpen(true)}>Elegir un plan <ArrowRight aria-hidden /></Button>
     </aside>
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={changeOpen}>
       <DialogContent className="max-h-[calc(100dvh-2rem)] gap-0 overflow-y-auto rounded-2xl p-0 sm:max-w-[500px]" data-testid="free-result-limit">
         <DialogHeader className="gap-4 px-6 pt-7 pb-6 sm:px-8 sm:pt-8">
           <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
@@ -100,7 +125,7 @@ export function FreeResultLimit({ limit, profileId, ...checkout }: { limit: numb
           <DialogTitle className="max-w-[340px] pr-4 text-[28px] leading-[1.15] font-semibold tracking-tight sm:text-[32px]">{feedback ? "¿Qué podemos mejorar?" : <>Seguí buscando <span className="block">ese auto.</span></>}</DialogTitle>
           <DialogDescription className="max-w-sm leading-relaxed">{feedback ? "Contanos qué te faltó, qué no funcionó o qué te gustaría encontrar en Ese Auto." : <>Ya recibiste los {limit} resultados de tu prueba gratis. Elegí un plan para recibir nuevas coincidencias.</>}</DialogDescription>
         </DialogHeader>
-        <div className="px-6 sm:px-8">{feedback ? <ProductFeedback profileId={profileId} onBack={() => setFeedback(false)} /> : <FreeResultPlans {...checkout} />}</div>
+        <div className="px-6 sm:px-8">{feedback ? <ProductFeedback profileId={profileId} onBack={() => setFeedback(false)} /> : <FreeResultPlans {...checkout} onSelect={selectPlan} />}</div>
         {!feedback ? <div className="flex flex-col px-6 pt-3 pb-5 sm:px-8 sm:pb-6">
           <DialogClose asChild><Button variant="ghost" className="h-10 w-full text-muted-foreground md:h-10">Seguir viendo mis resultados</Button></DialogClose>
           <Button variant="link" className="h-9 gap-2 text-xs text-muted-foreground md:h-9" onClick={() => setFeedback(true)}><MessageSquare className="size-3.5" aria-hidden /> Enviar feedback</Button>
