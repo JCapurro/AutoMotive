@@ -1,0 +1,157 @@
+{
+  "make": "Kia",
+  "model": "K3",
+  "generation_label": "Primera generación (importado de México)",
+  "year_from": 2025,
+  "year_to": null,
+  "slug_make": "kia",
+  "slug_model": "k3",
+  "body": {
+    "known_issues": [
+      {
+        "text": "Es un modelo nuevo en Argentina (se vende desde marzo de 2025): todavía no hay historial de fallas a largo plazo, y no encontré en la prensa argentina reportes de problemas repetidos.",
+        "applies_to": null
+      },
+      {
+        "text": "Llamado de Kia Argentina (octubre de 2026) para 3.406 K3 Hatchback fabricados en México entre el 9/9/2024 y el 19/2/2026: la hebilla central trasera del cinturón podía no trabar por un resorte mal armado. Kia inspecciona sin cargo y, si hace falta, cambia el conjunto del anclaje.",
+        "applies_to": "K3 Hatchback / Cross (versión BL7m), 09/2024–02/2026"
+      },
+      {
+        "text": "Hasta que se haga esa revisión, Kia recomienda no usar la plaza central trasera.",
+        "applies_to": "unidades alcanzadas por el llamado del cinturón"
+      }
+    ],
+    "visit_checklist": [
+      {
+        "text": "Pedí el número de chasis y consultá en un concesionario oficial Kia si la unidad tiene campañas pendientes y hasta cuándo sigue la cobertura de fábrica."
+      },
+      {
+        "text": "Si es el hatch (Cross), abrochá y tirá del cinturón central trasero varias veces: tiene que trabar firme y soltar bien.",
+        "applies_to": "K3 Cross"
+      },
+      {
+        "text": "Confirmá la versión por el equipamiento: la GT-Line trae faros LED y pantalla de 10,25 pulgadas; la EX, faros halógenos y pantalla de 8."
+      },
+      {
+        "text": "Probá en la ruta que funcionen las asistencias: aviso y frenado de emergencia (sin forzarlo), mantenimiento de carril, luces altas automáticas y control crucero; en el tablero no tiene que quedar ningún aviso de falla."
+      },
+      {
+        "text": "Si dice tener sensor de punto ciego, alerta de tráfico cruzado o monitoreo de presión de neumáticos, comprobá que funcionen: la prensa no coincide en qué versión los trae."
+      },
+      {
+        "text": "Probá la caja automática en frío y en caliente: que los cambios entren suaves y sin golpes, también al poner marcha atrás."
+      },
+      {
+        "text": "Revisá carrocería y llantas de 17 con buena luz: en un auto tan nuevo, raspones o diferencias de color pueden indicar reparaciones."
+      }
+    ],
+    "versions_equipment": [
+      {
+        "text": "Llegó en marzo de 2025 importado de México como reemplazo del Rio, en sedán y hatchback (llamado Cross), con versiones EX y GT-Line en ambas carrocerías.",
+        "applies_to": null
+      },
+      {
+        "text": "Motor único naftero 1.6 aspirado de unos 121 CV con caja automática de seis marchas y tracción delantera. La prensa da entre 151 y 157 Nm de torque; la caja manual del mercado mexicano no se ofrece acá.",
+        "applies_to": null
+      },
+      {
+        "text": "Todas traen seis airbags, frenos a disco en las cuatro ruedas, frenado autónomo de emergencia, asistente de mantenimiento de carril, luces altas automáticas y control crucero.",
+        "applies_to": null
+      },
+      {
+        "text": "La GT-Line suma faros LED y pantalla de 10,25 pulgadas; según Autoweb también levas, arranque sin llave, techo solar y cargador inalámbrico. Confirmá el equipamiento de la unidad puntual.",
+        "applies_to": "GT-Line"
+      },
+      {
+        "text": "Latin NCAP le dio cinco estrellas (octubre de 2024) a sedán y hatch, con seis airbags y control de estabilidad de serie. Señaló inestabilidad de la estructura en la zona de los pies en el choque frontal.",
+        "applies_to": null
+      },
+      {
+        "text": "Las versiones LX y SX no figuran en la gama argentina según la prensa de 2026; si una publicación las menciona, revisá el equipamiento real.",
+        "applies_to": null
+      }
+    ],
+    "maintenance_costs": [
+      {
+        "text": "Kia anunció cobertura de fábrica de 5 años o 100.000 km. Preguntá en un concesionario oficial qué condiciones de services pide para mantenerla y si pasa al nuevo dueño."
+      },
+      {
+        "text": "Según Parabrisas, el 1.6 usa cadena de distribución, sin reemplazo programado como una correa."
+      },
+      {
+        "text": "No encontré el plan de mantenimiento oficial del K3 para Argentina: seguí los intervalos del manual de garantía y mantenimiento de la unidad."
+      },
+      {
+        "text": "En un auto con pocos kilómetros, lo que más conviene revisar es que los services estén hechos en fecha y que las campañas estén cerradas."
+      }
+    ],
+    "generations": [
+      {
+        "label": "Primera generación",
+        "year_from": 2025,
+        "year_to": null,
+        "text": "Desarrollado para la región y fabricado en México. En Argentina, sedán y Cross desde marzo de 2025; las primeras unidades del hatch alcanzadas por el llamado se fabricaron desde septiembre de 2024."
+      }
+    ]
+  },
+  "questions": [
+    {
+      "text": "¿Te llegó el aviso del llamado por el cinturón central trasero y ya hiciste la revisión?",
+      "why": "Kia llamó a revisión a más de 3.400 K3 Hatchback fabricados entre septiembre de 2024 y febrero de 2026."
+    },
+    {
+      "text": "¿Todos los services se hicieron en concesionario oficial Kia y en fecha? ¿Tenés los comprobantes?",
+      "why": "Conviene confirmar qué services pide Kia para mantener la cobertura de 5 años o 100.000 km."
+    },
+    {
+      "text": "¿Es EX o GT-Line, y tiene algún equipamiento agregado después de la compra?",
+      "why": "El equipamiento cambia bastante entre versiones y la prensa no coincide en algunos ítems."
+    },
+    {
+      "text": "¿Alguna vez apareció un aviso de las asistencias de manejo o de la caja en el tablero?",
+      "why": "Las asistencias dependen de cámaras y sensores, y conviene saber si alguno falló o se reparó."
+    },
+    {
+      "text": "¿Tuvo algún choque o reparación de parabrisas, paragolpes o espejos?",
+      "why": "Las asistencias usan cámaras y sensores; conviene saber si alguna de esas zonas se reparó."
+    }
+  ],
+  "sources": [
+    {
+      "title": "Kia ya vende el nuevo K3 en la Argentina (Parabrisas, 26/03/2025)",
+      "url": "https://parabrisas.perfil.com/noticias/novedades/kia-ya-vende-el-nuevo-k3-en-la-argentina.phtml",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Nuevo Kia K3: equipamiento por versión en Argentina (Autocosmos, 27/03/2025)",
+      "url": "https://noticias.autocosmos.com.ar/2025/03/27/nuevo-kia-k3-equipamiento-por-version-en-argentina",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Kia lanza el K3 en Argentina (Autoweb, 26/03/2025)",
+      "url": "https://www.autoweb.com.ar/2025/03/26/kia-lanza-el-k3-en-argentina/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Kia llamó a revisión a más de 3.400 K3 Hatchback por una posible falla en el cinturón de seguridad (Autotest, 10/2026)",
+      "url": "https://autotest.com.ar/noticias/kia-llamo-a-revision-a-mas-de-3-400-k3-hatchback-por-una-posible-falla-en-el-cinturon-de-seguridad/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Precios y versiones del Kia K3 en agosto de 2026 (Autotest)",
+      "url": "https://autotest.com.ar/noticias/no-aumenta-desde-su-lanzamiento-precios-y-versiones-del-kia-k3-en-agosto-2026/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Latin NCAP: el Kia K3 logra las primeras cinco estrellas para la marca (Autoblog Uruguay, 15/10/2024)",
+      "url": "https://www.autoblog.com.uy/2024/10/latin-ncap-el-kia-k3-logra-las-primeras.html",
+      "kind": "prensa",
+      "verified": true
+    }
+  ]
+}

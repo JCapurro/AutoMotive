@@ -1,0 +1,209 @@
+{
+  "make": "Honda",
+  "model": "City",
+  "generation_label": "Quinta generación",
+  "year_from": 2009,
+  "year_to": 2015,
+  "slug_make": "honda",
+  "slug_model": "city",
+  "body": {
+    "known_issues": [
+      {
+        "text": "El City 2009 a 2014 figura en el llamado de Honda Argentina por los infladores de airbag Takata: el inflador del conductor y/o del acompañante se reemplaza sin cargo en servicios oficiales. En 2023 Honda informaba que todavía quedaban unos 48.000 autos de la marca sin reparar, sumando todos los modelos.",
+        "applies_to": "2009–2014 (confirmar con el número de chasis)"
+      },
+      {
+        "text": "Según la prensa, Honda Argentina dijo que no había registrado incidentes en el país por esta causa, pero el llamado sigue abierto: si la unidad no tiene la reparación hecha, es lo primero que conviene resolver.",
+        "applies_to": "2009–2014"
+      },
+      {
+        "text": "Un mecánico citado por la prensa brasileña (2014) contó desgaste prematuro del embrague en City manuales de poco kilometraje, que atribuye sobre todo al manejo. Probá el embrague como en cualquier usado.",
+        "applies_to": "caja manual (reportes en Brasil)"
+      },
+      {
+        "text": "La misma fuente brasileña menciona barro interno en el motor por falta de cambios de aceite, que obliga a desarmar y limpiar piezas. Un historial de services completo importa más que el kilometraje.",
+        "applies_to": "reportes en Brasil"
+      },
+      {
+        "text": "En la versión automática, ese mecánico brasileño ve los frenos delanteros gastados antes que en la manual (alrededor de 20.000 km contra 30.000 km). Es desgaste normal, no una falla, pero conviene revisar pastillas y discos.",
+        "applies_to": "caja automática (reportes en Brasil)"
+      }
+    ],
+    "visit_checklist": [
+      {
+        "text": "Antes de ir, pedí el número de chasis y consultalo en el sitio de campañas de Honda Argentina para saber si el cambio de infladores de airbag está hecho."
+      },
+      {
+        "text": "Al dar contacto, mirá que se enciendan y después se apaguen los testigos de airbag, ABS y motor."
+      },
+      {
+        "text": "Confirmá si la unidad tiene ABS: en el lanzamiento de 2009 la prensa lo menciona en la EX L; desde el rediseño de 2012, en las dos versiones.",
+        "applies_to": "sobre todo 2009–2012"
+      },
+      {
+        "text": "Si es automática, probala en frío y en caliente: que los cambios entren suaves, que responda bien en modo manual con las levas del volante y que no aparezcan testigos.",
+        "applies_to": "caja automática"
+      },
+      {
+        "text": "Si es manual, fijate a qué altura engancha el embrague y si patina al acelerar fuerte en una marcha alta.",
+        "applies_to": "caja manual"
+      },
+      {
+        "text": "Revisá pastillas y discos de freno delanteros y que el auto frene derecho, sin vibraciones en el pedal."
+      },
+      {
+        "text": "Mirá debajo del auto y en el vano motor si hay pérdidas de aceite o de líquido de la caja, y destapá el aceite para ver si hay restos oscuros o espesos."
+      },
+      {
+        "text": "Probá lo que traiga la versión: aire acondicionado o climatizador, control crucero, sensores de estacionamiento traseros y entradas USB y auxiliar del equipo de audio."
+      }
+    ],
+    "versions_equipment": [
+      {
+        "text": "Llegó en noviembre de 2009 importado de Brasil, con un único motor naftero 1.5 de 16 válvulas y 120 CV, en las versiones LX manual, EX L manual y EX L automática de cinco marchas.",
+        "applies_to": "lanzamiento 2009"
+      },
+      {
+        "text": "En 2009 la LX traía llantas de 15 pulgadas y la EX L sumaba llantas de 16, frenos con ABS y EBD, repetidores de giro en los espejos y levas en el volante.",
+        "applies_to": "lanzamiento 2009"
+      },
+      {
+        "text": "La producción en Campana (Buenos Aires) arrancó en 2011; desde el rediseño de 2012 el City se fabricaba solo ahí.",
+        "applies_to": "2011–2015"
+      },
+      {
+        "text": "Con el rediseño de 2012 la gama quedó en LX y EXL, ambas con doble airbag frontal, ABS, anclajes ISOFIX y llantas de 16. La automática quedó como opción de la EXL.",
+        "applies_to": "desde el rediseño de 2012"
+      },
+      {
+        "text": "La EXL 2012 sumaba tapizado de cuero, aire acondicionado, control crucero, volante multifunción, audio con USB y auxiliar y sensores de estacionamiento traseros.",
+        "applies_to": "EXL, desde 2012"
+      },
+      {
+        "text": "No confirmé en la prensa de lanzamiento una versión llamada EX a secas; si la publicación dice EX, comparala con el equipamiento real de la unidad.",
+        "applies_to": null
+      }
+    ],
+    "maintenance_costs": [
+      {
+        "text": "No encontré el plan de mantenimiento oficial de Honda Argentina para este City: pedí el libro de services y seguí los intervalos que figuran ahí."
+      },
+      {
+        "text": "Un mecánico citado por la prensa brasileña indica regular las válvulas en el service de los 40.000 km, desmontando el múltiple de admisión. Confirmalo en el manual de la unidad y preguntá si se hizo.",
+        "applies_to": "1.5 i-VTEC (reportes en Brasil)"
+      },
+      {
+        "text": "Si la unidad no tiene hecho el cambio de infladores de airbag, se hace sin cargo en servicios oficiales Honda: no lo cuentes como gasto, pero sí como trámite pendiente.",
+        "applies_to": "2009–2014"
+      },
+      {
+        "text": "Pastillas y discos delanteros son el desgaste a presupuestar, sobre todo en la automática, y el embrague en la manual si no hay comprobante de cambio."
+      },
+      {
+        "text": "No pongo si el motor usa correa o cadena de distribución porque no abrí una fuente que lo diga para este City: confirmalo en el manual de la unidad."
+      }
+    ],
+    "generations": [
+      {
+        "label": "Quinta generación, importada de Brasil",
+        "year_from": 2009,
+        "year_to": 2011,
+        "text": "Lanzada en noviembre de 2009 con el 1.5 de 120 CV y versiones LX y EX L. Es el sedán derivado del Fit."
+      },
+      {
+        "label": "Quinta generación, hecha en Campana",
+        "year_from": 2011,
+        "year_to": 2015,
+        "text": "Producción en Campana desde 2011 y rediseño en 2012 (paragolpes, parrilla y luces traseras nuevas). Según Autotest, en abril de 2015 la HR-V lo reemplazó en la línea y terminó su venta en Argentina; Autoweb da la producción hasta 2014."
+      },
+      {
+        "label": "Generaciones siguientes (no vendidas acá)",
+        "year_from": 2015,
+        "year_to": null,
+        "text": "Las dos generaciones posteriores se hicieron en Brasil y, según la prensa argentina, no se vendieron oficialmente en Argentina. Si ves un City posterior a 2015, confirmá el año y el origen en la documentación."
+      }
+    ]
+  },
+  "questions": [
+    {
+      "text": "¿Le hicieron el cambio de infladores de airbag del llamado de Honda? ¿Tenés la constancia?",
+      "why": "El City 2009 a 2014 está alcanzado por el llamado de Takata y miles de Honda todavía no fueron a reparar."
+    },
+    {
+      "text": "¿Es de los importados de Brasil o de los hechos en Campana, antes o después del rediseño de 2012?",
+      "why": "El equipamiento cambia: por ejemplo, en 2009 el ABS figuraba en la EX L y desde 2012 en las dos versiones."
+    },
+    {
+      "text": "¿Tenés el libro o las facturas de los services, con los cambios de aceite?",
+      "why": "La prensa brasileña menciona motores dañados por falta de cambios de aceite."
+    },
+    {
+      "text": "¿Alguna vez le regularon las válvulas?",
+      "why": "Un mecánico citado en Brasil lo indica en el service de los 40.000 km; conviene saber si se hizo."
+    },
+    {
+      "text": "¿Cuándo le cambiaron por última vez las pastillas y los discos de freno?",
+      "why": "En la automática se reporta desgaste de los frenos delanteros antes que en la manual."
+    },
+    {
+      "text": "Si es manual, ¿le cambiaron alguna vez el embrague y a qué kilometraje?",
+      "why": "En Brasil se reportó desgaste prematuro del embrague en unidades de poco kilometraje."
+    }
+  ],
+  "sources": [
+    {
+      "title": "Honda City a la venta en Argentina (Autocosmos, 18/11/2009)",
+      "url": "https://noticias.autocosmos.com.ar/2009/11/18/honda-city-a-la-venta-en-argentina",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Honda City, ahora made in Argentina y con rediseño (Autocosmos, 04/06/2012)",
+      "url": "https://noticias.autocosmos.com.ar/2012/06/04/honda-city-ahora-made-in-argentina-y-con-rediseno",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Importante llamado a revisión de Honda en Argentina (Autocosmos, 21/02/2018)",
+      "url": "https://noticias.autocosmos.com.ar/2018/02/21/importante-llamado-a-revision-de-honda-en-argentina",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Recall de Honda Argentina para autos y motos (Autocosmos, 30/08/2023)",
+      "url": "https://noticias.autocosmos.com.ar/2023/08/30/recall-de-honda-argentina-para-autos-y-motos",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Honda llama a revisar airbags de 50.000 autos en Argentina (El Cronista, 18/02/2020)",
+      "url": "https://www.cronista.com/autos/honda-llama-a-revisar-airbags-de-50000-autos-en-argentina-por-los-que-en-brasil-murio-un-conductor",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Video: City y HR-V, un breve paso por Campana (Autotest, 2020)",
+      "url": "https://autotest.com.ar/noticias/video-city-y-hr-v-un-breve-paso-por-campana/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Tras nueve años, Honda dejó de producir autos en Campana (Autoweb, 2020)",
+      "url": "https://www.autoweb.com.ar/?p=15437",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Debuta en Brasil el nuevo Honda City, que no llegará a la Argentina (Autoweb)",
+      "url": "https://www.autoweb.com.ar/?p=25819",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Honda City possui defeitos recorrentes (Oficina Brasil, 04/2014)",
+      "url": "https://oficinabrasil.com.br/noticia/avaliacao-do-reparador/honda-city-possui-defeitos-recorrentes-mas-principal-reclamacao-sao-as-informacoes-tecnicas",
+      "kind": "prensa",
+      "verified": true
+    }
+  ]
+}
