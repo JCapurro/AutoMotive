@@ -78,7 +78,7 @@ from db.repos.runs import SourceHealth
 from intelligence.matching import filter_currency, malformed_vehicle, model_less, wanted_body_types
 from normalization.listing import Target
 from normalization.normalize import normalize_brand, normalize_text
-from pipeline import breaker, news
+from pipeline import breaker, news, pacing
 from pipeline.ingest import IngestResult, ingest
 
 
@@ -629,9 +629,13 @@ async def _drain(source: str, on_batch: BatchHandler | None, jitter_seconds: flo
     source. Returns how many it crawled."""
     done = 0
     while (stop is None or not stop.is_set()) and not breaker.paused(source):
+        # Its pace (pipeline/pacing.py): the lane ends and a later tick starts it again.
+        if not pacing.ready(source):
+            break
         target = await targets_repo.claim_next(source, runs.worker_id(), LEASE_SECONDS)
         if target is None:
             break
+        pacing.mark(source)
         if done and jitter_seconds > 0:
             await asyncio.sleep(random.uniform(jitter_seconds / 2, jitter_seconds))
         try:
@@ -682,7 +686,7 @@ class Lanes:
         """Start a lane for every idle source with due targets. Returns those sources."""
         busy = self.running()
         started = [s for s in _due_sources(await targets_repo.due_targets())
-                   if s not in busy and not breaker.paused(s)]
+                   if s not in busy and not breaker.paused(s) and pacing.ready(s)]
         for source in started:
             task = asyncio.create_task(_drain(source, on_batch, jitter_seconds, stop, on_health),
                                        name=f"lane:{source}")

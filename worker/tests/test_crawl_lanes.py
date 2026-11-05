@@ -85,7 +85,10 @@ class LanesTests(unittest.IsolatedAsyncioTestCase):
         for p in (patch.object(crawl.targets_repo, "due_targets", due_targets),
                   patch.object(crawl.targets_repo, "claim_next", claim_next),
                   patch.object(crawl, "_run_one", run_one),
-                  patch.dict(crawl.REGISTRY, registry, clear=True)):
+                  patch.dict(crawl.REGISTRY, registry, clear=True),
+                  # No pace here (tests/test_pacing.py covers it).
+                  patch.dict(crawl.pacing.SOURCE_RUNS_PER_HOUR, {}, clear=True),
+                  patch.dict(crawl.pacing.SOURCE_QUIET_HOURS, {}, clear=True)):
             p.start()
             self.addCleanup(p.stop)
         self.lanes = crawl.Lanes()

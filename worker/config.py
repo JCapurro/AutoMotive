@@ -38,6 +38,31 @@ SOURCE_SUSPECT_STREAK = max(1, int(os.getenv("SOURCE_SUSPECT_STREAK", "3")))
 CRAWL_LOOP_STALE_SECONDS = max(120, int(os.getenv("CRAWL_LOOP_STALE_SECONDS", "900")))
 # Pause between two targets of the same source (randomized in [x/2, x]).
 CRAWL_JITTER_SECONDS = float(os.getenv("CRAWL_JITTER_SECONDS", "8"))
+# How fast a source may be read (pipeline/pacing.py): at most N targets an
+# hour, spread evenly, and hours with no reads at all (Argentina time, [start,
+# end)). «source=value» pairs separated by commas; empty turns a brake off.
+# Facebook's session lasted less the harder it was read (docs/FACEBOOK_RITMO.md).
+def _per_source(raw: str) -> dict[str, str]:
+    pairs = (item.split("=", 1) for item in raw.split(",") if "=" in item)
+    return {k.strip(): v.strip() for k, v in pairs if k.strip() and v.strip()}
+
+
+def _hours(value: str) -> tuple[int, int] | None:
+    start, _, end = value.partition("-")
+    try:
+        a, b = int(start), int(end)
+    except ValueError:
+        return None
+    return (a, b) if 0 <= a <= 23 and 0 <= b <= 24 and a != b else None
+
+
+DEFAULT_RUNS_PER_HOUR = "facebook=25"
+DEFAULT_QUIET_HOURS = "facebook=1-7"
+SOURCE_RUNS_PER_HOUR = {k: int(v) for k, v in _per_source(os.getenv("SOURCE_RUNS_PER_HOUR", DEFAULT_RUNS_PER_HOUR)).items()
+                        if v.isdigit() and int(v) > 0}
+SOURCE_QUIET_HOURS = {k: h for k, v in _per_source(os.getenv("SOURCE_QUIET_HOURS", DEFAULT_QUIET_HOURS)).items()
+                      if (h := _hours(v)) is not None}
+PACING_TZ = os.getenv("PACING_TZ", "America/Argentina/Buenos_Aires").strip() or "America/Argentina/Buenos_Aires"
 # Caps mark the scan incomplete rather than silently finishing a bootstrap.
 RECENT_ML_MAX_PAGES = max(1, int(os.getenv("RECENT_ML_MAX_PAGES", "100")))
 RECENT_FB_MAX_SCROLLS = max(1, int(os.getenv("RECENT_FB_MAX_SCROLLS", "200")))
