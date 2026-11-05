@@ -26,7 +26,7 @@ export default async function TermsPage() {
   const stockMax = trialReserve?.enabled && total != null && trialReserve.backfillMax < total ? trialReserve.backfillMax : null;
   const { free, pass, pro } = planLimits;
   return (
-    <LegalPage title="Términos de uso" updated="28 de octubre de 2026">
+    <LegalPage title="Términos de uso" updated="5 de noviembre de 2026">
       <p>
         Al crear una búsqueda con tu email o una cuenta en Ese Auto aceptás estos términos. Si no estás de acuerdo,
         no uses el servicio.
@@ -86,8 +86,9 @@ export default async function TermsPage() {
       <h2>Tu cuenta</h2>
       <p>
         Para la búsqueda gratis alcanza con tu email: al crearla queda creada tu cuenta, sin contraseña. Para volver a
-        entrar, por ejemplo desde otro dispositivo, te mandamos un link a ese email. Ese link da acceso a tu cuenta,
-        así que usá un email que sea tuyo, mantené privada tu casilla y no reenvíes los links que te mandamos.
+        entrar, por ejemplo desde otro dispositivo, te mandamos un código a ese email. Ese código da acceso a tu cuenta,
+        así que usá un email que sea tuyo, mantené privada tu casilla y no compartas los códigos ni los links que te
+        mandamos.
         Para contratar un plan necesitás una cuenta con el email confirmado y una contraseña: no compartas tu
         contraseña ni los links de confirmación o recuperación.
       </p>
