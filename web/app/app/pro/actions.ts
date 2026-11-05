@@ -15,6 +15,35 @@ export async function trackProCta(action: "viewed" | "clicked", placement: Place
   await track(supabase, user.id, action === "viewed" ? "pro_cta_viewed" : "pro_cta_clicked", { placement });
 }
 
+const QUOTA_POPUP_EVENTS = {
+  viewed: "quota_popup_viewed",
+  dismissed: "quota_popup_dismissed",
+  plan_selected: "quota_plan_selected",
+} as const;
+
+/**
+ * The pop-up shown after the free 50 results (FreeResultLimit): it was opened,
+ * closed without choosing, or a plan was picked. Never throws: a failed event
+ * must not get in the way of the checkout.
+ */
+export async function trackQuotaPopup(
+  action: keyof typeof QUOTA_POPUP_EVENTS,
+  profileId: number,
+  plan?: WaitlistPlan,
+): Promise<void> {
+  if (!(action in QUOTA_POPUP_EVENTS) || !Number.isInteger(profileId)) return;
+  try {
+    const user = await requireUser();
+    const supabase = await createClient();
+    await track(supabase, user.id, QUOTA_POPUP_EVENTS[action], {
+      search_profile_id: profileId,
+      ...(plan && isWaitlistPlan(plan) ? { plan } : {}),
+    });
+  } catch (error) {
+    console.error("quota popup event not recorded:", error);
+  }
+}
+
 /** "Sumarme a la lista de espera": the waitlist row and waitlist_joined with the plan (join_waitlist). */
 export async function joinWaitlist(plan: WaitlistPlan, placement: Placement | null): Promise<{ error?: string }> {
   await requireUser();
