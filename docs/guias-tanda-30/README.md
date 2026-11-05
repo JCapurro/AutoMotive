@@ -4,12 +4,11 @@ Las 25 guías que faltaban para completar los 30 modelos con más búsquedas act
 
 Siguen el mismo formato y criterio que las piloto (ver `docs/guias-piloto/README.md`). Cada archivo es el `p_values` completo para `admin_save_model_guide`: `make, model, generation_label, year_from, year_to, slug_make, slug_model, body, questions, sources`.
 
-- **Volkswagen Golf**: en producción ya hay un borrador vacío (id 6). Hay que cargarlo con `p_id => 6` y no con `null`, para no duplicar la fila. Las otras 24 se cargan con `p_id => null`.
 - Marca y modelo con la grafía de `vehicle_catalog`. Los slugs coinciden con `slugify()` de `web/lib/guides.ts`.
 - Validadas con `python -m json.tool` y con un test temporal de vitest (no commiteado) que corrió `GuideValuesInput` (zod), `lintGuide` (términos prohibidos y cifras de dinero), `publishProblem` y los slugs: las 25 pasan.
 - No hay montos de dinero.
 - `verified: true` quiere decir que la fuente se abrió y respalda renglones concretos de la guía. Los renglones sin fuente argentina están marcados en `applies_to` («reportes en Brasil», «otros mercados») o piden confirmar en el manual o con el VIN. Igual, quien publique tiene que leerlas y marcar «La revisé».
-- Las guías son **borradores para revisión**: no se escribió nada en la base.
+- **Cargadas en producción el 05/11/2026 como borradores** (`status = draft`, sin publicar) con `admin_save_model_guide`: el Golf sobre el borrador id 6 y las otras 24 con ids 7 a 30. Se comparó un md5 de `body`, `questions`, `sources`, `generation_label` y años de cada fila contra estos archivos: las 25 coinciden. Para publicarlas hay que revisarlas en `/admin/guides` y marcar «La revisé».
 
 ## Decisiones de generación que conviene revisar
 
