@@ -3,11 +3,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { AutoRefresh } from "@/components/app/auto-refresh";
+import { ExpiredMissed, type MissedSinceExpiry } from "@/components/app/expired-missed";
 import { LISTING_ROWS, ListingCard } from "@/components/app/listing-card";
 import { ProBanner } from "@/components/app/pro-cta";
 import { SearchLoadingButton } from "@/components/app/search-preparation";
 import { Button } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth";
+import { webConfig } from "@/lib/config";
 import type { ProCtaState } from "@/lib/pro";
 import { describeVehicle, filterParts } from "@/lib/search";
 import { costLinesFor } from "@/lib/cost-estimate-data";
@@ -22,11 +24,16 @@ export const metadata: Metadata = { title: "Inicio" };
 export default async function Dashboard() {
   const user = await requireUser();
   const supabase = await createClient();
-  const [{ data: searches }, { data: opportunities }, { data: cta }] = await Promise.all([
+  const [{ data: searches }, { data: opportunities }, { data: cta }, { data: missedRaw }, cfg] = await Promise.all([
     supabase.rpc("dashboard_summary"),
     supabase.rpc("recent_opportunities", { p_limit: 8 }),
     supabase.rpc("pro_cta_state"),
+    // Access ended: what its paused searches found since (20261211120000_pass_7.sql).
+    supabase.rpc("missed_since_expiry"),
+    webConfig(),
   ]);
+  const missed = missedRaw as MissedSinceExpiry | null;
+  const showMissed = missed != null && missed.found > 0 && cfg.commercialPilot;
   // §52: "Ver planes" after real activity or a plan limit.
   const pro = (cta ?? null) as ProCtaState | null;
   const [{ data: radii }, costLines, [marginLines, marginTeasers]] = await Promise.all([
@@ -60,6 +67,7 @@ export default async function Dashboard() {
 
   return (
     <div className="space-y-12">
+      {showMissed ? <ExpiredMissed missed={missed} offer={cfg.proOffer} automatic={cfg.automaticPayments} /> : null}
       <section>
         <div className="flex items-end justify-between gap-3">
           <h1 className="type-heading text-[30px] leading-tight">Mis búsquedas</h1>
@@ -147,7 +155,7 @@ export default async function Dashboard() {
         </div>
       </section>
 
-      {pro?.show && pro.reason ? <ProBanner placement="dashboard" reason={pro.reason} /> : null}
+      {!showMissed && pro?.show && pro.reason ? <ProBanner placement="dashboard" reason={pro.reason} /> : null}
 
       {!hasPending || opportunities?.length ? <section>
         <h2 className="type-heading text-[22px] leading-tight">Oportunidades recientes</h2>

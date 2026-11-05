@@ -1,20 +1,32 @@
 /** Ese Auto: route B. Keep the existing database plan identifiers. */
-export const WAITLIST_PLANS = ["pass_30", "pro_monthly"] as const;
+export const WAITLIST_PLANS = ["pass_7", "pass_30", "pro_monthly"] as const;
 export type WaitlistPlan = (typeof WAITLIST_PLANS)[number];
 export const PLACEMENTS = ["dashboard", "results", "settings", "plans"] as const;
 export type Placement = (typeof PLACEMENTS)[number];
 export function isWaitlistPlan(value: unknown): value is WaitlistPlan {
   return typeof value === "string" && (WAITLIST_PLANS as readonly string[]).includes(value);
 }
+/** The Particular passes: 30 days, and the 7-day entry pass (Juan, 05/11/2026). */
+export const PASS_OFFERS = ["pass_30", "pass_7"] as const;
+export type PassOffer = (typeof PASS_OFFERS)[number];
+export function isPassOffer(value: unknown): value is PassOffer {
+  return typeof value === "string" && (PASS_OFFERS as readonly string[]).includes(value);
+}
+/**
+ * Garantía (Juan, 05/11/2026): a pass is refunded in full when no car shows
+ * up for the account's searches during it. Refunded by hand from Cobros.
+ */
+export const PASS_GUARANTEE = "Garantía: si durante el pase no aparece ningún auto para tus búsquedas, te devolvemos el 100 %.";
 export function isPlacement(value: unknown): value is Placement {
   return typeof value === "string" && (PLACEMENTS as readonly string[]).includes(value);
 }
 export const PLAN_NAMES = { free: "Prueba gratis", pass: "Particular", pro: "Pro" } as const;
 export type PlanTier = keyof typeof PLAN_NAMES;
 /** The plan each offer buys (profiles.plan). */
-export const OFFER_TIER: Record<WaitlistPlan, Exclude<PlanTier, "free">> = { pass_30: "pass", pro_monthly: "pro" };
+export const OFFER_TIER: Record<WaitlistPlan, Exclude<PlanTier, "free">> = { pass_30: "pass", pass_7: "pass", pro_monthly: "pro" };
 export const PLAN_COPY: Record<WaitlistPlan, { name: string; period: string; pitch: string }> = {
   pass_30: { name: "Particular", period: "por 30 días", pitch: "Para encontrar tu próximo auto. Pago único." },
+  pass_7: { name: "Particular 7 días", period: "por 7 días", pitch: "Para probar una semana con todo. Pago único." },
   pro_monthly: { name: "Pro", period: "por mes", pitch: "Para agencias y revendedores que necesitan llegar primero." },
 };
 
@@ -123,13 +135,16 @@ export function alertsText(caps: PlanCaps): string {
 export const PRO_BENEFITS = ["Avisos cuando detectamos coincidencias", "Comparación de precios publicados",
   "Puntaje explicado y señales para revisar", "Historial, favoritos y varias búsquedas",
   "Búsqueda por carrocería, sin elegir modelo", "Aviso inmediato de bajas de precio en tus favoritos"];
-export type OfferPrice = { amount: number; currency: "ARS"; days: 30 };
+export type OfferPrice = { amount: number; currency: "ARS"; days: number };
 export type ProOffer = Record<WaitlistPlan, OfferPrice> & { version: string };
 /** As app_config.pro_offer since fase 3 (20261026120000_pro_price): only a fallback. */
 export const DEFAULT_PRO_OFFER: ProOffer = {
   version: "ars-pro-2026-10", pass_30: { amount: 15_000, currency: "ARS", days: 30 },
+  pass_7: { amount: 5_000, currency: "ARS", days: 7 },
   pro_monthly: { amount: 100_000, currency: "ARS", days: 30 },
 };
+/** The days each offer buys, as public.offer_days. */
+export const OFFER_DAYS: Record<WaitlistPlan, number> = { pass_30: 30, pass_7: 7, pro_monthly: 30 };
 export function proOffer(value: unknown): ProOffer {
   const raw = value && typeof value === "object" ? value as Record<string, unknown> : {};
   const out = { ...DEFAULT_PRO_OFFER };
@@ -137,7 +152,7 @@ export function proOffer(value: unknown): ProOffer {
   for (const plan of WAITLIST_PLANS) {
     const price = raw[plan] as Partial<OfferPrice> | undefined;
     // A legacy price_usd must never become a peso amount by changing its symbol.
-    if (price?.currency === "ARS" && price.days === 30 && typeof price.amount === "number"
+    if (price?.currency === "ARS" && price.days === OFFER_DAYS[plan] && typeof price.amount === "number"
       && Number.isSafeInteger(price.amount) && price.amount > 0) out[plan] = price as OfferPrice;
   }
   return out;
@@ -207,7 +222,7 @@ export function canAcquirePlan(access: PlanLimits | null): boolean {
   if (!access) return false;
   return access.plan === "free" || access.active === false;
 }
-/** A running Particular can be extended: the new 30 days add up to its end (2.4). */
+/** A running Particular can be extended: the new pass's days add up to its end (2.4). */
 export function extendsPass(access: PlanLimits | null): boolean {
   return access?.plan === "pass" && access.state === "paid" && access.active !== false;
 }

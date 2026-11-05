@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { analyticsEvent } from "@/lib/google-analytics";
 import { pixel } from "@/lib/meta-pixel";
-import { CUSTOM_PLAN, PLAN_COPY, planPrice, WAITLIST_PLANS, type ProOffer, type WaitlistPlan } from "@/lib/pro";
+import { CUSTOM_PLAN, isPassOffer, OFFER_DAYS, PLAN_COPY, planPrice, WAITLIST_PLANS, type ProOffer, type WaitlistPlan } from "@/lib/pro";
 import { ProductFeedback } from "@/components/app/product-feedback";
 
 type CheckoutOptions = { offer: ProOffer; automatic: boolean; pilot: boolean };
@@ -53,8 +53,8 @@ export function FreeResultPlans({ offer, automatic, pilot, onSelect }: CheckoutO
   return <div className="space-y-3">
     <div className="divide-y rounded-xl border px-4">
       {WAITLIST_PLANS.map((plan) => {
-        const Icon = plan === "pass_30" ? CarFront : Building2;
-        const terms = plan === "pass_30" ? "Pago único por 30 días" : automatic ? "Renovación mensual automática" : pilot ? "30 días · renovación manual" : "Por mes";
+        const Icon = isPassOffer(plan) ? CarFront : Building2;
+        const terms = isPassOffer(plan) ? `Pago único por ${OFFER_DAYS[plan]} días · si no aparece ningún auto, te devolvemos el 100 %` : automatic ? "Renovación mensual automática" : pilot ? "30 días · renovación manual" : "Por mes";
         const action = `${verb} ${PLAN_COPY[plan].name}`;
         return <button key={plan} type="button" aria-label={action} aria-describedby={`${id}-${plan}`} disabled={pending || (!automatic && requested === plan)}
           onClick={() => choose(plan)} className="group flex w-full items-center gap-3 py-4 text-left transition-colors outline-none hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-60">

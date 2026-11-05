@@ -13,7 +13,8 @@ export const MAX_LIFECYCLE_WINDOW_HOURS = 720;
 const count = z.number().int().min(0).max(MAX_CONFIG_INTEGER);
 const positiveCount = count.min(1);
 const price = z.object({ amount: z.number().int().positive().max(MAX_OFFER_ARS), currency: z.literal("ARS"), days: z.literal(30) }).passthrough();
-export const AdminOfferInput = z.object({ version: z.string().trim().min(1).max(80), pass_30: price, pro_monthly: price }).passthrough();
+const weekPrice = price.extend({ days: z.literal(7) });
+export const AdminOfferInput = z.object({ version: z.string().trim().min(1).max(80), pass_30: price, pass_7: weekPrice.optional(), pro_monthly: price }).passthrough();
 const plan = z.object({
   max_profiles: count.optional(), max_visible_results: positiveCount.nullable().optional(),
   max_total_results: positiveCount.optional(),
@@ -144,9 +145,9 @@ export function validateConfigChange(key: string, value: unknown, current: unkno
   if (value === null) return "El valor no puede ser null.";
   if (shape(current) !== shape(value)) return `El valor tiene que ser ${shape(current)}, como el actual.`;
   if (key === "pro_offer") {
-    if (!AdminOfferInput.safeParse(value).success) return "La oferta requiere versión (hasta 80 caracteres) y ambos planes con importe entero entre 1 y 9.999.999.999, moneda ARS y 30 días.";
+    if (!AdminOfferInput.safeParse(value).success) return "La oferta requiere versión (hasta 80 caracteres) y ambos planes con importe entero entre 1 y 9.999.999.999, moneda ARS y 30 días (7 en el pase de 7 días).";
     const before = proOffer(current), after = proOffer(value);
-    if (JSON.stringify([before.pass_30.amount, before.pro_monthly.amount]) !== JSON.stringify([after.pass_30.amount, after.pro_monthly.amount]) && before.version === after.version) {
+    if (JSON.stringify([before.pass_30.amount, before.pass_7.amount, before.pro_monthly.amount]) !== JSON.stringify([after.pass_30.amount, after.pass_7.amount, after.pro_monthly.amount]) && before.version === after.version) {
       return "Cambiá la versión de la oferta al modificar los importes. Cada confirmación debe identificar su precio.";
     }
   }
@@ -210,7 +211,7 @@ export function sameConfig(a: unknown, b: unknown): boolean {
 
 export type ConfigDifference = { path: string; before: unknown; after: unknown };
 export function configFieldLabel(key: string, path: string): string {
-  if (key === "pro_offer") return ({ version: "Versión de la oferta", "pass_30.amount": "Particular: importe (ARS)", "pro_monthly.amount": "Pro: importe (ARS)" } as Record<string, string>)[path] ?? path;
+  if (key === "pro_offer") return ({ version: "Versión de la oferta", "pass_30.amount": "Particular: importe (ARS)", "pass_7.amount": "Particular 7 días: importe (ARS)", "pro_monthly.amount": "Pro: importe (ARS)" } as Record<string, string>)[path] ?? path;
   if (key === "plan_limits") {
     const [tier, field] = path.split(".");
     const planName = ({ free: "Prueba gratis", pass: "Particular", pro: "Pro" } as Record<string, string>)[tier];

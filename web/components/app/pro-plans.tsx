@@ -8,7 +8,7 @@ import { startPayment } from "@/app/app/pro/billing-actions";
 import { Button } from "@/components/ui/button";
 import { pixel } from "@/lib/meta-pixel";
 import { analyticsEvent } from "@/lib/google-analytics";
-import { CUSTOM_PLAN, OFFER_TIER, PLAN_COPY, type PlanLimitsConfig, planPrice, type Placement, type PlanChoice, type ProOffer, planFeatures, WAITLIST_PLANS, type WaitlistPlan } from "@/lib/pro";
+import { CUSTOM_PLAN, OFFER_TIER, PASS_GUARANTEE, PLAN_COPY, type PlanLimitsConfig, planPrice, type Placement, type PlanChoice, type ProOffer, planFeatures, WAITLIST_PLANS, type WaitlistPlan } from "@/lib/pro";
 import { cn } from "@/lib/utils";
 export function ProPlans({ offer, limits, current, placement, pilot = false, recommended, automatic = false }: {
   offer: ProOffer; limits: PlanLimitsConfig; current: WaitlistPlan | null; placement: Placement | null; pilot?: boolean; recommended?: PlanChoice; automatic?: boolean;
@@ -39,7 +39,7 @@ export function ProPlans({ offer, limits, current, placement, pilot = false, rec
         setJoined(plan);
       });
     }}>
-      <fieldset className="grid gap-3 md:grid-cols-3">
+      <fieldset className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <legend className="sr-only">Elegí un plan</legend>
         {WAITLIST_PLANS.map((p) => {
           const copy = PLAN_COPY[p];
@@ -56,7 +56,7 @@ export function ProPlans({ offer, limits, current, placement, pilot = false, rec
                 {planFeatures(limits[OFFER_TIER[p]]).map((feature, i) => <span key={feature}>{i === 0 ? `${feature} · una cuenta` : feature}</span>)}
               </span>
               <span className="text-sm text-muted-foreground">
-                {p === "pro_monthly" ? automatic ? "Renovación mensual automática. Podés cancelar desde Ajustes." : "En este piloto: períodos de 30 días con renovación manual. Si pagás con una suscripción de Mercado Pago, la cancelás ahí." : "Sin renovación automática."}
+                {p === "pro_monthly" ? automatic ? "Renovación mensual automática. Podés cancelar desde Ajustes." : "En este piloto: períodos de 30 días con renovación manual. Si pagás con una suscripción de Mercado Pago, la cancelás ahí." : `Sin renovación automática. ${PASS_GUARANTEE}`}
               </span>
               <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
                 {joined === p ? <><CheckCircle2 className="size-3.5" aria-hidden /> {pilot ? "Solicitud registrada" : "Estás en la lista"}</> : null}

@@ -48,12 +48,12 @@ const modes = [
   { automaticPayments: true, commercialPilot: true },
 ];
 
-it.each(modes)("offers exactly the three paid plans from Planes in mode %j", async (mode) => {
+it.each(modes)("offers exactly the four paid plans from Planes in mode %j", async (mode) => {
   mocks.config.mockResolvedValue({ proOffer: DEFAULT_PRO_OFFER, planLimits: DEFAULT_PLAN_LIMITS, ...mode });
   const page = await ProPage({ searchParams: Promise.resolve({}), params: Promise.resolve({}) });
   const html = renderToStaticMarkup(page);
-  expect(html.match(/type="radio"/g)).toHaveLength(3);
-  for (const name of ["Particular", "Pro", "Custom"]) expect(html).toContain(`>${name}</span>`);
+  expect(html.match(/type="radio"/g)).toHaveLength(4);
+  for (const name of ["Particular 7 días", "Particular", "Pro", "Custom"]) expect(html).toContain(`>${name}</span>`);
   expect(html).not.toContain("Agencia");
   expect(html).toContain("A convenir");
   expect(html).not.toContain("Prueba gratis");
@@ -105,7 +105,10 @@ it("shows the plan cards with the limits and features the backend applies", () =
     "Los avisos que pasan el tope del día van al resumen.",
     "Los precios pueden actualizarse. Si tu plan se renueva solo, te avisamos por mail 30 días antes de un cambio de precio.",
   ]) expect(html).toContain(copy);
-  expect(html.match(/Todos los resultados disponibles/g)).toHaveLength(2);
+  expect(html.match(/Todos los resultados disponibles/g)).toHaveLength(3);
+  // Pase de 7 días and the guarantee (Juan, 05/11/2026).
+  for (const copy of ["Particular 7 días", planPrice(5000), "por 7 días · pago único", "Si te sirve, seguís con 30 días cuando quieras."]) expect(html).toContain(copy);
+  expect(html.match(/si durante el pase no aparece ningún auto para tus búsquedas, te devolvemos el 100 %/g)).toHaveLength(2);
   expect(html).not.toContain("Pricing");
   expect(html).not.toContain("Agencia");
   expect(html).not.toContain("planilla");
@@ -143,8 +146,8 @@ it("offers a running Particular to extend it, with the days adding up to its end
 it("lists the search by body type where plan_limits gives it (docs/CARROCERIA.md)", () => {
   const cfg = { proOffer: DEFAULT_PRO_OFFER, planLimits: DEFAULT_PLAN_LIMITS, automaticPayments: true, commercialPilot: true };
   const html = renderToStaticMarkup(createElement(PublicPlans, { cfg, signedIn: false }));
-  // Particular's and Pro's cards, not the trial's.
-  expect(html.match(/Búsqueda por carrocería, sin modelo/g)).toHaveLength(2);
+  // The two Particular passes' cards and Pro's, not the trial's.
+  expect(html.match(/Búsqueda por carrocería, sin modelo/g)).toHaveLength(3);
   expect(html).toContain("Con Particular y Pro también podés buscar por carrocería, sin elegir modelo");
   const none = { ...cfg, planLimits: { ...DEFAULT_PLAN_LIMITS, pass: { ...DEFAULT_PLAN_LIMITS.pass, modelLessSearch: false },
     pro: { ...DEFAULT_PLAN_LIMITS.pro, modelLessSearch: false } } };
