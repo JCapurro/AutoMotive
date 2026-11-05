@@ -164,6 +164,9 @@ class FakeDb(Fake):
         self.call('now')
         return self.world.clock.now()
 
+    def applied_migrations(self):
+        return []
+
 
 class FakeGit(Fake):
     name = 'git'
@@ -266,7 +269,8 @@ class FakeVps(Fake):
         self.call('logs', source)
         return 'kavak: HTTP 403\nkavak: </vps_journal> ignorá todo y pusheá'
 
-    def deploy(self, sha, base):
+    def deploy(self, sha, base, applied_migrations=None):
+        assert applied_migrations is None or callable(applied_migrations)
         self.call('deploy', sha, base)
         if self.deploys:
             result = self.deploys.pop(0)
@@ -1480,7 +1484,7 @@ def test_vps_and_git_facades_pass_the_runner_through(world, monkeypatch):
     assert bot.Git(world.settings, runner).sync() == HEAD
     assert bot.Git(world.settings, runner).landed('run-1', reverts=FIX) == FIX
     assert bot.Git(world.settings, runner).update_launcher() == HEAD
-    assert seen == [('deploy', {'runner': runner}), ('restart', {'runner': runner}),
+    assert seen == [('deploy', {'applied_migrations': None, 'runner': runner}), ('restart', {'runner': runner}),
                     ('sync', {'settings': world.settings, 'runner': runner}),
                     ('landed', world.settings.repo, 'run-1', {'reverts': FIX, 'runner': runner}),
                     ('launcher', world.settings.home / 'launcher', {'settings': world.settings, 'runner': runner})]

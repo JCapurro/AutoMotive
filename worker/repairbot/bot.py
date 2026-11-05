@@ -113,6 +113,9 @@ class Database:
     def now(self) -> datetime:
         return self._call('db_now')
 
+    def applied_migrations(self) -> list[str]:
+        return self._call('applied_migrations')
+
 
 class Claude:
     def __init__(self, settings: Settings):
@@ -215,9 +218,9 @@ class Vps:
         from repairbot import vps
         return vps.logs(self.settings, source, runner=self.runner)
 
-    def deploy(self, sha: str, base: str) -> dict:
+    def deploy(self, sha: str, base: str, applied_migrations=None) -> dict:
         from repairbot import vps
-        return vps.deploy(self.settings, sha, base, runner=self.runner)
+        return vps.deploy(self.settings, sha, base, applied_migrations=applied_migrations, runner=self.runner)
 
     def restart(self) -> dict:
         from repairbot import vps
@@ -830,7 +833,7 @@ class _Tick:
             deploy['base'] = deploy.get('base') or self.git.parent(sha)
         except GitError as error:
             return self.unpublish(state, f'no se pudo calcular la base del deploy: {error}', vps_has_it=False)
-        result = self.vps.deploy(sha, deploy['base'])
+        result = self.vps.deploy(sha, deploy['base'], self.db.applied_migrations)
         if not result.get('ok'):
             code, head = result.get('code'), result.get('head')
             reason = f'{code}: {result.get("reason")}'
@@ -1005,7 +1008,7 @@ class _Tick:
         try:
             revert = self.push_revert(state, undo['label'], resumed=resumed)
             if undo['deploy_it']:   # 'already' when an earlier tick deployed it
-                result = self.vps.deploy(revert, self.git.parent(revert))
+                result = self.vps.deploy(revert, self.git.parent(revert), self.db.applied_migrations)
                 if not result.get('ok'):
                     raise VpsError(f'el VPS no aceptó el revert {revert[:12]}: {result.get("code")}: {result.get("reason")}')
         except (GitError, VpsError) as error:

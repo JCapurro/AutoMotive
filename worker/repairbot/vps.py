@@ -406,7 +406,7 @@ def probe(settings, repo: Path, source: str, *, target_id: int | None, filters: 
     return result
 
 
-def deploy(settings, sha: str, base: str, **kw) -> dict:
+def deploy(settings, sha: str, base: str, *, applied_migrations=None, **kw) -> dict:
     """Fast-forward the VPS checkout from `base` to `sha` (already pushed). No restart here.
     Returns {ok, code, reason, prev_head, head, contains}; a refusal or an unreachable VPS is ok=False.
     head is the VPS HEAD as last read and contains says whether it is sha or descends from it, so
@@ -414,7 +414,13 @@ def deploy(settings, sha: str, base: str, **kw) -> dict:
     already contains sha is 'already' (ok). With head None the HEAD is unknown: 'ssh_error' and
     'wrong_host' changed nothing, while 'unknown_state' means the merge was sent but neither its
     answer nor a second read came back: the VPS may or may not be on sha (contains False then
-    means unknown, not no)."""
+    means unknown, not no).
+
+    Code already on main that the VPS lacks rides along: it was merged on purpose, and leaving
+    the VPS behind meant every later fix got reverted (05/11/2026). Only a migration that is
+    not applied in the database blocks ('pending_changes'): the worker would run against a
+    schema it does not know. `applied_migrations` returns the applied versions; None or a
+    failing read treats every pending migration as not applied."""
     sha, base = _checked(_SHA, sha, 'sha'), _checked(_SHA, base, 'base')
     result = {'ok': False, 'prev_head': None, 'head': None, 'contains': False, 'reason': '', 'code': ''}
 
@@ -462,11 +468,13 @@ def deploy(settings, sha: str, base: str, **kw) -> dict:
         return done('missing_commit', 'el VPS no encuentra el commit en origin (¿falta el push?)')
     if _one(facts, 'on_main') != '1':
         return done('not_on_main', 'el commit no está en origin/main')
-    blocking = [name for name in (line.strip('"') for line in facts.get('pending', []))
-                if name.startswith(('worker/', 'supabase/'))]
-    if prev != base and blocking:
-        return done('pending_changes', 'hay cambios sin desplegar que requieren a una persona: '
-                    + ', '.join(blocking[:10]))
+    migrations = [name for name in (line.strip('"') for line in facts.get('pending', []))
+                  if name.startswith('supabase/migrations/') and name.endswith('.sql')]
+    if prev != base and migrations:
+        blocking = _unapplied(migrations, applied_migrations)
+        if blocking:
+            return done('pending_changes', 'hay migraciones sin aplicar en la base que requieren a una persona: '
+                        + ', '.join(blocking[:10]))
     try:
         facts = _facts(_call(settings, DEPLOY_APPLY, kw, timeout=180, sha=sha, prev=prev))
     except VpsError as error:   # the merge may have run before the answer was lost
@@ -487,6 +495,16 @@ def deploy(settings, sha: str, base: str, **kw) -> dict:
     if 'done' not in facts or head != sha:
         return done('ssh_error', 'el VPS no confirmó el deploy')
     return done('deployed', '', ok=True)
+
+
+def _unapplied(paths: list[str], applied_migrations) -> list[str]:
+    """The pending migration files whose version is not in the database."""
+    try:
+        applied = {str(version) for version in applied_migrations()} if applied_migrations else set()
+    except Exception as error:   # no database: nothing proves they are applied
+        log.warning('no se pudieron leer las migraciones aplicadas: %s', error)
+        applied = set()
+    return [path for path in paths if path.rsplit('/', 1)[-1].split('_', 1)[0] not in applied]
 
 
 def restart_worker(settings, **kw) -> dict:

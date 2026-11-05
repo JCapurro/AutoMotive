@@ -359,12 +359,15 @@ DEPLOY_CASES = {
     'undeployed docs and web only': ([facts(OTHER, 'on_main=1', 'pending=docs/COLLECTOR_REPAIR.md',
                                             'pending=web/app/page.tsx', 'pending=README.md'), APPLIED], BASE,
                                      True, 'deployed', OTHER, SHA, True, 2, ''),
-    'undeployed worker change': ([facts(OTHER, 'on_main=1', 'pending=docs/a.md', 'pending=worker/pipeline/crawl.py')],
-                                 BASE, False, 'pending_changes', OTHER, OTHER, False, 1,
-                                 'requieren a una persona: worker/pipeline/crawl.py'),
+    # Code merged to main rides along with the fix (05/11/2026: blocking it reverted every fix).
+    'undeployed worker change': ([facts(OTHER, 'on_main=1', 'pending=docs/a.md', 'pending=worker/pipeline/crawl.py'),
+                                  APPLIED], BASE, True, 'deployed', OTHER, SHA, True, 2, ''),
+    'undeployed non-migration supabase files': ([facts(OTHER, 'on_main=1', 'pending=supabase/config.toml',
+                                                       'pending=supabase/templates/recovery.html'), APPLIED], BASE,
+                                                True, 'deployed', OTHER, SHA, True, 2, ''),
     'undeployed migration': ([facts(OTHER, 'on_main=1', 'pending=supabase/migrations/20261017_x.sql')], BASE,
                              False, 'pending_changes', OTHER, OTHER, False, 1, 'supabase/migrations/20261017_x.sql'),
-    'undeployed quoted worker path': ([facts(OTHER, 'on_main=1', 'pending="worker/a\\303\\261o.py"')], BASE,
+    'undeployed quoted migration path': ([facts(OTHER, 'on_main=1', 'pending="supabase/migrations/20261017_a\\303\\261o.sql"')], BASE,
                                       False, 'pending_changes', OTHER, OTHER, False, 1, 'requieren a una persona'),
     'already deployed': ([facts(SHA, 'contains=1')], BASE, True, 'already', SHA, SHA, True, 1, 'ya estaba'),
     'already contained by a later commit': ([facts(OTHER, 'contains=1', 'pending=worker/collectors/kavak.py')], BASE,
@@ -426,6 +429,25 @@ def test_deploy_decision_table(name):
     for script in runner.scripts[2:]:                       # a second read never merges again
         assert 'merge --ff-only' not in script and 'fetch' not in script
         assert f'sudo -u automotive -H git merge-base --is-ancestor {SHA} "$head"' in script
+
+
+def _no_database():
+    raise RuntimeError('sin base')
+
+
+@pytest.mark.parametrize('applied, ok', [
+    (lambda: ['20261017', '20261018'], True),
+    (lambda: ['20261018'], False),
+    (_no_database, False),
+])
+def test_deploy_blocks_only_migrations_missing_from_the_database(applied, ok):
+    runner = FakeSsh(facts(OTHER, 'on_main=1', 'pending=supabase/migrations/20261017_x.sql',
+                           'pending=worker/pipeline/crawl.py'), APPLIED)
+    result = vps.deploy(settings(), SHA, BASE, applied_migrations=applied, runner=runner)
+    assert (result['ok'], result['code']) == ((True, 'deployed') if ok else (False, 'pending_changes'))
+    assert len(runner.calls) == (2 if ok else 1)
+    if not ok:
+        assert 'supabase/migrations/20261017_x.sql' in result['reason']
 
 
 def as_automotive(script: str) -> None:
@@ -946,12 +968,20 @@ def test_bash_deploy_carries_undeployed_documentation_along(local):
 
 
 @needs_bash
-def test_bash_deploy_refuses_undeployed_runtime_changes(local):
+def test_bash_deploy_carries_undeployed_runtime_changes_along(local):
     runtime = local.publish('pipeline', **{'worker/pipeline/crawl.py': 'def run():\n    return 2\n'})
     fix = local.publish('fix', **{'worker/collectors/kavak.py': 'PRICE = "fixed"\n'})
     result = vps.deploy(local.settings, fix, runtime, runner=local)
+    assert (result['ok'], result['code']) == (True, 'deployed') and local.head() == fix
+
+
+@needs_bash
+def test_bash_deploy_refuses_an_unapplied_migration(local):
+    migration = local.publish('migration', **{'supabase/migrations/20261017_x.sql': 'select 1;\n'})
+    fix = local.publish('fix', **{'worker/collectors/kavak.py': 'PRICE = "fixed"\n'})
+    result = vps.deploy(local.settings, fix, migration, applied_migrations=lambda: [], runner=local)
     assert (result['ok'], result['code']) == (False, 'pending_changes') and local.head() == local.base
-    assert 'requieren a una persona: worker/pipeline/crawl.py' in result['reason']
+    assert 'supabase/migrations/20261017_x.sql' in result['reason']
 
 
 @needs_bash

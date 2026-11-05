@@ -106,6 +106,12 @@ async def runs_since(cx, source: str, target_ids: list[int], since: datetime) ->
     return [{**row, 'error': safe_text(row['error']) or None} for row in rows]
 
 
+async def applied_migrations(cx) -> list[str]:
+    """Versions of the Supabase migrations applied in this database."""
+    rows = await (await cx.execute('SELECT version FROM supabase_migrations.schema_migrations')).fetchall()
+    return [str(row['version']) for row in rows]
+
+
 async def db_now(cx) -> datetime:
     """The database clock, the one collector_runs.started_at is compared against."""
     return (await (await cx.execute('SELECT clock_timestamp() AS now')).fetchone())['now']
