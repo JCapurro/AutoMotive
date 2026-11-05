@@ -25,7 +25,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
           {/* Old links still carry ?mode=signup or ?mode=recover: there's one screen for all of them now. */}
           <CardTitle className="text-lg">Entrá a Ese Auto</CardTitle>
           <CardDescription>{paying ? "Para contratar un plan, entrá con tu email. Si es tu primera vez, te creamos la cuenta."
-            : "Te mandamos un código a tu email para entrar. Sin contraseña."}</CardDescription>
+            : "Escribí tu email para entrar. Si es tu primera vez, te creamos la cuenta."}</CardDescription>
         </CardHeader>
         <CardContent>
           <LoginForm next={next} linkError={params.error === "link"} googleError={params.error === "google"} mailbox={localMailbox} passwordUpdated={params.password === "updated"} inApp={inApp} />

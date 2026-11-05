@@ -32,7 +32,7 @@ test("una vista previa no consume el enlace, y un link viejo de registro sigue f
     await expect(page).toHaveURL(/\/login\?error=link/);
     await expect(page.getByRole("alert").filter({ hasText: "Este link ya se usó" })).toBeVisible();
     await page.getByLabel("Email", { exact: true }).fill(email);
-    await page.getByRole("button", { name: "Tengo contraseña" }).click();
+    await page.getByRole("button", { name: "Continuar", exact: true }).click();
     await page.getByLabel("Contraseña", { exact: true }).fill(password);
     await page.getByRole("button", { name: "Ingresar", exact: true }).click();
     await expect(page).toHaveURL(/\/app\/settings$/);
@@ -48,7 +48,7 @@ test("una vista previa no consume el enlace, y un link viejo de registro sigue f
     await page.getByRole("button", { name: "Guardar contraseña" }).click();
     await expect(page).toHaveURL(/\/login\?password=updated(&next=%2Fapp)?$/);
     await page.getByLabel("Email", { exact: true }).fill(email);
-    await page.getByRole("button", { name: "Tengo contraseña" }).click();
+    await page.getByRole("button", { name: "Continuar", exact: true }).click();
     await page.getByLabel("Contraseña", { exact: true }).fill(replacement);
     await page.getByRole("button", { name: "Ingresar", exact: true }).click();
     await expect(page).toHaveURL(/\/app$/);

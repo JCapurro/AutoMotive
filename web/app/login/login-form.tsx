@@ -11,9 +11,10 @@ import { analyticsEvent } from "@/lib/google-analytics";
 import { type LoginState, login, signInWithGoogle } from "./actions";
 
 /**
- * Entrar: the email, then the code we mail to it (docs/AUTENTICACION.md).
- * An email without an account gets one, so there's no separate signup.
- * A password, for whoever has one, and Google stay as the other ways.
+ * Entrar, email first (docs/AUTENTICACION.md): «Continuar», then the password
+ * if the account has one, or the code we mail otherwise. An email without an
+ * account gets one with the code, so there's no separate signup. Google stays
+ * as the other way.
  */
 export function LoginForm({ next, linkError, googleError = false, mailbox = "", passwordUpdated = false, inApp = false }: {
   next: string; linkError: boolean; googleError?: boolean; mailbox?: string; passwordUpdated?: boolean;
@@ -62,30 +63,39 @@ export function LoginForm({ next, linkError, googleError = false, mailbox = "", 
         <button type="submit" name="intent" value="send-code" formNoValidate className="underline underline-offset-4" disabled={busy}>Mandame otro código</button>
         <button type="submit" name="intent" value="change-email" formNoValidate className="underline underline-offset-4" disabled={busy}>Usar otro email</button>
       </div>
+    </form> : state.step === "password" ? <form action={submit} className="space-y-4">
+      <input type="hidden" name="next" value={next} />
+      <div className="space-y-1">
+        <p className="text-sm text-muted-foreground">Entrás como</p>
+        <div className="flex items-center justify-between gap-3">
+          <b className="min-w-0 [overflow-wrap:anywhere]" data-testid="login-email">{state.email}</b>
+          <button type="submit" name="intent" value="change-email" formNoValidate className="shrink-0 text-sm underline underline-offset-4" disabled={busy}>Cambiar</button>
+        </div>
+        {/* For password managers: the account the password belongs to. */}
+        <input type="email" name="email" value={state.email ?? ""} autoComplete="username" readOnly tabIndex={-1} aria-hidden="true" className="sr-only" />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="password">Contraseña</Label>
+        <Input id="password" name="password" type="password" autoComplete="current-password" required autoFocus className="h-10"
+          aria-invalid={state.error ? true : undefined} aria-describedby={state.error ? "password-error" : undefined} />
+      </div>
+      {state.error ? <p id="password-error" role="alert" className="text-sm text-destructive">{state.error}</p> : null}
+      <Button className="h-10 w-full" name="intent" value="password" disabled={busy}>{pending ? "Entrando…" : "Ingresar"}</Button>
+      <button type="submit" name="intent" value="send-code" formNoValidate className="block w-full text-center text-sm underline underline-offset-4" disabled={busy}>Olvidé mi contraseña: mandame un código</button>
     </form> : <form action={submit} className="space-y-4">
       <input type="hidden" name="next" value={next} />
       <div className="space-y-2">
         <Label htmlFor="email">Email</Label>
         <Input id="email" name="email" type="email" inputMode="email" autoComplete="email" autoCapitalize="none" spellCheck={false} required placeholder="vos@email.com"
-          defaultValue={state.email} className="h-10" />
+          defaultValue={state.email} autoFocus={Boolean(state.email)} className="h-10"
+          aria-invalid={state.error ? true : undefined} aria-describedby={state.error ? "email-error" : undefined} />
       </div>
-      {state.step === "password" ? <div className="space-y-2">
-        <Label htmlFor="password">Contraseña</Label>
-        <Input id="password" name="password" type="password" autoComplete="current-password" required autoFocus className="h-10" />
-      </div> : null}
-      {state.error ? <p role="alert" className="text-sm text-destructive">{state.error}</p> : null}
-      {state.step === "password" ? <>
-        <Button className="h-10 w-full" name="intent" value="password" disabled={busy}>{pending ? "Entrando…" : "Ingresar"}</Button>
-        <button type="submit" name="intent" value="send-code" formNoValidate className="block w-full text-center text-sm underline underline-offset-4" disabled={busy}>Mejor mandame un código</button>
-      </> : <>
-        <Button className="h-10 w-full" name="intent" value="send-code" disabled={busy}>{pending ? "Enviando…" : "Mandame un código"}</Button>
-        <p className="text-xs text-muted-foreground">Sin contraseña: te llega un código al email. Si es tu primera vez, con eso creamos tu cuenta.</p>
-        <button type="submit" name="intent" value="use-password" formNoValidate className="block w-full text-center text-sm underline underline-offset-4" disabled={busy}>Tengo contraseña</button>
-      </>}
+      {state.error ? <p id="email-error" role="alert" className="text-sm text-destructive">{state.error}</p> : null}
+      <Button className="h-10 w-full" name="intent" value="continue" disabled={busy}>{pending ? "Un momento…" : "Continuar"}</Button>
     </form>}
 
-    {state.step !== "code" && inApp ? <p className="text-center text-xs text-muted-foreground">Para entrar con Google, abrí esta página en tu navegador (menú ⋯ › Abrir en el navegador).</p> : null}
-    {state.step !== "code" && !inApp ? <>
+    {state.step === "email" && inApp ? <p className="text-center text-xs text-muted-foreground">Para entrar con Google, abrí esta página en tu navegador (menú ⋯ › Abrir en el navegador).</p> : null}
+    {state.step === "email" && !inApp ? <>
       <div className="flex items-center gap-3 text-xs text-muted-foreground"><span className="h-px flex-1 bg-border" />o<span className="h-px flex-1 bg-border" /></div>
       <form action={googleSubmit} className="space-y-2">
         <input type="hidden" name="next" value={next} />
@@ -97,6 +107,6 @@ export function LoginForm({ next, linkError, googleError = false, mailbox = "", 
       </form>
     </> : null}
 
-    {state.step !== "code" && !paying ? <p className="text-center text-sm"><Link className="underline" href="/#crear-busqueda">¿Buscás un auto? Creá tu búsqueda gratis</Link></p> : null}
+    {state.step === "email" && !paying ? <p className="text-center text-sm"><Link className="underline" href="/#crear-busqueda">¿Buscás un auto? Creá tu búsqueda gratis</Link></p> : null}
   </div>;
 }

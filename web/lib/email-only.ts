@@ -29,6 +29,20 @@ export async function accountForEmail(email: string): Promise<ExistingAccount | 
 }
 
 /**
+ * Whether /login should ask this account for its password (option A,
+ * 05/11): a confirmed full account that signed up with email and password.
+ * Email-only accounts, unconfirmed signups and Google-only accounts enter with
+ * the code. GoTrue doesn't say whether a password is set; the `email`
+ * identity is what a password signup leaves (Google gives a `google` one).
+ */
+export async function hasPassword(account: ExistingAccount): Promise<boolean> {
+  if (account.email_only || !account.confirmed) return false;
+  const { data, error } = await createAdminClient().auth.admin.getUserById(account.user_id);
+  if (error || !data.user) throw new Error(`getUserById: ${error?.message ?? "no user"}`);
+  return (data.user.identities ?? []).some((identity) => identity.provider === "email");
+}
+
+/**
  * A new email-only account, marked before any session can exist. When the
  * email got an account in between, that one comes back as `existing` (the
  * caller treats it as an existing email). `discard` deletes the new one, for a
