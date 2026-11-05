@@ -443,9 +443,21 @@ async def _get(url: str, what: str, *, allow_404: bool = False) -> Page:
         raise CollectorBlocked(f"mercadolibre {what}: {reason}; HTTP {page.status}; destination={_safe_url(page.url)}")
     if page.status in (403, 429):
         raise CollectorBlocked(f"mercadolibre {what}: HTTP {page.status}; destination={_safe_url(page.url)}")
-    if page.status >= 400 and not (allow_404 and page.status == 404):
+    if page.status >= 400 and not (allow_404 and page.status == 404) and not _empty_text_search(what, page):
         raise RuntimeError(f"mercadolibre {what} HTTP {page.status}: {_safe_url(page.url)}")
     return page
+
+
+def _empty_text_search(what: str, page: Page) -> bool:
+    """A model that isn't in ML's catalog ("k3", 05/11/2026) is searched as
+    text within the make, and an empty one answers 404 with the "no results"
+    page: zero results, once the make applied. A make that didn't apply (a
+    bad slug like "citro-n") still fails the run."""
+    if what != "search" or page.status != 404 or not page.html:
+        return False
+    if soup(page.html).select_one(".ui-search-rescue--zrp") is None:
+        return False
+    return any(key == "BRAND" for key, _ in search_state(page.html).applied)
 
 
 # ---------- whole stock ----------

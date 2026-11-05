@@ -106,6 +106,25 @@ class CollectorTransportTests(unittest.IsolatedAsyncioTestCase):
         found, _ = await self.search([("https://autos.mercadolibre.com.ar/_NoIndex_True", '<div class="ui-search-rescue"></div>', 200)])
         self.assertEqual(found, [])
 
+    async def test_an_empty_text_search_answering_404_is_zero_results(self):
+        # Kia K3 "Publicados hoy" with nothing today (05/11/2026): HTTP 404 and the no-results page.
+        html = (FIXTURES / "mercadolibre_zrp_404.html").read_text(encoding="utf-8")
+        url = "https://autos.mercadolibre.com.ar/kia/k3_PublishedToday_YES_NoIndex_True"
+        found, _ = await self.search([(url, html, 404)], {"marca": "Kia", "modelo": "K3"})
+        self.assertEqual(found, [])
+        found, _ = await self.search([(url, html, 404)], {"marca": "Kia", "modelo": "K3", "publication_days": 1})
+        self.assertEqual(list(found), [])
+        self.assertTrue(found.complete)
+
+    async def test_a_404_search_without_the_make_applied_still_fails(self):
+        html = (FIXTURES / "mercadolibre_zrp_404.html").read_text(encoding="utf-8").replace(
+            ',{"key":"BRAND","value":"374002"}', "")
+        for page in [("https://autos.mercadolibre.com.ar/citro-n/basalt_NoIndex_True", html, 404),
+                     ("https://autos.mercadolibre.com.ar/x_NoIndex_True", "<html>not found</html>", 404)]:
+            with self.subTest(html=page[1][:20]):
+                with self.assertRaisesRegex(RuntimeError, "HTTP 404"):
+                    await self.search([page])
+
     async def test_detail_returns_final_url_and_http_status(self):
         url = "https://auto.mercadolibre.com.ar/MLA-1675249827-toyota-_JM"
         html = (FIXTURES / "mercadolibre_detail.html").read_text(encoding="utf-8")
