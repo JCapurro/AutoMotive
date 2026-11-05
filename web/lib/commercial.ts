@@ -2,7 +2,8 @@ import { z } from "zod";
 import { WAITLIST_PLANS } from "@/lib/pro";
 
 const PriceInput = z.object({ amount: z.number().int().positive().safe(), currency: z.literal("ARS"), days: z.literal(30) }).strict();
-export const CommercialOfferInput = z.object({ version: z.string().trim().min(1).max(80), pass_30: PriceInput, pro_monthly: PriceInput }).strict();
+const WeekPriceInput = PriceInput.extend({ days: z.literal(7) });
+export const CommercialOfferInput = z.object({ version: z.string().trim().min(1).max(80), pass_30: PriceInput, pass_7: WeekPriceInput.optional(), pro_monthly: PriceInput }).strict();
 
 export const PaymentInput = z.object({
   userId: z.uuid(), offer: z.enum(WAITLIST_PLANS),

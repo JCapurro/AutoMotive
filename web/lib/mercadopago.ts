@@ -18,11 +18,14 @@ export function checkoutUrl(value: string, allowSandbox = false) {
   return url.href;
 }
 
-/** Calendar month in the provider's billing timezone, clamping January 31 to February's last day. */
-export function paymentPeriod(value: string, monthly: boolean) {
+/**
+ * A pass: its days from the payment (`days`, 30 or 7). Monthly: a calendar
+ * month in the provider's billing timezone, clamping January 31 to February's last day.
+ */
+export function paymentPeriod(value: string, monthly: boolean, days = 30) {
   const date = new Date(value);
   if (!Number.isFinite(date.getTime())) throw new Error("invalid_payment_date");
-  if (!monthly) return { start: date.toISOString(), end: new Date(date.getTime() + 30 * 86400000).toISOString() };
+  if (!monthly) return { start: date.toISOString(), end: new Date(date.getTime() + days * 86400000).toISOString() };
   const offset = value.match(/([+-])(\d{2}):(\d{2})$/);
   const minutes = offset ? (offset[1] === "+" ? 1 : -1) * (Number(offset[2]) * 60 + Number(offset[3])) : 0;
   const local = new Date(date.getTime() + minutes * 60000);

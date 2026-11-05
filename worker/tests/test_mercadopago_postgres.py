@@ -256,3 +256,68 @@ class MercadoPagoTests(PostgresTestCase):
         self.assertEqual(await self.expiry(), {'plan': 'pass', 'plan_expires_at': extension_end})
         self.assertEqual((await self.access())['state'], 'paid')
 
+    # -- Pase de 7 días (20261211120000_pass_7.sql) ---------------------------
+
+    async def test_the_7_day_pass_buys_particular_for_7_days(self):
+        checkout = await self.checkout('pass_7')
+        self.assertEqual((checkout['offer'], checkout['amount']), ('pass_7', 5000))
+        with self.assertRaisesRegex(Exception, 'invalid_payment_period'):
+            await self.apply(checkout, ref='401')  # 30 days for a 7-day pass
+        await self.apply(checkout, ref='401', end="now()+interval '7 days'")
+        [period] = await self.rows("SELECT period_start, period_end FROM commercial_payments WHERE reference='401'")
+        self.assertEqual((period['period_end'] - period['period_start']).days, 7)
+        self.assertEqual((await self.access())['plan'], 'pass')
+        self.assertEqual((await self.rows("SELECT status FROM billing_checkouts WHERE id=%s", checkout['id']))[0]['status'], 'paid')
+
+    async def test_the_7_day_pass_and_the_30_day_one_extend_each_other(self):
+        first = await self.checkout('pass_7')
+        await self.apply(first, ref='411', end="now()+interval '7 days'")
+        end_7 = (await self.expiry())['plan_expires_at']
+        second = await self.checkout()
+        await self.apply(second, ref='412')
+        self.assertEqual(((await self.expiry())['plan_expires_at'] - end_7).days, 30)
+        third = await self.checkout('pass_7')
+        before = (await self.expiry())['plan_expires_at']
+        await self.apply(third, ref='413', end="now()+interval '7 days'")
+        self.assertEqual(((await self.expiry())['plan_expires_at'] - before).days, 7)
+        self.assertEqual(len(await self.rows("SELECT 1 FROM events WHERE name='pass_extended' AND user_id=%s", self.user)), 2)
+        # Refunded newest first, the access goes back to the 30-day pass's end.
+        await self.apply(third, ref='413', status='refunded')
+        self.assertEqual(await self.expiry(), {'plan': 'pass', 'plan_expires_at': before})
+
+    async def test_no_five_days_left_email_for_a_7_day_pass(self):
+        await self.apply(await self.checkout('pass_7'), ref='421', end="now()+interval '7 days'")
+        await self.rows("UPDATE commercial_payments SET period_start=now()-interval '2 days 1 hour', "
+                        "period_end=now()+interval '4 days 23 hours' WHERE reference='421'")
+        await self.rows("UPDATE profiles SET plan_expires_at=now()+interval '4 days 23 hours' WHERE id=%s", self.user)
+        [due] = await self.rows("SELECT extract(epoch from plan_expires_at)::bigint::text AS k FROM profiles WHERE id=%s", self.user)
+        [row] = await self.rows("SELECT pass_expiry_eligible(%s,'pass_expiring',%s) AS v", self.user, due['k'])
+        self.assertFalse(row['v'])
+        # A 30-day pass at the same point still gets it.
+        await self.rows("UPDATE commercial_payments SET period_start=now()-interval '25 days 1 hour' WHERE reference='421'")
+        [row] = await self.rows("SELECT pass_expiry_eligible(%s,'pass_expiring',%s) AS v", self.user, due['k'])
+        self.assertTrue(row['v'])
+
+    async def test_the_expiry_screen_counts_what_the_paused_searches_found(self):
+        await self.rows("UPDATE profiles SET free_trial_started_at = now() - interval '10 days' WHERE id=%s", self.user)
+        self.assertIsNone((await self.rows("SELECT missed_since_expiry() AS v", actor=self.user))[0]['v'])
+        first, second = await self.paused_search('Gol', 150), await self.paused_search('Cruze', 150)
+        [t] = await self.rows("SELECT now() - interval '40 days' AS old, now() - interval '7 days' AS ended")
+        old_end, end = t['old'], t['ended']
+        listings = []
+        for n in range(4):
+            [row] = await self.rows("INSERT INTO listings (source, external_id, url, title, make, model, year, price, currency) "
+                                    "VALUES ('mercadolibre', %s, %s, 'Pgtap Gol', 'Pgtap', 'Gol', 2015, 10000, 'USD') RETURNING id",
+                                    f"p7-{self.user[:8]}-{n}", f"https://example.test/p7/{self.user}/{n}")
+            listings.append(row['id'])
+        for profile, listing, level, ended in ((first, listings[0], 'high', end), (first, listings[1], 'match', end),
+                                               (second, listings[1], 'match', end), (second, listings[2], 'high', end),
+                                               (second, listings[3], 'high', old_end)):
+            await self.rows("INSERT INTO expired_search_matches (search_profile_id, listing_id, access_ended_at, level) "
+                            "VALUES (%s, %s, %s, %s)", profile, listing, ended, level)
+        [row] = await self.rows("SELECT missed_since_expiry() AS v", actor=self.user)
+        self.assertEqual((row['v']['found'], row['v']['below']), (3, 2))
+        # Another account sees nothing of it, and a running pass hides it.
+        self.assertIsNone((await self.rows("SELECT missed_since_expiry() AS v", actor=await self.account()))[0]['v'])
+        await self.apply(await self.checkout('pass_7'), ref='431', end="now()+interval '7 days'")
+        self.assertIsNone((await self.rows("SELECT missed_since_expiry() AS v", actor=self.user))[0]['v'])

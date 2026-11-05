@@ -3,7 +3,7 @@ import { Check } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import type { WebConfig } from "@/lib/config";
-import { alertsText, CUSTOM_PLAN, inWords, modelLessText, OFFER_TIER, PLAN_COPY, planFeatures, planPrice, resultsText, searchesText, WAITLIST_PLANS } from "@/lib/pro";
+import { alertsText, CUSTOM_PLAN, inWords, isPassOffer, modelLessText, OFFER_TIER, PASS_GUARANTEE, PLAN_COPY, planFeatures, planPrice, resultsText, searchesText, WAITLIST_PLANS } from "@/lib/pro";
 
 type PricingConfig = Pick<WebConfig, "proOffer" | "planLimits" | "automaticPayments" | "commercialPilot"> & Partial<Pick<WebConfig, "trialReserve">>;
 type PublicPlan = {
@@ -49,12 +49,13 @@ export function PublicPlans({ cfg, signedIn }: { cfg: PricingConfig; signedIn: b
         name: copy.name,
         price: planPrice(cfg.proOffer[plan].amount),
         currency: "ARS",
-        period: plan === "pass_30" ? `${copy.period} · pago único` : copy.period,
+        period: isPassOffer(plan) ? `${copy.period} · pago único` : copy.period,
         pitch: plan === "pass_30"
           ? `Seguí hasta ${inWords(caps.maxProfiles)} opciones a la vez y recibí avisos para encontrar tu próximo auto.`
           : copy.pitch,
         features: planFeatures(caps),
-        terms: plan === "pass_30" ? "Sin renovación automática. Si todavía no lo encontraste, extendés 30 días con un clic."
+        terms: plan === "pass_30" ? `Sin renovación automática. Si todavía no lo encontraste, extendés 30 días con un clic. ${PASS_GUARANTEE}`
+          : plan === "pass_7" ? `Sin renovación automática. Si te sirve, seguís con 30 días cuando quieras. ${PASS_GUARANTEE}`
           : cfg.automaticPayments ? "Renovación mensual automática. Cancelás desde Ajustes y conservás el período pagado."
             : cfg.commercialPilot ? "Durante el piloto: períodos de 30 días con renovación manual. Si pagás con una suscripción de Mercado Pago, la cancelás ahí."
               : "Durante el piloto: períodos de 30 días con renovación manual.",
@@ -68,7 +69,7 @@ export function PublicPlans({ cfg, signedIn }: { cfg: PricingConfig; signedIn: b
 
   return (
     <>
-      <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
         {plans.map((plan) => (
           <article key={plan.id} className={`row-span-7 grid grid-rows-subgrid gap-y-0 rounded-lg border p-5 ${plan.id === "trial" ? "bg-muted/40" : ""}`}>
             <h3 className="text-xl font-bold">{plan.name}</h3>

@@ -2,6 +2,7 @@ import "server-only";
 import { z } from "zod";
 import { type AdAttribution, sendPurchase } from "@/lib/meta-capi";
 import { checkoutUrl, paymentPeriod } from "@/lib/mercadopago";
+import { isPassOffer, OFFER_DAYS, type WaitlistPlan } from "@/lib/pro";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Database } from "@/types/database";
 
@@ -46,7 +47,7 @@ async function saveCheckout(id: string, update: Database["public"]["Tables"]["bi
   if (error) throw new Error("billing_database_error");
 }
 
-export async function createCheckout(userId: string, offer: "pass_30" | "pro_monthly", email: string, version: string, amount: number, attribution?: AdAttribution) {
+export async function createCheckout(userId: string, offer: WaitlistPlan, email: string, version: string, amount: number, attribution?: AdAttribution) {
   if (!paymentsEnabled()) throw new Error("payments_not_configured");
   const { data, error } = await createAdminClient().rpc("begin_billing_checkout", { p_user: userId, p_offer: offer, p_email: email, p_version: version, p_expected_amount: amount });
   if (error) throw new Error(error.message.includes("account_required") ? "account_required" : error.message.includes("offer_changed") ? "offer_changed" : error.message.includes("paid_plan_already_active") ? "paid_plan_already_active" : error.message.includes("checkout_already_open") ? "checkout_already_open" : "billing_database_error");
@@ -55,7 +56,7 @@ export async function createCheckout(userId: string, offer: "pass_30" | "pro_mon
     const url = checkoutUrl(checkout.init_point, process.env.MERCADOPAGO_TEST_MODE === "true");
     // Older rehearsals stored sandbox_init_point. Verify the existing preference
     // before repairing its redirect; never recreate the purchase or grant access.
-    if (offer === "pass_30" && new URL(url).hostname === "sandbox.mercadopago.com.ar") {
+    if (isPassOffer(offer) && new URL(url).hostname === "sandbox.mercadopago.com.ar") {
       if (!checkout.provider_id) throw new Error("creation_needs_verification");
       return refreshPreferenceUrl(checkout, checkout.provider_id);
     }
@@ -66,15 +67,15 @@ export async function createCheckout(userId: string, offer: "pass_30" | "pro_mon
   const site = new URL(process.env.SITE_URL!);
   const back = new URL("/app/pro?payment=returned", site).href;
   try {
-    const body = offer === "pass_30" ? {
-      items: [{ id: offer, title: "Ese Auto · Particular · 30 días", quantity: 1, unit_price: checkout.amount, currency_id: checkout.currency }],
+    const body = isPassOffer(offer) ? {
+      items: [{ id: offer, title: `Ese Auto · Particular · ${OFFER_DAYS[offer]} días`, quantity: 1, unit_price: checkout.amount, currency_id: checkout.currency }],
       external_reference: checkout.id, payer: { email }, back_urls: { success: back, pending: back, failure: back }, auto_return: "approved",
       notification_url: new URL("/api/mercadopago/webhook", site).href,
     } : {
       reason: "Ese Auto · Pro", external_reference: checkout.id, payer_email: email, status: "pending", back_url: back,
       auto_recurring: { frequency: 1, frequency_type: "months", transaction_amount: checkout.amount, currency_id: checkout.currency },
     };
-    const result = await api(offer === "pass_30" ? "/checkout/preferences" : "/preapproval", "POST", body, checkout.id);
+    const result = await api(isPassOffer(offer) ? "/checkout/preferences" : "/preapproval", "POST", body, checkout.id);
     const resource = z.object({ id: providerId, init_point: z.string(), sandbox_init_point: z.string().optional(), collector_id: providerId }).parse(result);
     merchant(resource.collector_id);
     // The hosted checkout uses init_point even with the automatic test seller.
@@ -124,11 +125,11 @@ async function applyPayment(raw: unknown, checkout: BillingCheckout, debitDate?:
     merchant(owner.id);
     if (!owner.tags?.includes("test_user") && owner.user_type !== "test") throw new Error("payment_environment_mismatch");
   } else if (payment.live_mode !== !testMode) throw new Error("payment_environment_mismatch");
-  if (checkout.offer === "pass_30" && payment.external_reference !== checkout.id) throw new Error("payment_reference_mismatch");
+  if (isPassOffer(checkout.offer) && payment.external_reference !== checkout.id) throw new Error("payment_reference_mismatch");
   if (!["approved", "refunded", "charged_back"].includes(payment.status)) return;
   if (payment.status === "approved" && !payment.date_approved) throw new Error("invalid_payment_date");
   const paidAt = payment.date_approved ?? payment.date_created;
-  const period = paymentPeriod(debitDate ?? paidAt, checkout.offer === "pro_monthly");
+  const period = paymentPeriod(debitDate ?? paidAt, checkout.offer === "pro_monthly", isPassOffer(checkout.offer) ? OFFER_DAYS[checkout.offer] : 30);
   const { data: paymentRow, error } = await createAdminClient().rpc("apply_mercadopago_payment", {
     p_checkout: checkout.id, p_reference: payment.id, p_status: payment.status, p_amount: payment.transaction_amount,
     p_currency: payment.currency_id, p_paid_at: paidAt, p_start: period.start, p_end: period.end,
@@ -183,7 +184,7 @@ async function refreshPreferenceUrl(checkout: BillingCheckout, id: string) {
     .parse(await api(`/checkout/preferences/${id}`));
   merchant(resource.collector_id);
   if (resource.id !== id || resource.external_reference !== checkout.id || resource.items.length !== 1
-    || resource.items[0].id !== "pass_30" || resource.items[0].quantity !== 1) throw new Error("preference_mismatch");
+    || resource.items[0].id !== checkout.offer || !isPassOffer(checkout.offer) || resource.items[0].quantity !== 1) throw new Error("preference_mismatch");
   checkPrice(checkout, resource.items[0].unit_price, resource.items[0].currency_id);
   const url = checkoutUrl(resource.init_point);
   await saveCheckout(checkout.id, { provider_id: resource.id, init_point: url });
@@ -201,7 +202,7 @@ async function recoverPreference(checkout: BillingCheckout) {
 
 export async function syncCheckout(checkout: BillingCheckout, deadline?: number) {
   try {
-    if (checkout.offer === "pass_30" && !checkout.provider_id) await recoverPreference(checkout);
+    if (isPassOffer(checkout.offer) && !checkout.provider_id) await recoverPreference(checkout);
     if (checkout.offer === "pro_monthly") {
       if (!checkout.provider_id) {
         // external_reference is not a documented preapproval search filter; verify exact references locally.
@@ -231,7 +232,7 @@ export async function handleNotification(topic: string, id: string) {
     const payment = paymentSchema.parse(raw);
     merchant(payment.collector_id);
     const checkout = await checkoutByReference(payment.external_reference);
-    if (checkout?.offer === "pass_30") { await applyPayment(raw, checkout); return; }
+    if (isPassOffer(checkout?.offer)) { await applyPayment(raw, checkout); return; }
     // Subscription payments may omit external_reference. The invoice supplies the verified ownership link.
     const found = z.object({ results: z.array(z.object({ id: providerId })), paging: z.object({ total: z.number() }) })
       .parse(await api(`/authorized_payments/search?payment_id=${payment.id}`));

@@ -46,6 +46,10 @@ export default async function TermsPage() {
       <p>Particular cuesta {planPrice(proOffer.pass_30.amount)} ARS por 30 días, permite {searches(pass)} y {alerts(pass)}, y no se renueva automáticamente.
         Si lo comprás con el acceso vigente, los 30 días se suman a tu vencimiento; si lo comprás después de vencer, rigen desde
         la aprobación del pago y reactivamos tus búsquedas anteriores, hasta {pass.maxProfiles}.
+        {" "}Particular 7 días cuesta {planPrice(proOffer.pass_7.amount)} ARS, incluye lo mismo durante 7 días y se suma o rige igual que el de 30 días.
+        {" "}Garantía de los pases Particular: si durante los días del pase no aparece ninguna publicación que coincida con tus búsquedas,
+        te devolvemos el 100 % de ese pase. Pedila escribiendo a <Contact email={contactEmail} /> hasta 15 días después del vencimiento;
+        la devolución revoca el período.
         Pro cuesta {planPrice(proOffer.pro_monthly.amount)} ARS por mes y permite {searches(pro)} y {alerts(pro)} en una cuenta.
         {modelLessText(planLimits) ? ` ${modelLessText(planLimits)}` : ""}
         {pro.thresholdAlerts ? " Cada búsqueda de Pro puede tener un umbral de oportunidad: lo que está ese porcentaje o más por debajo de autos comparables se avisa al instante, sin tope diario, y el resto, igual que lo que no tiene comparables suficientes, va al resumen." : ""}
