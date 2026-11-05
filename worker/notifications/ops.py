@@ -45,6 +45,24 @@ def failing_text(h: SourceHealth, now: datetime, web_base_url: str = "") -> str:
     return "\n".join(lines)
 
 
+# An expired session (Facebook) doesn't come back by itself: it's told on the
+# first failure, with what to run, instead of after the streak (Juan,
+# 2026-11-05: renew faster rather than read Facebook slower).
+SESSION_EXPIRED = "session expired"
+RENEW_HINT = "En la PC: doble clic en «Renovar Facebook» (ops/fb-renovar.ps1) e iniciá sesión."
+
+
+def session_expired(h: SourceHealth) -> bool:
+    return SESSION_EXPIRED in (last_error_line(h.error) or "")
+
+
+def session_text(h: SourceHealth, now: datetime) -> str:
+    lines = [f"🔑 <b>{escape(h.name)}</b>: se cerró la sesión. No vuelve sola."]
+    lines.append("Última corrida OK: " + (f"hace {ago_long(h.last_ok_at, now)}." if h.last_ok_at else "nunca."))
+    lines.append(RENEW_HINT)
+    return "\n".join(lines)
+
+
 def recovered_text(h: SourceHealth) -> str:
     return f"✅ <b>{escape(h.name)}</b> volvió a funcionar después de {h.previous} fallas seguidas."
 
@@ -58,6 +76,9 @@ class SourceAlerts:
         self.chat_id = chat_id
         self.web_base_url = web_base_url.rstrip("/")
         self.clock = clock or (lambda: datetime.now(timezone.utc))
+        # Sources whose expired session was told in this streak. In memory: after a
+        # restart mid-streak the alert may go out once more, which beats missing it.
+        self._session_down: set[str] = set()
 
     @property
     def enabled(self) -> bool:
@@ -70,14 +91,27 @@ class SourceAlerts:
         try:
             after = int(await get_config("collector_failure_alert_after", DEFAULT_FAILURE_ALERT_AFTER)
                         or DEFAULT_FAILURE_ALERT_AFTER)
-            if h.failures == after and h.previous < after:
+            session_told = h.source in self._session_down
+            telling_session = False
+            if h.failures and session_expired(h):
+                # The first expired-session failure of the streak; the generic alert would only repeat it.
+                if session_told:
+                    return False
+                telling_session = True
+                text = session_text(h, self.clock())
+            elif h.failures == after and h.previous < after:
+                if session_told:
+                    return False
                 text = failing_text(h, self.clock(), self.web_base_url)
-            elif h.failures == 0 and h.previous >= after:
+            elif h.failures == 0 and h.previous >= 1 and (h.previous >= after or session_told):
+                self._session_down.discard(h.source)
                 text = recovered_text(h)
             else:
                 return False
             await self.bot.send_message(chat_id=self.chat_id, text=text, parse_mode=ParseMode.HTML,
                                         disable_web_page_preview=True)
+            if telling_session:                # only once it went out: a failed send tries again next run
+                self._session_down.add(h.source)
         except Exception:
             log.exception("could not alert the admin about source %s", h.source)
             return False
