@@ -4,6 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { LISTING_ROWS, ListingCard } from "@/components/app/listing-card";
+import { PhonePrompt } from "@/components/app/phone-form";
 import { AutoRefresh } from "@/components/app/auto-refresh";
 import { FreeResultLimit } from "@/components/app/free-result-limit";
 import { LowResultsNotice } from "@/components/app/low-results-notice";
@@ -159,7 +160,7 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
   // PAR-01: the total cost line, with the plan's flag only (one listings query for the page).
   // PRO-02: the margin line for Pro; the other plans, where it would be (Juan, 02/11).
   // Aviso de zona: counted only when nothing else rules it out (lib/zone-notice-server.ts).
-  const [tracks, costLines, marginLines, marginTeasers, zone] = await Promise.all([
+  const [tracks, costLines, marginLines, marginTeasers, zone, { data: contact }] = await Promise.all([
     fetchPriceTracks(
       (fn, args) => supabase.rpc(fn, args),
       shown.map((card) => card.listing_id).filter((lid): lid is number => lid != null),
@@ -173,6 +174,8 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
       : zoneSwitch == null || limitsError
         ? { state: "pending" as const }
         : zoneNotice(supabase, { profile, count: allCount(counts), access, sources: collectionSources, dismissed }),
+    // Option B (04/11): the mobile is asked here, once the results are showing.
+    supabase.from("profiles").select("phone").eq("id", user.id).maybeSingle(),
   ]);
   const href = (next: Partial<{ f: Filter; s: Sort; p: number }>) => {
     const qs = new URLSearchParams({ f: next.f ?? filter, s: next.s ?? sort });
@@ -263,6 +266,8 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
           <SortSelect value={sort} options={sortsFor(margin != null)} locked={lockedSorts} profileId={profileId} />
         </div>
       ) : null}
+
+      {shown.length && contact && !contact.phone ? <PhonePrompt profileId={profileId} /> : null}
 
       {shown.length ? (
         <div className={LISTING_ROWS} data-testid="results">

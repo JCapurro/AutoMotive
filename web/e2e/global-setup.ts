@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 
+import { resetAuthBrakes } from "./support/auth";
 import { closeDb, resetE2E, seedMarket } from "./support/db";
 import { MAILPIT_URL, PYTHON, SUPABASE_URL, WORKER_DIR } from "./support/env";
 
@@ -24,6 +25,8 @@ export default async function globalSetup() {
   }
 
   await resetE2E();
+  // Every run starts below the sign-up brakes (lib/email-only.ts claimThrottle).
+  await resetAuthBrakes();
   await seedMarket();
   await closeDb();
 }

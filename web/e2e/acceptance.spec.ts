@@ -3,6 +3,7 @@ import { expect, type Page, test } from "@playwright/test";
 import { EXPECTED_BACKFILL, finishFirstCollection, insertFreshDeal, query } from "./support/db";
 import { E2E_EMAIL_DOMAIN, E2E_LISTING_PREFIX } from "./support/env";
 import { worker } from "./support/worker";
+import { resetAuthBrakes } from "./support/auth";
 
 /**
  * F4 acceptance (docs/TECHNICAL_PLAN.md, sección 13):
@@ -41,9 +42,18 @@ async function expectNoHorizontalScroll(page: Page) {
 
 /** Main navigation: icons in the header on a phone, links on desktop. */
 async function navigate(page: Page, name: "Inicio" | "Guardados" | "Ajustes") {
+  if (name === "Ajustes") {
+    // In the account menu, top right (04/11).
+    await page.getByRole("button", { name: "Tu cuenta" }).filter({ visible: true }).click();
+    await page.getByRole("menuitem", { name: "Ajustes" }).click();
+    return;
+  }
   const nav = page.getByRole("navigation", { name: "Principal" }).filter({ visible: true });
   await nav.getByRole("link", { name, exact: false }).first().click();
 }
+
+// The landing's sign-ups go through the real brakes: start each test below them.
+test.beforeEach(async () => { await resetAuthBrakes(); });
 
 test("F4: búsqueda gratis con el email, backfill, alerta, guardar y guardados", async ({ page }, testInfo) => {
   const run = `${testInfo.project.name}-${Date.now()}`;
@@ -221,10 +231,12 @@ test("F4: búsqueda gratis con el email, backfill, alerta, guardar y guardados",
     await test.step("mobile: navegación en el encabezado a 375 px", async () => {
       expect(page.viewportSize()?.width).toBe(375);
       const tabs = page.getByRole("navigation", { name: "Principal" }).filter({ visible: true });
-      // Inicio, Guardados, Ajustes and «Nueva búsqueda» last, next to the logo; no bar at the bottom.
-      await expect(tabs.getByRole("link")).toHaveCount(4);
+      // Inicio, Guardados and «Nueva búsqueda», next to the logo, then the account menu; no bar at the bottom.
+      await expect(tabs.getByRole("link")).toHaveCount(3);
       expect((await tabs.boundingBox())!.y).toBeLessThan(80);
-      for (const name of ["Inicio", "Guardados", "Ajustes"] as const) {
+      const account = page.getByRole("button", { name: "Tu cuenta" }).filter({ visible: true });
+      expect((await account.boundingBox())!.y).toBeLessThan(80);
+      for (const name of ["Inicio", "Guardados"] as const) {
         await navigate(page, name);
         await expect(tabs.getByRole("link", { name }).first()).toHaveAttribute("aria-current", "page");
         await expectNoHorizontalScroll(page);

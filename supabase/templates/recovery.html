@@ -4,10 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
-  <title>Tu link para entrar a Ese Auto</title>
+  <title>Tu código para entrar a Ese Auto</title>
 </head>
 <body style="margin:0;padding:0;background-color:#f1f3f7;color:#14213d;font-family:Arial,Helvetica,sans-serif;-webkit-text-size-adjust:100%;">
-  <div style="display:none;font-size:1px;line-height:1px;color:#f1f3f7;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;">Tocá el botón para entrar. Solo funciona el link más nuevo y vence en 1 hora.</div>
+  <div style="display:none;font-size:1px;line-height:1px;color:#f1f3f7;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;">Tu código es {{ .Token }}. Escribilo en Ese Auto o tocá el botón. Vence en 1 hora.</div>
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f1f3f7;">
     <tr><td align="center" style="padding:32px 16px;">
       <!--[if mso]><table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->
@@ -22,11 +22,17 @@
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="table-layout:fixed;">
             <tr><td height="5" style="height:5px;font-size:0;line-height:0;background-color:#ffe14d;border-radius:12px 12px 0 0;">&nbsp;</td></tr>
             <tr><td style="padding:32px 28px 0;">
-              <p style="margin:0 0 16px;color:#4e5a73;font-size:11px;font-weight:700;letter-spacing:1.8px;line-height:18px;">LINK PARA ENTRAR</p>
+              <p style="margin:0 0 16px;color:#4e5a73;font-size:11px;font-weight:700;letter-spacing:1.8px;line-height:18px;">CÓDIGO PARA ENTRAR</p>
               <h1 style="margin:0 0 18px;color:#14213d;font-size:30px;font-weight:700;letter-spacing:-0.8px;line-height:37px;">Entrá a Ese Auto</h1>
-              <p style="margin:0;color:#4e5a73;font-size:16px;line-height:25px;">Tocá el botón para entrar a tu cuenta.</p>
+              <p style="margin:0;color:#4e5a73;font-size:16px;line-height:25px;">Escribí este código en Ese Auto, o tocá el botón para entrar directo.</p>
             </td></tr>
-            <tr><td style="padding:24px 28px;">
+            <tr><td style="padding:24px 28px 0;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#fff8cc;border:1px solid #ffe14d;border-radius:8px;table-layout:fixed;"><tr><td align="center" style="padding:18px 16px;">
+                <p style="margin:0 0 6px;color:#4e5a73;font-size:11px;font-weight:700;letter-spacing:1px;line-height:17px;">TU CÓDIGO</p>
+                <p style="margin:0;color:#14213d;font-family:'Courier New',Courier,monospace;font-size:34px;font-weight:700;letter-spacing:8px;line-height:40px;">{{ .Token }}</p>
+              </td></tr></table>
+            </td></tr>
+            <tr><td style="padding:16px 28px 24px;">
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f1f3f7;border-radius:8px;table-layout:fixed;"><tr><td style="padding:14px 16px;">
                 <p style="margin:0 0 4px;color:#4e5a73;font-size:11px;font-weight:700;letter-spacing:1px;line-height:17px;">TU EMAIL</p>
                 <p style="margin:0;color:#14213d;font-size:15px;font-weight:700;line-height:22px;overflow-wrap:anywhere;word-break:break-all;">{{ .Email }}</p>
@@ -36,12 +42,12 @@
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" bgcolor="#14213d" style="background-color:#14213d;border-radius:8px;mso-padding-alt:16px 20px;">
                 <a href="{{ .RedirectTo }}&amp;token_hash={{ .TokenHash }}&amp;type=recovery" style="display:block;border:1px solid #14213d;border-radius:8px;padding:16px 20px;color:#ffffff;font-size:16px;font-weight:700;line-height:22px;text-align:center;text-decoration:none;">Entrar a Ese Auto</a>
               </td></tr></table>
-              <p style="margin:12px 0 0;color:#4e5a73;font-size:12px;line-height:19px;">Solo funciona el link más nuevo: si pediste varios, usá el último. Vence en 1 hora.</p>
+              <p style="margin:12px 0 0;color:#4e5a73;font-size:12px;line-height:19px;">Solo funciona el email más nuevo: si pediste varios, usá el último. El código y el botón vencen en 1 hora.</p>
             </td></tr>
             <tr><td style="padding:28px;">
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f8f9fb;border-radius:6px;"><tr><td style="border-left:3px solid #ffe14d;padding:16px;">
                 <p style="margin:0 0 5px;color:#14213d;font-size:13px;font-weight:700;line-height:20px;">¿No lo pediste?</p>
-                <p style="margin:0;color:#4e5a73;font-size:13px;line-height:21px;">Ignorá este email: nadie entra sin este link. Tu contraseña, si tenés una, no cambia. No reenvíes este email.</p>
+                <p style="margin:0;color:#4e5a73;font-size:13px;line-height:21px;">Ignorá este email: nadie entra sin este código o este link. Tu contraseña, si tenés una, no cambia. No reenvíes este email.</p>
               </td></tr></table>
             </td></tr>
             <tr><td style="padding:0 28px 28px;">
@@ -54,7 +60,7 @@
         </td></tr>
         <tr><td align="center" style="padding:22px 12px 0;">
           <p style="margin:0 0 5px;color:#14213d;font-size:12px;font-weight:700;line-height:19px;">Ese Auto &middot; eseauto.com.ar</p>
-          <p style="margin:0;color:#4e5a73;font-size:11px;line-height:18px;">Este es un email automático para entrar a Ese Auto.<br>El link es personal y de un solo uso.</p>
+          <p style="margin:0;color:#4e5a73;font-size:11px;line-height:18px;">Este es un email automático para entrar a Ese Auto.<br>El código y el link son personales y de un solo uso.</p>
         </td></tr>
       </table>
       <!--[if mso]></td></tr></table><![endif]-->

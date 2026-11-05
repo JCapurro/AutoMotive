@@ -2,7 +2,7 @@ import { expect, type Page, test } from "@playwright/test";
 
 import { query, seedTotalCost } from "./support/db";
 import { E2E_EMAIL_DOMAIN } from "./support/env";
-import { magicLink } from "./support/mail";
+import { signUp } from "./support/auth";
 
 /**
  * PAR-01 (docs/superpowers/specs/2026-10-30-par01-costo-total-design.md): the
@@ -18,16 +18,7 @@ import { magicLink } from "./support/mail";
 const LINE = "Costo total estimado: USD 16.290 – 16.560 (ARS 21.188.000 – 21.518.000)";
 
 async function signIn(page: Page, email: string) {
-  const since = new Date();
-  await page.goto("/login?mode=signup&next=/app");
-  await page.getByLabel("Email", { exact: true }).fill(email);
-  await page.getByLabel("Contraseña", { exact: true }).fill("e2e-password-123");
-  await page.getByLabel("Repetí la contraseña").fill("e2e-password-123");
-  await page.getByRole("button", { name: "Crear cuenta", exact: true }).click();
-  await expect(page.getByText("Revisá tu email")).toBeVisible();
-  await page.goto(await magicLink(email, since));
-  await page.getByRole("button", { name: "Confirmar mi email" }).click();
-  await expect(page).toHaveURL(/\/app/);
+  await signUp(page, email, "/app");
 }
 
 async function expectNoHorizontalScroll(page: Page) {

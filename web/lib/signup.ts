@@ -11,15 +11,16 @@ import type { Database } from "@/types/database";
  * account (lib/email-only.ts), record the first sign-in.
  * Recovery does not count as a completed registration.
  */
-export async function afterSignIn(supabase: SupabaseClient<Database>, method: "email" | "google" | "email_only" = "email"): Promise<void> {
+export async function afterSignIn(supabase: SupabaseClient<Database>, method: "email" | "google" | "email_only" | "email_code" = "email"): Promise<boolean> {
   const { data } = await supabase.auth.getClaims();
   const userId = data?.claims?.sub;
-  if (!userId) return;
+  if (!userId) return false;
   const { count } = await supabase
     .from("events")
     .select("id", { count: "exact", head: true })
     .eq("name", "signup_completed");
-  if (count) return;
+  if (count) return false;
   await track(supabase, userId, "signup_completed", { method });
   await queuePixel("CompleteRegistration", { content_name: method }, `signup:${userId}`);
+  return true;
 }

@@ -16,7 +16,7 @@ export function HEAD() {
 
 /** A used or expired link goes back to the form that sends a new one, keeping where it was headed. */
 function failed(origin: string, recovery: boolean, next: string, status?: number) {
-  const params = new URLSearchParams({ error: "link", mode: recovery ? "recover" : "login", next: recovery ? afterRecovery(next) : next });
+  const params = new URLSearchParams({ error: "link", next: recovery ? afterRecovery(next) : next });
   return NextResponse.redirect(new URL(`/login?${params}`, origin), status);
 }
 

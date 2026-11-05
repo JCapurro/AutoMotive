@@ -4,18 +4,19 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect } from "react";
 
-import { type AccountState, completeAccount, sendAccountLink } from "@/app/app/cuenta/actions";
+import { type AccountState, completeAccount, confirmAccountCode, sendAccountLink } from "@/app/app/cuenta/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 /**
- * /app/cuenta for an email-only account: the link proves the inbox, then the
+ * /app/cuenta for an email-only account: the code (or the link) proves the inbox, then the
  * same session chooses a password. Paying needs both; otherwise it can wait.
  */
 export function AccountSteps({ email, next, proven, paying }: { email: string; next: string; proven: boolean; paying: boolean }) {
   const [password, submitPassword, saving] = useActionState(completeAccount.bind(null, next), {} satisfies AccountState);
   const [link, sendLink, sending] = useActionState(sendAccountLink.bind(null, next), {} satisfies AccountState);
+  const [code, submitCode, checking] = useActionState(confirmAccountCode.bind(null, next), {} satisfies AccountState);
   const router = useRouter();
   // The proof is gone: the page's heading and copy go back to "confirmá tu email".
   useEffect(() => { if (password.expired) router.refresh(); }, [password.expired, router]);
@@ -33,14 +34,23 @@ export function AccountSteps({ email, next, proven, paying }: { email: string; n
 
   return <div className="space-y-4">
     {password.error ? <p role="alert" className="text-sm text-destructive">{password.error}</p> : null}
-    {link.sent ? <div role="status" className="space-y-1 rounded-lg bg-muted p-4 text-sm">
-      <p className="font-medium [overflow-wrap:anywhere]">Listo: abrí el link que te mandamos a {email}.</p>
-      <p className="text-muted-foreground">Revisá también Spam. Vence en 1 hora y solo funciona el último.</p>
-    </div> : null}
+    {link.sent || code.sent ? <form action={submitCode} className="space-y-3">
+      <div role="status" className="space-y-1 rounded-lg bg-muted p-4 text-sm">
+        <p className="font-medium [overflow-wrap:anywhere]">Listo: te mandamos un código a {email}.</p>
+        <p className="text-muted-foreground">Escribilo acá o tocá el botón del email. Revisá también Spam. Vence en 1 hora y solo funciona el último.</p>
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="account-code">Código</Label>
+        <Input id="account-code" name="code" inputMode="numeric" autoComplete="one-time-code" maxLength={9} required placeholder="123456" autoFocus
+          aria-invalid={code.error ? true : undefined} className="h-11 text-lg tracking-[0.3em] tabular-nums" />
+      </div>
+      {code.error ? <p role="alert" className="text-sm text-destructive">{code.error}</p> : null}
+      <Button className="h-10 w-full" disabled={checking}>{checking ? "Comprobando…" : "Confirmar"}</Button>
+    </form> : null}
     <form action={sendLink} className="space-y-3">
       {link.error ? <p role="alert" className="text-sm text-destructive">{link.error}</p> : null}
-      <Button className="h-10 w-full" variant={link.sent ? "outline" : "default"} disabled={sending}>
-        {sending ? "Enviando…" : link.sent ? "Mandarme otro link" : "Mandarme el link"}
+      <Button className="h-10 w-full" variant={link.sent || code.sent ? "outline" : "default"} disabled={sending}>
+        {sending ? "Enviando…" : link.sent || code.sent ? "Mandarme otro código" : "Mandarme el código"}
       </Button>
     </form>
     <p className="text-xs text-muted-foreground">¿No es tu email? Borrá tu cuenta desde <Link href="/app/settings" className="underline">Ajustes</Link> y creá la búsqueda de nuevo con el correcto.</p>

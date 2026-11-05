@@ -25,7 +25,8 @@ it.each(["pass", "pro"] as const)("hides desktop and mobile purchase links for a
   expect(html).not.toContain(">Planes</a>");
   expect(html).not.toContain('href="/app/pro"');
   expect(html).toContain("Nueva búsqueda");
-  expect(html).toContain('href="/app/settings"');
+  // Ajustes moved into the account menu (04/11), which renders its items only when opened.
+  expect(html).toContain('aria-label="Tu cuenta"');
   expect(mocks.rpc).toHaveBeenCalledWith("my_plan_snapshot");
 });
 

@@ -7,7 +7,8 @@ import { z } from "zod";
 import { ASSISTED_MAX_CHARS, ASSISTED_MIN_CHARS } from "@/lib/assisted";
 import { currentUser } from "@/lib/auth";
 import { webConfig } from "@/lib/config";
-import { accountForEmail, claimThrottle, clientIpKey, DAY, type ExistingAccount, HOUR, linkError, sendEntryLink } from "@/lib/email-only";
+import { accountForEmail, claimThrottle, clientIpKey, createEmailOnlyUser, DAY, type ExistingAccount, HOUR, linkError, sendEntryLink } from "@/lib/email-only";
+import { verifyEntryCode } from "@/lib/entry-code";
 import { HEALTH_OWNER_EMAIL } from "@/lib/health-access";
 import { searchStartHref } from "@/lib/search-intent";
 import { afterSignIn } from "@/lib/signup";
@@ -28,7 +29,7 @@ export type FreeSearchResult =
   | { status: "unavailable"; error: string }
   | { status: "existing_email_only"; email: string; unconfirmed?: boolean; error?: string }
   | { status: "existing_account"; email: string }
-  | { status: "error"; error: string; field?: "prompt" | "email" | "password" };
+  | { status: "error"; error: string; field?: "prompt" | "email" | "password" | "code" };
 
 const Email = z.email().max(254);
 const FAILED = "No pudimos crear tu búsqueda. Probá de nuevo en unos minutos.";
@@ -70,7 +71,7 @@ export async function startFreeSearch(input: FreeSearchInput): Promise<FreeSearc
   const user = await currentUser();
   // A tab left open before signing in elsewhere: never drop the email typed here without saying so.
   if (user && user.email && user.email !== email) {
-    return { status: "error", field: "email", error: `Ya entraste como ${user.email}. Para usar otro email, salí de esa cuenta desde Ajustes.` };
+    return { status: "error", field: "email", error: `Ya entraste como ${user.email}. Para usar otro email, salí de esa cuenta desde el menú de tu cuenta (arriba a la derecha).` };
   }
   if (user) return { status: "created", href, signedUp: false };
 
@@ -108,7 +109,7 @@ export async function enterForFreeSearch(input: { prompt: string; email: string;
   if (!password) return { status: "error", field: "password", error: "Escribí tu contraseña." };
   try {
     if (!(await claimThrottle("free_search_password", await clientIpKey(), PASSWORD_TRIES_PER_HOUR, HOUR))) {
-      return { status: "error", field: "password", error: "Hiciste varios intentos. Pedí un link para entrar." };
+      return { status: "error", field: "password", error: "Hiciste varios intentos. Pedí un código para entrar." };
     }
   } catch (error) {
     console.error("password throttle failed:", error instanceof Error ? error.message : error);
@@ -116,17 +117,29 @@ export async function enterForFreeSearch(input: { prompt: string; email: string;
   }
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword({ email: valid.email, password });
-  if (error) return { status: "error", field: "password", error: "La contraseña no coincide. Probá de nuevo o pedí un link para entrar." };
+  if (error) return { status: "error", field: "password", error: "La contraseña no coincide. Probá de nuevo o pedí un código para entrar." };
   await afterSignIn(supabase);
   return { status: "created", href: valid.href, signedUp: false };
 }
 
-/** "No me acuerdo la contraseña": the link to enter, from the same pop-up. Same answer whether or not the email has an account. */
+/** "No me acuerdo la contraseña": the code (and link) to enter, from the same pop-up. Same answer whether or not the email has an account. */
 export async function linkForFreeSearch(input: { prompt: string; email: string }): Promise<FreeSearchResult> {
   const valid = validate(input);
   if (!valid.ok) return valid.result;
   const result = await sendEntryLink(valid.email, valid.href);
   return result === "sent" ? { status: "existing_email_only", email: valid.email } : { status: "existing_email_only", email: valid.email, error: linkError(result) };
+}
+
+/**
+ * The code from the email we just sent, typed in the same pop-up: same proof
+ * as the link, and the search goes on in this browser.
+ */
+export async function codeForFreeSearch(input: { prompt: string; email: string; code: string }): Promise<FreeSearchResult> {
+  const valid = validate(input);
+  if (!valid.ok) return valid.result;
+  const result = await verifyEntryCode(valid.email, input?.code, valid.href);
+  if (!result.ok) return { status: "error", field: "code", error: result.error };
+  return { status: "created", href: result.href, signedUp: false };
 }
 
 async function existingAccount(account: ExistingAccount, email: string, href: string): Promise<FreeSearchResult> {
@@ -181,20 +194,10 @@ async function resumeSignup(userId: string, email: string, href: string, code: u
  */
 async function createEmailOnlyAccount(email: string, href: string, code?: unknown): Promise<FreeSearchResult> {
   const admin = createAdminClient();
-  const created = await admin.auth.admin.createUser({ email, email_confirm: true });
-  const userId = created.data?.user?.id;
-  if (created.error || !userId) {
-    // Someone created it in between: from here on it's an existing email.
-    const again = await accountForEmail(email);
-    if (again) return existingAccount(again, email, href);
-    throw new Error(`createUser: ${created.error?.message ?? "no user"}`);
-  }
-  const discard = async (reason: string) => {
-    await admin.auth.admin.deleteUser(userId);
-    throw new Error(reason);
-  };
-  const { data: marked, error: markError } = await admin.rpc("mark_email_only_account", { p_user: userId });
-  if (markError || marked !== true) return discard(`mark_email_only_account: ${markError?.message ?? "not marked"}`);
+  const created = await createEmailOnlyUser(email);
+  // Someone created it in between: from here on it's an existing email.
+  if ("existing" in created) return existingAccount(created.existing, email, href);
+  const { userId, discard } = created;
   const hash = resumeHash(code);
   if (hash) {
     // Without it a reload only costs the inbox round trip it always did.

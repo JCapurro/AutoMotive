@@ -1,17 +1,18 @@
 "use client";
 
-import { Activity, Bookmark, Home, Plus, Settings } from "lucide-react";
+import { Activity, Bookmark, Car, ChevronDown, Home, LogOut, Plus, Settings, UserRound } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useRef } from "react";
 
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 
 
 const ITEMS = [
   { href: "/app", label: "Inicio", icon: Home, exact: true },
   { href: "/app/saved", label: "Guardados", icon: Bookmark },
-  { href: "/app/settings", label: "Ajustes", icon: Settings },
 ];
 
 function active(pathname: string, href: string, exact?: boolean) {
@@ -105,5 +106,54 @@ export function MobileNav({ healthOwner = false }: { healthOwner?: boolean }) {
         </span>
       </Link>
     </nav>
+  );
+}
+
+/**
+ * Top right, on desktop and mobile (Juan 04/11): the account. Mis datos,
+ * Ajustes and signing out live here, so the header keeps only the places
+ * people go to work.
+ */
+export function AccountMenu({ email }: { email: string | null }) {
+  const pathname = usePathname();
+  const signOut = useRef<HTMLFormElement>(null);
+  const current = pathname.startsWith("/app/datos") || pathname.startsWith("/app/settings") || pathname.startsWith("/app/cuenta");
+  return (
+    <>
+      <DropdownMenu modal={false}>
+        <DropdownMenuTrigger asChild>
+          {/* Juan, 04/11: the car with the arrow, not the email's initial. */}
+          <button type="button" aria-label="Tu cuenta" title="Tu cuenta" data-testid="account-menu"
+            className="group flex h-full shrink-0 items-center gap-0.5 px-1 text-muted-foreground outline-none hover:text-foreground focus-visible:text-foreground">
+            <span className={cn(
+              "grid size-8 place-items-center rounded-full border bg-muted text-foreground transition-colors",
+              current && "border-transparent bg-mark text-[#14213d]",
+            )}>
+              <Car className="size-4.5" aria-hidden />
+            </span>
+            <ChevronDown className="size-3.5 transition-transform group-data-[state=open]:rotate-180" aria-hidden />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" sideOffset={2} className="w-64">
+          {email ? <DropdownMenuLabel className="text-sm font-normal [overflow-wrap:anywhere]">
+            <span className="block text-xs text-muted-foreground">Entraste como</span>
+            <span className="font-medium text-foreground">{email}</span>
+          </DropdownMenuLabel> : null}
+          {email ? <DropdownMenuSeparator /> : null}
+          <DropdownMenuItem asChild className="py-2">
+            <Link href="/app/datos"><UserRound aria-hidden /> Mis datos</Link>
+          </DropdownMenuItem>
+          <DropdownMenuItem asChild className="py-2">
+            <Link href="/app/settings"><Settings aria-hidden /> Ajustes</Link>
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          {/* The form sits outside the menu: closing the menu would unmount it mid-submit. */}
+          <DropdownMenuItem className="py-2" onSelect={() => signOut.current?.requestSubmit()}>
+            <LogOut aria-hidden /> Cerrar sesión
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <form ref={signOut} action="/auth/signout" method="post" hidden />
+    </>
   );
 }

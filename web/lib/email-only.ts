@@ -28,6 +28,30 @@ export async function accountForEmail(email: string): Promise<ExistingAccount | 
   return data?.[0] ?? null;
 }
 
+/**
+ * A new email-only account, marked before any session can exist. When the
+ * email got an account in between, that one comes back as `existing` (the
+ * caller treats it as an existing email). `discard` deletes the new one, for a
+ * caller that fails before handing it over.
+ */
+export async function createEmailOnlyUser(email: string): Promise<{ userId: string; discard: (reason: string) => Promise<never> } | { existing: ExistingAccount }> {
+  const admin = createAdminClient();
+  const created = await admin.auth.admin.createUser({ email, email_confirm: true });
+  const userId = created.data?.user?.id;
+  if (created.error || !userId) {
+    const existing = await accountForEmail(email);
+    if (existing) return { existing };
+    throw new Error(`createUser: ${created.error?.message ?? "no user"}`);
+  }
+  const discard = async (reason: string): Promise<never> => {
+    await admin.auth.admin.deleteUser(userId);
+    throw new Error(reason);
+  };
+  const { data: marked, error: markError } = await admin.rpc("mark_email_only_account", { p_user: userId });
+  if (markError || marked !== true) return discard(`mark_email_only_account: ${markError?.message ?? "not marked"}`);
+  return { userId, discard };
+}
+
 /** One more attempt of `kind` for `key` inside the window, or false past the limit (app_config.email_only_signup). */
 export async function claimThrottle(kind: string, key: string, limit: number, windowSeconds: number): Promise<boolean> {
   const { data, error } = await createAdminClient().rpc("claim_auth_throttle", {
@@ -91,8 +115,8 @@ export async function sendEntryLink(email: string, next: string, known?: Existin
 
 /** User-facing text for a link that could not be sent. A 429 doesn't mean one went out (Auth also limits right after signing up). */
 export function linkError(result: Exclude<LinkResult, "sent">): string {
-  if (result === "busy") return "Por seguridad no podemos mandar links tan seguido. Esperá un minuto y probá de nuevo; si ya te llegó uno, usá el último.";
-  if (result === "throttled") return "Pediste varios links seguidos. Revisá tu email (y Spam) o probá de nuevo en una hora.";
+  if (result === "busy") return "Por seguridad no podemos mandarte emails tan seguido. Esperá un minuto y probá de nuevo; si ya te llegó uno, usá el último.";
+  if (result === "throttled") return "Pediste varios códigos seguidos. Revisá tu email (y Spam) o probá de nuevo en una hora.";
   return "Estamos con demora para mandar emails. Probá de nuevo en unos minutos.";
 }
 

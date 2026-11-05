@@ -34,6 +34,6 @@ export async function GET(request: NextRequest) {
   if (searchParams.get("provider") === "google") {
     return NextResponse.redirect(new URL(`/login?error=google&next=${encodeURIComponent(next)}`, origin));
   }
-  const failed = new URLSearchParams({ error: "link", mode: recovery ? "recover" : "login", next: recovery ? afterRecovery(next) : next });
+  const failed = new URLSearchParams({ error: "link", next: recovery ? afterRecovery(next) : next });
   return NextResponse.redirect(new URL(`/login?${failed}`, origin));
 }

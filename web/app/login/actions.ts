@@ -3,93 +3,136 @@
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { callbackUrl } from "@/lib/auth-links";
-import { accountForEmail, linkError, sendEntryLink } from "@/lib/email-only";
+import { webConfig } from "@/lib/config";
+import { accountForEmail, claimThrottle, clientIpKey, createEmailOnlyUser, DAY, type ExistingAccount, HOUR, linkError, sendEntryLink } from "@/lib/email-only";
+import { verifyEntryCode } from "@/lib/entry-code";
+import { HEALTH_OWNER_EMAIL } from "@/lib/health-access";
 import { safeNext } from "@/lib/navigation";
 import { supabaseAnonKey, supabaseUrl } from "@/lib/env";
 import { afterSignIn } from "@/lib/signup";
 import { createClient } from "@/lib/supabase/server";
 
-export type AuthMode = "login" | "signup" | "recover";
 /**
- * `entry`: we sent the link to enter instead of what the form asked for —
- * "password" when the email has no password yet (email-only account),
- * "signup" when it already has a free search.
+ * One screen to enter (docs/AUTENTICACION.md): the email, then the code we
+ * mail to it. A password, for whoever has one, and Google are the other ways.
+ * `step` is the screen to show; `notice` says why we sent a code the person
+ * didn't ask for (the email has no password yet, or was never confirmed).
+ * `signedUp`: the code went to an account created right here (the client
+ * counts the signup when the code is used).
  */
-export type LoginState = { email?: string; error?: string; sent?: boolean; entry?: "password" | "signup"; confirmationRequired?: boolean; next: string };
-const Email = z.email({ error: "Ingresá un email válido." });
-function emailError(error: { status?: number }): string {
-  return error.status === 429 ? "Pediste varios emails seguidos. Esperá un minuto y probá de nuevo." : "No pudimos mandar el email. Probá de nuevo.";
-}
-/** An email-only account (the free search) has no password: it enters with the link. */
-async function emailOnly(email: string) {
-  try {
-    const account = await accountForEmail(email);
-    return account?.email_only ? account : null;
-  } catch (error) {
-    console.error("account lookup failed:", error instanceof Error ? error.message : error);
-    return null;
-  }
-}
-export async function authenticate(mode: AuthMode, prev: LoginState, form: FormData): Promise<LoginState> {
-  const next = safeNext(String(form.get("next") ?? prev.next));
+export type LoginStep = "email" | "code" | "password";
+export type LoginState = { step: LoginStep; email?: string; error?: string; notice?: string; signedUp?: boolean; next: string };
+
+const Email = z.email({ error: "Ingresá un email válido." }).max(254);
+const FAILED = "No pudimos mandarte el código. Probá de nuevo en unos minutos.";
+
+function parseEmail(form: FormData): string | null {
   const parsed = Email.safeParse(String(form.get("email") ?? "").trim().toLowerCase());
-  if (!parsed.success) return { next, error: parsed.error.issues[0].message };
-  const email = parsed.data;
-  const state = { next, email };
-  if (!["login", "signup", "recover"].includes(mode)) return { ...state, error: "Acción inválida." };
-  const password = String(form.get("password") ?? "");
-  if (mode !== "recover" && !password) return { ...state, error: "Ingresá tu contraseña." };
-  if (mode === "signup") {
-    if (password.length < 8) return { ...state, error: "Usá al menos 8 caracteres." };
-    if (password !== form.get("confirmPassword")) return { ...state, error: "Las contraseñas no coinciden." };
-  }
-  const supabase = await createClient();
-  if (mode === "recover") {
-    // Neutral on purpose: the same link serves a forgotten password and an email-only account.
-    const result = await sendEntryLink(email, next);
-    return result === "sent" ? { ...state, sent: true } : { ...state, error: linkError(result) };
-  }
-  if (mode === "signup") {
-    // The email already has a free search: Auth would refuse the signup, the link
-    // proves the inbox and lets them choose a password.
-    const existing = await emailOnly(email);
-    if (existing) {
-      const result = await sendEntryLink(email, next, existing);
-      return result === "sent" ? { ...state, sent: true, entry: "signup" } : { ...state, error: linkError(result) };
-    }
-    const { data, error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: await callbackUrl(next) } });
-    if (error) return { ...state, error: error.code === "weak_password" ? "Elegí una contraseña más segura." : emailError(error) };
-    // A misconfigured provider must not leave an unconfirmed signup signed in.
-    if (data.session) {
-      await supabase.auth.signOut();
-      return { ...state, error: "La confirmación de email no está habilitada. Contactá a soporte para completar el registro." };
-    }
-    return { ...state, sent: true };
-  }
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) {
-    if (error.code === "invalid_credentials") {
-      const existing = await emailOnly(email);
-      if (existing) {
-        const result = await sendEntryLink(email, next, existing);
-        return result === "sent" ? { ...state, sent: true, entry: "password" } : { ...state, error: linkError(result) };
-      }
-    }
-    return { ...state, confirmationRequired: error.code === "email_not_confirmed", error: error.code === "email_not_confirmed" ? "Confirmá tu email antes de ingresar. Revisá tu bandeja de entrada y spam." : "No pudimos ingresar. Revisá tu email y contraseña, o pedí un link para entrar." };
-  }
-  await afterSignIn(supabase);
-  redirect(next);
-}
-export async function resendConfirmation(prev: LoginState, form: FormData): Promise<LoginState> {
-  const next = safeNext(String(form.get("next") ?? prev.next));
-  const parsed = Email.safeParse(String(form.get("email") ?? "").trim().toLowerCase());
-  if (!parsed.success) return { next, error: parsed.error.issues[0].message };
-  const supabase = await createClient();
-  const { error } = await supabase.auth.resend({ type: "signup", email: parsed.data, options: { emailRedirectTo: await callbackUrl(next) } });
-  return { next, email: parsed.data, sent: !error, error: error ? emailError(error) : undefined };
+  return parsed.success ? parsed.data : null;
 }
 
-export async function signInWithGoogle(prev: LoginState, form: FormData): Promise<LoginState> {
+export async function login(prev: LoginState, form: FormData): Promise<LoginState> {
+  const next = safeNext(String(form.get("next") ?? prev.next));
+  const intent = String(form.get("intent") ?? "");
+  if (intent === "change-email") return { step: "email", email: prev.email, next };
+  if (intent === "use-password") return { step: "password", email: String(form.get("email") ?? prev.email ?? "").trim(), next };
+  const email = parseEmail(form);
+  if (!email) return { step: intent === "password" ? "password" : "email", email: String(form.get("email") ?? ""), next, error: "Ingresá un email válido." };
+  if (intent === "send-code") return requestCode(email, next);
+  if (intent === "verify") return verify(email, form.get("code"), next, prev);
+  if (intent === "password") return withPassword(email, String(form.get("password") ?? ""), next);
+  return { step: "email", email, next, error: "Acción inválida." };
+}
+
+/**
+ * Sends the code. An email with no account gets one first, email-only like
+ * the landing's (no session until the code proves the inbox), under the same
+ * switch and brakes; past them, or with the switch off, the answer is the
+ * same as for an existing email, so the screen never says which emails exist.
+ */
+async function requestCode(email: string, next: string): Promise<LoginState> {
+  const state: LoginState = { step: "code", email, next };
+  let account: ExistingAccount | null;
+  let signedUp = false;
+  try {
+    account = await accountForEmail(email);
+    if (!account) {
+      const created = await newAccount(email);
+      if (created) {
+        account = created;
+        signedUp = true;
+      }
+    }
+  } catch (error) {
+    console.error("login code request failed:", error instanceof Error ? error.message : error);
+    return { step: "email", email, next, error: FAILED };
+  }
+  // Exactly the shape an existing email gets.
+  if (!account) return { ...state, signedUp: false };
+  const result = await sendEntryLink(email, next, account);
+  if (result !== "sent") return { step: "email", email, next, error: linkError(result) };
+  return { ...state, signedUp };
+}
+
+async function newAccount(email: string): Promise<ExistingAccount | null> {
+  // The health dashboard trusts this address: it never becomes an unproven account.
+  if (email === HEALTH_OWNER_EMAIL) return null;
+  const cfg = (await webConfig()).emailOnlySignup;
+  if (!cfg.enabled) return null;
+  const ip = await clientIpKey();
+  if (!(await claimThrottle("free_search_signup_ip", ip, cfg.perIpHour, HOUR))) return null;
+  if (!(await claimThrottle("free_search_signup_day", "global", cfg.perDay, DAY))) return null;
+  const created = await createEmailOnlyUser(email);
+  if ("existing" in created) return created.existing;
+  return { user_id: created.userId, email_only: true, confirmed: true };
+}
+
+async function verify(email: string, code: FormDataEntryValue | null, next: string, prev: LoginState): Promise<LoginState> {
+  const result = await verifyEntryCode(email, code, next);
+  if (!result.ok) return { step: "code", email, next, error: result.error, notice: prev.notice };
+  redirect(result.href);
+}
+
+/**
+ * The password, for accounts that have one. An email-only account, or a
+ * password signup that was never confirmed, gets the code instead: that's how
+ * it enters (and the code confirms the email).
+ */
+async function withPassword(email: string, password: string, next: string): Promise<LoginState> {
+  if (!password) return { step: "password", email, next, error: "Ingresá tu contraseña." };
+  try {
+    if (!(await claimThrottle("login_password", await clientIpKey(), 20, HOUR))) {
+      return { step: "password", email, next, error: "Hiciste varios intentos. Pedí un código para entrar." };
+    }
+  } catch (error) {
+    console.error("password throttle failed:", error instanceof Error ? error.message : error);
+  }
+  const supabase = await createClient();
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  if (!error) {
+    await afterSignIn(supabase);
+    redirect(next);
+  }
+  if (error.code === "invalid_credentials" || error.code === "email_not_confirmed") {
+    let account: ExistingAccount | null = null;
+    try {
+      account = await accountForEmail(email);
+    } catch (lookupError) {
+      console.error("account lookup failed:", lookupError instanceof Error ? lookupError.message : lookupError);
+    }
+    if (account && (account.email_only || !account.confirmed)) {
+      const result = await sendEntryLink(email, next, account);
+      if (result !== "sent") return { step: "password", email, next, error: linkError(result) };
+      return {
+        step: "code", email, next,
+        notice: account.email_only ? "Ese email todavía no tiene contraseña: entrás con el código que te mandamos." : "Ese email todavía no está confirmado: el código que te mandamos lo confirma.",
+      };
+    }
+  }
+  return { step: "password", email, next, error: "No pudimos ingresar. Revisá la contraseña o pedí un código para entrar." };
+}
+
+export async function signInWithGoogle(prev: { next: string; error?: string }, form: FormData): Promise<{ next: string; error?: string }> {
   const next = safeNext(String(form.get("next") ?? prev.next));
   let url: string;
   try {
@@ -98,9 +141,9 @@ export async function signInWithGoogle(prev: LoginState, form: FormData): Promis
     const settings = await fetch(`${supabaseUrl}/auth/v1/settings`, {
       headers: { apikey: supabaseAnonKey }, cache: "no-store", signal: AbortSignal.timeout(10_000),
     });
-    if (!settings.ok) return { next, error: "No pudimos conectar con Google. Probá de nuevo o ingresá con email y contraseña." };
+    if (!settings.ok) return { next, error: "No pudimos conectar con Google. Probá de nuevo o entrá con un código por email." };
     const config = await settings.json();
-    if (!config.external?.google) return { next, error: "El ingreso con Google todavía no está disponible. Ingresá con email y contraseña." };
+    if (!config.external?.google) return { next, error: "El ingreso con Google todavía no está disponible. Entrá con un código por email." };
     const supabase = await createClient();
     const callback = new URL(await callbackUrl(next));
     callback.searchParams.set("provider", "google");
@@ -111,7 +154,7 @@ export async function signInWithGoogle(prev: LoginState, form: FormData): Promis
     if (error || !data.url) return { next, error: "No pudimos iniciar el ingreso con Google. Probá de nuevo." };
     url = data.url;
   } catch {
-    return { next, error: "No pudimos conectar con Google. Probá de nuevo o ingresá con email y contraseña." };
+    return { next, error: "No pudimos conectar con Google. Probá de nuevo o entrá con un código por email." };
   }
   redirect(url);
 }

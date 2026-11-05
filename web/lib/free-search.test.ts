@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const m = vi.hoisted(() => ({
-  currentUser: vi.fn(), accountForEmail: vi.fn(), claimThrottle: vi.fn(), sendEntryLink: vi.fn(), afterSignIn: vi.fn(),
+  currentUser: vi.fn(), verifyEntryCode: vi.fn(), accountForEmail: vi.fn(), claimThrottle: vi.fn(), sendEntryLink: vi.fn(), afterSignIn: vi.fn(),
   createUser: vi.fn(), generateLink: vi.fn(), deleteUser: vi.fn(), rpc: vi.fn(), verifyOtp: vi.fn(), signOut: vi.fn(), signInWithPassword: vi.fn(),
   config: { enabled: true, perIpHour: 10, perDay: 100, linksPerUserHour: 3, linksPerIpHour: 20, lookupsPerIpHour: 30 },
 }));
@@ -11,14 +11,29 @@ vi.mock("@/lib/email-only", () => ({
   HOUR: 3600, DAY: 86400,
   accountForEmail: m.accountForEmail, claimThrottle: m.claimThrottle, clientIpKey: async () => "ip-key",
   sendEntryLink: m.sendEntryLink, linkError: () => "Ya te mandamos un link hace un momento.",
+  // The real helper's steps, on this file's admin mocks.
+  createEmailOnlyUser: async (email: string) => {
+    const created = await m.createUser({ email, email_confirm: true });
+    const userId = created.data?.user?.id;
+    if (created.error || !userId) {
+      const existing = await m.accountForEmail(email);
+      if (existing) return { existing };
+      throw new Error("createUser");
+    }
+    const discard = async (reason: string) => { await m.deleteUser(userId); throw new Error(reason); };
+    const { data, error } = await m.rpc("mark_email_only_account", { p_user: userId });
+    if (error || data !== true) return discard("mark_email_only_account");
+    return { userId, discard };
+  },
 }));
+vi.mock("@/lib/entry-code", () => ({ verifyEntryCode: m.verifyEntryCode }));
 vi.mock("@/lib/signup", () => ({ afterSignIn: m.afterSignIn }));
 vi.mock("@/lib/supabase/admin", () => ({
   createAdminClient: () => ({ auth: { admin: { createUser: m.createUser, generateLink: m.generateLink, deleteUser: m.deleteUser } }, rpc: m.rpc }),
 }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ auth: { verifyOtp: m.verifyOtp, signOut: m.signOut, signInWithPassword: m.signInWithPassword } }) }));
 
-import { enterForFreeSearch, linkForFreeSearch, startFreeSearch } from "@/app/actions";
+import { codeForFreeSearch, enterForFreeSearch, linkForFreeSearch, startFreeSearch } from "@/app/actions";
 
 const prompt = "Fiesta manual & Polo en Córdoba";
 const href = `/app/searches/new?${new URLSearchParams({ prompt })}`;
@@ -225,5 +240,21 @@ describe("an email with a password, from the same pop-up", () => {
   it("sends the link to enter instead, with the search as the destination", async () => {
     expect(await linkForFreeSearch(input)).toEqual({ status: "existing_email_only", email: "persona@example.com" });
     expect(m.sendEntryLink).toHaveBeenCalledWith("persona@example.com", href);
+  });
+});
+
+describe("the code from the pop-up", () => {
+  it("checks it for the typed email and goes on to the search", async () => {
+    m.verifyEntryCode.mockResolvedValue({ ok: true, href, signedUp: false });
+    expect(await codeForFreeSearch({ ...input, code: "123456" })).toEqual({ status: "created", href, signedUp: false });
+    expect(m.verifyEntryCode).toHaveBeenCalledWith("persona@example.com", "123456", href);
+  });
+  it("keeps the pop-up on the code with the error", async () => {
+    m.verifyEntryCode.mockResolvedValue({ ok: false, error: "El código no es correcto." });
+    expect(await codeForFreeSearch({ ...input, code: "000000" })).toEqual({ status: "error", field: "code", error: "El código no es correcto." });
+  });
+  it("still needs the prompt", async () => {
+    expect(await codeForFreeSearch({ prompt: "", email: input.email, code: "123456" })).toMatchObject({ field: "prompt" });
+    expect(m.verifyEntryCode).not.toHaveBeenCalled();
   });
 });

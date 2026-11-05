@@ -2,7 +2,7 @@ import { expect, type Page, test } from "@playwright/test";
 
 import { query } from "./support/db";
 import { E2E_EMAIL_DOMAIN } from "./support/env";
-import { magicLink } from "./support/mail";
+import { signUp, resetAuthBrakes } from "./support/auth";
 
 /**
  * PAR-04 · Guías por modelo (docs/superpowers/specs/2026-11-03-par04-guias-design.md):
@@ -41,21 +41,6 @@ async function events(name: string, model: string): Promise<{ user_id: string | 
   return query(`select user_id from public.events where name = $1 and props->>'model' = $2 and created_at > now() - interval '10 minutes'`, [name, model]);
 }
 
-async function signUp(page: Page, email: string, next: string) {
-  const since = new Date();
-  await page.goto(`/login?next=${encodeURIComponent(next)}`);
-  await page.getByLabel("Email").fill(email);
-  await page.getByRole("link", { name: "Crear cuenta", exact: true }).click();
-  await expect(page.getByLabel("Repetí la contraseña")).toBeVisible();
-  await page.getByLabel("Email", { exact: true }).fill(email);
-  await page.getByLabel("Contraseña", { exact: true }).fill("e2e-password-123");
-  await page.getByLabel("Repetí la contraseña").fill("e2e-password-123");
-  await page.getByRole("button", { name: "Crear cuenta", exact: true }).click();
-  await expect(page.getByText("Revisá tu email")).toBeVisible();
-  await page.goto(await magicLink(email, since));
-  await page.getByRole("button", { name: "Confirmar mi email" }).click();
-}
-
 test.beforeAll(async () => {
   // Only the models this spec owns: Courier (published), S-Max (draft), Maverick and Territory (made in /admin).
   await query(`delete from public.model_guides where make = 'Ford' and model in ('Courier', 'S-Max', 'Maverick', 'Territory')`);
@@ -74,6 +59,9 @@ test.afterAll(async () => {
   await query(`delete from public.model_guides where make = 'Ford' and model in ('Courier', 'S-Max', 'Maverick', 'Territory')`);
   await query(`delete from public.events where name like 'guide\\_%' and props->>'make' = 'Ford' and props->>'model' in ('Courier', 'S-Max', 'Maverick', 'Territory')`);
 });
+
+// The landing's sign-ups go through the real brakes: start each test below them.
+test.beforeEach(async () => { await resetAuthBrakes(); });
 
 test("PAR-04: la guía publicada se ve con el aviso y su CTA abre el alta con el modelo", async ({ page }, testInfo) => {
   const email = `guide-${testInfo.project.name}-${Date.now()}@${E2E_EMAIL_DOMAIN}`;

@@ -15,7 +15,7 @@ it("no longer lists «Tus notas»: the note was removed (Juan 02/11), the date s
   const html = renderToStaticMarkup(await PrivacyPage());
   expect(html).not.toContain("Tus notas");
   expect(html).not.toContain("Tu nota");
-  expect(html).toContain("2 de noviembre de 2026");
+  expect(html).toContain("4 de noviembre de 2026");
   // The follow-up statuses stay, and so does their mention.
   expect(html).toContain("«compré»");
 });
@@ -27,7 +27,13 @@ it("PAR-05: the agencies line stays hidden until its flag is on", async () => {
   const on = renderToStaticMarkup(await PrivacyPage());
   expect(on).toContain(SELL_INTENT_PRIVACY_LINE);
   expect(on).toContain("No compartimos tus datos con ninguna agencia sin que lo marques");
-  // The date moves with the line (approved by Juan, 03/11).
-  expect(off).toContain("2 de noviembre de 2026");
-  expect(on).toContain("3 de noviembre de 2026");
+  // The mobile (04/11) is newer than both versions of the agencies line.
+  expect(off).toContain("4 de noviembre de 2026");
+  expect(on).toContain("4 de noviembre de 2026");
+});
+
+it("lists the optional mobile and where to change it", async () => {
+  const html = renderToStaticMarkup(await PrivacyPage());
+  expect(html).toContain("Tu celular, si nos lo dejás");
+  expect(html).toContain("Mis datos");
 });
