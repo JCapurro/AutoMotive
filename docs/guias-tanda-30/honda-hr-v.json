@@ -1,0 +1,214 @@
+{
+  "make": "Honda",
+  "model": "HR-V",
+  "generation_label": "Segunda generación (Campana y México)",
+  "year_from": 2015,
+  "year_to": 2022,
+  "slug_make": "honda",
+  "slug_model": "hr-v",
+  "body": {
+    "known_issues": [
+      {
+        "text": "Llamado de Honda Argentina (diciembre de 2018) para HR-V 2018 de ciertos rangos de chasis: los pistones de las mordazas de freno traseras podían liberar gas y formar burbujas en el líquido, con más recorrido del pedal y menos frenado. La solución era purgar el sistema sin cargo.",
+        "applies_to": "2018, según rango de chasis (confirmar con el VIN)"
+      },
+      {
+        "text": "Según una reseña pensada para Norteamérica, en los primeros años hubo algunas fallas de la caja CVT, aunque no muchas. En EE.UU. Honda emitió una actualización de software y extendió la cobertura de la CVT para HR-V 2016-2020 de ese mercado; no encontré nada equivalente informado en Argentina.",
+        "applies_to": "CVT (reportes en otros mercados)"
+      },
+      {
+        "text": "Esa misma reseña norteamericana menciona pérdidas menores de aceite del motor, tensor de la correa auxiliar que hace ruido, rodamientos de rueda gastados y baterías que fallan antes de tiempo.",
+        "applies_to": "reportes en otros mercados"
+      },
+      {
+        "text": "No encontré en la prensa argentina reportes de fallas repetidas del HR-V hecho en Campana. Aun así, revisá el historial de la CVT, una pieza cara de reparar.",
+        "applies_to": null
+      }
+    ],
+    "visit_checklist": [
+      {
+        "text": "Pedí el número de chasis y consultá en un concesionario oficial Honda si la unidad tiene campañas pendientes, por ejemplo la de frenos de 2018."
+      },
+      {
+        "text": "Probá la CVT en frío y en caliente: que acelere sin tirones, que no haga ruidos de zumbido o silbido y que responda en modo S y con las levas, si las tiene.",
+        "applies_to": "CVT"
+      },
+      {
+        "text": "Pisá el freno a fondo con el auto detenido y en marcha: el pedal no tiene que hundirse de más ni sentirse esponjoso."
+      },
+      {
+        "text": "Al dar contacto, mirá que se enciendan y se apaguen los testigos de motor, airbag, ABS y control de estabilidad, y que el freno de mano eléctrico y el Brake Hold funcionen, si los tiene."
+      },
+      {
+        "text": "Contá los airbags que indica la unidad (etiquetas en volante, tablero, butacas y parantes): en el HR-V argentino eran dos, cuatro o seis según la versión.",
+        "applies_to": "fabricados en Campana"
+      },
+      {
+        "text": "Probá la pantalla táctil, la cámara trasera, el Bluetooth y, desde el restyling 2019 en EX y EXL, Android Auto y Apple CarPlay; también el climatizador táctil si lo tiene."
+      },
+      {
+        "text": "En un camino irregular escuchá golpes de suspensión y ruidos de rodamientos de rueda; tené en cuenta que la prensa describe la suspensión como firme."
+      },
+      {
+        "text": "Mirá debajo del auto y en el vano motor si hay pérdidas de aceite y escuchá en ralentí si la correa auxiliar o su tensor hacen ruido."
+      }
+    ],
+    "versions_equipment": [
+      {
+        "text": "Fabricada en Campana desde 2015, con un único motor naftero 1.8 i-VTEC de 140 CV (el del Civic) y tracción delantera. Al lanzamiento se anunciaron caja manual de seis o automática CVT y control de estabilidad de serie.",
+        "applies_to": "lanzamiento 2015"
+      },
+      {
+        "text": "La prueba de la EXL 2015 destaca seis airbags, climatizador automático, pantalla táctil de 7 pulgadas con cámara trasera, Bluetooth, control crucero y Auto Hold; no tenía arranque sin llave ni sensor de lluvia.",
+        "applies_to": "EXL 2015"
+      },
+      {
+        "text": "En febrero de 2016 Honda presentó la EX, entre LX y EXL, y dejó de ofrecer la caja manual: desde entonces toda la gama es CVT. La EX sumaba antiniebla, repetidores en espejos, llantas de 17, barras de techo y levas, que la LX no tenía.",
+        "applies_to": "desde 2016"
+      },
+      {
+        "text": "Restyling de enero de 2019: frente nuevo con luces diurnas LED y llantas de 17 de nuevo diseño. Todas con control crucero, Bluetooth y cámara trasera; la LX con pantalla de 5 pulgadas y la EX y EXL con multimedia de 7 con Android Auto y Apple CarPlay y climatizador táctil.",
+        "applies_to": "restyling 2019–2020"
+      },
+      {
+        "text": "Desde 2021 llegó importada de México en LX y EX, ambas con seis airbags y encendido automático de luces; según la prensa, la EX mexicana perdía el sensor de estacionamiento trasero.",
+        "applies_to": "importadas de México, desde 2021"
+      },
+      {
+        "text": "No encontré en la prensa una versión EXT de esta generación vendida en Argentina; si la publicación la menciona, revisá qué equipamiento trae realmente.",
+        "applies_to": null
+      }
+    ],
+    "maintenance_costs": [
+      {
+        "text": "Según la prueba de Autotest, el 1.8 usa cadena de distribución, que no tiene reemplazo programado como una correa."
+      },
+      {
+        "text": "La CVT es cara de reparar: pedí comprobantes de cambio de su fluido. Para el modelo norteamericano el aviso lo da el indicador de mantenimiento del tablero; confirmá el intervalo en el manual de la unidad.",
+        "applies_to": "CVT"
+      },
+      {
+        "text": "No encontré el plan de mantenimiento oficial de Honda Argentina para el HR-V: seguí los intervalos del libro de services de la unidad. El aceite 0W-20 figura para la versión norteamericana del motor.",
+        "applies_to": null
+      },
+      {
+        "text": "Presupuestá frenos, batería y neumáticos de 17 pulgadas según el estado; la reseña norteamericana menciona baterías y rodamientos de rueda entre los desgastes.",
+        "applies_to": null
+      }
+    ],
+    "generations": [
+      {
+        "label": "Segunda generación, hecha en Campana",
+        "year_from": 2015,
+        "year_to": 2018,
+        "text": "Producción en Campana desde 2015 (reemplazó al City en la línea). Desde febrero de 2016, solo con CVT. La prensa argentina la cuenta como segunda generación del HR-V a nivel mundial."
+      },
+      {
+        "label": "Restyling",
+        "year_from": 2019,
+        "year_to": 2020,
+        "text": "Renovada en enero de 2019 con frente, luces y equipamiento nuevos y el mismo 1.8. La producción en Campana terminó en mayo de 2020."
+      },
+      {
+        "label": "Importada de México",
+        "year_from": 2021,
+        "year_to": 2022,
+        "text": "Desde mayo de 2021, en LX y EX con el mismo 1.8 y CVT. No confirmé hasta cuándo se vendió: el año final es aproximado."
+      },
+      {
+        "label": "Tercera generación",
+        "year_from": 2023,
+        "year_to": null,
+        "text": "Llegó en octubre de 2023 importada de Brasil, con motor 1.5 de 121 CV y CVT. Es otro auto: esta guía no la cubre."
+      }
+    ]
+  },
+  "questions": [
+    {
+      "text": "¿La unidad fue hecha en Campana o importada de México?",
+      "why": "Cambian las versiones y el equipamiento, por ejemplo la cantidad de airbags."
+    },
+    {
+      "text": "¿Le cambiaron alguna vez el fluido de la CVT? ¿Tenés el comprobante?",
+      "why": "La CVT es cara de reparar y, según la reseña norteamericana, cambiar el fluido ayuda a que dure."
+    },
+    {
+      "text": "Si es 2018, ¿le hicieron el purgado de frenos del llamado de Honda?",
+      "why": "Hubo un llamado por las mordazas traseras en HR-V 2018 de ciertos rangos de chasis."
+    },
+    {
+      "text": "¿Alguna vez la caja dio tirones, ruidos o un testigo encendido, y le hicieron algo?",
+      "why": "En otros mercados se reportaron algunas fallas de CVT en los primeros años."
+    },
+    {
+      "text": "¿Los services se hicieron en concesionario oficial? ¿Tenés el libro o las facturas?",
+      "why": "Sirve para confirmar cambios de aceite y de fluido de caja y campañas hechas."
+    },
+    {
+      "text": "Si es anterior a 2016, ¿es manual o CVT?",
+      "why": "Al lanzamiento hubo caja manual de seis, que se dejó de ofrecer en febrero de 2016."
+    }
+  ],
+  "sources": [
+    {
+      "title": "La Honda HR-V se lanza a la venta en junio (Cuyo Motor, 15/04/2015)",
+      "url": "https://cuyomotor.com.ar/2015/04/15/la-honda-hr-v-se-lanza-a-la-venta-en-junio",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Prueba: Honda HR-V EXL 2015 (Autotest, 06/2015)",
+      "url": "https://autotest.com.ar/pruebas/honda-hr-v-exl-2015/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Honda HR-V: una nueva versión se lanza en Argentina (Autocosmos, 12/02/2016)",
+      "url": "https://noticias.autocosmos.com.ar/2016/02/12/honda-hr-v-una-nueva-version-se-lanza-en-argentina",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Honda HR-V y Accord a recall en Argentina (Autocosmos, 03/12/2018)",
+      "url": "https://noticias.autocosmos.com.ar/2018/12/03/honda-hr-v-y-accord-a-recall-en-argentina",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Honda HR-V: cómo es la línea 2019 (Parabrisas, 22/01/2019)",
+      "url": "https://parabrisas.perfil.com/noticias/general/2019-01-22-honda-hr-v-como-es-la-linea-2019.phtml",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Nuevo restyling para la HR-V (Autotest, 21/01/2019)",
+      "url": "https://autotest.com.ar/lanzamientos/nuevo-restyling-para-la-hr-v/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Tras nueve años, Honda dejó de producir autos en Campana (Autoweb, 2020)",
+      "url": "https://www.autoweb.com.ar/?p=15437",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Honda lanza la HR-V mexicana (Autoweb, 05/05/2021)",
+      "url": "https://www.autoweb.com.ar/?p=21735",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Honda lanza la nueva HR-V en la Argentina (Autoweb, 31/10/2023)",
+      "url": "https://www.autoweb.com.ar/?p=40858",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Honda HR-V 2016-2022: pros and cons, common problems (Samarins)",
+      "url": "https://www.samarins.com/reviews/honda-hr-v-2016.html",
+      "kind": "prensa",
+      "verified": true
+    }
+  ]
+}

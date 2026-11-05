@@ -1,0 +1,169 @@
+{
+  "make": "Renault",
+  "model": "Kardian",
+  "generation_label": "Primera generación",
+  "year_from": 2024,
+  "year_to": null,
+  "slug_make": "renault",
+  "slug_model": "kardian",
+  "body": {
+    "known_issues": [
+      {
+        "text": "Es un modelo nuevo, a la venta en Argentina desde agosto de 2024: todavía hay pocos años de uso y pocos reportes de dueños, así que no hay un historial de fallas consolidado."
+      },
+      {
+        "text": "La EDC es una caja de doble embrague de seis marchas, no una automática convencional. En su prueba, Autotest marcó que al maniobrar a baja velocidad el avance no es progresivo ni suave.",
+        "applies_to": "1.0 turbo con EDC"
+      },
+      {
+        "text": "Un blog brasileño, citando reclamos de dueños en Reclame Aqui, menciona tirones, ruidos y dificultad para poner la posición P en la caja de doble embrague. No hay datos de cuán frecuente es.",
+        "applies_to": "EDC (reportes en Brasil)"
+      },
+      {
+        "text": "En julio de 2024 Renault llamó a revisión en Brasil a Kardian Evolution fabricados del 15/03 al 03/05/2024 porque los bulones de las ruedas traseras podían quedar mal ajustados; cambiaba tambores traseros y bulones. No encontré la campaña en Argentina: consultá el VIN.",
+        "applies_to": "Evolution, fabricados 03–05/2024 (reportes en Brasil)"
+      },
+      {
+        "text": "La unidad de prensa que probó Autoweb tuvo algunas fallas eléctricas menores en vidrios y testigos del tablero.",
+        "applies_to": "Première Edition, prueba de prensa 2024"
+      }
+    ],
+    "visit_checklist": [
+      {
+        "text": "Si es EDC, probala maniobrando y en tránsito lento: tiene que avanzar sin tirones ni ruidos y la posición P tiene que entrar sin problemas. No deberían aparecer avisos de la caja en el tablero.",
+        "applies_to": "1.0 turbo con EDC"
+      },
+      {
+        "text": "Probá levantavidrios, testigos del tablero, pantalla multimedia y cámaras."
+      },
+      {
+        "text": "Consultá con el VIN en un concesionario oficial si tiene llamados a revisión pendientes y si los services figuran hechos en la red; por la edad del modelo, puede seguir en garantía de fábrica."
+      },
+      {
+        "text": "Escuchá las ruedas traseras al andar y al frenar: ruidos o golpes ahí son motivo para revisar el ajuste de los bulones."
+      },
+      {
+        "text": "Revisá que la rueda de auxilio esté en el baúl: según la prensa es temporal y de menor medida que las llantas de 17.",
+        "applies_to": "versiones con llantas de 17"
+      },
+      {
+        "text": "Pedí que escaneen motor y caja para ver si hay códigos de falla guardados."
+      }
+    ],
+    "versions_equipment": [
+      {
+        "text": "Lanzamiento (agosto de 2024): Evolution con 1.6 de 115 CV y manual de cinco o con 1.0 turbo de 120 CV y EDC de seis; Techno y Première Edition solo con el turbo. Se fabrica en Brasil.",
+        "applies_to": "2024–2025"
+      },
+      {
+        "text": "Evolution: seis airbags, control crucero, sensores traseros, tablero digital, pantalla de 8 pulgadas con cámara, climatizador y llantas de chapa de 16.",
+        "applies_to": "Evolution"
+      },
+      {
+        "text": "Techno: suma frenado autónomo de emergencia, freno de mano eléctrico, llantas de 17 y acceso y arranque sin llave. Première Edition: crucero adaptativo, cámara 360, alerta de punto ciego y sensores delanteros.",
+        "applies_to": "Techno y Première Edition, 2024–2025"
+      },
+      {
+        "text": "Agosto de 2025: salió la Techno y la Iconic reemplazó a la Première Edition; todas pasaron a una pantalla de 10 pulgadas y el frenado autónomo suma detección de peatones y ciclistas.",
+        "applies_to": "2025 en adelante"
+      },
+      {
+        "text": "Latin NCAP le dio cinco estrellas en noviembre de 2025 para unidades fabricadas desde el 14/08/2025; antes tenía cuatro. Indica seis airbags y control de estabilidad de serie.",
+        "applies_to": "fabricados desde 08/2025"
+      }
+    ],
+    "maintenance_costs": [
+      {
+        "text": "El 1.0 turbo tiene distribución por cadena según la ficha de Autoweb; seguí igual el plan de mantenimiento del manual de la unidad.",
+        "applies_to": "1.0 turbo"
+      },
+      {
+        "text": "En la EDC, preguntá si se hizo algún service o actualización de la caja y seguí lo que indique el manual.",
+        "applies_to": "1.0 turbo con EDC"
+      },
+      {
+        "text": "Por ser un modelo reciente puede seguir en garantía de fábrica: pedí el historial de services y confirmá en un concesionario oficial las condiciones y si siguen vigentes."
+      }
+    ],
+    "generations": [
+      {
+        "label": "Primera generación",
+        "year_from": 2024,
+        "year_to": null,
+        "text": "SUV compacto sobre la plataforma modular RGMP de Renault, hecho en Brasil. En Argentina se vende desde agosto de 2024; en agosto de 2025 se reordenó la gama con la Iconic."
+      }
+    ]
+  },
+  "questions": [
+    {
+      "text": "¿Es la Evolution 1.6 manual o una versión con el 1.0 turbo y caja EDC?",
+      "why": "Son motores y cajas distintos, y los reportes de la caja de doble embrague solo aplican a la EDC."
+    },
+    {
+      "text": "¿Todos los services se hicieron en concesionario oficial? ¿Tenés los comprobantes?",
+      "why": "Es un modelo reciente y el historial de services sirve para confirmar con la marca las condiciones de garantía."
+    },
+    {
+      "text": "¿Tuvo algún llamado a revisión o reparación en garantía, por ejemplo en la caja o en las ruedas traseras?",
+      "why": "En Brasil hubo una campaña por los bulones traseros y reclamos sobre la caja de doble embrague."
+    },
+    {
+      "text": "¿Qué fecha de fabricación figura en la documentación?",
+      "why": "El resultado de cinco estrellas de Latin NCAP corresponde a unidades fabricadas desde agosto de 2025."
+    },
+    {
+      "text": "¿Tuvo alguna falla eléctrica en vidrios, tablero o pantalla?",
+      "why": "La unidad de prensa que probó Autoweb tuvo fallas menores en vidrios y testigos."
+    }
+  ],
+  "sources": [
+    {
+      "title": "Renault lanza el Kardian en Argentina (Autoweb, 15/08/2024)",
+      "url": "https://www.autoweb.com.ar/2024/08/15/renault-lanza-el-kardian-en-argentina/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Renault actualiza la gama del Kardian en Argentina (Autoweb, 20/08/2025)",
+      "url": "https://www.autoweb.com.ar/2025/08/20/renault-actualiza-la-gama-del-kardian-en-argentina/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Prueba: Renault Kardian 1.0 Premiere Edition (Autoweb, 01/11/2024)",
+      "url": "https://www.autoweb.com.ar/2024/11/01/prueba-renault-kardian-1-0-premiere-edition/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Renault Kardian test drive (Autotest)",
+      "url": "https://autotest.com.ar/pruebas/renault-kardian-test-drive/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Renault Kardian: plataforma RMGP, motor 1.0 TCe, caja EDC y mucha tecnología (16 Válvulas)",
+      "url": "https://www.16valvulas.com.ar/?p=229408",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Renault Kardian tem recall para sanar perda de dirigibilidade (Vrum, 07/2024)",
+      "url": "https://www.vrum.com.br/noticias/2024/07/6901264-renault-kardian-tem-recall-para-sanar-perda-de-dirigibilidade.html",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Kardian is Renault's first five stars and Taos renews top safety (Latin NCAP, 27/11/2025)",
+      "url": "https://www.latinncap.com/en/media-area/new/8692840c0452cd/kardian-is-renaults-first-five-stars-and-taos-renews-top-safety",
+      "kind": "otra",
+      "verified": true
+    },
+    {
+      "title": "Problemas no câmbio do Nissan Kicks 2026 e Renault Kardian preocupam donos de SUVs (Carro.Blog.Br, 02/09/2025)",
+      "url": "https://carro.blog.br/problemas-no-cambio-do-nissan-kicks-2026-e-renault-kardian-preocupam-donos-de-suvs.html",
+      "kind": "prensa",
+      "verified": true
+    }
+  ]
+}

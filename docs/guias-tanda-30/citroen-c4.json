@@ -1,0 +1,169 @@
+{
+  "make": "Citroën",
+  "model": "C4",
+  "generation_label": "Primera generación (hatchback y sedán argentinos)",
+  "year_from": 2007,
+  "year_to": 2014,
+  "slug_make": "citroen",
+  "slug_model": "c4",
+  "body": {
+    "known_issues": [
+      {
+        "text": "La automática es de cuatro marchas, según las fichas de Autocosmos. La prensa brasileña señala por patinamiento e imprecisión a la AL4, la automática de cuatro marchas que PSA usó en esos años en modelos como el 206, el 207 y el C3. Confirmá qué caja lleva la unidad y probala bien.",
+        "applies_to": "versiones automáticas"
+      },
+      {
+        "text": "La seguridad depende mucho de la versión: en el lanzamiento del sedán, el control de estabilidad venía de serie solo en la naftera de 143 CV y los airbags laterales y de cortina eran opcionales.",
+        "applies_to": "según versión; sedán desde 2007"
+      },
+      {
+        "text": "El llamado de 2020 por airbags de Citroën nombra al C4 Lounge (desde julio de 2013), no a esta generación. Igual conviene consultar con el VIN en un concesionario oficial si la unidad tiene campañas pendientes."
+      }
+    ],
+    "visit_checklist": [
+      {
+        "text": "Si es automática, probala en tránsito y en ruta: que no patine al acelerar, que los cambios entren sin golpes y que no aparezcan avisos en el tablero.",
+        "applies_to": "versiones automáticas"
+      },
+      {
+        "text": "Confirmá en la unidad cuántos airbags tiene y si trae control de estabilidad. Mirá que el testigo de airbag se encienda al dar contacto y después se apague."
+      },
+      {
+        "text": "En la Exclusive, probá todo el equipamiento eléctrico: climatizador bizona, sensor de lluvia, luces automáticas, espejos rebatibles, sensores de estacionamiento y Bluetooth.",
+        "applies_to": "Exclusive"
+      },
+      {
+        "text": "Pedí que escaneen motor y caja para ver si hay códigos de falla guardados."
+      },
+      {
+        "text": "Consultá con el VIN en un concesionario oficial si hay llamados a revisión pendientes."
+      }
+    ],
+    "versions_equipment": [
+      {
+        "text": "Motores del C4 argentino según Autocosmos: naftas 1.6 16v de 110 CV y 2.0 16v de 143 CV, y turbodiésel 2.0 HDi de 110 CV, con manual de cinco o automática de cuatro."
+      },
+      {
+        "text": "Sedán en el lanzamiento: de serie ABS, repartidor electrónico de frenado, asistencia al frenado de emergencia, doble airbag frontal y regulador y limitador de velocidad. Control de estabilidad solo en la 2.0 de 143 CV.",
+        "applies_to": "sedán, 2007"
+      },
+      {
+        "text": "La 2.0 Exclusive, según la ficha de Autocosmos, trae airbags frontales, laterales y de cortina, control de estabilidad y de tracción, climatizador bizona, cuero, sensor de lluvia, sensores de estacionamiento traseros, USB y Bluetooth. Hubo manual de cinco y automática de cuatro.",
+        "applies_to": "2.0 Exclusive"
+      },
+      {
+        "text": "En las versiones de entrada el equipamiento de seguridad era menor: confirmá en la unidad airbags laterales, de cortina y control de estabilidad.",
+        "applies_to": "versiones de entrada"
+      },
+      {
+        "text": "Casi al mismo tiempo se importaron de Francia algunas unidades del C4 Coupé de tres puertas en versión VTS, con motor 2.0 más potente.",
+        "applies_to": "C4 Coupé VTS importado"
+      }
+    ],
+    "maintenance_costs": [
+      {
+        "text": "Confirmá en el manual de la unidad si el motor usa correa de distribución y cada cuánto se cambia; si no hay comprobante del último cambio, tomalo como pendiente."
+      },
+      {
+        "text": "En la automática, preguntá si la caja tuvo service o reparaciones y seguí lo que indique el manual para el aceite.",
+        "applies_to": "versiones automáticas"
+      },
+      {
+        "text": "En la 2.0 HDi, seguí el plan de mantenimiento del manual para filtros y aceite y pedí las facturas de los services.",
+        "applies_to": "2.0 HDi"
+      }
+    ],
+    "generations": [
+      {
+        "label": "C4 sedán",
+        "year_from": 2007,
+        "year_to": 2013,
+        "text": "Se fabricó en El Palomar desde abril de 2007. En Argentina se vendió como C4 sedán; el nombre C4 Pallas se usó en Brasil."
+      },
+      {
+        "label": "C4 hatchback",
+        "year_from": 2008,
+        "year_to": 2014,
+        "text": "El cinco puertas empezó a fabricarse en El Palomar en agosto de 2008 sobre la base del sedán; según Autocosmos, el público terminó prefiriéndolo al sedán."
+      },
+      {
+        "label": "C4 Lounge",
+        "year_from": 2013,
+        "year_to": 2021,
+        "text": "La segunda generación se fabricó en Argentina solo como sedán, con el nombre C4 Lounge; es otro auto."
+      }
+    ]
+  },
+  "questions": [
+    {
+      "text": "¿Es hatchback o sedán, y qué versión y motor tiene exactamente?",
+      "why": "El equipamiento de seguridad y el motor cambian mucho según la versión."
+    },
+    {
+      "text": "¿La caja es manual o automática? Si es automática, ¿tuvo alguna reparación?",
+      "why": "La prensa brasileña reporta problemas en la automática de cuatro marchas de PSA de esos años."
+    },
+    {
+      "text": "¿Cuántos airbags tiene y trae control de estabilidad?",
+      "why": "En el lanzamiento el control de estabilidad venía solo en la 2.0 de 143 CV y los airbags laterales y de cortina eran opcionales."
+    },
+    {
+      "text": "¿El motor usa correa de distribución? Si la usa, ¿cuándo se cambió y tenés el comprobante?",
+      "why": "El intervalo de cambio lo marca el plan de mantenimiento del manual."
+    },
+    {
+      "text": "¿Funciona todo el equipamiento eléctrico, como el climatizador, el sensor de lluvia y las luces automáticas?",
+      "why": "Las versiones más equipadas traen mucho equipamiento eléctrico que conviene probar."
+    }
+  ],
+  "sources": [
+    {
+      "title": "Autos clásicos de Argentina: Citroën C4 (Autocosmos, 07/03/2024)",
+      "url": "https://noticias.autocosmos.com.ar/2024/03/07/autos-clasicos-de-argentina-citroen-c4",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Citroën C4, el nuevo auto argentino (La Nación, 20/04/2007)",
+      "url": "https://www.lanacion.com.ar/autos/al-volante/citron-c4-el-nuevo-auto-argentino-nid901587",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Citroën C4 Hatchback va por más (La Nación, 22/08/2008)",
+      "url": "https://lanacion.com.ar/autos/al-volante/citron-c4-hatchback-va-por-mas-nid1041999",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Exclusivo: C4 Sedán, la novedad de Citroën para Sudamérica (Autocosmos Chile, 09/05/2007)",
+      "url": "https://noticias.autocosmos.cl/2007/05/09/exclusivo-c4-sedan-la-novedad-de-citroen-para-sudamerica",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Ficha técnica Citroën C4 Hatchback 2.0 Exclusive (Autocosmos)",
+      "url": "https://www.autocosmos.com.ar/catalogo/comparar?v1=152106",
+      "kind": "ficha técnica",
+      "verified": true
+    },
+    {
+      "title": "Ficha técnica Citroën C4 2.0i Exclusive BVA (Autocosmos)",
+      "url": "https://www.autocosmos.com.ar/catalogo/comparar?v1=152098",
+      "kind": "ficha técnica",
+      "verified": true
+    },
+    {
+      "title": "Além do Powershift: carros automáticos famosos por darem problemas no câmbio (Vrum, 12/2024)",
+      "url": "https://www.vrum.com.br/aceleradas/2024/12/7008662-alem-do-powershift-carros-automaticos-famosos-por-darem-problemas-no-cambio.html",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Citroën también llama a revisión por los airbags defectuosos (Autoweb, 29/09/2020)",
+      "url": "https://www.autoweb.com.ar/?p=17721",
+      "kind": "prensa",
+      "verified": true
+    }
+  ]
+}

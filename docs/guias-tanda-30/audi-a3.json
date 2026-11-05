@@ -1,0 +1,222 @@
+{
+  "make": "Audi",
+  "model": "A3",
+  "generation_label": "A3 tercera generación (8V)",
+  "year_from": 2013,
+  "year_to": 2020,
+  "slug_make": "audi",
+  "slug_model": "a3",
+  "body": {
+    "known_issues": [
+      {
+        "text": "La S tronic de siete marchas usa dos embragues secos y está diseñada para motores de hasta 250 Nm, según la ficha técnica de km77. Una reseña francesa del A3 8V dice que esa caja, en los motores chicos, tuvo problemas de mecatrónica, de embragues y de trepidación, y hay propietarios del 1.4 TFSI de 122 CV que cuentan un cambio de mecatrónica y una falla de caja entre unos 77.000 y 84.000 km.",
+        "applies_to": "S tronic de siete marchas (reportes en otros mercados)"
+      },
+      {
+        "text": "El 2.0 TDI se presentó en Argentina con S tronic de seis marchas. Según km77, la DSG de seis usa embragues húmedos en baño de aceite; la reseña francesa la considera más durable que la seca, pero dice que necesita cambios de aceite regulares. Confirmá en la unidad qué caja tiene.",
+        "applies_to": "2.0 TDI y cajas de embrague húmedo"
+      },
+      {
+        "text": "En los 1.8 y 2.0 TFSI, la reseña francesa señala como falla típica con los años las pérdidas del módulo de bomba de agua y la carcasa del termostato, que son de plástico. Una guía inglesa del A3 2012-2020 también menciona bombas de agua con pérdidas: mirá si hay manchas de refrigerante debajo del auto.",
+        "applies_to": "1.8 y 2.0 TFSI (reportes en otros mercados)"
+      },
+      {
+        "text": "La pantalla del MMI que sube y baja del tablero puede hacer ruido, tomar juego o dejar de desplegarse, según reseñas de Inglaterra y Francia.",
+        "applies_to": "reportes en otros mercados"
+      },
+      {
+        "text": "En 1.4 TFSI hay reportes de motor que hace ruido (Inglaterra) y de algún propietario que tuvo que agregar aceite entre services (Francia). Son pocos casos; escuchá el motor en frío y preguntá cómo se controló el nivel de aceite.",
+        "applies_to": "1.4 TFSI (reportes en otros mercados)"
+      },
+      {
+        "text": "Defensa del Consumidor publicó en 2019 un llamado para 149 A3 Sedán 2018 por el apoyacabezas central trasero, que podía proteger menos en un choque. La revisión y el cambio eran sin cargo; confirmá con el VIN si la unidad estaba alcanzada y si se hizo.",
+        "applies_to": "A3 Sedán 2018 (según rango de chasis)"
+      }
+    ],
+    "visit_checklist": [
+      {
+        "text": "Si es S tronic, manejalo en tránsito lento: arrancá varias veces desde parado, hacé maniobras de estacionamiento y fijate si hay tirones, trepidación o dudas al salir en primera."
+      },
+      {
+        "text": "Pedí que lean con un equipo de diagnóstico los códigos de falla de motor y caja antes de cerrar."
+      },
+      {
+        "text": "Mirá debajo del auto y en el vano motor si hay pérdidas de refrigerante o manchas en la zona de la bomba de agua y el termostato."
+      },
+      {
+        "text": "Encendé el MMI varias veces: la pantalla tiene que subir y bajar sin ruidos ni trabas. Probá Bluetooth, cámara o sensores si los trae."
+      },
+      {
+        "text": "Al dar contacto, revisá que se enciendan y se apaguen los testigos de motor, airbag, ABS y control de estabilidad, y que el freno de mano eléctrico funcione."
+      },
+      {
+        "text": "Mirá qué auxilio trae: el A3 de 2013 venía con rueda de uso temporal, algo que la prensa argentina criticó para nuestras rutas."
+      },
+      {
+        "text": "Si es de tres puertas, revisá los bordes de las puertas largas por golpes contra paredes o columnas, que una guía inglesa señala como daño común."
+      },
+      {
+        "text": "Consultá con el VIN en un concesionario oficial Audi si tiene campañas pendientes."
+      }
+    ],
+    "versions_equipment": [
+      {
+        "text": "En abril de 2013 llegó primero el tres puertas con 1.4 TFSI de 122 CV o 1.8 TFSI de 180 CV, manual de seis o S tronic de siete. El 1.8 S tronic también se ofrecía con tracción quattro.",
+        "applies_to": "lanzamiento 2013"
+      },
+      {
+        "text": "El Sportback (cinco puertas) se presentó en el Salón de Buenos Aires de junio de 2013 con 1.4 TFSI, 1.8 TFSI y 2.0 TDI de 143 CV; este último solo con S tronic de seis marchas.",
+        "applies_to": "Sportback desde 2013"
+      },
+      {
+        "text": "El A3 Sedán llegó en octubre de 2014 desde Hungría, con 1.4 TFSI de 122 CV y S tronic de siete. Según Parabrisas traía control de estabilidad, airbags frontales, laterales, de cortina y de rodilla del conductor, start-stop, climatizador y MMI con pantalla de 5,8 pulgadas.",
+        "applies_to": "Sedán desde 2014"
+      },
+      {
+        "text": "Con el restyling de 2017 la gama pasó a 1.4 TFSI de 150 CV (manual de seis o S tronic) y 2.0 TFSI de 190 CV con S tronic, en tres puertas, Sportback y Sedán importados de Alemania. El S3, con 310 CV, S tronic y quattro, se vendía en Sportback y Sedán.",
+        "applies_to": "restyling 2017"
+      },
+      {
+        "text": "La prensa argentina identifica las versiones por motor y caja. Nombres de equipamiento como Attraction, Ambition, Sport o S line aparecen en otros mercados y en avisos: confirmá qué trae la unidad puntual (xenón, Bluetooth, techo, cámara, Virtual Cockpit).",
+        "applies_to": "según versión"
+      }
+    ],
+    "maintenance_costs": [
+      {
+        "text": "No encontramos el plan de mantenimiento de Audi Argentina para el A3 8V: pedí el libro de service y confirmá ahí los intervalos de aceite, bujías, filtros y líquido de frenos de la unidad."
+      },
+      {
+        "text": "En una S tronic con síntomas, la reparación de mecatrónica o de embragues es la más mencionada en reseñas de otros mercados. Pedí presupuesto antes de comprar y compará con una versión manual.",
+        "applies_to": "S tronic"
+      },
+      {
+        "text": "Si la caja es de embrague húmedo (como la S tronic de seis del 2.0 TDI), preguntá cuándo se le cambió el aceite y confirmá el intervalo en el manual.",
+        "applies_to": "S tronic de seis marchas"
+      },
+      {
+        "text": "Bomba de agua y carcasa del termostato aparecen entre los reemplazos reportados por propietarios en otros mercados; si no hay comprobante y hay pérdidas, conviene presupuestarlo.",
+        "applies_to": "reportes en otros mercados"
+      }
+    ],
+    "generations": [
+      {
+        "label": "A3 8P (segunda generación)",
+        "year_from": null,
+        "year_to": 2013,
+        "text": "La generación anterior. Su motor 1.8 TFSI tenía 160 CV, según la prensa del lanzamiento del 8V."
+      },
+      {
+        "label": "A3 8V",
+        "year_from": 2013,
+        "year_to": 2016,
+        "text": "Tercera generación, sobre la plataforma MQB del Golf. Llegó en abril de 2013 en tres puertas, en junio de 2013 se sumó el Sportback y en octubre de 2014 el Sedán."
+      },
+      {
+        "label": "A3 8V restyling",
+        "year_from": 2017,
+        "year_to": 2020,
+        "text": "Lanzado en abril de 2017 con frente y faros nuevos, 1.4 TFSI de 150 CV, 2.0 TFSI de 190 CV, Virtual Cockpit opcional y el S3. El año de fin es aproximado: ninguna fuente que abrimos dice cuándo se dejó de vender."
+      },
+      {
+        "label": "A3 8Y (cuarta generación)",
+        "year_from": 2022,
+        "year_to": null,
+        "text": "Lanzada en Argentina en 2022 en Sportback y Sedán, según Autoweb, con 35 TFSI (1.4 de 150 CV, Tiptronic de ocho) y 40 TFSI (2.0 de 190 CV, S tronic de siete)."
+      }
+    ]
+  },
+  "questions": [
+    {
+      "text": "¿Es S tronic de siete o de seis marchas? ¿Alguna vez le cambiaron la mecatrónica o los embragues?",
+      "why": "En otros mercados la S tronic seca de siete tiene reportes de mecatrónica y embragues en los motores chicos."
+    },
+    {
+      "text": "¿Tenés las facturas de las reparaciones de la caja y de los services?",
+      "why": "Sirven para saber qué se cambió, cuándo y con qué kilometraje."
+    },
+    {
+      "text": "¿Le cambiaron la bomba de agua o el termostato? ¿Perdió refrigerante alguna vez?",
+      "why": "Las pérdidas de bomba de agua y termostato aparecen entre las fallas reportadas del A3 8V en otros mercados."
+    },
+    {
+      "text": "¿La pantalla del MMI sube y baja bien, o tuvo que repararse?",
+      "why": "Reseñas de otros mercados mencionan ruidos y trabas en el mecanismo de la pantalla."
+    },
+    {
+      "text": "¿Te llegó algún aviso de Audi por un llamado a revisión, como el del apoyacabezas del Sedán 2018, y lo hiciste?",
+      "why": "Hubo al menos un llamado publicado en Argentina para el A3 Sedán 2018."
+    },
+    {
+      "text": "¿Tuvo que agregarle aceite entre un service y otro?",
+      "why": "Algunos propietarios del 1.4 TFSI en otros mercados reportan agregados de aceite."
+    }
+  ],
+  "sources": [
+    {
+      "title": "Audi lanza el nuevo A3 al mercado argentino (Autocosmos, 12/04/2013)",
+      "url": "https://noticias.autocosmos.com.ar/2013/04/12/audi-lanza-el-nuevo-a3-al-mercado-argentino",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "El Nuevo Audi A3 ya se comercializa en Argentina (Mega Autos, 16/04/2013)",
+      "url": "https://www.megautos.com/el-nuevo-audi-a3-ya-se-comercializa-en-argentina/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "El nuevo Audi A3 Sportback se presentó en el Salón del Automóvil de Buenos Aires (16 Válvulas, 21/06/2013)",
+      "url": "https://www.16valvulas.com.ar/?p=69343",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Probamos el nuevo Audi A3 1.8 TFSI (16 Válvulas, 05/08/2013)",
+      "url": "https://www.16valvulas.com.ar/probamos-el-nuevo-audi-a3-1-8-tfsi/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Llegó a la Argentina el Audi A3 Sedán (Parabrisas, 28/10/2014)",
+      "url": "https://parabrisas.perfil.com/noticias/mercado/2014-10-28-llego-a-la-argentina-el-audi-a3-sedan.phtml",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Audi A3 (2017): precio, versiones, motor y equipamiento (Monkey Motor, 05/04/2017)",
+      "url": "https://www.monkeymotor.net/2017/04/audi-argentina-a3.html",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Alerta a propietarios de Audi A3 Sedán y RAM 1500 y 2500 (Defensa del Consumidor, 27/05/2019)",
+      "url": "https://www.argentina.gob.ar/noticias/alerta-propietarios-de-autos-audi-a3-sedan-y-4x4-ram-1500-y-ram-2500",
+      "kind": "otra",
+      "verified": true
+    },
+    {
+      "title": "Cambio Volkswagen DSG 7 velocidades: información general (km77)",
+      "url": "https://www.km77.com/coches/volkswagen/tecnica/2008/cambio-dsg-7-velocidades/estandar/informacion",
+      "kind": "ficha técnica",
+      "verified": true
+    },
+    {
+      "title": "Fiabilité Audi A3 8V: pannes et problèmes (Fiches Auto, Francia)",
+      "url": "https://www.fiches-auto.fr/fiabilite-audi/fiabilite-388-pannes-audi-a3.php",
+      "kind": "otra",
+      "verified": true
+    },
+    {
+      "title": "Used Audi A3 review 2012 to 2020: reliability and common problems (Carbuyer, Inglaterra)",
+      "url": "https://www.carbuyer.co.uk/reviews/audi/a3/sportback/76459/engines",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Audi confirma los equipamientos del nuevo A3 (Autoweb, 16/03/2022)",
+      "url": "https://www.autoweb.com.ar/?p=27565",
+      "kind": "prensa",
+      "verified": true
+    }
+  ]
+}

@@ -1,0 +1,223 @@
+{
+  "make": "Fiat",
+  "model": "Palio",
+  "generation_label": "Primera generación (proyecto 178) y restylings",
+  "year_from": 1996,
+  "year_to": 2017,
+  "slug_make": "fiat",
+  "slug_model": "palio",
+  "body": {
+    "known_issues": [
+      {
+        "text": "Según Los Andes, el tren delantero es una de las zonas que más sufre en un Palio usado: baches, lomos de burro y calles rotas gastan bujes, rótulas, extremos de dirección y amortiguadores."
+      },
+      {
+        "text": "Muchas versiones no traían ABS de serie: Autotest lo marca ausente en la HLX 1.8 de 2004, que sí tenía doble airbag, y en la Palio Weekend 2009 airbags y ABS eran opcionales. Confirmá en la unidad qué equipamiento de seguridad tiene.",
+        "applies_to": null
+      },
+      {
+        "text": "Stellantis Argentina mantiene una campaña por infladores de airbag que pueden degradarse con calor y humedad y romperse al desplegarse; incluye Fiat Palio fabricados de 2012 a 2018. La nota no separa Palio Fire de Nuevo Palio: consultá el VIN.",
+        "applies_to": "fabricados 2012–2018"
+      },
+      {
+        "text": "En 2021 FCA Argentina convocó a Palio de fabricación 2014, argentinos y brasileños, para revisar los módulos de airbag de conductor y acompañante por el mismo riesgo del inflador.",
+        "applies_to": "fabricados 2014, según VIN"
+      },
+      {
+        "text": "La prensa brasileña menciona en el Palio desgaste prematuro del embrague (sobre todo en motores 1.0), ruidos de suspensión y fallas eléctricas en levantavidrios, alarma y apertura del baúl.",
+        "applies_to": "reportes en Brasil"
+      }
+    ],
+    "visit_checklist": [
+      {
+        "text": "Escuchá el tren delantero en calles rotas: golpes secos, vibración al frenar o que tire hacia un lado pueden indicar bujes, rótulas o amortiguadores gastados. Mirá si las cubiertas tienen desgaste desparejo."
+      },
+      {
+        "text": "Probá el embrague: que no patine ni vibre, que no tome muy arriba y que la marcha atrás entre sin trabarse."
+      },
+      {
+        "text": "Con el motor en marcha, fijate que arranque parejo, que el ralentí sea estable y que no haya humo azul o blanco persistente ni pérdidas de aceite."
+      },
+      {
+        "text": "Revisá el piso del baúl: abolladuras, óxido o humedad."
+      },
+      {
+        "text": "Probá levantavidrios, cierre centralizado, luces, limpiaparabrisas, desempañador y bocina."
+      },
+      {
+        "text": "Si tiene airbags, mirá que el testigo se encienda al dar contacto y después se apague, y consultá con el VIN si tiene pendiente la campaña de airbags de Fiat."
+      },
+      {
+        "text": "Si tiene equipo de GNC, pedí la documentación del equipo y la oblea, y revisá la instalación en el baúl.",
+        "applies_to": "con GNC"
+      }
+    ],
+    "versions_equipment": [
+      {
+        "text": "Nació en 1996 dentro del proyecto 178. La Nación dice que se fabricó en Ferreyra, Córdoba, de 1997 a 2001 y que la planta volvió a producir en 2008 luego de años de inactividad.",
+        "applies_to": "1996–2008"
+      },
+      {
+        "text": "Restyling que Autotest analizó como modelo 2004: HLX con 1.8 de ocho válvulas y 105 CV de origen GM, que reemplazó al 1.6 multiválvulas; doble airbag, aire y pack eléctrico, pero sin ABS. Seguían las Fire y la ELX.",
+        "applies_to": "2004–2006"
+      },
+      {
+        "text": "Abril de 2007, cuarta generación según Autocosmos: ELX 1.4 de 82 CV en Active y Emotion y la deportiva 1.8R de 110 CV, en tres y cinco puertas, todas con manual de cinco. La Fire pasó a la carrocería anterior.",
+        "applies_to": "2007–2011"
+      },
+      {
+        "text": "16 Válvulas registra en septiembre de 2008 el primer Palio hecho íntegramente en Córdoba; la versión para Argentina era la ELX 1.4 nafta.",
+        "applies_to": "2008 en adelante"
+      },
+      {
+        "text": "Desde 2012 el Palio Fire siguió como versión de entrada debajo del Nuevo Palio, que es otro modelo (Attractive 1.4, Essence 1.6 E.torQ con Dualogic opcional y Sporting). Confirmá cuál de los dos es la unidad.",
+        "applies_to": "2012–2017"
+      },
+      {
+        "text": "La Palio Weekend es la familiar: en agosto de 2008 se renovó (modelo 2009) con ELX y Trekking y motor 1.4 Fire de 82 CV; airbags y ABS eran opcionales. Tiene datos distintos a esta guía.",
+        "applies_to": "Palio Weekend 2009"
+      }
+    ],
+    "maintenance_costs": [
+      {
+        "text": "Según Los Andes, el manual de Fiat Argentina del Palio Fire pide mantenimiento cada 10.000 km y fija reemplazos también por tiempo, así que un auto con pocos kilómetros puede necesitar la distribución."
+      },
+      {
+        "text": "Si no hay factura reciente, presupuestá el kit de distribución con tensor y bomba de agua. Confirmá el intervalo de la correa en el manual de la unidad."
+      },
+      {
+        "text": "El tren delantero (bujes, rótulas, extremos y amortiguadores) es el gasto que más se repite en las notas sobre el Palio usado."
+      },
+      {
+        "text": "Si tiene GNC, sumá el mantenimiento del equipo y consultá en un taller habilitado qué controles le corresponden.",
+        "applies_to": "con GNC"
+      }
+    ],
+    "generations": [
+      {
+        "label": "Palio original",
+        "year_from": 1996,
+        "year_to": 2000,
+        "text": "Diseño de Giugiaro para mercados emergentes, pensado para suceder al Uno. Se fabricó en Córdoba desde 1997."
+      },
+      {
+        "label": "Restylings 2001 y 2004",
+        "year_from": 2001,
+        "year_to": 2006,
+        "text": "Giugiaro firmó el restyling de 2001 y volvió a actualizar frente, cola e interior en el modelo que Autotest prueba como 2004, sin cambiar la estructura."
+      },
+      {
+        "label": "Cuarta generación",
+        "year_from": 2007,
+        "year_to": 2011,
+        "text": "Lanzada en Argentina en abril de 2007 con ELX 1.4 y 1.8R; según Autoblog Uruguay, el rediseño lo hizo Fiat Brasil."
+      },
+      {
+        "label": "Palio Fire",
+        "year_from": 2012,
+        "year_to": 2017,
+        "text": "Siguió como versión de entrada junto al Nuevo Palio. La producción terminó a fines de 2017 y su lugar lo tomó el Argo."
+      }
+    ]
+  },
+  "questions": [
+    {
+      "text": "¿Es un Palio Fire, un ELX, un HLX o un Nuevo Palio? ¿Qué dice la cédula?",
+      "why": "Son modelos y equipamientos distintos aunque todos se llamen Palio."
+    },
+    {
+      "text": "¿Cuándo se cambió la correa de distribución, el tensor y la bomba de agua? ¿Tenés la factura?",
+      "why": "El manual fija reemplazos por kilómetros y por tiempo; sin comprobante, conviene tomarlo como pendiente."
+    },
+    {
+      "text": "¿Le hiciste la revisión de airbags de la campaña de Fiat?",
+      "why": "Fiat convocó a Palio fabricados de 2012 a 2018 por los infladores de airbag."
+    },
+    {
+      "text": "¿Tiene airbags y ABS?",
+      "why": "Muchas versiones no traían ABS, según la prensa."
+    },
+    {
+      "text": "¿Qué se le hizo del tren delantero y cuándo?",
+      "why": "Es la zona que más sufre en un Palio usado."
+    },
+    {
+      "text": "¿Tiene GNC? ¿Está la oblea vigente y la documentación del equipo al día?",
+      "why": "Conviene confirmar que el equipo tenga la documentación en regla."
+    }
+  ],
+  "sources": [
+    {
+      "title": "Retro test: Fiat Palio HLX 1.8 2004 (Autotest, 04/11/2019)",
+      "url": "https://autotest.com.ar/noticias/retro-test-fiat-palio-hlx-1-8-2004/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Nuevo Palio 2008: todo nuevo (Autocosmos, 19/04/2007)",
+      "url": "https://noticias.autocosmos.com.ar/2007/04/19/nuevo-palio-2008-todo-nuevo",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Fiat volvió a fabricar el Palio en el país (La Nación, 25/06/2008)",
+      "url": "https://www.lanacion.com.ar/economia/fiat-volvio-a-fabricar-el-palio-en-el-pais-nid1024495",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Primer Fiat Palio producido en la Planta de Córdoba (16 Válvulas)",
+      "url": "https://www.16valvulas.com.ar/?p=5685",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "La estrategia del nuevo Fiat Palio en Argentina para 2012 (Autocosmos, 16/11/2011)",
+      "url": "https://noticias.autocosmos.com.ar/2011/11/16/la-estrategia-del-nuevo-fiat-palio-en-argentina-para-2012",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Trámites jubilatorios: Fiat dejó de producir al Palio (Autoblog Uruguay, 15/12/2017)",
+      "url": "https://www.autoblog.com.uy/2017/12/tramites-jubilatorios-fiat-dejo-del.html",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Despedida múltiple: los Fiat Palio, Palio Fire y Siena EL dejaron de ser producidos en Argentina (16 Válvulas, 27/11/2017)",
+      "url": "https://www.16valvulas.com.ar/?p=147525",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Qué mirar en un Fiat Palio usado antes de comprarlo (Los Andes, 2026)",
+      "url": "https://www.losandes.com.ar/automotores/que-mirar-un-fiat-palio-usado-antes-comprarlo-y-no-caer-un-gasto-taller-n5993680",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Airbags defectuosos: Stellantis Argentina continúa con el recall (16 Válvulas, 27/02/2026)",
+      "url": "https://www.16valvulas.com.ar/airbags-defectuosos-stellantis-argentina-continua-con-el-recall-que-afecta-a-varios-modelos-de-fiat-citroen-ds-jeep-chrysler-dodge-y-ram/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "FCA Argentina anunció un recall para los Fiat Uno, Fiorino, Palio y Grand Siena (16 Válvulas, 02/04/2021)",
+      "url": "https://www.16valvulas.com.ar/fca-argentina-anuncio-un-recall-para-los-fiat-uno-fiorino-palio-y-grand-siena/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Descubra os mistérios e desafios ocultos do Fiat Palio (Agora Motor, 25/03/2025)",
+      "url": "https://www.motoragora.com.br/?p=170204",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Palio Weekend 2009: nueva facha y equipamiento (Autocosmos, 22/08/2008)",
+      "url": "https://noticias.autocosmos.com.ar/2008/08/22/palio-weekend-2009-nueva-facha-y-equipamiento",
+      "kind": "prensa",
+      "verified": true
+    }
+  ]
+}

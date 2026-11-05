@@ -1,0 +1,238 @@
+{
+  "make": "Fiat",
+  "model": "Punto",
+  "generation_label": "Punto (Grande Punto regional)",
+  "year_from": 2007,
+  "year_to": 2017,
+  "slug_make": "fiat",
+  "slug_model": "punto",
+  "body": {
+    "known_issues": [
+      {
+        "text": "La Dualogic es una caja manual con embrague automatizado, no una automática convencional. Autocosmos criticó el bajón al pasar de cambio y que no es tan fluida como una automática; la prensa brasileña reporta tirones, dificultad para enganchar marchas y fallas de la central, con reparaciones que no siempre resuelven el problema.",
+        "applies_to": "versiones Dualogic"
+      },
+      {
+        "text": "En Brasil, Fiat llamó a revisión a Punto con Dualogic fabricados entre julio y noviembre de 2014 por una posible falla del actuador de embrague, que podía hacer patinar el embrague al salir o dificultar los cambios. No encontré la campaña en Argentina: consultá el VIN en un concesionario oficial.",
+        "applies_to": "Dualogic, fabricados 07–11/2014 (reportes en Brasil)"
+      },
+      {
+        "text": "En 2017 Fiat convocó en Brasil a Punto año/modelo 2009 a 2012 por una posible fisura en el travesaño del eje trasero, con riesgo de ruidos, volante desalineado y roce del neumático con el plástico interno. Las notas no mencionan Argentina; preguntá con el VIN si la unidad está alcanzada.",
+        "applies_to": "2009–2012 (reportes en Brasil)"
+      },
+      {
+        "text": "Mecánicos brasileños consultados por Oficina Brasil dicen que la suspensión delantera no es de las más robustas: mencionan ruidos de rótulas, bujes de parrilla, fuelles y bieletas. También citan intervenciones de embrague con poco kilometraje.",
+        "applies_to": "reportes en Brasil"
+      },
+      {
+        "text": "Esos mismos mecánicos recomiendan cambiar la bomba de agua junto con la correa de distribución en el motor Fire, porque suele dañarse al desmontarla.",
+        "applies_to": "motor 1.4 Fire (reportes en Brasil)"
+      },
+      {
+        "text": "La prensa brasileña menciona filtraciones de agua por puertas y baúl con lluvia fuerte, y fallas eléctricas intermitentes en tablero, levantavidrios y sensores de estacionamiento.",
+        "applies_to": "reportes en Brasil"
+      }
+    ],
+    "visit_checklist": [
+      {
+        "text": "Si es Dualogic, probala en tránsito, en subida y maniobrando: los cambios tienen que entrar sin golpes, el auto no tiene que patinar al salir y no deberían aparecer avisos de la caja en el tablero."
+      },
+      {
+        "text": "Escuchá el tren delantero en calles rotas y lomos de burro: golpes secos o crujidos pueden indicar rótulas, bujes o bieletas gastados."
+      },
+      {
+        "text": "Mirá si hay humedad o manchas en alfombras y en el piso del baúl, sobre todo debajo de los burletes de puertas y portón."
+      },
+      {
+        "text": "Probá levantavidrios, cierre centralizado, tablero y sensores de estacionamiento si los tiene."
+      },
+      {
+        "text": "En la manual, probá que el embrague no patine en cuarta o quinta al acelerar y que los cambios entren sin ruido."
+      },
+      {
+        "text": "Confirmá en la unidad si tiene airbags y ABS: en los primeros años eran opcionales según la prensa. Mirá que el testigo de airbag se encienda al dar contacto y después se apague.",
+        "applies_to": "2007–2012"
+      },
+      {
+        "text": "Pedí que escaneen motor y caja para ver si hay códigos de falla guardados."
+      }
+    ],
+    "versions_equipment": [
+      {
+        "text": "Lanzamiento en Argentina (septiembre de 2007): ELX 1.4 de ocho válvulas y 87 CV con manual de cinco, y HLX y Sporting con 1.8 de 110 CV, todas de cinco puertas. Venía de la planta de Fiat en Brasil.",
+        "applies_to": "2007 en adelante"
+      },
+      {
+        "text": "En el ELX de 2007, Autocosmos y La Nación listan ABS y airbags delanteros como opcionales; aire acondicionado y levantavidrios delanteros eléctricos eran de serie.",
+        "applies_to": "ELX 1.4, 2007"
+      },
+      {
+        "text": "Febrero de 2011: la Essence 1.6 16V E.torQ de 115 CV reemplazó al 1.8 de ocho válvulas, junto a la Attractive 1.4 8V; según 16 Válvulas, la Essence traía doble airbag de serie y ABS opcional.",
+        "applies_to": "2011 en adelante"
+      },
+      {
+        "text": "Junio de 2011: se sumó la Essence Dualogic con el 1.6 16V E.torQ de 115 CV; ABS y control de crucero figuraban como opcionales.",
+        "applies_to": "Essence Dualogic, 2011–2012"
+      },
+      {
+        "text": "Restyling de noviembre de 2012: Attractive 1.4 Fire Evo de 87 CV, Essence 1.6 16V (manual o Dualogic) y Sporting 1.6 16V. Según 16 Válvulas, todas traían doble airbag y ABS con EBD de serie.",
+        "applies_to": "2013 en adelante"
+      },
+      {
+        "text": "La T-Jet (1.4 turbo de 16 válvulas y 152 CV) se presentó en Brasil en 2008. No encontré confirmación de su venta en Argentina: si la unidad dice ser T-Jet, confirmalo con la documentación y el número de motor.",
+        "applies_to": "T-Jet"
+      }
+    ],
+    "maintenance_costs": [
+      {
+        "text": "El manual brasileño 2017 del Punto indica cambio de correa de distribución cada 60.000 km o 3 años en motores que no son E.torQ; el E.torQ usa cadena y pide controlarla. Confirmá el plan en el manual de la unidad.",
+        "applies_to": "manual Fiat Brasil 2017"
+      },
+      {
+        "text": "En el motor Fire, presupuestá la bomba de agua junto con el kit de distribución, según mecánicos brasileños. Si no hay comprobante del último cambio, tomalo como pendiente.",
+        "applies_to": "motor 1.4 Fire"
+      },
+      {
+        "text": "El mismo manual fija service cada 10.000 km o 12 meses con cambio de aceite y filtro, y controles de nivel de aceite de la caja Dualogic.",
+        "applies_to": "manual Fiat Brasil 2017"
+      },
+      {
+        "text": "En la Dualogic, el actuador y el embrague son lo que más se menciona en los reclamos; si se cambiaron, pedí la factura.",
+        "applies_to": "versiones Dualogic"
+      },
+      {
+        "text": "Presupuestá el tren delantero (bujes, rótulas, bieletas) y pastillas de freno, que son las piezas que los mecánicos citan como de mayor desgaste."
+      }
+    ],
+    "generations": [
+      {
+        "label": "Lanzamiento",
+        "year_from": 2007,
+        "year_to": 2010,
+        "text": "Diseño de Giugiaro derivado del Grande Punto europeo, sobre la plataforma del Idea y con motores regionales 1.4 de ocho válvulas y 1.8. Hecho en Brasil."
+      },
+      {
+        "label": "E.torQ y Dualogic",
+        "year_from": 2011,
+        "year_to": 2012,
+        "text": "El 1.6 16V E.torQ reemplazó al 1.8 y en junio de 2011 llegó la Dualogic."
+      },
+      {
+        "label": "Restyling",
+        "year_from": 2013,
+        "year_to": 2017,
+        "text": "Renovado a fines de 2012 con Attractive, Essence y Sporting, y doble airbag y ABS de serie según la prensa. El Argo lo reemplazó en 2017."
+      }
+    ]
+  },
+  "questions": [
+    {
+      "text": "¿La caja es manual o Dualogic?",
+      "why": "La Dualogic es la que la prensa señala con más reclamos."
+    },
+    {
+      "text": "¿Qué motor tiene: 1.4, 1.6 E.torQ o 1.8?",
+      "why": "Cambia el mantenimiento: el E.torQ usa cadena y los otros correa, según el manual."
+    },
+    {
+      "text": "¿Cuándo se cambió la correa de distribución y la bomba de agua? ¿Tenés el comprobante?",
+      "why": "El manual brasileño pide la correa cada 60.000 km o 3 años en motores que no son E.torQ."
+    },
+    {
+      "text": "¿Le hicieron algún llamado a revisión del eje trasero o de la caja Dualogic?",
+      "why": "En Brasil hubo campañas por el eje trasero (2009–2012) y el actuador de la Dualogic (2014)."
+    },
+    {
+      "text": "¿Tiene airbags y ABS? ¿Qué versión es exactamente?",
+      "why": "En los primeros años eran opcionales según la prensa."
+    },
+    {
+      "text": "¿Alguna vez se reparó el embrague, el actuador o el tren delantero?",
+      "why": "Son las piezas que más aparecen en los reportes de mecánicos y dueños."
+    },
+    {
+      "text": "¿Alguna vez entró agua al habitáculo o al baúl?",
+      "why": "La prensa brasileña menciona filtraciones por puertas y baúl."
+    }
+  ],
+  "sources": [
+    {
+      "title": "Fiat Punto ELX 1.4: belleza latina (La Nación, 28/09/2007)",
+      "url": "https://lanacion.com.ar/autos/al-volante/fiat-punto-elx-14-belleza-latina-nid947917",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Test Fiat Punto 1.4 ELX: pequeño seductor (Autocosmos, 21/11/2007)",
+      "url": "https://noticias.autocosmos.com.ar/2007/11/21/test-fiat-punto-14-elx-pequeno-seductor",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Fiat Punto con motor E-torQ de 1600 cm3 (16 Válvulas, 08/02/2011)",
+      "url": "https://www.16valvulas.com.ar/?p=26039",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Fiat incorpora la caja Dualogic al Punto (InfoNegocios, 06/06/2011)",
+      "url": "https://infonegocios.info/infoautos/fiat-incorpora-la-caja-dualogic-al-punto",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Nuevo Fiat Punto 2013, lanzamiento en Argentina (16 Válvulas, 27/11/2012)",
+      "url": "https://www.16valvulas.com.ar/?p=59883",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Probamos el nuevo Fiat Punto (Autocosmos, 29/01/2013)",
+      "url": "https://noticias.autocosmos.com.ar/2013/01/29/probamos-el-nuevo-fiat-punto",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Atenção! Recall de Linea e Punto (AutoPapo, 19/01/2017)",
+      "url": "https://autopapo.com.br/noticia/atencao-recall-de-linea-e-punto/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Fiat faz recall de modelos 2014 com câmbio Dualogic (O Mecânico, 06/01/2015)",
+      "url": "https://omecanico.com.br/fiat-faz-recall-de-modelos-2014-com-cambio-dualogic/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Manual do proprietário Fiat Punto 2017 (Fiat Brasil, PDF)",
+      "url": "https://servicos.fiat.com.br/content/dam/fiat/products/handbooks/118/2017/handbook-2017-punto.pdf",
+      "kind": "manual",
+      "verified": true
+    },
+    {
+      "title": "Aspectos positivos e negativos do Fiat Punto 1.4 8v Flex 2007 na manutenção (Oficina Brasil, 13/04/2015)",
+      "url": "https://oficinabrasil.com.br/noticia/avaliacao-do-reparador/conheca-os-aspectos-positivos-e-negativos-do-fiat-punto-1-4-8-v-flex-2007-na-hora-da-manutencao",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Fiat Punto: os problemas secretos que poucos proprietários conhecem (Agora Motor, 26/03/2025)",
+      "url": "https://www.motoragora.com.br/?p=170178",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Fiat Punto T-Jet: bien deportivo (Autocosmos, 27/10/2008)",
+      "url": "https://noticias.autocosmos.com.ar/2008/10/27/fiat-punto-t-jet-bien-deportivo",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Despedida múltiple: los Fiat Palio, Palio Fire y Siena EL dejaron de ser producidos en Argentina (16 Válvulas, 27/11/2017)",
+      "url": "https://www.16valvulas.com.ar/?p=147525",
+      "kind": "prensa",
+      "verified": true
+    }
+  ]
+}

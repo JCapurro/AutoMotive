@@ -1,0 +1,229 @@
+{
+  "make": "Toyota",
+  "model": "Hilux",
+  "generation_label": "Séptima generación",
+  "year_from": 2005,
+  "year_to": 2015,
+  "slug_make": "toyota",
+  "slug_model": "hilux",
+  "body": {
+    "known_issues": [
+      {
+        "text": "Toyota Argentina convocó a revisar los airbags de Hilux 2005 a 2015 (también Corolla y Etios). La prensa lo vincula con los airbags de Takata y en 2026 seguía incluyendo esas unidades en las listas de llamados. Consultá con el número de chasis (VIN) en un concesionario oficial si la unidad está alcanzada y si se hizo.",
+        "applies_to": "unidades específicas 2005–2015 (confirmar con el VIN)"
+      },
+      {
+        "text": "Según el aviso de Uruguay sobre la misma campaña, el inflador del airbag del conductor usa un propulsor que se degrada con humedad y calor, y al desplegarse puede romperse y lanzar fragmentos metálicos.",
+        "applies_to": "airbag del conductor, aviso de Uruguay (otros mercados)"
+      },
+      {
+        "text": "En Australia se señala como principal problema del 3.0 D-4D (motor 1KD-FTV) la falla de las arandelas de asiento de los inyectores: deja pasar gases al aceite y puede dar ruido en frío, ralentí irregular o humo blanco. Ninguna fuente que abrí confirma el código de motor de las unidades argentinas: confirmalo en la documentación.",
+        "applies_to": "3.0 D-4D (reportes en otros mercados)"
+      },
+      {
+        "text": "La misma revista australiana advierte que la carbonilla de esas arandelas puede tapar el chupador de aceite del cárter y dejar al motor sin lubricación, y menciona fallas del actuador del turbo de geometría variable que ponen al motor en modo de emergencia.",
+        "applies_to": "3.0 D-4D (reportes en otros mercados)"
+      },
+      {
+        "text": "También menciona embragues que patinaron temprano y pérdidas de la bomba de agua. Revisá ambos en cualquier unidad, en especial si trabajó con carga.",
+        "applies_to": "3.0 D-4D manual (reportes en otros mercados)"
+      },
+      {
+        "text": "Las versiones más simples no tenían control de estabilidad: una nota de Autotest describe una unidad básica de la época con doble airbag y ABS, sin ESP. Confirmá el equipamiento de la unidad puntual.",
+        "applies_to": "versiones de entrada"
+      }
+    ],
+    "visit_checklist": [
+      {
+        "text": "Arrancala en frío, con el motor sin uso de varias horas, y escuchá golpeteos o traqueteo; mirá si sale humo blanco y si el ralentí es parejo."
+      },
+      {
+        "text": "Al dar contacto, mirá que se enciendan y después se apaguen los testigos de motor, airbag, ABS y, si lo tiene, control de estabilidad, y que no quede encendido el de presión de aceite."
+      },
+      {
+        "text": "En la prueba, acelerá en una marcha alta a pocas vueltas y fijate si el embrague patina; en la automática, que los cambios entren sin golpes ni demoras."
+      },
+      {
+        "text": "Probá que la tracción 4x4 y la baja entren con la palanca de la caja de transferencia y que no haya ruidos en el tren delantero.",
+        "applies_to": "4x4"
+      },
+      {
+        "text": "Mirá debajo del vehículo: pérdidas de aceite o de refrigerante, estado del chasis, golpes de uso fuera de camino y elásticos traseros."
+      },
+      {
+        "text": "Revisá la caja de carga y el enganche: marcas de carga pesada o remolque indican uso de trabajo."
+      },
+      {
+        "text": "Consultá con el VIN en un concesionario oficial Toyota si tiene campañas pendientes, en particular la de airbags."
+      },
+      {
+        "text": "Pedí que escaneen el motor con un equipo de diagnóstico para ver si hay códigos de falla guardados, por ejemplo del turbo."
+      }
+    ],
+    "versions_equipment": [
+      {
+        "text": "Se fabricó en la planta de Zárate (Buenos Aires). Llegó al mercado argentino en 2005."
+      },
+      {
+        "text": "Motores turbodiésel 2.5 y 3.0. Con la línea 2012 (noviembre de 2011) el 2.5 pasó de 105 a 120 CV y el 3.0 de 163 a 171 CV, según Autocosmos.",
+        "applies_to": "potencias desde la línea 2012"
+      },
+      {
+        "text": "Caja manual de cinco marchas en todas; la SRV ofrecía automática, de cuatro marchas según la prensa de 2011. Confirmá la caja de la unidad.",
+        "applies_to": "automática solo en SRV"
+      },
+      {
+        "text": "Con la línea 2012 se sumaron control de tracción y de estabilidad, sobre todo en las versiones tope, y, según versión, una pantalla táctil con Bluetooth que también muestra la cámara trasera.",
+        "applies_to": "línea 2012, según versión"
+      },
+      {
+        "text": "La SRV 4x4 automática probada por Autoweb en 2011 traía dos airbags frontales, ABS y control de estabilidad y de tracción, sin airbags laterales ni de cortina.",
+        "applies_to": "SRV, línea 2012"
+      },
+      {
+        "text": "En 4x4 la caja de transferencia se acciona con palanca, con posiciones de tracción simple, doble y baja.",
+        "applies_to": "4x4"
+      }
+    ],
+    "maintenance_costs": [
+      {
+        "text": "La revista australiana recomienda revisar los inyectores y sus arandelas en cada service y reemplazar las arandelas cada 40.000 km. Pedí presupuesto de inyectores si no hay comprobantes; confirmá el plan en el manual de la unidad.",
+        "applies_to": "3.0 D-4D (recomendación de otros mercados)"
+      },
+      {
+        "text": "Esa misma fuente sugiere cambiar la bomba de agua antes de los 150.000 km o junto con la correa de distribución. Confirmá en el manual el tipo de distribución del motor de la unidad y cuándo se cambió.",
+        "applies_to": "3.0 D-4D (recomendación de otros mercados)"
+      },
+      {
+        "text": "En una unidad con muchos kilómetros o uso de trabajo y sin comprobantes, conviene pedir presupuesto de embrague, inyectores y turbo antes de comprar."
+      },
+      {
+        "text": "Los intervalos de aceite, filtros y fluidos de caja y diferenciales están en el manual y el libro de service de la unidad: pedilos y comparalos con los comprobantes."
+      }
+    ],
+    "generations": [
+      {
+        "label": "Séptima generación",
+        "year_from": 2005,
+        "year_to": 2008,
+        "text": "Llegó en 2005, fabricada en Zárate, más grande que la anterior. Se lanzó con un 3.0 turbodiésel de 163 CV."
+      },
+      {
+        "label": "Séptima generación, restyling 2008",
+        "year_from": 2008,
+        "year_to": 2011,
+        "text": "En 2008 cambiaron la parrilla y el paragolpes delantero y mejoró el equipamiento."
+      },
+      {
+        "label": "Séptima generación, línea 2012",
+        "year_from": 2011,
+        "year_to": 2015,
+        "text": "Presentada en noviembre de 2011: frente con más cromados, consola nueva, más potencia y control de estabilidad en versiones tope. Una nota de Autotest ubica cambios de frente y potencia en 2013; mirá el frente y la cédula para saber de qué etapa es."
+      },
+      {
+        "label": "Octava generación",
+        "year_from": 2015,
+        "year_to": null,
+        "text": "Presentada en Argentina en noviembre de 2015, también fabricada en Zárate. En el restyling de 2018 (sin cambios mecánicos) ofrecía motores 2.4 y 2.8 con cajas de seis marchas."
+      }
+    ]
+  },
+  "questions": [
+    {
+      "text": "¿Te llegó la carta de Toyota por el llamado de airbags y se hizo el cambio en un concesionario?",
+      "why": "Toyota Argentina convocó a revisar airbags de unidades específicas de Hilux 2005 a 2015."
+    },
+    {
+      "text": "¿Le cambiaron alguna vez los inyectores o sus arandelas? ¿Tenés la factura?",
+      "why": "En otros mercados la falla de las arandelas de los inyectores del 3.0 D-4D es un reclamo conocido."
+    },
+    {
+      "text": "¿Cuándo se cambiaron la correa de distribución y la bomba de agua, y con qué kilometraje?",
+      "why": "En otros mercados se recomienda cambiar la bomba de agua junto con la correa en el 3.0 D-4D."
+    },
+    {
+      "text": "¿Se usó para trabajo, con carga pesada, remolque o mucho camino de tierra?",
+      "why": "El uso de trabajo desgasta embrague, suspensión trasera y tren delantero."
+    },
+    {
+      "text": "¿Alguna vez entró en modo de emergencia o se encendió el testigo de aceite?",
+      "why": "En otros mercados se reportan fallas del actuador del turbo y del chupador de aceite."
+    },
+    {
+      "text": "¿Le cambiaron el embrague? ¿A qué kilometraje?",
+      "why": "Ayuda a saber si el embrague actual está gastado y cuánto trabajo tuvo la camioneta."
+    },
+    {
+      "text": "¿Es la versión con control de estabilidad o la de entrada sin ESP?",
+      "why": "Las versiones de entrada de la época no tenían control de estabilidad."
+    }
+  ],
+  "sources": [
+    {
+      "title": "Nueva Toyota Hilux y SW4 en Argentina (Autocosmos, 05/11/2011)",
+      "url": "https://noticias.autocosmos.com.ar/2011/11/05/nueva-toyota-hilux-y-sw4-en-argentina",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Prueba: Toyota Hilux 4x4 SRV AT (Autoweb, 07/11/2011)",
+      "url": "https://www.autoweb.com.ar/?p=9293",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Toyota Hilux de más de diez años sin uso (Autotest)",
+      "url": "https://autotest.com.ar/noticias/toyota-hilux-mas-de-diez-anos-nunca-uso/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Encuentran una Toyota Hilux como nueva (Autotest)",
+      "url": "https://autotest.com.ar/noticias/encuentran-una-toyota-hilux-como-nueva",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Recall: 10 automotrices piden revisión de sus autos vendidos en Argentina (BAE Negocios, 09/11/2020)",
+      "url": "https://www.baenegocios.com/negocios/Recall-10-automotrices-piden-revision-de-sus-autos-vendidos-en-Argentina-por-desperfectos-20201109-0051.html",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Toyota Argentina llama a revisión gratuita de airbags: Hilux, Etios y Corolla (16 Válvulas, 01/02/2024)",
+      "url": "https://www.16valvulas.com.ar/?p=224747",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Alerta por airbags defectuosos en Argentina: la lista de autos alcanzados (Infozona, 01/04/2026)",
+      "url": "https://www.infozona.com.ar/?p=391552",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Campaña de alerta vehículos Toyota, varios modelos (Ministerio de Economía y Finanzas de Uruguay, 2018)",
+      "url": "https://www.gub.uy/ministerio-economia-finanzas/comunicacion/comunicados/campana-alerta-vehiculos-marca-toyota-varios-modelos",
+      "kind": "otra",
+      "verified": true
+    },
+    {
+      "title": "D4D Hilux common problems and solutions (Unsealed 4X4, Australia)",
+      "url": "https://unsealed4x4.com.au/d4d-hilux-common-problems-and-solutions/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Toyota lanzó la nueva Hilux (El Sol, Mendoza, 26/11/2015)",
+      "url": "https://www.elsol.com.ar/?p=1015303",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Toyota lanza el restyling de la Hilux (Autoweb, 21/08/2018)",
+      "url": "https://www.autoweb.com.ar/?p=3095",
+      "kind": "prensa",
+      "verified": true
+    }
+  ]
+}

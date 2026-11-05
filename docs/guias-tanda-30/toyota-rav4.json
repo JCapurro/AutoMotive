@@ -1,0 +1,204 @@
+{
+  "make": "Toyota",
+  "model": "RAV4",
+  "generation_label": "Cuarta generación (XA40)",
+  "year_from": 2013,
+  "year_to": 2019,
+  "slug_make": "toyota",
+  "slug_model": "rav4",
+  "body": {
+    "known_issues": [
+      {
+        "text": "En reseñas norteamericanas se reporta que el convertidor de par de la automática de seis marchas puede vibrar al acelerar suave; Toyota dio allá una extensión de cobertura (ZH1). No está confirmado que la caja de las unidades argentinas sea la misma ni que esa extensión aplique acá.",
+        "applies_to": "2.5 automática de seis marchas (reportes en otros mercados)"
+      },
+      {
+        "text": "Con muchos kilómetros, esas mismas reseñas mencionan marcha atrás que entra tarde o con golpe, por desgaste en el cuerpo de válvulas de la caja automática.",
+        "applies_to": "2.5 automática de seis marchas (reportes en otros mercados)"
+      },
+      {
+        "text": "En Norteamérica se reportan pérdidas de la bomba de agua (gotas rosadas, nivel de refrigerante bajo, restos rojizos cerca de las correas) y del sensor de presión de aceite, la tapa de distribución y el cárter.",
+        "applies_to": "reportes en otros mercados"
+      },
+      {
+        "text": "También se reportan en otros mercados: equipo de audio que se reinicia o deja de funcionar, chillido de frenos delanteros, corrosión en las bisagras del portón trasero y asientos delanteros que no se deslizan.",
+        "applies_to": "reportes en otros mercados"
+      },
+      {
+        "text": "En EE.UU. hubo un llamado para RAV4 2013 a 2018 porque algunas baterías de reemplazo no calzan bien en la bandeja y pueden tocar el soporte y provocar un cortocircuito. No encontré un llamado equivalente de Toyota Argentina: consultalo con el VIN.",
+        "applies_to": "2013–2018 en EE.UU. (otros mercados)"
+      },
+      {
+        "text": "Antes del restyling de 2016 el control de estabilidad venía solo en las versiones Full, y los airbags laterales y de cortina solo en la 2.5 4x4 Full.",
+        "applies_to": "2013 hasta el restyling de julio de 2016"
+      }
+    ],
+    "visit_checklist": [
+      {
+        "text": "En la prueba, acelerá suave varias veces y fijate si aparece una vibración; poné marcha atrás varias veces y mirá que entre rápido y sin golpe.",
+        "applies_to": "automática de seis marchas"
+      },
+      {
+        "text": "Mirá el nivel de refrigerante y buscá restos rojizos o rosados alrededor de la bomba de agua, y manchas de aceite debajo del motor."
+      },
+      {
+        "text": "Probá todas las funciones de la pantalla y el audio (Bluetooth, radio, cámara trasera) y mirá la pantalla a plena luz del día."
+      },
+      {
+        "text": "Andá despacio por una calle rota y escuchá golpes en la dirección o el tren delantero."
+      },
+      {
+        "text": "Abrí y cerrá el portón trasero y mirá si hay óxido en las bisagras; probá que los asientos delanteros se deslicen bien."
+      },
+      {
+        "text": "Mirá debajo del vehículo por golpes o raspones de uso fuera de camino: la tracción integral no está pensada para eso.",
+        "applies_to": "4x4"
+      },
+      {
+        "text": "Al dar contacto, mirá que se enciendan y después se apaguen los testigos de motor, airbag, ABS y control de estabilidad (si lo tiene)."
+      },
+      {
+        "text": "Consultá con el número de chasis (VIN) en un concesionario oficial Toyota si la unidad tiene campañas pendientes."
+      }
+    ],
+    "versions_equipment": [
+      {
+        "text": "Se lanzó en Argentina en abril de 2013 con cuatro versiones: 2.0 4x2, 2.0 4x2 Full, 2.5 4x4 y 2.5 4x4 Full.",
+        "applies_to": "2013 hasta el restyling de julio de 2016"
+      },
+      {
+        "text": "Motores nafteros: 2.0 de 146 CV con caja CVT y tracción delantera, y 2.5 de 180 CV con automática de seis marchas y tracción 4x4. Autocosmos llama al motor grande 2.4 en un párrafo y 2.5 en otro; confirmalo en la cédula."
+      },
+      {
+        "text": "Desde el restyling de julio de 2016 la gama pasó a TX y VX, con los mismos motores. Todas suman control de estabilidad y de tracción, asistente de arranque en pendiente y airbag de rodilla del conductor; el control de descenso es de las 4x4.",
+        "applies_to": "desde julio de 2016"
+      },
+      {
+        "text": "La VX suma siete airbags, faros Bi-LED, cuero, asientos delanteros calefaccionados, climatizador bizona y sensores de estacionamiento delanteros y traseros; todas tienen pantalla táctil de 7 pulgadas con navegador.",
+        "applies_to": "desde julio de 2016"
+      },
+      {
+        "text": "Según una reseña norteamericana, la tracción integral reparte sobre todo hacia adelante con un acople electromagnético en el diferencial trasero, y no está pensada para uso fuera de camino exigente.",
+        "applies_to": "4x4 (reseña de otros mercados)"
+      }
+    ],
+    "maintenance_costs": [
+      {
+        "text": "En la versión norteamericana, el 2.5 (2AR-FE) usa cadena de distribución sin reemplazo programado, aceite 0W-20 y bujías a las 120.000 millas. No está confirmado que el 2.5 argentino sea el mismo motor: confirmalo en el manual de la unidad.",
+        "applies_to": "2.5 (dato de otros mercados)"
+      },
+      {
+        "text": "Si hay vibración o golpes en la automática, pedí presupuesto de la caja (convertidor de par o cuerpo de válvulas) antes de comprar.",
+        "applies_to": "automática de seis marchas"
+      },
+      {
+        "text": "Una reseña norteamericana sugiere que la versión de tracción delantera sale más barata de mantener a largo plazo que la 4x4."
+      },
+      {
+        "text": "Los intervalos de service, del fluido de la CVT o de la automática y del diferencial están en el manual y el libro de service: pedí los comprobantes."
+      }
+    ],
+    "generations": [
+      {
+        "label": "Tercera generación",
+        "year_from": 2005,
+        "year_to": 2013,
+        "text": "Generación anterior, reemplazada por la cuarta en abril de 2013. Los años de inicio son aproximados según el repaso de Autoweb."
+      },
+      {
+        "label": "Cuarta generación (XA40)",
+        "year_from": 2013,
+        "year_to": 2016,
+        "text": "Lanzada en abril de 2013 con motores 2.0 y 2.5 nafteros, en versiones con y sin el equipamiento Full."
+      },
+      {
+        "label": "Cuarta generación, restyling",
+        "year_from": 2016,
+        "year_to": 2019,
+        "text": "Desde julio de 2016: frente nuevo con luces LED, tablero con pantalla de 4,2 pulgadas, versiones TX y VX y control de estabilidad en toda la gama, sin cambios mecánicos."
+      },
+      {
+        "label": "Quinta generación",
+        "year_from": 2019,
+        "year_to": null,
+        "text": "Lanzada en mayo de 2019, solo híbrida (2.5 con motor eléctrico y CVT), en versiones XLE y Limited."
+      }
+    ]
+  },
+  "questions": [
+    {
+      "text": "¿Es la 2.0 con CVT o la 2.5 con automática de seis marchas y 4x4?",
+      "why": "Cambian la caja, la tracción y los puntos a revisar en la prueba."
+    },
+    {
+      "text": "¿Notaste alguna vibración al acelerar suave o golpes al poner marcha atrás?",
+      "why": "En otros mercados se reportan vibración del convertidor de par y marcha atrás con golpe en la automática."
+    },
+    {
+      "text": "¿Le cambiaron alguna vez el fluido de la caja automática o de la CVT? ¿Tenés el comprobante?",
+      "why": "Sirve para saber si se siguió el plan de mantenimiento de la caja."
+    },
+    {
+      "text": "¿Tuviste que agregar refrigerante o le cambiaron la bomba de agua?",
+      "why": "En otros mercados se reportan pérdidas de la bomba de agua en esta generación."
+    },
+    {
+      "text": "¿El audio o la pantalla se reiniciaron solos alguna vez?",
+      "why": "En otros mercados hay reclamos de equipos de audio que se reinician o dejan de funcionar."
+    },
+    {
+      "text": "¿Es anterior o posterior al restyling de julio de 2016, y qué versión es (Full, TX o VX)?",
+      "why": "El control de estabilidad y la cantidad de airbags dependen de la etapa y la versión."
+    }
+  ],
+  "sources": [
+    {
+      "title": "Toyota presenta la nueva RAV4 en Argentina (Autocosmos, 17/04/2013)",
+      "url": "https://noticias.autocosmos.com.ar/2013/04/17/toyota-presenta-la-nueva-rav4-en-argentina",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "La Toyota RAV4 se actualiza en Argentina (Autocosmos, 06/07/2016)",
+      "url": "https://noticias.autocosmos.com.ar/2016/07/06/la-toyota-rav4-se-actualiza-en-argentina-info-precios-y-mas",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Nueva Toyota RAV4 2016, a la altura de la competencia (Seminuevos, 13/07/2016)",
+      "url": "https://www.seminuevos.com/blog/nueva-toyota-rav4-2016-a-la-altura-de-la-competencia/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Toyota lanza la RAV4 híbrida en la Argentina (Autoweb, 23/05/2019)",
+      "url": "https://www.autoweb.com.ar/?p=8455",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Toyota presentó al nuevo RAV4 (Parabrisas, 23/05/2019)",
+      "url": "https://parabrisas.perfil.com/noticias/novedades/toyota-presento-al-nuevo-rav4.phtml",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Buying the 2013-2018 Toyota RAV4: pros and cons, problems (Samarins)",
+      "url": "https://www.samarins.com/reviews/rav4-xa40.html",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Toyota RAV4 common problems 2013-2018 (Haynes)",
+      "url": "https://us.haynes.com/blogs/tips-tutorials/toyota-rav4-common-problems-2013-2018",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Recall 23V734000: batería de 12 V en Toyota RAV4 2013-2018 (VehicleFlaws, datos de NHTSA)",
+      "url": "https://vehicleflaws.com/recall/23V734000",
+      "kind": "otra",
+      "verified": true
+    }
+  ]
+}

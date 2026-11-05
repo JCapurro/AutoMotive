@@ -1,0 +1,214 @@
+{
+  "make": "Suzuki",
+  "model": "Grand Vitara",
+  "generation_label": "Grand Vitara tercera generación (JIII)",
+  "year_from": 2008,
+  "year_to": 2018,
+  "slug_make": "suzuki",
+  "slug_model": "grand-vitara",
+  "body": {
+    "known_issues": [
+      {
+        "text": "En 2017 el representante de Suzuki en Argentina anunció un llamado preventivo para Grand Vitara J24B hechas en la planta de Iwata (Japón) entre 2008 y 2013: el mecanismo selector de marchas podía deteriorarse y, en algunos casos, impedir poner un cambio. La revisión y el reemplazo eran sin cargo; confirmá con el VIN si la unidad está alcanzada y si se hizo.",
+        "applies_to": "J24B 2008–2013 (según rango de chasis)"
+      },
+      {
+        "text": "En EE.UU. hubo un llamado parecido (2017) para Grand Vitara 2009-2013 con caja manual: el eje trasero de la palanca podía romperse y dejar el auto sin poder cambiar de marcha.",
+        "applies_to": "caja manual (otros mercados)"
+      },
+      {
+        "text": "El consumo es uno de sus puntos débiles según 16 Válvulas: en su prueba de 2014 la 2.4 automática gastó 12,8 litros cada 100 km en ciudad y 11,7 a 120 km/h, con un tanque de 55 litros.",
+        "applies_to": "2.4 automática (prueba 2014)"
+      },
+      {
+        "text": "Una guía de usados de Australia aconseja buscar señales de uso fuera de ruta: golpes en las puntas de paragolpes y zócalos, protectores de motor y caja dañados, y óxido en bajos de puertas, pasaruedas y piso.",
+        "applies_to": "reportes en otros mercados"
+      },
+      {
+        "text": "La misma guía recomienda prestar atención a arranques difíciles, falta de potencia o humo, a ruidos al bajar rápido de marcha en la manual y a una automática que tarde en tomar Drive.",
+        "applies_to": "reportes en otros mercados"
+      },
+      {
+        "text": "La prueba de 16 Válvulas de 2014 también menciona una suspensión firme en ciudad y que el portón necesita más de un metro libre para abrirse.",
+        "applies_to": "2014 en adelante"
+      }
+    ],
+    "visit_checklist": [
+      {
+        "text": "Pasá por todos los modos del selector de tracción (en la 4x4 que probó la prensa en 2014: 4H, 4H con bloqueo y 4L con bloqueo) y verificá que el testigo de cada uno se encienda y que el cambio entre modos no haga ruidos."
+      },
+      {
+        "text": "Si es manual, probá todos los cambios varias veces, también la marcha atrás, y fijate si la palanca tiene juego o cuesta entrar alguna marcha."
+      },
+      {
+        "text": "Si es automática, fijate que tome Drive enseguida desde Neutral y que los cambios sean firmes, sin patinar."
+      },
+      {
+        "text": "Mirá abajo con una linterna: protectores de motor y caja, zócalos, pasaruedas y piso. Barro seco o arena acumulada indican uso fuera de ruta."
+      },
+      {
+        "text": "Revisá el desgaste de las cubiertas: si es desparejo puede haber problemas de alineación o de la suspensión."
+      },
+      {
+        "text": "Al dar contacto, revisá que se enciendan y se apaguen los testigos de motor, airbag, ABS y control de estabilidad si lo tiene."
+      },
+      {
+        "text": "Consultá con el VIN en un servicio oficial Suzuki si la unidad tiene campañas pendientes, en especial la del selector de marchas."
+      }
+    ],
+    "versions_equipment": [
+      {
+        "text": "En agosto de 2007, 16 Válvulas anunciaba la JIII importada de Japón por GM, solo en cinco puertas y con un 2.0 naftero de 140 CV, con tracción integral permanente y bloqueo del diferencial.",
+        "applies_to": "etapa GM, primeros años"
+      },
+      {
+        "text": "En enero de 2010 GM presentó la JIII renovada con un 2.4 naftero de 165 CV y caja manual de cinco; anunciaba airbags frontales, laterales y de cortina, ABS, control de estabilidad e ISOFIX.",
+        "applies_to": "2010–2011 (etapa GM)"
+      },
+      {
+        "text": "En enero de 2014 la relanzó Distribuidora Automotriz Argentina (grupo Indumotora) con el 2.4 de 164-166 CV, manual de cinco o automática de cuatro, y tracción con alta y baja en las 4x4. Versiones: JX 4WD de tres puertas, JLX 2WD de cinco y JLX-L 4WD de cinco.",
+        "applies_to": "2014"
+      },
+      {
+        "text": "En 2014 todas traían airbags frontales, ABS y asistente de frenado; la JLX-L sumaba airbags laterales y de cortina, control de estabilidad, xenón, cuero y techo solar. La cámara trasera era opcional.",
+        "applies_to": "2014"
+      },
+      {
+        "text": "Tras un año sin ventas en 2015, en 2016 volvió en dos versiones: la JX de tres puertas con manual de cinco y la JLX-L de cinco puertas con automática de cuatro, ambas 2.4 con reductora.",
+        "applies_to": "2016"
+      }
+    ],
+    "maintenance_costs": [
+      {
+        "text": "No encontramos el plan de mantenimiento oficial de esta generación: pedí el libro de service y confirmá ahí los intervalos de aceite, filtros, bujías y si el motor usa cadena o correa."
+      },
+      {
+        "text": "En las 4x4, confirmá en el manual cada cuánto se cambia el aceite de la caja de transferencia y de los diferenciales, y pedí comprobantes.",
+        "applies_to": "4x4"
+      },
+      {
+        "text": "Por el consumo medido en las pruebas, calculá el gasto en combustible antes de comprar, sobre todo si vas a hacer mucha ciudad."
+      },
+      {
+        "text": "Una guía australiana dice que hay pocas quejas por repuestos y costos de service en ese mercado; en Argentina consultá disponibilidad en la red oficial Suzuki.",
+        "applies_to": "otros mercados"
+      }
+    ],
+    "generations": [
+      {
+        "label": "Vitara (primera generación)",
+        "year_from": null,
+        "year_to": null,
+        "text": "Importada: la tres puertas venía de Japón y la cinco puertas de EE.UU., vendida como Suzuki Sidekick, según Autocosmos."
+      },
+      {
+        "label": "Grand Vitara segunda generación",
+        "year_from": 2000,
+        "year_to": 2008,
+        "text": "Fabricada por GM en General Alvear (Santa Fe) y vendida como Suzuki o Chevrolet Grand Vitara, con nafteros 1.6 y 2.0 y diésel 2.0. La XL-7, de siete asientos, se vendió hasta 2008."
+      },
+      {
+        "label": "Grand Vitara JIII (etapa GM)",
+        "year_from": 2008,
+        "year_to": 2011,
+        "text": "Importada de Japón por GM hasta 2011, cuando GM dejó de representar a Suzuki. El año de inicio es aproximado: en agosto de 2007 la prensa la anunciaba como próxima a llegar. Renovada en 2010 con el 2.4."
+      },
+      {
+        "label": "Grand Vitara JIII (etapa Indumotora)",
+        "year_from": 2014,
+        "year_to": 2018,
+        "text": "Volvió en enero de 2014 con el 2.4, en tres y cinco puertas, y se importó hasta 2018 según Autocosmos; 16 Válvulas menciona un año sin ventas en 2015. Desde 2016 convivió con la New Vitara, que es otro modelo."
+      }
+    ]
+  },
+  "questions": [
+    {
+      "text": "¿Le hicieron el llamado a revisión del selector de marchas? ¿Tenés el comprobante?",
+      "why": "Suzuki llamó a revisión a las J24B hechas en Japón entre 2008 y 2013 por el selector de marchas."
+    },
+    {
+      "text": "¿La usaste fuera de ruta, en arena o en barro? ¿Con qué frecuencia?",
+      "why": "Las guías de usados recomiendan buscar desgaste por uso fuera de ruta en bajos, protectores y suspensión."
+    },
+    {
+      "text": "¿Cuándo se cambió el aceite de la caja de transferencia y de los diferenciales?",
+      "why": "En una 4x4 son mantenimientos que suelen olvidarse y conviene confirmarlos con el manual."
+    },
+    {
+      "text": "¿Es de la etapa GM (hasta 2011) o de la que se vendió desde 2014? ¿Es 2.0 o 2.4?",
+      "why": "Motor, cajas y equipamiento cambiaron entre etapas y conviene que coincidan con los papeles."
+    },
+    {
+      "text": "¿Cuánto consume en tu uso diario?",
+      "why": "La prensa argentina señaló el consumo del 2.4 como uno de sus puntos débiles."
+    }
+  ],
+  "sources": [
+    {
+      "title": "Autos clásicos de Argentina: Suzuki o Chevrolet Grand Vitara (Autocosmos, 18/07/2024)",
+      "url": "https://noticias.autocosmos.com.ar/2024/07/18/autos-clasicos-de-argentina-suzuki-o-chevrolet-grand-vitara",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Suzuki Grand Vitara JIII (16 Válvulas, 09/08/2007)",
+      "url": "https://www.16valvulas.com.ar/?p=353",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "El Grand Vitara JIII llegó renovado (Diario de Cuyo, 30/01/2010)",
+      "url": "https://www.diariodecuyo.com.ar/tendencia/El-Grand-Vitara-JIII-llego-renovado-20100130-0022.html",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Suzuki New Grand Vitara, lanzamiento en Argentina (16 Válvulas, 10/01/2014)",
+      "url": "https://www.16valvulas.com.ar/?p=77940",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Probamos la nueva Suzuki Grand Vitara 5 puertas JLX-L AT (16 Válvulas, 15/04/2014)",
+      "url": "https://www.16valvulas.com.ar/probamos-la-nueva-suzuki-grand-vitara-5-puertas-jlx-l-at/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Suzuki Grand Vitara 3 puertas, lanzamiento en Argentina (16 Válvulas, 08/06/2016)",
+      "url": "https://www.16valvulas.com.ar/?p=129010",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "La Suzuki Grand Vitara 5 puertas se vuelve a comercializar en Argentina (16 Válvulas, 27/09/2016)",
+      "url": "https://www.16valvulas.com.ar/?p=132085",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Recall preventivo para la Suzuki Vitara (16 Válvulas, 06/06/2017)",
+      "url": "https://www.16valvulas.com.ar/?p=139767",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Suzuki Grand Vitara recall: gear shifters (CarComplaints, 19/02/2017)",
+      "url": "https://carcomplaints.com/news/2017/suzuki-grand-vitara-recall-gear-shifters.shtml",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Suzuki Grand Vitara, Vitara 2005-2017: used car guide (Marque News, Australia)",
+      "url": "https://marquenews.com.au/suzuki-grand-vitara-vitara-2005-2017/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Se presentó el Suzuki XL7, un modelo que derivó de la Grand Vitara (Parabrisas, 01/04/2022)",
+      "url": "https://parabrisas.perfil.com/noticias/novedades/suzuki-grand-vitara-xl7-version-siete-asientos-7-nueva-suv-aventurera.phtml",
+      "kind": "prensa",
+      "verified": true
+    }
+  ]
+}

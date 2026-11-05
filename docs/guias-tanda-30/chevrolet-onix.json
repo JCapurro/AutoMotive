@@ -1,0 +1,239 @@
+{
+  "make": "Chevrolet",
+  "model": "Onix",
+  "generation_label": "Segunda generación",
+  "year_from": 2020,
+  "year_to": null,
+  "slug_make": "chevrolet",
+  "slug_model": "onix",
+  "body": {
+    "known_issues": [
+      {
+        "text": "El 1.0 turbo usa correa de distribución bañada en aceite. En Brasil hubo reportes de correas que se degradan antes de tiempo y sueltan fragmentos que pueden tapar el chupador de la bomba de aceite. La prensa lo vincula con aceite fuera de especificación.",
+        "applies_to": "1.0 turbo (reportes en Brasil)"
+      },
+      {
+        "text": "En 2025 GM dijo en Brasil que preparaba una campaña para revisar y cambiar la correa en autos que hubieran manifestado problemas; allí, desde la línea 2026, usa una correa reforzada. No hay confirmación de una campaña igual en Argentina: consultalo con el VIN en un concesionario oficial.",
+        "applies_to": "1.0 turbo (otros mercados)"
+      },
+      {
+        "text": "Según la prensa brasileña, si se enciende la luz de presión de aceite hay que detener el auto: una falla de lubricación puede dañar seriamente el motor.",
+        "applies_to": "1.0 turbo (reportes en Brasil)"
+      },
+      {
+        "text": "En noviembre de 2019, antes del lanzamiento argentino, Chevrolet frenó en Brasil las entregas del Onix Plus por una falla del software de gestión del motor con riesgo de incendio y anunció su actualización. La filial local dijo que no afectaba el lanzamiento acá.",
+        "applies_to": "Onix Plus 2019 (Brasil)"
+      },
+      {
+        "text": "En la prueba de Parabrisas de 2020, el motor turbo transmitía algo de vibración en ciertos regímenes, entraba ruido de viento y de los pasaruedas con lluvia, y el auxilio era de uso temporal.",
+        "applies_to": "Onix Plus Premier II, 2020"
+      }
+    ],
+    "visit_checklist": [
+      {
+        "text": "Si es 1.0 turbo, pedí el historial de cambios de aceite con facturas que digan qué aceite se usó, y confirmá en el manual la especificación que corresponde.",
+        "applies_to": "1.0 turbo"
+      },
+      {
+        "text": "Al dar contacto, mirá que se enciendan y se apaguen los testigos de presión de aceite, airbag, ABS y control de estabilidad."
+      },
+      {
+        "text": "Pedí que escaneen motor y caja para ver si hay códigos de falla guardados."
+      },
+      {
+        "text": "En la automática, probá en tránsito y en subida: los cambios tienen que entrar suaves y sin demoras.",
+        "applies_to": "caja automática de seis"
+      },
+      {
+        "text": "Probá la pantalla multimedia, Android Auto o Apple CarPlay, la cámara y el cargador inalámbrico si los tiene."
+      },
+      {
+        "text": "Revisá que esté el auxilio y las herramientas; en algunas versiones el auxilio es de uso temporal."
+      },
+      {
+        "text": "Consultá con el VIN en un concesionario oficial si la unidad tiene campañas de revisión pendientes."
+      }
+    ],
+    "versions_equipment": [
+      {
+        "text": "Se presentó en Argentina a fines de 2019, importado de Brasil, como hatchback (Onix) y sedán (Onix Plus, en lugar del Prisma). Seis airbags y control de estabilidad de serie; Latin NCAP le dio cinco estrellas en 2019."
+      },
+      {
+        "text": "Al lanzamiento, las versiones de entrada y LT usaban un 1.2 de tres cilindros y 90 CV con manual de cinco. La Premier, desde enero de 2020, traía el 1.0 turbo de 116 CV con manual de cinco o automática de seis con convertidor de par.",
+        "applies_to": "2020 en adelante"
+      },
+      {
+        "text": "Según Parabrisas, la Premier I era manual y la Premier II automática; la II sumaba alerta de punto ciego, sensores delanteros, climatizador, estacionamiento automático, cargador inalámbrico y control de crucero.",
+        "applies_to": "Premier I y Premier II"
+      },
+      {
+        "text": "En abril de 2021 llegaron la LTZ (hatch y sedán, manual o automática) y la RS (solo hatch y, al lanzamiento, solo manual), ambas con el 1.0 turbo.",
+        "applies_to": "desde 2021"
+      },
+      {
+        "text": "En julio de 2024 la LT pasó al 1.0 turbo y la LS, la última con el 1.2, salió de la gama. Según Autoweb, la gama quedó LT manual, LTZ manual o automática, Premier automática y RS automática solo hatch.",
+        "applies_to": "desde julio de 2024"
+      },
+      {
+        "text": "El rediseño de julio de 2025 trajo frente nuevo, tablero digital y pantalla más grande, con el 1.0 turbo; la LT es la única manual. En julio de 2026 se sumó el Onix Activ, con 1.0 turbo, automática de seis y más despeje.",
+        "applies_to": "desde julio de 2025"
+      }
+    ],
+    "maintenance_costs": [
+      {
+        "text": "En el 1.0 turbo, el aceite correcto es clave para la correa bañada en aceite. Usá el que indique el manual de la unidad: la prensa brasileña cita especificaciones distintas según el año y el motor.",
+        "applies_to": "1.0 turbo"
+      },
+      {
+        "text": "En Brasil GM habla de una vida útil de la correa de 240.000 km. Confirmá el intervalo en el manual argentino de la unidad.",
+        "applies_to": "1.0 turbo (otros mercados)"
+      },
+      {
+        "text": "En la automática de seis, preguntá si se le cambió alguna vez el aceite y seguí lo que indique el manual.",
+        "applies_to": "caja automática de seis"
+      },
+      {
+        "text": "La garantía de fábrica anunciada al lanzamiento era de 3 años o 100.000 km; si la unidad está dentro de ese plazo, pedí los comprobantes de service según el plan.",
+        "applies_to": "unidades dentro de la garantía de fábrica"
+      }
+    ],
+    "generations": [
+      {
+        "label": "Primera generación",
+        "year_from": 2013,
+        "year_to": 2019,
+        "text": "Llegó de Brasil en 2013. En Latin NCAP obtuvo cero estrellas para adultos en 2017 y tres en 2018."
+      },
+      {
+        "label": "Onix Joy",
+        "year_from": null,
+        "year_to": null,
+        "text": "Restyling de la primera generación que, según Autocosmos, siguió a la venta por debajo de la nueva gama desde fines de 2019, junto al Onix Joy Plus sedán. Es un auto de la generación anterior."
+      },
+      {
+        "label": "Segunda generación",
+        "year_from": 2020,
+        "year_to": 2025,
+        "text": "Presentada a fines de 2019, con motores 1.2 y 1.0 turbo, seis airbags y control de estabilidad. Desde julio de 2024 todas las versiones usan el 1.0 turbo."
+      },
+      {
+        "label": "Rediseño",
+        "year_from": 2025,
+        "year_to": null,
+        "text": "Desde julio de 2025: frente nuevo, tablero digital y pantalla más grande, con 1.0 turbo y manual de cinco o automática de seis."
+      }
+    ]
+  },
+  "questions": [
+    {
+      "text": "¿Es 1.2 o 1.0 turbo, y la caja es manual o automática?",
+      "why": "El 1.0 turbo usa correa bañada en aceite, con reportes en Brasil ligados al aceite usado."
+    },
+    {
+      "text": "¿Tenés las facturas de los cambios de aceite con la marca y la especificación del aceite?",
+      "why": "En Brasil, el aceite fuera de especificación se vincula con la degradación de la correa del 1.0 turbo."
+    },
+    {
+      "text": "¿Alguna vez se encendió la luz de presión de aceite o se revisó la correa?",
+      "why": "Según la prensa brasileña, una correa degradada puede tapar el chupador de aceite."
+    },
+    {
+      "text": "¿Los services se hicieron en concesionario oficial y según el plan del manual?",
+      "why": "Ayuda a saber si se usó el aceite especificado y si queda garantía de fábrica."
+    },
+    {
+      "text": "¿Qué versión es exactamente: LT, LTZ, Premier I, Premier II, RS o Activ?",
+      "why": "El motor, la caja y el equipamiento cambian según la versión y el año."
+    },
+    {
+      "text": "¿Se le cambió alguna vez el aceite a la caja automática?",
+      "why": "Conviene saber si la caja tuvo mantenimiento según el manual."
+    }
+  ],
+  "sources": [
+    {
+      "title": "Nuevos Chevrolet Onix y Onix Plus se lanzan en Argentina (Autocosmos, 28/11/2019)",
+      "url": "https://noticias.autocosmos.com.ar/2019/11/28/nuevos-chevrolet-onix-y-onix-plus-se-lanzan-en-argentina",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Chevrolet lanza el Onix, hatch y sedán (Autoweb, 28/11/2019)",
+      "url": "https://www.autoweb.com.ar/?p=12672",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Nuevo Chevrolet Onix Premier 1.0 Turbo: lanzamiento en Argentina (16 Válvulas, 02/01/2020)",
+      "url": "https://www.16valvulas.com.ar/?p=178020",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Chevrolet Onix Plus Premier II: prueba de manejo (Parabrisas, 07/2020)",
+      "url": "https://parabrisas.perfil.com/noticias/test/test-drive-prueba-de-manejo-chevrolet-onix-plus-premier-sedan-compacto.phtml",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Nuevos Chevrolet Onix LTZ y RS: lanzamiento en Argentina (16 Válvulas, 15/04/2021)",
+      "url": "https://www.16valvulas.com.ar/?p=195157",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Todos los Chevrolet Onix vendrán con el motor 1.0 turbo (Autoweb, 22/07/2024)",
+      "url": "https://www.autoweb.com.ar/?p=46036",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Chevrolet lanza el rediseño del Onix en Argentina (Autoweb, 24/07/2025)",
+      "url": "https://www.autoweb.com.ar/?p=53639",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Chevrolet lanzó en Argentina el nuevo Onix Activ (Diario Uno, 07/2026)",
+      "url": "https://www.diariouno.com.ar/motores/chevrolet-lanzo-argentina-el-nuevo-onix-activ-equipamiento-motorizacion-y-precios-n1578640",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Nuevo Chevrolet Onix Plus recibe la máxima calificación de Latin NCAP (Autocosmos, 12/09/2019)",
+      "url": "https://noticias.autocosmos.com.ar/2019/09/12/nuevo-chevrolet-onix-plus-recibe-la-maxima-calificacion-de-latin-ncap",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Chevrolet suspendió la entrega del nuevo Onix por riesgo de incendio (Diario de Cuyo, 07/11/2019)",
+      "url": "https://www.diariodecuyo.com.ar/economia/Chevrolet-suspendio-la-entrega-del-nuevo-Onix-por-riesgo-de-incendio-ya-se-quemaron-dos-20191107-0003.html",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "GM fará ação para verificação e troca de correia banhada a óleo do Onix (AutoPapo, 14/03/2025)",
+      "url": "https://autopapo.com.br/noticia/gm-acao-correia-dentada-banhada-oleo/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Onix 2026: nova correia dentada banhada a óleo (Vrum, 15/08/2025)",
+      "url": "https://www.vrum.com.br/noticias/2025/08/7227031-onix-2026-nova-correia-dentada-banhada-a-oleo-roda-ate-240-mil-km.html",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Motor do Onix turbo quebra? Os problemas mais comuns e como evitar (Vrum, 20/07/2026)",
+      "url": "https://www.vrum.com.br/mercado/2026/07/7464702-motor-do-onix-turbo-quebra-os-problemas-mais-comuns-e-como-evitar.html",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Chevrolet anunció la llegada a la Argentina en 2013 del Onix (Cuyo Motor, 07/09/2012)",
+      "url": "https://cuyomotor.com.ar/2012/09/07/chevrolet-anuncio-la-llegada-a-la-argentina-en-2013-del-onix-2",
+      "kind": "prensa",
+      "verified": true
+    }
+  ]
+}

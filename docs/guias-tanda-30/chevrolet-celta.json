@@ -1,0 +1,204 @@
+{
+  "make": "Chevrolet",
+  "model": "Celta",
+  "generation_label": "Celta 1.4 (lanzamiento argentino de 2011)",
+  "year_from": 2011,
+  "year_to": 2016,
+  "slug_make": "chevrolet",
+  "slug_model": "celta",
+  "body": {
+    "known_issues": [
+      {
+        "text": "Chevrolet Argentina llamó a revisión por el inflador del airbag del conductor (Takata), que podía romperse al activarse y despedir fragmentos. Según la prensa, alcanza a Celta fabricados entre enero de 2013 y abril de 2015, chasis DG224678 a GG101300. Consultá el VIN en la web de Chevrolet o en un concesionario oficial.",
+        "applies_to": "chasis DG224678 a GG101300"
+      },
+      {
+        "text": "En la presentación de 2011 la prensa indicaba que ninguna versión tenía airbags ni ABS. En la prueba de Latin NCAP de 2011, el Celta sin airbags obtuvo una estrella para adultos y Latin NCAP indicó que la estructura no podía soportar más cargas.",
+        "applies_to": "versiones sin airbags"
+      },
+      {
+        "text": "Mecánicos citados por la prensa brasileña mencionan bobinas de encendido que se rajan y fugan corriente, y un conector de la bobina que puede fallar y apagar el motor.",
+        "applies_to": "reportes en Brasil, sin separar por motor"
+      },
+      {
+        "text": "La misma fuente brasileña reporta ruido e inestabilidad por las bieletas de la barra estabilizadora, y una manguera entre el filtro de aire y la admisión que se raja y deja entrar aire.",
+        "applies_to": "reportes en Brasil, sin separar por motor"
+      },
+      {
+        "text": "En el aire acondicionado, mecánicos brasileños reportan pérdidas por el sello del compresor y por la válvula de servicio de alta, y un drenaje que se suelta y moja la alfombra.",
+        "applies_to": "con aire acondicionado (reportes en Brasil)"
+      }
+    ],
+    "visit_checklist": [
+      {
+        "text": "Consultá con el VIN si la unidad está alcanzada por el llamado del airbag Takata y si ya se hizo; pedí el comprobante."
+      },
+      {
+        "text": "Confirmá en la unidad si tiene airbags y ABS: mirá que los testigos se enciendan al dar contacto y después se apaguen. No lo des por hecho por el año."
+      },
+      {
+        "text": "Pasá por calles con pozos para escuchar golpeteos en el tren delantero, y fijate que el auto no se vaya de lado en recta."
+      },
+      {
+        "text": "Con el motor en marcha lenta, escuchá si se apaga solo o tiene tirones al acelerar."
+      },
+      {
+        "text": "Poné el aire acondicionado al máximo y fijate que enfríe; después revisá que la alfombra del lado del acompañante no esté húmeda.",
+        "applies_to": "con aire acondicionado"
+      },
+      {
+        "text": "Mirá debajo del auto si hay manchas de aceite en la zona de la caja y del motor, y probá que los cambios entren sin ruido."
+      },
+      {
+        "text": "Si tiene equipo de GNC, pedí la documentación del equipo y la oblea, y revisá la instalación en el baúl.",
+        "applies_to": "con GNC"
+      }
+    ],
+    "versions_equipment": [
+      {
+        "text": "Se lanzó en Argentina en abril de 2011, importado de Brasil, con motor naftero 1.4 de ocho válvulas y 92 CV y caja manual de cinco. Hubo tres y cinco puertas, en versiones LS y LT (en tres puertas también LS con aire)."
+      },
+      {
+        "text": "Según La Nación, la LT traía dirección asistida, aire acondicionado y radio con Bluetooth y USB; la LT de cinco puertas sumaba levantavidrios eléctricos delanteros y cierre centralizado.",
+        "applies_to": "LT, lanzamiento 2011"
+      },
+      {
+        "text": "En mayo de 2013 se anunció el Celta MY 2014 con airbags frontales para conductor y acompañante y ABS con EBD en las versiones más equipadas (LS de tres puertas y LT de cinco), además de parrilla cromada y espejos y manijas color carrocería.",
+        "applies_to": "desde el MY 2014"
+      },
+      {
+        "text": "En avisos argentinos de 2014 y 2015 aparece la versión Advantage. En Uruguay reemplazó a la LT de cinco puertas y traía doble airbag y ABS de serie; confirmá el equipamiento en la unidad.",
+        "applies_to": "Advantage"
+      }
+    ],
+    "maintenance_costs": [
+      {
+        "text": "Confirmá en el manual de la unidad cada cuánto se cambia la correa de distribución y pedí el comprobante del último cambio; si no hay, tomalo como pendiente."
+      },
+      {
+        "text": "Mecánicos brasileños recomiendan cambiar el filtro de aire más seguido que lo que indica la fábrica, porque es chico y se tapa, y cambiar cables y bujías junto con la bobina.",
+        "applies_to": "reportes en Brasil"
+      },
+      {
+        "text": "Usá el aceite que indica el manual para el motor 1.4: en Brasil, el aceite equivocado aparece entre las causas de consumo alto y botadores ruidosos.",
+        "applies_to": "reportes en Brasil"
+      },
+      {
+        "text": "Presupuestá bieletas de la barra estabilizadora y revisión de los cilindros de freno traseros si no hay facturas: aparecen entre los arreglos que mencionan mecánicos en Brasil.",
+        "applies_to": "reportes en Brasil"
+      },
+      {
+        "text": "Si tiene GNC, sumá el mantenimiento del equipo y consultá en un taller habilitado qué controles le corresponden.",
+        "applies_to": "con GNC"
+      }
+    ],
+    "generations": [
+      {
+        "label": "Suzuki Fun",
+        "year_from": 2003,
+        "year_to": 2011,
+        "text": "Según Autotest, desde 2003 el Celta llegó de Brasil con el nombre Suzuki Fun. Tras el fin de la asociación entre General Motors y Suzuki volvió con su nombre original y un leve rediseño."
+      },
+      {
+        "label": "Celta",
+        "year_from": 2011,
+        "year_to": 2013,
+        "text": "Lanzado en abril de 2011 con motor 1.4, en lugar del Suzuki Fun y del Classic de tres puertas. La prensa indicaba que ninguna versión tenía airbags ni ABS."
+      },
+      {
+        "label": "Celta MY 2014",
+        "year_from": 2013,
+        "year_to": 2016,
+        "text": "Desde mayo de 2013 sumó versiones con doble airbag frontal y ABS, antes de que fueran obligatorios. Las notas del llamado de airbags hablan de modelos 2013 a 2016."
+      }
+    ]
+  },
+  "questions": [
+    {
+      "text": "¿Le hiciste el cambio del airbag del llamado de Chevrolet? ¿Tenés el comprobante?",
+      "why": "Chevrolet llamó a revisión a Celta fabricados entre 2013 y 2015 por el inflador del airbag del conductor."
+    },
+    {
+      "text": "¿Qué versión es exactamente y tiene airbags y ABS?",
+      "why": "Según la prensa, los primeros Celta no los traían y en el MY 2014 venían en las versiones más equipadas."
+    },
+    {
+      "text": "¿Cuándo se cambió la correa de distribución y tenés el comprobante?",
+      "why": "Es una pieza de desgaste y el intervalo lo marca el manual de la unidad."
+    },
+    {
+      "text": "¿Se cambiaron alguna vez la bobina, los cables o las bujías?",
+      "why": "En Brasil, mecánicos mencionan fallas de la bobina y de su conector que pueden apagar el motor."
+    },
+    {
+      "text": "¿El aire acondicionado enfría bien y se recargó o reparó alguna vez?",
+      "why": "En Brasil se reportan pérdidas en el compresor y en la válvula de servicio."
+    },
+    {
+      "text": "¿Tiene GNC? ¿Está la documentación del equipo al día?",
+      "why": "Conviene confirmar que el equipo tenga la documentación en regla."
+    }
+  ],
+  "sources": [
+    {
+      "title": "Chevrolet lanzó el Celta (La Nación, 30/04/2011)",
+      "url": "https://www.lanacion.com.ar/autos/al-volante/chevrolet-lanzo-el-celta-nid1369188",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "El nuevo Chevrolet Celta fue presentado en Argentina (16 Válvulas, 26/04/2011)",
+      "url": "https://www.16valvulas.com.ar/?p=29973",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "El Chevrolet Celta suma una versión con más seguridad (Autocosmos, 02/05/2013)",
+      "url": "https://noticias.autocosmos.com.ar/2013/05/02/el-chevrolet-celta-suma-una-version-con-mas-seguridad",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Lanzamiento del Chevrolet Celta MY 2014 con airbags y ABS con EBD (16 Válvulas, 02/05/2013)",
+      "url": "https://www.16valvulas.com.ar/lanzamiento-chevrolet-celta-my-2014-con-airbags-y-abs-con-ebd-desde-70-300-pesos/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Recall para casi 100.000 Chevrolet Classic y Celta (Autoweb, 26/09/2020)",
+      "url": "https://www.autoweb.com.ar/2020/09/26/recall-para-casi-100-000-chevrolet-classic-y-celta/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Chevrolet Classic y Celta vuelven a ser llamados a revisión (Autocosmos, 16/05/2022)",
+      "url": "https://noticias.autocosmos.com.ar/2022/05/16/chevrolet-classic-y-celta-vuelven-a-ser-llamados-a-revision",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Chevrolet Celta sin airbags, resultado 2011 (Latin NCAP)",
+      "url": "https://www.latinncap.com/en/result/11/chevrolet-celta-no-airbags",
+      "kind": "otra",
+      "verified": true
+    },
+    {
+      "title": "Día del hermano: 5 autos que se vendieron con diferente marca en Argentina (Autotest)",
+      "url": "https://autotest.com.ar/noticias/dia-del-hermano-5-autos-vendieron-diferente-marca-argentina",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Lanzamiento: Chevrolet Celta Advantage (Autoblog Uruguay, 09/2014)",
+      "url": "https://www.autoblog.com.uy/2014/09/lanzamiento-chevrolet-celta-advantage.html",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "GM Celta é um velho conhecido do reparador (Oficina Brasil)",
+      "url": "https://oficinabrasil.com.br/noticia/avaliacao-do-reparador/gm-celta-e-um-velho-conhecido-do-reparador-e-seus-problemas-cronicos-ainda-estao-na-oficina",
+      "kind": "prensa",
+      "verified": true
+    }
+  ]
+}

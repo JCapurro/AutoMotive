@@ -1,0 +1,224 @@
+{
+  "make": "Volkswagen",
+  "model": "Gol",
+  "generation_label": "Gol G3 y G4 (incluye Gol Power)",
+  "year_from": 1999,
+  "year_to": 2014,
+  "slug_make": "volkswagen",
+  "slug_model": "gol",
+  "body": {
+    "known_issues": [
+      {
+        "text": "Volkswagen Argentina convocó a revisión por el generador de gas de los airbags Takata: en 2022 a Gol Power, Fox y Suran fabricados entre 2006 y 2010, y en 2023 a Gol y otros modelos fabricados entre 2006 y 2018. Consultá el VIN en la web de Volkswagen o en un concesionario oficial.",
+        "applies_to": "fabricados desde 2006, con airbag"
+      },
+      {
+        "text": "No todas las unidades tienen airbags ni ABS: en el Gol Power 1.4 de 2011 eran opcionales, según la prensa de ese año. La prensa uruguaya vincula el fin de la producción del Gol Power con la obligatoriedad de doble airbag y ABS desde enero de 2014.",
+        "applies_to": null
+      },
+      {
+        "text": "Según prensa brasileña, en el G3 y el G4 hay reportes de fallas en el sistema de refrigeración: la carcasa plástica de la válvula termostática puede resecarse y fisurarse, con pérdidas de refrigerante y riesgo de recalentamiento.",
+        "applies_to": "G3 y G4 (reportes en Brasil)"
+      },
+      {
+        "text": "Según prensa brasileña, la bobina de encendido de los motores de la familia AP tiene fama de quemarse, con fallas de encendido, pérdida de fuerza y tirones.",
+        "applies_to": "motores AP, G2 y G3 (reportes en Brasil)"
+      },
+      {
+        "text": "La prensa brasileña también menciona fallas eléctricas en levantavidrios y cierre de puertas, y ruidos del tablero y las puertas por los plásticos rígidos.",
+        "applies_to": "reportes en Brasil"
+      },
+      {
+        "text": "Según Autotest, la Gol Country fue perdiendo versiones, equipamiento y calidad de terminación, y las últimas unidades de 2013 venían muy despojadas.",
+        "applies_to": "Gol Country, últimos años"
+      },
+      {
+        "text": "Conviene confirmar en el manual si el motor de la unidad usa correa de distribución y cada cuánto se cambia; si la usa y no hay comprobante del último cambio, tomalo como pendiente.",
+        "applies_to": null
+      }
+    ],
+    "visit_checklist": [
+      {
+        "text": "Consultá con el VIN si tiene pendiente el llamado a revisión por airbags de Volkswagen."
+      },
+      {
+        "text": "Confirmá si la unidad tiene airbags y ABS, porque no venían en todas las versiones. Si tiene airbag, mirá que el testigo se encienda al dar contacto y después se apague."
+      },
+      {
+        "text": "Con el motor frío, revisá el nivel de refrigerante y buscá pérdidas alrededor de la carcasa del termostato y las mangueras. En la prueba, mirá que la aguja de temperatura no suba de lo normal."
+      },
+      {
+        "text": "En la prueba de manejo, prestá atención a tirones, fallas de encendido o falta de fuerza al acelerar."
+      },
+      {
+        "text": "Probá todos los levantavidrios, el cierre de puertas y las luces. Si tiene aire acondicionado y dirección asistida, probalos también."
+      },
+      {
+        "text": "En la manual, probá el embrague: que no patine en cuarta o quinta al acelerar y que los cambios entren sin ruido."
+      },
+      {
+        "text": "Pedí que escaneen el motor para ver si hay códigos de falla guardados."
+      },
+      {
+        "text": "Si tiene equipo de GNC, pedí la documentación del equipo y la oblea, y revisá la instalación en el baúl."
+      }
+    ],
+    "versions_equipment": [
+      {
+        "text": "G3 (desde 1999): según Autocosmos, en Argentina se vendió con motores 1.6, 1.8 y 1.9 SD diésel, en tres o cinco puertas. Autotest destaca la mejor calidad interior, con un tablero parecido al del Golf.",
+        "applies_to": "G3, 1999–2005"
+      },
+      {
+        "text": "Según Autotest, hacia 2003 apareció la versión Power como la opción más accesible, con el interior de la generación anterior para bajar costos.",
+        "applies_to": "desde 2003"
+      },
+      {
+        "text": "Ficha del Gol Power 1.6 de 2003 (Monkey Motor): 1.6 de ocho válvulas con inyección multipunto y 97 CV, motor longitudinal, caja manual de cinco, discos ventilados adelante y tambores atrás.",
+        "applies_to": "Gol Power 1.6, 2003"
+      },
+      {
+        "text": "G4 (presentado a fines de 2005): frente con la «V» de la marca y tablero más simple, como el del Fox. Según Autotest, las primeras unidades salieron con el interior anterior y, con la llegada del Gol Trend, pasó a llamarse Power.",
+        "applies_to": "G4, 2005–2014"
+      },
+      {
+        "text": "Desde marzo de 2011 hubo un 1.4 de 83 CV, nueve menos que el 1.6, en tres y cinco puertas y en la Country. Según la prensa, de serie traía radio con CD; aire, dirección hidráulica, ABS y airbags eran opcionales.",
+        "applies_to": "Gol Power 1.4, desde 2011"
+      },
+      {
+        "text": "La Gol Country (la Parati brasileña) compartía la gama de motores del Gol: 1.6 naftero y 1.9 diésel, según Autotest.",
+        "applies_to": "Gol Country"
+      }
+    ],
+    "maintenance_costs": [
+      {
+        "text": "Si el motor usa correa de distribución (confirmalo en el manual), pedí el comprobante del último cambio. El intervalo lo marca el plan de mantenimiento del manual."
+      },
+      {
+        "text": "Presupuestá una revisión del sistema de refrigeración (termostato, carcasa, mangueras y refrigerante), por los reportes de fisuras en la carcasa del termostato en Brasil.",
+        "applies_to": "G3 y G4 (reportes en Brasil)"
+      },
+      {
+        "text": "Si notás fallas de encendido, la bobina es una de las piezas a revisar en los motores AP, según prensa brasileña.",
+        "applies_to": "motores AP (reportes en Brasil)"
+      },
+      {
+        "text": "Si tiene GNC, sumá el mantenimiento del equipo y consultá en un taller habilitado qué controles le corresponden.",
+        "applies_to": "con GNC"
+      }
+    ],
+    "generations": [
+      {
+        "label": "Segunda generación (AB9)",
+        "year_from": 1996,
+        "year_to": 1999,
+        "text": "Llegó a la Argentina a fines de 1995 y se vendió masivamente desde 1996. Sumó la carrocería de cinco puertas, la Country, las primeras versiones diésel y una GTI de dos litros."
+      },
+      {
+        "label": "G3",
+        "year_from": 1999,
+        "year_to": 2005,
+        "text": "Rediseño de la segunda generación, lanzado en simultáneo en Brasil y Argentina en 1999, con interior de mejor calidad. Según Autotest, se produjo en Pacheco hasta cerca de 2003."
+      },
+      {
+        "label": "G4 (Gol Power)",
+        "year_from": 2005,
+        "year_to": 2014,
+        "text": "Presentado a fines de 2005, con frente nuevo e interior simplificado. Convivió con el Gol Trend desde 2008 y, según Autotest, se vendió hasta la llegada del up! en 2014. Las últimas unidades usaron el 1.4."
+      },
+      {
+        "label": "Gol Trend (tiene su propia guía)",
+        "year_from": 2008,
+        "year_to": 2022,
+        "text": "Generación nueva basada en la plataforma del Fox. Es un modelo distinto y tiene su propia guía."
+      }
+    ]
+  },
+  "questions": [
+    {
+      "text": "¿Es G3 o G4, y qué motor tiene exactamente: 1.6, 1.4, 1.8 o diésel?",
+      "why": "Motor y etapa cambian el equipamiento y los reportes de fallas que conviene revisar."
+    },
+    {
+      "text": "¿Tiene airbags y ABS? ¿Hiciste el llamado a revisión de airbags de Volkswagen?",
+      "why": "No venían en todas las versiones y Volkswagen convocó a Gol fabricados desde 2006 por los airbags."
+    },
+    {
+      "text": "¿El motor usa correa de distribución? Si la usa, ¿cuándo se cambió y tenés el comprobante?",
+      "why": "Si usa correa, el intervalo de cambio lo marca el plan de mantenimiento del manual."
+    },
+    {
+      "text": "¿Alguna vez recalentó o se cambió el termostato o su carcasa?",
+      "why": "En Brasil hay reportes de fisuras en la carcasa plástica del termostato del G3 y el G4."
+    },
+    {
+      "text": "¿Se cambió alguna vez la bobina de encendido? ¿Tuvo fallas de encendido?",
+      "why": "La prensa brasileña dice que la bobina de los motores AP tiene fama de quemarse."
+    },
+    {
+      "text": "¿Tiene GNC? ¿Está la oblea y la documentación del equipo al día?",
+      "why": "Conviene confirmar que el equipo tenga la documentación en regla."
+    }
+  ],
+  "sources": [
+    {
+      "title": "Volkswagen Gol: repaso de la historia de un ícono (Autotest)",
+      "url": "https://autotest.com.ar/noticias/volkswagen-gol-repaso-historia-icono/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Volkswagen Gol alcanza las 7 millones de unidades producidas (Autocosmos, 30/08/2012)",
+      "url": "https://noticias.autocosmos.com.ar/2012/08/30/volkswagen-gol-alcanza-las-7-millones-de-unidades-producidas",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Volkswagen Gol Country, rurales queridas por los argentinos (Autotest)",
+      "url": "https://autotest.com.ar/noticias/volkswagen-gol-country-rurales-queridas-argentinos/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Volkswagen Gol Power con motor 1.4 (16 Válvulas, 24/03/2011)",
+      "url": "https://www.16valvulas.com.ar/volkswagen-gol-power-con-motor-1-4/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Gol G4 com motor 1.4 chega à Argentina (Car.Blog.BR, 15/03/2011)",
+      "url": "https://www.car.blog.br/2011/03/gol-g4-com-motor-14-chega-argentina-com.html",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Ficha técnica: Volkswagen Gol Power 1.6 (2003) (Monkey Motor)",
+      "url": "https://www.monkeymotor.net/2024/01/ficha-tecnica-volkswagen-gol-power-16-2003.html",
+      "kind": "ficha técnica",
+      "verified": true
+    },
+    {
+      "title": "Recall para Volkswagen Gol Power, Fox y Suran (Autocosmos, 03/06/2022)",
+      "url": "https://noticias.autocosmos.com.ar/2022/06/03/recall-para-volkswagen-gol-power-fox-y-suran",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Si sos dueño de un Volkswagen fabricado entre 2006 y 2018, la marca te está buscando (El Economista, 18/12/2023)",
+      "url": "https://eleconomista.com.ar/autos/si-sos-dueno-volkswagen-fabricado-2006-2018-marca-te-esta-buscando-n69427",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Tras 27 años, el VW Gol dejó de ser el más vendido de Brasil (Autoblog Uruguay, 01/2015)",
+      "url": "https://www.autoblog.com.uy/2015/01/tras-27-anos-el-vw-gol-dejo-de-ser-el.html",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Volkswagen Gol: os 5 maiores defeitos crônicos (Vrum, 04/2026)",
+      "url": "https://www.vrum.com.br/aceleradas/2026/04/7394191-volkswagen-gol-os-5-maiores-defeitos-cronicos-do-queridinho-do-brasil.html",
+      "kind": "prensa",
+      "verified": true
+    }
+  ]
+}

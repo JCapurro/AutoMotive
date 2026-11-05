@@ -1,0 +1,215 @@
+{
+  "make": "Volkswagen",
+  "model": "Vento",
+  "generation_label": "Vento, sexta generación (Jetta VI)",
+  "year_from": 2011,
+  "year_to": 2018,
+  "slug_make": "volkswagen",
+  "slug_model": "vento",
+  "body": {
+    "known_issues": [
+      {
+        "text": "Desde fines de 2016 el 1.4 TSI se ofreció con una automática de doble embrague de siete marchas. En Brasil, la DSG de siete marchas en seco (DQ200) tiene reportes de luces en el tablero, pérdida momentánea de fuerza, cambios irregulares y fallas de la mecatrónica (el módulo que comanda la caja). Confirmá qué caja tiene la unidad.",
+        "applies_to": "1.4 TSI con doble embrague de 7 marchas, 2016–2018 (reportes en Brasil)"
+      },
+      {
+        "text": "En otros mercados Volkswagen hizo una campaña sobre mecatrónicas de la DQ200 fabricadas entre octubre de 2008 y noviembre de 2014, por una posible pérdida de presión hidráulica que corta la tracción. No encontramos si alcanza a autos argentinos: consultalo con el número de chasis (VIN) en un concesionario oficial.",
+        "applies_to": "DSG de 7 marchas (campaña en otros mercados)"
+      },
+      {
+        "text": "En un foro de usuarios argentinos hay relatos de Vento con DSG, la mayoría de la generación anterior, cuya caja entraba en modo de emergencia con la letra de la marcha parpadeando. Uno es de un 1.4 TSI 2017: letra D parpadeando, testigo de motor y chirrido al cambiar a bajas vueltas. Los usuarios mencionan la mecatrónica como un repuesto caro.",
+        "applies_to": "versiones DSG (relatos de usuarios)"
+      },
+      {
+        "text": "Las versiones con caja manual o con la automática Tiptronic del 2.5 no tienen DSG; en las manuales revisá el embrague como en cualquier usado.",
+        "applies_to": "manual y 2.5 Tiptronic"
+      }
+    ],
+    "visit_checklist": [
+      {
+        "text": "Si es DSG, probalo en tránsito lento: arrancá varias veces desde parado, hacé maniobras y subí una pendiente, y fijate si hay tirones, demoras o cambios bruscos.",
+        "applies_to": "DSG"
+      },
+      {
+        "text": "Durante la prueba, mirá que no parpadee la letra de la marcha en el tablero ni aparezcan avisos de la caja.",
+        "applies_to": "DSG"
+      },
+      {
+        "text": "Si es 2.5 Tiptronic, fijate que los cambios entren suaves en frío y en caliente, sin golpes al poner D o R.",
+        "applies_to": "2.5 Tiptronic"
+      },
+      {
+        "text": "Pedí que escaneen motor y caja con un equipo de diagnóstico para ver si hay códigos de falla guardados."
+      },
+      {
+        "text": "Al dar contacto, mirá que se enciendan y después se apaguen los testigos de motor, airbag, ABS y control de estabilidad."
+      },
+      {
+        "text": "Consultá con el VIN en un concesionario oficial Volkswagen si la unidad tiene llamados a revisión pendientes."
+      },
+      {
+        "text": "Confirmá en la unidad el motor y la versión: en esta generación hubo naftas 2.0, 2.5, 1.4 TSI y 2.0 TSI, y diésel 2.0 TDI."
+      }
+    ],
+    "versions_equipment": [
+      {
+        "text": "Se importaba de México. Según la prensa de 2010 y 2011, la gama inicial era 2.5 de 170 CV Luxury (manual o Tiptronic), 2.0 TSI de 200 CV Sportline, y diésel 2.0 TDI Advance de 110 CV y Luxury de 140 CV (esta última también con DSG).",
+        "applies_to": "2011–2014"
+      },
+      {
+        "text": "Según una prueba de 2011, solo la Sportline conservaba la suspensión trasera multibrazo; el resto pasó a un eje trasero rígido.",
+        "applies_to": "2011 en adelante"
+      },
+      {
+        "text": "Con el restyling de enero de 2015 se sumó un 2.0 8v de 115 CV (Advance) y el 2.5 quedó en Advance Plus y Luxury, con manual de cinco o Tiptronic de seis; siguió el 2.0 TDI de 110 CV.",
+        "applies_to": "restyling, desde 2015"
+      },
+      {
+        "text": "En junio de 2016 llegó la GLI con el 2.0 TSI de 211 CV, manual o DSG de seis marchas, seis airbags y control de estabilidad.",
+        "applies_to": "GLI, desde 2016"
+      },
+      {
+        "text": "Para el año modelo 2017 salieron el 2.0 8v y el 2.5 y llegó el 1.4 TSI de 150 CV en Comfortline y Highline, con manual de seis o doble embrague de siete. La prensa indica control de estabilidad y seis airbags de serie; la Highline sumaba alerta de punto ciego.",
+        "applies_to": "Comfortline y Highline, desde fines de 2016"
+      }
+    ],
+    "maintenance_costs": [
+      {
+        "text": "El libro de postventa de Volkswagen Argentina (2017) indica service cada 15.000 km o 1 año para autos nafteros; para diésel, cada 7.500 km o 1 año en autos entregados hasta 2016. Confirmalo en el libro de la unidad.",
+        "applies_to": "nafta y diésel"
+      },
+      {
+        "text": "Ese libro recomienda en general cambiar la correa de distribución cada 90.000 km, las bujías cada 60.000 km en nafteros y el líquido de frenos cada 2 años. Confirmá en el manual si el motor de la unidad usa correa y cada cuánto se cambia.",
+        "applies_to": "recomendación general de la marca"
+      },
+      {
+        "text": "La DSG no es libre de mantenimiento: el plan de la marca incluye controlar el nivel de aceite de la caja, y la prensa brasileña recomienda cambiar aceite y filtro de la caja en el plazo del manual. Pedí comprobantes.",
+        "applies_to": "DSG"
+      },
+      {
+        "text": "Si la caja DSG muestra síntomas, pedí presupuesto de mecatrónica y embragues antes de comprar y comparalo con una versión manual o Tiptronic.",
+        "applies_to": "DSG"
+      }
+    ],
+    "generations": [
+      {
+        "label": "Vento, quinta generación (Jetta V)",
+        "year_from": 2005,
+        "year_to": 2010,
+        "text": "La generación anterior (años aproximados), con 2.0 turbo de 200 CV, 2.5 de cinco cilindros y diésel TDI."
+      },
+      {
+        "label": "Vento, sexta generación",
+        "year_from": 2011,
+        "year_to": 2014,
+        "text": "Llegó en 2011 desde México con 2.5, 2.0 TSI Sportline y 2.0 TDI."
+      },
+      {
+        "label": "Vento, sexta generación restyling",
+        "year_from": 2015,
+        "year_to": 2018,
+        "text": "Renovado en enero de 2015; en 2016 llegaron la GLI y el 1.4 TSI, que reemplazó al 2.0 8v y al 2.5. Fue reemplazado en 2018 por la séptima generación."
+      },
+      {
+        "label": "Vento, séptima generación",
+        "year_from": 2018,
+        "year_to": null,
+        "text": "Sobre la plataforma MQB, con 1.4 turbo de 150 CV y una GLI 2.0 de 230 CV. No está cubierta por esta guía."
+      }
+    ]
+  },
+  "questions": [
+    {
+      "text": "¿Qué motor y qué caja tiene: manual, Tiptronic o DSG?",
+      "why": "En esta generación hubo cinco motores y tres tipos de caja, y la DSG es la que tiene reportes de fallas."
+    },
+    {
+      "text": "Si es DSG, ¿alguna vez le repararon la mecatrónica o los embragues?",
+      "why": "Hay reportes y relatos de usuarios de fallas de mecatrónica en la DSG."
+    },
+    {
+      "text": "¿La caja entró alguna vez en modo de emergencia o parpadeó la letra de la marcha en el tablero?",
+      "why": "Es un síntoma que describen usuarios de Vento con DSG en foros."
+    },
+    {
+      "text": "¿Tenés las facturas de los services, y del mantenimiento de la caja si es DSG?",
+      "why": "El plan de la marca fija intervalos por kilómetros y años e incluye controlar el aceite de la caja."
+    },
+    {
+      "text": "¿El motor usa correa de distribución? Si la usa, ¿cuándo se cambió y tenés el comprobante?",
+      "why": "Si usa correa, tiene reemplazo programado según el manual."
+    },
+    {
+      "text": "Si es diésel, ¿cada cuántos kilómetros se le hizo el service?",
+      "why": "El plan de la marca para diésel tenía intervalos más cortos que para nafta."
+    }
+  ],
+  "sources": [
+    {
+      "title": "Nuevo Volkswagen Vento 2011: versiones para Argentina (16 Válvulas, 16/06/2010)",
+      "url": "https://www.16valvulas.com.ar/?p=14170",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "El Nuevo Volkswagen Vento en nuestras manos (16 Válvulas, 31/05/2011)",
+      "url": "https://www.16valvulas.com.ar/?p=31934",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Volkswagen Argentina lanzó el nuevo Vento (16 Válvulas, 11/01/2015)",
+      "url": "https://www.16valvulas.com.ar/?p=93141",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Volkswagen Vento GLI se lanza en Argentina (Autocosmos, 08/06/2016)",
+      "url": "https://noticias.autocosmos.com.ar/2016/06/08/volkswagen-vento-gli-se-lanza-en-argentina",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "El Volkswagen Vento 1.4 TSI llega a Argentina (Autocosmos, 30/09/2016)",
+      "url": "https://noticias.autocosmos.com.ar/2016/09/30/el-volkswagen-vento-14tsi-llega-a-argentina",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Evolución de los sedanes de Volkswagen (Autotest, 28/10/2024)",
+      "url": "https://autotest.com.ar/noticias/evolucion-sedanes-volkswagen-historia/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Jetta, Bora, Vento: la historia de los sedanes medianos de VW (Autoweb, 24/09/2018)",
+      "url": "https://www.autoweb.com.ar/?p=4012",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Libro de Servicio Postventa Volkswagen Argentina (2017)",
+      "url": "https://www.volkswagen.com.ar/idhub/content/dam/onehub_pkw/importers/ar/tengo-un-volkswagen/mantenimiento/Vw_LibroBlanco.pdf",
+      "kind": "manual",
+      "verified": true
+    },
+    {
+      "title": "Golf GTI e Jetta GLI: o câmbio DSG ainda é um problema? (Auto+ TV, Brasil, 30/08/2025)",
+      "url": "https://www.automaistv.com.br/curiosidades/volkswagen-golf-gti-e-jetta-gli-o-cambio-dsg-ainda-e-um-problema-explicamos/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Campaña Mechatronics Unit 35E5, DSG DQ200 (Volkswagen Nueva Zelanda)",
+      "url": "https://volkswagen.co.nz/en/owners-and-servicing/about-my-car/campaigns-and-recalls/mechatronics-unit.html",
+      "kind": "otra",
+      "verified": true
+    },
+    {
+      "title": "Volkswagen Vento: caja DSG con problemas (Opinautos, foro de usuarios)",
+      "url": "https://www.opinautos.com/ar/volkswagen/vento/defectos/32896/caja-dsg-con-problemas-repuestos-caros-y-vw-no-los-tiene",
+      "kind": "foro",
+      "verified": true
+    }
+  ]
+}

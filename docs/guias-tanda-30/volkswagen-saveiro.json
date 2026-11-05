@@ -1,0 +1,244 @@
+{
+  "make": "Volkswagen",
+  "model": "Saveiro",
+  "generation_label": "Saveiro sobre base Gol Trend (G5, G6 y G7)",
+  "year_from": 2010,
+  "year_to": null,
+  "slug_make": "volkswagen",
+  "slug_model": "saveiro",
+  "body": {
+    "known_issues": [
+      {
+        "text": "Volkswagen Argentina convocó a revisión por el generador de gas de los airbags Takata a Saveiro, Gol y otros modelos fabricados entre 2006 y 2018. Consultá el VIN en la web de Volkswagen o en un concesionario oficial.",
+        "applies_to": "fabricadas 2006–2018"
+      },
+      {
+        "text": "Hasta 2022 el control de estabilidad no estaba en toda la gama: según la prensa, en la gama 2019 solo lo traía la Cross. Hacia 2022 se sumó a todas las versiones por la normativa. Confirmá en la unidad si lo tiene.",
+        "applies_to": "antes de 2022, salvo Cross"
+      },
+      {
+        "text": "Según prensa brasileña que recoge reclamos de propietarios, en unidades 2010 a 2020 con motor EA111 hay reportes de pérdidas de aceite en distintas partes del motor; un propietario de una 2017 reclamó además por consumo de aceite.",
+        "applies_to": "motor EA111, 2010–2020 (reportes en Brasil)"
+      },
+      {
+        "text": "La misma prensa brasileña recoge reclamos por ruidos en la caja, sobre todo en unidades 2021 a 2023.",
+        "applies_to": "2021–2023 (reportes en Brasil)"
+      },
+      {
+        "text": "También hay reclamos de propietarios en Brasil por ruidos en la suspensión delantera, en unidades 2017 y 2025.",
+        "applies_to": "reportes en Brasil"
+      },
+      {
+        "text": "Conviene confirmar en el manual si el motor de la unidad usa correa de distribución y cada cuánto se cambia; si la usa y no hay comprobante del último cambio, tomalo como pendiente.",
+        "applies_to": null
+      }
+    ],
+    "visit_checklist": [
+      {
+        "text": "Consultá con el VIN si tiene pendiente el llamado a revisión por airbags de Volkswagen."
+      },
+      {
+        "text": "Confirmá qué versión es y si tiene control de estabilidad. Mirá que el testigo de airbag se encienda al dar contacto y después se apague."
+      },
+      {
+        "text": "Mirá debajo del motor y alrededor de la tapa de válvulas si hay pérdidas de aceite, y revisá el nivel con la varilla."
+      },
+      {
+        "text": "En la prueba de manejo, pasá todas las marchas y prestá atención a ruidos de la caja."
+      },
+      {
+        "text": "Pasá por calles irregulares y escuchá si hay ruidos en la suspensión delantera."
+      },
+      {
+        "text": "Revisá la caja de carga, el piso y las fijaciones: el estado da una idea de cuánto trabajo pesado hizo."
+      },
+      {
+        "text": "En las versiones equipadas, probá multimedia, sensores de estacionamiento y cámara si tiene."
+      },
+      {
+        "text": "Pedí que escaneen motor y frenos para ver si hay códigos de falla guardados."
+      },
+      {
+        "text": "Si tiene equipo de GNC, pedí la documentación del equipo y la oblea, y revisá la instalación."
+      }
+    ],
+    "versions_equipment": [
+      {
+        "text": "Lanzamiento (enero de 2010): cabina simple y extendida, 1.6 de 101 CV y caja manual de cinco; carga útil de 715 kg (simple) y 700 kg (extendida). La nota de lanzamiento menciona doble airbag y ABS: confirmalos en la unidad.",
+        "applies_to": "2010–2013"
+      },
+      {
+        "text": "Cabina doble desde noviembre de 2014 en versiones Power y Pack High con el 1.6 de ocho válvulas; la Cross llegó en 2015 con 1.6 de 16 válvulas y 110 CV, control de estabilidad y tracción, bloqueo electrónico de diferencial y ABS off-road.",
+        "applies_to": "cabina doble, desde 2014"
+      },
+      {
+        "text": "Renovación de 2016: versiones Safety, Power, Pack High y Cross, todas con aire y dirección hidráulica según Autocosmos. El 1.6 de ocho válvulas siguió en todas menos la Cross.",
+        "applies_to": "2016–2018"
+      },
+      {
+        "text": "Gama 2019 (mayo de 2018): Trendline (cabina simple), Comfortline (extendida), Highline y Cross (doble). Las tres primeras con 1.6 de ocho válvulas y 101 CV; la Cross con 1.6 MSI de 16 válvulas y 110 CV. Todas manuales de cinco.",
+        "applies_to": "2019–2021"
+      },
+      {
+        "text": "Según Autoweb, hacia 2022 toda la gama sumó control de estabilidad y quedó solo el 1.6 de 16 válvulas y 110 CV; el de ocho válvulas dejó de ofrecerse.",
+        "applies_to": "desde 2022"
+      },
+      {
+        "text": "Rediseño de fines de 2023: Trendline (cabina simple), Comfortline y Extreme (doble), todas con 1.6 MSI, ABS, doble airbag, control de estabilidad y tracción y asistente de arranque en pendiente.",
+        "applies_to": "desde fines de 2023"
+      },
+      {
+        "text": "Robust es una versión de entrada que la prensa describe para el mercado brasileño, con cabina doble desde la línea 2018. Si ves una, confirmá su origen y equipamiento.",
+        "applies_to": "Robust (mercado brasileño)"
+      }
+    ],
+    "maintenance_costs": [
+      {
+        "text": "Si el motor usa correa de distribución (confirmalo en el manual), pedí el comprobante del último cambio. El intervalo lo marca el plan de mantenimiento del manual."
+      },
+      {
+        "text": "Controlá seguido el nivel de aceite y pedí el historial de cambios, por los reportes de pérdidas y consumo en Brasil.",
+        "applies_to": "motor EA111 (reportes en Brasil)"
+      },
+      {
+        "text": "Si se usó para trabajar con carga, presupuestá una revisión de embrague, frenos y suspensión trasera."
+      },
+      {
+        "text": "Si tiene GNC, sumá el mantenimiento del equipo y consultá en un taller habilitado qué controles le corresponden.",
+        "applies_to": "con GNC"
+      }
+    ],
+    "generations": [
+      {
+        "label": "Lanzamiento (G5)",
+        "year_from": 2010,
+        "year_to": 2013,
+        "text": "Generación sobre la base del Gol Trend, lanzada en Argentina a comienzos de 2010 con cabina simple y extendida."
+      },
+      {
+        "label": "Restyling 2013 (G6)",
+        "year_from": 2013,
+        "year_to": 2016,
+        "text": "Presentada en el Salón de Buenos Aires 2013 con frente nuevo; doble airbag y ABS de serie desde la versión base. A fines de 2014 se sumó la cabina doble y en 2015 la Cross."
+      },
+      {
+        "label": "Renovación 2016 (G7)",
+        "year_from": 2016,
+        "year_to": 2023,
+        "text": "Faros, parrilla y tablero nuevos. En 2018 se reordenó la gama en Trendline, Comfortline, Highline y Cross, y hacia 2022 sumó control de estabilidad en todas las versiones."
+      },
+      {
+        "label": "Rediseño de fines de 2023",
+        "year_from": 2024,
+        "year_to": null,
+        "text": "Frente nuevo y versiones Trendline, Comfortline y Extreme. Autoweb lo describe como el tercer cambio de importancia desde el lanzamiento de esta generación en 2009."
+      }
+    ]
+  },
+  "questions": [
+    {
+      "text": "¿Qué versión y cabina es, y tiene control de estabilidad?",
+      "why": "Antes de 2022 el control de estabilidad no estaba en toda la gama."
+    },
+    {
+      "text": "¿Hiciste el llamado a revisión de airbags de Volkswagen?",
+      "why": "Volkswagen convocó a Saveiro fabricadas entre 2006 y 2018."
+    },
+    {
+      "text": "¿El motor usa correa de distribución? Si la usa, ¿cuándo se cambió y tenés el comprobante?",
+      "why": "Si usa correa, el intervalo de cambio lo marca el plan de mantenimiento del manual."
+    },
+    {
+      "text": "¿Tuvo pérdidas de aceite o tenés que agregarle aceite entre services?",
+      "why": "En Brasil hay reclamos de propietarios por pérdidas de aceite en el motor EA111."
+    },
+    {
+      "text": "¿Se usó para trabajar? ¿Con cuánta carga andaba normalmente?",
+      "why": "El uso con carga desgasta más embrague, frenos y suspensión."
+    },
+    {
+      "text": "¿Se reparó alguna vez la caja o la suspensión delantera?",
+      "why": "En Brasil hay reclamos de propietarios por ruidos en la caja y en la suspensión delantera."
+    }
+  ],
+  "sources": [
+    {
+      "title": "Nueva Saveiro: diseño, armonía y funcionalidad (Autocosmos, 29/01/2010)",
+      "url": "https://noticias.autocosmos.com.ar/2010/01/29/nueva-saveiro-diseno-armonia-y-funcionalidad",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Volkswagen Argentina lanza la nueva Saveiro (Autocosmos, 03/07/2013)",
+      "url": "https://noticias.autocosmos.com.ar/2013/07/03/volkswagen-argentina-lanza-la-nueva-saveiro",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "VW Saveiro Cabina Doble se presenta en Argentina (Autocosmos, 22/11/2014)",
+      "url": "https://noticias.autocosmos.com.ar/2014/11/22/vw-saveiro-cabina-doble-se-presenta-en-argentina",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Las Volkswagen Saveiro y Saveiro Cross se renuevan en Argentina (Autocosmos, 24/06/2016)",
+      "url": "https://noticias.autocosmos.com.ar/2016/06/24/las-volkswagen-saveiro-y-saveiro-cross-se-renuevan-en-argentina",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "La Volkswagen Saveiro se renueva en Argentina (Autocosmos, 16/05/2018)",
+      "url": "https://noticias.autocosmos.com.ar/2018/05/16/la-volkswagen-saveiro-se-renueva-en-argentina",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Lanzamiento: Volkswagen Saveiro gama 2019 (16 Válvulas, 17/05/2018)",
+      "url": "https://www.16valvulas.com.ar/?p=154099",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "La gama VW Saveiro tendrá ESP, 16 válvulas y… ¿caja automática? (Autoweb, 20/01/2022)",
+      "url": "https://www.autoweb.com.ar/?p=26843",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Así quedó la renovada gama de la Volkswagen Saveiro (Autoweb, 14/04/2023)",
+      "url": "https://www.autoweb.com.ar/?p=35338",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Volkswagen lanza el rediseño de la Saveiro en la Argentina (Autoweb, 28/12/2023)",
+      "url": "https://www.autoweb.com.ar/?p=41952",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Lanzamiento nueva Volkswagen Saveiro (16 Válvulas, 09/01/2024)",
+      "url": "https://www.16valvulas.com.ar/?p=224120",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "La Volkswagen Saveiro suma opción doble cabina en las versiones Robust (16 Válvulas, 02/05/2017)",
+      "url": "https://www.16valvulas.com.ar/?p=138172",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Si sos dueño de un Volkswagen fabricado entre 2006 y 2018, la marca te está buscando (El Economista, 18/12/2023)",
+      "url": "https://eleconomista.com.ar/autos/si-sos-dueno-volkswagen-fabricado-2006-2018-marca-te-esta-buscando-n69427",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "VW Saveiro: veja as reclamações da 2ª picape mais vendida no Brasil (Vrum, 07/2025)",
+      "url": "https://www.vrum.com.br/aceleradas/2025/07/7195446-vw-saveiro-veja-as-reclamacoes-da-2-picape-mais-vendida-no-brasil.html",
+      "kind": "prensa",
+      "verified": true
+    }
+  ]
+}

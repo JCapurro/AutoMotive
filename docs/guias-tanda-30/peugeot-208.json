@@ -1,0 +1,188 @@
+{
+  "make": "Peugeot",
+  "model": "208",
+  "generation_label": "Primera generación",
+  "year_from": 2013,
+  "year_to": 2020,
+  "slug_make": "peugeot",
+  "slug_model": "208",
+  "body": {
+    "known_issues": [
+      {
+        "text": "Hasta 2017 la automática era una Tiptronic de cuatro marchas con convertidor, que 16Válvulas identifica como la AL4. En su prueba, Parabrisas la encontró «algo patinadora». La prensa brasileña señala a la AL4 por patinamiento e imprecisión en otros Peugeot y Citroën de los 2000.",
+        "applies_to": "automática de cuatro marchas, hasta 2017"
+      },
+      {
+        "text": "Según la prensa, las versiones naftas no traían control de estabilidad: en la gama 2016 figura solo en la GT y la prueba de 2018 lo marca como falta. La versión diésel HDi de 2017 sí lo traía. Confirmalo en la unidad.",
+        "applies_to": "versiones naftas salvo GT"
+      },
+      {
+        "text": "En el Reino Unido se reportó que la pantalla táctil puede colgarse y dejar de funcionar; apagarla y volver a encenderla suele resolverlo. Es un reporte de otro mercado, con autos fabricados en Europa.",
+        "applies_to": "otros mercados, versiones con pantalla táctil"
+      },
+      {
+        "text": "En el Reino Unido el 208 tuvo varios llamados a revisión (pérdidas de combustible y aceite, fallas de ESP y ABS, amortiguadores del portón, suspensión delantera). No hay datos de que alcancen a los autos vendidos acá, así que consultá con el VIN en un concesionario oficial.",
+        "applies_to": "otros mercados"
+      }
+    ],
+    "visit_checklist": [
+      {
+        "text": "Fijate si la automática es de cuatro o de seis marchas. En la de cuatro, probala en tránsito y en ruta: que no patine al acelerar, que los cambios entren sin golpes y que no aparezcan avisos en el tablero.",
+        "applies_to": "versiones automáticas"
+      },
+      {
+        "text": "Confirmá qué airbags y qué control de estabilidad trae la unidad según la versión, y mirá que el testigo de airbag se encienda al dar contacto y después se apague."
+      },
+      {
+        "text": "Si tiene pantalla táctil, probala varios minutos: radio, Bluetooth y, en la Feline, la cámara de retroceso.",
+        "applies_to": "Allure, Feline y GT"
+      },
+      {
+        "text": "Pedí que escaneen motor y caja para ver si hay códigos de falla guardados."
+      },
+      {
+        "text": "Consultá con el VIN en un concesionario oficial si la unidad tiene llamados a revisión pendientes."
+      },
+      {
+        "text": "En la GT o la GTi, con motor turbo, pedí el historial de service completo y probá el auto con el motor frío y caliente.",
+        "applies_to": "GT y GTi (1.6 THP)"
+      }
+    ],
+    "versions_equipment": [
+      {
+        "text": "Lanzamiento de 2013: venía de Brasil (planta de Porto Real) con motor 1.5 de 90 CV o 1.6 VTi de 115 CV. Las XY y GTi llegaban de Francia con 1.6 turbo de 156 y 200 CV.",
+        "applies_to": "2013–2016"
+      },
+      {
+        "text": "Gama 2016 según Monkey Motor: el 1.5 con manual de cinco; el 1.6 VTi con manual de cinco o automática de cuatro; la GT con 1.6 THP de 165 CV y manual de seis. Seguía sin anclajes ISOFIX.",
+        "applies_to": "2016–2017"
+      },
+      {
+        "text": "Equipamiento 2016: Active con doble airbag frontal, ABS y aire; Allure suma airbags laterales, pantalla táctil de siete pulgadas y llantas de 16; Feline suma airbags de cortina, cuero, climatizador bizona y cámara; GT suma ESP desconectable.",
+        "applies_to": "2016–2017"
+      },
+      {
+        "text": "Desde fines de 2017 la automática pasó a ser una Aisin EAT6 de seis marchas, en Allure y Feline. Se sumó una Allure Plus HDi diésel de 92 CV con manual de cinco, ESP, control de tracción y frenos a disco en las cuatro ruedas.",
+        "applies_to": "2018–2020"
+      },
+      {
+        "text": "Según la prueba de 16Válvulas de 2018, las versiones naftas tenían frenos a tambor atrás."
+      }
+    ],
+    "maintenance_costs": [
+      {
+        "text": "Confirmá en el manual de la unidad si el motor usa correa o cadena de distribución y cada cuánto se cambia; si no hay comprobante del último cambio, tomalo como pendiente."
+      },
+      {
+        "text": "En la automática, preguntá si la caja tuvo service o reparaciones y seguí lo que indique el manual para el aceite.",
+        "applies_to": "versiones automáticas"
+      },
+      {
+        "text": "En la GT y la GTi, con motor turbo, pedí las facturas de los services y compará las fechas y kilometrajes con el plan de mantenimiento del manual.",
+        "applies_to": "GT y GTi (1.6 THP)"
+      }
+    ],
+    "generations": [
+      {
+        "label": "Primera generación",
+        "year_from": 2013,
+        "year_to": 2016,
+        "text": "Llegó en 2013 importado de Brasil, con las XY y GTi de Francia."
+      },
+      {
+        "label": "Rediseño 2016",
+        "year_from": 2016,
+        "year_to": 2020,
+        "text": "En julio de 2016 cambiaron parrilla, llantas y antiniebla, con más cambios en el interior. A fines de 2017 llegaron la automática de seis marchas y la versión HDi."
+      },
+      {
+        "label": "Segunda generación",
+        "year_from": 2020,
+        "year_to": null,
+        "text": "Desde 2020 se fabrica en El Palomar sobre la plataforma CMP, con 1.2 de 82 CV en la Like y 1.6 VTi de 115 CV en las demás versiones; es otro auto."
+      }
+    ]
+  },
+  "questions": [
+    {
+      "text": "¿La caja es manual, automática de cuatro marchas o automática de seis?",
+      "why": "La automática de cuatro, usada hasta 2017, es la que la prensa critica."
+    },
+    {
+      "text": "¿La caja automática tuvo alguna reparación o service? ¿Tenés las facturas?",
+      "why": "La prensa brasileña reporta problemas en la AL4 de cuatro marchas."
+    },
+    {
+      "text": "¿Qué versión es exactamente y cuántos airbags tiene?",
+      "why": "Los airbags laterales y de cortina dependen de la versión."
+    },
+    {
+      "text": "¿El motor usa correa de distribución? Si la usa, ¿cuándo se cambió y tenés el comprobante?",
+      "why": "El intervalo de cambio lo marca el plan de mantenimiento del manual."
+    },
+    {
+      "text": "¿La pantalla táctil alguna vez se colgó o dejó de funcionar?",
+      "why": "En el Reino Unido se reportó que puede colgarse."
+    },
+    {
+      "text": "¿Hiciste algún llamado a revisión en un concesionario oficial?",
+      "why": "En otros mercados el 208 tuvo varios llamados; con el VIN se puede consultar si alguno aplica."
+    }
+  ],
+  "sources": [
+    {
+      "title": "Peugeot lanzó en Argentina al 208 fabricado en Brasil (Autoblog Uruguay, 06/2013)",
+      "url": "https://www.autoblog.com.uy/2013/06/peugeot-lanzo-en-argentina-al-208.html",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Peugeot Argentina presentó la nueva actualización del 208 (Monkey Motor, 07/2016)",
+      "url": "https://www.monkeymotor.net/2016/07/peugeot-argentina-presento-nuevo-208.html",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Peugeot 208 Allure Tiptronic, prueba de manejo (Parabrisas)",
+      "url": "https://parabrisas.perfil.com/noticias/test/peugeot-208-allure-tiptronic-test-prueba-de-manejo-feline-115-cv-16.phtml",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Test Drive: Peugeot 208 Feline caja automática 6 marchas (16Válvulas, 22/01/2018)",
+      "url": "https://www.16valvulas.com.ar/test-drive-peugeot-208-feline-caja-automatica-6-marchas/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "El Peugeot 208 incorpora el motor diésel y una renovada caja automática (iProfesional, 25/10/2017)",
+      "url": "https://www.iprofesional.com/autos/257674-el-peugeot-208-incorpora-el-motor-diesel-y-una-renovada-caja-de-cambios-automatica",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Além do Powershift: carros automáticos famosos por darem problemas no câmbio (Vrum, 12/2024)",
+      "url": "https://www.vrum.com.br/aceleradas/2024/12/7008662-alem-do-powershift-carros-automaticos-famosos-por-darem-problemas-no-cambio.html",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Used Peugeot 208 Mk1 (2012-2019): problems and recalls (Auto Express, 12/2021)",
+      "url": "https://www.autoexpress.co.uk/peugeot/208/99371/used-peugeot-208-mk1-2012-2019-problems-recalls",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Se presentó el nuevo Peugeot 208 en Argentina (Parabrisas, 25/08/2020)",
+      "url": "https://parabrisas.perfil.com/noticias/novedades/peugeot-208-lanzamiento-argentina-precio-2020-nuevo-2021-210-aniversario.phtml",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Peugeot 208: la production a débuté en Argentine (L'argus, 26/08/2020)",
+      "url": "https://www.largus.fr/actualite-automobile/peugeot-208-la-production-a-debute-en-argentine-10399398.html",
+      "kind": "prensa",
+      "verified": true
+    }
+  ]
+}

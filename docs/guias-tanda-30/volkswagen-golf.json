@@ -1,0 +1,207 @@
+{
+  "make": "Volkswagen",
+  "model": "Golf",
+  "generation_label": "Golf VII",
+  "year_from": 2015,
+  "year_to": 2021,
+  "slug_make": "volkswagen",
+  "slug_model": "golf",
+  "body": {
+    "known_issues": [
+      {
+        "text": "La caja DSG de siete marchas y doble embrague en seco (DQ200) tiene reportes en Brasil: luces en el tablero, pérdida momentánea de fuerza, cambios irregulares y tirones a baja velocidad, con fallas de la mecatrónica (el módulo que comanda la caja). La prensa brasileña menciona campañas de reparación y cambios en la especificación del fluido, sin detallarlos.",
+        "applies_to": "1.4 TSI con DSG de 7 marchas (reportes en Brasil)"
+      },
+      {
+        "text": "En otros mercados Volkswagen hizo una campaña sobre mecatrónicas de la DQ200 fabricadas entre octubre de 2008 y noviembre de 2014, por una posible pérdida de presión hidráulica que corta la tracción. No encontramos si alcanza a autos argentinos: consultalo con el número de chasis (VIN) en un concesionario oficial.",
+        "applies_to": "DSG de 7 marchas (campaña en otros mercados)"
+      },
+      {
+        "text": "En foros de usuarios de Argentina y México hay relatos de un chillido o rechinido al pasar de primera a segunda o de segunda a tercera en Golf VII con DSG. Según esos relatos, los concesionarios lo atribuyeron al embrague o al volante bimasa, según el caso.",
+        "applies_to": "DSG de 7 marchas (relatos de usuarios)"
+      },
+      {
+        "text": "En julio de 2019 Defensa del Consumidor publicó un llamado a revisión de Golf, Tiguan y Vento por resortes de suspensión trasera hechos con un material incorrecto, que podían romperse. Para el Golf alcanza a un rango de chasis publicado; la solución era cambiar los dos resortes traseros en un concesionario oficial.",
+        "applies_to": "según chasis (confirmar con el VIN)"
+      },
+      {
+        "text": "Las versiones con caja manual no tienen la DSG; revisá el embrague como en cualquier usado.",
+        "applies_to": "versiones manuales"
+      }
+    ],
+    "visit_checklist": [
+      {
+        "text": "Si es DSG, probalo en tránsito lento: arrancá varias veces desde parado, hacé maniobras y subí una pendiente, y fijate si hay tirones, demoras o cambios bruscos."
+      },
+      {
+        "text": "Escuchá con la ventanilla baja al pasar de primera a segunda y de segunda a tercera a baja velocidad, por si aparece un chillido o rechinido.",
+        "applies_to": "DSG"
+      },
+      {
+        "text": "Pedí que escaneen motor y caja con un equipo de diagnóstico para ver si hay códigos de falla guardados."
+      },
+      {
+        "text": "Al dar contacto, mirá que se enciendan y después se apaguen los testigos de motor, airbag, ABS y control de estabilidad, y que no aparezcan avisos de la caja durante la prueba."
+      },
+      {
+        "text": "Consultá con el VIN en un concesionario oficial Volkswagen si la unidad tiene llamados a revisión pendientes, como el de los resortes traseros de 2019."
+      },
+      {
+        "text": "Probá lo que traiga la versión: pantalla y conexión del teléfono, cámara trasera, sensores de estacionamiento, climatizador y techo solar."
+      },
+      {
+        "text": "Revisá que esté la rueda de auxilio: la prensa indica que el Golf local trae auxilio de medida completa."
+      }
+    ],
+    "versions_equipment": [
+      {
+        "text": "Se importaba de la planta de Puebla, en México. Llegó a los concesionarios en enero de 2015 y tuvo su lanzamiento oficial en abril de ese año."
+      },
+      {
+        "text": "Al lanzamiento: Trendline con 1.6 16v de 110 CV y caja manual; Comfortline con 1.4 TSI de 140 CV y manual de seis o DSG de siete; Highline con 1.4 TSI y solo DSG. Una fuente dice manual de cinco para la Trendline y otra de seis: confirmalo en la unidad.",
+        "applies_to": "2015–2017"
+      },
+      {
+        "text": "La prensa no coincide en el equipamiento de seguridad de 2015: una nota habla de siete airbags y control de estabilidad en todas las versiones y otra, de airbags frontales en la Trendline y laterales y de cortina desde la Comfortline. Confirmá los airbags de la unidad.",
+        "applies_to": "2015–2017"
+      },
+      {
+        "text": "Con el restyling de septiembre de 2017 el 1.4 TSI pasó a 150 CV (manual de seis o DSG de siete) y el 1.6 siguió con manual de cinco. Según la versión: pantalla de 8 pulgadas con App Connect y control de crucero, cámara trasera desde la Comfortline y Discover Media con faros LED en la Highline.",
+        "applies_to": "restyling, desde septiembre de 2017"
+      },
+      {
+        "text": "El GTI usaba el 2.0 TSI: 220 CV al llegar en 2015 y 230 CV desde el restyling de 2017, con pantalla Discover Pro de 9,2 pulgadas. Hubo también una carrocería familiar (Variant).",
+        "applies_to": "GTI"
+      },
+      {
+        "text": "El Golf R se anunció para la Argentina, pero según la prensa nunca se vendió oficialmente. Si te ofrecen uno, preguntá cómo ingresó al país.",
+        "applies_to": "R"
+      }
+    ],
+    "maintenance_costs": [
+      {
+        "text": "El libro de postventa de Volkswagen Argentina (2017) indica service cada 15.000 km o 1 año, lo que ocurra primero, para autos nafteros, y cambio de líquido de frenos cada 2 años. Confirmalo en el libro de la unidad."
+      },
+      {
+        "text": "Ese libro recomienda en general cambiar la correa de distribución cada 90.000 km y las bujías cada 60.000 km en motores nafteros. Confirmá en el manual de la unidad si su motor usa correa y cada cuánto se cambia.",
+        "applies_to": "recomendación general de la marca"
+      },
+      {
+        "text": "La DSG no es libre de mantenimiento: el plan de la marca incluye controlar el nivel de aceite de la caja, y la prensa brasileña recomienda cambiar aceite y filtro de la caja en el plazo del manual. Pedí comprobantes.",
+        "applies_to": "DSG"
+      },
+      {
+        "text": "La mecatrónica y los embragues de la DSG aparecen entre las reparaciones reportadas. Si la caja muestra síntomas, pedí presupuesto antes de comprar y comparalo con una versión manual.",
+        "applies_to": "DSG"
+      }
+    ],
+    "generations": [
+      {
+        "label": "Golf VII",
+        "year_from": 2015,
+        "year_to": 2017,
+        "text": "Importado de México, llegó en enero de 2015 con Trendline 1.6, Comfortline y Highline 1.4 TSI; el GTI de 220 CV llegó después."
+      },
+      {
+        "label": "Golf VII restyling",
+        "year_from": 2017,
+        "year_to": 2021,
+        "text": "Renovado en septiembre de 2017 (hatchback, Variant y GTI). A fines de 2020 quedaban la Highline 250 TSI y las últimas unidades del GTI, y la producción en México terminó en enero de 2021. Los años de fin de venta son aproximados."
+      }
+    ]
+  },
+  "questions": [
+    {
+      "text": "¿La caja es manual o DSG? Si es DSG, ¿alguna vez le repararon los embragues o la mecatrónica?",
+      "why": "La DSG de siete marchas tiene reportes de fallas de mecatrónica y embragues."
+    },
+    {
+      "text": "¿Tenés las facturas de los services y del mantenimiento de la caja?",
+      "why": "El plan de la marca pide service cada 15.000 km o 1 año e incluye controlar el aceite de la caja."
+    },
+    {
+      "text": "¿Notaste algún chillido o tirón al pasar de primera a segunda o de segunda a tercera?",
+      "why": "Hay relatos de usuarios de ruidos en esos cambios en Golf VII con DSG."
+    },
+    {
+      "text": "¿Te llegó el aviso del llamado de 2019 por los resortes traseros, y lo hiciste?",
+      "why": "Ese llamado alcanzó a un rango de chasis del Golf."
+    },
+    {
+      "text": "¿El motor usa correa de distribución? Si la usa, ¿cuándo se cambió y tenés el comprobante?",
+      "why": "Si usa correa, tiene reemplazo programado según el manual."
+    },
+    {
+      "text": "¿Qué airbags tiene la unidad y en qué versión vino de fábrica?",
+      "why": "La prensa de 2015 no coincide en los airbags de cada versión."
+    }
+  ],
+  "sources": [
+    {
+      "title": "Primer contacto: Volkswagen Golf VII (Autoweb, 09/04/2015)",
+      "url": "https://www.autoweb.com.ar/2015/04/09/primer-contacto-volkswagen-golf-vii/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "El Volkswagen Golf VII está llegando a la Argentina (Monkey Motor, 01/2015)",
+      "url": "https://www.monkeymotor.net/2015/01/el-volkswagen-golf-vii-esta-llegando-la.html",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Volkswagen Golf 2018 en Argentina: versiones y motores (Monkey Motor, 09/2017)",
+      "url": "https://www.monkeymotor.net/2017/09/volkswagen-golf-2018-argentina.html",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Volkswagen Golf: versiones que seguían a la venta a fines de 2020 (Autotest, 28/12/2020)",
+      "url": "https://autotest.com.ar/noticias/volkswagen-golf-dejo-de-comercializar/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Volkswagen se despide del Golf VII (Parabrisas, 21/01/2021)",
+      "url": "https://parabrisas.perfil.com/noticias/novedades/volkswagen-golf-vii-7-nuevo-hatchback-argentina-mexico-produccion-adios.phtml",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Golf R de séptima generación: nunca llegó oficialmente (Autotest, 13/02/2023)",
+      "url": "https://autotest.com.ar/noticias/volkswagen-golf-r-septima-generacion-argentina/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Alerta a propietarios de Volkswagen Golf, Tiguan y Vento (Defensa del Consumidor, 23/07/2019)",
+      "url": "https://www.argentina.gob.ar/noticias/alerta-propietarios-de-autos-volkswagen-golf-tiguan-y-vento-y-nissan-tiida",
+      "kind": "otra",
+      "verified": true
+    },
+    {
+      "title": "Libro de Servicio Postventa Volkswagen Argentina (2017)",
+      "url": "https://www.volkswagen.com.ar/idhub/content/dam/onehub_pkw/importers/ar/tengo-un-volkswagen/mantenimiento/Vw_LibroBlanco.pdf",
+      "kind": "manual",
+      "verified": true
+    },
+    {
+      "title": "Golf GTI e Jetta GLI: o câmbio DSG ainda é um problema? (Auto+ TV, Brasil, 30/08/2025)",
+      "url": "https://www.automaistv.com.br/curiosidades/volkswagen-golf-gti-e-jetta-gli-o-cambio-dsg-ainda-e-um-problema-explicamos/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Campaña Mechatronics Unit 35E5, DSG DQ200 (Volkswagen Nueva Zelanda)",
+      "url": "https://volkswagen.co.nz/en/owners-and-servicing/about-my-car/campaigns-and-recalls/mechatronics-unit.html",
+      "kind": "otra",
+      "verified": true
+    },
+    {
+      "title": "Ruido caja DSG, Volkswagen Golf (Opinautos, foro de usuarios)",
+      "url": "https://www.opinautos.com/volkswagen/golf/temas/bc945d6e0e/ruido-caja-dsg",
+      "kind": "foro",
+      "verified": true
+    }
+  ]
+}

@@ -1,0 +1,209 @@
+{
+  "make": "Chevrolet",
+  "model": "Corsa",
+  "generation_label": "Corsa II",
+  "year_from": 2002,
+  "year_to": 2010,
+  "slug_make": "chevrolet",
+  "slug_model": "corsa",
+  "body": {
+    "known_issues": [
+      {
+        "text": "Mecánicos citados por la prensa brasileña dicen que muchas cajas manuales de 2002 a 2009 pierden aceite por los retenes de la palanca y laterales y por la tapa. Mirá debajo de la caja y pedí que revisen el nivel.",
+        "applies_to": "caja manual 2002–2009 (reportes en Brasil)"
+      },
+      {
+        "text": "En Brasil, mecánicos describen un ruido crónico en la caja de la dirección hidráulica, además de pérdidas y juego en la cremallera; según ellos, la reparación lo reduce por un tiempo.",
+        "applies_to": "con dirección hidráulica (reportes en Brasil)"
+      },
+      {
+        "text": "La misma fuente brasileña menciona desgaste temprano de amortiguadores y de bujes de los brazos de suspensión, y frenos traseros que se gastan más rápido que en el Corsa anterior.",
+        "applies_to": "reportes en Brasil"
+      },
+      {
+        "text": "En el aire acondicionado, mecánicos brasileños reportan pérdidas en compresor y mangueras, y drenajes del evaporador tapados que dejan agua debajo del tablero.",
+        "applies_to": "con aire acondicionado (reportes en Brasil)"
+      },
+      {
+        "text": "En 2007 GM do Brasil llamó a revisión a Corsa y Montana 2007 y 2008 de ciertos rangos de chasis por bulones de la suspensión delantera más duros de lo especificado, que podían romperse. No hay confirmación de que alcance a unidades vendidas en Argentina: consultá con el VIN.",
+        "applies_to": "2007–2008, según chasis (campaña en Brasil)"
+      },
+      {
+        "text": "La caja Easytronic es una manual de cinco marchas con cambios automatizados, no una automática convencional. Si la unidad la tiene, probala con atención y pedí historial de service de la caja.",
+        "applies_to": "versiones Easytronic"
+      }
+    ],
+    "visit_checklist": [
+      {
+        "text": "Mirá debajo del auto si hay manchas de aceite en la zona de la caja y en el motor."
+      },
+      {
+        "text": "Girá el volante a fondo hacia los dos lados con el auto quieto y en marcha lenta: prestá atención a ruidos en la dirección y a juego en el volante."
+      },
+      {
+        "text": "Pasá por calles con pozos y lomos de burro para escuchar golpes de amortiguadores o bujes, y frená fuerte en recta para ver que no tire hacia un lado."
+      },
+      {
+        "text": "Poné el aire acondicionado al máximo y fijate que enfríe; después revisá que la alfombra del lado del acompañante no esté húmeda.",
+        "applies_to": "con aire acondicionado"
+      },
+      {
+        "text": "Confirmá en la unidad si tiene airbags y ABS: mirá que los testigos se enciendan al dar contacto y después se apaguen."
+      },
+      {
+        "text": "Con el motor caliente, dejalo en marcha lenta un rato y mirá que el electroventilador arranque y que la temperatura no suba de más."
+      },
+      {
+        "text": "Si es Easytronic, probala en tránsito y en subida: los cambios tienen que entrar sin golpes y no deberían aparecer avisos en el tablero.",
+        "applies_to": "versiones Easytronic"
+      },
+      {
+        "text": "Si tiene equipo de GNC, pedí la documentación del equipo y la oblea, y revisá la instalación en el baúl.",
+        "applies_to": "con GNC"
+      }
+    ],
+    "versions_equipment": [
+      {
+        "text": "Según Autocosmos, se vendió como hatchback de cinco puertas y sedán de cuatro, con motor naftero 1.8 de ocho válvulas de unos 100 CV o un 1.7 turbodiésel de 65 CV.",
+        "applies_to": null
+      },
+      {
+        "text": "En julio de 2007 se presentaron versiones con caja Easytronic de cinco marchas y motor 1.8 de 106 CV, con modo automático, modo sport y modo secuencial. La nota de lanzamiento menciona doble airbag, ABS y aire acondicionado en esas versiones.",
+        "applies_to": "Easytronic, presentada en 2007"
+      },
+      {
+        "text": "En los avisos aparecen versiones como GL, GLS y CD; el equipamiento cambia según la versión y el año, así que confirmá en la unidad qué trae (aire, dirección asistida, airbags, ABS)."
+      },
+      {
+        "text": "Prensa argentina dice que no hubo Corsa II rural en la región: la rural que se vendía en esos años era la del Corsa anterior."
+      }
+    ],
+    "maintenance_costs": [
+      {
+        "text": "Mecánicos brasileños nombran la correa de distribución entre las piezas de desgaste. Confirmá en el manual de la unidad cada cuánto se cambia y pedí el comprobante del último cambio; si no hay, tomalo como pendiente."
+      },
+      {
+        "text": "Usá el aceite que indica el manual: en Brasil la especificación cambió según el año del motor, y la falta de cambios de aceite aparece entre las causas de trabajos de tapa de cilindros.",
+        "applies_to": "reportes en Brasil"
+      },
+      {
+        "text": "Presupuestá amortiguadores, bujes de suspensión y frenos traseros si no hay facturas de cambio: aparecen entre los desgastes que mencionan mecánicos en Brasil.",
+        "applies_to": "reportes en Brasil"
+      },
+      {
+        "text": "Si se cambia el ruleman hidráulico del embrague, mecánicos brasileños recomiendan cambiar también la cañería y no ajustarlo de más.",
+        "applies_to": "reportes en Brasil"
+      },
+      {
+        "text": "Si tiene GNC, sumá el mantenimiento del equipo y consultá en un taller habilitado qué controles le corresponden.",
+        "applies_to": "con GNC"
+      }
+    ],
+    "generations": [
+      {
+        "label": "Corsa (Corsa B)",
+        "year_from": 1994,
+        "year_to": 2002,
+        "text": "Llegó importado de Brasil y desde 1997 el sedán se fabricó en Alvear, Santa Fe. Hubo tres y cinco puertas, sedán y rural. Parabrisas enumera versiones como Base, GL, GLS, Sport y City."
+      },
+      {
+        "label": "Corsa Classic",
+        "year_from": 2002,
+        "year_to": 2008,
+        "text": "Con la llegada del Corsa II, el Corsa anterior siguió a la venta como Corsa Classic, más económico. Según Autocosmos, en 2009 un restyling profundo lo convirtió en el Classic."
+      },
+      {
+        "label": "Corsa II",
+        "year_from": 2002,
+        "year_to": 2010,
+        "text": "Llegó en 2002 como hatchback de cinco puertas y sedán. Según Autocosmos, el hatch se vendió hasta 2007 y el sedán hasta 2010."
+      },
+      {
+        "label": "Classic",
+        "year_from": 2009,
+        "year_to": 2016,
+        "text": "Heredero del Corsa Classic, solo sedán y rural con motor 1.4. Autocosmos ubica el cambio en 2009 y Autotest en 2011. Se fabricó hasta 2016 y tiene su propia guía en el catálogo."
+      }
+    ]
+  },
+  "questions": [
+    {
+      "text": "¿Es Corsa II o Corsa Classic, y qué versión exacta es (GL, GLS, CD)?",
+      "why": "Son dos autos distintos que se vendieron al mismo tiempo, y el equipamiento cambia según la versión."
+    },
+    {
+      "text": "¿Cuándo se cambió la correa de distribución y tenés el comprobante?",
+      "why": "Es una pieza de desgaste y el intervalo lo marca el manual de la unidad."
+    },
+    {
+      "text": "¿La caja pierde aceite o se cambió algún retén?",
+      "why": "En Brasil, mecánicos reportan pérdidas en muchas cajas manuales de 2002 a 2009."
+    },
+    {
+      "text": "¿La dirección hace ruido o se reparó la cremallera?",
+      "why": "Mecánicos brasileños describen un ruido crónico en la caja de dirección hidráulica de este modelo."
+    },
+    {
+      "text": "¿El aire acondicionado enfría bien y se recargó o reparó alguna vez?",
+      "why": "En Brasil se reportan pérdidas en compresor y mangueras."
+    },
+    {
+      "text": "¿Tiene caja Easytronic? ¿Se le hizo algún service o reparación a la caja?",
+      "why": "Es una caja manual automatizada, distinta de una automática convencional."
+    },
+    {
+      "text": "¿Tiene GNC? ¿Está la documentación del equipo al día?",
+      "why": "Conviene confirmar que el equipo tenga la documentación en regla."
+    }
+  ],
+  "sources": [
+    {
+      "title": "Autos clásicos de Argentina: Chevrolet Corsa (Autocosmos, 08/02/2024)",
+      "url": "https://noticias.autocosmos.com.ar/2024/02/08/autos-clasicos-de-argentina-chevrolet-corsa",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Los Chevrolet/Opel Corsa que no tuvimos (Autoweb, 20/10/2021)",
+      "url": "https://www.autoweb.com.ar/2021/10/20/los-chevrolet-opel-corsa-que-no-tuvimos/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Así hubiera sido el Chevrolet Corsa II rural, si no fuera por Meriva (Parabrisas)",
+      "url": "https://parabrisas.perfil.com/noticias/novedades/chevrolet-corsa-rural-ii-meriva-argentina-brasil-asi-seria-wagon-suv-proyecto.phtml",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Corsa y Meriva con caja automática (16 Válvulas, 12/07/2007)",
+      "url": "https://www.16valvulas.com.ar/?p=237",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Chevrolet Corsa/Classic: récord y despedida (Parabrisas, 31/10/2016)",
+      "url": "https://parabrisas.perfil.com/noticias/general/2016-10-31-chevrolet-corsaclassic-record-y-despedida.phtml",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Chevrolet Corsa y Classic usados (Autotest)",
+      "url": "https://autotest.com.ar/noticias/chevrolet-corsa-classic-usado/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Chevrolet Corsa é de manutenção simples e barata na opinião de quem lida com ele (Oficina Brasil)",
+      "url": "https://oficinabrasil.com.br/noticia/avaliacao-do-reparador/chevrolet-corsa-e-de-manutencao-simples-e-barata-na-opiniao-de-quem-lida-com-ele",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "GM anuncia recall do Corsa, Montana, Meriva, S10 e Blazer (Vrum, 24/09/2007)",
+      "url": "https://www.vrum.com.br/noticias/gm-anuncia-recall-do-corsa-montana-meriva-s10-e-blazer/",
+      "kind": "prensa",
+      "verified": true
+    }
+  ]
+}

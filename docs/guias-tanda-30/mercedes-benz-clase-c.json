@@ -1,0 +1,224 @@
+{
+  "make": "Mercedes-Benz",
+  "model": "Clase C",
+  "generation_label": "Clase C W204",
+  "year_from": 2007,
+  "year_to": 2015,
+  "slug_make": "mercedes-benz",
+  "slug_model": "clase-c",
+  "body": {
+    "known_issues": [
+      {
+        "text": "Mercedes-Benz Argentina incluyó a la Clase C 2007 a 2015 en su llamado por airbags Takata: el inflador puede volverse inestable con humedad y calor. La reparación es sin cargo en concesionarios oficiales; consultá con el VIN si la unidad está alcanzada y si se hizo.",
+        "applies_to": "2007–2015 (según VIN)"
+      },
+      {
+        "text": "En 2018 hubo otro llamado en Argentina para 1.395 Clase C (serie W204) y GLK: la conexión a masa de la columna de dirección podía ser insuficiente y hacer que el airbag del conductor se active solo o quede inactivo. La revisión de las conexiones era sin cargo.",
+        "applies_to": "según rango de chasis (confirmar con el VIN)"
+      },
+      {
+        "text": "La caja automática de siete marchas (722.9, familia 7G-Tronic) puede dar tirones, patinar o entrar en modo de emergencia, según talleres consultados por prensa rusa; la solución habitual es cambiar el bloque hidráulico con su placa de control. La misma nota la describe como sensible al estado del aceite.",
+        "applies_to": "7G-Tronic (reportes en otros mercados)"
+      },
+      {
+        "text": "El bloqueo eléctrico de la columna de dirección puede fallar: según prensa rusa, suele dar fallas intermitentes antes de dejar el auto sin arrancar.",
+        "applies_to": "reportes en otros mercados"
+      },
+      {
+        "text": "En el 1.8 con compresor o turbo (M271), la cadena de distribución puede estirarse desde unos 80.000 km según prensa rusa; al cambiarla se reemplazan también los variadores de fase. En los V6 (M276) la misma nota menciona cadenas y baja presión de aceite.",
+        "applies_to": "M271 y V6 M276 del restyling (reportes en otros mercados)"
+      },
+      {
+        "text": "Suspensión y dirección: la prensa rusa menciona fallas frecuentes de la bomba de dirección asistida, rótulas y bujes. Una guía australiana nombra a la caja automática entre los puntos a vigilar y aclara que su reemplazo puede ser muy caro.",
+        "applies_to": "reportes en otros mercados"
+      },
+      {
+        "text": "Electricidad: los módulos SAM delantero y trasero son sensibles al agua y a picos de tensión, y antes del restyling se reportan cables quemados en las placas de los faros traseros, según prensa rusa.",
+        "applies_to": "reportes en otros mercados"
+      }
+    ],
+    "visit_checklist": [
+      {
+        "text": "Si es automático, probalo en frío y en caliente: los cambios tienen que ser suaves, sin tirones ni patinadas, y no debe aparecer ningún aviso de la caja."
+      },
+      {
+        "text": "Dale contacto y arrancalo varias veces: fijate si el volante se desbloquea sin demoras y si alguna vez aparece un aviso de la columna de dirección."
+      },
+      {
+        "text": "Pedí que escaneen todos los módulos (motor, caja, airbag, SAM) con un equipo de diagnóstico compatible con Mercedes-Benz."
+      },
+      {
+        "text": "Escuchá el motor en el arranque en frío: si hay ruidos metálicos en los primeros segundos, pedí que lo revise un mecánico antes de comprar."
+      },
+      {
+        "text": "Mirá debajo del auto pérdidas de aceite de motor y caja, y la zona trasera del piso por óxido o golpes."
+      },
+      {
+        "text": "En una calle con pozos, escuchá golpes en el tren delantero y fijate si la dirección tiene juego o hace ruido al girar."
+      },
+      {
+        "text": "Probá luces traseras, levantavidrios, climatizador, pantalla, Bluetooth y sensores de estacionamiento si los trae."
+      },
+      {
+        "text": "Consultá con el VIN en un concesionario oficial Mercedes-Benz si quedaron llamados pendientes (airbags Takata y columna de dirección)."
+      }
+    ],
+    "versions_equipment": [
+      {
+        "text": "En el lanzamiento argentino de julio de 2007 había terminaciones Elegance y Avantgarde, con C 200 Kompressor (184 CV), C 220 CDI (170 CV), C 280, C 320 CDI (224 CV) y C 350. La manual de seis era de serie salvo en el C 350, que traía la 7G-Tronic; la lista también incluía versiones automáticas.",
+        "applies_to": "lanzamiento 2007"
+      },
+      {
+        "text": "Equipamiento anunciado en 2007: nueve airbags, ABS, asistente de frenado, control de estabilidad, apoyacabezas NECK-PRO y amortiguación Agility Control.",
+        "applies_to": "lanzamiento 2007"
+      },
+      {
+        "text": "En 2010 llegaron el C 200 CGI y el C 250 CGI BlueEfficiency (1.8 turbo de 204 CV en el C 250) con automática de cinco marchas, junto con un 350 Avantgarde Sport con 7G-Tronic.",
+        "applies_to": "2010"
+      },
+      {
+        "text": "En 2012 se sumó el C 200 BlueEfficiency Manual City, de 184 CV con caja manual de seis, climatizador bizona, Bluetooth y airbag de rodilla del conductor.",
+        "applies_to": "2012"
+      },
+      {
+        "text": "Con el restyling de 2011, en Uruguay la automática de cinco fue reemplazada por la 7G-Tronic Plus en toda la gama. No confirmamos la fecha exacta en Argentina: mirá qué caja tiene la unidad.",
+        "applies_to": "restyling 2011 (dato de Uruguay)"
+      }
+    ],
+    "maintenance_costs": [
+      {
+        "text": "Una guía australiana indica service cada 25.000 km o una vez por año para ese mercado. Confirmá en el libro de la unidad el plan que corresponde a la versión argentina."
+      },
+      {
+        "text": "Para la 7G-Tronic, la prensa rusa recomienda cambiar el aceite cada unos 40.000 km. Pedí comprobante del último cambio y confirmá el intervalo en el manual.",
+        "applies_to": "7G-Tronic"
+      },
+      {
+        "text": "Cadena de distribución con variadores de fase, bloque hidráulico de la caja y bomba de dirección son los trabajos más mencionados en reseñas de otros mercados: si hay síntomas, pedí presupuesto antes de comprar."
+      },
+      {
+        "text": "Los repuestos y el service en concesionario son la queja más común de los dueños según la guía australiana; un taller especializado en la marca puede ser una alternativa."
+      }
+    ],
+    "generations": [
+      {
+        "label": "Clase C W203",
+        "year_from": null,
+        "year_to": 2007,
+        "text": "La generación anterior. El W204 la reemplazó en julio de 2007 manteniendo los V6 nafteros de la serie anterior, según Autocosmos."
+      },
+      {
+        "label": "Clase C W204",
+        "year_from": 2007,
+        "year_to": 2011,
+        "text": "Lanzada en Argentina en julio de 2007 como sedán, en Elegance y Avantgarde. Desde 2010 sumó motores CGI BlueEfficiency."
+      },
+      {
+        "label": "Clase C W204 restyling",
+        "year_from": 2011,
+        "year_to": 2015,
+        "text": "Renovada en 2011 con paragolpes, faros y parrilla nuevos y mejor interior. El W205 llegó a Argentina en mayo de 2015, así que puede haber W204 vendidos como 2015: confirmalo con el VIN."
+      },
+      {
+        "label": "Clase C W205",
+        "year_from": 2015,
+        "year_to": null,
+        "text": "Llegó en mayo de 2015 desde Bremen (Alemania) como C 250 Avantgarde con 7G-Tronic Plus. En 2019 se renovó, con versiones C 200 y C 300 y caja de nueve marchas."
+      }
+    ]
+  },
+  "questions": [
+    {
+      "text": "¿Hiciste el cambio de airbag del llamado Takata y el control de la columna de dirección? ¿Tenés el comprobante?",
+      "why": "Mercedes-Benz Argentina llamó a revisión a la Clase C 2007 a 2015 por airbags Takata, y en 2018 hubo otro llamado del W204."
+    },
+    {
+      "text": "¿Cuándo se le cambió el aceite a la caja automática?",
+      "why": "Talleres de otros mercados describen a la 7G-Tronic como sensible al estado del aceite."
+    },
+    {
+      "text": "¿Le cambiaron alguna vez la cadena de distribución o los variadores de fase?",
+      "why": "En el 1.8 M271 se reportan cadenas estiradas desde unos 80.000 km en otros mercados."
+    },
+    {
+      "text": "¿Alguna vez el auto no arrancó o el volante quedó trabado?",
+      "why": "El bloqueo eléctrico de la columna de dirección tiene fallas reportadas en el W204."
+    },
+    {
+      "text": "¿Los services se hicieron en concesionario oficial o en taller especializado? ¿Tenés el libro o las facturas?",
+      "why": "Sin historial, es más difícil saber el estado de caja, cadena y suspensión."
+    },
+    {
+      "text": "¿Qué motor y caja tiene exactamente: Kompressor, CGI, V6 o diésel, manual, automática de cinco o 7G-Tronic?",
+      "why": "En Argentina se vendieron muchas combinaciones y las fallas reportadas cambian según el motor y la caja."
+    }
+  ],
+  "sources": [
+    {
+      "title": "Llegó la nueva Clase C de Mercedes-Benz (Autocosmos, 03/07/2007)",
+      "url": "https://noticias.autocosmos.com.ar/2007/07/03/llego-la-nueva-clase-c-de-mercedes-benz",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Llegaron a Argentina los Mercedes Benz con tecnologías BlueEfficiency y CGI (16 Válvulas, 16/05/2010)",
+      "url": "https://www.16valvulas.com.ar/?p=13274",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Lanzamiento: Mercedes-Benz Clase C restyling (Autoblog Uruguay, 08/06/2011)",
+      "url": "https://www.autoblog.com.uy/2011/06/lanzamiento-mercedes-benz-clase-c.html",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Nuevo Clase C, el modelo más económico de Mercedes-Benz (Cuyo Motor, 19/07/2012)",
+      "url": "https://cuyomotor.com.ar/2012/07/19/nuevo-clase-c-el-modelo-mas-economico-de-mercedes-benz",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "El nuevo Mercedes-Benz Clase C ya se vende en Argentina (16 Válvulas, 18/05/2015)",
+      "url": "https://www.16valvulas.com.ar/?p=100244",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Mercedes lanza el restyling de la Clase C (Autoweb, 07/10/2019)",
+      "url": "https://www.autoweb.com.ar/?p=11730",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Mercedes refuerza su recall en Argentina por airbags defectuosos (Autoweb, 11/08/2023)",
+      "url": "https://www.autoweb.com.ar/?p=38955",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Mercedes Benz Clases C y GLK: llamado a revisión (Defensa del Consumidor, 02/05/2018)",
+      "url": "https://www.argentina.gob.ar/node/109813",
+      "kind": "otra",
+      "verified": true
+    },
+    {
+      "title": "Fiabilidad del Mercedes-Benz C-Class W204 restyling con kilometraje (Auto.ru, Rusia, 03/06/2021)",
+      "url": "https://auto.ru/mag/article/merccklassew204restyledurability/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Mercedes-Benz C-Klasse W204 usado: carrocería, interior y bloqueo de dirección (Kolesa.ru, Rusia, 23/04/2020)",
+      "url": "https://www.kolesa.ru/article/mercedes-benz-c-klasse-w204-s-probegom-tonkoe-lkp-bednyy-salon-i-kovarnyy-blokirator-rulya",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Used Mercedes-Benz C-Class review: 2007-2013 (CarsGuide, Australia)",
+      "url": "https://www.carsguide.com.au/car-reviews/mercedes-benz-c-class-used-review-2007-2013-41790",
+      "kind": "prensa",
+      "verified": true
+    }
+  ]
+}

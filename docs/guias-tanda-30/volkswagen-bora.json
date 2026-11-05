@@ -1,0 +1,185 @@
+{
+  "make": "Volkswagen",
+  "model": "Bora",
+  "generation_label": "Bora renovado (restyling 2008)",
+  "year_from": 2008,
+  "year_to": 2015,
+  "slug_make": "volkswagen",
+  "slug_model": "bora",
+  "body": {
+    "known_issues": [
+      {
+        "text": "Según Autotest, el Bora renovado perdió equipamiento y algo de calidad de materiales respecto de la primera etapa, y en unidades con mucho uso los ruidos de carrocería suelen ser normales.",
+        "applies_to": null
+      },
+      {
+        "text": "Autotest señala poco despeje: en obstáculos altos la trompa y los bajos pueden tocar el piso. También menciona amortiguadores algo blandos en terreno desparejo.",
+        "applies_to": null
+      },
+      {
+        "text": "En reseñas de otros mercados hay casos de fallas de la caja automática, como un 2.0 automático de 2002 con ruidos y dificultad para poner marcha atrás. Son reportes de la primera etapa en otro mercado.",
+        "applies_to": "Tiptronic (reportes en otros mercados)"
+      },
+      {
+        "text": "Las mismas reseñas mencionan fallas eléctricas, sobre todo en levantavidrios, y problemas con bobinas de encendido, sondas de oxígeno y caudalímetros.",
+        "applies_to": "reportes en otros mercados"
+      },
+      {
+        "text": "En reseñas de otros mercados se indica que el 2.0 usa correa de distribución con cambio cerca de los 100.000 km. Confirmá en el manual de la unidad si la usa y cada cuánto se cambia, también en el 1.8T y el TDI.",
+        "applies_to": "2.0 (reportes en otros mercados)"
+      },
+      {
+        "text": "Esas reseñas también advierten que los cambios de aceite descuidados pueden generar lodo en el motor; por eso conviene ver el historial de service.",
+        "applies_to": "reportes en otros mercados"
+      }
+    ],
+    "visit_checklist": [
+      {
+        "text": "Confirmá motor y caja: 2.0 manual o Tiptronic, 1.8T manual o Tiptronic, o 1.9 TDI, que solo venía manual."
+      },
+      {
+        "text": "Si es Tiptronic, probala en frío y en caliente: los cambios tienen que entrar sin golpes ni ruidos, y la marcha atrás tiene que entrar sin dificultad."
+      },
+      {
+        "text": "Mirá el paragolpes delantero y los bajos buscando golpes o raspones por el poco despeje."
+      },
+      {
+        "text": "Probá los cuatro levantavidrios, el cierre de puertas y el climatizador."
+      },
+      {
+        "text": "En la prueba de manejo, prestá atención a tirones, fallas de encendido o falta de fuerza, y mirá que el testigo de motor no quede encendido."
+      },
+      {
+        "text": "Pasá por calles irregulares y escuchá ruidos de suspensión y de carrocería."
+      },
+      {
+        "text": "Mirá que el testigo de airbag se encienda al dar contacto y después se apague. Consultá con el VIN si la unidad tiene algún llamado a revisión pendiente."
+      },
+      {
+        "text": "Pedí que escaneen motor y caja para ver si hay códigos de falla guardados."
+      }
+    ],
+    "versions_equipment": [
+      {
+        "text": "Lanzamiento del renovado (2007): 2.0 naftero de 115 CV con manual o Tiptronic de seis marchas, 1.8T de 180 CV con manual o Tiptronic, y 1.9 TDI de 100 CV solo manual. Se fabricaba en Puebla, México.",
+        "applies_to": "desde fines de 2007"
+      },
+      {
+        "text": "Según Autocosmos, toda la gama tenía airbags frontales, ABS y climatizador; el 1.8T sumaba control de tracción y opcionalmente airbags laterales y control de estabilidad. Confirmá el equipamiento en la unidad.",
+        "applies_to": "desde fines de 2007"
+      },
+      {
+        "text": "El 1.8T se ofrecía con tapizado de cuero, volante y pomo de cuero, con caja manual o Tiptronic.",
+        "applies_to": "1.8T"
+      },
+      {
+        "text": "Según Autotest, el TDI no cambió con el restyling: 1.9 de cuatro cilindros con inyector-bomba, turbo e intercooler, caja manual de cinco y unos 100 CV.",
+        "applies_to": "1.9 TDI"
+      },
+      {
+        "text": "Las notas de lanzamiento identifican las versiones por motor y caja; confirmá en la documentación qué versión exacta es la unidad.",
+        "applies_to": null
+      }
+    ],
+    "maintenance_costs": [
+      {
+        "text": "Si el motor usa correa de distribución (confirmalo en el manual), pedí el comprobante del último cambio. En otros mercados se indica cerca de 100.000 km para el 2.0.",
+        "applies_to": "2.0 (reportes en otros mercados)"
+      },
+      {
+        "text": "Pedí el historial de cambios de aceite: reseñas de otros mercados vinculan los cambios descuidados con lodo en el motor."
+      },
+      {
+        "text": "En la Tiptronic, preguntá si se hizo algún service de la caja y seguí lo que indique el manual; si hay dudas sobre la caja, pedí que la revisen antes de comprar.",
+        "applies_to": "Tiptronic"
+      },
+      {
+        "text": "Presupuestá revisar amortiguadores y tren delantero, y componentes eléctricos como levantavidrios, en unidades con muchos años de uso."
+      }
+    ],
+    "generations": [
+      {
+        "label": "Primera etapa",
+        "year_from": 2000,
+        "year_to": 2007,
+        "text": "Llegó a Argentina en 2000 desde México con el 2.0 de 116 CV; el 1.9 TDI se sumó en 2001 con 90 CV y pasó a 100 CV en 2004. También hubo un 1.8T. Autotest la considera mejor terminada que la etapa siguiente."
+      },
+      {
+        "label": "Restyling",
+        "year_from": 2008,
+        "year_to": 2015,
+        "text": "Frente renovado, parecido al del Passat de la generación anterior, presentado en septiembre de 2007. Convivió con el Vento y, según Autotest, se retiró del mercado alrededor de 2014; confirmá el año modelo en la documentación."
+      }
+    ]
+  },
+  "questions": [
+    {
+      "text": "¿Qué motor y caja tiene exactamente: 2.0, 1.8T o TDI, manual o Tiptronic?",
+      "why": "Cambian el equipamiento, el mantenimiento y lo que conviene revisar en la prueba."
+    },
+    {
+      "text": "¿El motor usa correa de distribución? Si la usa, ¿cuándo se cambió y tenés el comprobante?",
+      "why": "En otros mercados se indica cambio cerca de los 100.000 km para el 2.0; el manual marca el intervalo."
+    },
+    {
+      "text": "¿Se reparó alguna vez la caja automática o se le hizo service?",
+      "why": "En otros mercados hay reportes de fallas de la automática del Bora."
+    },
+    {
+      "text": "¿Tenés el historial de cambios de aceite?",
+      "why": "Reseñas de otros mercados vinculan los cambios descuidados con lodo en el motor."
+    },
+    {
+      "text": "¿Se cambiaron levantavidrios, bobinas o sensores del motor?",
+      "why": "Reseñas de otros mercados los mencionan entre las fallas eléctricas del Bora."
+    },
+    {
+      "text": "¿Tiene airbags laterales o control de estabilidad?",
+      "why": "En la nota de lanzamiento del renovado figuraban como opcionales del 1.8T."
+    }
+  ],
+  "sources": [
+    {
+      "title": "Usados: Volkswagen Bora 1.9 TDI (Autotest)",
+      "url": "https://autotest.com.ar/noticias/usados-volkswagen-bora-1-9-tdi/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "El estado de un Volkswagen Bora abandonado (Autotest)",
+      "url": "https://autotest.com.ar/noticias/estado-volkswagen-bora-abandonado/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Nuevo Bora 2008: llega la renovación (Autocosmos, 11/09/2007)",
+      "url": "https://noticias.autocosmos.com.ar/2007/09/11/nuevo-bora-2008-llega-la-renovacion",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Nuevo Bora: disfrutar lo sofisticado (Autocosmos, 01/10/2007)",
+      "url": "https://noticias.autocosmos.com.ar/2007/10/01/nuevo-bora-disfrutar-lo-sofisticado",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Así probábamos el Volkswagen Bora (Parabrisas)",
+      "url": "https://parabrisas.perfil.com/noticias/clasicos/volkswagen-bora-test-argentina-2001-prueba-manejo-retro-motor.phtml",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Se viene el nuevo Volkswagen Bora (Autocosmos, 16/10/2013)",
+      "url": "https://noticias.autocosmos.com.ar/2013/10/16/se-viene-el-nuevo-volkswagen-bora",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Volkswagen Bora problems (CarsGuide, Australia)",
+      "url": "https://www.carsguide.com.au/volkswagen/bora/problems",
+      "kind": "prensa",
+      "verified": true
+    }
+  ]
+}

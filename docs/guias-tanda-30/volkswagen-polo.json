@@ -1,0 +1,185 @@
+{
+  "make": "Volkswagen",
+  "model": "Polo",
+  "generation_label": "Polo, sexta generación (MQB A0)",
+  "year_from": 2018,
+  "year_to": null,
+  "slug_make": "volkswagen",
+  "slug_model": "polo",
+  "body": {
+    "known_issues": [
+      {
+        "text": "En mayo de 2019 Volkswagen llamó a revisión a Polo y Virtus por una falla en la fijación del revestimiento del pilar central (columna B), que podía afectar al airbag lateral. Alcanzaba a rangos de chasis publicados; la revisión se hacía en un concesionario oficial.",
+        "applies_to": "según chasis (confirmar con el VIN)"
+      },
+      {
+        "text": "En Brasil se reportó entrada de agua en los faros y en el habitáculo en unidades 2018.",
+        "applies_to": "2018 (reportes en Brasil)"
+      },
+      {
+        "text": "La prensa brasileña recoge quejas de tirones fuertes de la automática de seis marchas, sobre todo entre primera y tercera, en las versiones turbo vendidas allá.",
+        "applies_to": "automática con motor turbo (reportes en Brasil)"
+      },
+      {
+        "text": "También en Brasil hubo reportes de discos de freno que se deforman antes de tiempo y hacen ruido.",
+        "applies_to": "reportes en Brasil"
+      }
+    ],
+    "visit_checklist": [
+      {
+        "text": "Mirá si hay humedad o condensación dentro de los faros y alfombras húmedas en el habitáculo o el baúl."
+      },
+      {
+        "text": "Si es automática, probala desde parado y en tránsito lento: fijate si hay tirones al pasar de primera a tercera o demoras al poner D o R.",
+        "applies_to": "automática"
+      },
+      {
+        "text": "Frená varias veces desde velocidad media y fijate si el pedal vibra o si hay ruidos en los frenos."
+      },
+      {
+        "text": "Consultá con el número de chasis (VIN) en un concesionario oficial Volkswagen si la unidad tiene llamados a revisión pendientes, como el del pilar central de 2019."
+      },
+      {
+        "text": "Al dar contacto, mirá que se enciendan y después se apaguen los testigos de motor, airbag, ABS y control de estabilidad."
+      },
+      {
+        "text": "Probá lo que traiga la versión: tablero digital, pantalla y conexión del teléfono, cámara trasera, sensores de estacionamiento, climatizador y arranque sin llave."
+      },
+      {
+        "text": "Pedí que escaneen motor y caja con un equipo de diagnóstico para ver si hay códigos de falla guardados."
+      }
+    ],
+    "versions_equipment": [
+      {
+        "text": "Llegó en enero de 2018 desde Brasil con un solo motor, el 1.6 MSI 16v de 110 CV, con manual de cinco o automática Tiptronic de seis. Versiones: Trendline (manual y automática), Comfortline (manual), Comfortline Plus (automática) y Highline (manual y automática).",
+        "applies_to": "2018 en adelante, antes del restyling"
+      },
+      {
+        "text": "Según el lanzamiento de 2018, la Trendline ya traía cuatro airbags, control de estabilidad, asistente de arranque en pendiente y anclajes ISOFIX. La Highline sumaba tablero digital, pantalla de 8 pulgadas con navegador, cámara trasera, climatizador y arranque sin llave.",
+        "applies_to": "antes del restyling"
+      },
+      {
+        "text": "El GTS llegó en agosto de 2020 con el 1.4 TSI de 150 CV y automática Tiptronic de seis con levas, sobre la base de la Highline.",
+        "applies_to": "GTS, desde 2020"
+      },
+      {
+        "text": "Con el restyling de agosto de 2023 la gama quedó en Track (1.6 MSI con manual de cinco), una versión MSI, Highline (170 TSI, un 1.0 turbo de tres cilindros y 101 CV, con automática de seis) y GTS. Según la prensa, toda la gama trae cuatro airbags y control de estabilidad.",
+        "applies_to": "restyling, desde 2023"
+      },
+      {
+        "text": "El Track, de entrada de gama, apareció en junio de 2023 en el lugar que dejó el Gol Trend.",
+        "applies_to": "Track, desde 2023"
+      },
+      {
+        "text": "En junio de 2025 la Comfortline pasó al 170 TSI con automática de seis y se discontinuó el GTS; la gama quedó en Track 1.6 MSI manual, Comfortline y Highline 170 TSI.",
+        "applies_to": "desde mediados de 2025"
+      }
+    ],
+    "maintenance_costs": [
+      {
+        "text": "El libro de postventa de Volkswagen Argentina (2017) indica service cada 15.000 km o 1 año, lo que ocurra primero, para autos nafteros, y cambio de líquido de frenos cada 2 años. Confirmalo en el libro de la unidad."
+      },
+      {
+        "text": "La prensa brasileña lista la correa de distribución entre los repuestos de mantenimiento del 1.6 MSI y de los TSI. El libro de la marca recomienda en general cambiarla cada 90.000 km: confirmá el intervalo en el manual de la unidad.",
+        "applies_to": "1.6 MSI y TSI"
+      },
+      {
+        "text": "En los motores turbo, la prensa brasileña insiste en usar el aceite con la especificación de fábrica; confirmala en el manual.",
+        "applies_to": "170 TSI y 1.4 TSI"
+      },
+      {
+        "text": "Si encontrás discos de freno deformados o tirones en la automática, pedí presupuesto antes de comprar."
+      }
+    ],
+    "generations": [
+      {
+        "label": "Polo VI",
+        "year_from": 2018,
+        "year_to": 2023,
+        "text": "Llegó desde Brasil en enero de 2018 sobre la plataforma MQB A0, con el 1.6 MSI; en 2020 se sumó el GTS con 1.4 TSI."
+      },
+      {
+        "label": "Polo VI restyling",
+        "year_from": 2023,
+        "year_to": null,
+        "text": "Renovado en 2023: el Track llegó en junio y el resto de la gama en agosto, con el debut del 170 TSI. En 2025 se discontinuó el GTS."
+      }
+    ]
+  },
+  "questions": [
+    {
+      "text": "¿Te llegó el aviso del llamado de 2019 por el revestimiento del pilar central, y lo hiciste?",
+      "why": "Ese llamado podía afectar al airbag lateral y alcanzó a un rango de chasis."
+    },
+    {
+      "text": "¿Alguna vez entró agua en los faros o en el habitáculo?",
+      "why": "En Brasil se reportaron filtraciones de agua en unidades 2018."
+    },
+    {
+      "text": "¿Tenés las facturas de los services hechos cada 15.000 km o 1 año?",
+      "why": "Es el intervalo del plan de Volkswagen Argentina para autos nafteros."
+    },
+    {
+      "text": "¿Se cambió la correa de distribución? Si se cambió, ¿tenés el comprobante?",
+      "why": "La prensa lista la correa entre los repuestos de mantenimiento de estos motores."
+    },
+    {
+      "text": "Si es automática, ¿notaste tirones al pasar los cambios bajos?",
+      "why": "En Brasil hay quejas de tirones de la automática entre primera y tercera."
+    },
+    {
+      "text": "¿Le cambiaron discos o pastillas de freno? ¿Por qué motivo?",
+      "why": "En Brasil hubo reportes de discos que se deforman antes de tiempo."
+    }
+  ],
+  "sources": [
+    {
+      "title": "Nuevo Volkswagen Polo se lanza en Argentina (Autocosmos, 04/01/2018)",
+      "url": "https://noticias.autocosmos.com.ar/2018/01/04/nuevo-volkswagen-polo-se-lanza-en-argentina",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Volkswagen lanza los Polo y Virtus GTS (Autoweb, 07/08/2020)",
+      "url": "https://www.autoweb.com.ar/2020/08/07/volkswagen-lanza-los-polo-y-virtus-gts/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Nuevo VW Polo Track: presentación y equipamiento en Argentina (Autocosmos, 01/06/2023)",
+      "url": "https://noticias.autocosmos.com.ar/2023/06/01/nuevo-vw-polo-track-presentacion-precio-y-equipamiento-en-argentina",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Volkswagen presentó la gama completa del nuevo Polo en Argentina (Parabrisas, 03/08/2023)",
+      "url": "https://parabrisas.perfil.com/noticias/novedades/volkswagen-presento-la-gama-completa-del-nuevo-polo-en-argentina.phtml",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "El VW Polo Comfortline pasa al motor turbo en Argentina (Autocosmos, 12/06/2025)",
+      "url": "https://noticias.autocosmos.com.ar/2025/06/12/el-vw-polo-comfortline-pasa-al-motor-turbo-en-argentina",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Volkswagen, Ford y Renault llaman a revisión a más de 85.000 vehículos (Parabrisas, 03/05/2019)",
+      "url": "https://parabrisas.perfil.com/noticias/novedades/volkswagen-ford-y-renault-llaman-a-revision-a-mas-de-85000-vehiculos.phtml",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Volkswagen Polo 2018: 10 fatos sobre o hatch compacto (Vrum, Brasil, 30/10/2022)",
+      "url": "https://www.vrum.com.br/bom-negocio/volkswagen-polo-2018-hatch-compacto/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Libro de Servicio Postventa Volkswagen Argentina (2017)",
+      "url": "https://www.volkswagen.com.ar/idhub/content/dam/onehub_pkw/importers/ar/tengo-un-volkswagen/mantenimiento/Vw_LibroBlanco.pdf",
+      "kind": "manual",
+      "verified": true
+    }
+  ]
+}
