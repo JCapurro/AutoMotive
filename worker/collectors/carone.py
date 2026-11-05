@@ -23,8 +23,6 @@ class CarOneScraper(PublicCatalogScraper):
     PAGE_SIZE = 50
     MAX_PAGES = 100
     PAGE_DELAY = .2
-    GATEWAY_RETRIES = 2
-    GATEWAY_RETRY_PAUSE = 10.0
     # Fields and endpoint are published by the site's GetProductsCard query.
     QUERY = """query GetProductsCard($q:String!,$pageSize:Int!,$currentPage:Int!,
         $filter:ProductAttributeFilterInput,$sort:ProductAttributeSortInput) {
@@ -145,15 +143,8 @@ class CarOneScraper(PublicCatalogScraper):
                      "sort": {"created_at": "DESC"}, "filter": {"stock_status": {"eq": "IN_STOCK"}}}
         async with async_client(headers=HEADERS, timeout=45, follow_redirects=False,
                                      transport=self.transport) as client:
-            # The GraphQL gateway answers 502/504 now and then; the same page
-            # read again a few seconds later usually succeeds.
-            for attempt in range(self.GATEWAY_RETRIES + 1):
-                if attempt:
-                    await asyncio.sleep(self.GATEWAY_RETRY_PAUSE * attempt)
-                response = await client.post(self.BASE + "/api/graphql",
-                                             json={"query": self.QUERY, "variables": variables})
-                if response.status_code not in (502, 504):
-                    break
+            response = await client.post(self.BASE + "/api/graphql",
+                                         json={"query": self.QUERY, "variables": variables})
         if response.is_redirect or urlparse(str(response.url)).hostname != urlparse(self.BASE).hostname:
             raise CollectorBlocked("carone: unexpected GraphQL redirect")
         self.check_status(response.status_code)

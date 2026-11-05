@@ -436,33 +436,6 @@ class AgencyTransportTests(unittest.IsolatedAsyncioTestCase):
             with self.subTest(source=collector.name), self.assertRaisesRegex(RuntimeError, '503'):
                 await collector.search({})
 
-    async def test_carone_gateway_timeout_on_a_page_is_retried(self):
-        calls = []
-        def handler(request):
-            page = json.loads(request.content)['variables']['currentPage']
-            calls.append(page)
-            if page == 2 and calls.count(2) <= 2:
-                return httpx.Response(504 if calls.count(2) == 1 else 502)
-            return httpx.Response(200, json={'data': {'products': {
-                'items': [carone_record(id=page, url_key=f'vehicle-{page}')], 'total_count': 2}}})
-        collector = CarOne(transport=httpx.MockTransport(handler))
-        collector.PAGE_SIZE = 1
-        collector.PAGE_DELAY = collector.GATEWAY_RETRY_PAUSE = 0
-        items = await collector.search({})
-        self.assertEqual(sorted(v.listing_id for v in items), ['1', '2'])
-        self.assertEqual(calls, [1, 2, 2, 2])
-
-    async def test_carone_persistent_gateway_timeout_still_fails(self):
-        calls = []
-        def handler(request):
-            calls.append(1)
-            return httpx.Response(504)
-        collector = CarOne(transport=httpx.MockTransport(handler))
-        collector.GATEWAY_RETRY_PAUSE = 0
-        with self.assertRaisesRegex(RuntimeError, '504'):
-            await collector.search({})
-        self.assertEqual(len(calls), CarOne.GATEWAY_RETRIES + 1)
-
     async def test_sources_reject_unrelated_detail_host(self):
         for cls in (Autocity, CarOne, Randazzo):
             with self.subTest(source=cls.name), self.assertRaises(ValueError):
