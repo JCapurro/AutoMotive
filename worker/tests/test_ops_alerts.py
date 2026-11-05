@@ -106,3 +106,61 @@ class OnHealthTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+FB_EXPIRED = """Traceback (most recent call last):
+  File "/opt/automotive/worker/collectors/_isolated.py", line 71, in call
+    raise value
+collectors.base.CollectorBlocked: facebook: session expired (logged out, no c_user cookie)
+"""
+
+
+def fb(failures: int, previous: int, error: str | None = FB_EXPIRED):
+    return SourceHealth("facebook", "Facebook Marketplace", failures, previous, NOW - timedelta(minutes=20), error)
+
+
+@patch("notifications.ops.get_config", new=AsyncMock(return_value=3))
+class SessionExpiredTests(unittest.IsolatedAsyncioTestCase):
+    """Juan, 2026-11-05: an expired session is told at once, with how to renew it."""
+
+    async def test_told_on_the_first_failure_with_the_renewal(self):
+        bot = FakeBot()
+        alerts = SourceAlerts(bot, 42, clock=lambda: NOW)
+        self.assertTrue(await alerts.on_health(fb(1, 0)))
+        text = bot.sent[0]["text"]
+        self.assertIn("Facebook Marketplace</b>: se cerró la sesión", text)
+        self.assertIn("hace 20 minutos", text)
+        self.assertIn("ops/fb-renovar.ps1", text)
+
+    async def test_once_per_streak_without_the_generic_alert(self):
+        bot = FakeBot()
+        alerts = SourceAlerts(bot, 42, clock=lambda: NOW)
+        for failures in range(1, 6):
+            await alerts.on_health(fb(failures, failures - 1))
+        self.assertEqual(len(bot.sent), 1)
+
+    async def test_a_streak_that_started_with_another_error_is_still_told(self):
+        bot = FakeBot()
+        alerts = SourceAlerts(bot, 42, clock=lambda: NOW)
+        await alerts.on_health(fb(1, 0, error="TimeoutError: feed"))
+        await alerts.on_health(fb(2, 1))
+        self.assertEqual(len(bot.sent), 1)
+        self.assertIn("se cerró la sesión", bot.sent[0]["text"])
+
+    async def test_the_renewal_is_told_even_before_the_threshold(self):
+        bot = FakeBot()
+        alerts = SourceAlerts(bot, 42, clock=lambda: NOW)
+        await alerts.on_health(fb(1, 0))
+        self.assertTrue(await alerts.on_health(fb(0, 1, error=None)))
+        self.assertIn("volvió a funcionar después de 1 fallas", bot.sent[1]["text"])
+        # A new death is a new streak: told again.
+        await alerts.on_health(fb(1, 0))
+        self.assertEqual(len(bot.sent), 3)
+
+    async def test_a_failed_send_tries_again_on_the_next_run(self):
+        bot = FakeBot(error=RuntimeError("telegram down"))
+        alerts = SourceAlerts(bot, 42, clock=lambda: NOW)
+        self.assertFalse(await alerts.on_health(fb(1, 0)))
+        bot.error = None
+        self.assertTrue(await alerts.on_health(fb(2, 1)))
+        self.assertEqual(len(bot.sent), 1)
