@@ -18,7 +18,9 @@ async function signOutFromMenu(page: Page) {
 async function withPassword(page: Page, email: string, password: string) {
   await page.goto("/login");
   await page.getByLabel("Email", { exact: true }).fill(email);
-  await page.getByRole("button", { name: "Tengo contraseña" }).click();
+  await page.getByRole("button", { name: "Continuar", exact: true }).click();
+  // Email first: an account with a password is asked for it, nothing is mailed.
+  await expect(page.getByTestId("login-email")).toHaveText(email);
   await page.getByLabel("Contraseña", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Ingresar", exact: true }).click();
 }
@@ -37,9 +39,9 @@ test("entrar con código, elegir contraseña, el menú de la cuenta y cambiar la
     await resetAuthBrakes();
     await page.goto("/login?mode=signup&next=%2Fapp%2Fsettings");
     // Old signup links land on the same single screen.
-    await expect(page.getByRole("button", { name: "Mandame un código" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Continuar", exact: true })).toBeVisible();
     await page.getByLabel("Email", { exact: true }).fill(email);
-    await page.getByRole("button", { name: "Mandame un código" }).click();
+    await page.getByRole("button", { name: "Continuar", exact: true }).click();
     await expect(page.getByText("Revisá tu email")).toBeVisible();
     const code = await entryCode(email);
     await page.getByLabel("Código").fill(code === "000000" ? "111111" : "000000");
@@ -90,7 +92,7 @@ test("entrar con código, elegir contraseña, el menú de la cuenta y cambiar la
     await page.getByRole("button", { name: "Guardar contraseña" }).click();
     await expect(page).toHaveURL(/\/login\?password=updated&next=%2Fapp%2Fdatos$/);
     await withPassword(page, email, E2E_PASSWORD);
-    await expect(page.getByRole("alert").filter({ hasText: "No pudimos ingresar" })).toBeVisible();
+    await expect(page.getByRole("alert").filter({ hasText: "La contraseña no es correcta" })).toBeVisible();
     await withPassword(page, email, replacement);
     await expect(page).toHaveURL(/\/app$/);
   });

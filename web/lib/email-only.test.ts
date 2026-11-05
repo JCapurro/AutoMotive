@@ -1,15 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const m = vi.hoisted(() => ({ rpc: vi.fn(), resetPasswordForEmail: vi.fn(), headers: {} as Record<string, string> }));
+const m = vi.hoisted(() => ({ rpc: vi.fn(), getUserById: vi.fn(), resetPasswordForEmail: vi.fn(), headers: {} as Record<string, string> }));
 vi.mock("server-only", () => ({}));
 vi.mock("next/headers", () => ({ headers: async () => new Headers(m.headers) }));
 vi.mock("@/lib/config", () => ({
   webConfig: async () => ({ emailOnlySignup: { enabled: true, perIpHour: 10, perDay: 100, linksPerUserHour: 3, linksPerIpHour: 20, lookupsPerIpHour: 30 } }),
 }));
-vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({ rpc: m.rpc }) }));
+vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({ rpc: m.rpc, auth: { admin: { getUserById: m.getUserById } } }) }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ auth: { resetPasswordForEmail: m.resetPasswordForEmail } }) }));
 
-import { clientIpKey, ipBucket, sendEntryLink } from "@/lib/email-only";
+import { clientIpKey, hasPassword, ipBucket, sendEntryLink } from "@/lib/email-only";
 
 const throttles = () => m.rpc.mock.calls.filter(([name]) => name === "claim_auth_throttle").map(([, args]) => args.p_kind);
 
@@ -21,6 +21,30 @@ beforeEach(() => {
     ? { data: true, error: null }
     : { data: [{ user_id: "lite", email_only: true, confirmed: true }], error: null });
   m.resetPasswordForEmail.mockResolvedValue({ error: null });
+});
+
+describe("whether /login asks for a password", () => {
+  const user = (...providers: string[]) => ({ data: { user: { identities: providers.map((provider) => ({ provider })) } }, error: null });
+
+  it("asks a confirmed email-and-password account", async () => {
+    m.getUserById.mockResolvedValue(user("email", "google"));
+    expect(await hasPassword({ user_id: "full", email_only: false, confirmed: true })).toBe(true);
+    expect(m.getUserById).toHaveBeenCalledWith("full");
+  });
+
+  it("sends the code to Google-only, email-only and unconfirmed accounts", async () => {
+    m.getUserById.mockResolvedValue(user("google"));
+    expect(await hasPassword({ user_id: "g", email_only: false, confirmed: true })).toBe(false);
+    m.getUserById.mockResolvedValue(user("email"));
+    expect(await hasPassword({ user_id: "lite", email_only: true, confirmed: true })).toBe(false);
+    expect(await hasPassword({ user_id: "pending", email_only: false, confirmed: false })).toBe(false);
+    expect(m.getUserById).toHaveBeenCalledOnce();
+  });
+
+  it("fails loudly when Auth can't say", async () => {
+    m.getUserById.mockResolvedValue({ data: { user: null }, error: { message: "down" } });
+    await expect(hasPassword({ user_id: "full", email_only: false, confirmed: true })).rejects.toThrow("down");
+  });
 });
 
 describe("the IP key", () => {

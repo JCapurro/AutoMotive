@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { callbackUrl } from "@/lib/auth-links";
 import { webConfig } from "@/lib/config";
-import { accountForEmail, claimThrottle, clientIpKey, createEmailOnlyUser, DAY, type ExistingAccount, HOUR, linkError, sendEntryLink } from "@/lib/email-only";
+import { accountForEmail, claimThrottle, clientIpKey, createEmailOnlyUser, DAY, type ExistingAccount, hasPassword, HOUR, linkError, sendEntryLink } from "@/lib/email-only";
 import { verifyEntryCode } from "@/lib/entry-code";
 import { HEALTH_OWNER_EMAIL } from "@/lib/health-access";
 import { safeNext } from "@/lib/navigation";
@@ -13,8 +13,11 @@ import { afterSignIn } from "@/lib/signup";
 import { createClient } from "@/lib/supabase/server";
 
 /**
- * One screen to enter (docs/AUTENTICACION.md): the email, then the code we
- * mail to it. A password, for whoever has one, and Google are the other ways.
+ * One screen to enter (docs/AUTENTICACION.md), email first (option A, Juan
+ * 05/11): «Continuar» looks the email up and goes on with what that account
+ * uses: its password if it has one, the code otherwise (a new email gets an
+ * account with it). Google is the other way. This shows whether an email has a
+ * password; Juan accepted that, with the lookups braked per IP.
  * `step` is the screen to show; `notice` says why we sent a code the person
  * didn't ask for (the email has no password yet, or was never confirmed).
  * `signedUp`: the code went to an account created right here (the client
@@ -35,13 +38,31 @@ export async function login(prev: LoginState, form: FormData): Promise<LoginStat
   const next = safeNext(String(form.get("next") ?? prev.next));
   const intent = String(form.get("intent") ?? "");
   if (intent === "change-email") return { step: "email", email: prev.email, next };
-  if (intent === "use-password") return { step: "password", email: String(form.get("email") ?? prev.email ?? "").trim(), next };
   const email = parseEmail(form);
   if (!email) return { step: intent === "password" ? "password" : "email", email: String(form.get("email") ?? ""), next, error: "Ingresá un email válido." };
+  if (intent === "continue") return continueWith(email, next);
   if (intent === "send-code") return requestCode(email, next);
   if (intent === "verify") return verify(email, form.get("code"), next, prev);
   if (intent === "password") return withPassword(email, String(form.get("password") ?? ""), next);
   return { step: "email", email, next, error: "Acción inválida." };
+}
+
+/** «Continuar»: the password step for an account that has one, the code for the rest. */
+async function continueWith(email: string, next: string): Promise<LoginState> {
+  let account: ExistingAccount | null;
+  try {
+    // «Continuar» says which emails have a password: braked like the landing's lookups.
+    const { lookupsPerIpHour } = (await webConfig()).emailOnlySignup;
+    if (!(await claimThrottle("login_lookup_ip", await clientIpKey(), lookupsPerIpHour, HOUR))) {
+      return { step: "email", email, next, error: "Probaste varios emails seguidos. Esperá un rato y volvé a intentar." };
+    }
+    account = await accountForEmail(email);
+    if (account && await hasPassword(account)) return { step: "password", email, next };
+  } catch (error) {
+    console.error("login lookup failed:", error instanceof Error ? error.message : error);
+    return { step: "email", email, next, error: "No pudimos seguir. Probá de nuevo en unos minutos." };
+  }
+  return requestCode(email, next, account);
 }
 
 /**
@@ -50,12 +71,12 @@ export async function login(prev: LoginState, form: FormData): Promise<LoginStat
  * switch and brakes; past them, or with the switch off, the answer is the
  * same as for an existing email, so the screen never says which emails exist.
  */
-async function requestCode(email: string, next: string): Promise<LoginState> {
+async function requestCode(email: string, next: string, known?: ExistingAccount | null): Promise<LoginState> {
   const state: LoginState = { step: "code", email, next };
   let account: ExistingAccount | null;
   let signedUp = false;
   try {
-    account = await accountForEmail(email);
+    account = known === undefined ? await accountForEmail(email) : known;
     if (!account) {
       const created = await newAccount(email);
       if (created) {
@@ -102,7 +123,7 @@ async function withPassword(email: string, password: string, next: string): Prom
   if (!password) return { step: "password", email, next, error: "Ingresá tu contraseña." };
   try {
     if (!(await claimThrottle("login_password", await clientIpKey(), 20, HOUR))) {
-      return { step: "password", email, next, error: "Hiciste varios intentos. Pedí un código para entrar." };
+      return { step: "password", email, next, error: "Hiciste varios intentos. Entrá con un código por email." };
     }
   } catch (error) {
     console.error("password throttle failed:", error instanceof Error ? error.message : error);
@@ -129,7 +150,7 @@ async function withPassword(email: string, password: string, next: string): Prom
       };
     }
   }
-  return { step: "password", email, next, error: "No pudimos ingresar. Revisá la contraseña o pedí un código para entrar." };
+  return { step: "password", email, next, error: "La contraseña no es correcta. Probá de nuevo o entrá con un código por email." };
 }
 
 export async function signInWithGoogle(prev: { next: string; error?: string }, form: FormData): Promise<{ next: string; error?: string }> {

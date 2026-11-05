@@ -4,11 +4,12 @@ const mocks = vi.hoisted(() => ({
   auth: { signInWithPassword: vi.fn(), signInWithOAuth: vi.fn() },
   afterSignIn: vi.fn(),
   accountForEmail: vi.fn(),
+  hasPassword: vi.fn(),
   sendEntryLink: vi.fn(),
   claimThrottle: vi.fn(),
   createEmailOnlyUser: vi.fn(),
   verifyEntryCode: vi.fn(),
-  config: { emailOnlySignup: { enabled: true, perIpHour: 5, perDay: 100 } },
+  config: { emailOnlySignup: { enabled: true, perIpHour: 5, perDay: 100, lookupsPerIpHour: 30 } },
 }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ auth: mocks.auth }) }));
 vi.mock("@/lib/signup", () => ({ afterSignIn: mocks.afterSignIn }));
@@ -16,7 +17,7 @@ vi.mock("@/lib/config", () => ({ webConfig: async () => mocks.config }));
 vi.mock("@/lib/health-access", () => ({ HEALTH_OWNER_EMAIL: "owner@example.com" }));
 vi.mock("@/lib/entry-code", () => ({ verifyEntryCode: mocks.verifyEntryCode }));
 vi.mock("@/lib/email-only", () => ({
-  accountForEmail: mocks.accountForEmail, sendEntryLink: mocks.sendEntryLink, claimThrottle: mocks.claimThrottle,
+  accountForEmail: mocks.accountForEmail, hasPassword: mocks.hasPassword, sendEntryLink: mocks.sendEntryLink, claimThrottle: mocks.claimThrottle,
   createEmailOnlyUser: mocks.createEmailOnlyUser, clientIpKey: async () => "ip", HOUR: 3600, DAY: 86400,
   linkError: (result: string) => result === "busy" ? "Esperá un minuto." : "No se pudo.",
 }));
@@ -36,7 +37,44 @@ beforeEach(() => {
   mocks.claimThrottle.mockResolvedValue(true);
   mocks.sendEntryLink.mockResolvedValue("sent");
   mocks.accountForEmail.mockResolvedValue(null);
+  mocks.hasPassword.mockResolvedValue(false);
   mocks.auth.signInWithPassword.mockResolvedValue({ error: null });
+});
+
+describe("«Continuar» (email first)", () => {
+  it("asks an account with a password for it, sending nothing", async () => {
+    mocks.accountForEmail.mockResolvedValue(full);
+    mocks.hasPassword.mockResolvedValue(true);
+    const state = await login(start, form({ intent: "continue", email: " Person@Example.com ", next: "/app/saved" }));
+    expect(state).toEqual({ step: "password", email: "person@example.com", next: "/app/saved" });
+    expect(mocks.hasPassword).toHaveBeenCalledWith(full);
+    expect(mocks.sendEntryLink).not.toHaveBeenCalled();
+    expect(mocks.claimThrottle).toHaveBeenCalledWith("login_lookup_ip", "ip", 30, 3600);
+  });
+
+  it("sends the code to an account without a password, looking it up once", async () => {
+    mocks.accountForEmail.mockResolvedValue(lite);
+    const state = await login(start, form({ intent: "continue", email: "person@example.com" }));
+    expect(state).toEqual({ step: "code", email: "person@example.com", next: "/app", signedUp: false });
+    expect(mocks.sendEntryLink).toHaveBeenCalledWith("person@example.com", "/app", lite);
+    expect(mocks.accountForEmail).toHaveBeenCalledOnce();
+  });
+
+  it("creates the account for a new email and sends the code", async () => {
+    mocks.createEmailOnlyUser.mockResolvedValue({ userId: "new", discard: vi.fn() });
+    expect(await login(start, form({ intent: "continue", email: "new@example.com" }))).toMatchObject({ step: "code", signedUp: true });
+    expect(mocks.hasPassword).not.toHaveBeenCalled();
+  });
+
+  it("stops with the lookup brake or a failed lookup, sending nothing", async () => {
+    mocks.claimThrottle.mockResolvedValue(false);
+    expect(await login(start, form({ intent: "continue", email: "person@example.com" }))).toMatchObject({ step: "email", error: expect.stringContaining("varios emails") });
+    mocks.claimThrottle.mockResolvedValue(true);
+    mocks.accountForEmail.mockRejectedValue(new Error("down"));
+    expect(await login(start, form({ intent: "continue", email: "person@example.com" }))).toMatchObject({ step: "email", error: expect.stringContaining("No pudimos seguir") });
+    expect(mocks.accountForEmail).toHaveBeenCalledOnce();
+    expect(mocks.sendEntryLink).not.toHaveBeenCalled();
+  });
 });
 
 describe("asking for the code", () => {

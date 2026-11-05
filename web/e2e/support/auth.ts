@@ -38,12 +38,19 @@ export async function enterWithCode(page: Page, email: string, next = "/app") {
   await page.getByLabel("Email", { exact: true }).fill(email);
   const sent = page.getByText("Revisá tu email");
   const tooSoon = page.getByRole("alert").filter({ hasText: "tan seguido" });
-  await page.getByRole("button", { name: "Mandame un código" }).click();
-  await expect(sent.or(tooSoon)).toBeVisible();
+  const password = page.getByLabel("Contraseña", { exact: true });
+  // Email first: an account with a password is asked for it; its code is the link below.
+  const askCode = async () => {
+    await page.getByRole("button", { name: "Continuar", exact: true }).click();
+    await expect(sent.or(tooSoon).or(password)).toBeVisible();
+    if (await password.isVisible()) await page.getByRole("button", { name: /mandame un código/ }).click();
+    await expect(sent.or(tooSoon)).toBeVisible();
+  };
+  await askCode();
   // Auth's own minimum between two emails to one address: the same email asked again within it.
   if (await tooSoon.isVisible()) {
     await page.waitForTimeout(61_000);
-    await page.getByRole("button", { name: "Mandame un código" }).click();
+    await askCode();
   }
   await expect(sent).toBeVisible();
   await page.getByLabel("Código").fill(await entryCode(email));
