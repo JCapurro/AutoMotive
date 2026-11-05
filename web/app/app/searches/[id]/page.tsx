@@ -219,7 +219,7 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
         />
       </header>
 
-      {quota?.reached && checkoutConfig ? <FreeResultLimit profileId={profileId} limit={quota.limit} offer={checkoutConfig.proOffer} automatic={checkoutConfig.automaticPayments} pilot={checkoutConfig.commercialPilot} /> : null}
+      {quota?.reached && checkoutConfig ? <FreeResultLimit profileId={profileId} limit={quota.limit} opportunities={count.opportunities_count ?? 0} offer={checkoutConfig.proOffer} pro={checkoutConfig.planLimits.pro} automatic={checkoutConfig.automaticPayments} pilot={checkoutConfig.commercialPilot} /> : null}
 
       {pending ? (
         <SearchPreparation
