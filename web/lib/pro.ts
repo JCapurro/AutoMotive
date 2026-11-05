@@ -128,6 +128,11 @@ export function modelLessText(limits: PlanLimitsConfig): string | null {
   if (!plans.length) return null;
   return `Con ${plans.join(" y ")} también podés buscar por carrocería, sin elegir modelo (por ejemplo, cualquier SUV hasta un precio máximo): cuenta como una búsqueda.`;
 }
+/** Pro in one line, for the trial's pop-up: «Hasta 20 búsquedas activas, margen estimado de reventa y filtro estricto de vendedor.» */
+export function proSummary(caps: PlanCaps): string {
+  const parts = [searchesText(caps), ...(caps.dealerMargin ? ["margen estimado de reventa"] : []), ...(caps.sellerFilter ? ["filtro estricto de vendedor"] : [])];
+  return `${parts.length > 1 ? `${parts.slice(0, -1).join(", ")} y ${parts[parts.length - 1]}` : parts[0]}.`;
+}
 export function alertsText(caps: PlanCaps): string {
   const n = caps.immediateAlertsPerDay;
   return n > 0 ? `Hasta ${counted(n, "aviso inmediato", "avisos inmediatos")} por día y resumen diario` : "Resumen diario de coincidencias";
