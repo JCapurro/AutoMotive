@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 
 import { liveAccount } from "@/lib/auth";
 import { hasFreshProof, linkError, sendEntryLink } from "@/lib/email-only";
+import { verifyEntryCode } from "@/lib/entry-code";
 import { safeNext } from "@/lib/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -15,10 +16,25 @@ export type AccountState = { error?: string; sent?: boolean; expired?: boolean }
 export async function sendAccountLink(next: string): Promise<AccountState> {
   const target = safeNext(next);
   const account = await liveAccount();
-  if (!account?.email) return { error: "Tu sesión venció. Volvé a entrar con un link desde el login." };
+  if (!account?.email) return { error: "Tu sesión venció. Volvé a entrar con un código desde el login." };
   if (!account.emailOnly) redirect(target);
   const result = await sendEntryLink(account.email, target, { user_id: account.id, email_only: true, confirmed: true });
   return result === "sent" ? { sent: true } : { error: linkError(result) };
+}
+
+/**
+ * The code from that same email, typed here: the same proof as the link, and
+ * then this page asks for the password.
+ */
+export async function confirmAccountCode(next: string, _prev: AccountState, form: FormData): Promise<AccountState> {
+  const target = safeNext(next);
+  const account = await liveAccount();
+  if (!account?.email) return { error: "Tu sesión venció. Volvé a entrar con un código desde el login." };
+  if (!account.emailOnly) redirect(target);
+  const result = await verifyEntryCode(account.email, form.get("code"), target);
+  if (!result.ok) return { sent: true, error: result.error };
+  // A cleanup that couldn't finish comes back here with its own error.
+  redirect(result.href.startsWith("/app/cuenta") ? result.href : `/app/cuenta?${new URLSearchParams({ next: target })}`);
 }
 
 /**
@@ -32,7 +48,7 @@ export async function completeAccount(next: string, _prev: AccountState, form: F
   if (password.length < 8) return { error: "Usá al menos 8 caracteres." };
   if (password !== form.get("confirmPassword")) return { error: "Las contraseñas no coinciden." };
   const account = await liveAccount();
-  if (!account?.sessionId) return { error: "Tu sesión venció. Volvé a entrar con un link desde el login." };
+  if (!account?.sessionId) return { error: "Tu sesión venció. Volvé a entrar con un código desde el login." };
   if (!account.emailOnly) redirect(target);
   // A direct action call must prove ownership before it can revoke anyone else's session.
   // The completion RPC rechecks this proof and the live session in its own transaction.

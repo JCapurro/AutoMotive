@@ -20,6 +20,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }), not
 vi.mock("@/components/app/low-results-notice", () => ({ LowResultsNotice: () => null }));
 // Aviso de zona: its own page test (lib/zone-notice-page.test.ts).
 vi.mock("@/lib/zone-notice-server", () => ({ allCount: () => null, dismissedZones: async () => [], zoneNotice: async () => ({ state: "none" }) }));
+vi.mock("@/components/app/phone-form", () => ({ PhonePrompt: () => createElement("aside", { "data-phone-prompt": true }) }));
 vi.mock("@/components/app/zone-notice", () => ({ ZoneNoticePanel: () => null }));
 vi.mock("@/components/app/search-actions", () => ({ FrequencySelect: () => null, PauseButton: () => null }));
 vi.mock("@/components/app/sort-select", () => ({ SortSelect: () => null }));

@@ -7,6 +7,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/env", () => ({ supabaseUrl: "https://auth.example.com", supabaseAnonKey: "public-key" }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ auth: mocks }) }));
 vi.mock("@/lib/signup", () => ({ afterSignIn: mocks.afterSignIn }));
+vi.mock("@/lib/entry-code", () => ({ verifyEntryCode: vi.fn() }));
+vi.mock("@/lib/config", () => ({ webConfig: vi.fn() }));
 vi.mock("@/lib/email-only", () => ({ accountForEmail: vi.fn(), sendEntryLink: vi.fn(), linkError: vi.fn() }));
 vi.mock("@/lib/account-proof", () => ({ afterRecoveryLink: vi.fn(), completeWithGoogle: mocks.completeWithGoogle }));
 vi.mock("next/headers", () => ({ headers: async () => new Headers({ origin: "https://eseauto.com.ar" }) }));

@@ -2,7 +2,7 @@ import { expect, type Page, test } from "@playwright/test";
 
 import { query, seedConfirmationComparables } from "./support/db";
 import { E2E_EMAIL_DOMAIN, E2E_LISTING_PREFIX } from "./support/env";
-import { magicLink } from "./support/mail";
+import { signUp } from "./support/auth";
 
 /**
  * Comparables fase 1 (migration 20261105120000): the listing page's "autos
@@ -12,16 +12,7 @@ import { magicLink } from "./support/mail";
  */
 
 async function signIn(page: Page, email: string) {
-  const since = new Date();
-  await page.goto("/login?mode=signup&next=/app");
-  await page.getByLabel("Email", { exact: true }).fill(email);
-  await page.getByLabel("Contraseña", { exact: true }).fill("e2e-password-123");
-  await page.getByLabel("Repetí la contraseña").fill("e2e-password-123");
-  await page.getByRole("button", { name: "Crear cuenta", exact: true }).click();
-  await expect(page.getByText("Revisá tu email")).toBeVisible();
-  await page.goto(await magicLink(email, since));
-  await page.getByRole("button", { name: "Confirmar mi email" }).click();
-  await expect(page).toHaveURL(/\/app/);
+  await signUp(page, email, "/app");
 }
 
 test("la ficha compara contra el mismo pool que comparables()", async ({ page }, testInfo) => {

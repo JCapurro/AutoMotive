@@ -4,6 +4,7 @@ const m = vi.hoisted(() => ({
   liveAccount: vi.fn(), sendEntryLink: vi.fn(), hasFreshProof: vi.fn(), rpc: vi.fn(), updateUser: vi.fn(), signOut: vi.fn(),
 }));
 vi.mock("@/lib/auth", () => ({ liveAccount: m.liveAccount }));
+vi.mock("@/lib/entry-code", () => ({ verifyEntryCode: vi.fn() }));
 vi.mock("@/lib/email-only", () => ({ sendEntryLink: m.sendEntryLink, hasFreshProof: m.hasFreshProof, linkError: () => "Ya te mandamos un link hace un momento." }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({ rpc: m.rpc }) }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ auth: { updateUser: m.updateUser, signOut: m.signOut } }) }));

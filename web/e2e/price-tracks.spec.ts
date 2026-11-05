@@ -2,7 +2,7 @@ import { expect, type Page, test } from "@playwright/test";
 
 import { query, seedPriceTracks } from "./support/db";
 import { E2E_EMAIL_DOMAIN } from "./support/env";
-import { magicLink } from "./support/mail";
+import { signUp } from "./support/auth";
 
 /**
  * PAR-03 (docs/superpowers/specs/2026-10-29-par03-dias-y-bajas-design.md):
@@ -14,16 +14,7 @@ import { magicLink } from "./support/mail";
 test.describe.configure({ mode: "serial" });
 
 async function signIn(page: Page, email: string) {
-  const since = new Date();
-  await page.goto("/login?mode=signup&next=/app");
-  await page.getByLabel("Email", { exact: true }).fill(email);
-  await page.getByLabel("Contraseña", { exact: true }).fill("e2e-password-123");
-  await page.getByLabel("Repetí la contraseña").fill("e2e-password-123");
-  await page.getByRole("button", { name: "Crear cuenta", exact: true }).click();
-  await expect(page.getByText("Revisá tu email")).toBeVisible();
-  await page.goto(await magicLink(email, since));
-  await page.getByRole("button", { name: "Confirmar mi email" }).click();
-  await expect(page).toHaveURL(/\/app/);
+  await signUp(page, email, "/app");
 }
 
 /** Nothing sticks out sideways: the page never scrolls horizontally. */

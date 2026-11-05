@@ -2,7 +2,7 @@ import { expect, type Page, test } from "@playwright/test";
 
 import { insertFreshDeal, query } from "./support/db";
 import { E2E_EMAIL_DOMAIN } from "./support/env";
-import { magicLink } from "./support/mail";
+import { signUp } from "./support/auth";
 
 /**
  * F6 acceptance (docs/TECHNICAL_PLAN.md, sección 13):
@@ -16,20 +16,7 @@ import { magicLink } from "./support/mail";
 test.describe.configure({ mode: "serial" });
 
 async function signIn(page: Page, email: string, next = "/app") {
-  const since = new Date();
-  await page.goto(`/login?next=${encodeURIComponent(next)}`);
-  await page.getByLabel("Email").fill(email);
-  await page.getByRole("link", { name: "Crear cuenta", exact: true }).click();
-  // A client navigation: until the signup form is up, «Email» is the login
-  // form's input, and a fill there is lost when the form is swapped.
-  await expect(page.getByLabel("Repetí la contraseña")).toBeVisible();
-  await page.getByLabel("Email", { exact: true }).fill(email);
-  await page.getByLabel("Contraseña", { exact: true }).fill("e2e-password-123");
-  await page.getByLabel("Repetí la contraseña").fill("e2e-password-123");
-  await page.getByRole("button", { name: "Crear cuenta", exact: true }).click();
-  await expect(page.getByText("Revisá tu email")).toBeVisible();
-  await page.goto(await magicLink(email, since));
-    await page.getByRole("button", { name: "Confirmar mi email" }).click();
+  await signUp(page, email, next);
 }
 
 async function expectNoHorizontalScroll(page: Page) {

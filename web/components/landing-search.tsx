@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState, useSyncExternalStore, useTransition } from "react";
 
-import { enterForFreeSearch, type FreeSearchResult, linkForFreeSearch, startFreeSearch } from "@/app/actions";
+import { codeForFreeSearch, enterForFreeSearch, type FreeSearchResult, linkForFreeSearch, startFreeSearch } from "@/app/actions";
 import { SearchPromptInput } from "@/components/search-prompt-input";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -87,10 +87,13 @@ export function LandingSearch({ signedIn: serverSignedIn, initialText = "", onSt
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
+  /** The email the code went to, kept while a wrong code is retried. */
+  const [sent, setSent] = useState<{ email: string; unconfirmed?: boolean } | null>(null);
   const [company, setCompany] = useState("");
   const [result, setResult] = useState<FreeSearchResult | null>(null);
   // An error keeps the pop-up on the step where it happened.
-  const [step, setStep] = useState<"email" | "password" | "sent">("email");
+  const [step, setStep] = useState<"email" | "password" | "code">("email");
   const [pending, start] = useTransition();
   // Before hydration a tap would submit the bare form and reload the page, losing the text: the button waits for it.
   const hydrated = useSyncExternalStore(noop, () => true, () => false);
@@ -100,17 +103,19 @@ export function LandingSearch({ signedIn: serverSignedIn, initialText = "", onSt
   const passwordId = useId();
   const emailRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
+  const codeRef = useRef<HTMLInputElement>(null);
+  const codeId = useId();
   const suggestion = emailSuggestion(email);
   const fieldError = result?.status === "error" ? result.field : undefined;
   // Each step's field takes the focus: the one that had it was just unmounted (autoFocus loses to the dialog's focus trap).
   useEffect(() => {
     // While an action runs the fields are disabled and can't take it.
     if (!open || pending) return;
-    const field = step === "password" ? passwordRef : step === "email" ? emailRef : null;
+    const field = step === "password" ? passwordRef : step === "code" ? codeRef : emailRef;
     const id = window.setTimeout(() => field?.current?.focus(), 0);
     return () => window.clearTimeout(id);
   }, [open, pending, step, result]);
-  const message = result?.status === "unavailable" || (result?.status === "error" && result.field !== "email" && result.field !== "password") ? result.error : null;
+  const message = result?.status === "unavailable" || (result?.status === "error" && result.field !== "email" && result.field !== "password" && result.field !== "code") ? result.error : null;
 
   /** Runs an action from the pop-up; a dropped connection keeps everything typed. */
   const run = (action: () => Promise<FreeSearchResult>) => start(async () => {
@@ -126,7 +131,11 @@ export function LandingSearch({ signedIn: serverSignedIn, initialText = "", onSt
       setPromptError(next.error);
     }
     if (next.status === "existing_account") setStep("password");
-    else if (next.status === "existing_email_only") setStep("sent");
+    else if (next.status === "existing_email_only") {
+      setCode("");
+      setSent(next.error ? null : { email: next.email, unconfirmed: next.unconfirmed });
+      setStep("code");
+    }
     setResult(next);
     if (next.status !== "created") return;
     forgetSignupCode();
@@ -140,6 +149,8 @@ export function LandingSearch({ signedIn: serverSignedIn, initialText = "", onSt
   const otherEmail = () => {
     setResult(null);
     setPassword("");
+    setCode("");
+    setSent(null);
     setEmail("");
     setStep("email");
   };
@@ -163,6 +174,8 @@ export function LandingSearch({ signedIn: serverSignedIn, initialText = "", onSt
         // Reopening starts over at the email (it stays typed).
         setResult(null);
         setPassword("");
+        setCode("");
+        setSent(null);
         setStep("email");
         setOpen(true);
       }}>
@@ -252,24 +265,48 @@ export function LandingSearch({ signedIn: serverSignedIn, initialText = "", onSt
             <Button type="submit" className="h-11 w-full text-[15px]" disabled={pending}>{pending ? "Entrando…" : "Entrar y crear la búsqueda"}</Button>
             <div className="flex flex-col gap-2 text-center text-sm">
               <button type="button" className="underline underline-offset-4" disabled={pending} onClick={() => run(() => linkForFreeSearch({ prompt: text, email }))}>
-                No me acuerdo: mandame un link para entrar
+                No me acuerdo: mandame un código
               </button>
               <button type="button" className="underline underline-offset-4" disabled={pending} onClick={otherEmail}>Usar otro email</button>
             </div>
           </form> : null}
 
-          {step === "sent" && result?.status === "existing_email_only" ? <div className="space-y-4">
+          {step === "code" && !sent && result?.status === "existing_email_only" ? <div className="space-y-4">
             <DialogHeader>
-              <DialogTitle>{result.error ? "No pudimos mandarte el link" : "Revisá tu email"}</DialogTitle>
-              <DialogDescription className="[overflow-wrap:anywhere]">
-                {result.error ?? `Ya tenés una cuenta con este email: te mandamos un link a ${result.email} para entrar${result.unconfirmed ? " y elegir tu contraseña" : ""}. Si no lo ves, revisá Spam; si pedís otro, usá el último.`}
-              </DialogDescription>
+              <DialogTitle>No pudimos mandarte el código</DialogTitle>
+              <DialogDescription className="[overflow-wrap:anywhere]">{result.error}</DialogDescription>
             </DialogHeader>
             <div className="flex flex-col gap-2">
-              <Button type="button" variant="outline" className="h-11 w-full" onClick={() => setOpen(false)}>Listo</Button>
+              <Button type="button" variant="outline" className="h-11 w-full" onClick={() => setOpen(false)}>Cerrar</Button>
               <button type="button" className="text-sm underline underline-offset-4" onClick={otherEmail}>Usar otro email</button>
             </div>
           </div> : null}
+
+          {step === "code" && sent ? <form className="space-y-4" noValidate onSubmit={(event) => {
+            event.preventDefault();
+            if (!pending) run(() => codeForFreeSearch({ prompt: text, email: sent.email, code }));
+          }}>
+            <DialogHeader>
+              <DialogTitle>Revisá tu email</DialogTitle>
+              <DialogDescription className="[overflow-wrap:anywhere]">
+                Ya tenés una cuenta con este email. Te mandamos un código a {sent.email}{sent.unconfirmed ? " para confirmarlo y elegir tu contraseña" : ""}: escribilo acá y seguimos con la búsqueda. Si no lo ves, revisá Spam.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-1.5">
+              <Label htmlFor={codeId}>Código</Label>
+              <Input ref={codeRef} id={codeId} name="code" inputMode="numeric" autoComplete="one-time-code" maxLength={9} required placeholder="123456" value={code} disabled={pending}
+                aria-invalid={fieldError === "code" || undefined} aria-describedby={fieldError === "code" ? `${codeId}-error` : undefined}
+                onChange={(event) => setCode(event.target.value)} className="h-11 bg-background text-lg tracking-[0.3em] tabular-nums" />
+              {fieldError === "code" && result?.status === "error" ? <p id={`${codeId}-error`} role="alert" className="text-sm text-destructive">{result.error}</p> : null}
+              <p className="text-xs text-muted-foreground">También podés tocar el botón del email. Sirve el último que te mandamos.</p>
+            </div>
+            {message ? <p role="alert" className="text-sm text-destructive">{message}</p> : null}
+            <Button type="submit" className="h-11 w-full text-[15px]" disabled={pending}>{pending ? "Entrando…" : "Entrar y crear la búsqueda"}</Button>
+            <div className="flex flex-col gap-2 text-center text-sm">
+              <button type="button" className="underline underline-offset-4" disabled={pending} onClick={() => run(() => linkForFreeSearch({ prompt: text, email: sent.email }))}>Mandame otro código</button>
+              <button type="button" className="underline underline-offset-4" disabled={pending} onClick={otherEmail}>Usar otro email</button>
+            </div>
+          </form> : null}
         </DialogContent>
       </Dialog>}
     </>

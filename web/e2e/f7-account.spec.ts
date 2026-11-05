@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 import { query } from "./support/db";
 import { E2E_EMAIL_DOMAIN } from "./support/env";
-import { magicLink } from "./support/mail";
+import { signUp } from "./support/auth";
 
 /**
  * F7, punto 7 (docs/TECHNICAL_PLAN.md): the legal pages, unsubscribing from
@@ -22,21 +22,7 @@ test("F7: privacidad, baja del email y borrar la cuenta", async ({ page, request
   });
 
   await test.step("registro con email como canal", async () => {
-    const since = new Date();
-    await page.goto("/login");
-    await page.getByLabel("Email").fill(email);
-    await page.getByRole("link", { name: "Crear cuenta", exact: true }).click();
-    // A client navigation: until the signup form is up, «Email» is the login
-    // form's input, and a fill there is lost when the form is swapped.
-    await expect(page.getByLabel("Repetí la contraseña")).toBeVisible();
-    await page.getByLabel("Email", { exact: true }).fill(email);
-    await page.getByLabel("Contraseña", { exact: true }).fill("e2e-password-123");
-    await page.getByLabel("Repetí la contraseña").fill("e2e-password-123");
-    await page.getByRole("button", { name: "Crear cuenta", exact: true }).click();
-    await expect(page.getByText("Revisá tu email")).toBeVisible();
-    await page.goto(await magicLink(email, since));
-    await page.getByRole("button", { name: "Confirmar mi email" }).click();
-    await expect(page).toHaveURL(/\/app/);
+    await signUp(page, email);
     await query(`update public.profiles set default_channels = '{telegram,email,web}' where email = $1`, [email]);
   });
 

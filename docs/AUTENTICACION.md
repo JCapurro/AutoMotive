@@ -7,10 +7,9 @@ La web tiene dos tipos de cuenta:
 
 Rutas:
 
-- `/` (portada): `startFreeSearch` ([web/app/actions.ts](../web/app/actions.ts)) crea la búsqueda gratis con el email.
-- `/login`: `signInWithPassword`. Debajo de la contraseña, **No tengo contraseña: mandame un link para entrar** lleva al modo link. Si las credenciales no sirven y el email es de una cuenta solo-email, manda el link para entrar.
-- `/login?mode=signup`: `signUp`, confirmación por email y reenvío con `resend`. El link «Crear cuenta» solo aparece para contratar (`next` en `/app/pro`); la portada también cae acá si el alta solo con email está apagada o llegó a su tope. Si el email ya es de una cuenta solo-email, manda el link para entrar en vez de registrar.
-- `/login?mode=recover` («Entrá con un link»): `resetPasswordForEmail`; respuesta genérica exista o no la cuenta.
+- `/` (portada): `startFreeSearch` ([web/app/actions.ts](../web/app/actions.ts)) crea la búsqueda gratis con el email. Si el email ya es de una cuenta, el mismo pop-up pide la contraseña o el **código** del email (`codeForFreeSearch`) y sigue con la búsqueda.
+- `/login` (desde el 04/11/2026, opción B): **una sola pantalla**. Email → «Mandame un código» → el código de 6 números que llega al email → «Entrar» ([web/app/login/actions.ts](../web/app/login/actions.ts) `login`). Un email sin cuenta recibe una cuenta solo-email, sin sesión hasta usar el código, con el mismo interruptor y los mismos frenos que la portada; pasados los frenos, o con el interruptor apagado, la respuesta es igual a la de un email existente. «Tengo contraseña» muestra el campo de contraseña (`signInWithPassword`, freno `login_password` por IP); si el email es solo-email o nunca se confirmó, manda el código. Google sigue igual. Los links viejos con `?mode=signup` o `?mode=recover` caen en la misma pantalla: ya no hay registro con contraseña ni «Reenviar confirmación».
+- `/app/datos` («Mis datos», desde el menú de la cuenta arriba a la derecha): email, celular (`profiles.phone`), contraseña (elegirla en `/app/cuenta` si la cuenta es solo-email; cambiarla en `/auth/reset-password` si no) y cerrar sesión.
 - `/auth/confirm`: `verifyOtp` para links con token hash (también funciona desde otro navegador). Para `type=recovery` solo acepta `next=/auth/reset-password?next=<ruta interna>`.
 - `/auth/callback`: soporta token hash y el intercambio PKCE `exchangeCodeForSession`.
 - `/auth/reset-password`: valida la sesión en página y acción, cambia la contraseña con `updateUser` y cierra las sesiones con `signOut`. Una sesión solo-email va a `/app/cuenta`.
@@ -18,6 +17,26 @@ Rutas:
 - `/r/<id>` y `/m/<id>`: los links de alertas y promociones solo navegan; nunca crean una sesión, aunque un correo anterior todavía incluya firma. Ver [Enlaces de correo e identidad](#enlaces-de-correo-e-identidad).
 
 Las contraseñas se envían directamente desde la acción al proveedor; no se guardan en tablas, eventos ni estado devuelto a la interfaz. La recuperación no genera `signup_completed`.
+
+## Código para entrar
+
+Desde el 04/11/2026 el email para entrar (la plantilla **Reset password**, [supabase/templates/recovery.html](../supabase/templates/recovery.html), asunto «Tu código para entrar a Ese Auto») muestra el código (`{{ .Token }}`) arriba del botón. El botón sigue funcionando igual que antes. [web/lib/entry-code.ts](../web/lib/entry-code.ts) `verifyEntryCode` hace `verifyOtp({ email, token, type: 'recovery' })` en el servidor y después aplica las mismas reglas que el link:
+
+- **Cuenta solo-email:** `afterRecoveryLink` (cierra las otras sesiones, limpia huellas, guarda la prueba en `account_proofs` con `method = 'email_link'`) y sigue a `next`, o a elegir contraseña si va a pagar. `afterSignIn(..., 'email_code')` registra `signup_completed` si es la primera vez (una cuenta creada desde `/login`).
+- **Registro con contraseña nunca confirmado:** va a elegir una contraseña nueva.
+- **Cualquier otra cuenta:** va directo a `next`, sin pedir contraseña nueva.
+
+Por qué un código: se escribe en el mismo navegador donde está la persona. El link del navegador de Instagram o Facebook abre Gmail, que no comparte cookies. Hay un solo código por usuario (el último email lo reemplaza), vence con el link (`otp_expiry`, 1 hora) y abrir el link también lo consume.
+
+Seis números se pueden adivinar, así que los intentos tienen frenos que, si no se pueden leer, **bloquean** (no dejan pasar): `entry_code_user` (8 por hora por cuenta) y `entry_code_ip` (30 por hora por IP), además del límite de Auth (`token_verifications`). Un email sin cuenta contesta lo mismo que un código equivocado, sin consultar a Auth.
+
+Lo usan `/login`, el pop-up de la portada (`codeForFreeSearch`) y el paso «Confirmá tu email» de `/app/cuenta` (`confirmAccountCode`).
+
+**Proyecto alojado:** pegar la plantilla de [supabase/templates/recovery.html](../supabase/templates/recovery.html) y el asunto nuevo en Dashboard → Authentication → Email Templates → Reset password **antes** de desplegar la web. Sin eso, el email llega sin código y `/login` queda esperando un código que nadie recibe.
+
+## Celular
+
+`profiles.phone` (ya existía; `authenticated` puede actualizarlo), en E.164 argentino: `+549` + 10 dígitos ([web/lib/phone.ts](../web/lib/phone.ts) acepta +54, el 9, el 0 y el 15). Es para que el equipo contacte al usuario si hace falta (ayuda, seguimiento, planes); hoy no hay canal de producto por WhatsApp. Se pide **después** de que la búsqueda muestra resultados: una tarjeta en `/app/searches/<id>` (`PhonePrompt`, se puede cerrar y queda cerrada en ese navegador), y se edita o borra en Mis datos. Eventos: `phone_prompt_viewed` (una vez por navegador), `phone_prompt_dismissed`, `phone_added` y `phone_removed` (`props.source`: `results` o `datos`).
 
 ## Búsqueda gratis solo con email
 

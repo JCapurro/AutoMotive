@@ -18,7 +18,7 @@ export default async function PrivacyPage() {
   const { sellIntent } = await webConfig();
   return (
     // The agencies line was approved by Juan on 03/11: the date moves with it.
-    <LegalPage title="Política de privacidad" updated={sellIntent.agenciesContact ? "3 de noviembre de 2026" : "2 de noviembre de 2026"}>
+    <LegalPage title="Política de privacidad" updated="4 de noviembre de 2026">
       <p>
         Ese Auto es un servicio en etapa de piloto que monitorea publicaciones de autos usados y te avisa cuando
         aparece una que coincide con tu búsqueda. Esta política explica qué datos tuyos usamos, para qué y cómo
@@ -31,7 +31,7 @@ export default async function PrivacyPage() {
           <strong>Tu email</strong>. Para la búsqueda gratis te pedimos solo tu email, sin contraseña ni
           confirmación. Lo usamos para mandarte las alertas de tu búsqueda y los avisos sobre tu prueba gratis y tu
           plan (por ejemplo, cuando termina la prueba, o cuántos autos nuevos aparecieron para tu búsqueda en las 3
-          semanas después de que venció). Para volver a entrar desde otro dispositivo te mandamos un link a ese
+          semanas después de que venció). Para volver a entrar desde otro dispositivo te mandamos un código a ese
           email. Para contratar un plan te pedimos crear una cuenta: confirmar tu email y elegir una contraseña.
           También te escribimos para confirmar el registro o recuperar la contraseña. Las alertas y los avisos
           traen un link para dejar de recibirlos.
@@ -49,6 +49,11 @@ export default async function PrivacyPage() {
           de 1 píxel que lo marca abierto cuando se cargan las imágenes) y respuestas a encuestas. Lo usamos para
           mejorar las alertas y medir si el servicio es útil.
         </li>
+        <li>
+          <strong>Tu celular, si nos lo dejás</strong>: es opcional. Lo usamos solo para contactarte, si hace falta, sobre
+          tus búsquedas o tu cuenta. No se lo damos a vendedores ni a nadie. Lo cambiás o lo borrás cuando quieras desde
+          Mis datos.
+        </li>
         {sellIntent.agenciesContact ? (
           <li data-testid="privacy-sell-intent">
             <strong>Si tenés que vender tu auto</strong>. {SELL_INTENT_PRIVACY_LINE}
@@ -59,8 +64,8 @@ export default async function PrivacyPage() {
         </li>
         <li>
           <strong>Un identificador cifrado de tu IP</strong>: cuando dejás tu email para crear una búsqueda o pedís
-          un link para entrar, guardamos un identificador cifrado (un hash) de tu dirección IP para prevenir abusos,
-          como crear muchas búsquedas o pedir muchos links desde la misma conexión. Lo borramos a los 2 días como
+          un código para entrar, guardamos un identificador cifrado (un hash) de tu dirección IP para prevenir abusos,
+          como crear muchas búsquedas o pedir muchos códigos desde la misma conexión. Lo borramos a los 2 días como
           máximo y no guardamos la IP en sí.
         </li>
       </ul>
@@ -136,7 +141,7 @@ export default async function PrivacyPage() {
         Podés acceder, rectificar y suprimir tus datos en cualquier momento (Ley 25.326 de Protección de Datos
         Personales). Casi todo lo podés hacer vos desde <Link href="/app/settings">Ajustes</Link>: cambiar los
         canales, dejar de recibir emails (también con el link al pie de cada email) o borrar tu cuenta. Para
-        borrar tus datos sin contraseña, en Ingresar pedí el link para entrar (te llega a tu email) y andá a
+        borrar tus datos sin contraseña, en Ingresar pedí el código para entrar (te llega a tu email) y andá a
         Ajustes → «Borrar mi cuenta». Si no podés entrar, o para cualquier otro pedido, escribinos a{" "}
         <Contact email={contactEmail} /> y te respondemos dentro de los plazos que fija la ley.
       </p>

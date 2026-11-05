@@ -20,7 +20,7 @@ export default async function ResetPasswordPage({ searchParams }: PageProps<"/au
   }
   return <main className="flex min-h-dvh flex-col items-center justify-center gap-6 px-4 py-10">
     <Logo /><Card className="w-full max-w-sm"><CardHeader><CardTitle>Nueva contraseña</CardTitle><CardDescription>Elegí una contraseña de al menos 8 caracteres.</CardDescription></CardHeader><CardContent>
-      {data.user && !error ? <PasswordForm next={next} /> : <p role="alert" className="text-sm">Este link ya se usó o venció. <Link className="underline" href={`/login?${new URLSearchParams({ mode: "recover", next })}`}>Pedí uno nuevo</Link>.</p>}
+      {data.user && !error ? <PasswordForm next={next} /> : <p role="alert" className="text-sm">Este link ya se usó o venció. <Link className="underline" href={`/login?${new URLSearchParams({ next })}`}>Pedí un código para entrar</Link>.</p>}
     </CardContent></Card>
   </main>;
 }

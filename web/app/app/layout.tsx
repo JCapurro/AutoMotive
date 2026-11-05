@@ -1,4 +1,4 @@
-import { AcquirePlanButton, MobileNav, TopNav } from "@/components/app/app-nav";
+import { AccountMenu, AcquirePlanButton, MobileNav, TopNav } from "@/components/app/app-nav";
 import { Logo } from "@/components/logo";
 import { canViewHealth } from "@/lib/health-auth";
 import { isAdmin } from "@/lib/admin";
@@ -7,7 +7,7 @@ import { canAcquirePlan, type PlanLimits } from "@/lib/pro";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function AppLayout({ children }: LayoutProps<"/app">) {
-  await requireUser();
+  const user = await requireUser();
   const supabase = await createClient();
   const [admin, healthOwner, { data: rawAccess, error: accessError }] = await Promise.all([
     isAdmin(), canViewHealth(), supabase.rpc("my_plan_snapshot"),
@@ -21,10 +21,12 @@ export default async function AppLayout({ children }: LayoutProps<"/app">) {
           <div className="mx-auto flex h-15 w-full max-w-6xl items-center gap-3 px-4 sm:px-6 md:gap-7 lg:px-10">
             <Logo href="/app" className="shrink-0 whitespace-nowrap" />
             <TopNav admin={admin} healthOwner={healthOwner} canAcquirePlan={showAcquirePlan} />
+            <div className="hidden h-full items-center md:flex"><AccountMenu email={user.email} /></div>
             {/* Below 360 px «Planes» gives way, so the icons never push the page sideways. */}
             <div className="ml-auto flex h-full items-center gap-1.5 md:hidden">
               <AcquirePlanButton canAcquirePlan={showAcquirePlan} className="h-8 px-2.5 text-[13px] max-[359px]:hidden" />
               <MobileNav healthOwner={healthOwner} />
+              <AccountMenu email={user.email} />
             </div>
           </div>
         </header>

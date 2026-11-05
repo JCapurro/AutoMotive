@@ -39,13 +39,13 @@ export default async function AccountPage({ searchParams }: PageProps<"/app/cuen
               ? paying ? "Para contratar, elegí una contraseña. Así entrás desde cualquier dispositivo y ves tus pagos."
                 : "Así entrás más rápido la próxima vez. La vas a necesitar para contratar un plan."
               : <>Para {paying ? "pagar" : "elegir una contraseña"} necesitamos confirmar que <b className="text-foreground [overflow-wrap:anywhere]">{account.email}</b> es tuyo.
-                Te vamos a mandar un link: lo abrís y elegís tu contraseña.</>}
+                Te vamos a mandar un código: lo escribís acá y elegís tu contraseña.</>}
           </CardDescription>
         </CardHeader>
         <CardContent>
           {params.error === "security" ? (
             <p role="alert" className="mb-4 text-sm text-destructive">
-              No pudimos terminar de proteger tu cuenta. Pedí un nuevo link para volver a intentarlo.
+              No pudimos terminar de proteger tu cuenta. Pedí un código nuevo para volver a intentarlo.
             </p>
           ) : null}
           <AccountSteps email={account.email} next={next} proven={proven} paying={paying} />

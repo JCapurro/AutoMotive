@@ -2,8 +2,8 @@ import { expect, type Page, test } from "@playwright/test";
 
 import { query } from "./support/db";
 import { E2E_EMAIL_DOMAIN } from "./support/env";
-import { magicLink } from "./support/mail";
 import { worker } from "./support/worker";
+import { signUp, resetAuthBrakes } from "./support/auth";
 
 /**
  * F5 modo asistido (docs/TECHNICAL_PLAN.md, sección 8.4): text → llm_jobs →
@@ -35,21 +35,7 @@ test.beforeEach(async ({ context }) => {
 });
 
 async function signIn(page: Page, email: string) {
-  const since = new Date();
-  await page.goto("/login?next=/app/searches/new");
-  await page.getByLabel("Email").fill(email);
-  await page.getByRole("link", { name: "Crear cuenta", exact: true }).click();
-  // A client navigation: until the signup form is up, «Email» is the login
-  // form's input, and a fill there is lost when the form is swapped.
-  await expect(page.getByLabel("Repetí la contraseña")).toBeVisible();
-  await page.getByLabel("Email", { exact: true }).fill(email);
-  await page.getByLabel("Contraseña", { exact: true }).fill("e2e-password-123");
-  await page.getByLabel("Repetí la contraseña").fill("e2e-password-123");
-  await page.getByRole("button", { name: "Crear cuenta", exact: true }).click();
-  await expect(page.getByText("Revisá tu email")).toBeVisible();
-  await page.goto(await magicLink(email, since));
-    await page.getByRole("button", { name: "Confirmar mi email" }).click();
-  await expect(page).toHaveURL(/\/app\/searches\/new$/);
+  await signUp(page, email, "/app/searches/new");
   await expect(page.getByRole("tab", { name: "Asistido" })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByLabel("¿Qué auto buscás?")).toBeVisible();
 }
@@ -67,6 +53,9 @@ async function ask(page: Page, text: string) {
   await expect(page.getByRole("status")).toContainText("Interpretando tu búsqueda");
   worker("llm_jobs", "--replay");
 }
+
+// The landing's sign-ups go through the real brakes: start each test below them.
+test.beforeEach(async () => { await resetAuthBrakes(); });
 
 test("F5: dos vehículos en un pedido, revisados y guardados", async ({ page }, testInfo) => {
   const email = `assisted-${testInfo.project.name}-${Date.now()}@${E2E_EMAIL_DOMAIN}`;
