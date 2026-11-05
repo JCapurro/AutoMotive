@@ -1,0 +1,194 @@
+{
+  "make": "Ford",
+  "model": "Maverick",
+  "generation_label": "Primera generación (pick-up compacta)",
+  "year_from": 2022,
+  "year_to": null,
+  "slug_make": "ford",
+  "slug_model": "maverick",
+  "body": {
+    "known_issues": [
+      {
+        "text": "En junio de 2026 Ford Argentina llamó a revisión a Maverick y Bronco Sport importadas de México porque la rótula que une el brazo inferior delantero con la mangueta pudo quedar mal armada y separarse, con riesgo de perder el control de la dirección. La nota no da años ni chasis: consultá con el VIN.",
+        "applies_to": "unidades importadas de México (confirmar con el VIN)"
+      },
+      {
+        "text": "En EE.UU. la misma falla de las rótulas delanteras motivó un llamado para Maverick 2022 a 2026, con la indicación de no usar el vehículo hasta repararlo.",
+        "applies_to": "2022–2026 en EE.UU. (otros mercados)"
+      },
+      {
+        "text": "En marzo de 2026 la prensa informó otra campaña de Ford Argentina que incluye a la Maverick (junto con Kuga, Bronco, Bronco Sport y F-150), sin detallar la falla. Preguntá en un concesionario oficial qué campañas tiene la unidad.",
+        "applies_to": "según chasis (confirmar con el VIN)"
+      },
+      {
+        "text": "En EE.UU. hubo un llamado de 2024 porque la pantalla del tablero podía no encenderse, que se corrige con una actualización de software. Según Autocosmos, Ford no había reportado esa falla en las Maverick vendidas en Argentina.",
+        "applies_to": "EE.UU. (otros mercados)"
+      },
+      {
+        "text": "En EE.UU. hubo llamados por luces traseras que podían apagarse por un problema de software, incluido uno repetido para Maverick 2022 a 2024 donde la reparación anterior no se había aplicado bien.",
+        "applies_to": "2022–2024 en EE.UU. (otros mercados)"
+      }
+    ],
+    "visit_checklist": [
+      {
+        "text": "Consultá con el número de chasis (VIN) en un concesionario oficial Ford si tiene campañas pendientes, en especial la de las rótulas delanteras, y pedí el comprobante de las que se hicieron."
+      },
+      {
+        "text": "Al dar contacto, mirá que el tablero encienda completo y que se apaguen los testigos de motor, airbag, ABS y, en la híbrida, los del sistema híbrido."
+      },
+      {
+        "text": "Con alguien afuera, probá luces traseras, de freno y de giro."
+      },
+      {
+        "text": "En la prueba, andá por una calle rota y escuchá golpes en el tren delantero; fijate que la dirección no tenga juego ni tire hacia un lado."
+      },
+      {
+        "text": "Probá la pantalla, Apple CarPlay o Android Auto, la cámara trasera y las ayudas a la conducción que traiga la versión."
+      },
+      {
+        "text": "Mirá la caja de carga y el enganche: marcas de carga pesada o remolque indican uso de trabajo."
+      },
+      {
+        "text": "En una Tremor o una Lariat FX4, mirá debajo del vehículo por golpes de uso fuera de camino y probá los modos de manejo y los bloqueos.",
+        "applies_to": "Lariat FX4 y Tremor"
+      }
+    ],
+    "versions_equipment": [
+      {
+        "text": "Se importa de México. Llegó en 2022 en dos versiones con el 2.0 EcoBoost turbo de 253 CV y automática de ocho marchas: XLT con tracción simple y Lariat 4x4 con paquete FX4.",
+        "applies_to": "2022 hasta el restyling de 2025"
+      },
+      {
+        "text": "El paquete FX4 sumaba ganchos de rescate, neumáticos para todo terreno, control de descenso, protecciones inferiores y calcos.",
+        "applies_to": "Lariat FX4"
+      },
+      {
+        "text": "Desde el lanzamiento trae siete airbags, control de estabilidad, frenado autónomo de emergencia, frenos a disco en las cuatro ruedas y una capacidad de carga declarada de 680 kg.",
+        "applies_to": "según la presentación de 2021-2022"
+      },
+      {
+        "text": "En mayo de 2023 llegó la Lariat Híbrida: naftero 2.5 de ciclo Atkinson y motor eléctrico, 194 CV combinados, caja e-CVT y tracción delantera.",
+        "applies_to": "Lariat Híbrida 2023 hasta el restyling de 2025"
+      },
+      {
+        "text": "Con el restyling de abril de 2025 todas pasaron a 4x4: XLT y Tremor con el 2.0 EcoBoost y Lariat Híbrida. La Tremor reemplazó a la Lariat FX4 y suma suspensión reforzada, más despeje, bloqueo del diferencial trasero y neumáticos A/T.",
+        "applies_to": "desde abril de 2025"
+      },
+      {
+        "text": "Desde 2025 todas traen pantalla de 12,3 pulgadas con Apple CarPlay y Android Auto inalámbricos; Lariat Híbrida y Tremor suman cámara 360°, crucero adaptativo y centrado de carril.",
+        "applies_to": "desde abril de 2025"
+      }
+    ],
+    "maintenance_costs": [
+      {
+        "text": "Ford anunciaba garantía de 3 años o 100.000 km. En unidades recientes puede seguir vigente: confirmá con el VIN en un concesionario oficial y pedí los comprobantes de service."
+      },
+      {
+        "text": "Para la Lariat Híbrida 2025, Ford anunció 8 años o 160.000 km para el sistema de alto voltaje. Para las híbridas 2023-2024, confirmá la cobertura en el manual o con el concesionario.",
+        "applies_to": "Lariat Híbrida"
+      },
+      {
+        "text": "No encontré el plan de mantenimiento oficial de Ford Argentina para la Maverick: los intervalos de aceite, filtros y fluidos de caja están en el manual y el libro de service de la unidad."
+      },
+      {
+        "text": "En una unidad usada con remolque, carga pesada o uso fuera de camino, conviene presupuestar frenos, neumáticos y tren delantero."
+      }
+    ],
+    "generations": [
+      {
+        "label": "Primera generación",
+        "year_from": 2022,
+        "year_to": 2025,
+        "text": "Preventa en noviembre de 2021 y lanzamiento en febrero de 2022, importada de México. La híbrida llegó en mayo de 2023. Es una pick-up compacta, distinta del Ford Maverick de los años setenta."
+      },
+      {
+        "label": "Primera generación, restyling",
+        "year_from": 2025,
+        "year_to": null,
+        "text": "Desde abril de 2025: diseño renovado, todas 4x4, versiones XLT, Lariat Híbrida y Tremor, y pantalla de 12,3 pulgadas."
+      }
+    ]
+  },
+  "questions": [
+    {
+      "text": "¿Le hicieron el llamado a revisión de las rótulas delanteras? ¿Tenés el comprobante?",
+      "why": "Ford Argentina llamó a revisión en 2026 a Maverick importadas de México por esas rótulas."
+    },
+    {
+      "text": "¿Le hicieron otras campañas o actualizaciones de software en el concesionario?",
+      "why": "Hubo campañas en Argentina y llamados por software en otros mercados."
+    },
+    {
+      "text": "¿Es naftera EcoBoost o híbrida, y de qué año modelo? ¿Antes o después del restyling de 2025?",
+      "why": "Cambian el motor, la caja, la tracción y el equipamiento según la etapa."
+    },
+    {
+      "text": "¿Los services se hicieron en concesionario oficial? ¿Tenés el libro o las facturas?",
+      "why": "Sirve para saber si se siguió el plan de service y para consultar la garantía con el concesionario."
+    },
+    {
+      "text": "¿La usaste para remolcar o con carga pesada, o fuera de camino?",
+      "why": "Ese uso desgasta frenos, neumáticos y tren delantero."
+    },
+    {
+      "text": "¿Alguna vez el tablero no encendió o fallaron las luces traseras?",
+      "why": "En EE.UU. hubo llamados por esas dos fallas de software."
+    }
+  ],
+  "sources": [
+    {
+      "title": "Ford presenta la Maverick en Argentina: versiones y ficha técnica (Parabrisas, 04/11/2021)",
+      "url": "https://parabrisas.perfil.com/noticias/novedades/ford-maverick-argentina-presentacion-pick-up-compacta-versiones-2022.phtml",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Ford lanza la Maverick en la Argentina (Autoweb, 15/02/2022)",
+      "url": "https://www.autoweb.com.ar/?p=27313",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Nueva Ford Maverick híbrida (Autotest, 22/05/2023)",
+      "url": "https://autotest.com.ar/lanzamientos/nueva-ford-maverick-hibrida/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Ford Maverick: renovación y nueva variante offroad en Argentina (Autocosmos, 23/04/2025)",
+      "url": "https://noticias.autocosmos.com.ar/2025/04/23/ford-maverick-renovacion-precio-y-nueva-variante-offroad-en-argentina",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Recall para la Ford Maverick en EE.UU. por una falla en el tablero (Autocosmos, 05/03/2024)",
+      "url": "https://noticias.autocosmos.com.ar/2024/03/05/recall-para-la-ford-maverick-en-eeuu-por-una-falla-en-el-tablero",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Ford llama a revisión a Maverick y Bronco Sport (Infonegocios, 17/06/2026)",
+      "url": "https://infonegocios.info/default/ford-llama-a-revision-a-maverick-y-bronco-sport-recomienda-no-usar-las-unidades-afectadas",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Recall de Ford en Argentina: cinco modelos afectados (Infonegocios, 27/03/2026)",
+      "url": "https://infonegocios.info/default/recall-de-ford-en-argentina-cinco-modelos-afectados-y-llamados-a-revision",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Urgent recall on certain 2021-2026 Bronco Sport, 2022-2026 Maverick vehicles (Shelby County Today, 08/06/2026)",
+      "url": "https://scttx.com/node/50517",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Ford Maverick recalled again for failing tail lights (Kelley Blue Book, 28/02/2025)",
+      "url": "https://www.kbb.com/car-news/ford-maverick-recalled-again-for-failing-tail-lights",
+      "kind": "prensa",
+      "verified": true
+    }
+  ]
+}

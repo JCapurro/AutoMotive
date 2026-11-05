@@ -1,0 +1,193 @@
+{
+  "make": "Renault",
+  "model": "Clio",
+  "generation_label": "Clio II y Clio Mío",
+  "year_from": 2000,
+  "year_to": 2016,
+  "slug_make": "renault",
+  "slug_model": "clio",
+  "body": {
+    "known_issues": [
+      {
+        "text": "Según Autotest, ya a 100 km/h se siente el viento que se filtra por los burletes, incluso en unidades nuevas, y las contrapuertas hacen ruido y, una vez desmontadas, no vuelven a quedar como de fábrica.",
+        "applies_to": "Clio II"
+      },
+      {
+        "text": "Autotest menciona que el embrague se gasta antes de lo esperado y que el pedal tiene mucho juego libre, y que el pomo de la caja cabecea ante aceleraciones o frenadas bruscas.",
+        "applies_to": "Clio II"
+      },
+      {
+        "text": "En los diésel, según Autotest, el gasoil de mala calidad puede tapar la válvula principal de la inyección, con pérdida de potencia y humo en baja.",
+        "applies_to": "diésel 1.9 y 1.5 dCi"
+      },
+      {
+        "text": "Según las pruebas de 2012 y 2013, los primeros Clio Mío no tenían airbags ni ABS. Latin NCAP le dio cero estrellas sin airbags en 2013 y tres estrellas para adultos con doble airbag en 2014. Confirmá en la unidad qué tiene.",
+        "applies_to": "Clio Mío, sobre todo 2012–2013"
+      }
+    ],
+    "visit_checklist": [
+      {
+        "text": "Confirmá si tiene airbags y ABS: en el Clio II dependían de la versión y los primeros Clio Mío no los traían. Mirá que el testigo de airbag se encienda al dar contacto y después se apague."
+      },
+      {
+        "text": "Probá el embrague: que no patine al acelerar en cuarta o quinta y fijate cuánto juego libre tiene el pedal."
+      },
+      {
+        "text": "Si podés, salí a la ruta y escuchá si entra viento por los burletes a partir de 100 km/h."
+      },
+      {
+        "text": "Revisá las contrapuertas: que estén bien fijas y no hagan ruido al pasar por calles en mal estado."
+      },
+      {
+        "text": "En los diésel, prestá atención a humo o falta de potencia en baja.",
+        "applies_to": "diésel 1.9 y 1.5 dCi"
+      },
+      {
+        "text": "Pedí que escaneen el motor para ver si hay códigos de falla guardados."
+      }
+    ],
+    "versions_equipment": [
+      {
+        "text": "Motores del Clio II según Autotest: naftas 1.2 de 75 CV, 1.6 de ocho válvulas y 90 CV (primera etapa) y 1.6 16v de 100 y 110 CV; diésel 1.9 de 65 CV (primera etapa) y 1.5 dCi de 65 CV desde 2003. Hubo una versión Sport francesa con 2.0 de 172 CV.",
+        "applies_to": "Clio II"
+      },
+      {
+        "text": "Versiones del Clio II: RN y RT en 2000; desde 2003, Authentique, Expression y Privilège, con carrocería de tres puertas; desde 2006, Dynamique, Confort y Luxe. También hubo sedán desde 2000.",
+        "applies_to": "Clio II"
+      },
+      {
+        "text": "Equipamiento según Autotest: en RN, Authentique y Dynamique el aire y el doble airbag eran opcionales; RT, Expression y Confort suman antiniebla y apertura a distancia; Privilège y Luxe suman ABS y espejos eléctricos.",
+        "applies_to": "Clio II"
+      },
+      {
+        "text": "Clio Mío: motor 1.2 16v de 75 CV con manual de cinco en toda la gama. Hubo versiones Authentique, Expression y variantes Pack.",
+        "applies_to": "Clio Mío 2012–2016"
+      },
+      {
+        "text": "En noviembre de 2014 se sumó la Dynamique, la más equipada, basada en la Confort Plus, con doble airbag, ABS, llantas de aleación de 14 y antiniebla.",
+        "applies_to": "Clio Mío, desde fines de 2014"
+      }
+    ],
+    "maintenance_costs": [
+      {
+        "text": "Autotest advierte que el Clio II no es el más barato en repuestos: las piezas de motor son caras y muchas son importadas.",
+        "applies_to": "Clio II"
+      },
+      {
+        "text": "Confirmá en el manual de la unidad si el motor usa correa de distribución y cada cuánto se cambia; si no hay comprobante del último cambio, tomalo como pendiente."
+      },
+      {
+        "text": "Presupuestá el embrague si no hay factura de un cambio reciente, porque la prensa señala que se gasta antes de lo esperado.",
+        "applies_to": "Clio II"
+      },
+      {
+        "text": "En los diésel, cargá gasoil de buena calidad y preguntá si la inyección tuvo reparaciones.",
+        "applies_to": "diésel 1.9 y 1.5 dCi"
+      }
+    ],
+    "generations": [
+      {
+        "label": "Clio II",
+        "year_from": 2000,
+        "year_to": 2003,
+        "text": "Llegó en 2000 importado de Brasil y después se fabricó en la planta de Santa Isabel, en Córdoba. Reemplazó al Clio I, fabricado allí desde 1996."
+      },
+      {
+        "label": "Rediseño 2003",
+        "year_from": 2003,
+        "year_to": 2006,
+        "text": "Trompa nueva con ópticas más triangulares y parrilla más grande, sin cambios en el interior; llegaron el tres puertas y el diésel 1.5 dCi."
+      },
+      {
+        "label": "Rediseño 2006",
+        "year_from": 2006,
+        "year_to": 2012,
+        "text": "Cambio sutil: paragolpes sin plásticos negros y patente trasera en el paragolpes. Nuevas versiones Dynamique, Confort y Luxe."
+      },
+      {
+        "label": "Clio Mío",
+        "year_from": 2012,
+        "year_to": 2016,
+        "text": "Un Clio II rediseñado, fabricado en Santa Isabel desde noviembre de 2012 hasta 2016, cuando terminó la producción del Clio en Argentina."
+      }
+    ]
+  },
+  "questions": [
+    {
+      "text": "¿Tiene airbags y ABS? ¿Qué versión es exactamente?",
+      "why": "En el Clio II dependían de la versión y los primeros Clio Mío no los traían."
+    },
+    {
+      "text": "¿Cuándo se cambió el embrague por última vez?",
+      "why": "La prensa señala que en el Clio II el embrague se gasta antes de lo esperado."
+    },
+    {
+      "text": "¿El motor usa correa de distribución? Si la usa, ¿cuándo se cambió y tenés el comprobante?",
+      "why": "El intervalo de cambio lo marca el plan de mantenimiento del manual."
+    },
+    {
+      "text": "Si es diésel, ¿la inyección tuvo alguna reparación?",
+      "why": "Según la prensa, el gasoil de mala calidad puede tapar la válvula principal de la inyección."
+    },
+    {
+      "text": "¿Se desarmaron alguna vez las contrapuertas o se cambiaron burletes?",
+      "why": "La prensa menciona ruidos de contrapuertas y viento que se filtra por los burletes."
+    }
+  ],
+  "sources": [
+    {
+      "title": "Renault Clio II usado: 5 aspectos que tenés que saber (Autotest, 05/07/2022)",
+      "url": "https://autotest.com.ar/noticias/usados-renault-clio-segunda-generacion/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "El Renault Clio argentino se despidió después de 20 años (16Válvulas, 01/11/2016)",
+      "url": "https://www.16valvulas.com.ar/el-renault-clio-argentino-se-despidio-despues-de-20-anos/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Renault Clio Mío, presentación industrial (Autocosmos, 15/11/2012)",
+      "url": "https://noticias.autocosmos.com.ar/2012/11/15/renault-clio-mio-presentacion-industrial",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Prueba: Renault Clio Mío Pack 1.2, parte 1 (Autoblog Uruguay, 05/2013)",
+      "url": "https://www.autoblog.com.uy/2013/05/prueba-renault-clio-mio-pack-12-parte-1.html",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Prueba: Renault Clio Mío Expression Pack I (Autoweb, 01/12/2012)",
+      "url": "https://www.autoweb.com.ar/?p=9838",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Renault Clio Mío, versiones, equipamiento y precios (16Válvulas)",
+      "url": "https://www.16valvulas.com.ar/renault-clio-mio-versiones-equipamiento-y-precios/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "El Renault Clio Mío mejoró su performance con tres estrellas Latin NCAP (16Válvulas, 13/01/2014)",
+      "url": "https://www.16valvulas.com.ar/?p=78050",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Latin NCAP retira las tres estrellas de seguridad al Renault Clio (Autocosmos, 24/06/2015)",
+      "url": "https://noticias.autocosmos.com.ar/2015/06/24/latin-ncap-retira-las-tres-estrellas-de-seguridad-al-renault-clio",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "El más equipado: Renault Clio Mío Dynamique (Parabrisas, 14/11/2014)",
+      "url": "https://parabrisas.perfil.com/noticias/mercado/2014-11-14-el-mas-equipado.phtml",
+      "kind": "prensa",
+      "verified": true
+    }
+  ]
+}

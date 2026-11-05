@@ -1,0 +1,177 @@
+{
+  "make": "Suzuki",
+  "model": "Fun",
+  "generation_label": "Fun (Chevrolet Celta con marca Suzuki)",
+  "year_from": 2003,
+  "year_to": 2011,
+  "slug_make": "suzuki",
+  "slug_model": "fun",
+  "body": {
+    "known_issues": [
+      {
+        "text": "El Fun es el Chevrolet Celta brasileño con marca Suzuki, desarrollado sobre la plataforma del Opel Corsa B. Muchos repuestos y fallas son los del Celta, y la prensa brasileña es la que más los documentó."
+      },
+      {
+        "text": "Usa correa de distribución. Una nota brasileña sobre el Celta usado menciona desgaste prematuro de la correa; si no hay comprobante del último cambio, tomalo como pendiente y confirmá el intervalo en el manual.",
+        "applies_to": "reportes en Brasil (Celta)"
+      },
+      {
+        "text": "Reportes en Brasil sobre el Celta: pérdidas de aceite por retenes de caja y junta de tapa de válvulas, olor a nafta por la brida de la bomba de combustible y tapa de la bomba que se reseca y se parte.",
+        "applies_to": "reportes en Brasil (Celta)"
+      },
+      {
+        "text": "También en Brasil: motor que se apaga en el arranque en frío por la bomba de combustible, marcha lenta que oscila por mala masa del motor o por el sensor de velocidad, y medidor de combustible que falla por el flotante del tanque.",
+        "applies_to": "reportes en Brasil (Celta)"
+      },
+      {
+        "text": "Carrocería y terminaciones: la misma nota brasileña cuenta soldaduras con chapas que se sueltan y hacen ruido, plásticos de tablero y puertas que se aflojan y crujen, y aislación acústica pobre.",
+        "applies_to": "reportes en Brasil (Celta)"
+      },
+      {
+        "text": "Es un auto que ya tiene entre 15 y más de 20 años: el estado depende más del mantenimiento y del uso que del modelo en sí."
+      }
+    ],
+    "visit_checklist": [
+      {
+        "text": "Arrancalo en frío y dejalo en marcha lenta unos minutos: fijate si se apaga, si la marcha lenta oscila o si la aguja de temperatura hace cosas raras."
+      },
+      {
+        "text": "Mirá debajo del auto y en el motor si hay pérdidas de aceite en la caja y en la tapa de válvulas, y si hay olor a nafta cerca del tanque o en el habitáculo."
+      },
+      {
+        "text": "En la prueba de manejo, pasá por calles con pozos y escuchá ruidos de carrocería, tablero y puertas."
+      },
+      {
+        "text": "Probá todos los cambios, también la marcha atrás, y fijate si la palanca tiene juego o cuesta entrar alguna marcha."
+      },
+      {
+        "text": "Llená un poco el tanque o mirá si el medidor de combustible se mueve y es coherente."
+      },
+      {
+        "text": "Probá el aire acondicionado, los levantavidrios y la dirección asistida si los trae."
+      },
+      {
+        "text": "Si es tres puertas, recordá que la prensa de 2003 mencionaba ventanillas traseras fijas: no es una falla."
+      }
+    ],
+    "versions_equipment": [
+      {
+        "text": "Se vendió en Argentina desde 2003, importado de la planta de General Motors en Gravataí (Brasil). Al lanzamiento era un tres puertas con motor 1.0 de ocho válvulas.",
+        "applies_to": "lanzamiento 2003"
+      },
+      {
+        "text": "La prueba de Parabrisas de 2003 lo describe con aire acondicionado y CD de serie, y con opcionales como alarma, levantavidrios eléctricos, dirección asistida y llantas de aleación. Confirmá qué trae la unidad.",
+        "applies_to": "lanzamiento 2003"
+      },
+      {
+        "text": "Después hubo tres y cinco puertas, en terminaciones LS y LT, y aparece con motor 1.4 en avisos y opiniones de dueños. No encontramos una nota de prensa con la fecha de esos cambios: confirmá motor y equipamiento con la documentación."
+      },
+      {
+        "text": "En 2011 GM dejó de representar a Suzuki en Argentina y el auto pasó a venderse como Chevrolet Celta, con un pequeño restyling y motor 1.4 de 92 CV con caja manual de cinco."
+      }
+    ],
+    "maintenance_costs": [
+      {
+        "text": "La correa de distribución es el trabajo programado más importante: si no hay comprobante, presupuestalo. Confirmá el intervalo en el manual del Fun o del Celta."
+      },
+      {
+        "text": "Según Parabrisas, el 1.0 del Fun es el mismo cuatro cilindros de ocho válvulas que usaba el Corsa. Para repuestos, preguntá en la red Chevrolet por las piezas del Celta y del Corsa."
+      },
+      {
+        "text": "GM Argentina anunció en 2011 que seguiría dando service y repuestos a los Suzuki vendidos antes de la separación hasta 2021. Hoy conviene consultar disponibilidad en la red Chevrolet usando las piezas del Celta."
+      }
+    ],
+    "generations": [
+      {
+        "label": "Suzuki Fun",
+        "year_from": 2003,
+        "year_to": 2011,
+        "text": "Chevrolet Celta brasileño vendido con marca Suzuki por la alianza de GM con Suzuki en Argentina. Las fuentes no coinciden en el inicio: la prensa argentina lo prueba en julio de 2003 y Wikipedia habla de 2004."
+      },
+      {
+        "label": "Chevrolet Celta",
+        "year_from": 2011,
+        "year_to": 2016,
+        "text": "Desde mediados de 2011 el mismo auto se vendió como Chevrolet Celta, con restyling y 1.4 de 92 CV. Los Celta 2013 a 2016 tuvieron un llamado por airbag Takata; esos años son posteriores al Fun."
+      }
+    ]
+  },
+  "questions": [
+    {
+      "text": "¿Cuándo se cambió la correa de distribución y tenés el comprobante?",
+      "why": "Usa correa y la prensa brasileña reporta desgaste prematuro en el Celta."
+    },
+    {
+      "text": "¿Es motor 1.0 o 1.4? ¿Está así en los papeles?",
+      "why": "Se vendió con los dos motores y conviene que lo que figura coincida con la unidad."
+    },
+    {
+      "text": "¿Alguna vez se apagó en frío o tuvo problemas con la bomba de nafta o el medidor de combustible?",
+      "why": "Son fallas reportadas en Brasil para el Celta, el mismo auto."
+    },
+    {
+      "text": "¿Le cambiaron retenes o juntas por pérdidas de aceite?",
+      "why": "Las pérdidas en caja y tapa de válvulas aparecen entre las fallas del Celta en Brasil."
+    },
+    {
+      "text": "¿Dónde le hacías el service y conseguís los repuestos sin problema?",
+      "why": "La marca Suzuki dejó de ser representada por GM en 2011 y los repuestos se buscan como Celta."
+    }
+  ],
+  "sources": [
+    {
+      "title": "Así probábamos el Suzuki Fun (Parabrisas, prueba de julio de 2003 republicada el 13/09/2020)",
+      "url": "https://parabrisas.perfil.com/noticias/novedades/suzuki-fun-auto-2003-test-prueba-manejo-impresion-argentina-nuevo.phtml",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Brazil: German-based Brazilian Chevy goes to Argentina as a Suzuki (Just Auto, 11/06/2003)",
+      "url": "https://www.just-auto.com/news/exclusive-brazil-german-based-brazilian-chevy-goes-to-argentina-as-a-suzuki/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Suzuki Fun 1.0 (Salvat, Autos Inolvidables Argentinos)",
+      "url": "https://www.salvat.com/autos-inolvidables-argentinos/suzuki-fun-10-6680",
+      "kind": "otra",
+      "verified": true
+    },
+    {
+      "title": "Día del Hermano: 5 autos que se vendieron con diferente marca en Argentina (Autotest)",
+      "url": "https://autotest.com.ar/noticias/dia-del-hermano-5-autos-vendieron-diferente-marca-argentina/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "El actual Suzuki Fun pasará a llamarse Chevrolet Celta (iProfesional, 30/04/2011)",
+      "url": "https://www.iprofesional.com/actualidad/115295-el-actual-suzuki-fun-pasara-a-llamarse-chevrolet-celta",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Chevrolet lanzó el Celta (La Nación, 30/04/2011)",
+      "url": "https://www.lanacion.com.ar/autos/al-volante/chevrolet-lanzo-el-celta-nid1369188",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Chevrolet Celta (Wikipedia)",
+      "url": "https://en.wikipedia.org/wiki/Chevrolet_Celta",
+      "kind": "otra",
+      "verified": true
+    },
+    {
+      "title": "Não compre no escuro: pressão no menor da GM (Vrum, Brasil, 23/11/2008)",
+      "url": "https://www.vrum.com.br/noticias/nao-compre-no-escuro-pressao-no-menor-da-gm/",
+      "kind": "prensa",
+      "verified": true
+    },
+    {
+      "title": "Fallas en autos Chevrolet Classic y Celta: citan a dueños para que los lleven al taller (Los Andes, 23/10/2020)",
+      "url": "https://www.losandes.com.ar/sociedad/fallas-en-autos-chevrolet-classic-y-celta-citan-a-duenos-para-que-los-lleven-al-taller-en-mendoza",
+      "kind": "prensa",
+      "verified": true
+    }
+  ]
+}
