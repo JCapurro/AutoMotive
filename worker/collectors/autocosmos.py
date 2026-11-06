@@ -23,6 +23,13 @@ target's last complete read (query._read) nor a step's base
 or an ad's page answering 401, 403 or 429 pauses the source
 (CollectorBlocked, pipeline/breaker.py). The MAX_PAGES cap and a page without new cards still
 end a read taken as complete.
+
+Since 06/11/2026 AutoCosmos is an INVENTORY_TARGET: one target, without
+filters, reads the whole site for every search, make by make (the makes
+/auto/usado links to, 52 then), and ingest tells each car's model from its
+card's brand and model. Not /auto/usado itself: its order shifts during a
+long read, and past page 99 a page brought no card not seen before (4.752 of
+6.206 cars); the biggest make, Peugeot, had 20 pages (947 cars).
 """
 from __future__ import annotations
 import asyncio
@@ -81,6 +88,8 @@ OTHER_PAGES = {
 MODEL_PAGES_TTL_SECONDS = 24 * 3600
 _model_pages: dict[str, tuple[float, frozenset[str]]] = {}
 _MODEL_LINK_RE = r'href="/auto/usado/{make}/([a-z0-9-]+)"'
+# The makes /auto/usado links to (/auto/usado/<make>, without a model).
+_MAKE_LINK_RE = re.compile(r'href="/auto/usado/([a-z0-9-]+)"')
 
 
 def _make_slug(make: str) -> str:
@@ -148,7 +157,9 @@ class AutoCosmosScraper(BaseScraper):
     DETAIL_PARSER_VERSION = 4  # 4: a sold ad is gone ('vendido')
     name = "autocosmos"
     BASE = "https://www.autocosmos.com.ar"
-    MAX_PAGES = 20             # 960 cards: a safety cap, no model comes close today
+    # One target reads every make's pages for every search (06/11/2026: 6.206 cars).
+    INVENTORY_TARGET = True
+    MAX_PAGES = 40             # 1.920 cards a page list: Peugeot, the biggest make, had 947
     PAGE_PAUSE_SECONDS = 2.0
     RETRIES = 2
     RETRY_PAUSE_SECONDS = 10.0
@@ -382,6 +393,9 @@ class AutoCosmosScraper(BaseScraper):
             timeout=self.TIMEOUT, headers=HEADERS, follow_redirects=True, verify=True,
             transport=self.transport,
         ) as cx:
+            if not filters.get("marca") and not filters.get("modelo"):
+                reason = await self._read_catalog(cx, filters, out, seen)
+                return SearchResults(out, complete=reason is None, reason=reason)
             slugs: list[str | None] = [None]
             if filters.get("marca") and filters.get("modelo"):
                 make = _make_slug(filters["marca"])
@@ -394,20 +408,47 @@ class AutoCosmosScraper(BaseScraper):
                     return SearchResults(out, complete=False, reason=reason)
         return SearchResults(out)
 
+    async def _read_catalog(self, cx: httpx.AsyncClient, filters: dict,
+                            out: list[Listing], seen: set[str]) -> str | None:
+        """The whole site, make by make: the makes /auto/usado links to, each
+        one's pages (_read_model). /auto/usado must answer 200 with makes, or
+        the run fails; a make that fails later makes the read partial, after
+        the other makes are read. The reason of the first one that did."""
+        r = await self._get(cx, self.BASE + "/auto/usado")
+        if r.status_code in (401, 403, 429):
+            raise CollectorBlocked(f"autocosmos: HTTP {r.status_code}")
+        if r.status_code != 200:
+            raise httpx.HTTPStatusError(f"autocosmos: HTTP {r.status_code} for /auto/usado",
+                                        request=r.request, response=r)
+        makes = sorted(set(_MAKE_LINK_RE.findall(r.text)))
+        if not makes:
+            raise RuntimeError("autocosmos: /auto/usado links to no make")
+        first_reason = None
+        for make in makes:
+            await asyncio.sleep(self.PAGE_PAUSE_SECONDS)
+            reason = await self._read_model(cx, filters, None, out, seen, first=False, make=make)
+            first_reason = first_reason or reason
+        log.info("autocosmos: %d makes, %d cards%s", len(makes), len(seen),
+                 f", partial: {first_reason}" if first_reason else "")
+        return first_reason
+
     async def _read_model(self, cx: httpx.AsyncClient, filters: dict, slug: str | None,
-                          out: list[Listing], seen: set[str], *, first: bool) -> str | None:
-        """One model page's pages into `out`; the reason when the read ends partial."""
+                          out: list[Listing], seen: set[str], *, first: bool,
+                          make: str | None = None) -> str | None:
+        """One model page's pages into `out`, or with `make` (a slug from
+        /auto/usado) that make's pages; the reason when the read ends partial."""
+        url_filters = {**filters, "marca": make} if make else filters
         for p in range(1, self.MAX_PAGES + 1):
             if p > 1:
                 await asyncio.sleep(self.PAGE_PAUSE_SECONDS)
-            url = self._build_url(filters, page=p, model_slug=slug)
+            url = self._build_url(url_filters, page=p, model_slug=slug)
             try:
                 r = await self._get(cx, url)
             except httpx.HTTPError as e:
                 if p == 1 and first:
                     raise
                 log.warning("autocosmos: %s failed, keeping the %d cards read", url, len(seen))
-                return f"autocosmos: {self._where(None if first else slug, p)} falló ({type(e).__name__})"
+                return f"autocosmos: {self._where(make or (None if first else slug), p)} falló ({type(e).__name__})"
             if r.status_code != 200:
                 if r.status_code in (401, 403, 429):
                     if p == 1:
@@ -420,7 +461,7 @@ class AutoCosmosScraper(BaseScraper):
                                                 request=r.request, response=r)
                 log.warning("autocosmos: %s answered %d, keeping the %d cards read",
                             url, r.status_code, len(seen))
-                return f"autocosmos: {self._where(None if first else slug, p)} respondió {r.status_code}"
+                return f"autocosmos: {self._where(make or (None if first else slug), p)} respondió {r.status_code}"
             listings = [l for l in self.parse_search(r.text) if l.listing_id not in seen]
             if not listings:
                 return None
@@ -432,7 +473,7 @@ class AutoCosmosScraper(BaseScraper):
             if not _NEXT_PAGE_RE.search(r.text):
                 return None
         log.warning("autocosmos: %s stops at %d pages with more to read, keeping the %d cards read",
-                    self._build_url(filters, model_slug=slug), self.MAX_PAGES, len(seen))
+                    self._build_url(url_filters, model_slug=slug), self.MAX_PAGES, len(seen))
         return None
 
     @staticmethod

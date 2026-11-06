@@ -12,6 +12,11 @@ Card markup uses `tc-v2-*` classes which have been stable since the
 2024 redesign. Item pages (`/auto/<slug>-<id>`) carry schema.org JSON-LD
 server-side, but the description and the spec grid (`v2-*`) render
 client-side, so fetch_detail loads them in the browser.
+
+Since 06/11/2026 V6 is an INVENTORY_TARGET: one target, without filters,
+scrolls the whole site (167 cars, all loaded after about 10 scrolls) for
+every search; ingest tells each car's model from its title. The search by
+make and model stays for tools and probes.
 """
 from __future__ import annotations
 import re
@@ -20,7 +25,7 @@ import urllib.parse
 
 from bs4 import BeautifulSoup
 
-from .base import BaseScraper, Listing, ListingDetail
+from .base import BaseScraper, Listing, ListingDetail, SearchResults
 from ._browser import browser_context
 from ._dates import publication_date
 from ._http import Page, dedupe, fetch_rendered, json_ld_of_type, multiline_text, soup, text_of, to_int
@@ -184,10 +189,25 @@ def parse_detail(html: str, url: str, status: int = 200) -> ListingDetail:
     ))
 
 
+_TOTAL_RE = re.compile(r"(\d[\d.]*)\s+resultados?", re.IGNORECASE)
+
+
+def stated_total(text: str) -> int | None:
+    """The "167 resultados" the listing page states, if it does."""
+    m = _TOTAL_RE.search(text or "")
+    return to_int(m.group(1)) if m else None
+
+
 class V6Scraper(BaseScraper):
     DETAIL_PARSER_VERSION = 3
     name = "v6"
     BASE = "https://www.v6.com.ar/publicaciones"
+    # One target scrolls the whole site for every search (06/11/2026: 167 cars).
+    INVENTORY_TARGET = True
+    # Scrolls a run gives at most; each loads about 30 more cars. Two in a
+    # row without a new card end the read.
+    MAX_SCROLLS = 40
+    STALE_SCROLLS = 2
 
     def _build_url(self, f: dict) -> str:
         qs: dict[str, str] = {"sortOrder": "publicadoMasNuevo"}
@@ -199,26 +219,38 @@ class V6Scraper(BaseScraper):
             qs["search"] = q
         return f"{self.BASE}?{urllib.parse.urlencode(qs)}"
 
-    async def search(self, filters: dict) -> list[Listing]:
+    async def search(self, filters: dict) -> SearchResults:
+        """Scroll the infinite list until it stops growing, or shows the total
+        it states. A read cut by MAX_SCROLLS short of that total is partial."""
         url = self._build_url(filters)
-        out: list[Listing] = []
         async with browser_context() as ctx:
             page = await ctx.new_page()
             try:
                 await page.goto(url, timeout=45_000, wait_until="domcontentloaded")
                 await page.wait_for_timeout(2_500)
-                # v6 uses infinite scroll; load up to ~3 batches
-                for _ in range(4):
+                total = stated_total(await page.inner_text("body"))
+                html = await page.content()
+                seen, stale, scrolls = len(parse_search(html)), 0, 0
+                while scrolls < self.MAX_SCROLLS and stale < self.STALE_SCROLLS                         and (total is None or seen < total):
                     await page.mouse.wheel(0, 5_000)
                     await page.wait_for_timeout(1_000)
-                html = await page.content()
+                    scrolls += 1
+                    html = await page.content()
+                    count = len(parse_search(html))
+                    stale = stale + 1 if count <= seen else 0
+                    seen = max(seen, count)
             finally:
                 await page.close()
-        for listing in parse_search(html):
+        cards = parse_search(html)
+        results = SearchResults()
+        if total is not None and len(cards) < total and scrolls >= self.MAX_SCROLLS:
+            results.complete = False
+            results.reason = f"v6: {len(cards)} of {total} cars after {scrolls} scrolls"
+        for listing in cards:
             self.annotate_partial_price(listing)
             if self.matches_filters(listing, filters):
-                out.append(listing)
-        return out
+                results.append(listing)
+        return results
 
     parse_detail = staticmethod(parse_detail)
 

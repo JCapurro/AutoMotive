@@ -148,7 +148,12 @@ def _model(listing, f) -> Reason | None:
     wanted = " ".join(x for x in (make, model) if x)
     l_make, l_model = listing.get("make"), listing.get("model")
     if (make and not l_make) or (model and not l_model):
-        return Reason(UNKNOWN, copy.NOT_INFORMED)
+        # A target by model always gives its listings a model (resolve_vehicle
+        # falls back to the target's): a listing without one comes from a read
+        # of a whole stock (an inventory target) whose card the catalog
+        # couldn't tell, and nothing fills it in later. Unknown matched it to
+        # every search of a vehicle ("Ford F100" to 8 of them, 06/11/2026).
+        return Reason(FAIL, copy.REASON["vehicle_unknown"])
     actual = " ".join(x for x in (l_make, l_model) if x)
     if make and normalize_brand(l_make) != normalize_brand(make):
         return Reason(FAIL, copy.REASON["model_other"].format(actual=actual, wanted=wanted))

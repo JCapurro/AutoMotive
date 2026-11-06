@@ -10,14 +10,15 @@ from __future__ import annotations
 
 import itertools
 import unittest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from collectors import REGISTRY
 from collectors import kavak as kv
 from collectors._http import Page
 from intelligence.matching import vehicle_fails
 from pipeline.crawl import BodyTypeTargets, derive_targets, scraper_filters
-from pipeline.scheduler import _candidates, _vehicle_keys
+from pipeline import scheduler
+from pipeline.scheduler import _candidates, _vehicle_keys, _wanted
 
 BODY = BodyTypeTargets(frozenset({"mercadolibre", "kavak"}), 1800, fx_rate=1_000.0)
 
@@ -100,20 +101,73 @@ class VehicleGateTests(unittest.TestCase):
                 got = set(_candidates(search, keys))
                 self.assertEqual(passing, got)
 
-    def test_a_batch_of_one_model_keeps_every_listing(self):
-        rows = {1: {"make": "Ford", "model": "Fiesta"}, 2: {"make": "Ford", "model": None},
-                3: {"make": None, "model": None}}
+    def test_a_batch_of_one_model_keeps_it_and_drops_the_listings_without_one(self):
+        rows = {1: {"make": "Ford", "model": "Fiesta"}, 2: {"make": "ford", "model": "FIESTA"},
+                3: {"make": "Ford", "model": None}, 4: {"make": None, "model": None}}
         self.assertEqual(_candidates({"filters": {"make": "Ford", "model": "Fiesta"}}, _vehicle_keys(rows, rows)),
-                         [1, 2, 3])
+                         [1, 2])
 
-    def test_another_model_fails_and_an_unknown_one_doesnt(self):
+    def test_another_or_an_unknown_model_fails(self):
         wanted = {"make": "Ford", "model": "Fiesta"}
         self.assertTrue(vehicle_fails({"make": "Ford", "model": "Ka"}, wanted))
         self.assertTrue(vehicle_fails({"make": "Fiat", "model": "Fiesta"}, wanted))
         self.assertFalse(vehicle_fails({"make": "Ford", "model": "Fiesta"}, wanted))
-        self.assertFalse(vehicle_fails({"make": "Ford", "model": None}, wanted))
-        self.assertFalse(vehicle_fails({"make": "Toyota", "model": "Etios"}, {"body_types": ["suv"]}))
+        # A card of a whole stock the catalog couldn't tell ("Ford F100"): no longer
+        # matched to every search of a vehicle as unknown.
+        self.assertTrue(vehicle_fails({"make": "Ford", "model": None}, wanted))
+        self.assertTrue(vehicle_fails({"make": None, "model": None}, wanted))
+        self.assertTrue(vehicle_fails({"make": None, "model": None}, {"make": "Ford"}))
+        self.assertFalse(vehicle_fails({"make": "Ford", "model": None}, {"make": "Ford"}))
+        # A search by body type alone doesn't look at the vehicle.
+        self.assertFalse(vehicle_fails({"make": None, "model": None}, {"body_types": ["suv"]}))
 
+class WantedTests(unittest.IsolatedAsyncioTestCase):
+    """Comparables (a query each) only for the listings some search could match."""
+    ROWS = {1: {"make": "Ford", "model": "Fiesta"}, 2: {"make": "Ford", "model": "Ka"},
+            3: {"make": "Toyota", "model": "Etios"}, 4: {"make": None, "model": None}}
+    TARGET = {"id": 7, "source": "kavak", "make": None, "model": None, "query": {"inventory": True}}
+    FIESTA = {"profile": {"filters": {"make": "Ford", "model": "Fiesta"}}}
+    ETIOS = {"profile": {"filters": {"make": "Toyota", "model": "Etios"}}}
+
+    async def wanted(self, counting, *, first_run=False):
+        keys = _vehicle_keys(self.ROWS, self.ROWS)
+        with patch.object(scheduler.db, "counting_alerts_for_target", counting), \
+                patch.object(scheduler, "log_error", AsyncMock()) as log_error:
+            got = await _wanted(self.TARGET, [self.FIESTA], keys, first_run=first_run, listing_ids=[1, 2, 3, 4])
+        return got, log_error
+
+    async def test_the_active_and_the_counted_searches_models(self):
+        got, _ = await self.wanted(AsyncMock(return_value=[self.ETIOS]))
+        self.assertEqual(got, [1, 3])
+
+    async def test_a_first_run_counts_nothing(self):
+        counting = AsyncMock(return_value=[self.ETIOS])
+        got, _ = await self.wanted(counting, first_run=True)
+        self.assertEqual(got, [1])
+        counting.assert_not_awaited()
+
+    async def test_all_of_them_if_the_counted_searches_cant_be_read(self):
+        got, log_error = await self.wanted(AsyncMock(side_effect=RuntimeError("db down")))
+        self.assertEqual(got, [1, 2, 3, 4])
+        self.assertEqual(log_error.await_args.args[0], "count_after_expiry")
+
+    async def test_process_batch_reads_the_rows_then_the_comparables_it_needs(self):
+        rows = {lid: dict(row, id=lid) for lid, row in self.ROWS.items()}
+        scorer = MagicMock(rows=rows, prepare=AsyncMock(), evaluate=MagicMock(return_value=None))
+        notifier = MagicMock(on_matches=AsyncMock(), on_listing_events=AsyncMock(), deliver=AsyncMock())
+        with patch.object(scheduler.Scorer, "create", AsyncMock(return_value=scorer)), \
+                patch.object(scheduler.db, "get_config", AsyncMock(return_value=15)), \
+                patch.object(scheduler.db, "alerts_for_target", AsyncMock(return_value=[dict(self.FIESTA, id=1)])), \
+                patch.object(scheduler.db, "counting_alerts_for_target", AsyncMock(return_value=[])), \
+                patch.object(scheduler.db, "filter_unseen", AsyncMock(return_value=[])), \
+                patch.object(scheduler.db, "matched_by_other_profiles", AsyncMock(return_value=set())), \
+                patch.object(scheduler.news, "old_band", AsyncMock(return_value=set())), \
+                patch.object(scheduler, "match_alert", AsyncMock(return_value=[])), \
+                patch.object(scheduler, "count_after_expiry", AsyncMock()):
+            await scheduler.process_batch(notifier, self.TARGET, [1, 2, 3, 4], first_run=False)
+        self.assertEqual([c.args for c in scorer.prepare.await_args_list], [([1, 2, 3, 4],), ([1],)])
+        self.assertEqual(scorer.prepare.await_args_list[0].kwargs, {"refs_limit": 0})
+        self.assertEqual({c.args[0] for c in scorer.evaluate.call_args_list}, {1})
 
 if __name__ == "__main__":
     unittest.main()

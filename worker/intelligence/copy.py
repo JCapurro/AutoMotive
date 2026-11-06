@@ -44,6 +44,7 @@ def ago(hours: float) -> str:
 NOT_INFORMED = "la publicación no lo informa"
 REASON = {
     "model_other": "es {actual}, se busca {wanted}",
+    "vehicle_unknown": "la publicación no dice qué modelo es",
     "year_range": "{year} ∈ {lo}–{hi}",
     "year_out": "{year} fuera de {lo}–{hi}",
     "price_ok": "{shown} ≤ {cap}",
