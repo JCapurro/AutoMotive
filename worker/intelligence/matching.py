@@ -157,6 +157,15 @@ def _model(listing, f) -> Reason | None:
     return Reason(OK, actual)
 
 
+def vehicle_fails(listing: Mapping[str, Any], f: Mapping[str, Any]) -> bool:
+    """Whether the vehicle rule (_model) fails this listing for these filters:
+    then evaluate() can't match it, whatever the other rules say. A cheap
+    check before scoring a batch that holds every model of a source (an
+    inventory target), where most of the listings are another model."""
+    reason = _model(listing, f)
+    return reason is not None and reason.result == FAIL
+
+
 def _year(listing, f) -> Reason | None:
     years = f.get("years") or []
     lo = f.get("year_min") or (min(years) if years else None)

@@ -36,7 +36,8 @@ from db.repos import expired_matches
 from db.repos import matches as matches_repo
 from db.repos.runs import bootstrapped_at, log_error
 from intelligence.engine import Evaluation
-from intelligence.matching import model_less
+from intelligence.matching import malformed_vehicle, model_less, wanted_body_types
+from normalization.normalize import normalize_brand, normalize_text
 from notifications.service import MatchCandidate, Notifier
 from pipeline import crawl, news, rematch
 from pipeline.scoring import Scorer
@@ -64,6 +65,39 @@ class _Staged:
     evaluations: dict[int, Evaluation]
     fresh: list[int]
     matched_elsewhere: set[tuple[str, str]]
+
+
+_VehicleKey = tuple[str | None, str | None]
+
+
+def _vehicle_keys(listing_ids: Iterable[int], rows: dict[int, dict]) -> dict[int, _VehicleKey]:
+    """Each listing's make and model as the vehicle rule compares them
+    (intelligence.matching._model), normalized once per batch."""
+    return {lid: (normalize_brand(rows[lid]["make"]) if rows[lid].get("make") else None,
+                  normalize_text(rows[lid]["model"]) if rows[lid].get("model") else None)
+            for lid in listing_ids if lid in rows}
+
+
+def _candidates(profile: dict, keys: dict[int, _VehicleKey]) -> list[int]:
+    """The listings of the batch the vehicle rule doesn't fail for this
+    profile: the same rule as intelligence.matching._model (a missing make or
+    model is unknown, never a fail), so scoring only these changes nothing.
+    A batch of one model keeps all of it; an inventory batch (every model of
+    a source) only the profile's model, so the cost doesn't grow with
+    listings × searches."""
+    f = profile.get("filters") or {}
+    if malformed_vehicle(f):
+        return []
+    if model_less(f):
+        # By body type alone; without one either, the rule fails every listing.
+        return list(keys) if wanted_body_types(f) else []
+    # As the rule does: a make or model is wanted when the filter has one at
+    # all, and compared normalized (a blank one then fails every listing with one).
+    want_make, want_model = bool(f.get("make")), bool(f.get("model"))
+    make, model = normalize_brand(f.get("make")), normalize_text(f.get("model"))
+    return [lid for lid, (l_make, l_model) in keys.items()
+            if (want_make and l_make is None) or (want_model and l_model is None)
+            or ((not want_make or l_make == make) and (not want_model or l_model == model))]
 
 
 async def _stage(alert: dict, listing_ids: list[int], scorer: Scorer) -> _Staged:
@@ -239,13 +273,14 @@ async def process_batch(notifier: Notifier, target: dict, listing_ids: list[int]
     band = news.band_ids(target, rows, max_age_days=max_age_days)
     backfill_ids |= await news.old_band(target, [r for r in rows if r["id"] in band])
     members = frozenset((target.get("query") or {}).get("profile_ids") or ())
+    keys = _vehicle_keys(listing_ids, scorer.rows)
     staged: list[_Staged] = []
     for alert in await db.alerts_for_target(target["source"], target.get("make"), target.get("model"),
                                             telegram_only=False,
                                             inventory=(target.get("query") or {}).get("inventory") is True,
                                             body_type=target.get("body_type")):
         try:
-            staged.append(await _stage(alert, listing_ids, scorer))
+            staged.append(await _stage(alert, _candidates(alert["profile"], keys), scorer))
         except Exception:
             await log_error("match", f"profile:{alert['id']}", traceback.format_exc())
     candidates: list[MatchCandidate] = []
