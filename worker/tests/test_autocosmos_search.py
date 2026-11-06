@@ -9,6 +9,7 @@ from urllib.parse import parse_qs, urlparse
 import httpx
 
 from collectors._http import Page
+from collectors import autocosmos
 from collectors.autocosmos import AutoCosmosScraper
 from collectors.base import CollectorBlocked
 from pipeline import breaker, crawl, enrich
@@ -29,13 +30,28 @@ def page(ids: range, *, more: bool) -> str:
     return f"<html><head>{head}</head><body>{''.join(card(n) for n in ids)}</body></html>"
 
 
+def is_model_list(request: httpx.Request) -> bool:
+    """/auto/usado/<make>: the make's model pages, read before the model."""
+    return len(request.url.path.strip("/").split("/")) == 3
+
+
+def models_first(handler):
+    """`handler` for the model's pages; an empty model list for the make."""
+    return lambda request: (httpx.Response(200, text="") if is_model_list(request)
+                            else handler(request))
+
+
 class Site:
     """Serves `pages[pidx]`; `fail[pidx]` is a list of statuses (or exceptions) to give first."""
 
-    def __init__(self, pages: dict[int, str], fail: dict[int, list] | None = None) -> None:
+    def __init__(self, pages: dict[int, str], fail: dict[int, list] | None = None,
+                 model_list: str = "") -> None:
         self.pages, self.fail, self.asked = pages, fail or {}, []
+        self.model_list = model_list
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
+        if is_model_list(request):
+            return httpx.Response(200, text=self.model_list)
         pidx = int(parse_qs(urlparse(str(request.url)).query).get("pidx", ["1"])[0])
         self.asked.append(pidx)
         if self.fail.get(pidx):
@@ -95,7 +111,7 @@ class AutoCosmosSearchTests(unittest.IsolatedAsyncioTestCase):
         responses = [httpx.Response(503, headers={"Retry-After": "30"}),
                      httpx.Response(200, text=page(range(1, 3), more=False))]
         s = AutoCosmosScraper()
-        s.transport = httpx.MockTransport(lambda request: responses.pop(0))
+        s.transport = httpx.MockTransport(models_first(lambda request: responses.pop(0)))
         with patch("collectors.autocosmos.asyncio.sleep", new_callable=AsyncMock) as sleep:
             found = await s.search(FILTERS)
         self.assertEqual(len(found), 2)
@@ -105,7 +121,7 @@ class AutoCosmosSearchTests(unittest.IsolatedAsyncioTestCase):
         responses = [httpx.Response(503, headers={"Retry-After": "Fri, 09 Oct 2026 13:00:45 GMT"}),
                      httpx.Response(200, text=page(range(1, 3), more=False))]
         s = AutoCosmosScraper()
-        s.transport = httpx.MockTransport(lambda request: responses.pop(0))
+        s.transport = httpx.MockTransport(models_first(lambda request: responses.pop(0)))
         with patch("collectors.autocosmos.datetime") as clock, \
                 patch("collectors.autocosmos.asyncio.sleep", new_callable=AsyncMock) as sleep:
             clock.now.return_value = datetime(2026, 10, 9, 13, 0, tzinfo=timezone.utc)
@@ -117,7 +133,7 @@ class AutoCosmosSearchTests(unittest.IsolatedAsyncioTestCase):
         responses = [httpx.Response(503, headers={"Retry-After": "not-a-date"}),
                      httpx.Response(200, text=page(range(1, 3), more=False))]
         s = AutoCosmosScraper()
-        s.transport = httpx.MockTransport(lambda request: responses.pop(0))
+        s.transport = httpx.MockTransport(models_first(lambda request: responses.pop(0)))
         with patch("collectors.autocosmos.asyncio.sleep", new_callable=AsyncMock) as sleep:
             found = await s.search(FILTERS)
         self.assertEqual(len(found), 2)
@@ -126,7 +142,7 @@ class AutoCosmosSearchTests(unittest.IsolatedAsyncioTestCase):
     async def test_long_retry_after_stops_without_retrying_too_early(self):
         responses = [httpx.Response(503, headers={"Retry-After": "3600"})]
         s = AutoCosmosScraper()
-        s.transport = httpx.MockTransport(lambda request: responses.pop(0))
+        s.transport = httpx.MockTransport(models_first(lambda request: responses.pop(0)))
         with patch("collectors.autocosmos.asyncio.sleep", new_callable=AsyncMock) as sleep:
             with self.assertRaises(httpx.HTTPStatusError):
                 await s.search(FILTERS)
@@ -178,6 +194,115 @@ class AutoCosmosSearchTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual((len(found), found.complete), (4, True))
         self.assertIn("stops at 2 pages", logs.output[0])
+
+
+CITROEN_MODELS = "".join(f'<a href="/auto/usado/citroen/{m}">x</a>' for m in (
+    "c3", "c4", "c4-aircross", "c4-cactus", "c4-grand-picasso", "c4-hatchback", "c4-lounge",
+    "c4-mhev", "c4-picasso", "c4-spacetourer"))
+
+
+class ModelPagesTests(unittest.IsolatedAsyncioTestCase):
+    """The site's make and model pages aren't always our slug (06/11/2026)."""
+
+    def setUp(self):
+        autocosmos._model_pages.clear()
+        self.addCleanup(autocosmos._model_pages.clear)
+
+    def test_makes_lose_every_accent_and_take_the_site_slug(self):
+        s = AutoCosmosScraper()
+        self.assertEqual(s._build_url({"marca": "Citroën", "modelo": "C4"}),
+                         "https://www.autocosmos.com.ar/auto/usado/citroen/c4")
+        self.assertEqual(s._build_url({"marca": "Mercedes-Benz", "modelo": "Clase C"}),
+                         "https://www.autocosmos.com.ar/auto/usado/mercedes/clase-c")
+
+    def test_a_model_takes_its_body_and_version_pages_and_no_other_model(self):
+        def slugs(model, *pages, make="x"):
+            return autocosmos.model_slugs(make, model, frozenset(pages))
+
+        self.assertEqual(slugs("C4", "c4", "c4-cactus", "c4-hatchback", "c4-lounge", "c4-mhev"),
+                         ["c4", "c4-hatchback", "c4-mhev"])
+        self.assertEqual(slugs("Polo", "polo", "polo-5p"), ["polo", "polo-5p"])
+        self.assertEqual(slugs("S10", "s-10", "spin"), ["s-10"])
+        self.assertEqual(slugs("Serie 3", "serie-1", "serie-3-coupe", "serie-3-sedan"),
+                         ["serie-3-coupe", "serie-3-sedan"])
+        self.assertEqual(slugs("Clase C", "clase-c-sedan", "clase-c-sedan-amg", "clase-clk-coupe"),
+                         ["clase-c-sedan", "clase-c-sedan-amg"])
+        self.assertEqual(slugs("Gol", "gol", "gol-country", "gol-trend"), ["gol"])
+        self.assertEqual(slugs("Corolla", "corolla", "corolla-cross", "corolla-cross-hybrid", "corolla-hybrid"),
+                         ["corolla", "corolla-hybrid"])
+        self.assertEqual(slugs("Bronco", "bronco", "bronco-sport"), ["bronco"])
+        self.assertEqual(slugs("Megane", "megane", "megane-ii", "megane-iii", "megane-iii-rs"),
+                         ["megane", "megane-ii", "megane-iii", "megane-iii-rs"])
+        self.assertEqual(slugs("Corsa", "corsa", "corsa-classic", "corsa-wagon"),
+                         ["corsa", "corsa-classic", "corsa-wagon"])
+        self.assertEqual(slugs("Fox", "fox", "crossfox", make="volkswagen"), ["fox", "crossfox"])
+        self.assertEqual(slugs("Stepway", "sandero", "sandero-stepway", "stepway", make="renault"),
+                         ["stepway", "sandero-stepway"])
+        # No list, or nothing in it for the model: its own slug, as before.
+        self.assertEqual(slugs("Fiesta"), ["fiesta"])
+        self.assertEqual(slugs("Serie 4", "serie-1", "x5"), ["serie-4"])
+
+    async def test_search_reads_every_page_of_the_model_once(self):
+        asked = []
+
+        def site(request: httpx.Request) -> httpx.Response:
+            asked.append(request.url.path)
+            if request.url.path == "/auto/usado/citroen":
+                return httpx.Response(200, text=CITROEN_MODELS)
+            n = {"/auto/usado/citroen/c4": range(1, 3), "/auto/usado/citroen/c4-hatchback": range(2, 5),
+                 "/auto/usado/citroen/c4-mhev": range(5, 6)}.get(request.url.path, range(0))
+            return httpx.Response(200, text=page(n, more=False))
+
+        s = AutoCosmosScraper()
+        s.transport = httpx.MockTransport(site)
+        s.PAGE_PAUSE_SECONDS = 0
+        filters = {"marca": "Citroën", "modelo": "C4"}
+
+        found = await s.search(filters)
+        again = await s.search(filters)
+
+        self.assertEqual((len(found), found.complete, len(again)), (5, True, 5))
+        self.assertEqual(asked.count("/auto/usado/citroen"), 1)      # kept for the day
+        self.assertEqual([p for p in asked if p != "/auto/usado/citroen"][:3],
+                         ["/auto/usado/citroen/c4", "/auto/usado/citroen/c4-hatchback",
+                          "/auto/usado/citroen/c4-mhev"])
+
+    async def test_a_variant_down_keeps_what_was_read_as_a_partial_read(self):
+        def site(request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/auto/usado/citroen":
+                return httpx.Response(200, text=CITROEN_MODELS)
+            if request.url.path == "/auto/usado/citroen/c4-hatchback":
+                return httpx.Response(503, text="")
+            if request.url.path == "/auto/usado/citroen/c4-mhev":
+                return httpx.Response(404, text="")
+            return httpx.Response(200, text=page(range(1, 3), more=False))
+
+        s = AutoCosmosScraper()
+        s.transport = httpx.MockTransport(site)
+        s.PAGE_PAUSE_SECONDS = s.RETRY_PAUSE_SECONDS = 0
+
+        found = await s.search({"marca": "Citroën", "modelo": "C4"})
+
+        self.assertEqual((len(found), found.complete), (2, False))
+        self.assertEqual(found.reason, "autocosmos: página 1 de c4-hatchback respondió 503")
+
+    async def test_a_failed_model_list_falls_back_to_the_model_slug(self):
+        asked = []
+
+        def site(request: httpx.Request) -> httpx.Response:
+            asked.append(request.url.path)
+            if request.url.path == "/auto/usado/citroen":
+                return httpx.Response(503, text="")
+            return httpx.Response(200, text=page(range(1, 3), more=False))
+
+        s = AutoCosmosScraper()
+        s.transport = httpx.MockTransport(site)
+
+        found = await s.search({"marca": "Citroën", "modelo": "C4"})
+
+        self.assertEqual((len(found), found.complete), (2, True))
+        self.assertEqual(asked, ["/auto/usado/citroen", "/auto/usado/citroen/c4"])
+        self.assertNotIn("citroen", autocosmos._model_pages)      # tried again next run
 
 
 class DetailPageTests(unittest.IsolatedAsyncioTestCase):
