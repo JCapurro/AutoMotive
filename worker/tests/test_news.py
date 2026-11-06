@@ -666,6 +666,7 @@ class ListingEventsTests(unittest.IsolatedAsyncioTestCase):
         with patch.object(scheduler.Scorer, "create", AsyncMock(return_value=scorer)), \
                 patch.object(scheduler.db, "get_config", AsyncMock(return_value=15)), \
                 patch.object(scheduler.db, "alerts_for_target", AsyncMock(return_value=[])), \
+                patch.object(scheduler.db, "counting_alerts_for_target", AsyncMock(return_value=[])), \
                 patch.object(scheduler, "count_after_expiry", AsyncMock()):
             await scheduler.process_batch(notifier, dict(TARGET, last_run_at=last_run_at), [1], first_run=first_run,
                                           events=["drop"])
