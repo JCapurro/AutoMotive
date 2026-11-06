@@ -23,6 +23,7 @@ from dataclasses import dataclass, replace
 import logging
 import random
 import re
+import unicodedata
 from urllib.parse import parse_qs, urlparse
 
 from bs4 import BeautifulSoup
@@ -54,7 +55,8 @@ BODY_TYPE_SLUGS = {"sedan": "sedan", "hatchback": "hatchback", "suv": "suv", "pi
 
 def _slug(s: str) -> str:
     s = s.lower().strip()
-    s = s.translate(str.maketrans("áéíóúñü", "aeiounu"))
+    # Every accent off: "Citroën" as citro-n (Kavak's own links say citroen, 06/11/2026).
+    s = "".join(c for c in unicodedata.normalize("NFKD", s) if not unicodedata.combining(c))
     return re.sub(r"[^a-z0-9]+", "-", s).strip("-")
 
 

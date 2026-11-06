@@ -2,7 +2,10 @@
 
 AutoCosmos exposes a public listings page at
 `/auto/usado/{marca}/{modelo}` with rich schema.org microdata, no login,
-no anti-bot. Filters are applied client-side via BaseScraper.matches_filters
+no anti-bot. Its slugs aren't always ours: "mercedes", and a model split by
+body or version (polo-5p, serie-3-sedan, s-10). Each search reads the
+make's model list once a day (/auto/usado/{marca}) and walks every page of
+the model (model_slugs); before 06/11/2026 Citroën and Mercedes read none. Filters are applied client-side via BaseScraper.matches_filters
 because the site's server-side filters aren't always honored via URL params.
 
 Many dealer ads show only the down payment ("Anticipo") and the installment:
@@ -25,6 +28,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+import time
+import unicodedata
 import urllib.parse
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
@@ -45,8 +50,55 @@ _NEXT_PAGE_RE = re.compile(r"<link[^>]*\brel=['\"]?next\b", re.IGNORECASE)
 
 def _slug(s: str) -> str:
     s = s.lower().strip()
-    s = s.translate(str.maketrans("áéíóúñü", "aeiounu"))
+    # Every accent off: "Citroën" as citro-n lists no car (06/11/2026).
+    s = "".join(c for c in unicodedata.normalize("NFKD", s) if not unicodedata.combining(c))
     return re.sub(r"[^a-z0-9]+", "-", s).strip("-")
+
+
+# The site's make where its slug isn't ours (/auto/usado lists them, 06/11/2026).
+MAKE_SLUGS = {"mercedes-benz": "mercedes"}
+
+# The site splits a model into pages by body or version (polo-5p, serie-3-sedan,
+# megane-iii, focus-sedan, clase-c-sedan-amg). A page "<model>-<words>" is the
+# same model when every word is one of these; any other word (c4-cactus,
+# gol-trend, corolla-cross, passat-cc, bronco-sport) is a model of its own.
+VARIANT_WORDS = frozenset({
+    "sedan", "hatchback", "coupe", "convertible", "cabrio", "rural", "wagon", "variant",
+    "3p", "5p", "5", "suv", "sportback", "amg", "mhev", "hybrid", "hibrido", "hibrida",
+    "ii", "iii", "iv", "rs", "gti", "gli", "exe", "one", "fire", "kinetic", "max",
+    "mio", "activ", "adventure", "working", "raptor", "classic", "joy",
+})
+# Pages of a model under another name, as the catalog's aliases have them.
+OTHER_PAGES = {
+    ("volkswagen", "fox"): ("crossfox",),
+    ("volkswagen", "beetle"): ("new-beetle",),
+    ("renault", "stepway"): ("sandero-stepway",),
+    ("renault", "oroch"): ("duster-oroch",),
+    ("citroen", "c4-picasso"): ("c4-grand-picasso", "c4-spacetourer"),
+}
+
+# A make's model pages, read from /auto/usado/<make> once a day.
+MODEL_PAGES_TTL_SECONDS = 24 * 3600
+_model_pages: dict[str, tuple[float, frozenset[str]]] = {}
+_MODEL_LINK_RE = r'href="/auto/usado/{make}/([a-z0-9-]+)"'
+
+
+def _make_slug(make: str) -> str:
+    slug = _slug(make)
+    return MAKE_SLUGS.get(slug, slug)
+
+
+def model_slugs(make: str, model: str, pages: frozenset[str]) -> list[str]:
+    """The site's pages for a model, its own first: the exact slug (or the
+    same without hyphens, s10 as s-10), the variants by body or version and
+    OTHER_PAGES. Without the make's list, or with nothing in it, the
+    model's own slug."""
+    own = _slug(model)
+    exact = [p for p in pages if p.replace("-", "") == own.replace("-", "")]
+    variants = sorted(p for p in pages if p.startswith(own + "-")
+                      and p not in exact and set(p[len(own) + 1:].split("-")) <= VARIANT_WORDS)
+    other = [p for p in OTHER_PAGES.get((make, own), ()) if p in pages]
+    return (exact[:1] + variants + other) or [own]
 
 
 def _retry_after(response: httpx.Response) -> float:
@@ -105,9 +157,9 @@ class AutoCosmosScraper(BaseScraper):
     TIMEOUT = httpx.Timeout(60.0, connect=15.0)
     transport: httpx.AsyncBaseTransport | None = None     # tests
 
-    def _build_url(self, f: dict, page: int = 1) -> str:
-        marca = _slug(f.get("marca", "")) if f.get("marca") else ""
-        modelo = _slug(f.get("modelo", "")) if f.get("modelo") else ""
+    def _build_url(self, f: dict, page: int = 1, model_slug: str | None = None) -> str:
+        marca = _make_slug(f["marca"]) if f.get("marca") else ""
+        modelo = model_slug or (_slug(f["modelo"]) if f.get("modelo") else "")
 
         if marca and modelo:
             path = f"/auto/usado/{marca}/{modelo}"
@@ -296,57 +348,96 @@ class AutoCosmosScraper(BaseScraper):
                         url, r.status_code, pause, attempt + 1, self.RETRIES)
         raise AssertionError("unreachable")
 
+    async def _model_pages(self, cx: httpx.AsyncClient, make: str) -> frozenset[str]:
+        """The make's model pages (/auto/usado/<make> links to every one),
+        kept MODEL_PAGES_TTL_SECONDS. A failed read is not kept: the run
+        goes on with the model's own slug, as before the list existed."""
+        cached = _model_pages.get(make)
+        if cached and time.monotonic() - cached[0] < MODEL_PAGES_TTL_SECONDS:
+            return cached[1]
+        try:
+            r = await cx.get(f"{self.BASE}/auto/usado/{make}")
+        except httpx.HTTPError as e:
+            log.warning("autocosmos: the %s model list failed (%s)", make, type(e).__name__)
+            return frozenset()
+        if r.status_code != 200:
+            log.warning("autocosmos: the %s model list answered %d", make, r.status_code)
+            return frozenset()
+        pages = frozenset(re.findall(_MODEL_LINK_RE.format(make=re.escape(make)), r.text))
+        if pages:
+            _model_pages[make] = (time.monotonic(), pages)
+        return pages
+
     async def search(self, filters: dict) -> SearchResults:
-        """Every page while there is a next one with new cards. The first
-        page fails the run unless it answers 200, or 404 or 410 (a model
-        without stock); a 401, 403 or 429 is the site turning us away, not
-        0 results, and pauses the source. A later one that fails or answers
-        anything but 200 makes the read partial."""
+        """Every page of each of the model's pages on the site (model_slugs),
+        while there is a next one with new cards. The first page of the
+        model's first page fails the run unless it answers 200, or 404 or
+        410 (a model without stock); a 401, 403 or 429 anywhere is the site
+        turning us away, not 0 results, and pauses the source. Any other
+        page that fails or answers anything but 200 (a variant's 404 or 410
+        aside) makes the read partial."""
         out: list[Listing] = []
         seen: set[str] = set()
         async with async_client(
             timeout=self.TIMEOUT, headers=HEADERS, follow_redirects=True, verify=True,
             transport=self.transport,
         ) as cx:
-            for p in range(1, self.MAX_PAGES + 1):
-                if p > 1:
+            slugs: list[str | None] = [None]
+            if filters.get("marca") and filters.get("modelo"):
+                make = _make_slug(filters["marca"])
+                slugs = model_slugs(make, filters["modelo"], await self._model_pages(cx, make))
+            for i, slug in enumerate(slugs):
+                if i:
                     await asyncio.sleep(self.PAGE_PAUSE_SECONDS)
-                url = self._build_url(filters, page=p)
-                try:
-                    r = await self._get(cx, url)
-                except httpx.HTTPError as e:
-                    if p == 1:
-                        raise
-                    log.warning("autocosmos: %s failed, keeping the %d cards read", url, len(seen))
-                    return SearchResults(out, complete=False,
-                                         reason=f"autocosmos: página {p} falló ({type(e).__name__})")
-                if r.status_code != 200:
-                    if p == 1:
-                        if r.status_code in (401, 403, 429):
-                            raise CollectorBlocked(f"autocosmos: HTTP {r.status_code}")
-                        if r.status_code not in (404, 410):
-                            # Another 2xx too: a challenge page is no "0 results".
-                            raise httpx.HTTPStatusError(f"autocosmos: HTTP {r.status_code} for {url}",
-                                                        request=r.request, response=r)
-                        break
-                    log.warning("autocosmos: %s answered %d, keeping the %d cards read",
-                                url, r.status_code, len(seen))
-                    return SearchResults(out, complete=False,
-                                         reason=f"autocosmos: página {p} respondió {r.status_code}")
-                listings = [l for l in self.parse_search(r.text) if l.listing_id not in seen]
-                if not listings:
-                    break
-                for listing in listings:
-                    seen.add(listing.listing_id)
-                    self.annotate_partial_price(listing)
-                    if self.matches_filters(listing, filters):
-                        out.append(listing)
-                if not _NEXT_PAGE_RE.search(r.text):
-                    break
-            else:
-                log.warning("autocosmos: %s stops at %d pages with more to read, keeping the %d cards read",
-                            self._build_url(filters), self.MAX_PAGES, len(seen))
+                reason = await self._read_model(cx, filters, slug, out, seen, first=i == 0)
+                if reason:
+                    return SearchResults(out, complete=False, reason=reason)
         return SearchResults(out)
+
+    async def _read_model(self, cx: httpx.AsyncClient, filters: dict, slug: str | None,
+                          out: list[Listing], seen: set[str], *, first: bool) -> str | None:
+        """One model page's pages into `out`; the reason when the read ends partial."""
+        for p in range(1, self.MAX_PAGES + 1):
+            if p > 1:
+                await asyncio.sleep(self.PAGE_PAUSE_SECONDS)
+            url = self._build_url(filters, page=p, model_slug=slug)
+            try:
+                r = await self._get(cx, url)
+            except httpx.HTTPError as e:
+                if p == 1 and first:
+                    raise
+                log.warning("autocosmos: %s failed, keeping the %d cards read", url, len(seen))
+                return f"autocosmos: {self._where(None if first else slug, p)} falló ({type(e).__name__})"
+            if r.status_code != 200:
+                if r.status_code in (401, 403, 429):
+                    if p == 1:
+                        raise CollectorBlocked(f"autocosmos: HTTP {r.status_code}")
+                elif p == 1 and r.status_code in (404, 410):
+                    return None
+                elif p == 1 and first:
+                    # Another 2xx too: a challenge page is no "0 results".
+                    raise httpx.HTTPStatusError(f"autocosmos: HTTP {r.status_code} for {url}",
+                                                request=r.request, response=r)
+                log.warning("autocosmos: %s answered %d, keeping the %d cards read",
+                            url, r.status_code, len(seen))
+                return f"autocosmos: {self._where(None if first else slug, p)} respondió {r.status_code}"
+            listings = [l for l in self.parse_search(r.text) if l.listing_id not in seen]
+            if not listings:
+                return None
+            for listing in listings:
+                seen.add(listing.listing_id)
+                self.annotate_partial_price(listing)
+                if self.matches_filters(listing, filters):
+                    out.append(listing)
+            if not _NEXT_PAGE_RE.search(r.text):
+                return None
+        log.warning("autocosmos: %s stops at %d pages with more to read, keeping the %d cards read",
+                    self._build_url(filters, model_slug=slug), self.MAX_PAGES, len(seen))
+        return None
+
+    @staticmethod
+    def _where(slug: str | None, p: int) -> str:
+        return f"página {p}" + (f" de {slug}" if slug else "")
 
     async def fetch_detail_page(self, url: str) -> Page:
         """Only a 404, a 410 or a page without the car proves the ad over

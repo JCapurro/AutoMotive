@@ -15,6 +15,7 @@ client-side, so fetch_detail loads them in the browser.
 """
 from __future__ import annotations
 import re
+import unicodedata
 import urllib.parse
 
 from bs4 import BeautifulSoup
@@ -33,7 +34,8 @@ _ID_RE = re.compile(r"-([A-Za-z0-9]{10})$")
 
 def _slug(s: str) -> str:
     s = s.lower().strip()
-    s = s.translate(str.maketrans("áéíóúñü", "aeiounu"))
+    # Every accent off: "Citroën" as citro-n (Kavak's own links say citroen, 06/11/2026).
+    s = "".join(c for c in unicodedata.normalize("NFKD", s) if not unicodedata.combining(c))
     return re.sub(r"[^a-z0-9]+", "-", s).strip("-")
 
 
