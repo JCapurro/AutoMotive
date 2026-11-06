@@ -16,6 +16,11 @@ URL, so fetch_detail compares the page's canonical slug with the one asked for.
 
 A target by body type (docs/CARROCERIA.md) reads `/ar/usados/{carroceria}`
 the same way.
+
+Since 06/11/2026 Kavak is an INVENTORY_TARGET: one target, without filters,
+reads the whole catalog (`/ar/usados`, every page) for every search, and the
+searches by model or by body type are matched from it. The search by make
+and model (and by body type) stays for tools and probes.
 """
 from __future__ import annotations
 import asyncio
@@ -261,9 +266,16 @@ class KavakScraper(BaseScraper):
     # 30 cars (a second page was never loaded): the targets already in the pool
     # reload in silence (targets.sync_targets). Bump it if this read grows again.
     COVERAGE_VERSION = 2
-    # The pages a run reads at most: SUV had 15 (422 cars) on 15/10/2026, the
-    # whole catalog 47; a model has 1-2 (Sandero: 37 cars on 24/10/2026).
-    MAX_PAGES = 40
+    # One target reads the whole catalog (/ar/usados) for every search, and
+    # ingest tells each car's model from its card: the cost no longer grows
+    # with the models searched (06/11/2026: 1.326 cars, 45 pages, about 3
+    # minutes a read). Without make/model hints the catalog resolves the cards
+    # as the model pages did (95 of 95 stored cars, 06/11/2026).
+    INVENTORY_TARGET = True
+    # The pages a run reads at most: the whole catalog had 45 (1.326 cars) on
+    # 06/11/2026, 47 on 15/10/2026; SUV 15 (422 cars). A catalog past it is a
+    # partial read: raise it.
+    MAX_PAGES = 80
 
     @staticmethod
     def matches_filters(item: Listing, f: dict) -> bool:

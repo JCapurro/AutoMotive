@@ -23,6 +23,7 @@ from intelligence.comparables import PriceRef
 from intelligence.config import IntelligenceConfig
 from intelligence.engine import Evaluation, evaluate
 from intelligence.guides import DEFAULT_MAX_QUESTIONS_IN_LISTING, MAX_QUESTIONS_IN_LISTING, GuideIndex, pick
+from intelligence.matching import vehicle_fails
 
 # America/Argentina/Buenos_Aires (no DST since 2009): "today" for fx.max_age_days.
 _AR = timezone(timedelta(hours=-3))
@@ -79,6 +80,11 @@ class Scorer:
     def evaluate(self, listing_id: int, profile: dict[str, Any]) -> Evaluation | None:
         row = self.rows.get(listing_id)
         if row is None:
+            return None
+        # Another make or model never matches: skip the scoring (0.7 ms a
+        # call), which a batch with every model of a source (an inventory
+        # target: Kavak's 1.300 cars) would spend on every search.
+        if vehicle_fails(row, profile.get("filters") or {}):
             return None
         ref = self.refs.get(listing_id)
         ev = evaluate(row, profile, price_ref=ref, cfg=self.cfg,

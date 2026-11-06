@@ -364,9 +364,12 @@ class CrawlTargetTests(unittest.TestCase):
 
     def setUp(self):
         # kavak declares COVERAGE_VERSION: these tests are about the other query keys.
-        patcher = patch.object(REGISTRY["kavak"], "COVERAGE_VERSION", None)
-        patcher.start()
-        self.addCleanup(patcher.stop)
+        # It reads its whole catalog since 06/11/2026 (INVENTORY_TARGET): here it
+        # stands for a source searched per model.
+        for name, value in (("COVERAGE_VERSION", None), ("INVENTORY_TARGET", False)):
+            patcher = patch.object(REGISTRY["kavak"], name, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
 
     def _profile(self, pid: int, **filters) -> dict:
         f = {"make": "Ford", "model": "Fiesta"}
