@@ -14,6 +14,7 @@ import {
   faqJsonLd,
   GUIDE_COPY,
   guideBreadcrumb,
+  guideDate,
   guideDates,
   guideDescription,
   guideName,
@@ -21,10 +22,13 @@ import {
   guideSummary,
   guideTitle,
   jsonLdScript,
+  makePath,
+  METHOD_PATH,
   modelYears,
+  relatedGuides,
   yearsText,
 } from "@/lib/guides";
-import { publishedModelGuides } from "@/lib/guides-data";
+import { type GuideIndexEntry, publishedGuideIndex, publishedModelGuides } from "@/lib/guides-data";
 
 // PAR-04: ISR. Nothing is built at deploy time (a database problem never
 // breaks the build); each page is generated on its first visit, cached for an
@@ -67,6 +71,15 @@ export async function generateMetadata({ params }: PageProps<"/guias/[marca]/[mo
 
 const WRAP = "mx-auto w-full max-w-3xl px-4 sm:px-6";
 
+/** «Otras guías» is extra: a problem reading the index never takes the guide down. */
+async function indexOrEmpty(): Promise<GuideIndexEntry[]> {
+  try {
+    return await publishedGuideIndex();
+  } catch {
+    return [];
+  }
+}
+
 /** /guias/<marca>/<modelo>: the published guides of one model. 404 for anything else. */
 export default async function GuidePage({ params }: PageProps<"/guias/[marca]/[modelo]">) {
   const { marca, modelo } = await params;
@@ -81,6 +94,8 @@ export default async function GuidePage({ params }: PageProps<"/guias/[marca]/[m
   const article = articleJsonLd(guides, siteUrl);
   const breadcrumb = guideBreadcrumb(make, model, marca, modelo, siteUrl);
   const summary = guideSummary(guides);
+  const { modified } = guideDates(guides);
+  const related = relatedGuides(await indexOrEmpty(), marca, modelo);
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -89,12 +104,21 @@ export default async function GuidePage({ params }: PageProps<"/guias/[marca]/[m
         {[faq, article, breadcrumb].map((ld, n) => ld ? <script key={n} type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdScript(ld) }} /> : null)}
         <GuideTracker slugMake={marca} slugModel={modelo} name={name} />
         <div className={`${WRAP} space-y-8`}>
-          <nav aria-label="Ruta" className="text-sm text-muted-foreground">
+          <nav aria-label="Ruta" className="flex flex-wrap gap-x-2 text-sm text-muted-foreground">
             <Link href="/guias" className="underline underline-offset-4">{GUIDE_COPY.allGuides}</Link>
+            <span aria-hidden="true">›</span>
+            <Link href={makePath(marca)} className="underline underline-offset-4">{make}</Link>
           </nav>
           <header className="space-y-4">
             <p className="text-sm font-semibold text-muted-foreground">{GUIDE_COPY.badge}</p>
             <h1 className="type-display text-[2.1rem] leading-[1.05] text-balance md:text-5xl">{guideTitle(make, model)}</h1>
+            {/* GEO: the date up top, where a reader and an engine see how current the page is. */}
+            {modified ? (
+              <p data-testid="guide-updated" className="text-sm text-muted-foreground">
+                {GUIDE_COPY.updatedTop.split("{date}")[0]}
+                <time dateTime={modified}>{guideDate(modified)}</time>
+              </p>
+            ) : null}
             <GuideNotice />
           </header>
           {summary ? (
@@ -111,11 +135,31 @@ export default async function GuidePage({ params }: PageProps<"/guias/[marca]/[m
             </a>
           </p>
           <GuideContent guides={guides} slugMake={marca} slugModel={modelo} />
+          <p className="text-sm">
+            <Link href={METHOD_PATH} className="underline underline-offset-4">{GUIDE_COPY.method}</Link>
+          </p>
           <section id="crear-busqueda" aria-labelledby="guide-cta" className="scroll-mt-24 rounded-xl border p-4 sm:p-6">
             <h2 id="guide-cta" className="text-xl font-semibold tracking-tight">{GUIDE_COPY.ctaTitle.replace("{name}", name)}</h2>
             <p className="mt-2 text-[15px] text-muted-foreground">{GUIDE_COPY.ctaText}</p>
             <GuideCta prompt={ctaPrompt(make, model, years.from, years.to)} slugMake={marca} slugModel={modelo} />
           </section>
+          {related.length ? (
+            <nav aria-labelledby="guide-related" data-testid="guide-related" className="space-y-3">
+              <h2 id="guide-related" className="text-xl font-semibold tracking-tight">{GUIDE_COPY.related}</h2>
+              <ul className="grid gap-x-6 gap-y-1 sm:grid-cols-2">
+                {related.map((g) => (
+                  <li key={`${g.slugMake}/${g.slugModel}`}>
+                    <Link href={guidePath(g.slugMake, g.slugModel)} className="inline-flex min-h-11 items-center text-[16px] underline underline-offset-4">
+                      {guideName(g.make, g.model)}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+              <Link href={makePath(marca)} className="inline-flex min-h-11 items-center text-sm text-muted-foreground underline underline-offset-4">
+                {GUIDE_COPY.allFromMake.replace("{make}", make)}
+              </Link>
+            </nav>
+          ) : null}
         </div>
       </main>
       <SiteFooter />

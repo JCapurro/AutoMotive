@@ -4,7 +4,7 @@ import Link from "next/link";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { siteUrl } from "@/lib/env";
-import { GUIDE_COPY, guideIndexJsonLd, guideName, guidePath, jsonLdScript } from "@/lib/guides";
+import { GUIDE_COPY, guideIndexJsonLd, guideName, guidePath, jsonLdScript, makePath, METHOD_PATH } from "@/lib/guides";
 import { type GuideIndexEntry, publishedGuideIndex } from "@/lib/guides-data";
 
 // PAR-04: static, regenerated at most once an hour and at once on publishing.
@@ -51,7 +51,9 @@ export default async function GuidesIndex() {
           <div className="space-y-6">
             {[...byMake.entries()].map(([make, models]) => (
               <section key={make} aria-labelledby={`marca-${models[0].slugMake}`} className="space-y-2">
-                <h2 id={`marca-${models[0].slugMake}`} className="text-lg font-semibold">{make}</h2>
+                <h2 id={`marca-${models[0].slugMake}`} className="text-lg font-semibold">
+                  <Link href={makePath(models[0].slugMake)} className="hover:underline underline-offset-4">{make}</Link>
+                </h2>
                 <ul className="space-y-1.5">
                   {models.map((m) => (
                     <li key={m.slugModel}>
@@ -63,6 +65,9 @@ export default async function GuidesIndex() {
                 </ul>
               </section>
             ))}
+            <p className="text-sm">
+              <Link href={METHOD_PATH} className="underline underline-offset-4">{GUIDE_COPY.method}</Link>
+            </p>
           </div>
         ) : (
           <div className="space-y-3">

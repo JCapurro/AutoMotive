@@ -1,10 +1,12 @@
 "use server";
 
 import { refresh, revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { z } from "zod";
 
 import { requireAdmin } from "@/lib/admin";
-import { GuideContentInput, GuideValuesInput, guidePath, lintGuide, publishProblem, slugify } from "@/lib/guides";
+import { GuideContentInput, GuideValuesInput, guidePath, lintGuide, makePath, publishProblem, slugify } from "@/lib/guides";
+import { pingIndexNow } from "@/lib/indexnow";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Json } from "@/types/database";
 
@@ -39,8 +41,14 @@ function guideError(message: string): string {
 }
 
 function revalidateGuide(slugMake: unknown, slugModel: unknown) {
-  if (typeof slugMake === "string" && typeof slugModel === "string") revalidatePath(guidePath(slugMake, slugModel));
+  const known = typeof slugMake === "string" && typeof slugModel === "string";
+  if (known) {
+    revalidatePath(guidePath(slugMake, slugModel));
+    revalidatePath(makePath(slugMake));
+  }
   revalidatePath("/guias");
+  // GEO: tell the engines now, after the response (a ping never slows or fails the action).
+  after(() => pingIndexNow(known ? [guidePath(slugMake, slugModel), makePath(slugMake), "/guias"] : ["/guias"]));
   revalidatePath("/sitemap.xml");
   revalidatePath("/llms.txt");
   revalidatePath("/llms-full.txt");

@@ -4,13 +4,24 @@ import { CopyGuideQuestions } from "@/components/guides/copy-guide-questions";
 import {
   generationAnchor,
   GUIDE_COPY,
-  GUIDE_SECTION_NAME,
   GUIDE_SECTIONS,
   guideDate,
+  guideName,
   type PublicGuide,
   questionsText,
+  sectionQuestion,
   yearsText,
 } from "@/lib/guides";
+
+/**
+ * Who a section's question is about: the model, or with several generations
+ * the model and the generation («Toyota Corolla E170»), unless the label
+ * already is the model («Gol Trend» of the Gol Trend).
+ */
+function subject(name: string, label: string | null, many: boolean): string {
+  if (!many || !label || name.toLowerCase().includes(label.toLowerCase())) return name;
+  return `${name} ${label}`;
+}
 
 /** The «Guía orientativa» notice, first thing on the page. */
 export function GuideNotice() {
@@ -35,6 +46,7 @@ export function GuideContent({ guides, slugMake, slugModel }: { guides: PublicGu
   const questions = questionsText(guides);
   // One guide: its sections are the page's h2; several: each generation is.
   const Heading = many ? "h3" : "h2";
+  const name = guideName(guides[0]?.make ?? "", guides[0]?.model ?? "");
   return (
     <div className="space-y-10">
       {many ? (
@@ -52,7 +64,7 @@ export function GuideContent({ guides, slugMake, slugModel }: { guides: PublicGu
           {many ? <h2 className="type-display text-2xl">{g.generationLabel ?? "Todo el modelo"} <span className="text-muted-foreground">{yearsText(g.yearFrom, g.yearTo)}</span></h2> : null}
           {GUIDE_SECTIONS.map((key) => g.body[key].length ? (
             <section key={key} aria-labelledby={`${generationAnchor(g)}-${key}`} className="space-y-3">
-              <Heading id={`${generationAnchor(g)}-${key}`} className="text-xl font-semibold tracking-tight">{GUIDE_SECTION_NAME[key]}</Heading>
+              <Heading id={`${generationAnchor(g)}-${key}`} className="text-xl font-semibold tracking-tight">{sectionQuestion(key, subject(name, g.generationLabel, many))}</Heading>
               <ul className="list-disc space-y-2 pl-5 text-[16px] leading-relaxed">
                 {g.body[key].map((line, n) => (
                   <li key={n}>
@@ -69,7 +81,7 @@ export function GuideContent({ guides, slugMake, slugModel }: { guides: PublicGu
 
       {questions ? (
         <section aria-labelledby="guide-questions" className="space-y-3 rounded-xl bg-muted/60 p-4 sm:p-6">
-          <h2 id="guide-questions" className="text-xl font-semibold tracking-tight">{GUIDE_COPY.questionsTitle}</h2>
+          <h2 id="guide-questions" className="text-xl font-semibold tracking-tight">{sectionQuestion("seller", name)}</h2>
           <ol className="list-decimal space-y-2 pl-5 text-[16px] leading-relaxed" data-testid="guide-questions">
             {questions.split("\n").map((q) => <li key={q}>{q}</li>)}
           </ol>

@@ -66,6 +66,6 @@ export const config = {
   // Skips what never reads the session: assets, crawler files, the OG image and the
   // Mercado Pago webhook/cron (each proxy run is an invocation plus a Supabase check).
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|llms.txt|llms-full.txt|opengraph-image|api/mercadopago/|.*\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|llms.txt|llms-full.txt|indexnow.txt|opengraph-image|api/mercadopago/|.*\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };
