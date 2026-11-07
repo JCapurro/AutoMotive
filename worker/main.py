@@ -4,6 +4,7 @@ import logging
 import signal
 import socket
 
+from telegram import Bot
 from telegram.ext import Application
 
 from config import (CRAWL_LOOP_STALE_SECONDS, EMAIL_FROM, ENRICH_TICK_SECONDS, HEARTBEAT_SECONDS, LOG_FILE, LOG_KEEP_DAYS,
@@ -99,6 +100,23 @@ def notifying(job, notifier: Notifier):
     return run
 
 
+async def _send_only_bot() -> Bot | None:
+    """The admin's operational alerts (notifications/ops.py) when the user bot
+    is off (TELEGRAM_ENABLED=false, users get email): the same token, sending
+    only, never polling. 2026-11-07: with the bot off, the "Facebook session
+    expired" alert never went out and Facebook was down 6 h unnoticed."""
+    if not (TELEGRAM_TOKEN and TELEGRAM_ADMIN_CHAT_ID):
+        return None
+    bot = Bot(TELEGRAM_TOKEN)
+    try:
+        await bot.initialize()
+    except Exception:
+        log.exception("admin alerts: could not reach Telegram; they stay off until the next restart")
+        return None
+    log.info("admin alerts by Telegram (send only)")
+    return bot
+
+
 async def amain() -> None:
     if TELEGRAM_ENABLED and not TELEGRAM_TOKEN:
         raise SystemExit("TELEGRAM_TOKEN no está seteado en .env")
@@ -110,17 +128,20 @@ async def amain() -> None:
     if app is not None:
         register(app, links)
     notifier = build_notifier(app.bot if app else None, links)
-    source_alerts = SourceAlerts(app.bot, TELEGRAM_ADMIN_CHAT_ID, WEB_BASE_URL) if app else None
     for warning in startup_warnings():
         log.warning(warning)
 
+    ops_bot = None
     if app is not None:
         await app.initialize()
         await app.start()
         await app.updater.start_polling(drop_pending_updates=True)
+        ops_bot = app.bot
         log.info("bot iniciado")
     else:
         log.info("worker iniciado: alertas por email")
+        ops_bot = await _send_only_bot()
+    source_alerts = SourceAlerts(ops_bot, TELEGRAM_ADMIN_CHAT_ID, WEB_BASE_URL) if ops_bot else None
 
     stop = asyncio.Event()
 
@@ -187,6 +208,8 @@ async def amain() -> None:
             await app.updater.stop()
             await app.stop()
             await app.shutdown()
+        elif ops_bot is not None:
+            await ops_bot.shutdown()
         await run_collector(browser_shutdown())
         await db.close_pool()
         log.info("bye")

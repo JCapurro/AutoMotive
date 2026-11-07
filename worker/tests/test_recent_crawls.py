@@ -389,6 +389,12 @@ class FacebookWindowTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("daysSinceListed=30", page.url)
         self.assertIn("sortBy=creation_time_descend", page.url)
 
+    async def test_the_scan_keeps_the_refreshed_session(self):
+        page = FacebookPage([[("1", 2)]])
+        with patch.object(fb, "_keep_session", AsyncMock(return_value=True)) as kept:
+            await self.search(page)
+        kept.assert_awaited_once()
+
     async def test_each_batch_of_cards_is_read_in_one_call(self):
         # Chevrolet Prisma (2026-11-01): reading card by card, waiting 30 s for
         # nth(39) ended every scan as partial.
