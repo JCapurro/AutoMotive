@@ -23,6 +23,25 @@ export const GUIDE_SECTION_NAME: Record<GuideSection, string> = {
   maintenance_costs: "Mantenimiento y costos típicos",
   generations: "Generaciones",
 };
+/**
+ * GEO: each section's heading on the public page, as the question someone
+ * types into a search or answer engine; the FAQPage JSON-LD repeats them word
+ * for word, so the structured data matches what the page shows.
+ */
+export const GUIDE_SECTION_QUESTION: Record<GuideSection, string> = {
+  known_issues: "¿Qué fallas conocidas tiene el {name}?",
+  visit_checklist: "¿Qué revisar al ver un {name} usado?",
+  versions_equipment: "¿Qué versiones y equipamiento tiene el {name}?",
+  maintenance_costs: "¿Qué mantenimiento necesita el {name}?",
+  generations: "¿Qué generaciones tuvo el {name}?",
+};
+export const SELLER_QUESTION = "¿Qué preguntarle al vendedor de un {name}?";
+
+/** A section's question for a model («Volkswagen Gol Trend») or one of its generations («Toyota Corolla E170»). */
+export function sectionQuestion(key: GuideSection | "seller", name: string): string {
+  return (key === "seller" ? SELLER_QUESTION : GUIDE_SECTION_QUESTION[key]).replace("{name}", name);
+}
+
 export const SOURCE_KINDS = ["ficha técnica", "manual", "prensa", "foro", "otra"] as const;
 export const MIN_QUESTIONS = 3;
 export const MAX_QUESTIONS = 8;
@@ -60,6 +79,13 @@ export const GUIDE_COPY = {
   ctaTopText: "¿Ya sabés que querés un {name}? Te avisamos cuando aparezca uno publicado.",
   home: "Inicio",
   listingLink: "Ver la guía del {name}",
+  updatedTop: "Actualizada el {date}",
+  makeTitle: "Guías de {make} usados",
+  makeIntro: "Qué mirar y qué preguntar antes de ver un {make} usado, modelo por modelo. Información general: no verifica ningún auto en particular ni reemplaza la revisión de un mecánico.",
+  makeIssue: "Falla conocida: {text}",
+  allFromMake: "Todas las guías de {make}",
+  related: "Otras guías",
+  method: "Cómo hacemos las guías",
 } as const;
 
 /** Who publishes the guides (schema.org Organization). */
@@ -105,6 +131,14 @@ export function isSlug(value: unknown): value is string {
 export function guidePath(slugMake: string, slugModel: string): string {
   return `/guias/${slugMake}/${slugModel}`;
 }
+
+/** /guias/<marca>: the make's published models. */
+export function makePath(slugMake: string): string {
+  return `/guias/${slugMake}`;
+}
+
+/** How the guides are made (sources, updates, what they are not). A static segment: it wins over /guias/[marca]. */
+export const METHOD_PATH = "/guias/como-las-hacemos";
 
 /**
  * The published model whose guide a listing links to (the ficha's «Ver la
@@ -369,20 +403,32 @@ export function questionsText(guides: PublicGuide[]): string {
   return out.join("\n");
 }
 
+/** A line as the FAQ's answer says it: the generation's label and years first, «Aplica a» last. */
+function lineAnswer(line: GuideLine | GenerationLine): string {
+  const label = "label" in line && line.label ? `${line.label}${line.year_from || line.year_to ? ` (${yearsText(line.year_from, line.year_to)})` : ""}: ` : "";
+  const applies = "applies_to" in line && line.applies_to ? ` (${GUIDE_COPY.appliesTo.replace("{text}", line.applies_to)})` : "";
+  return `${label}${line.text}${applies}`;
+}
+
 /**
- * schema.org FAQPage built from the sections, deterministically: known
- * issues, what to check and what to ask, with the guide's own lines.
+ * schema.org FAQPage built from the sections, deterministically: every
+ * section and the questions for the seller, each asked as the page's own
+ * heading asks it, with the guide's own lines as the answer.
  */
 export function faqJsonLd(guides: PublicGuide[], url: string): Record<string, unknown> | null {
   if (!guides.length) return null;
   const name = guideName(guides[0].make, guides[0].model);
-  const lines = (key: "known_issues" | "visit_checklist") => guides.flatMap((g) => g.body[key].map((l) => l.text));
+  const lines = (key: GuideSection) => guides.flatMap((g) => (g.body[key] as (GuideLine | GenerationLine)[]).map(lineAnswer));
   // The page's own list: each question once across the generations.
   const questions = questionsText(guides).split("\n").filter(Boolean);
+  // The first three keep their place (what most people ask); then the rest of the page.
   const entries: [string, string[]][] = [
-    [`¿Qué fallas conocidas tiene el ${name}?`, lines("known_issues")],
-    [`¿Qué revisar al ver un ${name} usado?`, lines("visit_checklist")],
-    [`¿Qué preguntarle al vendedor de un ${name}?`, questions],
+    [sectionQuestion("known_issues", name), lines("known_issues")],
+    [sectionQuestion("visit_checklist", name), lines("visit_checklist")],
+    [sectionQuestion("seller", name), questions],
+    [sectionQuestion("versions_equipment", name), lines("versions_equipment")],
+    [sectionQuestion("maintenance_costs", name), lines("maintenance_costs")],
+    [sectionQuestion("generations", name), lines("generations")],
   ];
   const mainEntity = entries
     .filter(([, answer]) => answer.length)
@@ -502,8 +548,76 @@ export function guideBreadcrumb(make: string, model: string, slugMake: string, s
   return breadcrumbJsonLd([
     { name: GUIDE_COPY.home, url: `${site}/` },
     { name: GUIDE_COPY.indexTitle, url: `${site}/guias` },
+    { name: make, url: `${site}${makePath(slugMake)}` },
     { name: guideName(make, model), url: `${site}${guidePath(slugMake, slugModel)}` },
   ]);
+}
+
+/** schema.org CollectionPage of /guias/<marca>, with an ItemList of the make's published models. */
+export function makeIndexJsonLd(
+  make: string,
+  slugMake: string,
+  entries: { make: string; model: string; slugMake: string; slugModel: string }[],
+  site: string,
+): Record<string, unknown> {
+  return {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    name: GUIDE_COPY.makeTitle.replace("{make}", make),
+    description: GUIDE_COPY.makeIntro.replace("{make}", make),
+    url: `${site}${makePath(slugMake)}`,
+    inLanguage: "es-AR",
+    publisher: organizationJsonLd(site),
+    about: { "@type": "Brand", name: make },
+    mainEntity: {
+      "@type": "ItemList",
+      numberOfItems: entries.length,
+      itemListElement: entries.map((e, n) => ({
+        "@type": "ListItem",
+        position: n + 1,
+        name: guideName(e.make, e.model),
+        url: `${site}${guidePath(e.slugMake, e.slugModel)}`,
+      })),
+    },
+  };
+}
+
+/** The breadcrumb of a make's page: Inicio › Guías › the make. */
+export function makeBreadcrumb(make: string, slugMake: string, site: string) {
+  return breadcrumbJsonLd([
+    { name: GUIDE_COPY.home, url: `${site}/` },
+    { name: GUIDE_COPY.indexTitle, url: `${site}/guias` },
+    { name: make, url: `${site}${makePath(slugMake)}` },
+  ]);
+}
+
+/**
+ * «Otras guías» under a model's page: the make's other models first, then
+ * others spread across the index in a stable per-page order (every guide gets
+ * links from somewhere, and a page's list doesn't move between visits).
+ */
+export function relatedGuides<T extends { slugMake: string; slugModel: string }>(
+  index: readonly T[],
+  slugMake: string,
+  slugModel: string,
+  count = 6,
+): T[] {
+  const others = index.filter((e) => !(e.slugMake === slugMake && e.slugModel === slugModel));
+  const sameMake = others.filter((e) => e.slugMake === slugMake);
+  const seed = hash(`${slugMake}/${slugModel}`);
+  const rest = others
+    .filter((e) => e.slugMake !== slugMake)
+    .map((e) => ({ e, k: hash(`${seed}:${e.slugMake}/${e.slugModel}`) }))
+    .sort((x, y) => x.k - y.k)
+    .map(({ e }) => e);
+  return [...sameMake, ...rest].slice(0, count);
+}
+
+/** FNV-1a, 32 bits: a stable order, not security. */
+function hash(text: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193) >>> 0;
+  return h;
 }
 
 /** schema.org CollectionPage of /guias, with an ItemList of every published model. */

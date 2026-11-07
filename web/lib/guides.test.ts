@@ -166,11 +166,16 @@ describe("FAQ JSON-LD", () => {
     const faq = faqJsonLd([guide], "https://eseauto.com.ar/guias/toyota/corolla")!;
     expect(faq["@type"]).toBe("FAQPage");
     const entries = faq.mainEntity as { name: string; acceptedAnswer: { text: string } }[];
+    // Every section, asked as the page's headings ask it; the three most asked first.
     expect(entries.map((e) => e.name)).toEqual([
       "¿Qué fallas conocidas tiene el Toyota Corolla?",
       "¿Qué revisar al ver un Toyota Corolla usado?",
       "¿Qué preguntarle al vendedor de un Toyota Corolla?",
+      "¿Qué versiones y equipamiento tiene el Toyota Corolla?",
+      "¿Qué mantenimiento necesita el Toyota Corolla?",
+      "¿Qué generaciones tuvo el Toyota Corolla?",
     ]);
+    expect(entries[5].acceptedAnswer.text).toBe("Guía orientativa. E170 (2014 a 2019): Restyling en 2017.");
     expect(entries[0].acceptedAnswer.text.startsWith("Guía orientativa.")).toBe(true);
     const script = jsonLdScript(faq);
     expect(script).not.toContain("<");
@@ -232,7 +237,8 @@ describe("FAQ JSON-LD", () => {
     expect(ld.itemListElement).toEqual([
       { "@type": "ListItem", position: 1, name: "Inicio", item: "https://eseauto.com.ar/" },
       { "@type": "ListItem", position: 2, name: GUIDE_COPY.indexTitle, item: "https://eseauto.com.ar/guias" },
-      { "@type": "ListItem", position: 3, name: "Toyota Corolla", item: "https://eseauto.com.ar/guias/toyota/corolla" },
+      { "@type": "ListItem", position: 3, name: "Toyota", item: "https://eseauto.com.ar/guias/toyota" },
+      { "@type": "ListItem", position: 4, name: "Toyota Corolla", item: "https://eseauto.com.ar/guias/toyota/corolla" },
     ]);
     expect(breadcrumbJsonLd([]).itemListElement).toEqual([]);
   });
@@ -336,7 +342,14 @@ describe("/guias/<marca>/<modelo>", () => {
     const html = renderToStaticMarkup(await GuidePage(params("toyota", "corolla")));
     expect(html).toContain(GUIDE_COPY.notice);
     expect(html).toContain("Toyota Corolla usado: guía orientativa para revisarlo");
-    for (const name of ["Fallas conocidas", "Qué revisar en la visita", "Versiones y equipamiento", "Mantenimiento y costos típicos", "Generaciones", "Preguntas para hacerle al vendedor"]) {
+    for (const name of [
+      "¿Qué fallas conocidas tiene el Toyota Corolla?",
+      "¿Qué revisar al ver un Toyota Corolla usado?",
+      "¿Qué versiones y equipamiento tiene el Toyota Corolla?",
+      "¿Qué mantenimiento necesita el Toyota Corolla?",
+      "¿Qué generaciones tuvo el Toyota Corolla?",
+      "¿Qué preguntarle al vendedor de un Toyota Corolla?",
+    ]) {
       expect(html).toContain(name);
     }
     expect(html).toContain("¿La caja hace tirones en frío?");
@@ -353,7 +366,7 @@ describe("/guias/<marca>/<modelo>", () => {
     const html = renderToStaticMarkup(await GuidePage(params("toyota", "corolla")));
     const summary = html.indexOf('data-testid="guide-summary"');
     const top = html.indexOf('data-testid="guide-cta-top"');
-    const sections = html.indexOf("Fallas conocidas</h2>");
+    const sections = html.indexOf("¿Qué fallas conocidas tiene el Toyota Corolla?</h2>");
     expect(summary).toBeGreaterThan(-1);
     expect(summary).toBeLessThan(sections);
     expect(top).toBeLessThan(sections);
@@ -424,7 +437,7 @@ describe("/guias and the sitemap", () => {
     vi.mocked(createPublicClient).mockReturnValue(client({ data: null, error: { code: "PGRST205", message: "x" } }).client);
     const noTable = (await sitemap()).map((e) => e.url);
     expect(noTable.some((u) => u.endsWith("/guias"))).toBe(true);
-    expect(noTable.some((u) => u.includes("/guias/"))).toBe(false);
+    expect(noTable.some((u) => u.includes("/guias/") && !u.endsWith("/guias/como-las-hacemos"))).toBe(false);
     vi.mocked(createPublicClient).mockReturnValue(client({ data: null, error: { code: "57014", message: "timeout" } }).client);
     const failed = (await sitemap()).map((e) => e.url);
     expect(failed.some((u) => u.endsWith("/planes"))).toBe(true);
@@ -484,7 +497,7 @@ describe("a model with several generations", () => {
     expect(html.indexOf('id="generacion-e170"')).toBeLessThan(html.indexOf('id="generacion-e210"'));
     expect(html).toMatch(/<h2[^>]*>Todo el modelo/);
     expect(html).toMatch(/<h2[^>]*>E210 <span[^>]*>2020 a 2024<\/span><\/h2>/);
-    expect(html).toMatch(/<h3 id="generacion-e210-known_issues"[^>]*>Fallas conocidas<\/h3>/);
+    expect(html).toMatch(/<h3 id="generacion-e210-known_issues"[^>]*>¿Qué fallas conocidas tiene el Toyota Corolla E210\?<\/h3>/);
     expect(html).not.toMatch(/<h2 id="[^"]*-known_issues"/);
     const list = /<ol[^>]*data-testid="guide-questions"[^>]*>(.*?)<\/ol>/.exec(html)![1];
     expect(list.match(/<li>/g)).toHaveLength(6);
@@ -505,7 +518,7 @@ describe("a model with several generations", () => {
     vi.mocked(createPublicClient).mockReturnValue(client({ data: [WHOLE], error: null }).client);
     const html = renderToStaticMarkup(await GuidePage(params("toyota", "corolla")));
     expect(html).not.toContain('aria-label="Generaciones"');
-    expect(html).toMatch(/<h2 id="guia-known_issues"[^>]*>Fallas conocidas<\/h2>/);
+    expect(html).toMatch(/<h2 id="guia-known_issues"[^>]*>¿Qué fallas conocidas tiene el Toyota Corolla\?<\/h2>/);
     expect(html).toContain('data-prompt="Busco un Toyota Corolla"');
   });
 });

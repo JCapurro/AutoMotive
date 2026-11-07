@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ requireAdmin: vi.fn(), client: vi.fn(), rpc: vi.fn(), single: vi.fn(), refresh: vi.fn(), revalidatePath: vi.fn() }));
+const mocks = vi.hoisted(() => ({ requireAdmin: vi.fn(), client: vi.fn(), rpc: vi.fn(), single: vi.fn(), refresh: vi.fn(), revalidatePath: vi.fn(), after: vi.fn() }));
 vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ refresh: mocks.refresh, revalidatePath: mocks.revalidatePath }));
+vi.mock("next/server", async (original) => ({ ...(await original<typeof import("next/server")>()), after: mocks.after }));
 vi.mock("@/lib/admin", () => ({ requireAdmin: mocks.requireAdmin }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: mocks.client }));
 
@@ -61,7 +62,9 @@ describe("/admin/guides actions", () => {
   it("saving a published guide invalidates its page, /guias and the sitemap", async () => {
     expect(await saveGuide({ id: 3, expectedUpdatedAt: "t1", values: VALUES })).toEqual({ ok: true, id: 3, updatedAt: "t2" });
     expect(mocks.rpc).toHaveBeenCalledWith("admin_save_model_guide", expect.objectContaining({ p_id: 3, p_expected_updated_at: "t1", p_actor_id: "session-admin" }));
-    expect(mocks.revalidatePath.mock.calls.map((c) => c[0])).toEqual(["/guias/ford/fiesta", "/guias", "/sitemap.xml", "/llms.txt", "/llms-full.txt"]);
+    expect(mocks.revalidatePath.mock.calls.map((c) => c[0])).toEqual(["/guias/ford/fiesta", "/guias/ford", "/guias", "/sitemap.xml", "/llms.txt", "/llms-full.txt"]);
+    // GEO: the engines hear about it after the response (IndexNow), never in the action's way.
+    expect(mocks.after).toHaveBeenCalledTimes(1);
   });
 
   it("a conflict says so", async () => {
@@ -96,7 +99,7 @@ describe("/admin/guides actions", () => {
     // A change between the read and the RPC: the RPC refuses it.
     mocks.rpc.mockResolvedValue({ data: null, error: { message: "guide_changed" } });
     expect((await setGuideStatus({ id: 3, status: "published", expectedUpdatedAt: SEEN })).error).toContain("Recargá y revisala");
-    expect(mocks.revalidatePath).toHaveBeenCalledTimes(5);
+    expect(mocks.revalidatePath).toHaveBeenCalledTimes(6);
   });
 
   it("publishing and unpublishing invalidate the public pages", async () => {

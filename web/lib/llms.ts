@@ -10,6 +10,8 @@ import {
   guideDescription,
   guidePath,
   guideTitle,
+  makePath,
+  METHOD_PATH,
   modelYears,
   type PublicGuide,
   questionsText,
@@ -28,6 +30,8 @@ export const LLMS_COPY = {
   pages: "Páginas",
   home: "Inicio: cómo funciona y crear una búsqueda",
   plans: "Planes",
+  method: "Cómo hacemos las guías: fuentes, revisión y actualización",
+  makes: "Guías por marca",
 } as const;
 
 /** Markdown text of a line: no newlines (a line never breaks the list). */
@@ -55,7 +59,19 @@ export function llmsTxt(models: PublicGuide[][], site: string): string {
     out.push(`- [${guideTitle(make, model)}](${site}${guidePath(slugMake, slugModel)}): ${modelSummary(guides)}`);
   }
   if (!published.length) out.push("", LLMS_COPY.noGuides);
-  out.push("", `## ${LLMS_COPY.pages}`, "", `- [${LLMS_COPY.home}](${site}/)`, `- [${LLMS_COPY.plans}](${site}/planes)`);
+  const makes = new Map(published.map((guides) => [guides[0].slugMake, guides[0].make]));
+  if (makes.size) {
+    out.push("", `## ${LLMS_COPY.makes}`, "");
+    for (const [slugMake, make] of makes) out.push(`- [${GUIDE_COPY.makeTitle.replace("{make}", make)}](${site}${makePath(slugMake)})`);
+  }
+  out.push(
+    "",
+    `## ${LLMS_COPY.pages}`,
+    "",
+    `- [${LLMS_COPY.home}](${site}/)`,
+    `- [${LLMS_COPY.plans}](${site}/planes)`,
+    `- [${LLMS_COPY.method}](${site}${METHOD_PATH})`,
+  );
   if (published.length) out.push("", `## ${LLMS_COPY.optionalTitle}`, "", `- [${LLMS_COPY.fullText}](${site}/llms-full.txt)`);
   return `${out.join("\n")}\n`;
 }

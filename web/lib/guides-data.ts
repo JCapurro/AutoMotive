@@ -32,6 +32,27 @@ export const publishedModelGuides = cache(async (slugMake: string, slugModel: st
   return guides.length ? sortGenerations(guides) : null;
 });
 
+/**
+ * A make's published guides, one array per model (by model, each by year),
+ * read as anon: /guias/<marca>. null like publishedModelGuides: no published
+ * model, a slug out of pattern or a base without the table.
+ */
+export const publishedMakeGuides = cache(async (slugMake: string): Promise<PublicGuide[][] | null> => {
+  if (!isSlug(slugMake)) return null;
+  const { data, error } = await createPublicClient()
+    .from("model_guides")
+    .select(PUBLIC_GUIDE_COLUMNS)
+    .eq("slug_make", slugMake)
+    .order("model")
+    .order("year_from", { ascending: true, nullsFirst: true })
+    .order("id");
+  if (missingTable(error)) return null;
+  if (error) throw new Error(`model_guides: ${error.message}`);
+  const byModel = new Map<string, PublicGuide[]>();
+  for (const row of (data ?? []) as PublicGuideRow[]) byModel.set(row.slug_model, [...(byModel.get(row.slug_model) ?? []), toPublicGuide(row)]);
+  return byModel.size ? [...byModel.values()].map(sortGenerations) : null;
+});
+
 /** `updatedAt`: the latest content_updated_at of the model's published guides. */
 export type GuideIndexEntry = { make: string; model: string; slugMake: string; slugModel: string; updatedAt: string };
 

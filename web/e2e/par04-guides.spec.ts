@@ -72,9 +72,17 @@ test("PAR-04: la guía publicada se ve con el aviso y su CTA abre el alta con el
     await expect(page.getByRole("heading", { level: 1, name: "Ford Courier usado: guía orientativa para revisarlo" })).toBeVisible();
     await expect(page.getByTestId("guide-notice")).toContainText("Guía orientativa");
     await expect(page.getByTestId("guide-notice")).toContainText("reemplaza la revisión de un mecánico");
-    for (const name of ["Fallas conocidas", "Qué revisar en la visita", "Versiones y equipamiento", "Mantenimiento y costos típicos", "Generaciones"]) {
+    // GEO: each section is the question people ask, and the date is up top.
+    for (const name of [
+      "¿Qué fallas conocidas tiene el Ford Courier?",
+      "¿Qué revisar al ver un Ford Courier usado?",
+      "¿Qué versiones y equipamiento tiene el Ford Courier?",
+      "¿Qué mantenimiento necesita el Ford Courier?",
+      "¿Qué generaciones tuvo el Ford Courier?",
+    ]) {
       await expect(page.getByRole("heading", { name })).toBeVisible();
     }
+    await expect(page.getByTestId("guide-updated")).toContainText("Actualizada el");
     await expect(page.getByTestId("guide-questions").getByRole("listitem")).toHaveCount(3);
     const html = await page.content();
     expect(html).toContain('"@type":"FAQPage"');

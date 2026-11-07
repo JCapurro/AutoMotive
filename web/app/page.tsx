@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { LandingSearch } from "@/components/landing-search";
 import { PublicPlans } from "@/components/public-plans";
 import { SiteFooter } from "@/components/site-footer";
@@ -6,6 +8,9 @@ import { Button } from "@/components/ui/button";
 import { currentUser } from "@/lib/auth";
 import { money } from "@/lib/format";
 import { webConfig } from "@/lib/config";
+import { siteUrl } from "@/lib/env";
+import { jsonLdScript } from "@/lib/guides";
+import { HOME_FAQ, homeJsonLd } from "@/lib/site-jsonld";
 
 // §50: hero, an example of what we flag, how it works, the four benefits and
 // the "Crear mi búsqueda" CTA. No chart to decode: a price list read with a
@@ -58,6 +63,7 @@ export default async function Landing({ searchParams }: PageProps<"/">) {
       <SiteHeader signedIn={Boolean(user)} page="home" />
 
       <main className="flex-1">
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdScript(homeJsonLd(siteUrl)) }} />
         {params.cuenta === "borrada" ? (
           <p role="status" className={`${WRAP} text-sm text-muted-foreground`}>
             Borramos tu cuenta y todos tus datos.
@@ -122,6 +128,28 @@ export default async function Landing({ searchParams }: PageProps<"/">) {
             <p className="mt-3 max-w-3xl text-muted-foreground">Probá gratis por 3 días y elegí cuántas búsquedas querés seguir.</p>
             <div className="mt-8">
               <PublicPlans cfg={cfg} signedIn={Boolean(user)} />
+            </div>
+          </div>
+        </section>
+
+        <section aria-labelledby="preguntas" data-testid="home-faq" className="border-t py-16">
+          <div className={WRAP}>
+            <h2 id="preguntas" className="type-heading text-[1.75rem] leading-tight md:text-4xl">Preguntas frecuentes</h2>
+            <div className="mt-8 grid border-t-2 border-foreground md:grid-cols-2 md:gap-x-12">
+              {HOME_FAQ.map(({ q, a }) => (
+                <div key={q} className="space-y-1.5 border-b py-5">
+                  <h3 className="text-lg leading-snug font-bold">{q}</h3>
+                  <p className="max-w-[60ch] text-muted-foreground">
+                    {a}
+                    {q.includes("revisa") ? (
+                      <>
+                        {" "}
+                        <Link href="/guias" className="underline underline-offset-4">Ver las guías</Link>
+                      </>
+                    ) : null}
+                  </p>
+                </div>
+              ))}
             </div>
           </div>
         </section>
