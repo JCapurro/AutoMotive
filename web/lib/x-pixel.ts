@@ -16,9 +16,9 @@ export const TWCLID_COOKIE = "x_twclid";
  * Empty = that conversion isn't sent.
  */
 export const X_EVENTS = {
-  purchase: "",
-  signup: "",
-  firstSearch: "",
+  purchase: "tw-rimgs-rimt6",
+  signup: "tw-rimgs-rimt7",
+  firstSearch: "tw-rimgs-rimt9",
 } as const;
 
 export type XConversion = keyof typeof X_EVENTS;
