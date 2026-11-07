@@ -62,6 +62,10 @@ REFERENCE_YEAR_BAND = min(1, max(0, int(os.getenv("REFERENCE_YEAR_BAND", "1"))))
 # A Facebook card is dated from the search page's own data (its listing's
 # creation_time) before opening its item page; 0 reads every page as before.
 FB_FEED_DATES = os.getenv("FB_FEED_DATES", "1").strip().lower() in {"1", "true", "yes", "on"}
+# Each Facebook search writes the cookies Facebook refreshed back to
+# FB_STORAGE_STATE (collectors/facebook.py _keep_session); 0 keeps the login's
+# snapshot frozen, as before 2026-11-07.
+FB_KEEP_SESSION = os.getenv("FB_KEEP_SESSION", "1").strip().lower() in {"1", "true", "yes", "on"}
 # Enrichment of matched listings (sección 5.5) and the watchlist refresher
 # (sección 5.6) wake up this often; each listing is checked at most daily.
 ENRICH_TICK_SECONDS = int(os.getenv("ENRICH_TICK_SECONDS", "300"))
@@ -203,8 +207,9 @@ def startup_warnings(env: dict | None = None, which=None) -> list[str]:
                    "no llevan firma de autorización")
     if not (g["RESEND_API_KEY"] and g["EMAIL_FROM"]):
         out.append("email desactivado: faltan RESEND_API_KEY / EMAIL_FROM (canal obligatorio del §21)")
-    if g.get("TELEGRAM_ENABLED", False) and not g["TELEGRAM_ADMIN_CHAT_ID"]:
-        out.append("alertas operativas desactivadas: falta TELEGRAM_ADMIN_CHAT_ID")
+    if not (g.get("TELEGRAM_TOKEN") and g["TELEGRAM_ADMIN_CHAT_ID"]):
+        out.append("alertas operativas desactivadas: faltan TELEGRAM_TOKEN / TELEGRAM_ADMIN_CHAT_ID "
+                   "(sesión de Facebook caída, fuentes que fallan)")
     if g["LLM_PROVIDER"] == "claude_cli":
         out.append("LLM_PROVIDER=claude_cli usa tu suscripción de Claude Code: para usuarios del piloto, "
                    "LLM_PROVIDER=openai con OPENAI_API_KEY o anthropic con ANTHROPIC_API_KEY")

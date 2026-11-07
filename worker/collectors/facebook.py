@@ -332,6 +332,42 @@ async def _require_session(ctx) -> None:
         raise CollectorBlocked("facebook: session expired (logged out, no c_user cookie)")
 
 
+def _state_mtime() -> float | None:
+    try:
+        return Path(FB_STORAGE_STATE).stat().st_mtime
+    except OSError:
+        return None
+
+
+async def _keep_session(ctx, loaded_mtime: float | None) -> bool:
+    """Write back the cookies Facebook refreshed during this run, as a real
+    browser keeps them. Until 2026-11-07 every run started from the snapshot
+    saved at login and threw away what Facebook set (fr, xs, presence...), so
+    for Facebook the account was being replayed from one frozen state ~80
+    times an hour; the sessions lived 3 h to 7 d and shorter the more runs.
+
+    Never writes a logged-out state (no c_user), nor over a session renewed
+    while this run was going (fb_state.json changed since it was loaded).
+    Returns whether it wrote; never raises."""
+    if not config.FB_KEEP_SESSION or loaded_mtime is None:
+        return False
+    try:
+        state = await ctx.storage_state()
+        if not any(c.get("name") == "c_user" and "facebook.com" in (c.get("domain") or "")
+                   for c in state.get("cookies") or ()):
+            return False
+        if _state_mtime() != loaded_mtime:
+            return False
+        with open(FB_STORAGE_STATE, encoding="utf-8") as f:
+            if json.load(f) == state:
+                return False
+        _save_state(state)
+        return True
+    except Exception as exc:
+        log.warning("facebook: could not keep the refreshed session: %s: %s", type(exc).__name__, exc)
+        return False
+
+
 _CREATION_RE = re.compile(r'"creation_time":(\d{9,11}),"location_text"')
 _STORY_ID_RE = re.compile(r'"id":"(Uzpf[A-Za-z0-9+/=]+)"')
 
@@ -786,6 +822,7 @@ class FacebookMarketplaceScraper(BaseScraper):
         url = self._build_url(filters)
         out: list[Listing] = []
         seen: set[str] = set()
+        loaded = _state_mtime()
         async with browser_context(storage_state=FB_STORAGE_STATE, native=True) as ctx:
             page = await ctx.new_page()
             try:
@@ -814,6 +851,7 @@ class FacebookMarketplaceScraper(BaseScraper):
                         out.append(listing)
             finally:
                 await page.close()
+                await _keep_session(ctx, loaded)
         return out
 
     async def _publication_date(self, ctx, listing: Listing) -> int | None:
@@ -856,6 +894,7 @@ class FacebookMarketplaceScraper(BaseScraper):
         # undated: pages read without a date (unknown_dates also counts the cards past the cap).
         stalls = scrolls = fetched = skipped = out_of_window = undated = 0
         self._probe = probe = _FeedProbe()
+        loaded = _state_mtime()
         async with browser_context(storage_state=FB_STORAGE_STATE, native=True) as ctx:
             page = await ctx.new_page()
             probe.listen(page)
@@ -962,6 +1001,7 @@ class FacebookMarketplaceScraper(BaseScraper):
                 self._probe = None
                 await probe.close(page)
                 await page.close()
+                await _keep_session(ctx, loaded)
         if remembering:
             if results.complete:
                 memory = {i: s for i, s in memory.items() if i in seen}

@@ -62,7 +62,7 @@ class StartupWarningsTests(unittest.TestCase):
     FULL = {"WEB_BASE_URL": "https://automotive.example", "ALERT_LINK_SECRET": "x" * 32, "RESEND_API_KEY": "re_x",
             "EMAIL_FROM": "alertas@automotive.example", "TELEGRAM_ADMIN_CHAT_ID": "1",
             "LLM_PROVIDER": "anthropic", "ANTHROPIC_API_KEY": "sk-x", "CLAUDE_CLI_PATH": "",
-            "GEOCODING_ENABLED": True, "TELEGRAM_ENABLED": True}
+            "GEOCODING_ENABLED": True, "TELEGRAM_ENABLED": True, "TELEGRAM_TOKEN": "123:abc"}
 
     def warnings(self, found=True, **changes):
         from config import startup_warnings
@@ -71,8 +71,14 @@ class StartupWarningsTests(unittest.TestCase):
     def test_a_complete_configuration_is_quiet(self):
         self.assertEqual(self.warnings(), [])
 
-    def test_mvp_does_not_require_telegram_configuration(self):
-        self.assertEqual(self.warnings(TELEGRAM_ENABLED=False, TELEGRAM_ADMIN_CHAT_ID=""), [])
+    def test_mvp_does_not_require_the_user_bot(self):
+        self.assertEqual(self.warnings(TELEGRAM_ENABLED=False), [])
+
+    def test_admin_alerts_need_a_token_even_with_the_user_bot_off(self):
+        # 2026-11-07: with TELEGRAM_ENABLED=false the Facebook session alert never went out.
+        for changes in ({"TELEGRAM_TOKEN": ""}, {"TELEGRAM_ADMIN_CHAT_ID": ""}):
+            with self.subTest(**changes):
+                self.assertIn("alertas operativas", self.warnings(TELEGRAM_ENABLED=False, **changes)[0])
 
     def test_each_missing_piece_is_named(self):
         self.assertIn("§53", self.warnings(WEB_BASE_URL="")[0])
