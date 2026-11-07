@@ -1,6 +1,7 @@
 import "server-only";
 import { z } from "zod";
 import { type AdAttribution, sendPurchase } from "@/lib/meta-capi";
+import { sendXConversion } from "@/lib/x-capi";
 import { checkoutUrl, paymentPeriod } from "@/lib/mercadopago";
 import { isPassOffer, OFFER_DAYS, type WaitlistPlan } from "@/lib/pro";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -136,7 +137,11 @@ async function applyPayment(raw: unknown, checkout: BillingCheckout, debitDate?:
   });
   if (error) throw new Error("payment_database_error");
   // A refund before the first notification still returns a row: only approvals are purchases.
-  if (payment.status === "approved" && paymentRow != null) await sendPurchase({ paymentId: Number(paymentRow), checkout, paidAt });
+  if (payment.status === "approved" && paymentRow != null) {
+    await sendPurchase({ paymentId: Number(paymentRow), checkout, paidAt });
+    // Webhooks repeat: the conversion_id makes X count each payment once.
+    await sendXConversion({ conversion: "purchase", conversionId: `purchase:${checkout.id}:${paymentRow}`, at: paidAt, attribution: checkout.ad_attribution as AdAttribution | null });
+  }
 }
 async function invoicePayment(raw: unknown, knownCheckout?: BillingCheckout, knownPayment?: unknown) {
   const invoice = invoiceSchema.parse(raw);

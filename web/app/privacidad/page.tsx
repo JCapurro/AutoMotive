@@ -100,6 +100,11 @@ export default async function PrivacyPage() {
           Meta (Facebook e Instagram), salvo que rechaces las cookies de medición: las páginas que visitás acá y las acciones que
           medimos (ver Cookies), sin tu email ni el contenido de tus búsquedas.
         </li>
+        <li>
+          X (Twitter), salvo que rechaces las cookies de medición: las páginas que visitás acá y, desde nuestro servidor,
+          cuándo creás tu cuenta, tu primera búsqueda y los pagos aprobados, con tu dirección IP, tu navegador y el
+          identificador del anuncio de X por el que llegaste. Sin tu email, tu teléfono ni el contenido de tus búsquedas.
+        </li>
         <li>Google Analytics 4, salvo que rechaces las cookies de medición: páginas visitadas y eventos de uso como búsquedas, favoritos y contratación, sin el texto ni los filtros de tus búsquedas.</li>
         <li>Microsoft Clarity, salvo que rechaces las cookies de medición: mapas de calor y grabaciones de las interacciones con el sitio para detectar dificultades de uso. El contenido de los campos de los formularios se oculta en las grabaciones.</li>
         <li>
@@ -124,8 +129,10 @@ export default async function PrivacyPage() {
         crear una cuenta, guardar una búsqueda o una publicación, o iniciar la contratación de un plan. Google Analytics no recibe el texto ni los filtros de tus búsquedas. Cuando un pago se aprueba, se lo informamos
         a Meta desde nuestro servidor con el plan, el importe, un identificador cifrado de tu cuenta, tu dirección IP,
         tu navegador y los identificadores de esas cookies. No le mandamos tu email, tus búsquedas ni otros datos de
-        tu cuenta. Estas cookies están activas desde que entrás al sitio. Un solo «Rechazar» las desactiva todas:
-        el Pixel deja de enviarle datos a Meta, no le informamos los pagos, Google Analytics deja de medir tus visitas
+        tu cuenta. Con el mismo criterio usamos la etiqueta de X (Twitter): le informamos desde nuestro servidor cuándo
+        creás tu cuenta, tu primera búsqueda y los pagos aprobados, con tu IP, tu navegador y el identificador del
+        anuncio de X por el que llegaste. Estas cookies están activas desde que entrás al sitio. Un solo «Rechazar» las desactiva todas:
+        el Pixel deja de enviarle datos a Meta, no le informamos los pagos ni a Meta ni a X, no cargamos la etiqueta de X, Google Analytics deja de medir tus visitas
         y no cargamos Microsoft Clarity.
       </p>
       <ConsentSettings />

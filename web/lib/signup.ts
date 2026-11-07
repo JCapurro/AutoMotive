@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { track } from "@/lib/events";
 import { queuePixel } from "@/lib/meta-pixel-server";
+import { reportXConversion } from "@/lib/x-capi";
 import type { Database } from "@/types/database";
 
 /**
@@ -22,5 +23,6 @@ export async function afterSignIn(supabase: SupabaseClient<Database>, method: "e
   if (count) return false;
   await track(supabase, userId, "signup_completed", { method });
   await queuePixel("CompleteRegistration", { content_name: method }, `signup:${userId}`);
+  await reportXConversion("signup", `signup:${userId}`);
   return true;
 }

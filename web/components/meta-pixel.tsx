@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { googleAnalyticsId } from "@/lib/google-analytics";
 import { clarityProjectId } from "@/lib/microsoft-clarity";
 import { CONSENT_COOKIE, metaPixelId, pixel, PIXEL_QUEUE_COOKIE, trackingAllowed, untrackedPath, type QueuedPixel } from "@/lib/meta-pixel";
+import { TWCLID_COOKIE, xPixelId } from "@/lib/x-pixel";
 
 /** "Ver publicación": the web button and the alert redirect both leave the site through these. */
 const OUTBOUND = /^\/(app\/listings\/\d+\/out|r\/\d+)(\?|$)/;
@@ -36,7 +37,10 @@ function subscribe(onChange: () => void) {
 function setConsent(value: Choice) {
   reopened = false;
   document.cookie = `${CONSENT_COOKIE}=${value}; path=/; max-age=${365 * 86_400}; samesite=lax`;
-  if (value === "denied") document.cookie = `${PIXEL_QUEUE_COOKIE}=; path=/; max-age=0`;
+  if (value === "denied") {
+    document.cookie = `${PIXEL_QUEUE_COOKIE}=; path=/; max-age=0`;
+    document.cookie = `${TWCLID_COOKIE}=; path=/; max-age=0`;
+  }
   // Already loaded on this page: the snippet doesn't run twice, so switch it directly.
   (window as unknown as { fbq?: (...a: unknown[]) => void }).fbq?.("consent", value === "granted" ? "grant" : "revoke");
   window.dispatchEvent(new Event(CONSENT_EVENT));
@@ -44,7 +48,7 @@ function setConsent(value: Choice) {
 
 /** "Cambiar preferencias de cookies" in /privacidad: shows the banner again. */
 export function ConsentSettings() {
-  if (!metaPixelId && !googleAnalyticsId && !clarityProjectId) return null;
+  if (!metaPixelId && !googleAnalyticsId && !clarityProjectId && !xPixelId) return null;
   return (
     <Button
       variant="outline"
@@ -112,7 +116,7 @@ export function MetaPixel() {
     return () => window.clearInterval(timer);
   }, [granted, pathname]);
 
-  if (untrackedPath(pathname) || (!metaPixelId && !googleAnalyticsId && !clarityProjectId)) return null;
+  if (untrackedPath(pathname) || (!metaPixelId && !googleAnalyticsId && !clarityProjectId && !xPixelId)) return null;
   return (
     <>
       {metaPixelId ? <Script id="meta-pixel" strategy="afterInteractive">

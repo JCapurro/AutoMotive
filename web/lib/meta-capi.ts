@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import { cookies, headers } from "next/headers";
 
 import { CONSENT_COOKIE, metaPixelId } from "@/lib/meta-pixel";
+import { TWCLID_COOKIE } from "@/lib/x-pixel";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Json } from "@/types/database";
 
@@ -19,14 +20,15 @@ import type { Json } from "@/types/database";
  */
 const GRAPH = "https://graph.facebook.com/v23.0";
 
-export type AdAttribution = { consent: boolean; fbp?: string; fbc?: string; ip?: string; ua?: string; url?: string };
+/** Also carries X's ad click (twclid), for the X copy of the Purchase (lib/x-capi.ts). */
+export type AdAttribution = { consent: boolean; fbp?: string; fbc?: string; twclid?: string; ip?: string; ua?: string; url?: string };
 
 export function capiEnabled(): boolean {
   return Boolean(metaPixelId && process.env.META_CAPI_TOKEN);
 }
 
 /**
- * At checkout start (a Server Action): what Meta needs to match the later
+ * At checkout start (a Server Action): what Meta and X need to match the later
  * Purchase to the ad click. Granted unless the visitor rejected the banner.
  */
 export async function readAttribution(): Promise<AdAttribution> {
@@ -37,6 +39,7 @@ export async function readAttribution(): Promise<AdAttribution> {
     consent: true,
     fbp: store.get("_fbp")?.value,
     fbc: store.get("_fbc")?.value,
+    twclid: store.get(TWCLID_COOKIE)?.value,
     ip,
     ua: h.get("user-agent")?.slice(0, 512) ?? undefined,
     url: h.get("referer") ?? undefined,

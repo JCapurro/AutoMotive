@@ -5,6 +5,7 @@ import { Analytics } from "@vercel/analytics/next";
 import { MetaPixel } from "@/components/meta-pixel";
 import { GoogleAnalytics } from "@/components/google-analytics";
 import { MicrosoftClarity } from "@/components/microsoft-clarity";
+import { XPixel } from "@/components/x-pixel";
 import { Toaster } from "@/components/ui/sonner";
 import { siteUrl } from "@/lib/env";
 
@@ -49,6 +50,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <GoogleAnalytics />
         <MicrosoftClarity />
         <MetaPixel />
+        <XPixel />
         <Analytics />
       </body>
     </html>
