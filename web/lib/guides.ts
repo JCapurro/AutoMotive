@@ -76,6 +76,7 @@ export const GUIDE_COPY = {
   summaryCheck: "En la visita, revisá primero esto: {text}.",
   summaryClose: "Es información general del modelo: no reemplaza la revisión de un mecánico de confianza.",
   ctaTop: "Crear mi búsqueda",
+  ctaTopShort: "Avisame",
   ctaTopText: "¿Ya sabés que querés un {name}? Te avisamos cuando aparezca uno publicado.",
   home: "Inicio",
   listingLink: "Ver la guía del {name}",
@@ -86,6 +87,19 @@ export const GUIDE_COPY = {
   allFromMake: "Todas las guías de {make}",
   related: "Otras guías",
   method: "Cómo hacemos las guías",
+  indexEyebrow: "Guías orientativas",
+  indexHeading: "Qué mirar antes de ver un usado",
+  letters: "Marcas por letra",
+  models: "{n} modelos",
+  model: "1 modelo",
+  toc: "En esta guía",
+  sources: "{n} fuentes consultadas",
+  source: "1 fuente consultada",
+  sourcesFold: "Fuentes ({n})",
+  visitHint: "Tocá el círculo a medida que lo revisás.",
+  visitTick: "Marcar como revisado",
+  whatsapp: "Mandarlas por WhatsApp",
+  whatsappIntro: "Hola, te consulto por el {name}:",
 } as const;
 
 /** Who publishes the guides (schema.org Organization). */
@@ -457,6 +471,15 @@ function clause(text: string): string {
  * so a search or answer engine can quote it as it stands. null without either.
  */
 export function guideSummary(guides: PublicGuide[]): string | null {
+  const parts = guideSummaryParts(guides);
+  return parts ? parts.map((p) => p.text).join("") : null;
+}
+
+/** A piece of «En resumen»; `mark`: what to check first, the one highlighted thing on the page. */
+export type SummaryPart = { text: string; mark?: true };
+
+/** guideSummary in pieces, so the page can highlight what to check first. */
+export function guideSummaryParts(guides: PublicGuide[]): SummaryPart[] | null {
   if (!guides.length) return null;
   const name = guideName(guides[0].make, guides[0].model);
   // Each line with the guide it comes from: its label and years are that guide's, not the page's.
@@ -469,14 +492,22 @@ export function guideSummary(guides: PublicGuide[]): string | null {
   const issue = first("known_issues");
   const check = first("visit_checklist");
   if (!issue && !check) return null;
-  const parts: string[] = [];
+  const parts: SummaryPart[] = [];
   if (issue) {
     const scope = [issue.guide.generationLabel, yearsText(issue.guide.yearFrom, issue.guide.yearTo)].filter(Boolean).join(", ");
-    parts.push(GUIDE_COPY.summaryIssue.replace("{name}", name).replace("{years}", scope ? ` (${scope})` : "").replace("{text}", withApplies(issue.line)));
+    parts.push({ text: `${GUIDE_COPY.summaryIssue.replace("{name}", name).replace("{years}", scope ? ` (${scope})` : "").replace("{text}", withApplies(issue.line))} ` });
   }
-  if (check) parts.push(GUIDE_COPY.summaryCheck.replace("{text}", withApplies(check.line)));
-  parts.push(GUIDE_COPY.summaryClose);
-  return parts.join(" ");
+  if (check) {
+    const [before, after] = GUIDE_COPY.summaryCheck.split("{text}");
+    // Only the first clause is highlighted («Si es I-Motion, probala en tránsito y en subida»): a swipe, not a paragraph.
+    const text = withApplies(check.line);
+    const head = /^(.{12,}?)(?=[:;.]\s|\s\()/.exec(text)?.[1] ?? text;
+    parts.push({ text: before }, { text: head, mark: true });
+    if (head.length < text.length) parts.push({ text: text.slice(head.length) });
+    parts.push({ text: `${after} ` });
+  }
+  parts.push({ text: GUIDE_COPY.summaryClose });
+  return parts;
 }
 
 /**

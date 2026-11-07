@@ -53,14 +53,28 @@ export const publishedMakeGuides = cache(async (slugMake: string): Promise<Publi
   return byModel.size ? [...byModel.values()].map(sortGenerations) : null;
 });
 
-/** `updatedAt`: the latest content_updated_at of the model's published guides. */
-export type GuideIndexEntry = { make: string; model: string; slugMake: string; slugModel: string; updatedAt: string };
+/**
+ * `updatedAt`: the latest content_updated_at of the model's published guides;
+ * `yearFrom`/`yearTo`: the years they cover together (null where none says).
+ */
+export type GuideIndexEntry = {
+  make: string;
+  model: string;
+  slugMake: string;
+  slugModel: string;
+  updatedAt: string;
+  yearFrom?: number | null;
+  yearTo?: number | null;
+};
+
+const lower = (a: number | null | undefined, b: number | null | undefined) => (a == null ? (b ?? null) : b == null ? a : Math.min(a, b));
+const upper = (a: number | null | undefined, b: number | null | undefined) => (a == null ? (b ?? null) : b == null ? a : Math.max(a, b));
 
 /** One entry per published model (for /guias and the sitemap); [] on a base without the table. */
 export const publishedGuideIndex = cache(async (): Promise<GuideIndexEntry[]> => {
   const { data, error } = await createPublicClient()
     .from("model_guides")
-    .select("make, model, slug_make, slug_model, content_updated_at")
+    .select("make, model, slug_make, slug_model, content_updated_at, year_from, year_to")
     .order("make")
     .order("model");
   if (missingTable(error)) return [];
@@ -69,8 +83,12 @@ export const publishedGuideIndex = cache(async (): Promise<GuideIndexEntry[]> =>
   for (const row of data ?? []) {
     const key = `${row.slug_make}/${row.slug_model}`;
     const prev = byModel.get(key);
+    const yearFrom = lower(prev?.yearFrom, row.year_from);
+    const yearTo = upper(prev?.yearTo, row.year_to);
     if (!prev || row.content_updated_at > prev.updatedAt) {
-      byModel.set(key, { make: row.make, model: row.model, slugMake: row.slug_make, slugModel: row.slug_model, updatedAt: row.content_updated_at });
+      byModel.set(key, { make: row.make, model: row.model, slugMake: row.slug_make, slugModel: row.slug_model, updatedAt: row.content_updated_at, yearFrom, yearTo });
+    } else {
+      byModel.set(key, { ...prev, yearFrom, yearTo });
     }
   }
   return [...byModel.values()];

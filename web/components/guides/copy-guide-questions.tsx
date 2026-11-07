@@ -1,18 +1,22 @@
 "use client";
 
 import { Check, Copy } from "lucide-react";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 
 import { logGuideEvent } from "@/components/guides/guide-events";
 import { Button } from "@/components/ui/button";
 import { GUIDE_COPY } from "@/lib/guides";
 
-/** «Copiar preguntas»: every question of the page, one per line (guide_questions_copied). */
-export function CopyGuideQuestions({ text, slugMake, slugModel }: { text: string; slugMake?: string; slugModel?: string }) {
+/**
+ * «Copiar preguntas»: every question of the page, one per line
+ * (guide_questions_copied). `children`: what goes above it (the WhatsApp link).
+ */
+export function CopyGuideQuestions({ text, slugMake, slugModel, children }: { text: string; slugMake?: string; slugModel?: string; children?: ReactNode }) {
   const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
   return (
     <div className="space-y-2">
-      <Button type="button" variant="outline" className="h-11" onClick={async () => {
+      {children}
+      <Button type="button" variant="outline" className="h-12 w-full bg-background text-[16px]" onClick={async () => {
         try {
           await navigator.clipboard.writeText(text);
           setState("copied");
