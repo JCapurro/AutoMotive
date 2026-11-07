@@ -47,6 +47,7 @@ import {
   zoneKind,
   zoneOf,
 } from "@/lib/zone-notice";
+import { reportXConversion } from "@/lib/x-capi";
 import { allCount, dismissedZones, zoneNotice } from "@/lib/zone-notice-server";
 import type { Json } from "@/types/database";
 
@@ -249,7 +250,10 @@ async function save(id: number | null, raw: SearchInput, origin?: SaveOrigin): P
     }
     // The free trial's 72 hours start with the first active search (/app/pro).
     const { count } = await supabase.from("search_profiles").select("id", { count: "exact", head: true });
-    if (count === 1) await queuePixel("StartTrial", { content_name: "first_search" }, `trial:${user.id}`);
+    if (count === 1) {
+      await queuePixel("StartTrial", { content_name: "first_search" }, `trial:${user.id}`);
+      await reportXConversion("firstSearch", `trial:${user.id}`);
+    }
     await queuePixel("SearchCreated", { mode: origin?.mode ?? "structured" }, `search:${data.id}`);
     if (origin?.stay) return { savedId: data.id };
     redirect(`/app/searches/${data.id}`);
