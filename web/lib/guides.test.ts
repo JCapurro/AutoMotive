@@ -370,7 +370,20 @@ describe("/guias/<marca>/<modelo>", () => {
     expect(summary).toBeGreaterThan(-1);
     expect(summary).toBeLessThan(sections);
     expect(top).toBeLessThan(sections);
-    expect(html).toMatch(/<a href="#crear-busqueda"[^>]*>Crear mi búsqueda<\/a>/);
+    expect(html).toMatch(/<a href="#crear-busqueda"[^>]*>Avisame<\/a>/);
+    // The one highlight: what to check first, inside «En resumen».
+    expect(html).toMatch(/<mark class="mark[^"]*">[^<]+<\/mark>/);
+    expect(html.indexOf("<mark")).toBeGreaterThan(summary);
+    // The index of chapters links to each one; the reference chapters are folded but in the HTML.
+    for (const id of ["fallas", "visita", "vendedor", "versiones", "mantenimiento", "generaciones"]) {
+      expect(html).toContain(`href="#${id}"`);
+      expect(html).toContain(`id="${id}"`);
+    }
+    expect(html).toMatch(/<details[^>]*id="mantenimiento"/);
+    expect(html).toMatch(/<section[^>]*id="visita"/);
+    // The visit is to tick: one 56 px button per line, nothing ticked on the server.
+    expect(html).toContain('aria-pressed="false"');
+    expect(html).toContain("https://wa.me/?text=");
     expect(html).toContain('id="crear-busqueda"');
     const scripts = [...html.matchAll(/<script type="application\/ld\+json">(.*?)<\/script>/g)].map((m) => JSON.parse(m[1]) as { "@type": string });
     expect(scripts.map((ld) => ld["@type"])).toEqual(["FAQPage", "Article", "BreadcrumbList"]);
@@ -485,7 +498,7 @@ describe("a model with several generations", () => {
     ]);
   });
 
-  it("renders a nav to each generation, one h2 per generation with h3 sections, and the CTA with every year", async () => {
+  it("renders a nav to each generation, one h2 per chapter with an h3 per generation, and the CTA with every year", async () => {
     vi.mocked(createPublicClient).mockReturnValue(client({ data: rows, error: null }).client);
     const html = renderToStaticMarkup(await GuidePage(params("toyota", "corolla")));
     expect(html).toContain('aria-label="Generaciones"');
@@ -495,12 +508,13 @@ describe("a model with several generations", () => {
     }
     expect(html.indexOf('id="guia"')).toBeLessThan(html.indexOf('id="generacion-e170"'));
     expect(html.indexOf('id="generacion-e170"')).toBeLessThan(html.indexOf('id="generacion-e210"'));
-    expect(html).toMatch(/<h2[^>]*>Todo el modelo/);
-    expect(html).toMatch(/<h2[^>]*>E210 <span[^>]*>2020 a 2024<\/span><\/h2>/);
-    expect(html).toMatch(/<h3 id="generacion-e210-known_issues"[^>]*>¿Qué fallas conocidas tiene el Toyota Corolla E210\?<\/h3>/);
-    expect(html).not.toMatch(/<h2 id="[^"]*-known_issues"/);
+    // Chapter first: one h2 per chapter about the model, one h3 per generation inside it.
+    expect(html).toMatch(/<h2 id="fallas-titulo"[^>]*>¿Qué fallas conocidas tiene el Toyota Corolla\?<\/h2>/);
+    expect(html).toMatch(/<h3 id="generacion-e210"[^>]*>E210 · 2020 a 2024<\/h3>/);
+    expect(html).toMatch(/<h3[^>]*>Todo el modelo<\/h3>/);
+    expect(html.match(/id="generacion-e210"/g)).toHaveLength(1);
     const list = /<ol[^>]*data-testid="guide-questions"[^>]*>(.*?)<\/ol>/.exec(html)![1];
-    expect(list.match(/<li>/g)).toHaveLength(6);
+    expect(list.match(/<li[ >]/g)).toHaveLength(6);
     expect(list.match(/tirones en frío/gi)).toHaveLength(1);
     expect(html).toContain('data-prompt="Busco un Toyota Corolla 2014 a 2024"');
     expect(html).toContain("Ficha E210");
@@ -518,7 +532,8 @@ describe("a model with several generations", () => {
     vi.mocked(createPublicClient).mockReturnValue(client({ data: [WHOLE], error: null }).client);
     const html = renderToStaticMarkup(await GuidePage(params("toyota", "corolla")));
     expect(html).not.toContain('aria-label="Generaciones"');
-    expect(html).toMatch(/<h2 id="guia-known_issues"[^>]*>¿Qué fallas conocidas tiene el Toyota Corolla\?<\/h2>/);
+    expect(html).toMatch(/<h2 id="fallas-titulo"[^>]*>¿Qué fallas conocidas tiene el Toyota Corolla\?<\/h2>/);
+    expect(html).not.toMatch(/<h3[^>]*>Todo el modelo/);
     expect(html).toContain('data-prompt="Busco un Toyota Corolla"');
   });
 });
