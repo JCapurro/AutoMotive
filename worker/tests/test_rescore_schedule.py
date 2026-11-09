@@ -163,9 +163,14 @@ def test_a_bad_hour_falls_back(hour):
     assert rescore_config({"hour": hour, "every_hours": 6}) == {**DEFAULT_RESCORE, "every_hours": 6}
 
 
-@pytest.mark.parametrize("every", [0, 25, 1.5, "6", True, -6])
+@pytest.mark.parametrize("every", [0, 25, 1.5, "6", True, -6, 5, 7, 9, 10, 16])
 def test_a_bad_interval_falls_back(every):
     assert rescore_config({"every_hours": every})["every_hours"] == 24
+
+
+@pytest.mark.parametrize("every", [1, 2, 3, 4, 6, 8, 12, 24])
+def test_every_divisor_of_24_is_kept(every):
+    assert rescore_config({"every_hours": every})["every_hours"] == every
 
 
 @pytest.mark.parametrize("days", [0, 181, "14", 7.5])

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { AdminLifecycleInput, AdminOfferInput, AdminPlanLimitsInput, CONFIRM_SOURCES_MESSAGE, configDifferences, configFieldLabel, DEALER_MARGIN_MESSAGE, LEVEL_THRESHOLDS_ORDER_MESSAGE, LIFECYCLE_KINDS, MAX_OFFER_ARS, RESCORE_HOUR_MESSAGE, sameConfig, SCORE_GUARDS_ORDER_MESSAGE, SCORE_WEIGHTS_ZERO_MESSAGE, SourceUpdateInput, TRIAL_RESERVE_CONFIG_MESSAGE, validateConfigChange, visibleConfigRows, ZONE_NOTICE_CONFIG_MESSAGE } from "@/lib/admin-config";
+import { AdminLifecycleInput, AdminOfferInput, AdminPlanLimitsInput, CONFIRM_SOURCES_MESSAGE, configDifferences, configFieldLabel, DEALER_MARGIN_MESSAGE, LEVEL_THRESHOLDS_ORDER_MESSAGE, LIFECYCLE_KINDS, MAX_OFFER_ARS, RESCORE_EVERY_HOURS_MESSAGE, RESCORE_HOUR_MESSAGE, sameConfig, SCORE_GUARDS_ORDER_MESSAGE, SCORE_WEIGHTS_ZERO_MESSAGE, SourceUpdateInput, TRIAL_RESERVE_CONFIG_MESSAGE, validateConfigChange, visibleConfigRows, ZONE_NOTICE_CONFIG_MESSAGE } from "@/lib/admin-config";
 import { DEFAULT_PRO_OFFER } from "@/lib/pro";
 
 describe("guided config validators", () => {
@@ -268,15 +268,17 @@ describe("scoring config bounds (same as worker/intelligence/config.py)", () => 
     }
   });
 
-  it("keeps rescore.hour a valid HH:MM, every_hours from 1 to 24 and days from 1 to 180", () => {
+  it("keeps rescore.hour a valid HH:MM, every_hours a divisor of 24 and days from 1 to 180", () => {
     expect(check("rescore", { days: 1, hour: "00:00", every_hours: 1 })).toBeNull();
     expect(check("rescore", { days: 180, hour: "23:59", every_hours: 24 })).toBeNull();
     expect(check("rescore", { days: 14 })).toBeNull();
     for (const hour of ["25:00", "24:00", "04:60", "4:00", "4", 400, null]) {
       expect(check("rescore", { days: 14, hour, every_hours: 6 })).toBe(RESCORE_HOUR_MESSAGE);
     }
-    for (const every_hours of [0, 25, 1.5, "6"]) {
-      expect(check("rescore", { days: 14, hour: "04:00", every_hours })).toBe("rescore.every_hours tiene que ser un entero de 1 a 24.");
+    for (const every_hours of [1, 2, 3, 4, 6, 8, 12, 24]) expect(check("rescore", { days: 14, hour: "04:00", every_hours })).toBeNull();
+    // Not a divisor of 24: the worker would run it once a day (next_slot).
+    for (const every_hours of [5, 7, 9, 10, 16, 0, 25, 48, 1.5, "6", null]) {
+      expect(check("rescore", { days: 14, hour: "04:00", every_hours })).toBe(RESCORE_EVERY_HOURS_MESSAGE);
     }
     expect(check("rescore", { days: 0, hour: "04:00" })).toBe("rescore.days tiene que ser un entero de 1 a 180.");
     expect(check("rescore", { days: 14, hour: "04:00", every_hour: 6 })).toMatch(/^rescore no usa every_hour;/);

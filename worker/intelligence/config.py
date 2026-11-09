@@ -162,7 +162,11 @@ def comparables_config(raw: Any) -> dict[str, Any]:
 
 def rescore_config(raw: Any) -> dict[str, Any]:
     """app_config.rescore as pipeline/rescore.py uses it: days, hour (HH:MM, ART), every_hours."""
-    return _merge(DEFAULT_RESCORE, raw, _RESCORE_BOUNDS)
+    out = _merge(DEFAULT_RESCORE, raw, _RESCORE_BOUNDS)
+    # Only a divisor of 24 spaces the slots evenly; next_slot runs any other once a day.
+    if 24 % out["every_hours"]:
+        out["every_hours"] = DEFAULT_RESCORE["every_hours"]
+    return out
 
 
 def config_number(key: str, raw: Any) -> int | float:

@@ -156,7 +156,10 @@ const COMPARABLES_BOUNDS = {
   min_n: whole(1, 1000), year_tol: whole(0, 10), km_tol_pct: whole(0, 100), max_age_days: whole(1, 180),
   confirm_grace_hours: whole(0, 720), gone_max_age_days: whole(1, 180),
 };
-const RESCORE_BOUNDS = { days: whole(1, 180), every_hours: whole(1, 24) };
+const RESCORE_BOUNDS = { days: whole(1, 180) };
+// The re-score slots are hour + k · every_hours within the day (worker/pipeline/rescore.py next_slot),
+// so only a divisor of 24 keeps them evenly spaced; the worker runs any other value once a day.
+const RESCORE_EVERY_HOURS = [1, 2, 3, 4, 6, 8, 12, 24];
 // SQL casts alerts_max_per_user_day to integer (immediate_alert_cap): a 7.5 would stop every batch.
 const SCALAR_BOUNDS: Record<string, NumberBound> = {
   digest_top_n: whole(1, 50), price_drop_min_pct: { min: 0, max: 100 }, alerts_max_per_user_day: whole(0, MAX_CONFIG_INTEGER),
@@ -193,6 +196,7 @@ export const SCORE_WEIGHTS_ZERO_MESSAGE = "score_weights no puede tener todos lo
 export const LEVEL_THRESHOLDS_ORDER_MESSAGE = "level_thresholds tiene que cumplir high > good > match (sin la clave: 85, 70 y 50).";
 export const SCORE_GUARDS_ORDER_MESSAGE = "score_curves.guards.suspicious_pct no puede superar partial_pct (sin la clave: 50 y 65).";
 export const RESCORE_HOUR_MESSAGE = "rescore.hour tiene que ser un horario HH:MM entre 00:00 y 23:59 (hora argentina).";
+export const RESCORE_EVERY_HOURS_MESSAGE = "rescore.every_hours tiene que dividir 24: 1, 2, 3, 4, 6, 8, 12 o 24 horas.";
 export const CONFIRM_SOURCES_MESSAGE = "comparables.confirm_sources tiene que ser una lista de ids de fuentes (texto).";
 
 /** score_weights, level_thresholds, score_curves, comparables, rescore and the scalar keys; null for any other key. */
@@ -234,6 +238,7 @@ function scoringConfigProblem(key: string, value: unknown): string | null {
   }
   const problem = unknownKeysProblem(key, value, ["days", "hour", "every_hours"]) ?? boundsProblem(key, value, RESCORE_BOUNDS);
   if (problem) return problem;
+  if (Object.hasOwn(value, "every_hours") && !RESCORE_EVERY_HOURS.includes(value.every_hours as number)) return RESCORE_EVERY_HOURS_MESSAGE;
   return !Object.hasOwn(value, "hour") || clock.safeParse(value.hour).success ? null : RESCORE_HOUR_MESSAGE;
 }
 
