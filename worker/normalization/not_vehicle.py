@@ -1,4 +1,4 @@
-"""Listings that are not a car: parts, accessories, a car taken apart.
+"""Listings that are not a car: parts, accessories, a car taken apart, a scale model.
 
 Facebook Marketplace searches ("peugeot 206") bring back whatever mentions
 the model, and in AR that is mostly parts: «Cremallera Peugeot 206-207-307»,
@@ -17,7 +17,12 @@ part only when
   with too («Caja automática», «Techo solar», «Llantas», «Alarma»), or a word
   that may be something else («Insignia», «Campana»), only when it names no
   single model year; or the title says «desarme», «autopartes» or
-  «repuestos de/para» anywhere, not negated («no es desarme»);
+  «repuestos de/para» anywhere, not negated («no es desarme»); or it names a
+  scale model anywhere: «escala», a scale with a colon («Solido 1:43»), or a
+  slash next to «colección» («coleccion rally 1/24»; «VTV 1/24» is a date, and
+  «Prisma 1:4» a 1.4), a diecast maker or collection («Welly», «Hot Wheels»,
+  Salvat's «Autos Inolvidables», «fascículos»), «auto a control remoto».
+  «Colección» alone is not one: classics are sold «de colección»;
 * and nothing says it is a whole car: the source's own mileage together with
   a year (Facebook only shows «Conducido 112.000 km» on vehicles), a title
   that starts with the year (Facebook's own vehicle titles: «2017 Ford ka
@@ -113,6 +118,17 @@ _LEADS = rf"^(?:(?:{'|'.join(_LEAD)})\b[\s,/:-]*){{0,3}}"
 _PART_START = re.compile(rf"{_LEADS}(?:{'|'.join(_PARTS)})\b")
 _EQUIPMENT_START = re.compile(rf"{_LEADS}(?:{'|'.join(_EQUIPMENT)})\b")
 _PART_ANYWHERE = re.compile(r"\b(?:desarmes?|autopartes?|repuestos (?:de|para))\b")
+# Scale models («Audi TT Cabriolet Escala 1/87 Marca HONGWELL», «AUTO AUDI TT
+# COUPE - WELLY 1 36 (DE COLECCION)»), anywhere in the title. Only scales a
+# model is made in, never «1:4» (a 1.4 typed with a colon).
+_SCALE = r"1\s*{sep}\s*(?:18|24|32|36|43|64|87)\b"
+_TOY_ANYWHERE = re.compile(
+    r"\bescala\b|\b" + _SCALE.format(sep=":") +
+    r"|\b(?:hot ?wheels?|welly|maisto|b?burago|motormax|majorette|matchbox|kinsmart|minichamps|norev"
+    r"|hongwell|cammarama|salvat|autos inolvidables|fasciculos?)\b"
+    r"|\b(?:autos?|autitos?|coches?|camionetas?) a control remoto\b")
+_TOY_SLASH = re.compile(r"\b" + _SCALE.format(sep="/"))
+_COLLECTION = re.compile(r"\bcoleccion\b")
 # «Ford Ka 2012 no es desarme», «no es para repuestos».
 _NEGATED = re.compile(r"\bno (?:es )?(?:(?:un|para|de) )?(?:desarmes?|autopartes?|repuestos?)\b(?: (?:de|para))?")
 _YEAR = re.compile(r"(?<![\d/-])(?:19[89]\d|20[0-3]\d)(?![\d/-])")
@@ -134,13 +150,15 @@ def _plain(text: str | None) -> str:
 
 
 def part_reason(title: str | None) -> str | None:
-    """Why the title names a part, or None."""
+    """Why the title names a part or a scale model, or None."""
     t = _NEGATED.sub(" ", _plain(title)).strip()
     if m := _PART_START.match(t):
         return f"título: «{m.group(0).strip()}»"
     if (m := _EQUIPMENT_START.match(t)) and not _single_year(t):
         return f"título: «{m.group(0).strip()}»"
     if m := _PART_ANYWHERE.search(t):
+        return f"título: «{m.group(0)}»"
+    if (m := _TOY_ANYWHERE.search(t)) or (_COLLECTION.search(t) and (m := _TOY_SLASH.search(t))):
         return f"título: «{m.group(0)}»"
     return None
 

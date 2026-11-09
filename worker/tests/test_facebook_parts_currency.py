@@ -203,6 +203,37 @@ MATCHED_PARTS_CARS = [
     "Motor: 1.4 Litros Turbo (ecotec), 4 Cilindros, 16 Válvulas D",
 ]
 
+# Scale models and collectibles active in production (09/11/2026), most of
+# them matched to searches as cars, several at level «good».
+TOYS = [
+    "Audi TT Roadster Escala 1/24 Cammarama",
+    "Audi TT Coupé Motormax — Escala 1:18",
+    "AUTO AUDI TT COUPE - WELLY 1 36 (DE COLECCION)",
+    "AUDI TT ROADSTER MAJORETTE - AUTO A ESCALA ( DE COLECCION ) 8 CM",
+    "Audi TT Cabriolet con capota \nGris \nEscala 1/87\nMarca HONGWELL",
+    "Auto A Control Remoto Audi TT Silver - Excelente Estado",
+    "Solido 1:43 Peugeot 207 Spider CUP #30 Dino Lunardi 2008. NUEVO",
+    "AUTO HONDA CIVIC CUSTON HOTWHEELS ( DE COLECCION )",
+    "Ford Maverick a escala 1/8",
+    "Ford Maverick Salvat Entrega N° 34 Escala 1:8 Nuevo Cerrado",
+    "FASCICULOS DE FORD MAVERICK,14, 17,18,19,20",
+    "Honda civic Salvat 1:43",
+    "Ford Focus WRC 03 coleccion rally 1/24",
+    "Ford Focus CLX Autos Inolvidables Argentinos",
+]
+
+# Cars whose titles share a word or a number with those.
+TOY_CARS = [
+    # Production: a 1.4 typed with a colon (#33752).
+    "Chevrolet prisma 1:4 n ltz ano 2017 línea nueva cuero pantalla de marcha atrás full",
+    "Ford Falcon 1978 de colección",
+    "Chevrolet 400 de colección, impecable",
+    "Peugeot 208 Feline VTV hasta 1/24",
+    "Gol Trend 2015 alarma con control remoto",
+    "Honda Civic estilo rápido y furioso",
+    "Toyota Corolla 1.8 XEI 2015",
+]
+
 
 class NotVehicleTests(unittest.TestCase):
     def test_every_part_in_production_is_a_part(self):
@@ -220,6 +251,16 @@ class NotVehicleTests(unittest.TestCase):
     def test_no_car_naming_those_parts_is_a_part(self):
         wrong = [(t, not_vehicle.classify(t)) for t in MATCHED_PARTS_CARS if not_vehicle.classify(t)]
         self.assertEqual(wrong, [])
+
+    def test_every_scale_model_in_production_is_not_a_car(self):
+        missed = [t for t in TOYS if not_vehicle.classify(t) is None]
+        self.assertEqual(missed, [])
+
+    def test_no_car_sharing_their_words_is_a_scale_model(self):
+        wrong = [(t, not_vehicle.classify(t)) for t in TOY_CARS if not_vehicle.classify(t)]
+        self.assertEqual(wrong, [])
+        # Whole-car evidence still wins, as for a part.
+        self.assertIsNone(not_vehicle.classify("Ford Focus coleccion rally 1/24", year=2004, mileage_km=180_000))
 
     def test_the_digest_rows_are_flagged_as_stored(self):
         # As stored: no year or mileage, pesos read as dollars or no price at all.
