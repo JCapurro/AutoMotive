@@ -28,7 +28,7 @@ import time
 import traceback
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Iterable
+from typing import Any, Iterable
 
 import db
 from config import TICK_INTERVAL_SECONDS, RECOMMENDED_MAX_AGE_DAYS, CRAWL_JITTER_SECONDS
@@ -319,20 +319,7 @@ async def process_batch(notifier: Notifier, target: dict, listing_ids: list[int]
     # Matches are stored and re-scored: price drops carry the new score.
     try:
         await notifier.on_matches(candidates, scorer.rows)
-        # A first run silences new listings. One of a target that ran before
-        # (back after a day inactive, a new coverage or publication policy)
-        # still tells the price drops of what was stored, to whom had it:
-        # a news match (matched by a batch that read the listing, so at the
-        # stored price or an earlier one, whenever it was made) and a
-        # backfill match older than its last_run_at (if an empty read held
-        # this run, where the run before that read left it: the empty read
-        # doesn't move it, targets.finish_target), not a newer one (this
-        # batch's backfill, a search created during the pause) against a
-        # price from before it.
-        if not first_run:
-            await notifier.on_listing_events(events)
-        elif target.get("last_run_at") is not None:
-            await notifier.on_listing_events(events, matched_before=target["last_run_at"])
+        await _listing_events(notifier, target, events, first_run=first_run)
     except Exception:
         await log_error("notify", f"target:{target.get('id')}", traceback.format_exc())
     await notifier.deliver()
@@ -351,7 +338,45 @@ def batch_handler(notifier: Notifier) -> crawl.BatchHandler:
                                 events=run.result.events, backfill_ids=run.backfill_ids,
                                 body_type_filled=run.result.body_type_filled,
                                 held_first_run=run.first_run and run.empty_runs > 0)
+        elif run.result.events:
+            # Events without a listing to match: a batch of only sold cards
+            # (ingest_rows card_gone) still tells who saved or followed them.
+            await deliver_events(notifier, run.target, run.result.events, first_run=run.first_run)
     return handle
+
+
+async def _listing_events(notifier: Notifier, target: dict[str, Any], events: list, *,
+                          first_run: bool) -> None:
+    """A batch's price drops and ended listings, to whom they concern.
+
+    A first run silences new listings. One of a target that ran before
+    (back after a day inactive, a new coverage or publication policy) still
+    tells the price drops of what was stored, to whom had it: a news match
+    (matched by a batch that read the listing, so at the stored price or an
+    earlier one, whenever it was made) and a backfill match older than its
+    last_run_at (if an empty read held this run, where the run before that
+    read left it: the empty read doesn't move it, targets.finish_target),
+    not a newer one (this batch's backfill, a search created during the
+    pause) against a price from before it. An ended listing (a sold card,
+    ingest_rows card_gone) is told on any run: it reaches only who saved or
+    follows it (notifications/engine.py), it ends once (listings.mark_gone)
+    and, gone, no detail check reads it again."""
+    if not first_run:
+        await notifier.on_listing_events(events)
+    elif target.get("last_run_at") is not None:
+        await notifier.on_listing_events(events, matched_before=target["last_run_at"])
+    elif gone := [e for e in events if e.kind == "listing_gone"]:
+        await notifier.on_listing_events(gone)
+
+
+async def deliver_events(notifier: Notifier, target: dict[str, Any], events: list, *,
+                         first_run: bool) -> None:
+    """The listing events of a batch without listings to match (only sold cards)."""
+    try:
+        await _listing_events(notifier, target, events, first_run=first_run)
+    except Exception:
+        await log_error("notify", f"target:{target.get('id')}", traceback.format_exc())
+    await notifier.deliver()
 
 
 async def _counting_profiles() -> list[dict] | None:

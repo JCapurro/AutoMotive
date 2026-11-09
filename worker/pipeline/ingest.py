@@ -97,6 +97,9 @@ class IngestResult:
     # Rows that are not a car (normalization/not_vehicle.py): not stored, and
     # a stored one ended (listings.mark_not_vehicle). They count as found.
     not_vehicle: int = 0
+    # Cards that say the ad was sold (row card_gone): a stored one ended, none
+    # stored. They count as found.
+    card_gone: int = 0
 
     def extend(self, other: "IngestResult") -> None:
         self.found += other.found
@@ -108,6 +111,7 @@ class IngestResult:
         self.seller_groups |= other.seller_groups
         self.seller_keyless += other.seller_keyless
         self.not_vehicle += other.not_vehicle
+        self.card_gone += other.card_gone
 
 
 @dataclass(frozen=True)
@@ -414,6 +418,16 @@ async def ingest_rows(rows: Iterable[dict[str, Any]], *, detail: bool = False,
                 if old is not None and "_not_vehicle" not in (old.get("attributes") or {}):
                     await repo.mark_not_vehicle(cx, [(old["id"], reason)])
                 continue
+            # The card says the ad was sold («Sold ·», «Vendido ·»): it ends as a
+            # sold detail page ends it (pipeline/enrich.ingest_detail), and one
+            # never stored isn't. Read again without the mark, it comes back
+            # (update_listing sets it active).
+            if status := row.get("card_gone"):
+                result.card_gone += 1
+                if old is not None and await repo.mark_gone(cx, old["id"]):
+                    result.events.append(ListingEvent("listing_gone", old["id"], old["source"],
+                                                      old["external_id"], changes=(status,)))
+                continue
             if old is None:
                 stored = await repo.insert_listing(cx, row, detail=detail)
                 if stored is None:
@@ -544,11 +558,13 @@ async def ingest(items: Iterable[Listing], *, target: Target | None = None, deta
     rows before they cost a geocode or a row; they still count as found."""
     items = list(items)
     rows = await normalize_items(items, target=target, geocode=None)
-    kept = [r for r in rows if keep(r)] if keep is not None else rows
+    # A sold card is never stored, only ends a stored listing: past the
+    # prefilter whatever its values, and no geocode.
+    kept = [r for r in rows if r.get("card_gone") or keep(r)] if keep is not None else rows
     if dropped := len(rows) - len(kept):
         log.info("prefilter (%s): %d of %d listings dropped", target, dropped, len(rows))
     if geocode is not None:
-        await _geocode_rows(kept, geocode)
+        await _geocode_rows([r for r in kept if not r.get("card_gone")], geocode)
     result = await ingest_rows(kept, detail=detail, config=config or await IngestConfig.load(), seen=seen)
     result.found += dropped
     # F-02 (decision 7a): after the batch commits and before the caller scores
