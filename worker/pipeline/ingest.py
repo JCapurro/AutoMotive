@@ -36,6 +36,7 @@ from db.repos import listings as repo
 from db.repos.catalog import load_models
 from db.repos.fx import quote_for_today
 from db.repos.runs import log_error
+from intelligence.config import config_number
 from normalization.description_facts import PARTIAL_KINDS, DescriptionFacts, resolve_price
 from normalization import not_vehicle
 from normalization.geo import SOURCE_DEFAULT_LOCATIONS, geocode_location
@@ -120,7 +121,7 @@ class IngestConfig:
     async def load(cls) -> "IngestConfig":
         repost = await db.get_config("repost", {}) or {}
         return cls(
-            price_drop_min_pct=float(await db.get_config("price_drop_min_pct", 3)),
+            price_drop_min_pct=float(config_number("price_drop_min_pct", await db.get_config("price_drop_min_pct"))),
             repost_window_days=int(repost.get("window_days", 60)),
             repost_price_tol_pct=float(repost.get("price_tol_pct", 10)),
         )
