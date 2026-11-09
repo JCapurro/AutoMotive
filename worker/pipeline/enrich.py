@@ -50,6 +50,7 @@ from llm.provider import LLMProvider, build_provider
 from normalization.description_claims import input_hash
 from normalization.description_facts import VERSION, from_llm, parse as parse_facts, trim_page_noise
 from normalization.listing import Target
+from notifications import decision_log
 from pipeline import breaker
 from pipeline.ingest import IngestResult, ListingEvent, ingest
 from pipeline.photo_hash import photo_hash_pass
@@ -249,10 +250,16 @@ async def enrich_pass(stop: asyncio.Event | None = None) -> IngestResult:
 async def rescore_changed(result: IngestResult) -> int:
     """Re-score the matches of the listings a detail pass updated or gave
     another body type (the reason changes, even when no event says so), and
-    match the ones it gave a body type against the searches without a model."""
+    match the ones it gave a body type against the searches without a model.
+    In the f3 shadow, the decision log then writes its 'deferred' rows from
+    the re-scored matches (notifications/decision_log.py: never raises, nothing
+    with score_model_f3.mode off): where the live PR will decide the alerts
+    that waited for the detail (spec §4.1)."""
     changed = list(dict.fromkeys([e.listing_id for e in result.events if e.kind == "listing_updated"]
                                  + result.body_type_filled))
     n = await rescore_listings(changed) if changed else 0
+    if changed:
+        await decision_log.record_deferred(changed)
     if result.body_type_filled:
         try:
             n += await match_model_less(result.body_type_filled)

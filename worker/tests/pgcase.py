@@ -67,6 +67,10 @@ class PostgresTestCase(unittest.IsolatedAsyncioTestCase):
         await db.open_pool(TEST_DATABASE_URL, max_size=2)
         async with db.connection() as cx:
             await cx.execute(f"TRUNCATE {_TRUNCATE} RESTART IDENTITY CASCADE")
+            # The f3 shadow's decision log (migration 20261212120000), when applied: match ids restart
+            # above, so stale rows would swallow new ones by ON CONFLICT.
+            await cx.execute("DO $$ BEGIN IF to_regclass('public.match_decisions') IS NOT NULL THEN "
+                             "TRUNCATE public.match_decisions; END IF; END $$")
             await cx.execute("DELETE FROM auth.users WHERE raw_app_meta_data->>'provider' = 'telegram' "
                              "   OR email LIKE '%automotive.test'")
             await cx.execute("UPDATE sources SET last_ok_at = NULL, consecutive_failures = 0")

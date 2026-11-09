@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { CONTACT_MESSAGE, CONTACT_TEMPLATE_ERROR, COST_ESTIMATE, FOLLOW_EMPTY, FOLLOW_LABEL, FORBIDDEN_TERMS, MARGIN, SELLER_STRICT, TRACKING, forbiddenTermsIn } from "./copy";
+import { COMPONENT, COMPONENTS, CONTACT_MESSAGE, CONTACT_TEMPLATE_ERROR, COST_ESTIMATE, FOLLOW_EMPTY, FOLLOW_LABEL, FORBIDDEN_TERMS, MARGIN, SELLER_STRICT, TRACKING, forbiddenTermsIn } from "./copy";
 
 const ROOT = path.resolve(__dirname, "..");
 
@@ -90,5 +90,19 @@ describe("PRO-01 copy", () => {
     expect(forbiddenTermsIn("Uno que vale la pena mirar")).toEqual([]);
     expect(forbiddenTermsIn("¿Cuánto vale?")).toEqual(["vale"]);
     expect(FORBIDDEN_TERMS).toContain("tasación");
+  });
+});
+
+describe("score_breakdown components", () => {
+  // The listing page (ScoreInWords) and the admin inspector show only these keys of
+  // matches.score_breakdown. The rest of the object is not a component: scoring_version,
+  // guard and, in the f3 shadow, shadow_f3 (worker/intelligence/engine.py Evaluation.row),
+  // which the web never shows while f2 decides.
+  it("are the six f2 components, never the breakdown's other keys", () => {
+    expect(COMPONENTS).toEqual(["price", "match", "km", "trim", "recency", "completeness"]);
+    for (const key of ["shadow_f3", "scoring_version", "guard"]) {
+      expect(COMPONENTS).not.toContain(key);
+      expect(COMPONENT).not.toHaveProperty(key);
+    }
   });
 });

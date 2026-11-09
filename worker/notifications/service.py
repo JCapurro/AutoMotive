@@ -27,9 +27,10 @@ from intelligence import contact_message
 from intelligence.matching import strict_seller_unknown
 from intelligence.guides import GuideIndex, pick as pick_guide
 from intelligence.seller_questions import question_texts
-from notifications import dispatch
+from notifications import decision_log, dispatch
 from notifications.channels.base import Channel
-from notifications.engine import LISTING_GONE, MATCH, PRICE_DROP, Audience, Event, Rules, decide_all
+from notifications.engine import (LISTING_GONE, MATCH, NONE, PRICE_DROP, R_HIDDEN_TRIAL, Audience, Event, Outcome,
+                                  Rules, decide_all)
 from notifications.media import image_urls
 from notifications.templates import MAX_FLAGS
 
@@ -104,12 +105,20 @@ def listing_payload(row: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def match_payload(match: Mapping[str, Any], min_n: int) -> dict[str, Any]:
-    """Score and level; diff_pct only with enough comparables (§19)."""
+    """Score and level; diff_pct only with enough comparables (§19). Also, when the match carries
+    them, its scoring_version and the price reference it was decided with (n, level_used, median,
+    p25, p75, diff_pct; f3 shadow, spec §4.4): data for the analysis only, no template, digest or
+    engine rule reads them."""
     ref = match.get("price_ref") or {}
     enough = int(ref.get("n") or 0) >= min_n and ref.get("median")
     diff = ref.get("diff_pct") if enough else None
-    return {"score": match.get("score"), "level": match.get("level"),
-            "diff_pct": float(diff) if diff is not None else None}
+    out = {"score": match.get("score"), "level": match.get("level"),
+           "diff_pct": float(diff) if diff is not None else None}
+    if match.get("scoring_version"):
+        out["scoring_version"] = match["scoring_version"]
+    if decision_ref := decision_log.price_ref_json(ref):
+        out["price_ref"] = decision_ref
+    return out
 
 
 def flag_texts(red_flags: Iterable[Mapping[str, Any]] | None,
@@ -278,10 +287,13 @@ class Notifier:
         order = await flag_order()
         guides, guide_limit = await _guides() if candidates else ({}, 0)
         events = []
+        # f3 shadow (spec §4.4): every candidate, as this batch saw it, for the decision log.
+        items: list[decision_log.CardItem] = []
         for c in candidates:
             a = audiences.get(c.profile_id)
             listing = rows.get(c.listing_id)
             if a is None or listing is None:
+                items.append(decision_log.CardItem(c, None, listing, None))
                 continue
             state = states.get((str(a["user_id"]), c.listing_id)) or {}
             ev = c.evaluation
@@ -302,15 +314,23 @@ class Notifier:
             locked_contact = True if _opportunity(c) and a.get("contact_locked") else None
             # PRO-01, option C: «vendedor sin dato» in the opportunity email.
             seller_unknown = True if _opportunity(c) and strict_seller_unknown(ev.get("match_reasons")) else None
-            events.append(Event(
+            event = Event(
                 MATCH, c.listing_id, self._audience(a), level=ev["level"], score=ev["score"],
                 match_id=c.match_id, repost=c.repost, saved=bool(state.get("saved")),
                 status=state.get("status"),
                 payload=payload(listing, ev, min_n=min_n, profile_name=a["profile_name"], order=order,
                                 questions=questions or None, price_track=track, total_cost=cost,
                                 margin=dealer, contact_message=contact, seller_unknown=seller_unknown,
-                                margin_teaser=locked_margin, contact_teaser=locked_contact)))
-        return await self._commit(events, now=now)
+                                margin_teaser=locked_margin, contact_teaser=locked_contact))
+            events.append(event)
+            items.append(decision_log.CardItem(c, event, listing, a))
+        # What f2 did with each event (a side channel: the decisions are the same without it).
+        outcomes: dict[int, Outcome] = {}
+        ids = await self._commit(events, now=now, outcomes=outcomes)
+        # After the notifications committed, in its own transaction; never raises, and does nothing
+        # unless the evaluations carry score_breakdown.shadow_f3 (score_model_f3.mode shadow).
+        await decision_log.record_card(items, outcomes)
+        return ids
 
     async def on_listing_events(self, listing_events: Iterable[Any], *, now: datetime | None = None,
                                 matched_before: datetime | None = None) -> list[int]:
@@ -355,10 +375,17 @@ class Notifier:
                                     if e.kind == PRICE_DROP else None)))
         return await self._commit(events, now=now)
 
-    async def _commit(self, events: list[Event], *, now: datetime | None = None) -> list[int]:
+    async def _commit(self, events: list[Event], *, now: datetime | None = None,
+                      outcomes: dict[int, Outcome] | None = None) -> list[int]:
+        """Decide and store the events. `outcomes`, when given, gets what happened to each event
+        (engine.decide_all's trace, plus the ones the trial hides): the f3 shadow's decision log."""
         # What the trial hides is never announced: drop it before the engine
         # shares out the alerts of the day.
         hidden = await repo.hidden_pairs((e.audience.user_id, e.listing_id) for e in events)
+        if outcomes is not None:
+            for e in events:
+                if (e.audience.user_id, e.listing_id) in hidden:
+                    outcomes[id(e)] = Outcome(NONE, R_HIDDEN_TRIAL)
         events = [e for e in events if (e.audience.user_id, e.listing_id) not in hidden]
         if not events:
             return []
@@ -367,7 +394,8 @@ class Notifier:
         existing = await repo.existing_keys(users, {e.listing_id for e in events})
         counts = await repo.sent_today(users, start_of_day(now))
         caps = await repo.alert_caps(users)
-        decisions = decide_all(events, await load_rules(), sent_today=counts, existing=existing, caps=caps)
+        decisions = decide_all(events, await load_rules(), sent_today=counts, existing=existing, caps=caps,
+                               outcomes=outcomes)
         ids = await repo.insert_decisions(decisions)
         if decisions:
             log.info("notifications: %d events → %d decisions, %d new rows", len(events),

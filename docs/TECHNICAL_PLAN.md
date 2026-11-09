@@ -520,6 +520,57 @@ Se leen de `app_config.level_thresholds = {high: 85, good: 70, match: 50}`:
 | 🟡 match | ≥ 50 |
 | ⚪ low | < 50 |
 
+#### Modo sombra f3 «precio × encaje»
+
+Recalibración del score en sombra (`docs/superpowers/specs/2026-11-08-recalibracion-score-design.md`, §4.4 y §11). f2 (`SCORING_VERSION = "f2-v5-seller-margin"`) sigue decidiendo todo: scores, niveles, alertas, digest, mails y web.
+
+- `app_config.score_model_f3.mode`: `off` (el default del código: una base sin la migración se comporta como antes), `shadow` (lo que inserta la migración `20261212120000_score_f3_shadow`) o `live` (por ahora igual que `shadow`). El rollback es `off`. Si se mueve un parámetro, la medición vuelve a empezar.
+- En cada evaluación de un match, f3 se calcula al lado (`intelligence/f3.py`) y queda en `matches.score_breakdown.shadow_f3`, la vista actual. Nada de f2 la lee: la web y el worker leen claves con nombre (`COMPONENTS`, `guard`).
+- `public.match_decisions`, solo de inserción, guarda una fila por candidato fresco y por fase: `card` (cuando decide el Notifier: la decisión real de f2 y la hipotética de f3 con la misma audiencia), `deferred` (después del re-score de enriquecimiento) y `sweeper` (a los 20 minutos, para las que esperarían el detalle). La escribe `notifications/decision_log.py`, después de las notificaciones y en su propia transacción; un fallo se registra y nunca frena una alerta.
+- El payload de las alertas suma `match.scoring_version` y `match.price_ref` (la referencia con la que se decidió). Ningún template ni regla los lee.
+- Lectura: `python -m tools.shadow_report [--since AAAA-MM-DD]` (solo lectura) imprime los criterios de §11.4 por búsqueda, y `python -m tools.explain_match <match_id>` muestra el bloque «Sombra f3».
+- Una decisión espera el detalle (`would_defer`) solo en una tarjeta de Facebook o Mercado Libre sin vendedor, de una búsqueda que pide vendedor (spec §4.1). La misma prueba en cualquier fuente queda en `shadow_f3.would_defer_any_source`, para evaluar la regla amplia.
+- «Borrar mi cuenta» también borra las filas de la cuenta en `match_decisions`: un trigger en `auth.users` (`match_decisions_purge_account`) las borra antes que al usuario, por `user_id` y por sus búsquedas. Es el único borrado que deja pasar el trigger de solo inserción. Una búsqueda borrada sola conserva sus filas, como sus notificaciones.
+
+##### Puesta en marcha del modo sombra (con el OK de Juan en cada paso)
+
+1. **Releer la versión.** En producción, `select max(version) from supabase_migrations.schema_migrations` tiene que dar menos que `20261212120000` (el 09/11 era `20261211120000`).
+2. **Aplicar la migración a mano**, en una transacción y con el insert de su versión exacta. Nunca `apply_migration` del MCP, `supabase db push` ni `ops/update.ps1`. Desde la raíz del repo, con la conexión directa de producción (rol `postgres`) en `PROD_DB_URL`:
+
+   ```bash
+   psql "$PROD_DB_URL" -v ON_ERROR_STOP=1 <<'SQL'
+   begin;
+   \set sql `cat supabase/migrations/20261212120000_score_f3_shadow.sql`
+   \i supabase/migrations/20261212120000_score_f3_shadow.sql
+   insert into supabase_migrations.schema_migrations (version, name, statements)
+   values ('20261212120000', 'score_f3_shadow', array[:'sql']);
+   commit;
+   SQL
+   ```
+
+   Con `ON_ERROR_STOP`, un error corta antes del `commit` y no queda nada. `statements` lleva el archivo entero, como las migraciones anteriores.
+3. **Verificar**, todo con `select`:
+   - `to_regclass('public.match_decisions')` no es null;
+   - `has_table_privilege('anon', 'public.match_decisions', 'select')` y lo mismo con `authenticated` dan false;
+   - `select value->>'mode' from app_config where key = 'score_model_f3'` da `shadow`;
+   - el trigger `match_decisions_purge_account` existe en `auth.users`;
+   - `md5(statements[1] || E'\n')` de la versión `20261212120000` es igual a `md5sum` del archivo.
+4. **Orden.** Es libre. Un worker nuevo sin la migración no encuentra la fila y queda en `off`. El worker de hoy ignora la fila y la tabla. La web solo valida esa clave al guardarla en `/admin/config`. Lo natural: migración, merge a `main` (Vercel despliega la web) y worker.
+5. **Worker en el VPS**, como en «Desplegar main a mano» de [COLLECTOR_REPAIR.md](COLLECTOR_REPAIR.md): `python -m tools.wait_idle facebook mercadolibre --max-wait 1200 --poll 5` y después `systemctl restart automotive-worker.service`. Sin cambio de `SCORING_VERSION`, el arranque no re-puntúa nada (`re-score (outdated): 0/0`).
+   - En el log del worker (`logs/worker.log`) no tiene que aparecer «match_decisions is missing». Dentro de la primera hora tienen que aparecer «f3 shadow: N card decision rows» y, con el detalle, «f3 shadow: N deferred decision rows».
+   - En la base: `select phase, count(*), max(decided_at) from match_decisions group by phase`.
+   - `shadow_f3` aparece en los matches que se evalúan desde el arranque y en el re-score de cada 6 horas.
+6. **Informe diario** (spec §11.3), en el VPS, que tiene el `DATABASE_URL` del `.env`. Es una sola transacción `READ ONLY`, sin riesgo para producción:
+
+   ```bash
+   cd /opt/automotive/worker && sudo -u automotive -H /opt/automotive/.venv/bin/python -m tools.shadow_report \
+     --since <día del deploy del worker> --out /opt/automotive/logs/shadow_report_$(date +%F).md
+   ```
+
+   Se corre una vez por día y se publica la tabla por búsqueda. Si se movió un parámetro, el informe lo avisa y propone `--params <hash>`: la medición vuelve a empezar ese día. Los criterios para pasar a real son los de spec §11.4 y no se mueven durante la sombra.
+7. **Apagarla.** En `/admin/config`, `score_model_f3` con `"mode": "off"`. El worker deja de calcular y registrar f3 en menos de 60 s (la caché de config), sin reinicio. Los `shadow_f3` ya guardados no los lee nadie y se pisan en el próximo re-score. `match_decisions` queda (spec §12). Para sacar el código, se revierte el deploy del worker: la tabla y la fila no le molestan al código viejo.
+8. **Retención.** La tabla crece ~1,5 MB por día y nada la purga sola. Se guarda durante la sombra y los 7 días de seguimiento (§11.6). Después se purga con una migración: `disable trigger match_decisions_insert_only`, `delete … where decided_at < …` y `enable trigger`, o un `truncate`.
+
 ### 6.5 Red flags (§24)
 
 Son reglas determinísticas sobre la descripción y los números. Cada una tiene id, texto y severidad, y **todas se redactan como "conviene verificar"**:
