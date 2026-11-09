@@ -19,14 +19,17 @@ part only when
   with too («Caja automática», «Techo solar», «Llantas», «Alarma»), or a word
   that may be something else («Insignia», «Campana»), only when it names no
   single model year and no «0km» (a new car's title may say «Caja automática
-  Peugeot 208 0km»); or the title says «desarme», «autopartes» or
-  «repuestos de/para» anywhere, not negated («no es desarme»);
+  Peugeot 208 0km»), or when it is «para» a car; or the title says
+  «desarme», «autopartes», «repuestos de/para» or a body part with its side
+  («óptica derecha», «puerta trasera izquierda») anywhere, not negated («no
+  es desarme»);
 * or the title says, anywhere, what only a scale model or a toy says: a
   scale with its word («escala 1/87», «a escala») or next to a model maker
   («Welly 1 36», «Solido 1:43»), «auto a control remoto», «fascículos»; or
   «colección» together with a maker only toys have («Hot Wheels»), a bare
-  scale («1/24») or «rápido y furioso», when the title names no single model
-  year. Never «de colección» alone: a classic car is sold «de colección»;
+  scale («1/24») or «rápido y furioso», or «Hot Wheels», «maqueta» or
+  «miniatura» alone, when the title names no single model year. Never «de
+  colección» alone: a classic car is sold «de colección»;
 * and nothing says it is a whole car: the source's own mileage together with
   a year (Facebook only shows «Conducido 112.000 km» on vehicles), a title
   that starts with the year (Facebook's own vehicle titles: «2017 Ford ka
@@ -35,6 +38,9 @@ part only when
   uses («vendo mi», «permuto», «titular», «papeles al día», «VTV»,
   «formulario 08», «único dueño», «km reales»), in the title or the
   description.
+
+A wanted post («Busco Gol Trend», «2012 Busco tapa ciega») is no car for sale
+either, unless the source gives it a year and a mileage.
 
 Pure: no I/O.
 """
@@ -80,10 +86,20 @@ _PARTS = (
     r"guardafangos?", r"baul(?:es)?", r"estribos?", r"barral\w*",
     # Matched as cars in production (11/2026), often with no price or year:
     # «Comando calefacción Peugeot 207», «Polea Chevrolet Corsa motor 1.4»,
-    # «Depósito de líquido de freno», «Soporte para llaves».
-    r"comandos?", r"poleas?", r"soportes?", r"encendidos?", r"arranques?", r"bielas?", r"caballetes?",
-    r"cables?", r"canos?", r"tubos?", r"mangueras?", r"servo\w*", r"resortes?", r"progresivos?",
-    r"selector\w*", r"pedal(?:es)?", r"teclas?", r"torpedos?", r"consolas?", r"carcasas?", r"ceniceros?",
+    # «Depósito de líquido de freno», «Soporte para llaves». The lookaheads
+    # keep car titles that open with the same word: «Comandos al volante Fiat
+    # Cronos 2021», «Llave x llave Corsa 2009» (a swap), «Caja de 6 marchas
+    # Focus 2015», «Luces led Amarok 2017», «Panel Fiat Fiorino 2014» (the
+    # van), «Todo de serie Fiesta 2012».
+    r"comandos?(?! al volante)", r"poleas?", r"soportes?", r"encendidos?", r"arranques?", r"bielas?",
+    r"caballetes?", r"cables?", r"canos?", r"tubos?", r"mangueras?", r"servo\w*", r"resortes?", r"progresivos?",
+    r"selector\w*", r"pedal\w*", r"teclas?", r"torpedos?", r"consolas?", r"carcasas?", r"ceniceros?",
+    r"patas? (?:de|del|motor)", r"deposito\w*", r"cilindros?", r"electros?", r"luces(?! led)",
+    r"asesori\w*", r"octicas?",
+    r"panel(?:es)? (?:de|del|tapizad\w*|traser\w*|delanter\w*|interior\w*|difusor\w*|lateral\w*)",
+    r"caja de(?! \d+ marchas)",
+    # «Todo de Peugeot 307 HDI diesel modelo 2006»: every part of one car.
+    r"todo de(?! (?:serie|fabrica))",
     r"viseras?", r"chapon\w*", r"difusor\w*", r"forzador\w*", r"resonador\w*", r"limitador\w*",
     r"laterale?s?", r"logos?", r"lonas?", r"pomos?", r"tazas?", r"aranas?", r"kits?",
     r"almas? (?:de )?(?:par[aq]golpes?|parachoques?)", r"bajadas? (?:de )?(?:motor|escape)",
@@ -95,8 +111,9 @@ _PARTS = (
     r"(?:pata|p4t4)s? (?:de )?(?:motor|caja)", r"rampas? (?:de )?inyec\w*",
     r"porta ?(?:filtro|ma[sz]a|lampara|fusible|vaso|llave|escalera|equipaje|placa)\w*",
     r"manual(?:es)? (?:del? )?(?:propietario|usuario|taller|servicio|instrucciones)",
-    # Not «Llave en mano» (a new car's price); «Luz» and «Marco» are names.
-    r"llaves?(?! en mano)",
+    # Not «Llave en mano» (a new car's price) nor «Llave x llave» (a swap);
+    # «Luz» and «Marco» are names («Marco Polo T5»).
+    r"llaves?(?! en mano| (?:x|por) llave)",
     r"luz (?:de |del )?(?:auxiliar|stop|giro|freno|patente|posicion|alta|baja|trasera|delantera|interior"
     r"|cortesia|cortecia|techo|faro)\w*",
     r"marcos? (?:de |del )?(?:climatiz|estereo|radio|espejo|optica|faro|puerta|tablero|parrilla|palanca"
@@ -107,7 +124,9 @@ _PARTS = (
 # «Sold · » on a listing that sold).
 _LEAD = (r"vendo", r"venta(?: de)?", r"se vende", r"liquido", r"oferta", r"kit(?: de)?", r"juego(?: de)?",
          r"par(?: de)?", r"set(?: de)?", r"base", r"originale?s?", r"nuevos?", r"nuevas?", r"usados?",
-         r"usadas?", r"repuesto", r"x\d+", r"sold")
+         r"usadas?", r"repuesto", r"x\d+", r"sold", r"tengo",
+         # «4 llantas», «Tengo 2 puertas»; never «5 puertas Gol», «7 asientos Spin».
+         r"\d(?! (?:puertas|asientos|plazas|cilindros|marchas|velocidades)\b)")
 # Equipment a car's own title may open with as well as a part's («Caja
 # automática Peugeot 208 Allure 2020», «Techo solar Jeep Compass Limited 2018»,
 # «Llantas de aleación, Gol Trend 2013 full», «Radio taxi Chevrolet Spin»), and
@@ -123,7 +142,28 @@ _EQUIPMENT = (
 _LEADS = rf"^(?:(?:{'|'.join(_LEAD)})\b[\s,/:-]*){{0,3}}"
 _PART_START = re.compile(rf"{_LEADS}(?:{'|'.join(_PARTS)})\b")
 _EQUIPMENT_START = re.compile(rf"{_LEADS}(?:{'|'.join(_EQUIPMENT)})\b")
-_PART_ANYWHERE = re.compile(r"\b(?:desarmes?|autopartes?|repuestos (?:de|para))\b")
+_PART_ANYWHERE = re.compile(
+    r"\b(?:desarmes?|autopartes?|repuestos (?:de|para))\b"
+    # «Ford ecosport kinetic ... pata soporte de motor p703». Not «soporte de
+    # motor» alone: «Peugeot 207 compact soporte de motor nuevo» is a car's repair.
+    r"|\b(?:patas? (?:soporte )?de motor|cuerpos? (?:de )?mariposa)\b")
+# A body part with its side: «Gol power 2006/14 óptica derecha» is one piece;
+# unless the title tells a car's damage («Peugeot 207 con detalle en puerta
+# delantera izquierda», «Gol 2008 faro izquierdo roto»).
+_SIDED_PART = re.compile(
+    r"\b(?:opticas?|faros?|paragolpes?|puertas?|espejos?|guardabarros?|guardaplast\w*|zocalos?)"
+    r" (?:(?:delanter|traser)\w* )?(?:derech|izquierd)\w*\b")
+_DAMAGE_BEFORE = re.compile(r"\b(?:con|detalles?|rot[oa]s?|choque|chocad\w*|abollad\w*|falta|rayad\w*"
+                            r"|golpe\w*|sin)\b")
+# Only right after the piece: «óptica derecha con detalle» is a damaged part.
+_DAMAGE_AFTER = re.compile(r"^\W*(?:rot[oa]s?|abollad\w*|rayad\w*|golpead\w*|chocad\w*)\b")
+# Someone who wants to buy («Busco Gol Trend», «2012 Busco tapa ciega»):
+# there is no car for sale behind it. Not «Busco permuta Ford Ka 2014», «Busco
+# nuevo dueño», «Compro, vendo, permuto» (a dealer): those offer a car.
+_WANTED = re.compile(r"^(?:(?:19[89]\d|20[0-3]\d)\s+)?(?:busco|compro|buscamos|compramos)\b"
+                     r"(?![\s,]*(?:permut\w*|cambio|canje|nuevos? duen\w*|nuevas? duen\w*|comprador\w*"
+                     r"|interesad\w*)\b)")
+_OFFER = re.compile(r"\b(?:vend\w*|permut\w*)\b")
 # «Ford Ka 2012 no es desarme», «no es para repuestos».
 _NEGATED = re.compile(r"\bno (?:es )?(?:(?:un|para|de) )?(?:desarmes?|autopartes?|repuestos?)\b(?: (?:de|para))?")
 # Scale models, toys and collectibles, matched in production (09/11/2026):
@@ -154,8 +194,15 @@ _TOY = re.compile(
 _TOY_HINT = re.compile(rf"\b(?:{'|'.join(_TOY_MAKERS)})\b|\b1\s*[:/]\s*{_DENOMINATOR}"
                        r"|\brapido y furioso\b|\bfast (?:and )?furious\b|\bautos inolvidables\b")
 _COLLECTION = re.compile(r"\bcolecci\w*")
+# Enough alone, when the title names no single model year: «HONDA CIVIC
+# CUSTOM HOTWHEELS». Not «juguete»: a car in great shape «es un juguete».
+_TOY_WORD = re.compile(r"\b(?:hot ?wheels?|maquetas?|miniaturas?)\b")
 _YEAR = re.compile(r"(?<![\d/-])(?:19[89]\d|20[0-3]\d)(?![\d/-])")
-_YEAR_RANGE = re.compile(r"(?:19[89]\d|20[0-3]\d)\s*(?:/|-|al|a|hasta)\s*(?:19[89]\d|20[0-3]\d|\d\d)\b")
+_YEAR_RANGE = re.compile(r"(?:19[89]\d|20[0-3]\d)\s*(?:(?:/|-|al|a|hasta)\s*(?:19[89]\d|20[0-3]\d|\d\d)\b"
+                         r"|en adelante\b)")
+# «Estéreo impecable para Ford focus 2012»: equipment *for* a car, «para» at
+# most two words after it (not «Caja automática ... 2020 listo para transferir»).
+_FOR = re.compile(r"^\W*(?:\w+\W+){0,2}?para\b")
 
 # Whole-car evidence (title or description).
 _CAR_WORDS = re.compile(
@@ -180,10 +227,22 @@ def part_reason(title: str | None) -> str | None:
     t = _NEGATED.sub(" ", _plain(title)).strip()
     if m := _PART_START.match(t):
         return f"título: «{m.group(0).strip()}»"
-    if (m := _EQUIPMENT_START.match(t)) and not _single_year(t) and not _ZERO_KM.search(t):
+    if (m := _EQUIPMENT_START.match(t)) and (
+            not _single_year(t) and not _ZERO_KM.search(t) or _FOR.match(t[m.end():])):
         return f"título: «{m.group(0).strip()}»"
     if m := _PART_ANYWHERE.search(t):
         return f"título: «{m.group(0)}»"
+    if (m := _SIDED_PART.search(t)) and not _DAMAGE_BEFORE.search(t[:m.start()]) \
+            and not _DAMAGE_AFTER.match(t[m.end():]):
+        return f"título: «{m.group(0)}»"
+    return None
+
+
+def wanted_reason(title: str | None) -> str | None:
+    """Why the title asks to buy rather than sells («Busco Gol Trend»), or None."""
+    t = _plain(title)
+    if (m := _WANTED.match(t)) and not _OFFER.search(t):
+        return f"pedido de compra: «{m.group(0).strip()}»"
     return None
 
 
@@ -194,6 +253,8 @@ def toy_reason(title: str | None) -> str | None:
         return f"título: «{m.group(0).strip()}»"
     if (m := _TOY_HINT.search(t)) and (c := _COLLECTION.search(t)) and not _single_year(t):
         return f"título: «{m.group(0)}» y «{c.group(0)}»"
+    if (m := _TOY_WORD.search(t)) and not _single_year(t):
+        return f"título: «{m.group(0)}»"
     return None
 
 
@@ -221,7 +282,10 @@ def car_evidence(title: str | None, description: str | None = None, *,
 def classify(title: str | None, description: str | None = None, *,
              year: int | None = None, mileage_km: int | None = None) -> str | None:
     """The reason a listing is not a car (a part, an accessory, a car taken
-    apart, a scale model), or None when it may be one."""
+    apart, a scale model, a wanted post), or None when it may be one."""
+    if (reason := wanted_reason(title)) and not (year and mileage_km):
+        # «2012 Busco tapa ciega»: the year a wanted post opens with is no car.
+        return reason
     reason = part_reason(title) or toy_reason(title)
     if reason is None or car_evidence(title, description, year=year, mileage_km=mileage_km):
         return None

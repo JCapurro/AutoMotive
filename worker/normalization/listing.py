@@ -262,4 +262,8 @@ def normalize_listing(item: Listing, *, catalog: list[CatalogModel], target: Tar
     row["fingerprint"] = fingerprint(row)
     # Not a column: a part or an accessory, not a car (ingest_rows skips it).
     row["not_vehicle"] = not_vehicle.classify_row(row)
+    # Not a column: the card says the ad was sold (collectors/facebook.card_status,
+    # «Sold · ...»): ingest_rows ends a stored listing and stores no new one. A
+    # «Pending · ...» one may open again: it stays a listing like any other.
+    row["card_gone"] = "sold" if item.extra.get("card_status") == "sold" else None
     return row

@@ -3,13 +3,14 @@
 The titles and prices are the production ones of 02/11/2026."""
 from __future__ import annotations
 
+import asyncio
 import unittest
 
 from collectors.base import Listing
 from normalization import not_vehicle
 from normalization.fx import FxQuote
 from normalization.listing import Target, doubtful_price, facebook_price, normalize_listing
-from collectors.facebook import _parse_price_sign, parse_card
+from collectors.facebook import _parse_price_sign, card_status, parse_card
 from normalization.money import explicit_usd, facebook_currency, high_end
 from normalization.vehicle import CatalogModel
 from pipeline.ingest import merge, misread_currency, price_drop_pct, published_partial, published_view
@@ -352,6 +353,166 @@ class NotVehicleTests(unittest.TestCase):
         self.assertIsNone(not_vehicle.classify_row({**row, "source": "mercadolibre", "attributes": {}}))
 
 
+# Matched as cars in the week of 02/11/2026 (the audit of 07/11/2026): the
+# production titles, with the source's year when it gave one.
+PARTS_1107 = [
+    ("Comandos Golf mk3 full Volkswagen", None), ("Comando Climatizador Volkswagen gol original", None),
+    ("SE VENDE COMANDO DE AIRE FIAT UNO WAY", None), ("Torpedo y centro de volante Chevrolet tracker", None),
+    ("cuerpo mariposa Ford fiesta kinetic Ecosport kinetic", None), ("Vendo cuerpo mariposa Chevrolet prisma", None),
+    ("Porta Filtro de Aire Original Chevrolet Corsa", None), ("Portamasa Chevrolet Astra 99-05", None),
+    ("Porta masa tracero Chevrolet Tracker 13-19", None), ("Portafiltro Peugeot 308 / 408 thp", None),
+    ("Soporte motor delantero Volkswagen Gol G1, Senda, Saveiro", None),
+    ("SOPORTE PARA LLAVES VOLKSWAGEN GOLF GTI 🚗🔑", None),
+    ("Pedal de Acelerador Ford Fiesta Kinetic Ecosport 8V219F836AB ID:278", None),
+    ("Pedal Embrague Original Peugeot 208/2008 Año 13 A 19", 2008),
+    ("Llave desde 0 Ford fiesta max ecosport linea vieja", None), ("Pata de motor Ford fiesta kinetic, Ecosport", None),
+    ("Cables de bujias para ford fiesta kinetic ecosport kinetic", None),
+    ("Panel trasero interno derecho Nissan Chevrolet Cruze - Cod 717", None),
+    ("Caja de Volkswagen Gol", None), ("Vendo caja de Chevrolet prisma", None),
+    ("Cilindro Puerta Volkswagen Senda Saveiro Gol 1991 1992 1994 1994 1995", 1991),
+    ("Depósito de líquido de freno Peugeot 208 2025", 2025), ("Manguera aire acondicionado Peugeot 208", None),
+    ("Caños de aire acondicionado Peugeot 208 2025", 2025), ("Marco de espejo Chevrolet Corsa", None),
+    ("Ruedas de Chevrolet Astra", None), ("Rueda entera para Renault kangoo R14 175/70 cargo", None),
+    ("Taza Citroën C4 R15", None), ("Resortes de suspensión de Renault Kangoo nuevos", None),
+    ("Pomo y cofia palanca cambios Volkswagen vento variant golf mk6", None),
+    ("BAJADA MOTOR ESCAPE VOLKSWAGEN VOYAGE GOL TREND FOX SAVEIRO", None),
+    ("Vendo electro originales Peugeot 208 2014 valeo", 2014),
+    ("Tecla Levantavidrios Cuadruple Chevrolet Corsa classic NUEVAS", None), ("LUZ AUXILIAR CHEVROLET CORSA", None),
+    ("Bielas de ford maverick/bronco 2.0 ecoboost", None), ("Lona marítima Ford maverick", None),
+    ("Asesorío de Chevrolet Corsa 3 puertas ay todo de interio", None), ("Baúl Volkswagen gol trend", None),
+    ("Baúl paragolpe Volkswagen Vento Tsi 2017", 2017), ("4 Llantas 15 Toyota Corolla (5 tuercas)", None),
+    ("1 llanta de Volkswagen Gol trend rodado 15 original", None),
+    ("Tengo 2 puertas traseras izquierd y derecha y bomba inyectora de Peugeot 307 HDI diesel", None),
+    ("Todo de Peugeot 307 HDI diesel modelo 2006", 2006), ("Octicas+de+Peugeot+307+y+de+Peugeot+208", None),
+    ("Volkswagen gol power 2006/14 óptica derecha con detalle cod 787", 2006),
+    ("Chevrolet prisma onix puerta trasera izquierda", None),
+    ("Ford ecosport kinetic fiesta kinetic design pata soporte de motor p703", None),
+    ("Estereo impecable para Ford focus 2012 2.0 l ....zona alta Córdoba", 2012),
+    ("Estereo Peugeot 208 2021 en adelante", 2021),
+    # Toys, scale models, collections.
+    ("HONDA CIVIC CUSTOM HOTWHEELS", None), ("AUTO HONDA CIVIC CUSTON HOTWHEELS ( DE COLECCION )", None),
+    ("FASCICULOS DE FORD MAVERICK,14, 17,18,19,20", None),
+    ("Ford Maverick Salvat Entrega N° 34 Escala 1:8 Nuevo Cerrado", None),
+    ("Honda civic coleccion rápido y furioso", None), ("Audi TT Coupé Motormax — Escala 1:18", None),
+    ("Solido 1:43 Peugeot 207 Spider CUP #30 Dino Lunardi 2008. NUEVO", 2008),
+    # A wanted post.
+    ("2012 Busco Tapa Ciega Auxiliar honda city 2012", 2012),
+]
+
+# Cars the new words must not take for parts.
+CARS_1107 = [
+    "Ford Falcon de colección 1978", "Llave en mano Volkswagen Gol Trend 2015", "5 puertas Gol Trend 2012",
+    "7 asientos Chevrolet Spin LTZ 2016", "2019 Volkswagen golf comfortline", "Volkswagen Gol Trend 5 puertas",
+    "Toyota Etios Cross 2017", "Renault Kangoo Stepway 2014 doble portón", "Chevrolet Corsa Classic 2010 GNC",
+    "Peugeot 208 GT 2020 impecable", "Fiat Palio Essence 1.6 2013", "Ford Ka Viral 2004",
+    # The cases the review of 07/11/2026 raised.
+    "Caja automática Peugeot 208 Allure 2020 listo para transferir", "Fiat 600 de colección",
+    "Busco permuta Ford Ka 2014 por camioneta", "Compro, vendo, permuto Volkswagen Amarok 2018",
+    "Vendo Peugeot 207 con detalle en puerta delantera izquierda", "Gol 2008 faro izquierdo roto",
+    "Panel Fiat Fiorino 2014 1.4", "Comandos al volante Fiat Cronos 2021 drive",
+    "Llave x llave Chevrolet Corsa 2009", "Caja de 6 marchas Ford Focus 2015", "Todo de serie Ford Fiesta 2012",
+    "Luces led Volkswagen Amarok 2017 full", "Marco Polo Volkswagen T5 California",
+    "3 cilindros Volkswagen up 2016",
+]
+
+
+class ProductionPartsOf0711Tests(unittest.TestCase):
+    def test_every_part_is_a_part(self):
+        missed = [t for t, year in PARTS_1107 if not_vehicle.classify(t, year=year) is None]
+        self.assertEqual(missed, [])
+
+    def test_no_car_is_a_part(self):
+        wrong = [(t, r) for t in CARS_1107 + [t for t, _, _ in CARS] if (r := not_vehicle.classify(t))]
+        self.assertEqual(wrong, [])
+
+    def test_the_sources_year_and_mileage_still_say_car(self):
+        self.assertIsNone(not_vehicle.classify("Comandos Golf mk3 full Volkswagen", year=1998, mileage_km=250_000))
+        self.assertIsNone(not_vehicle.classify("Busco permuta Gol Trend 2012", year=2012, mileage_km=120_000))
+
+    def test_a_wanted_post_is_no_car_whatever_its_title_says(self):
+        for title in ("Busco Gol Trend 2012", "Compro Ford Ka", "2012 Busco Tapa Ciega Auxiliar honda city 2012"):
+            self.assertTrue(not_vehicle.classify(title, year=2012).startswith("pedido de compra"), title)
+
+    def test_the_reasons_say_what_it_is(self):
+        self.assertEqual(not_vehicle.classify("HONDA CIVIC CUSTOM HOTWHEELS"), "título: «hotwheels»")
+        self.assertEqual(not_vehicle.classify("Comando calefacción Peugeot 207"), "título: «comando»")
+
+
+class SoldCardTests(unittest.TestCase):
+    def test_the_status_leaves_the_title(self):
+        self.assertEqual(card_status("Sold · 2019 Volkswagen golf comfortline"),
+                         ("2019 Volkswagen golf comfortline", "sold"))
+        self.assertEqual(card_status("Vendido · 2017 Volkswagen gol trend"), ("2017 Volkswagen gol trend", "sold"))
+        self.assertEqual(card_status("Pending · 2014 Ford fiesta kinetic"), ("2014 Ford fiesta kinetic", "pending"))
+        self.assertEqual(card_status("2014 Ford fiesta kinetic"), ("2014 Ford fiesta kinetic", None))
+        # Only as a prefix: «Vendido» in a title is no status.
+        self.assertEqual(card_status("Gol Trend 2012 vendido · consultar")[1], None)
+
+    def test_a_sold_card_says_so_and_normalizes_as_gone(self):
+        card = parse_card("/marketplace/item/42/",
+                          "US$ 12.500\nSold · 2019 Volkswagen golf comfortline\nRosario, SF",
+                          label="Sold · 2019 Volkswagen golf comfortline, US$ 12.500, Rosario, SF")
+        self.assertEqual((card.titulo, card.extra.get("card_status")), ("2019 Volkswagen golf comfortline", "sold"))
+        # The line after the title is still the place, not the title itself.
+        self.assertEqual(card.ubicacion, "Rosario, SF")
+        row = normalize_listing(card, catalog=CATALOG, fx=FX)
+        self.assertEqual((row["title"], row["card_gone"]), ("2019 Volkswagen golf comfortline", "sold"))
+        live = parse_card("/marketplace/item/43/", "US$ 12.500\n2019 Volkswagen golf comfortline\nRosario")
+        self.assertEqual(normalize_listing(live, catalog=CATALOG, fx=FX)["card_gone"], None)
+
+    def test_a_batch_of_only_sold_cards_still_notifies(self):
+        from types import SimpleNamespace
+        from unittest.mock import AsyncMock, MagicMock
+
+        from pipeline import scheduler
+        from pipeline.ingest import IngestResult, ListingEvent
+
+        events = [ListingEvent("listing_gone", 7, "facebook", "42", changes=("sold",))]
+        # On any run: an ended listing reaches only who saved or follows it.
+        for first_run, last_run_at, called in ((False, None, True), (True, None, True), (True, "ayer", True)):
+            notifier = MagicMock(on_matches=AsyncMock(), on_listing_events=AsyncMock(), deliver=AsyncMock())
+            run = SimpleNamespace(target={"id": 1, "last_run_at": last_run_at}, first_run=first_run,
+                                  result=IngestResult(events=list(events)))
+            asyncio.run(scheduler.batch_handler(notifier)(run))
+            self.assertEqual(notifier.on_listing_events.await_count, int(called), (first_run, last_run_at))
+            notifier.on_matches.assert_not_awaited()
+            notifier.deliver.assert_awaited_once()
+        # A first run with nothing before still silences the price drops.
+        drop = ListingEvent("price_drop", 8, "facebook", "43")
+        notifier = MagicMock(on_matches=AsyncMock(), on_listing_events=AsyncMock(), deliver=AsyncMock())
+        asyncio.run(scheduler.deliver_events(notifier, {"id": 1, "last_run_at": None}, [drop, *events],
+                                             first_run=True))
+        notifier.on_listing_events.assert_awaited_once_with(events)
+
+    def test_the_repair_plan_of_marked_titles(self):
+        from tools import repair_facebook as rf
+
+        def row(i, title, price=12_500, **kw):
+            return {"id": i, "source": "facebook", "external_id": str(i), "title": title, "description": None,
+                    "make": "Ford", "model": "Ka", "year": 2015, "mileage_km": 90_000, "price": price,
+                    "currency": "USD", "price_usd": price, "price_published": price,
+                    "price_published_currency": "USD", "price_partial": False, "price_partial_reason": None,
+                    "description_facts": None, "attributes": {"moneda": "USD"}, "n_matches": 0,
+                    "watched": False, **kw}
+        p = rf.plan([row(1, "Sold · 2015 Ford Ka SE"),
+                     row(2, "Sold · 2015 Ford Ka SE", watched=True),
+                     # A doubtful bare-"$" price: fixed before it ends (comparables count gone ones).
+                     row(3, "Sold · 2015 Ford Ka SE", 600_000),
+                     row(4, "Pending · Paragolpe delantero Ford Ka", year=None, mileage_km=None),
+                     row(5, "Pending · 2014 Ford Ka SE"),
+                     row(6, "Sold · Butacas Ford Ka", year=None, mileage_km=None)], FX)
+        self.assertEqual(p.card_gone, [1, 3])
+        self.assertEqual([lid for lid, _ in p.parts], [4, 6])
+        self.assertEqual(p.doubtful, [3])
+        self.assertEqual(p.titles, [(5, "Pending · 2014 Ford Ka SE", "2014 Ford Ka SE")])
+        self.assertEqual(p.counts[("facebook", rf.CARD_WATCHED)], 1)
+
+    def test_a_pending_card_stays_a_listing(self):
+        card = parse_card("/marketplace/item/44/", "US$ 8.000\nPending · 2014 Ford fiesta kinetic\nRosario, SF")
+        self.assertEqual((card.titulo, card.ubicacion), ("2014 Ford fiesta kinetic", "Rosario, SF"))
+        self.assertEqual(normalize_listing(card, catalog=CATALOG, fx=FX)["card_gone"], None)
+
+
 class ClassifyUpdateTests(unittest.TestCase):
     """A card on a stored listing is judged with what the listing already knows."""
 
@@ -563,6 +724,8 @@ DOUBTFUL = [
     ("You", 111_111, None, None),
     ("2027 Volkswagen Polo", 285_000, "Volkswagen", "Polo"),
 ]
+PARTS_BY_TITLE_SINCE_1107 = {"Torpedo y centro de volante Chevrolet tracker sin detalles",
+                             "4 Llantas Ford 16 pulgadas"}
 WIDE_CATALOG = CATALOG + [CatalogModel(make="Chevrolet", model="Onix", body_types=("hatchback",)),
                           CatalogModel(make="Chevrolet", model="Tracker", body_types=("suv",)),
                           CatalogModel(make="Volkswagen", model="Polo", body_types=("hatchback",))]
@@ -577,7 +740,8 @@ class DoubtfulFacebookPriceTests(unittest.TestCase):
         for title, price, make, model in DOUBTFUL:
             with self.subTest(title):
                 row = self.normalize(title, price, make=make, model=model, atributos={"moneda": "ARS"})
-                self.assertIsNone(row["not_vehicle"])                    # a «car» by its title...
+                # A «car» by its title, but for the two the words of 07/11/2026 know...
+                self.assertEqual(row["not_vehicle"] is not None, title in PARTS_BY_TITLE_SINCE_1107)
                 self.assertEqual((row["price"], row["currency"], row["price_usd"], row["price_published"],
                                   row["price_published_currency"], row["fx_rate"]),
                                  (None, None, None, None, None, None))

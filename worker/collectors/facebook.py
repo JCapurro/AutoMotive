@@ -219,6 +219,24 @@ def _matches_query_text(text: str, f: dict) -> bool:
     return all(term in haystack for term in _query_terms(f))
 
 
+# What Facebook puts before the title of an ad that is over («Sold · 2019
+# Volkswagen golf comfortline», «Vendido · 2017 Volkswagen gol trend») or
+# reserved («Pending · ...», which may open again). 58 of them were active on
+# 07/11/2026 and 38 matched.
+_CARD_STATUS = re.compile(r"^\s*(sold|vendid[oa]|pending|pendiente)\s*[·•]\s*", re.IGNORECASE)
+_CARD_STATUS_NAME = {"sold": "sold", "vendido": "sold", "vendida": "sold",
+                     "pending": "pending", "pendiente": "pending"}
+
+
+def card_status(title: str) -> tuple[str, str | None]:
+    """The title without Facebook's «Sold · »/«Pending · », and that status
+    ('sold' or 'pending'), or None when the card says nothing."""
+    m = _CARD_STATUS.match(title or "")
+    if not m:
+        return title, None
+    return title[m.end():].strip(), _CARD_STATUS_NAME[m.group(1).lower()]
+
+
 def _title_from_card(label: str, lines: list[str]) -> str:
     label_title = (label or "").split(",", 1)[0].strip()
     if label_title:
@@ -287,7 +305,13 @@ def parse_card(href: str, text: str, label: str = "", img: str | None = None) ->
     price, moneda, sign = _parse_price_sign(text)
     if price is None:
         price, moneda, sign = _parse_price_sign(label)
-    title = _title_from_card(label, lines) or (text or "")[:120]
+    raw_title = _title_from_card(label, lines) or (text or "")[:120]
+    title, status = card_status(raw_title)
+    extra: dict[str, str] = {"price_sign": sign} if sign else {}
+    if status:
+        # A sold one: ingest ends the stored listing and stores no new one
+        # (pipeline/ingest.py). A pending one is read as any other.
+        extra["card_status"] = status
 
     # Publication cues only; a model year or a price is not a date.
     date_line = next(
@@ -305,10 +329,10 @@ def parse_card(href: str, text: str, label: str = "", img: str | None = None) ->
         moneda=moneda,
         anio=_parse_year(text),
         km=_parse_km(text),
-        ubicacion=_extract_location(lines, title),
+        ubicacion=_extract_location(lines, raw_title),
         published_at=parse_publication_date(date_line),
         imagenes=[img] if img else [],
-        extra={"price_sign": sign} if sign else {},
+        extra=extra,
     )
 
 
@@ -450,6 +474,9 @@ def parse_detail(html: str, url: str, status: int = 200) -> ListingDetail:
     title = (h1.get_text(" ", strip=True) if h1 else None) or (lines[0] if lines else None)
     if not m or not title:
         raise ValueError(f"facebook detail without id/title: {url}")
+    title, status = card_status(title)
+    if status == "sold":
+        return ListingDetail(url, gone=True, gone_reason=status)
 
     # The price sits by the title; the description below may quote others.
     price = moneda = sign = None
@@ -982,6 +1009,12 @@ class FacebookMarketplaceScraper(BaseScraper):
                             continue
                         ident = listing.listing_id
                         probe.card(ident, f"{label}\n{text}")
+                        if listing.extra.get("card_status") == "sold":
+                            # A sold card needs no date nor window: ingest ends a
+                            # stored listing (dated or not, recent or not) and
+                            # stores no new one. No page read, no date memory.
+                            results.append(listing)
+                            continue
                         remembered = memory.get(ident)
                         if listing.published_at is not None:
                             origin = "card"

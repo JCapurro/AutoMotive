@@ -11,6 +11,17 @@ transaction:
 * parts (normalization/not_vehicle.py): ended without an event, out of
   comparables and market stats, and their matches deleted
   (listings.mark_not_vehicle); nobody is notified;
+* ads whose stored title carries Facebook's «Sold · »/«Vendido · »
+  (collectors.facebook.card_status, read before the crawl ended them):
+  status 'gone' as a sold detail page leaves them, after the price fixes
+  below (a gone listing still counts among the comparables). No event: the
+  end only reaches who saved or follows a listing, so those (the ones the
+  watchlist reads, listings.watchlist_queue) are left active for its detail
+  read, which tells them. Their matches stay, as a sold listing's do (no
+  view shows a gone listing). A sold part counts as a part. A «Pending · »
+  one (reserved, it may open again) stays active and loses the mark in its
+  title, which the crawl's card can't give it back to an enriched listing
+  (ingest.merge keeps its stored title);
 * doubtful prices (money.facebook_currency gives None): a "USD" price written
   with a bare "$" (not «US$», «U$S», «USD») of a car that is not high-end,
   with FB_USD_CEILING <= amount < 1.000.000. Neither dollars nor pesos make it
@@ -55,6 +66,7 @@ from typing import Any
 from psycopg.types.json import Jsonb
 
 import db
+from collectors.facebook import card_status
 from aio import run
 from db.repos import listings as listings_repo
 from db.repos import fx as fx_repo
@@ -69,6 +81,9 @@ from pipeline.rescore import rescore_listings
 log = logging.getLogger("repair_facebook")
 
 PART = "repuestos a excluir"
+CARD_GONE = "vendidos en la tarjeta a terminar"
+CARD_WATCHED = "vendidos guardados: los cierra la watchlist"
+TITLE = "títulos «Pending ·» a limpiar"
 PART_MATCHES = "matches de repuestos a borrar"
 TO_ARS = "monedas USD -> ARS"
 DOUBTFUL = "precios dudosos -> sin precio"
@@ -81,13 +96,20 @@ _SELECT = ("SELECT l.id, l.source, l.external_id, l.title, l.description, l.make
            "       l.mileage_km, l.price, l.currency, l.price_usd, l.price_published, "
            "       l.price_published_currency, l.price_partial, l.price_partial_reason, "
            "       l.description_facts, l.attributes, "
-           "       (SELECT count(*) FROM matches m WHERE m.listing_id = l.id)::int AS n_matches "
+           "       (SELECT count(*) FROM matches m WHERE m.listing_id = l.id)::int AS n_matches, "
+           # The watchlist reads it (listings.watchlist_queue), and tells its end.
+           "       EXISTS (SELECT 1 FROM user_listing_interactions i "
+           "                WHERE i.listing_id = l.id AND public.commercial_access_active(i.user_id) "
+           "                  AND (i.saved OR i.status IN ('interested', 'contacted', 'visit_scheduled'))) "
+           "         AS watched "
            "  FROM listings l WHERE l.status = 'active' AND l.source = ANY(%s) ORDER BY l.id")
 
 
 @dataclass
 class Plan:
     parts: list[tuple[int, str]] = field(default_factory=list)
+    card_gone: list[int] = field(default_factory=list)  # «Sold · ...» titles: status gone
+    titles: list[tuple[int, str, str]] = field(default_factory=list)  # «Pending · ...»: (id, stored, bare)
     prices: list[tuple[dict[str, Any], dict[str, Any]]] = field(default_factory=list)  # (row, new values)
     doubtful: list[int] = field(default_factory=list)  # listings left without a price: their matches go
     stale: list[int] = field(default_factory=list)  # already without a price, flagged, still matched
@@ -171,12 +193,29 @@ def plan(rows: list[dict[str, Any]], fx: FxQuote | None, *, examples: int = 5) -
     for row in rows:
         source, label = row["source"], f"#{row['id']} «{row['title']}»"
         price = _money(*_published(row))
-        if reason := not_vehicle.classify_row(row):
+        bare, status = card_status(row.get("title") or "")
+        if row["source"] != "facebook":
+            bare, status = row.get("title"), None
+        if reason := not_vehicle.classify_row({**row, "title": bare} if status else row):
             out.parts.append((row["id"], reason))
             out.note(source, PART, f"{label} {price} — {reason}", keep=examples)
             if row.get("n_matches"):
                 out.note(source, PART_MATCHES, f"{label}: {row['n_matches']}", row["n_matches"], keep=examples)
             continue
+        if status == "sold" and row.get("watched"):
+            # Left to the watchlist, whose detail read tells its end to who
+            # saved or follows it; the repair would end it in silence.
+            out.note(source, CARD_WATCHED, label, keep=examples)
+        elif status == "sold":
+            # It ends after its price is fixed below: a gone listing still
+            # counts among the comparables.
+            out.card_gone.append(row["id"])
+            out.note(source, CARD_GONE, f"{label} — {status}", keep=examples)
+        elif status == "pending":
+            # Reserved, may open again: it stays, without the mark in its
+            # title (an enriched one keeps its stored title, ingest.merge).
+            out.titles.append((row["id"], row["title"], bare))
+            out.note(source, TITLE, f"{label} -> «{bare}»", keep=examples)
         if (values := reprice(row, fx)) is not None:
             out.prices.append((row, values))
             n = row.get("n_matches") or 0
@@ -241,6 +280,13 @@ async def apply(p: Plan) -> tuple[list[int], int]:
             await cur.executemany(
                 "UPDATE listings SET attributes = jsonb_set(attributes, '{moneda}', to_jsonb(%s::text)) "
                 " WHERE id = %s", [(currency, lid) for lid, currency in p.monedas])
+            # Only if no crawl changed the title since it was read.
+            await cur.executemany("UPDATE listings SET title = %s WHERE id = %s AND title = %s",
+                                  [(bare, lid, stored) for lid, stored, bare in p.titles])
+        # Last: the price updates above only touch active listings.
+        if p.card_gone:
+            await cx.execute("UPDATE listings SET status = 'gone', detail_checked_at = now() "
+                             " WHERE id = ANY(%s) AND status = 'active'", (p.card_gone,))
     return repriced, deleted
 
 

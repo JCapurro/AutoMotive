@@ -164,6 +164,31 @@ class IngestTests(Case):
         self.assertNotIn("_not_vehicle", row["attributes"])
         self.assertEqual(len(await self.rows("SELECT * FROM matches")), 1)
 
+    async def test_a_sold_card_ends_the_stored_listing_and_stores_no_new_one(self):
+        lid = await self.store("8", "2019 Volkswagen golf comfortline", 12_500, "USD", make="Volkswagen",
+                               model="Golf", year=2019, km=80_000)
+        await self.match(lid)
+        sold = fb("8", "2019 Volkswagen golf comfortline", 12_500, anio=2019, km=80_000,
+                  extra={"card_status": "sold"})
+        result = await ingest([sold, fb("7", "2016 Ford ka se", 9_500, anio=2016, km=70_000,
+                                        extra={"card_status": "sold"}),
+                               fb("9", "2017 Ford ka se", 10_500, anio=2017, km=60_000,
+                                  extra={"card_status": "pending"})], geocode=None)
+        self.assertEqual((result.found, result.new, result.card_gone), (3, 1, 2))
+        self.assertEqual([(e.kind, e.listing_id, e.changes) for e in result.events if e.kind == "listing_gone"],
+                         [("listing_gone", lid, ("sold",))])
+        self.assertEqual((await self.listing("8"))["status"], "gone")
+        self.assertEqual(await self.rows("SELECT * FROM listings WHERE external_id = '7'"), [])
+        # A reserved one may open again: stored as any other.
+        self.assertEqual((await self.listing("9"))["status"], "active")
+        # Its match stays, as a sold listing's does; no view shows a gone listing.
+        self.assertEqual(len(await self.rows("SELECT * FROM matches")), 1)
+        # The same card again: no second event.
+        self.assertEqual((await ingest([sold], geocode=None)).events, [])
+        # Read again without the mark (the seller put it up again): active again.
+        await ingest([fb("8", "2019 Volkswagen golf comfortline", 12_500, anio=2019, km=80_000)], geocode=None)
+        self.assertEqual((await self.listing("8"))["status"], "active")
+
     async def test_a_stored_part_leaves_the_count_after_expiry(self):
         lid = await self.store("1", "Butacas Ford Ecosport", 350_000, "USD")
         [aid] = await db.create_alert(user_id=TG_USER, chat_id=TG_USER, name="Ecosport",
@@ -337,6 +362,31 @@ class RepairToolTests(Case):
         row = await self.listing("30")
         self.assertEqual((row["price"], row["price_partial"], row["price_partial_reason"]),
                          (None, True, "precio de Facebook no interpretable: $ 600.000"))
+
+    async def test_a_stored_sold_title_ends_without_an_event(self):
+        sold = await self.store("20", "Sold · 2019 Volkswagen golf comfortline", 12_500, "USD",
+                                make="Volkswagen", model="Golf", year=2019, km=80_000)
+        await self.store("21", "Vendido · 2017 Volkswagen gol trend", 9_000, "USD", make="Volkswagen",
+                         model="Gol Trend", year=2017, km=90_000)
+        await self.store("22", "2017 Ford ka se", 10_500, "USD", make="Ford", model="Ka", year=2017, km=60_000)
+        await self.store("23", "Pending · 2014 Ford fiesta kinetic", 8_000, "USD", make="Ford", model="Fiesta",
+                         year=2014, km=100_000)
+        await self.store("24", "Sold · Butacas Ford Ecosport", 350_000, "ARS")
+        await self.match(sold)
+        p = await repair_facebook.repair(write=False, sources=["facebook"])
+        self.assertEqual(dict(p.counts), {("facebook", repair_facebook.CARD_GONE): 2,
+                                          ("facebook", repair_facebook.PART): 1,
+                                          ("facebook", repair_facebook.TITLE): 1})
+        self.assertEqual((await self.listing("20"))["status"], "active")
+        await repair_facebook.repair(write=True, sources=["facebook"])
+        self.assertEqual([(await self.listing(x))["status"] for x in ("20", "21", "22", "23")],
+                         ["gone", "gone", "active", "active"])
+        self.assertIsNotNone((await self.listing("20"))["detail_checked_at"])
+        self.assertEqual((await self.listing("23"))["title"], "2014 Ford fiesta kinetic")
+        self.assertIn("_not_vehicle", (await self.listing("24"))["attributes"])
+        self.assertEqual(len(await self.rows("SELECT * FROM matches")), 1)
+        self.assertEqual(await self.rows("SELECT * FROM notifications"), [])
+        self.assertEqual(dict((await repair_facebook.repair(write=False, sources=["facebook"])).counts), {})
 
     async def test_only_the_named_sources(self):
         await self.seed()

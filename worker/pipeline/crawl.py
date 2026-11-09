@@ -455,8 +455,9 @@ async def run_target(target: dict[str, Any], on_health: HealthHandler | None = N
                                    updated=result.updated, error=error)
     await _report(on_health, health)
     probe = getattr(items, "probe", None)
-    log.info("target=%s %s %s found=%d new=%d updated=%d events=%d%s", target["id"], source,
-             _label(target), result.found, result.new, result.updated, len(result.events),
+    log.info("target=%s %s %s found=%d new=%d updated=%d not_vehicle=%d sold_cards=%d events=%d%s",
+             target["id"], source, _label(target), result.found, result.new, result.updated,
+             result.not_vehicle, result.card_gone, len(result.events),
              f" probe={json.dumps(probe, separators=(',', ':'))}" if probe else "")
     covered_until = (datetime.fromtimestamp(filters["publication_until"], timezone.utc)
                      if "publication_until" in filters else None)
