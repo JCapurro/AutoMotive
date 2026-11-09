@@ -7,8 +7,10 @@ deploy. `IntelligenceConfig.from_app_config` is pure: it takes the raw values
 """
 from __future__ import annotations
 
+import math
+import re
 from dataclasses import dataclass, field
-from typing import Any, Mapping
+from typing import Any, Mapping, NamedTuple
 
 from normalization.price_check import ALMOST_CERTAIN_BELOW_MEDIAN_PCT, SUSPICIOUS_BELOW_MEDIAN_PCT
 
@@ -58,11 +60,118 @@ DEFAULT_RED_FLAGS = {"much_cheaper_pct": 25, "much_cheaper_verify_pct": 35, "ant
 DEFAULT_RESCORE = {"days": 14, "hour": "04:00", "every_hours": 24}
 
 
-def _merge(defaults: Mapping[str, Any], value: Any) -> dict[str, Any]:
+class Bound(NamedTuple):
+    """A finite number in [lo, hi] (lo excluded when `above`), whole when `integer`."""
+    lo: float
+    hi: float
+    integer: bool = False
+    above: bool = False
+
+    def accepts(self, value: Any) -> bool:
+        if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(value):
+            return False
+        if self.integer and value != int(value):
+            return False
+        return (value > self.lo if self.above else value >= self.lo) and value <= self.hi
+
+
+# Same bounds as the /admin/config validator (web/lib/admin-config.ts,
+# scoringConfigProblem). Before them a threshold saved as "80" raised in
+# level_for, a 0 divisor in the price or recency curve raised
+# ZeroDivisionError, and a rescore.hour like "04:60" ended the nightly loop
+# ("25:00" wrapped to 01:00 without a word).
+# A bad value falls back to its default, key by key (_merge).
+_SHARE = Bound(0, 1)                                    # a component value c
+_WEIGHTS_BOUNDS = {k: Bound(0, 1000) for k in COMPONENTS}
+_THRESHOLDS_BOUNDS = {k: Bound(0, 100) for k in DEFAULT_THRESHOLDS}
+_CURVES_BOUNDS: dict[str, dict[str, Bound]] = {
+    "price": {"base": _SHARE, "pct_per_unit": Bound(0, 100, above=True)},
+    "match": {"unknown_penalty": _SHARE},
+    "km": {"base": _SHARE, "slope": Bound(0, 10)},
+    "trim": {k: _SHARE for k in DEFAULT_CURVES["trim"]},
+    "recency": {"half_life_hours": Bound(0, 720, above=True)},
+    "completeness": {"min_description_chars": Bound(0, 5000, integer=True),
+                     "min_images": Bound(0, 50, integer=True)},
+    # From 25% below the median a price is still a deal, not a down payment.
+    "guards": {"suspicious_pct": Bound(25, 100), "partial_pct": Bound(25, 100)},
+}
+# public.comparables() casts year_tol, max_age_days and gone_max_age_days to
+# integer. confirm_grace_hours and gone_max_age_days are read by SQL only.
+_COMPARABLES_BOUNDS = {"min_n": Bound(1, 1000, integer=True), "year_tol": Bound(0, 10, integer=True),
+                       "km_tol_pct": Bound(0, 100, integer=True), "max_age_days": Bound(1, 180, integer=True),
+                       "confirm_grace_hours": Bound(0, 720, integer=True),
+                       "gone_max_age_days": Bound(1, 180, integer=True)}
+_CLOCK = re.compile(r"(?:[01][0-9]|2[0-3]):[0-5][0-9]")
+_RESCORE_BOUNDS: dict[str, Bound | re.Pattern[str]] = {
+    "days": Bound(1, 180, integer=True), "hour": _CLOCK, "every_hours": Bound(1, 24, integer=True)}
+# The plain-number keys: (default, bound). SQL casts alerts_max_per_user_day
+# to integer (immediate_alert_cap), so a 7.5 would stop every batch.
+_SCALARS: dict[str, tuple[int | float, Bound]] = {
+    "digest_top_n": (10, Bound(1, 50, integer=True)),
+    "price_drop_min_pct": (3, Bound(0, 100)),
+    "alerts_max_per_user_day": (10, Bound(0, 2_147_483_647, integer=True)),
+}
+
+
+def _within(bound: Bound | re.Pattern[str], value: Any) -> bool:
+    if isinstance(bound, re.Pattern):
+        return isinstance(value, str) and bound.fullmatch(value) is not None
+    return bound.accepts(value)
+
+
+def _merge(defaults: Mapping[str, Any], value: Any,
+           bounds: Mapping[str, Bound | re.Pattern[str]] | None = None) -> dict[str, Any]:
+    """`defaults` overlaid with the keys of `value` (None skipped). A key in
+    `bounds` takes the value only within them; otherwise it keeps its default,
+    or stays out when it has none."""
     out = dict(defaults)
-    if isinstance(value, Mapping):
-        out.update({k: v for k, v in value.items() if v is not None})
+    if not isinstance(value, Mapping):
+        return out
+    for k, v in value.items():
+        bound = bounds.get(k) if bounds else None
+        if v is None or (bound is not None and not _within(bound, v)):
+            continue
+        out[k] = int(v) if isinstance(bound, Bound) and bound.integer else v
     return out
+
+
+def _weights(raw: Any) -> dict[str, Any]:
+    out = _merge(DEFAULT_WEIGHTS, raw, _WEIGHTS_BOUNDS)
+    # Every weight at 0 scores every match 0 (level low): the defaults instead.
+    return out if sum(out[k] for k in COMPONENTS) > 0 else dict(DEFAULT_WEIGHTS)
+
+
+def _thresholds(raw: Any) -> dict[str, Any]:
+    out = _merge(DEFAULT_THRESHOLDS, raw, _THRESHOLDS_BOUNDS)
+    # Out of order (good above high...) the levels make no sense: all three defaults.
+    return out if out["high"] > out["good"] > out["match"] else dict(DEFAULT_THRESHOLDS)
+
+
+def _curves(raw: Any) -> dict[str, dict[str, Any]]:
+    raw = raw if isinstance(raw, Mapping) else {}
+    out = {k: _merge(v, raw.get(k), _CURVES_BOUNDS[k]) for k, v in DEFAULT_CURVES.items()}
+    if out["guards"]["suspicious_pct"] > out["guards"]["partial_pct"]:
+        out["guards"] = dict(DEFAULT_CURVES["guards"])
+    return out
+
+
+def comparables_config(raw: Any) -> dict[str, Any]:
+    """app_config.comparables as the worker uses it; other keys (confirm_sources) as stored."""
+    return _merge(DEFAULT_COMPARABLES, raw, _COMPARABLES_BOUNDS)
+
+
+def rescore_config(raw: Any) -> dict[str, Any]:
+    """app_config.rescore as pipeline/rescore.py uses it: days, hour (HH:MM, ART), every_hours."""
+    return _merge(DEFAULT_RESCORE, raw, _RESCORE_BOUNDS)
+
+
+def config_number(key: str, raw: Any) -> int | float:
+    """app_config.<key> for digest_top_n, price_drop_min_pct and
+    alerts_max_per_user_day: the default when missing or out of bounds."""
+    default, bound = _SCALARS[key]
+    if not bound.accepts(raw):
+        return default
+    return int(raw) if bound.integer else raw
 
 
 @dataclass(frozen=True)
@@ -89,12 +198,11 @@ class IntelligenceConfig:
 
     @classmethod
     def from_app_config(cls, values: Mapping[str, Any]) -> "IntelligenceConfig":
-        curves_in = values.get("score_curves") or {}
         return cls(
-            weights=_merge(DEFAULT_WEIGHTS, values.get("score_weights")),
-            thresholds=_merge(DEFAULT_THRESHOLDS, values.get("level_thresholds")),
-            comparables=_merge(DEFAULT_COMPARABLES, values.get("comparables")),
-            curves={k: _merge(v, curves_in.get(k)) for k, v in DEFAULT_CURVES.items()},
+            weights=_weights(values.get("score_weights")),
+            thresholds=_thresholds(values.get("level_thresholds")),
+            comparables=comparables_config(values.get("comparables")),
+            curves=_curves(values.get("score_curves")),
             red_flags=_merge(DEFAULT_RED_FLAGS, values.get("red_flags")),
             risk=risk(values.get("risk")),
         )
