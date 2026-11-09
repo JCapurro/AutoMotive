@@ -1,15 +1,28 @@
 """Parse Spanish relative date strings shown by AR car classifieds.
 
-Examples handled:
-    "Hace 2 horas"      → now - 2h
+Minutes and hours are precise enough to keep:
     "Hace 30 minutos"   → now - 30m
-    "Hace 1 día"        → now - 1d
-    "Hace 7 días"       → now - 7d
+    "Hace 2 horas"      → now - 2h
+
+A day says nothing about the hour, and sites round days differently: Mercado
+Libre rounds up, so an ad «Publicados hoy» lists, under a day old, reads
+"hace 1 día" (docs/RECENT_PUBLICATIONS.md). Read as now - 1d, every fresh ad
+lost a day: 23.9 h old at p25, p50 and p75 of the live Mercado Libre matches
+(2026-11-08), half its recency gone. So a day-level phrase gives the latest
+instant it allows, never an hour it doesn't know:
     "Publicado hoy"     → now
-    "Ayer"              → now - 1d
+    "Hace 1 día"        → now
+    "Hace 7 días"       → now - 6d          (more than 6 days old)
+    "Ayer"              → start of today in Argentina
+    "Anteayer"          → start of yesterday in Argentina
+Ingest never stores a publication after first detection (pipeline/ingest.py
+merge): an ad whose page, read once it was already stored, says "hace 1 día"
+or "hoy" keeps its first detection as its date, as a listing without one does.
+
+Weeks, months and years keep whole units ("Hace 2 meses" → now - 60d): at
+those ages a day either way is noise.
 
 Returns a unix timestamp (int) or None if the string can't be parsed.
-Granularity is good enough for "is this within the last N hours" checks.
 """
 from __future__ import annotations
 import re
@@ -20,6 +33,8 @@ from typing import Any
 
 
 _NUM_RE = re.compile(r"(\d+)")
+_AR_TZ = timezone(timedelta(hours=-3))
+_DAY = 86_400
 
 
 def _strip_accents(s: str) -> str:
@@ -27,6 +42,12 @@ def _strip_accents(s: str) -> str:
         c for c in unicodedata.normalize("NFD", s)
         if unicodedata.category(c) != "Mn"
     )
+
+
+def _day_start(now: int, days_back: int) -> int:
+    """Midnight in Argentina, `days_back` days before the day of `now`."""
+    day = datetime.fromtimestamp(now, _AR_TZ).date() - timedelta(days=days_back)
+    return int(datetime(day.year, day.month, day.day, tzinfo=_AR_TZ).timestamp())
 
 
 def parse_relative_date(text: str | None) -> int | None:
@@ -38,10 +59,10 @@ def parse_relative_date(text: str | None) -> int | None:
 
     if "hoy" in s or s in ("ahora", "recien publicado", "publicado ahora"):
         return now
-    if "anteayer" in s:
-        return now - 2 * 86_400
-    if "ayer" in s:
-        return now - 86_400
+    if "anteayer" in s:                 # before yesterday began
+        return _day_start(now, 1)
+    if "ayer" in s:                     # before today began
+        return _day_start(now, 0)
 
     n_match = _NUM_RE.search(s)
     if not n_match:
@@ -53,19 +74,18 @@ def parse_relative_date(text: str | None) -> int | None:
         return now - n * 60
     if "hora" in s or " h " in f" {s} " or s.endswith(" h"):
         return now - n * 3_600
-    if "dia" in s:                  # "hace 7 dias"
-        return now - n * 86_400
+    if "dia" in s:                  # "hace 7 dias": more than 6 days old
+        return now - max(n - 1, 0) * _DAY
     if "semana" in s:
-        return now - n * 7 * 86_400
+        return now - n * 7 * _DAY
     if "mes" in s:                  # "hace 2 meses"
-        return now - n * 30 * 86_400
+        return now - n * 30 * _DAY
     if "ano" in s:                  # "hace 1 año" → "hace 1 ano" after strip
-        return now - n * 365 * 86_400
+        return now - n * 365 * _DAY
 
     return None
 
 
-_AR_TZ = timezone(timedelta(hours=-3))
 _MONTHS = {name: i for i, name in enumerate((
     "enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
     "agosto", "septiembre", "octubre", "noviembre", "diciembre"), 1)}

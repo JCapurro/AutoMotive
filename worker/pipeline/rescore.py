@@ -41,7 +41,7 @@ from db.repos import matches as matches_repo
 from db.repos.profiles import profiles_by_ids
 from db.repos.runs import log_error
 from intelligence import margin
-from intelligence.config import DEFAULT_COMPARABLES, DEFAULT_RESCORE, SCORING_VERSION
+from intelligence.config import SCORING_VERSION, comparables_config, rescore_config
 from pipeline.retention import purge_raw_pages, purge_stale_listings
 from pipeline.scoring import Scorer
 from pipeline.risk_duplicates import detect_all as detect_duplicates
@@ -97,11 +97,11 @@ async def rescore_listings(listing_ids: Iterable[int]) -> int:
 
 
 async def rescore_recent(*, outdated_only: bool = False) -> int:
-    cfg = {**DEFAULT_RESCORE, **(await db.get_config("rescore", {}) or {})}
-    comparables = {**DEFAULT_COMPARABLES, **(await db.get_config("comparables", {}) or {})}
+    cfg = rescore_config(await db.get_config("rescore"))
+    comparables = comparables_config(await db.get_config("comparables"))
     ratio = margin.parse_config(await db.get_config("dealer_margin"))["plausible_ratio"]
-    queue = await matches_repo.rescore_queue(days=int(cfg["days"]), scoring_version=SCORING_VERSION,
-                                             min_n=int(comparables["min_n"]), plausible_ratio=ratio,
+    queue = await matches_repo.rescore_queue(days=cfg["days"], scoring_version=SCORING_VERSION,
+                                             min_n=comparables["min_n"], plausible_ratio=ratio,
                                              outdated_only=outdated_only)
     n = await rescore(queue)
     log.info("re-score (%s): %d/%d matches", "outdated" if outdated_only else "nightly", n, len(queue))
@@ -150,8 +150,9 @@ async def nightly_loop(stop: asyncio.Event) -> None:
     except Exception:
         await log_error("rescore", "outdated", traceback.format_exc())
     while not stop.is_set():
-        cfg = {**DEFAULT_RESCORE, **(await db.get_config("rescore", {}) or {})}
-        wait, is_anchor = next_slot(str(cfg["hour"]), int(cfg["every_hours"]), datetime.now(_AR))
+        # rescore_config keeps hour a valid HH:MM: next_slot is outside the try below.
+        cfg = rescore_config(await db.get_config("rescore"))
+        wait, is_anchor = next_slot(cfg["hour"], cfg["every_hours"], datetime.now(_AR))
         try:
             await asyncio.wait_for(stop.wait(), timeout=wait)
             return

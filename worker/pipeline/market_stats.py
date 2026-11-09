@@ -45,6 +45,7 @@ from psycopg.types.json import Jsonb
 
 import db
 from db.repos.runs import log_error
+from intelligence.config import comparables_config
 from normalization.zone import DEFAULT_ZONE_MAP, derive_zone, resolve_region
 from pipeline.market_zones import sync_zones
 from pipeline.retention import purge_market_stats
@@ -389,7 +390,9 @@ async def upsert_rows(stats: list[StatRow], *, weeks: list[date], run_id: int | 
 
 async def _configs() -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     cfg = {**DEFAULT_MARKET_STATS, **(await db.get_config("market_stats", {}) or {})}
-    comparables = await db.get_config("comparables", {}) or {}
+    # Bounded like /admin/config: a bad max_age_days or confirm_grace_hours
+    # falls back to its default (30 days, 36 hours) instead of reaching SQL.
+    comparables = comparables_config(await db.get_config("comparables"))
     zone_map = await db.get_config("market_zones", None) or DEFAULT_ZONE_MAP
     return cfg, comparables, zone_map
 

@@ -1,6 +1,9 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
 import { describe, expect, it } from "vitest";
 
-import { AdminLifecycleInput, AdminOfferInput, AdminPlanLimitsInput, configDifferences, configFieldLabel, DEALER_MARGIN_MESSAGE, LIFECYCLE_KINDS, MAX_OFFER_ARS, sameConfig, SourceUpdateInput, TRIAL_RESERVE_CONFIG_MESSAGE, validateConfigChange, visibleConfigRows, ZONE_NOTICE_CONFIG_MESSAGE } from "@/lib/admin-config";
+import { AdminLifecycleInput, AdminOfferInput, AdminPlanLimitsInput, configDifferences, configFieldLabel, CONFIRM_SOURCES_MESSAGE, DEALER_MARGIN_MESSAGE, LEVEL_THRESHOLDS_ORDER_MESSAGE, LIFECYCLE_KINDS, MAX_OFFER_ARS, RESCORE_EVERY_HOURS_MESSAGE, RESCORE_HOUR_MESSAGE, sameConfig, SCORE_GUARDS_ORDER_MESSAGE, SCORE_MODEL_F3_BOUNDS, SCORE_MODEL_F3_DEFAULTS, SCORE_MODEL_F3_LABELS, SCORE_MODEL_F3_MODES, SCORE_WEIGHTS_ZERO_MESSAGE, ScoreModelF3Input, scoreModelF3Problem, SourceUpdateInput, TRIAL_RESERVE_CONFIG_MESSAGE, validateConfigChange, visibleConfigRows, ZONE_NOTICE_CONFIG_MESSAGE } from "@/lib/admin-config";
 import { DEFAULT_PRO_OFFER } from "@/lib/pro";
 
 describe("guided config validators", () => {
@@ -176,5 +179,253 @@ describe("retired config keys (X-01 notes removed, Juan 02/11)", () => {
   });
   it("refuses to save listing_tracking", () => {
     expect(validateConfigChange("listing_tracking", { note_max_chars: 300 }, { note_max_chars: 500 })).toMatch(/ya no se usa/);
+  });
+});
+
+describe("scoring config bounds (same as worker/intelligence/config.py)", () => {
+  // app_config in production on 09/11/2026: every value must still save.
+  const production = {
+    score_weights: { km: 15, trim: 10, match: 25, price: 35, recency: 10, completeness: 5 },
+    level_thresholds: { good: 70, high: 85, match: 50 },
+    score_curves: {
+      km: { base: 0.5, slope: 1.25 }, trim: { other: 0.2, unknown: 0.5, preferred: 1, no_preference: 1 },
+      match: { unknown_penalty: 0.15 }, price: { base: 0.5, pct_per_unit: 20 },
+      guards: { partial_pct: 65, suspicious_pct: 50 }, recency: { half_life_hours: 24 },
+      completeness: { min_images: 3, min_description_chars: 150 },
+    },
+    comparables: { min_n: 5, year_tol: 1, km_tol_pct: 25, max_age_days: 30, confirm_grace_hours: 36,
+      confirm_sources: ["autocity", "carone", "deruedas", "gruporandazzo", "mardelusados", "rosariogarage", "mercadolibre"] },
+    rescore: { days: 14, hour: "04:00", every_hours: 6 },
+    digest_top_n: 10, price_drop_min_pct: 3, alerts_max_per_user_day: 10,
+  } as Record<string, unknown>;
+  const check = (key: string, value: unknown) => validateConfigChange(key, value, production[key]);
+  const curves = production.score_curves as Record<string, Record<string, unknown>>;
+  const withCurve = (name: string, change: Record<string, unknown>) => ({ ...curves, [name]: { ...curves[name], ...change } });
+
+  it.each(Object.keys(production))("accepts the production %s", (key) => {
+    expect(check(key, production[key])).toBeNull();
+  });
+
+  it("keeps score_weights finite, from 0 to 1000 and not all zero", () => {
+    const weights = production.score_weights as Record<string, number>;
+    expect(check("score_weights", { ...weights, completeness: 0 })).toBeNull();
+    expect(check("score_weights", { price: 100, match: 0, km: 0, trim: 0, recency: 0, completeness: 0 })).toBeNull();
+    expect(check("score_weights", { price: 0 })).toBeNull(); // the others keep their defaults
+    expect(check("score_weights", { price: 0, match: 0, km: 0, trim: 0, recency: 0, completeness: 0 })).toBe(SCORE_WEIGHTS_ZERO_MESSAGE);
+    expect(check("score_weights", { ...weights, price: -1 })).toBe("score_weights.price tiene que ser un número de 0 a 1.000.");
+    for (const price of [1001, "35", null, true]) expect(check("score_weights", { ...weights, price })).toMatch(/^score_weights\.price /);
+    expect(check("score_weights", { ...weights, price: NaN })).toMatch(/números finitos/);
+    expect(check("score_weights", { ...weights, prcie: 40 })).toBe("score_weights no usa prcie; sus claves son price, match, km, trim, recency, completeness.");
+  });
+
+  it("keeps level_thresholds numbers from 0 to 100 with high > good > match", () => {
+    expect(check("level_thresholds", { high: 90, good: 75, match: 55 })).toBeNull();
+    expect(check("level_thresholds", { high: 90 })).toBeNull();
+    expect(check("level_thresholds", { high: "80", good: 70, match: 50 })).toBe("level_thresholds.high tiene que ser un número de 0 a 100.");
+    for (const bad of [{ high: 60, good: 70 }, { high: 60, good: 70, match: 50 }, { high: 70, good: 70, match: 50 }, { match: 70 }]) {
+      expect(check("level_thresholds", bad)).toBe(LEVEL_THRESHOLDS_ORDER_MESSAGE);
+    }
+    expect(check("level_thresholds", { high: 101, good: 70, match: 50 })).toMatch(/^level_thresholds\.high /);
+    expect(check("level_thresholds", { high: 85, good: 70, match: -1 })).toMatch(/^level_thresholds\.match /);
+    expect(check("level_thresholds", { high: 85, good: 70, match: 50, low: 0 })).toMatch(/no usa low/);
+  });
+
+  it("keeps score_curves with positive divisors and values a component can take", () => {
+    expect(check("score_curves", { recency: { half_life_hours: 12 } })).toBeNull();
+    expect(check("score_curves", withCurve("recency", { half_life_hours: 0.5 }))).toBeNull();
+    expect(check("score_curves", withCurve("recency", { half_life_hours: 0 }))).toBe("score_curves.recency.half_life_hours tiene que ser un número mayor que 0 y hasta 720.");
+    expect(check("score_curves", withCurve("price", { pct_per_unit: 0 }))).toBe("score_curves.price.pct_per_unit tiene que ser un número mayor que 0 y hasta 100.");
+    const bad: [string, Record<string, unknown>][] = [
+      ["price", { pct_per_unit: -20 }], ["price", { base: 1.5 }], ["match", { unknown_penalty: -0.1 }],
+      ["km", { slope: -1 }], ["km", { slope: 11 }], ["trim", { preferred: 1.5 }], ["trim", { other: "0.2" }],
+      ["recency", { half_life_hours: 721 }], ["completeness", { min_images: 2.5 }], ["completeness", { min_description_chars: -1 }],
+      ["guards", { partial_pct: 10 }], ["guards", { suspicious_pct: 101 }],
+    ];
+    for (const [name, change] of bad) {
+      const [field] = Object.keys(change);
+      expect(check("score_curves", withCurve(name, change))).toMatch(new RegExp(`^score_curves\\.${name}\\.${field} tiene que ser`));
+    }
+    expect(check("score_curves", withCurve("guards", { suspicious_pct: 70 }))).toBe(SCORE_GUARDS_ORDER_MESSAGE);
+    expect(check("score_curves", { guards: { suspicious_pct: 70 } })).toBe(SCORE_GUARDS_ORDER_MESSAGE); // partial_pct defaults to 65
+    expect(check("score_curves", withCurve("guards", { suspicious_pct: 65 }))).toBeNull();
+    expect(check("score_curves", { ...curves, price: null })).toBe("score_curves.price tiene que ser un objeto.");
+    expect(check("score_curves", { ...curves, prices: {} })).toMatch(/^score_curves no usa prices;/);
+    expect(check("score_curves", withCurve("km", { slpoe: 1 }))).toMatch(/^score_curves\.km no usa slpoe;/);
+  });
+
+  it("keeps comparables whole numbers in sane ranges and lets other keys through", () => {
+    const current = production.comparables as Record<string, unknown>;
+    expect(check("comparables", { ...current, min_n: 1, year_tol: 0, km_tol_pct: 100, max_age_days: 180 })).toBeNull();
+    expect(check("comparables", { ...current, gone_max_age_days: 7 })).toBeNull();
+    expect(check("comparables", { ...current, gone_max_age_days: null })).toBeNull();
+    expect(check("comparables", { ...current, future_key: "x" })).toBeNull();
+    expect(check("comparables", { ...current, min_n: 0 })).toBe("comparables.min_n tiene que ser un entero de 1 a 1.000.");
+    for (const change of [{ min_n: 1.5 }, { min_n: "5" }, { min_n: 1001 }, { year_tol: 1.5 }, { year_tol: 11 },
+      { km_tol_pct: 101 }, { km_tol_pct: 12.5 }, { max_age_days: 0 }, { max_age_days: 181 },
+      { confirm_grace_hours: -1 }, { gone_max_age_days: 0 }, { min_n: null }]) {
+      const [field] = Object.keys(change);
+      expect(check("comparables", { ...current, ...change })).toMatch(new RegExp(`^comparables\\.${field} tiene que ser un entero`));
+    }
+    for (const confirm_sources of ["autocity", ["autocity", 1], [""], null]) {
+      expect(check("comparables", { ...current, confirm_sources })).toBe(CONFIRM_SOURCES_MESSAGE);
+    }
+  });
+
+  it("keeps rescore.hour a valid HH:MM, every_hours a divisor of 24 and days from 1 to 180", () => {
+    expect(check("rescore", { days: 1, hour: "00:00", every_hours: 1 })).toBeNull();
+    expect(check("rescore", { days: 180, hour: "23:59", every_hours: 24 })).toBeNull();
+    expect(check("rescore", { days: 14 })).toBeNull();
+    for (const hour of ["25:00", "24:00", "04:60", "4:00", "4", 400, null]) {
+      expect(check("rescore", { days: 14, hour, every_hours: 6 })).toBe(RESCORE_HOUR_MESSAGE);
+    }
+    for (const every_hours of [1, 2, 3, 4, 6, 8, 12, 24]) expect(check("rescore", { days: 14, hour: "04:00", every_hours })).toBeNull();
+    // Not a divisor of 24: the worker would run it once a day (next_slot).
+    for (const every_hours of [5, 7, 9, 10, 16, 0, 25, 48, 1.5, "6", null]) {
+      expect(check("rescore", { days: 14, hour: "04:00", every_hours })).toBe(RESCORE_EVERY_HOURS_MESSAGE);
+    }
+    expect(check("rescore", { days: 0, hour: "04:00" })).toBe("rescore.days tiene que ser un entero de 1 a 180.");
+    expect(check("rescore", { days: 14, hour: "04:00", every_hour: 6 })).toMatch(/^rescore no usa every_hour;/);
+  });
+
+  it("keeps the alert and digest numbers in range", () => {
+    expect(check("digest_top_n", 1)).toBeNull();
+    expect(check("digest_top_n", 50)).toBeNull();
+    for (const n of [0, 51, 2.5]) expect(check("digest_top_n", n)).toBe("digest_top_n tiene que ser un entero de 1 a 50.");
+    expect(check("price_drop_min_pct", 0)).toBeNull();
+    expect(check("price_drop_min_pct", 0.5)).toBeNull();
+    for (const n of [-1, 101]) expect(check("price_drop_min_pct", n)).toBe("price_drop_min_pct tiene que ser un número de 0 a 100.");
+    expect(check("alerts_max_per_user_day", 0)).toBeNull();
+    for (const n of [-1, 7.5, 2_147_483_648]) {
+      expect(check("alerts_max_per_user_day", n)).toBe("alerts_max_per_user_day tiene que ser un entero de 0 a 2.147.483.647.");
+    }
+    expect(check("alerts_max_per_user_day", "10")).toMatch(/tiene que ser number/); // the shape check, as before
+  });
+});
+
+// f3 «precio × encaje» in shadow (docs/superpowers/specs/2026-11-08-recalibracion-score-design.md §8).
+const REPO = path.resolve(__dirname, "../..");
+const MIGRATION = "supabase/migrations/20261212120000_score_f3_shadow.sql";
+/** The app_config row the migration seeds (kept ONE json literal, as worker/tests/test_f3_migration_defaults.py reads it). */
+function migrationValue(): Record<string, unknown> {
+  const sql = readFileSync(path.join(REPO, MIGRATION), "utf-8");
+  const literal = /values \('score_model_f3', '(\{[\s\S]*?\})'::jsonb\)/.exec(sql)?.[1];
+  if (!literal) throw new Error(`${MIGRATION}: no score_model_f3 json literal`);
+  return JSON.parse(literal) as Record<string, unknown>;
+}
+/** worker/intelligence/config.py, the side this validator mirrors. */
+const WORKER_CONFIG = readFileSync(path.join(REPO, "worker/intelligence/config.py"), "utf-8");
+/** The Python dict literal assigned to `name` (until the closing brace at column 0), as JSON. */
+function pythonDict(name: string): Record<string, unknown> {
+  const block = new RegExp(`^${name}[^=\\n]*= (\\{[\\s\\S]*?\\n\\})`, "m").exec(WORKER_CONFIG)?.[1];
+  if (!block) throw new Error(`worker/intelligence/config.py: ${name} not found; update this test with the worker`);
+  return JSON.parse(block.replace(/\bTrue\b/g, "true").replace(/\bFalse\b/g, "false").replace(/\(([^()]*)\)/g, "[$1]").replace(/,(\s*[}\]])/g, "$1")) as Record<string, unknown>;
+}
+const CURRENT = migrationValue();
+const f3 = (value: unknown) => validateConfigChange("score_model_f3", value, CURRENT);
+
+describe("score_model_f3 (f3 «precio × encaje», shadow)", () => {
+  it("mirrors the worker: defaults, modes, bounds and the whole-count key", () => {
+    expect(pythonDict("DEFAULT_SCORE_MODEL_F3")).toEqual(SCORE_MODEL_F3_DEFAULTS);
+    expect(SCORE_MODEL_F3_DEFAULTS.mode).toBe("off");
+    expect(/^F3_MODES = \(([^)]*)\)/m.exec(WORKER_CONFIG)?.[1].split(",").map((m) => m.trim().replace(/"/g, ""))).toEqual([...SCORE_MODEL_F3_MODES]);
+    expect(pythonDict("F3_BOUNDS")).toEqual(SCORE_MODEL_F3_BOUNDS);
+    expect(/^F3_INTEGERS = frozenset\(\{([^}]*)\}\)/m.exec(WORKER_CONFIG)?.[1].trim()).toBe('("levels", "n_min_high")');
+    // Every tunable key has a bound and a default, and the other way around.
+    for (const group of ["deal", "fit", "levels"] as const) {
+      expect(Object.keys(SCORE_MODEL_F3_BOUNDS[group]).sort()).toEqual(Object.keys(SCORE_MODEL_F3_DEFAULTS[group]).sort());
+    }
+  });
+
+  it("accepts the migration's row, which is the defaults with mode shadow", () => {
+    expect(CURRENT).toEqual({ ...SCORE_MODEL_F3_DEFAULTS, mode: "shadow" });
+    expect(f3(CURRENT)).toBeNull();
+    expect(scoreModelF3Problem(SCORE_MODEL_F3_DEFAULTS)).toBeNull();
+    expect(ScoreModelF3Input.parse(CURRENT)).toEqual(CURRENT); // nothing dropped or added
+  });
+
+  it("accepts the three modes, the rollback and partial values (a missing key keeps its default)", () => {
+    for (const mode of SCORE_MODEL_F3_MODES) expect(f3({ ...CURRENT, mode })).toBeNull();
+    for (const value of [{}, { mode: "off" }, { levels: { c_high: 0.84 } }, { deal: { kavak_offset: 0 } }, { rules: { seller_cap: false } },
+      { mode: "shadow", fit: {}, rules: { agency_voice: false, placeholder: false, pro_deal_d: false } },
+      { deal: { d_floor: 5, d_ceil: 30, d_mult: 1, cred_min: 0, cred_max: 49.9 } }]) {
+      expect(f3(value), JSON.stringify(value)).toBeNull();
+    }
+  });
+
+  it("holds every key inside the worker's bound, ends included (cred_max below 50)", () => {
+    for (const [group, keys] of Object.entries(SCORE_MODEL_F3_BOUNDS)) {
+      for (const [name, [low, high, open]] of Object.entries(keys)) {
+        const ok = (n: number) => ScoreModelF3Input.safeParse({ [group]: { [name]: n } }).success;
+        expect(ok(low), `${group}.${name} = ${low}`).toBe(true);
+        expect(ok(high), `${group}.${name} = ${high}`).toBe(!open);
+        expect(ok(low - 0.01), `${group}.${name} = ${low - 0.01}`).toBe(false);
+        expect(ok(high + 0.01), `${group}.${name} = ${high + 0.01}`).toBe(false);
+        expect(ok(Number.NaN), `${group}.${name} = NaN`).toBe(false);
+      }
+    }
+    expect(f3({ deal: { cred_max: 50 } })).toBe("deal.cred_max tiene que ser un número (sin comillas) desde 20 y menor que 50 (el «sospechoso» de score_curves.guards).");
+    expect(f3({ fit: { unknown_hard: 0.2 } })).toBe("fit.unknown_hard tiene que ser un número (sin comillas) entre 0 y 0,15.");
+    expect(f3({ levels: { low_d: -31 } })).toBe("levels.low_d tiene que ser un número (sin comillas) entre −30 y 0.");
+  });
+
+  it("refuses strings, booleans and null where a number goes (a \"0.82\" would be dropped by the worker)", () => {
+    expect(f3({ ...CURRENT, levels: { ...(CURRENT.levels as object), c_high: "0.82" } })).toBe("levels.c_high tiene que ser un número (sin comillas) entre 0,7 y 0,95.");
+    expect(f3({ deal: { d_mult: true } })).toMatch(/^deal\.d_mult tiene que ser un número/);
+    expect(f3({ fit: { fail: null } })).toMatch(/^fit\.fail tiene que ser un número/);
+    expect(f3({ levels: { c_high: Infinity } })).toMatch(/finitos/);
+  });
+
+  it("keeps n_min_high a whole count from 5 to 100", () => {
+    expect(f3({ levels: { n_min_high: 5 } })).toBeNull();
+    for (const n_min_high of [4, 10.5, 101]) expect(f3({ levels: { n_min_high } })).toBe("levels.n_min_high tiene que ser un entero (sin comillas) entre 5 y 100.");
+  });
+
+  it("refuses a mode that is not off, shadow or live, and rules that are not true/false", () => {
+    for (const mode of ["on", "OFF", "", 1, true, null]) expect(f3({ ...CURRENT, mode })).toBe("mode tiene que ser off, shadow o live.");
+    for (const seller_cap of ["true", 1, null]) expect(f3({ rules: { seller_cap } })).toBe("rules.seller_cap tiene que ser true o false (sin comillas).");
+  });
+
+  it("refuses an unknown key, so a typo can't look applied (the worker ignores it)", () => {
+    expect(f3({ ...CURRENT, levels: { ...(CURRENT.levels as object), c_hihg: 0.84 } })).toBe(
+      "levels no tiene la clave «c_hihg»: revisá cómo está escrita. Sus claves son x_high, y_high, c_high, x_good, y_deal, y_good, y_min, n_min_high, fair_min_d y low_d.");
+    expect(f3({ ...CURRENT, params: "3f2a9c1d07be" })).toBe("score_model_f3 no tiene la clave «params»: revisá cómo está escrita. Sus claves son mode, deal, fit, levels y rules.");
+    expect(f3({ rules: { seller_cap: true, voice: true } })).toMatch(/^rules no tiene la clave «voice»/);
+    expect(f3({ deal: { d_susp: 50 } })).toMatch(/^deal no tiene la clave «d_susp».*kavak_offset\.$/); // f3 reads score_curves.guards.suspicious_pct
+    expect(f3({ deal: 3 })).toBe("deal tiene que ser un objeto con sus claves (d_floor, d_ceil, d_mult, cred_min, cred_max, r_model, r_noyear y kavak_offset).");
+    expect(f3([])).toMatch(/object/); // the generic shape check comes first
+  });
+
+  it("applies the cross-key rules over the defaults, like the worker (which drops the whole group)", () => {
+    expect(f3({ deal: { d_floor: 20, d_ceil: 20 } })).toBe("deal.d_floor tiene que ser menor que deal.d_ceil (los dos entre 5 y 30).");
+    expect(f3({ deal: { d_floor: 25 } })).toMatch(/^deal\.d_floor tiene que ser menor que deal\.d_ceil/); // d_ceil's default is 20
+    expect(f3({ deal: { d_floor: 25, d_ceil: 30 } })).toBeNull();
+    expect(f3({ fit: { fail: 0.8 } })).toBe("fit.fail no puede ser mayor que fit.unknown: una preferencia sin dato nunca pesa menos que una que no se cumple.");
+    expect(f3({ fit: { fail: 0.75 } })).toBeNull();
+    expect(f3({ levels: { x_good: 0.7 } })).toMatch(/^levels\.x_good tiene que ser menor que levels\.x_high/);
+    expect(f3({ levels: { y_deal: 0.7 } })).toMatch(/^levels\.y_deal tiene que ser menor que levels\.y_high/);
+    expect(f3({ levels: { y_good: 0.55, y_min: 0.6 } })).toBe("levels.y_good tiene que ser mayor que levels.y_min.");
+    expect(f3({ levels: { low_d: -2 } })).toBe("levels.low_d tiene que ser menor que levels.fair_min_d.");
+    expect(f3({ levels: { low_d: -3 } })).toBeNull();
+  });
+
+  it("refuses a c_high the combined 🔥 rule can never reach (it would do nothing)", () => {
+    expect(f3({ levels: { x_high: 0.9, y_high: 0.9, c_high: 0.85 } })).toBe(
+      "levels.c_high tiene que ser al menos 0,6·x_high + 0,4·y_high (con estos valores, 0,9); si no, el mínimo combinado de 🔥 no hace nada.");
+    expect(f3({ levels: { x_high: 0.9, y_high: 0.9, c_high: 0.9 } })).toBeNull(); // 0.6·0.9 + 0.4·0.9 is 0.9000000000000001
+    expect(f3({ levels: { x_high: 0.95, y_high: 0.5 } })).toBeNull(); // 0.77 ≤ 0.82
+    expect(f3({ levels: { x_high: 0.95, y_high: 0.95 } })).toMatch(/^levels\.c_high tiene que ser al menos/); // 0.95 > the default 0.82
+  });
+
+  it("names every key in the change preview", () => {
+    const paths = ["mode", ...Object.entries(SCORE_MODEL_F3_BOUNDS).flatMap(([group, keys]) => Object.keys(keys).map((name) => `${group}.${name}`)),
+      ...Object.keys(SCORE_MODEL_F3_DEFAULTS.rules).map((name) => `rules.${name}`)];
+    expect(Object.keys(SCORE_MODEL_F3_LABELS).sort()).toEqual([...paths].sort());
+    for (const p of paths) expect(configFieldLabel("score_model_f3", p)).not.toBe(p);
+    expect(configFieldLabel("score_model_f3", "mode")).toBe("Modo de f3 (off, shadow o live)");
+    expect(configFieldLabel("score_model_f3", "levels.c_high")).toContain("(c_high)");
+    const after = { ...CURRENT, mode: "off", levels: { ...(CURRENT.levels as object), c_high: 0.84 } };
+    expect(configDifferences(CURRENT, after).map((d) => configFieldLabel("score_model_f3", d.path))).toEqual([
+      "Modo de f3 (off, shadow o live)", SCORE_MODEL_F3_LABELS["levels.c_high"],
+    ]);
   });
 });

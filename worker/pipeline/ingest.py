@@ -36,6 +36,7 @@ from db.repos import listings as repo
 from db.repos.catalog import load_models
 from db.repos.fx import quote_for_today
 from db.repos.runs import log_error
+from intelligence.config import config_number
 from normalization.description_facts import PARTIAL_KINDS, DescriptionFacts, resolve_price
 from normalization import not_vehicle
 from normalization.geo import SOURCE_DEFAULT_LOCATIONS, geocode_location
@@ -124,7 +125,7 @@ class IngestConfig:
     async def load(cls) -> "IngestConfig":
         repost = await db.get_config("repost", {}) or {}
         return cls(
-            price_drop_min_pct=float(await db.get_config("price_drop_min_pct", 3)),
+            price_drop_min_pct=float(config_number("price_drop_min_pct", await db.get_config("price_drop_min_pct"))),
             repost_window_days=int(repost.get("window_days", 60)),
             repost_price_tol_pct=float(repost.get("price_tol_pct", 10)),
         )
@@ -256,7 +257,11 @@ def merge(existing: dict[str, Any], incoming: dict[str, Any], *,
                 existing.get(k) == incoming.get(k) for k in ("make", "model")):
             out[col] = existing.get(col)
 
-    out["published_at"] = existing.get("published_at") or incoming.get("published_at")
+    # Never published after it was first seen: a day-level date read on a later
+    # visit ("hoy", "hace 1 día": collectors/_dates.py) leaves first detection.
+    published = existing.get("published_at") or incoming.get("published_at")
+    first_seen = existing.get("first_seen_at")
+    out["published_at"] = min(published, first_seen) if published and first_seen else published
     attrs_old, attrs_new = existing.get("attributes") or {}, incoming.get("attributes") or {}
     out["attributes"] = {**attrs_old, **attrs_new} if authoritative else {**attrs_new, **attrs_old}
     # Merged rows are cars (ingest_rows skips the rest): a listing once taken

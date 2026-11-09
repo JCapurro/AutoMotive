@@ -18,6 +18,7 @@ from llm import build_provider
 from notifications.channels.email import ResendEmailChannel
 from notifications.channels.telegram import TelegramChannel
 from notifications.digest import digest_loop
+from notifications import decision_log
 from notifications.links import Links
 from notifications.ops import SourceAlerts
 from notifications.service import Notifier
@@ -181,6 +182,9 @@ async def amain() -> None:
                                    notifying(refresh_watchlist, notifier), stop)),
         asyncio.create_task(_every("notifications", NOTIFY_TICK_SECONDS,
                                    lambda _stop: notifier.deliver(), stop)),
+        # f3 shadow (spec §4.4): the 'sweeper' rows of the decision log; nothing with score_model_f3 off.
+        asyncio.create_task(_every("decision_sweeper", decision_log.SWEEP_TICK_SECONDS,
+                                   lambda _stop: decision_log.sweep(), stop)),
         asyncio.create_task(_every("product_feedback", NOTIFY_TICK_SECONDS,
                                    lambda _stop: run_product_feedback(notifier.channels.get("email"),links),stop)),
         asyncio.create_task(digest_loop(notifier, stop)),

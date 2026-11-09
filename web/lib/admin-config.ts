@@ -127,6 +127,234 @@ export const ZoneNoticeConfigInput = z.object({ enabled: z.boolean() }).passthro
 export const TRIAL_RESERVE_CONFIG_MESSAGE = "trial_reserve necesita enabled (true/false) y backfill_max (entero de 0 a 1000).";
 export const TrialReserveConfigInput = z.object({ enabled: z.boolean(), backfill_max: z.number().int().min(0).max(1000) }).passthrough();
 
+/**
+ * f3 «precio × encaje» (docs/superpowers/specs/2026-11-08-recalibracion-score-design.md §8):
+ * app_config.score_model_f3, read only by worker/intelligence/f3.py. The same bounds and
+ * cross-key rules as worker/intelligence/config.py score_model_f3 (F3_BOUNDS, _f3_group_ok).
+ * The worker falls back to the default key by key (a group that breaks a cross-key rule as a
+ * whole), so a value it would drop silently is refused here: the admin sees it. Every key is
+ * optional (a missing one keeps its default; a missing mode is 'off') but an unknown key is
+ * refused, so a typo can't look applied. Mode 'off' is the code default; the migration
+ * 20261212120000_score_f3_shadow seeds 'shadow'. 'live' is accepted and, until the live PR,
+ * behaves as 'shadow' (f2 keeps deciding).
+ */
+export const SCORE_MODEL_F3_MODES = ["off", "shadow", "live"] as const;
+export const SCORE_MODEL_F3_DEFAULTS = {
+  mode: "off",
+  deal: { d_floor: 12, d_ceil: 20, d_mult: 2.5, cred_min: 5, cred_max: 35, r_model: 0.9, r_noyear: 0.3, kavak_offset: 9 },
+  fit: { unknown: 0.75, fail: 0.4, trim_other: 0.5, unknown_hard: 0.03, price_target_at_max: 0.6 },
+  levels: { x_high: 0.7, y_high: 0.7, c_high: 0.82, x_good: 0.65, y_deal: 0.45, y_good: 0.85, y_min: 0.3, n_min_high: 10, fair_min_d: -2, low_d: -10 },
+  rules: { seller_cap: true, agency_voice: true, placeholder: true, pro_deal_d: true },
+} as const;
+type F3Group = "deal" | "fit" | "levels";
+/** [low, high, high excluded]: closed intervals except deal.cred_max, [20, 50) (below score_curves.guards.suspicious_pct). */
+type F3Bound = readonly [number, number, boolean];
+export const SCORE_MODEL_F3_BOUNDS: Record<F3Group, Record<string, F3Bound>> = {
+  deal: { d_floor: [5, 30, false], d_ceil: [5, 30, false], d_mult: [1, 4, false], cred_min: [0, 15, false], cred_max: [20, 50, true],
+    r_model: [0.1, 1, false], r_noyear: [0.1, 1, false], kavak_offset: [0, 20, false] },
+  fit: { unknown: [0, 1, false], fail: [0, 1, false], trim_other: [0, 1, false], unknown_hard: [0, 0.15, false], price_target_at_max: [0.3, 1, false] },
+  levels: { x_high: [0.5, 0.95, false], y_high: [0.5, 0.95, false], c_high: [0.7, 0.95, false], x_good: [0.3, 0.95, false],
+    y_deal: [0.1, 0.95, false], y_good: [0.5, 1, false], y_min: [0.1, 0.6, false], n_min_high: [5, 100, false],
+    fair_min_d: [-10, 5, false], low_d: [-30, 0, false] },
+};
+const F3_GROUPS: readonly F3Group[] = ["deal", "fit", "levels"];
+/** levels.n_min_high is a whole count; the worker also lifts it to comparables.min_n. */
+const F3_INTEGERS: ReadonlySet<string> = new Set(["levels.n_min_high"]);
+/** The worker's slack on the combined 🔥 rule (config._EPS), so 0.6·0.9 + 0.4·0.9 still allows c_high 0.9. */
+const F3_EPS = 1e-9;
+
+function f3Number(path: string, [low, high, open]: F3Bound) {
+  const atLeast = z.number().min(low);
+  const bounded = open ? atLeast.lt(high) : atLeast.max(high);
+  return F3_INTEGERS.has(path) ? bounded.int() : bounded;
+}
+function f3Group(group: F3Group) {
+  return z.object(Object.fromEntries(Object.entries(SCORE_MODEL_F3_BOUNDS[group]).map(([name, bound]) => [name, f3Number(`${group}.${name}`, bound).optional()]))).strict();
+}
+export const ScoreModelF3Input = z.object({
+  mode: z.enum(SCORE_MODEL_F3_MODES).optional(),
+  deal: f3Group("deal").optional(),
+  fit: f3Group("fit").optional(),
+  levels: f3Group("levels").optional(),
+  rules: z.object(Object.fromEntries(Object.keys(SCORE_MODEL_F3_DEFAULTS.rules).map((name) => [name, z.boolean().optional()]))).strict().optional(),
+}).strict();
+
+/** «a, b y c». */
+function spanishList(items: readonly string[]): string {
+  return items.length > 1 ? `${items.slice(0, -1).join(", ")} y ${items[items.length - 1]}` : (items[0] ?? "");
+}
+/** A bound as the spec writes it: 0,15 and −10. */
+function f3Figure(n: number): string {
+  return String(Number(n.toFixed(4))).replace(".", ",").replace(/^-/, "−");
+}
+function f3Keys(path: readonly string[]): string[] {
+  const [group] = path;
+  if (!path.length) return Object.keys(SCORE_MODEL_F3_DEFAULTS);
+  return group === "rules" ? Object.keys(SCORE_MODEL_F3_DEFAULTS.rules) : Object.keys(SCORE_MODEL_F3_BOUNDS[group as F3Group] ?? {});
+}
+function f3IssueMessage(issue: z.ZodError["issues"][number]): string {
+  const path = issue.path.map(String);
+  if (issue.code === "unrecognized_keys") {
+    const where = path.length ? path.join(".") : "score_model_f3";
+    const extra = issue.keys.map((name) => `«${name}»`);
+    return `${where} no tiene ${extra.length > 1 ? "las claves" : "la clave"} ${spanishList(extra)}: revisá cómo está escrita. Sus claves son ${spanishList(f3Keys(path))}.`;
+  }
+  const [group, name] = path;
+  if (group === "mode") return "mode tiene que ser off, shadow o live.";
+  if (path.length === 1) return `${group} tiene que ser un objeto con sus claves (${spanishList(f3Keys(path))}).`;
+  if (group === "rules") return `rules.${name} tiene que ser true o false (sin comillas).`;
+  const bound = SCORE_MODEL_F3_BOUNDS[group as F3Group]?.[name];
+  if (!bound) return "Revisá score_model_f3: todas sus claves son números (sin comillas) o true/false.";
+  const [low, high, open] = bound;
+  const what = F3_INTEGERS.has(`${group}.${name}`) ? "un entero" : "un número";
+  // deal.cred_max: f3's «sospechoso» is f2's guard (score_curves.guards.suspicious_pct, 50).
+  const range = open ? `desde ${f3Figure(low)} y menor que ${f3Figure(high)} (el «sospechoso» de score_curves.guards)` : `entre ${f3Figure(low)} y ${f3Figure(high)}`;
+  return `${group}.${name} tiene que ser ${what} (sin comillas) ${range}.`;
+}
+
+/**
+ * Why /admin/config refuses this score_model_f3, in Spanish and naming the key, or null.
+ * Bounds and types first; then the cross-key rules on the value over the defaults, as the
+ * worker checks them (a missing key counts with its default).
+ */
+export function scoreModelF3Problem(value: unknown): string | null {
+  const parsed = ScoreModelF3Input.safeParse(value);
+  if (!parsed.success) return f3IssueMessage(parsed.error.issues[0]);
+  const given = parsed.data;
+  const [deal, fit, levels] = F3_GROUPS.map((group) => ({ ...SCORE_MODEL_F3_DEFAULTS[group], ...given[group] })) as [
+    Record<keyof typeof SCORE_MODEL_F3_DEFAULTS.deal, number>,
+    Record<keyof typeof SCORE_MODEL_F3_DEFAULTS.fit, number>,
+    Record<keyof typeof SCORE_MODEL_F3_DEFAULTS.levels, number>,
+  ];
+  if (!(deal.d_floor < deal.d_ceil)) return "deal.d_floor tiene que ser menor que deal.d_ceil (los dos entre 5 y 30).";
+  if (!(deal.cred_min < deal.cred_max)) return "deal.cred_min tiene que ser menor que deal.cred_max (la banda creíble va de cred_min a cred_max % debajo).";
+  if (!(fit.fail <= fit.unknown)) return "fit.fail no puede ser mayor que fit.unknown: una preferencia sin dato nunca pesa menos que una que no se cumple.";
+  const combined = 0.6 * levels.x_high + 0.4 * levels.y_high;
+  if (!(levels.c_high + F3_EPS >= combined)) {
+    return `levels.c_high tiene que ser al menos 0,6·x_high + 0,4·y_high (con estos valores, ${f3Figure(combined)}); si no, el mínimo combinado de 🔥 no hace nada.`;
+  }
+  if (!(levels.x_good < levels.x_high)) return "levels.x_good tiene que ser menor que levels.x_high (el piso de precio de «buena» queda debajo del de 🔥).";
+  if (!(levels.y_deal < levels.y_high)) return "levels.y_deal tiene que ser menor que levels.y_high (el piso de encaje de «buena» queda debajo del de 🔥).";
+  if (!(levels.y_good > levels.y_min)) return "levels.y_good tiene que ser mayor que levels.y_min.";
+  if (!(levels.low_d < levels.fair_min_d)) return "levels.low_d tiene que ser menor que levels.fair_min_d.";
+  return null;
+}
+
+/**
+ * Bounds of the scoring, re-score and alert keys: the same table as
+ * worker/intelligence/config.py (Bound, _merge), which falls back to the
+ * default key by key. Before them a threshold saved as "80", a 0 divisor or
+ * every weight at 0 broke the scoring of every search within a minute.
+ */
+type NumberBound = { min: number; max: number; integer?: boolean; aboveMin?: boolean };
+const share: NumberBound = { min: 0, max: 1 };
+const whole = (min: number, max: number): NumberBound => ({ min, max, integer: true });
+const SCORE_WEIGHT_DEFAULTS = { price: 35, match: 25, km: 15, trim: 10, recency: 10, completeness: 5 };
+const LEVEL_THRESHOLD_DEFAULTS = { high: 85, good: 70, match: 50 };
+const GUARD_DEFAULTS = { suspicious_pct: 50, partial_pct: 65 };
+const SCORE_WEIGHT_BOUNDS = Object.fromEntries(Object.keys(SCORE_WEIGHT_DEFAULTS).map((k) => [k, { min: 0, max: 1000 }]));
+const LEVEL_THRESHOLD_BOUNDS = Object.fromEntries(Object.keys(LEVEL_THRESHOLD_DEFAULTS).map((k) => [k, { min: 0, max: 100 }]));
+const SCORE_CURVE_BOUNDS: Record<string, Record<string, NumberBound>> = {
+  price: { base: share, pct_per_unit: { min: 0, max: 100, aboveMin: true } },
+  match: { unknown_penalty: share },
+  km: { base: share, slope: { min: 0, max: 10 } },
+  trim: { preferred: share, unknown: share, other: share, no_preference: share },
+  recency: { half_life_hours: { min: 0, max: 720, aboveMin: true } },
+  completeness: { min_description_chars: whole(0, 5000), min_images: whole(0, 50) },
+  // From 25% below the median a price is still a deal, not a down payment.
+  guards: { suspicious_pct: { min: 25, max: 100 }, partial_pct: { min: 25, max: 100 } },
+};
+// public.comparables() casts year_tol, max_age_days and gone_max_age_days to integer.
+const COMPARABLES_BOUNDS = {
+  min_n: whole(1, 1000), year_tol: whole(0, 10), km_tol_pct: whole(0, 100), max_age_days: whole(1, 180),
+  confirm_grace_hours: whole(0, 720), gone_max_age_days: whole(1, 180),
+};
+const RESCORE_BOUNDS = { days: whole(1, 180) };
+// The re-score slots are hour + k · every_hours within the day (worker/pipeline/rescore.py next_slot),
+// so only a divisor of 24 keeps them evenly spaced; the worker runs any other value once a day.
+const RESCORE_EVERY_HOURS = [1, 2, 3, 4, 6, 8, 12, 24];
+// SQL casts alerts_max_per_user_day to integer (immediate_alert_cap): a 7.5 would stop every batch.
+const SCALAR_BOUNDS: Record<string, NumberBound> = {
+  digest_top_n: whole(1, 50), price_drop_min_pct: { min: 0, max: 100 }, alerts_max_per_user_day: whole(0, MAX_CONFIG_INTEGER),
+};
+
+function formatBound(n: number): string {
+  return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+}
+function describeBound(b: NumberBound): string {
+  const kind = b.integer ? "un entero" : "un número";
+  return b.aboveMin ? `${kind} mayor que ${formatBound(b.min)} y hasta ${formatBound(b.max)}` : `${kind} de ${formatBound(b.min)} a ${formatBound(b.max)}`;
+}
+function withinBound(value: unknown, b: NumberBound): boolean {
+  return typeof value === "number" && Number.isFinite(value) && (!b.integer || Number.isInteger(value))
+    && (b.aboveMin ? value > b.min : value >= b.min) && value <= b.max;
+}
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+function unknownKeysProblem(path: string, value: Record<string, unknown>, known: readonly string[]): string | null {
+  const unknown = Object.keys(value).filter((k) => !known.includes(k));
+  return unknown.length ? `${path} no usa ${unknown.join(", ")}; sus claves son ${known.join(", ")}.` : null;
+}
+/** The first field of `value` outside its bound, as a message. Missing fields keep the worker's default. */
+function boundsProblem(path: string, value: Record<string, unknown>, bounds: Record<string, NumberBound>, nullable: readonly string[] = []): string | null {
+  for (const [name, bound] of Object.entries(bounds)) {
+    if (!Object.hasOwn(value, name) || (value[name] === null && nullable.includes(name))) continue;
+    if (!withinBound(value[name], bound)) return `${path}.${name} tiene que ser ${describeBound(bound)}.`;
+  }
+  return null;
+}
+
+export const SCORE_WEIGHTS_ZERO_MESSAGE = "score_weights no puede tener todos los pesos en 0: cada aviso sacaría 0 y nivel bajo (sin la clave: 35, 25, 15, 10, 10 y 5).";
+export const LEVEL_THRESHOLDS_ORDER_MESSAGE = "level_thresholds tiene que cumplir high > good > match (sin la clave: 85, 70 y 50).";
+export const SCORE_GUARDS_ORDER_MESSAGE = "score_curves.guards.suspicious_pct no puede superar partial_pct (sin la clave: 50 y 65).";
+export const RESCORE_HOUR_MESSAGE = "rescore.hour tiene que ser un horario HH:MM entre 00:00 y 23:59 (hora argentina).";
+export const RESCORE_EVERY_HOURS_MESSAGE = "rescore.every_hours tiene que dividir 24: 1, 2, 3, 4, 6, 8, 12 o 24 horas.";
+export const CONFIRM_SOURCES_MESSAGE = "comparables.confirm_sources tiene que ser una lista de ids de fuentes (texto).";
+
+/** score_weights, level_thresholds, score_curves, comparables, rescore and the scalar keys; null for any other key. */
+function scoringConfigProblem(key: string, value: unknown): string | null {
+  if (Object.hasOwn(SCALAR_BOUNDS, key)) return withinBound(value, SCALAR_BOUNDS[key]) ? null : `${key} tiene que ser ${describeBound(SCALAR_BOUNDS[key])}.`;
+  if (!["score_weights", "level_thresholds", "score_curves", "comparables", "rescore"].includes(key)) return null;
+  if (!isPlainObject(value)) return `${key} tiene que ser un objeto.`;
+  if (key === "score_weights") {
+    const problem = unknownKeysProblem(key, value, Object.keys(SCORE_WEIGHT_BOUNDS)) ?? boundsProblem(key, value, SCORE_WEIGHT_BOUNDS);
+    if (problem) return problem;
+    const weights = { ...SCORE_WEIGHT_DEFAULTS, ...value } as Record<string, number>;
+    return Object.values(weights).some((w) => w > 0) ? null : SCORE_WEIGHTS_ZERO_MESSAGE;
+  }
+  if (key === "level_thresholds") {
+    const problem = unknownKeysProblem(key, value, Object.keys(LEVEL_THRESHOLD_BOUNDS)) ?? boundsProblem(key, value, LEVEL_THRESHOLD_BOUNDS);
+    if (problem) return problem;
+    const t = { ...LEVEL_THRESHOLD_DEFAULTS, ...value } as Record<string, number>;
+    return t.high > t.good && t.good > t.match ? null : LEVEL_THRESHOLDS_ORDER_MESSAGE;
+  }
+  if (key === "score_curves") {
+    const unknown = unknownKeysProblem(key, value, Object.keys(SCORE_CURVE_BOUNDS));
+    if (unknown) return unknown;
+    for (const [name, bounds] of Object.entries(SCORE_CURVE_BOUNDS)) {
+      if (!Object.hasOwn(value, name)) continue;
+      const curve = value[name], path = `${key}.${name}`;
+      if (!isPlainObject(curve)) return `${path} tiene que ser un objeto.`;
+      const problem = unknownKeysProblem(path, curve, Object.keys(bounds)) ?? boundsProblem(path, curve, bounds);
+      if (problem) return problem;
+    }
+    const guards = { ...GUARD_DEFAULTS, ...configObject(value.guards) } as Record<string, number>;
+    return guards.suspicious_pct <= guards.partial_pct ? null : SCORE_GUARDS_ORDER_MESSAGE;
+  }
+  if (key === "comparables") {
+    // Other keys pass: the SQL reads more than these (confirm_sources).
+    const problem = boundsProblem(key, value, COMPARABLES_BOUNDS, ["gone_max_age_days"]);
+    if (problem) return problem;
+    const sources = value.confirm_sources;
+    return sources === undefined || (Array.isArray(sources) && sources.length <= 50 && sources.every((s) => typeof s === "string" && s.trim() !== "")) ? null : CONFIRM_SOURCES_MESSAGE;
+  }
+  const problem = unknownKeysProblem(key, value, ["days", "hour", "every_hours"]) ?? boundsProblem(key, value, RESCORE_BOUNDS);
+  if (problem) return problem;
+  if (Object.hasOwn(value, "every_hours") && !RESCORE_EVERY_HOURS.includes(value.every_hours as number)) return RESCORE_EVERY_HOURS_MESSAGE;
+  return !Object.hasOwn(value, "hour") || clock.safeParse(value.hour).success ? null : RESCORE_HOUR_MESSAGE;
+}
+
 export function configObject(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
@@ -175,6 +403,8 @@ export function validateConfigChange(key: string, value: unknown, current: unkno
   if (key === "trial_reserve" && !TrialReserveConfigInput.safeParse(value).success) return TRIAL_RESERVE_CONFIG_MESSAGE;
   // PAR-01: every block with source and as_of, valid ranges and scales (lib/cost-estimator.ts, the parser's own rules).
   if (key === "cost_estimator") return costEstimatorProblem(value);
+  // f3 «precio × encaje» (shadow): the worker's bounds and cross-key rules (worker/intelligence/config.py score_model_f3).
+  if (key === "score_model_f3") return scoreModelF3Problem(value);
   if (key === "risk") {
     // PAR-02: the «Antes de señar» switch and its official links (https only).
     const parsed = RiskConfigInput.safeParse(value);
@@ -195,7 +425,7 @@ export function validateConfigChange(key: string, value: unknown, current: unkno
     const parsed = AdminLifecycleInput.safeParse(value);
     if (!parsed.success) return parsed.error.issues[0]?.message ?? "Revisá los horarios, tipos y topes de emails.";
   }
-  return null;
+  return scoringConfigProblem(key, value);
 }
 
 /** Object key order does not make a setting change. Arrays retain their order. */
@@ -210,6 +440,37 @@ export function sameConfig(a: unknown, b: unknown): boolean {
 }
 
 export type ConfigDifference = { path: string; before: unknown; after: unknown };
+/** score_model_f3 in the change preview: what each key rules (spec §3 and §14 «Parámetros»), with the key. */
+export const SCORE_MODEL_F3_LABELS: Record<string, string> = {
+  mode: "Modo de f3 (off, shadow o live)",
+  "deal.d_floor": "Precio: crédito completo, como mínimo a este % debajo (d_floor)",
+  "deal.d_ceil": "Precio: crédito completo, como máximo a este % debajo (d_ceil)",
+  "deal.d_mult": "Precio: spreads debajo de la mediana para el crédito completo (d_mult)",
+  "deal.cred_min": "Precio: inicio de la banda creíble, % debajo (cred_min)",
+  "deal.cred_max": "Precio: fin de la banda creíble, % debajo (cred_max)",
+  "deal.r_model": "Precio: confiabilidad con comparables del modelo (r_model)",
+  "deal.r_noyear": "Precio: confiabilidad sin año (r_noyear)",
+  "deal.kavak_offset": "Precio: sesgo de Kavak, en puntos (kavak_offset)",
+  "fit.unknown": "Encaje: preferencia sin dato (unknown)",
+  "fit.fail": "Encaje: preferencia que no se cumple (fail)",
+  "fit.trim_other": "Encaje: otra versión que la preferida (trim_other)",
+  "fit.unknown_hard": "Encaje: descuento por filtro sin dato, solo en el score (unknown_hard)",
+  "fit.price_target_at_max": "Encaje: precio ideal superado, en el precio máximo (price_target_at_max)",
+  "levels.x_high": "🔥: piso de precio (x_high)",
+  "levels.y_high": "🔥: piso de encaje (y_high)",
+  "levels.c_high": "🔥: mínimo combinado 0,6·precio + 0,4·encaje e inicio de la banda 85–99 (c_high)",
+  "levels.n_min_high": "🔥: comparables mínimos (n_min_high)",
+  "levels.x_good": "🟢: piso de precio de «buen precio» (x_good)",
+  "levels.y_deal": "🟢: piso de encaje de «buen precio» (y_deal)",
+  "levels.y_good": "🟢: encaje de «coincide, precio en línea» (y_good)",
+  "levels.fair_min_d": "🟢: % debajo mínimo de «precio en línea» (fair_min_d)",
+  "levels.y_min": "🟡: piso de encaje (y_min)",
+  "levels.low_d": "🟡: % debajo mínimo; más caro es ⚪ (low_d)",
+  "rules.seller_cap": "Tope de vendedor: vendedor distinto del pedido, como mucho 🟡",
+  "rules.agency_voice": "Voz de agencia: un particular que escribe como agencia cuenta como agencia para la preferencia",
+  "rules.placeholder": "Precio de relleno (11.111, 1.111.111): como sin precio",
+  "rules.pro_deal_d": "Umbral Pro con el % ajustado de Kavak (pro_deal_d)",
+};
 export function configFieldLabel(key: string, path: string): string {
   if (key === "pro_offer") return ({ version: "Versión de la oferta", "pass_30.amount": "Particular: importe (ARS)", "pass_7.amount": "Particular 7 días: importe (ARS)", "pro_monthly.amount": "Pro: importe (ARS)" } as Record<string, string>)[path] ?? path;
   if (key === "plan_limits") {
@@ -238,6 +499,7 @@ export function configFieldLabel(key: string, path: string): string {
   if (key === "trial_reserve") {
     return ({ enabled: "Reserva de la prueba para autos nuevos", backfill_max: "Máximo de resultados ya publicados" } as Record<string, string>)[path] ?? path;
   }
+  if (key === "score_model_f3") return SCORE_MODEL_F3_LABELS[path] ?? path;
   if (key === "lifecycle_emails") {
     if (path.startsWith("kinds.")) return LIFECYCLE_KINDS[path.slice(6) as keyof typeof LIFECYCLE_KINDS]?.label ?? path;
     return ({ enabled: "Envío de emails del plan", send_from: "Enviar desde (hora argentina)", send_until: "Enviar hasta (hora argentina)", window_hours: "Vigencia del evento (horas)", max_per_day: "Emails del plan por día" } as Record<string, string>)[path] ?? path;
