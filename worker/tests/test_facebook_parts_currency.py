@@ -203,35 +203,49 @@ MATCHED_PARTS_CARS = [
     "Motor: 1.4 Litros Turbo (ecotec), 4 Cilindros, 16 Válvulas D",
 ]
 
-# Scale models and collectibles active in production (09/11/2026), most of
-# them matched to searches as cars, several at level «good».
+# Scale models and collectibles matched to searches as cars in production
+# (09/11/2026), several at level «good»: no year, no mileage, pesos read as
+# dollars. As stored (18218: line breaks in the title).
 TOYS = [
-    "Audi TT Roadster Escala 1/24 Cammarama",
-    "Audi TT Coupé Motormax — Escala 1:18",
-    "AUTO AUDI TT COUPE - WELLY 1 36 (DE COLECCION)",
-    "AUDI TT ROADSTER MAJORETTE - AUTO A ESCALA ( DE COLECCION ) 8 CM",
     "Audi TT Cabriolet con capota \nGris \nEscala 1/87\nMarca HONGWELL",
-    "Auto A Control Remoto Audi TT Silver - Excelente Estado",
-    "Solido 1:43 Peugeot 207 Spider CUP #30 Dino Lunardi 2008. NUEVO",
-    "AUTO HONDA CIVIC CUSTON HOTWHEELS ( DE COLECCION )",
-    "Ford Maverick a escala 1/8",
+    "Audi TT Cabriolet sin capota \nGris \nEscala 1/87\nMarca HONGWELL",
+    "Audi TT Coupé Motormax — Escala 1:18",
+    "Audi TT Roadster Escala 1/24 Cammarama",
     "Ford Maverick Salvat Entrega N° 34 Escala 1:8 Nuevo Cerrado",
-    "FASCICULOS DE FORD MAVERICK,14, 17,18,19,20",
-    "Honda civic Salvat 1:43",
+    "AUTO AUDI TT COUPE - WELLY 1 36 (DE COLECCION)",
+    "AUTO HONDA CIVIC CUSTON HOTWHEELS ( DE COLECCION )",
     "Ford Focus WRC 03 coleccion rally 1/24",
+    "Auto A Control Remoto Audi TT Silver - Excelente Estado",
+    "FASCICULOS DE FORD MAVERICK,14, 17,18,19,20",
+    "Honda civic coleccion rápido y furioso",
     "Ford Focus CLX Autos Inolvidables Argentinos",
+    # Active and unmatched the same day.
+    "AUDI TT ROADSTER MAJORETTE - AUTO A ESCALA ( DE COLECCION ) 8 CM",
+    "Solido 1:43 Peugeot 207 Spider CUP #30 Dino Lunardi 2008. NUEVO",
+    "Ford Maverick a escala 1/8",
+    "Honda civic Salvat 1:43",
 ]
 
-# Cars whose titles share a word or a number with those.
+# Cars with a word a scale model's title has too.
 TOY_CARS = [
-    # Production: a 1.4 typed with a colon (#33752).
-    "Chevrolet prisma 1:4 n ltz ano 2017 línea nueva cuero pantalla de marcha atrás full",
     "Ford Falcon 1978 de colección",
-    "Chevrolet 400 de colección, impecable",
-    "Peugeot 208 Feline VTV hasta 1/24",
-    "Gol Trend 2015 alarma con control remoto",
-    "Honda Civic estilo rápido y furioso",
-    "Toyota Corolla 1.8 XEI 2015",
+    "Ford Falcon de colección, motor sólido",
+    "Peugeot 208 1.6 Allure",
+    # Motormax is a used-car dealer too («Somos Motormax», Mercado Libre).
+    "Peugeot 208 1.6 Allure - Motormax",
+    "Toyota Corolla 1.8 XEI, Motormax financia en 1/24 cuotas",
+    "Peugeot 208 1.6 Allure disponible 1/12",
+    "Fiat Cronos Drive, entrega 1/8",
+    # Real titles: a 1.4 engine written 1:4 (Facebook), a 118i and a 1.8 (vehicle classifieds).
+    "Chevrolet prisma 1:4 n ltz ano 2017 línea nueva cuero pantalla de marcha atrás full con 96mil.kilome",
+    "BMW X1 X 1 18 I sDRIVE",
+    "BMW X1 X 1 18 I sDRIVE - Motormax",
+    "Toyota Corolla XEI PACK 1 8 CVT",
+    "Ford Ka 2012 cierre centralizado a control remoto",
+    "Mitsubishi Eclipse 1997 de colección, réplica rápido y furioso",
+    "Chevrolet Camaro 2010 Hot Wheels edition de colección",
+    "Ideal coleccionistas Ford Falcon Futura",
+    "Peugeot 207 Escapade",
 ]
 
 
@@ -252,15 +266,33 @@ class NotVehicleTests(unittest.TestCase):
         wrong = [(t, not_vehicle.classify(t)) for t in MATCHED_PARTS_CARS if not_vehicle.classify(t)]
         self.assertEqual(wrong, [])
 
-    def test_every_scale_model_in_production_is_not_a_car(self):
+    def test_every_scale_model_matched_in_production_is_not_a_car(self):
         missed = [t for t in TOYS if not_vehicle.classify(t) is None]
         self.assertEqual(missed, [])
 
-    def test_no_car_sharing_their_words_is_a_scale_model(self):
+    def test_no_car_is_a_scale_model(self):
         wrong = [(t, not_vehicle.classify(t)) for t in TOY_CARS if not_vehicle.classify(t)]
         self.assertEqual(wrong, [])
-        # Whole-car evidence still wins, as for a part.
-        self.assertIsNone(not_vehicle.classify("Ford Focus coleccion rally 1/24", year=2004, mileage_km=180_000))
+
+    def test_a_scale_model_says_why(self):
+        self.assertEqual(not_vehicle.classify(TOYS[0]), "título: «escala 1/87»")
+        self.assertEqual(not_vehicle.classify("AUTO AUDI TT COUPE - WELLY 1 36 (DE COLECCION)"),
+                         "título: «welly 1 36»")
+        self.assertEqual(not_vehicle.classify("AUTO HONDA CIVIC CUSTON HOTWHEELS ( DE COLECCION )"),
+                         "título: «hotwheels» y «coleccion»")
+
+    def test_a_scale_model_row_is_flagged_as_stored(self):
+        row = {"source": "facebook", "title": "AUTO AUDI TT COUPE - WELLY 1 36 (DE COLECCION)", "description": None,
+               "year": None, "mileage_km": None, "price": 13_000, "currency": "USD", "attributes": {}}
+        self.assertIsNotNone(not_vehicle.classify_row(row))
+        self.assertIsNone(not_vehicle.classify_row({**row, "source": "mercadolibre"}))
+
+    def test_whole_car_evidence_wins_over_a_scale_model(self):
+        self.assertIsNone(not_vehicle.classify("Ford Focus WRC 03 coleccion rally 1/24", year=2003,
+                                               mileage_km=120_000))
+        self.assertIsNone(not_vehicle.classify("2008 Audi TT Coupé escala 1:18"))
+        self.assertIsNone(not_vehicle.classify("Honda Civic Hot Wheels de colección con 80.000 km"))
+        self.assertIsNone(not_vehicle.classify("Audi TT a escala", "Vendo mi auto, titular"))
 
     def test_the_digest_rows_are_flagged_as_stored(self):
         # As stored: no year or mileage, pesos read as dollars or no price at all.
