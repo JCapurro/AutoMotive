@@ -253,7 +253,11 @@ def merge(existing: dict[str, Any], incoming: dict[str, Any], *,
                 existing.get(k) == incoming.get(k) for k in ("make", "model")):
             out[col] = existing.get(col)
 
-    out["published_at"] = existing.get("published_at") or incoming.get("published_at")
+    # Never published after it was first seen: a day-level date read on a later
+    # visit ("hoy", "hace 1 día": collectors/_dates.py) leaves first detection.
+    published = existing.get("published_at") or incoming.get("published_at")
+    first_seen = existing.get("first_seen_at")
+    out["published_at"] = min(published, first_seen) if published and first_seen else published
     attrs_old, attrs_new = existing.get("attributes") or {}, incoming.get("attributes") or {}
     out["attributes"] = {**attrs_old, **attrs_new} if authoritative else {**attrs_new, **attrs_old}
     # Merged rows are cars (ingest_rows skips the rest): a listing once taken

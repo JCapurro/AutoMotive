@@ -246,7 +246,7 @@ class MercadoLibreWindowTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_today_s_results_are_kept_without_reading_each_ad(self):
         """The ad's page says "hace 1 día" for an ad Mercado Libre lists as published today."""
-        detail = AsyncMock(return_value=NOW - DAY)
+        detail = AsyncMock(return_value=NOW)
         today_url = f"{BASE}/ford/fiesta/_PublishedToday_YES_NoIndex_True"
         with patch.object(ml.MercadoLibreScraper, "_publication_date", detail):
             results, http = await self.search([(today_url, card("3") + card("4"), 200)], page_size=48,
