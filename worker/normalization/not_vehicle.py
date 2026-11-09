@@ -1,9 +1,11 @@
-"""Listings that are not a car: parts, accessories, a car taken apart.
+"""Listings that are not a car: parts, accessories, a car taken apart, a
+scale model.
 
 Facebook Marketplace searches ("peugeot 206") bring back whatever mentions
 the model, and in AR that is mostly parts: «Cremallera Peugeot 206-207-307»,
-«Butacas Ford Ecosport», «Desarme de Chevrolet prisma 2017». Ingested as
-cars they matched searches and, priced in pesos but read as dollars
+«Butacas Ford Ecosport», «Desarme de Chevrolet prisma 2017», and the odd
+scale model: «Audi TT Coupé Motormax — Escala 1:18». Ingested as cars they
+matched searches and, priced in pesos but read as dollars
 (normalization/money.facebook_currency), skewed the comparables.
 
 The rule is conservative on purpose: letting a part through costs one bad
@@ -18,6 +20,12 @@ part only when
   that may be something else («Insignia», «Campana»), only when it names no
   single model year; or the title says «desarme», «autopartes» or
   «repuestos de/para» anywhere, not negated («no es desarme»);
+* or the title says, anywhere, what only a scale model or a toy says: a
+  scale with its word («escala 1/87», «a escala») or next to a model maker
+  («Welly 1 36», «Solido 1:43»), «auto a control remoto», «fascículos»; or
+  «colección» together with a maker only toys have («Hot Wheels»), a bare
+  scale («1/24») or «rápido y furioso», when the title names no single model
+  year. Never «de colección» alone: a classic car is sold «de colección»;
 * and nothing says it is a whole car: the source's own mileage together with
   a year (Facebook only shows «Conducido 112.000 km» on vehicles), a title
   that starts with the year (Facebook's own vehicle titles: «2017 Ford ka
@@ -115,6 +123,34 @@ _EQUIPMENT_START = re.compile(rf"{_LEADS}(?:{'|'.join(_EQUIPMENT)})\b")
 _PART_ANYWHERE = re.compile(r"\b(?:desarmes?|autopartes?|repuestos (?:de|para))\b")
 # «Ford Ka 2012 no es desarme», «no es para repuestos».
 _NEGATED = re.compile(r"\bno (?:es )?(?:(?:un|para|de) )?(?:desarmes?|autopartes?|repuestos?)\b(?: (?:de|para))?")
+# Scale models, toys and collectibles, matched in production (09/11/2026):
+# «Audi TT Cabriolet sin capota Gris Escala 1/87 Marca HONGWELL», «AUTO AUDI
+# TT COUPE - WELLY 1 36 (DE COLECCION)», «FASCICULOS DE FORD MAVERICK,14, 17».
+# Model makers, next to a scale. Not alone: Motormax is also a used-car dealer
+# («Somos Motormax», Mercado Libre) and «sólido» a word.
+_MAKERS = (r"welly", r"maisto", r"motor ?max", r"hot ?wheels?", r"b?burago", r"green ?light", r"minichamps",
+           r"matchbox", r"hongwell", r"cararama", r"cammarama", r"norev", r"auto ?art", r"kyosho", r"majorette",
+           r"kinsmart", r"salvat", r"tamiya", r"revell", r"solido", r"ixo", r"jada")
+# Makers only a toy has: with «colección» (Hot Wheels, not Motormax).
+_TOY_MAKERS = (r"welly", r"maisto", r"hot ?wheels?", r"b?burago", r"greenlight", r"minichamps", r"matchbox",
+               r"hongwell", r"cararama", r"cammarama", r"norev", r"autoart", r"kyosho", r"majorette", r"kinsmart",
+               r"salvat", r"tamiya", r"revell")
+# Scales no car's title writes otherwise. 1:4 («Chevrolet prisma 1:4», a 1.4
+# engine), 1/8 and 1/12 (a date, «disponible 1/12») count only after
+# «escala»; one written with a space («1 18») only next to a maker: «BMW X1
+# X 1 18 I sDRIVE» is a 118i.
+_DENOMINATOR = r"(?:16|18|24|25|32|36|43|50|64|72|76|87)\b"
+_MAKER = rf"(?:{'|'.join(_MAKERS)})"
+_TOY = re.compile(
+    r"\bescala\s*:?\s*1\s*[:/.\s-]\s*\d{1,3}\b|\ba escala\b"
+    rf"|\b{_MAKER}[\s-]*(?:marca\s*)?1\s*[:/\s]\s*{_DENOMINATOR}"
+    rf"|\b1\s*[:/\s]\s*{_DENOMINATOR}[\s-]*(?:marca\s*)?{_MAKER}\b"
+    r"|\b(?:autos?|autitos?|coches?|camionetas?|camion\w*|jeeps?|carros?|vehiculos?) a control remoto\b"
+    r"|\bfasciculos?\b|\bautos inolvidables argentinos\b|\bdie ?cast\b")
+# Enough with «colección», when the title names no single model year.
+_TOY_HINT = re.compile(rf"\b(?:{'|'.join(_TOY_MAKERS)})\b|\b1\s*[:/]\s*{_DENOMINATOR}"
+                       r"|\brapido y furioso\b|\bfast (?:and )?furious\b|\bautos inolvidables\b")
+_COLLECTION = re.compile(r"\bcolecci\w*")
 _YEAR = re.compile(r"(?<![\d/-])(?:19[89]\d|20[0-3]\d)(?![\d/-])")
 _YEAR_RANGE = re.compile(r"(?:19[89]\d|20[0-3]\d)\s*(?:/|-|al|a|hasta)\s*(?:19[89]\d|20[0-3]\d|\d\d)\b")
 
@@ -145,6 +181,16 @@ def part_reason(title: str | None) -> str | None:
     return None
 
 
+def toy_reason(title: str | None) -> str | None:
+    """Why the title names a scale model or a toy, or None."""
+    t = _plain(title)
+    if m := _TOY.search(t):
+        return f"título: «{m.group(0).strip()}»"
+    if (m := _TOY_HINT.search(t)) and (c := _COLLECTION.search(t)) and not _single_year(t):
+        return f"título: «{m.group(0)}» y «{c.group(0)}»"
+    return None
+
+
 def _single_year(t: str) -> bool:
     """Whether the (plain) title names one model year, not a range."""
     return len(_YEAR.findall(t)) == 1 and not _YEAR_RANGE.search(t)
@@ -169,8 +215,8 @@ def car_evidence(title: str | None, description: str | None = None, *,
 def classify(title: str | None, description: str | None = None, *,
              year: int | None = None, mileage_km: int | None = None) -> str | None:
     """The reason a listing is not a car (a part, an accessory, a car taken
-    apart), or None when it may be one."""
-    reason = part_reason(title)
+    apart, a scale model), or None when it may be one."""
+    reason = part_reason(title) or toy_reason(title)
     if reason is None or car_evidence(title, description, year=year, mileage_km=mileage_km):
         return None
     return reason
