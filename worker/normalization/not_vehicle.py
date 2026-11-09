@@ -14,8 +14,9 @@ part only when
   Ecosport», «Kit Embrague Valeo», «Vendo frente de Chevrolet prisma»): car
   titles start with the year, the make or a word like «Oportunidad», never
   with «Faro» or «Puerta»; with a piece of equipment a car's title may lead
-  with too («Caja automática», «Techo solar», «Llantas», «Alarma») only when
-  it names no single model year; or the title says «desarme», «autopartes» or
+  with too («Caja automática», «Techo solar», «Llantas», «Alarma»), or a word
+  that may be something else («Insignia», «Campana»), only when it names no
+  single model year; or the title says «desarme», «autopartes» or
   «repuestos de/para» anywhere, not negated («no es desarme»);
 * and nothing says it is a whole car: the source's own mileage together with
   a year (Facebook only shows «Conducido 112.000 km» on vehicles), a title
@@ -38,45 +39,75 @@ SOURCES = frozenset({"facebook"})
 
 # A part's name, as the first word(s) of a title (accents stripped, lowercase).
 _PARTS = (
-    r"paragolpes?", r"butacas?", r"asientos?", r"cremalleras?", r"caja (?:de )?(?:velocidad|cambio)\w*",
-    r"faros?", r"farol\w*", r"faritos?", r"opticas?", r"lentes?",
+    # «Parqgolpe delantero de Citroën C4».
+    r"par[aq]golpes?", r"parachoques?", r"butacas?", r"asientos?", r"cremalleras?",
+    r"caja (?:de )?(?:velocidad|cambio|fusible|filtr|porta|evapora|completa)\w*",
+    # «Octicas de Peugeot 307».
+    r"faros?", r"farol\w*", r"faritos?", r"o[cp]ticas?", r"lentes?",
     # «Bomba» alone is also slang for a car in great shape («BOMBA Gol Trend»).
     r"bombas? (?:de|nafta|inyector\w*|electrica|hidraulica|combustible|centrifuga)",
     r"burros?(?: de arranque)?", r"tapas?(?: de cilindro\w*)?", r"tableros?", r"puertas?", r"porton\w*",
     r"embragues?", r"espejos?", r"retrovisor\w*",
     r"ciguenal\w*", r"ecu", r"modulos?", r"computadora", r"centralita",
     r"capot\w*", r"capo", r"aleron?\w*", r"suspension\w*", r"amortiguador\w*", r"espirales?",
-    r"puesta (?:a )?punto", r"parrillas?", r"rejillas?", r"molduras?", r"zocalos?", r"guardaplast\w*",
+    r"puesta (?:a )?punto", r"parrillas?", r"rejillas?", r"molduras?", r"zocalos?", r"guardapla\w*",
     r"guardabarros?", r"compresor\w*", r"condensador\w*", r"evaporador\w*", r"radiador\w*",
     r"electroventilador\w*", r"barras?", r"sensor\w*", r"spoiler\w*", r"deflector\w*", r"guias?",
-    r"motor (?:de arranque|limpia\w*|levanta\w*|electroventilador|completo|para|de)",
+    r"motor (?:de arranque|limpia\w*|levanta\w*|electroventilador|completo|para|de|y caja|calefac\w*"
+    r"|forzador\w*|soplador\w*)",
     r"limpiaparabrisas", r"parabrisas", r"lunetas?", r"vidrios?", r"desarmes?", r"volantes?",
     r"radiadores?", r"frentes?", r"trompas?", r"cosas de", r"alternador\w*", r"inyector\w*",
     r"bobinas?", r"semiej\w*", r"homocinetic\w*", r"diferencial\w*", r"cardan\w*",
     r"silenciador\w*", r"catalizador\w*", r"multiple", r"carter\w*", r"culatas?", r"juntas?",
     r"pistones?", r"arbol de levas", r"correas?", r"tensor\w*", r"bujias?",
-    r"discos? de freno", r"pastillas?", r"calipers?", r"mazas?", r"rodamientos?", r"bujes?",
+    r"discos? de freno", r"pastillas?", r"calipers?", r"ma[sz]as?", r"rodamientos?", r"bujes?",
     r"rotulas?", r"parantes?", r"elasticos?", r"tanques?", r"manijas?", r"cerraduras?", r"bocinas?",
     r"parlantes?", r"antenas?", r"cinturon\w*",
     r"palancas?", r"pedaler\w*", r"tapizad\w*", r"tapiceria", r"fundas?", r"alfombras?",
     r"cubre\w*", r"portaequipaje\w*", r"enganches?", r"emblemas?", r"calcos?",
     r"termostato\w*", r"turbocompresor\w*", r"repuestos?", r"autopartes?",
-    r"guardafangos?", r"baul de", r"estribos?", r"barral\w*",
+    r"guardafangos?", r"baul(?:es)?", r"estribos?", r"barral\w*",
+    # Matched as cars in production (11/2026), often with no price or year:
+    # «Comando calefacción Peugeot 207», «Polea Chevrolet Corsa motor 1.4»,
+    # «Depósito de líquido de freno», «Soporte para llaves».
+    r"comandos?", r"poleas?", r"soportes?", r"encendidos?", r"arranques?", r"bielas?", r"caballetes?",
+    r"cables?", r"canos?", r"tubos?", r"mangueras?", r"servo\w*", r"resortes?", r"progresivos?",
+    r"selector\w*", r"pedal(?:es)?", r"teclas?", r"torpedos?", r"consolas?", r"carcasas?", r"ceniceros?",
+    r"viseras?", r"chapon\w*", r"difusor\w*", r"forzador\w*", r"resonador\w*", r"limitador\w*",
+    r"laterale?s?", r"logos?", r"lonas?", r"pomos?", r"tazas?", r"aranas?", r"kits?",
+    r"almas? (?:de )?(?:par[aq]golpes?|parachoques?)", r"bajadas? (?:de )?(?:motor|escape)",
+    r"centros? (?:de )?(?:llantas?|volante)", r"columnas? (?:de )?direccion",
+    r"cuerpos? (?:de )?(?:mariposa|marisopa|acelerador|amortiguador\w*|porta\w*)",
+    r"depositos? (?:de )?(?:agua|liquido|anticongelante|refrigerante|combustible|aceite|expansion"
+    r"|limpia\w*|freno)",
+    r"(?:levanta|alza) ?(?:cristal|vidrio)\w*", r"maquinas? (?:de )?(?:levanta|alza|motor)\w*",
+    r"(?:pata|p4t4)s? (?:de )?(?:motor|caja)", r"rampas? (?:de )?inyec\w*",
+    r"porta ?(?:filtro|ma[sz]a|lampara|fusible|vaso|llave|escalera|equipaje|placa)\w*",
+    r"manual(?:es)? (?:del? )?(?:propietario|usuario|taller|servicio|instrucciones)",
+    # Not «Llave en mano» (a new car's price); «Luz» and «Marco» are names.
+    r"llaves?(?! en mano)",
+    r"luz (?:de |del )?(?:auxiliar|stop|giro|freno|patente|posicion|alta|baja|trasera|delantera|interior"
+    r"|cortesia|cortecia|techo|faro)\w*",
+    r"marcos? (?:de |del )?(?:climatiz|estereo|radio|espejo|optica|faro|puerta|tablero|parrilla|palanca"
+    r"|cromado|consola)\w*",
 )
 # Words a part's title may open with before the part («Vendo frente de...»,
-# «Kit faros auxiliares», «Juego de llantas», «Base Moldura»).
+# «Kit faros auxiliares», «Juego de llantas», «Base Moldura», and Facebook's
+# «Sold · » on a listing that sold).
 _LEAD = (r"vendo", r"venta(?: de)?", r"se vende", r"liquido", r"oferta", r"kit(?: de)?", r"juego(?: de)?",
          r"par(?: de)?", r"set(?: de)?", r"base", r"originale?s?", r"nuevos?", r"nuevas?", r"usados?",
-         r"usadas?", r"repuesto", r"x\d+")
+         r"usadas?", r"repuesto", r"x\d+", r"sold")
 # Equipment a car's own title may open with as well as a part's («Caja
 # automática Peugeot 208 Allure 2020», «Techo solar Jeep Compass Limited 2018»,
-# «Llantas de aleación, Gol Trend 2013 full», «Radio taxi Chevrolet Spin»): a
-# part only when the title names no single model year (a part's names a range,
-# «2008 al 2012», or none).
+# «Llantas de aleación, Gol Trend 2013 full», «Radio taxi Chevrolet Spin»), and
+# words that may be something else («Insignia» is an Opel, «Campana» a town):
+# a part only when the title names no single model year (a part's names a
+# range, «2008 al 2012», or none).
 _EQUIPMENT = (
-    r"caja automatica", r"techo solar", r"llantas?", r"cubiertas?", r"neumaticos?", r"estereos?",
-    r"stereos?", r"pantallas?", r"radios?(?! (?:taxi|llamada|remis))", r"alarmas?", r"airbags?",
-    r"accesorios?",
+    r"cajas?", r"techo solar", r"llantas?", r"ruedas?", r"cubiertas?", r"neumaticos?", r"estereos?",
+    r"e?sterios?", r"stereos?", r"pantallas?", r"displays?", r"radios?(?! (?:taxi|llamada|remis))",
+    r"alarmas?", r"airbags?", r"accesorios?", r"asesorios?", r"luces", r"leds?", r"insignias?",
+    r"campanas?",
 )
 _LEADS = rf"^(?:(?:{'|'.join(_LEAD)})\b[\s,/:-]*){{0,3}}"
 _PART_START = re.compile(rf"{_LEADS}(?:{'|'.join(_PARTS)})\b")

@@ -95,6 +95,114 @@ CARS = [
     ("Ford Ka 2012 no es desarme", 6000, "USD"),
 ]
 
+# Parts matched to searches as cars in production (09/11/2026), several sent in
+# a daily digest as «low» matches; most with no price or year, the others with
+# pesos read as dollars under the ceiling («Comando calefacción Peugeot 207»,
+# USD 40.000). Kept out of PARTS: facebook_currency can't tell those prices.
+MATCHED_PARTS = [
+    "Comando calefacción Peugeot 207",
+    "Comando Climatizador Volkswagen Vento original",
+    "Comando levantavidrios pasajero original Peugeot 208 13/20",
+    "SE VENDE COMANDO DE AIRE FIAT UNO WAY",
+    "Depósito de líquido de freno de Ford Focus 2",
+    "Depósito de agua de limpiaparabrisas Chevrolet onix prisma",
+    "Sold · Encendido de Chevrolet corsa completo con cables",
+    "SOPORTE PARA LLAVES VOLKSWAGEN GOLF GTI 🚗🔑",
+    "Soporte de P4t4 De Motor Ford Focus 1 Diesel Lado Derecho $$$40000!!!",
+    "Polea Chevrolet Corsa motor 1.4",
+    "Vendo polea cigüeñal Chevrolet prisma",
+    "Vendo parqgolpe delantero de chevrolet corsa classic del modelo 2010al2016 generico es",
+    "Alma paragolpe delantero Ford Focus 2 y Ford Kuga 04/13 original",
+    "Caja completa evaporadora de aire acondicionado de Chevrolet Corsa classic 2010",
+    "Caja de Volkswagen Gol",
+    "Caja filtrera de Peugeot 206",
+    "Cuerpo marisopa Chevrolet corsa 1.6",
+    "Pedal de Acelerador Ford Fiesta Kinetic Ecosport 8V219F836AB ID:278",
+    "Pata de motor de Chevrolet onix prisma",
+    "P4t4 De Motor Ford Focus 1 Diesel Lado Derecho $50000!!!",
+    "Torpedo y centro de volante Volkswagen gol trend",
+    "Torpedo y centro de volante Chevrolet tracker sin detalles",
+    "Porta filtro de aire original Chevrolet Corsa",
+    "Porta masa tracero Chevrolet Tracker 13-19",
+    "Portalámpara delantero Peugeot 207.c4.cronos",
+    "Maquina Levanta Cristal Peugeot 207 08/15 3p manual derecha",
+    "Vendo alza cristal eléctrico Volkswagen gol gl,lado izquierdo.",
+    "Tecla Levantavidrios Peugeot 207 #352",
+    "Servo de freno de Ford Focus",
+    "Tubo Retorno A/C Ford Focus 2 C-Max 1.6 TDCi FOMOCO Original 1581992",
+    "Manguera aire acondicionado Peugeot 208",
+    "Cables de bujias para ford fiesta kinetic ecosport kinetic",
+    "Kit Cables + Bujias NGK Chevrolet Prisma Onix 1.4",
+    "Kit precaps Renault Kangoo",
+    "Caños de bomba inyectora diesel volkswagen senda gol Saveiro gacel",
+    "Vendo+columna+dirección+Chevrolet+prisma",
+    "Llave tambor Peugeot 207",
+    "LUZ STOP TRASERA PEUGEOT 207 SEDAN (SOLO SEDAN )",
+    "Led Cree H1 Luz Alta Peugeot 207",
+    "Marco de espejo Chevrolet Corsa",
+    "Motor calefacción original Peugeot 308 408 Citroen C4 lounge",
+    "Motor y caja de Ford fiesta gasoil con papeles",
+    "Octicas+de+Peugeot+307+y+de+Peugeot+208",
+    "GUARDAPLAS DELANTERO DERECHO VOLKSWAGEN  GOL VOYAGE 2012 /15",
+    "Masas delanteras completas Peugeot 207-206 y demás muy buen estado",
+    "Baúl Peugeot 408",
+    "Arranque honda Accord",
+    "Bielas de ford maverick/bronco 2.0 ecoboost",
+    "Vendo araña Chevrolet prisma",
+    "Vendo caballete con leva.chevrolet.prisma",
+    "Chapon cubre carter Peugeot 207",
+    "CARCASA CUBRE VOLANTE PEUGEOT 207 ORIGINAL",
+    "Cenicero de Ford Focus 1 $$$18000!!!",
+    "Centro llanta Ford fiesta Ka original",
+    "CONSOLA ORIGINAL FRENO DE MANO PEUGEOT 207",
+    "Difusor de circulacion aire Ford Focus 1 $$$40000!!!",
+    "Forzador de calefacción Peugeot 207",
+    "Vendo resonador de aire Chevrolet prisma",
+    "Limitador (rienda) Puerta delantera Derecha Chevrolet ONIX/PRISMA ORIGINAL 100% USADO",
+    "lateral derecho peugeot 408 sin zocalo",
+    "Logo Insignia de Peugeot 207 en muy buen estado",
+    "Lona marítima Ford maverick",
+    "Manual de Propietario Original Honda Accord",
+    "Pomo y cofia palanca cambios Volkswagen vento variant golf mk6",
+    "Progresivos nuevos de Peugeot 207/06",
+    "RAMPA DE INYECTORES PARA GAS 5TA GENERACIÓN PEUGEOT 207",
+    "Resortes de suspensión de Renault Kangoo nuevos",
+    "Selectora De Cambios Automática DSG 6v Audi A3/TT Original Nuevo",
+    "Tazas chevrolet corsa",
+    "VISERA DE TABLERO ORIGINAL PEUGEOT 207",
+    "BAJADA MOTOR ESCAPE VOLKSWAGEN VOYAGE GOL TREND FOX SAVEIRO",
+    # Equipment and ambiguous words, with no single model year.
+    "Rueda de auxilio temporal ford fiesta",
+    "Ruedas de Chevrolet Astra",
+    "Sterio chevrolet corsa",
+    "Display Peugeot 207",
+    "Insignia Peugeot 207 grande",
+    "Campana Ford Ecosport kinetic",
+    "Asesorío de Chevrolet Corsa 3 puertas ay todo de interio",
+]
+
+# Cars whose titles name one of those parts, or open with a word they share.
+MATCHED_PARTS_CARS = [
+    "Corsa con paragolpes nuevo",
+    "Chevrolet Corsa Classic 1.4 con comando de climatizador",
+    "Vendo Chevrolet Corsa, polea y distribución nuevas",
+    "Peugeot 207 compact soporte de motor nuevo",
+    "Gol Trend 2015 depósito de agua y mangueras nuevas",
+    "Vendo Peugeot 207 con llave de repuesto",
+    "Llave en mano Peugeot 208 Allure",
+    "Llaves en mano Fiat Cronos Drive",
+    "Rueda de auxilio sin uso, Gol Trend 2014 full",
+    "Caja manual 5ta, Peugeot 208 Active 2019",
+    "Insignia 2.0 turbo 2012 impecable",
+    "Campana: Ford Ka 2016 impecable",
+    "Luz vende su Fiat Palio 1.4",
+    "Marco vende Volkswagen Gol Trend",
+    "Sold · 2018 Toyota Etios",
+    # Real titles of cars in the vehicle classifieds.
+    "Distribución recién hecha en Taller Renault Oficial Carlos Trabucco",
+    "Motor: 1.4 Litros Turbo (ecotec), 4 Cilindros, 16 Válvulas D",
+]
+
 
 class NotVehicleTests(unittest.TestCase):
     def test_every_part_in_production_is_a_part(self):
@@ -104,6 +212,25 @@ class NotVehicleTests(unittest.TestCase):
     def test_no_car_is_a_part(self):
         wrong = [(t, not_vehicle.classify(t)) for t, _, _ in CARS if not_vehicle.classify(t)]
         self.assertEqual(wrong, [])
+
+    def test_every_part_matched_in_production_is_a_part(self):
+        missed = [t for t in MATCHED_PARTS if not_vehicle.classify(t) is None]
+        self.assertEqual(missed, [])
+
+    def test_no_car_naming_those_parts_is_a_part(self):
+        wrong = [(t, not_vehicle.classify(t)) for t in MATCHED_PARTS_CARS if not_vehicle.classify(t)]
+        self.assertEqual(wrong, [])
+
+    def test_the_digest_rows_are_flagged_as_stored(self):
+        # As stored: no year or mileage, pesos read as dollars or no price at all.
+        for title, price in (("Comando calefacción Peugeot 207", 40_000),
+                             ("Depósito de líquido de freno Peugeot/ citroen 208/ c3", 40_000),
+                             ("Polea Chevrolet Corsa motor 1.4", None),
+                             ("Vendo parqgolpe delantero de chevrolet corsa classic del modelo 2010al2016 "
+                              "generico es", None)):
+            row = {"source": "facebook", "title": title, "description": None, "year": None,
+                   "mileage_km": None, "price": price, "currency": "USD" if price else None, "attributes": {}}
+            self.assertIsNotNone(not_vehicle.classify_row(row), title)
 
     def test_equipment_without_a_single_year_is_still_a_part(self):
         for title in ("Llantas Peugeot 206 2008 al 2012", "Radio Peugeot 206", "Caja automatica Peugeot 208",
@@ -118,6 +245,9 @@ class NotVehicleTests(unittest.TestCase):
         self.assertIsNone(not_vehicle.classify("Faro Peugeot 206 con 120.000 km"))
         self.assertIsNone(not_vehicle.classify("Frente impecable 206", "Papeles al día, VTV"))
         self.assertIsNone(not_vehicle.classify("2015 Llantas Peugeot"))
+        self.assertIsNone(not_vehicle.classify("Comando calefacción Peugeot 207", year=2012, mileage_km=150_000))
+        self.assertIsNone(not_vehicle.classify("Polea Chevrolet Corsa", "Vendo mi auto, papeles al día"))
+        self.assertIsNone(not_vehicle.classify("Soporte de motor nuevo, Corsa con 98.000 km"))
         # A year alone is no car: «Faro ... tracker 2025».
         self.assertIsNotNone(not_vehicle.classify("Faro auxiliar led Chevrolet tracker 2025", year=2025))
 
@@ -327,11 +457,12 @@ class MergeReinterpretedCurrencyTests(unittest.TestCase):
 # The ones tools.repair_facebook's dry run of 02/11/2026 would have turned
 # into peso «cars» (or left without a price but still matching): bare «$»,
 # FB_USD_CEILING <= amount < 1.000.000, none of them a part by its title.
+# («Torpedo y centro de volante Chevrolet tracker sin detalles», $ 750.000, was
+# one too; a part by its title since 11/2026, in MATCHED_PARTS.)
 DOUBTFUL = [
     ("Ford ecosport porton trasero", 600_000, "Ford", "EcoSport"),
     ("FORD ECOSPORT 1.4 XLS 2008 ‼️RETÍRALO CON $900.000 Y CUOTAS FIJAS‼️", 900_000, "Ford", "EcoSport"),
     ("Chevrolet Onix tracker 1.0 1.2 tapa de cilindro", 500_000, "Chevrolet", "Onix"),
-    ("Torpedo y centro de volante Chevrolet tracker sin detalles", 750_000, "Chevrolet", "Tracker"),
     ("4 Llantas Ford 16 pulgadas", 800_000, "Ford", None),
     ("TURBO COMPRSOR FORD", 650_000, "Ford", None),
     ("FORD ECOSPORT XLS 1.6 GNC FULL", 990_000, "Ford", "EcoSport"),           # 21327
