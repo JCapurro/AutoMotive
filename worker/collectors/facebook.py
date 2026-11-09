@@ -72,6 +72,37 @@ _CARD_SELECTOR = "a[href*='/marketplace/item/']"
 _NO_RESULTS = ("no se encontraron resultados", "no se encontraron publicaciones",
                "no hay resultados", "no results found", "no listings found")
 
+RESTRICTED = "facebook: search restricted for the account (field_exception)"
+NO_SESSION = "facebook without session"
+
+
+class SearchRestricted(FeedUnconfirmed):
+    """Facebook refused the account's search: the page loads logged in, but
+    its results come back as a server error. From 2026-11-09 03:57 every
+    query search did so while the session stayed logged in, the vehicles
+    page still listed cars, and the same search logged out, from the same
+    VPS, listed 24: the account's searches were restricted, not the IP, and
+    renewing the session wouldn't help. search() then reads it logged out
+    (config.FB_NO_SESSION_FALLBACK)."""
+
+
+# The search results' data embedded in the page, answered with an error.
+_RESTRICTED_RE = re.compile(r'"message":"[^"]*field_exception[^"]*"[^{}]{0,400}?'
+                            r'"path":\["marketplace_search","feed_units"')
+
+
+def search_restricted(html: str) -> bool:
+    """Whether the search page's results came back as Facebook's server error."""
+    return bool(_RESTRICTED_RE.search(html or ""))
+
+
+async def _html(page) -> str:
+    """The page's HTML now, or "" when it can't be read."""
+    try:
+        return await page.content()
+    except Exception:
+        return ""
+
 
 async def _cards(page) -> list[tuple[str, str, str, str | None]]:
     """The item cards on the page now: (href, text, aria-label, img src)."""
@@ -844,7 +875,18 @@ class FacebookMarketplaceScraper(BaseScraper):
                                    "Run: python -m collectors.facebook   to log in once.")
 
         if window := PublicationWindow.from_filters(filters):
-            return await self._search_recent(filters, window)
+            try:
+                return await self._search_recent(filters, window)
+            except SearchRestricted:
+                if not config.FB_NO_SESSION_FALLBACK:
+                    raise
+                log.warning("%s; reading %s without the session", RESTRICTED, self._build_url(filters))
+            try:
+                return await self._search_recent(filters, window, session=False)
+            except FeedUnconfirmed as exc:
+                raise FeedUnconfirmed(f"{RESTRICTED}; {exc}") from exc
+            except Exception as exc:
+                raise RuntimeError(f"{RESTRICTED}; {NO_SESSION}: {type(exc).__name__}: {exc}") from exc
 
         url = self._build_url(filters)
         out: list[Listing] = []
@@ -882,18 +924,21 @@ class FacebookMarketplaceScraper(BaseScraper):
         return out
 
     async def _publication_date(self, ctx, listing: Listing) -> int | None:
+        # Without the session (_search_recent's `session`) a login wall only
+        # fails this page's date: the scan goes on, partial.
+        wall = CollectorBlocked if getattr(self, "_session", True) else RuntimeError
         page = await ctx.new_page()
         try:
             response = await page.goto(listing.url, timeout=45_000, wait_until="domcontentloaded")
             status = response.status if response else 0
             if "/login" in page.url or "checkpoint" in page.url:
-                raise CollectorBlocked("facebook: session expired while reading publication date")
+                raise wall("facebook: session expired while reading publication date")
             if status >= 400 and status != 404:
                 raise RuntimeError(f"facebook date HTTP {status}")
             if status != 404:
                 await page.wait_for_timeout(3_500)
             if "/login" in page.url or "checkpoint" in page.url:
-                raise CollectorBlocked("facebook: session expired while reading publication date")
+                raise wall("facebook: session expired while reading publication date")
             html = await page.content()
             detail = parse_detail(html, listing.url, status)
             if (probe := getattr(self, "_probe", None)) is not None:
@@ -902,10 +947,15 @@ class FacebookMarketplaceScraper(BaseScraper):
         finally:
             await page.close()
 
-    async def _search_recent(self, filters: dict, window: PublicationWindow) -> SearchResults:
+    async def _search_recent(self, filters: dict, window: PublicationWindow, *,
+                             session: bool = True) -> SearchResults:
         """The cards of the window, each dated by the card, a stored listing,
         the search page's own data (FB_FEED_DATES) or its item page, up to
         RECENT_FB_MAX_DATE_FETCHES pages a scan.
+
+        `session` False reads it logged out (search's fallback for
+        SearchRestricted): no cookies loaded or written back, and a login wall
+        is FeedUnconfirmed, never "session expired".
 
         With filters["date_skips"] (the target's date memory) a page already
         read is skipped as collectors/_recency.py says, and results.date_skips
@@ -921,8 +971,10 @@ class FacebookMarketplaceScraper(BaseScraper):
         # undated: pages read without a date (unknown_dates also counts the cards past the cap).
         stalls = scrolls = fetched = skipped = out_of_window = undated = 0
         self._probe = probe = _FeedProbe()
-        loaded = _state_mtime()
-        async with browser_context(storage_state=FB_STORAGE_STATE, native=True) as ctx:
+        self._session = session
+        # Without the session nothing is written back (_keep_session needs loaded).
+        loaded = _state_mtime() if session else None
+        async with browser_context(storage_state=FB_STORAGE_STATE if session else None, native=True) as ctx:
             page = await ctx.new_page()
             probe.listen(page)
             try:
@@ -930,11 +982,15 @@ class FacebookMarketplaceScraper(BaseScraper):
                 await probe.document(response)
                 if response and response.status >= 400:
                     raise RuntimeError(f"facebook search HTTP {response.status}")
-                await _require_session(ctx)
+                if session:
+                    await _require_session(ctx)
                 await page.wait_for_timeout(3_500)
                 reloaded = False
                 while True:
                     if "/login" in page.url or "checkpoint" in page.url:
+                        if not session:
+                            # Not the account's session: nothing to renew.
+                            raise FeedUnconfirmed(f"{NO_SESSION}: login wall")
                         raise CollectorBlocked("facebook: session expired")
                     before = len(seen)
                     # Read each batch before scrolling; older cards may leave the DOM.
@@ -1005,6 +1061,9 @@ class FacebookMarketplaceScraper(BaseScraper):
                     if stalls >= 3:
                         body = _plain(await page.locator("body").inner_text())
                         if not seen and not any(s in body for s in _NO_RESULTS):
+                            if session and search_restricted(await _html(page)):
+                                # No reload: it answers the same, and is one more search for the account.
+                                raise SearchRestricted(RESTRICTED)
                             if not reloaded:
                                 # Often a feed that didn't render: one more load before failing.
                                 reloaded, stalls = True, 0
@@ -1031,7 +1090,7 @@ class FacebookMarketplaceScraper(BaseScraper):
                     raise
                 results.complete, results.reason = False, f"facebook: {type(exc).__name__}: {exc}"
             finally:
-                self._probe = None
+                self._probe, self._session = None, True
                 await probe.close(page)
                 await page.close()
                 await _keep_session(ctx, loaded)
@@ -1040,6 +1099,8 @@ class FacebookMarketplaceScraper(BaseScraper):
                 memory = {i: s for i, s in memory.items() if i in seen}
             results.date_skips = encode_date_skips(memory)
         results.probe = probe.report(known)
+        if not session:
+            results.probe = {**(results.probe or {}), "no_session": 1}
         # How the cards were dated: feed_dates from the search page's data,
         # page_dates from an item page, unknown_dates not at all.
         log.info("facebook publication window: scrolls=%d kept=%d dates_read=%d feed_dates=%d page_dates=%d "
