@@ -6,7 +6,9 @@ from datetime import datetime, timedelta, timezone
 
 from intelligence import copy
 from intelligence.comparables import PriceRef
-from intelligence.config import SCORING_VERSION, IntelligenceConfig
+from intelligence.config import (COMPONENTS, DEFAULT_COMPARABLES, DEFAULT_CURVES, DEFAULT_THRESHOLDS,
+                                 DEFAULT_WEIGHTS, SCORING_VERSION, IntelligenceConfig, comparables_config,
+                                 config_number)
 from intelligence.engine import assess, evaluate
 from intelligence.levels import level_for
 from intelligence.matching import match
@@ -491,6 +493,118 @@ class ConfigTests(unittest.TestCase):
                          .red_flags["much_cheaper_verify_pct"], 35)
         tuned = IntelligenceConfig.from_app_config({"red_flags": {**production, "much_cheaper_verify_pct": 40}})
         self.assertEqual(tuned.red_flags["much_cheaper_verify_pct"], 40)
+
+
+# app_config in production on 09/11/2026: the bounds must keep every value.
+PRODUCTION_SCORING = {
+    "score_weights": {"km": 15, "trim": 10, "match": 25, "price": 35, "recency": 10, "completeness": 5},
+    "level_thresholds": {"good": 70, "high": 85, "match": 50},
+    "score_curves": {
+        "km": {"base": 0.5, "slope": 1.25}, "trim": {"other": 0.2, "unknown": 0.5, "preferred": 1, "no_preference": 1},
+        "match": {"unknown_penalty": 0.15}, "price": {"base": 0.5, "pct_per_unit": 20},
+        "guards": {"partial_pct": 65, "suspicious_pct": 50}, "recency": {"half_life_hours": 24},
+        "completeness": {"min_images": 3, "min_description_chars": 150}},
+    "comparables": {"min_n": 5, "year_tol": 1, "km_tol_pct": 25, "max_age_days": 30, "confirm_grace_hours": 36,
+                    "confirm_sources": ["autocity", "carone", "deruedas", "gruporandazzo", "mardelusados",
+                                        "rosariogarage", "mercadolibre"]},
+}
+
+
+class ConfigBoundsTests(unittest.TestCase):
+    """The scoring keys' bounds, as /admin/config enforces them: a bad value
+    falls back to its default, key by key, and scoring never raises."""
+
+    @staticmethod
+    def cfg(**values) -> IntelligenceConfig:
+        return IntelligenceConfig.from_app_config(values)
+
+    def score(self, cfg: IntelligenceConfig):
+        return evaluate(fiesta_listing(), fiesta_profile(), price_ref=MARKET, cfg=cfg, now=NOW).score
+
+    def test_production_values_are_kept(self):
+        cfg = IntelligenceConfig.from_app_config(PRODUCTION_SCORING)
+        self.assertEqual(cfg.weights, PRODUCTION_SCORING["score_weights"])
+        self.assertEqual(cfg.thresholds, PRODUCTION_SCORING["level_thresholds"])
+        self.assertEqual(cfg.curves, PRODUCTION_SCORING["score_curves"])
+        self.assertEqual(cfg.comparables, PRODUCTION_SCORING["comparables"])
+        self.assertEqual(self.score(cfg).score, self.score(CFG).score)
+
+    def test_a_string_threshold_falls_back_and_scoring_runs(self):
+        # Before: TypeError in level_for on every scoring call.
+        cfg = self.cfg(level_thresholds={"high": "80", "good": 70, "match": 50})
+        self.assertEqual(cfg.thresholds, DEFAULT_THRESHOLDS)
+        self.assertEqual(self.score(cfg).level, self.score(CFG).level)
+
+    def test_thresholds_out_of_order_fall_back_together(self):
+        for bad in ({"high": 60, "good": 70}, {"high": 70, "good": 70, "match": 50}, {"match": 90},
+                    {"high": 101}, {"good": -1}):
+            self.assertEqual(self.cfg(level_thresholds=bad).thresholds, DEFAULT_THRESHOLDS, bad)
+        self.assertEqual(self.cfg(level_thresholds={"high": 90}).thresholds, {"high": 90, "good": 70, "match": 50})
+
+    def test_zero_divisors_fall_back_and_scoring_runs(self):
+        # Before: ZeroDivisionError in price_component and recency_component.
+        cfg = self.cfg(score_curves={"price": {"pct_per_unit": 0}, "recency": {"half_life_hours": 0}})
+        self.assertEqual(cfg.curve("price")["pct_per_unit"], 20)
+        self.assertEqual(cfg.curve("recency")["half_life_hours"], 24)
+        self.assertEqual(self.score(cfg).score, self.score(CFG).score)
+        for divisor in (-5, 101, "20"):
+            self.assertEqual(self.cfg(score_curves={"price": {"pct_per_unit": divisor}}).curve("price")["pct_per_unit"], 20)
+        self.assertEqual(self.cfg(score_curves={"recency": {"half_life_hours": 0.5}}).curve("recency")["half_life_hours"], 0.5)
+
+    def test_all_zero_weights_fall_back_to_the_defaults(self):
+        # Before: every match scored 0, level low.
+        cfg = self.cfg(score_weights={k: 0 for k in COMPONENTS})
+        self.assertEqual(cfg.weights, DEFAULT_WEIGHTS)
+        self.assertEqual(self.score(cfg).score, self.score(CFG).score)
+        self.assertEqual(self.cfg(score_weights={"completeness": 0}).weights, {**DEFAULT_WEIGHTS, "completeness": 0})
+
+    def test_out_of_bounds_values_fall_back_key_by_key(self):
+        cfg = self.cfg(
+            score_weights={"price": -1, "match": "25", "km": 1001, "trim": float("nan"), "recency": True,
+                           "completeness": 7},
+            score_curves={"km": {"base": 0.7, "slope": -1}, "trim": {"preferred": 1.5, "other": 0.3},
+                          "completeness": {"min_images": 2.5, "min_description_chars": 200},
+                          "match": "x", "guards": {"partial_pct": 10}},
+            comparables={"min_n": 0, "year_tol": 1.5, "km_tol_pct": 30, "max_age_days": "30",
+                         "confirm_sources": ["autocity"]},
+        )
+        self.assertEqual(cfg.weights, {**DEFAULT_WEIGHTS, "completeness": 7})
+        self.assertEqual(cfg.curve("km"), {"base": 0.7, "slope": 1.25})
+        self.assertEqual(cfg.curve("trim"), {**DEFAULT_CURVES["trim"], "other": 0.3})
+        self.assertEqual(cfg.curve("completeness"), {"min_description_chars": 200, "min_images": 3})
+        self.assertEqual(cfg.curve("match"), DEFAULT_CURVES["match"])
+        self.assertEqual(cfg.curve("guards"), DEFAULT_CURVES["guards"])
+        self.assertEqual(cfg.comparables, {"min_n": 5, "year_tol": 1, "km_tol_pct": 30, "max_age_days": 30,
+                                           "confirm_sources": ["autocity"]})
+
+    def test_guards_out_of_order_fall_back_together(self):
+        self.assertEqual(self.cfg(score_curves={"guards": {"suspicious_pct": 70}}).curve("guards"),
+                         DEFAULT_CURVES["guards"])
+        # Equal leaves no capped band, which is allowed.
+        self.assertEqual(self.cfg(score_curves={"guards": {"suspicious_pct": 65}}).curve("guards"),
+                         {"suspicious_pct": 65, "partial_pct": 65.0})
+
+    def test_score_curves_that_are_not_an_object_give_the_defaults(self):
+        for bad in ([], "x", 5):
+            self.assertEqual(self.cfg(score_curves=bad).curves, DEFAULT_CURVES)
+
+    def test_comparables_whole_numbers(self):
+        out = comparables_config({"min_n": 6.0, "gone_max_age_days": 0, "confirm_grace_hours": 12})
+        self.assertEqual(out, {**DEFAULT_COMPARABLES, "min_n": 6, "confirm_grace_hours": 12})
+        self.assertIsInstance(out["min_n"], int)
+        self.assertEqual(comparables_config({"min_n": 1000})["min_n"], 1000)
+        self.assertEqual(comparables_config({"min_n": 1001})["min_n"], 5)
+        self.assertEqual(comparables_config(None), DEFAULT_COMPARABLES)
+
+    def test_scalar_keys(self):
+        cases = [("digest_top_n", 20, 20), ("digest_top_n", 0, 10), ("digest_top_n", 51, 10),
+                 ("digest_top_n", 2.5, 10), ("digest_top_n", None, 10),
+                 ("price_drop_min_pct", 0.5, 0.5), ("price_drop_min_pct", 0, 0), ("price_drop_min_pct", -1, 3),
+                 ("price_drop_min_pct", 101, 3), ("price_drop_min_pct", "3", 3),
+                 ("alerts_max_per_user_day", 0, 0), ("alerts_max_per_user_day", 7.5, 10),
+                 ("alerts_max_per_user_day", True, 10), ("alerts_max_per_user_day", -1, 10)]
+        for key, raw, expected in cases:
+            self.assertEqual(config_number(key, raw), expected, (key, raw))
 
 
 if __name__ == "__main__":

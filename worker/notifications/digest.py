@@ -25,6 +25,7 @@ import db
 from db.repos import listings as listings_repo
 from db.repos import notifications as repo
 from db.repos.runs import log_error
+from intelligence.config import config_number
 from notifications.service import (AR, Notifier, _min_n, deliverable, flag_order, payload, price_track_payload,
                                    shows_published_price)
 from pipeline.rescore import seconds_until
@@ -86,7 +87,7 @@ async def run_digest(notifier: Notifier, now: datetime | None = None) -> int:
     """Build today's digests. Returns how many were created (then delivered)."""
     now = now or datetime.now(timezone.utc)
     day = now.astimezone(AR).date().isoformat()
-    top_n = int(await db.get_config("digest_top_n", 10))
+    top_n = int(config_number("digest_top_n", await db.get_config("digest_top_n")))
     min_n = await _min_n()
     order = await flag_order()
     created = 0

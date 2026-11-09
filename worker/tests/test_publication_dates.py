@@ -1,14 +1,19 @@
 """Publication evidence, date precision and exclusion of unrelated dates."""
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 import pytest
 
 from collectors._dates import parse_publication_date, publication_date
 from collectors._http import Page, soup
+from pipeline.ingest import merge
 import test_parsers as fixtures
+from test_body_type import _stored
 
-NOW = int(datetime(2026, 10, 5, 12, tzinfo=timezone.utc).timestamp())
+DAY = 86_400
+ART = timezone(timedelta(hours=-3))
+NOW = int(datetime(2026, 10, 5, 12, tzinfo=timezone.utc).timestamp())      # 09:00 in Argentina
+TODAY_ART = int(datetime(2026, 10, 5, tzinfo=ART).timestamp())
 PUBLISHED = int(datetime(2026, 9, 27, 3, tzinfo=timezone.utc).timestamp())
 
 
@@ -20,12 +25,57 @@ def test_explicit_dates_share_argentine_timezone(value):
         assert parse_publication_date(value) == PUBLISHED
 
 
-@pytest.mark.parametrize("value,seconds", [("Hace 2 horas", 7200), ("Publicado hace 30 minutos", 1800),
-                                         ("3 días", 3 * 86400), ("Anteayer", 2 * 86400),
-                                         ("Publicado hoy", 0)])
-def test_relative_dates(value, seconds):
+@pytest.mark.parametrize("value,seconds", [("Hace 2 horas", 2 * 3600), ("hace 1 hora", 3600),
+                                         ("Hace 23 horas", 23 * 3600), ("Publicado hace 30 minutos", 1800)])
+def test_minutes_and_hours_keep_their_precision(value, seconds):
     with patch("collectors._dates.time.time", return_value=NOW):
         assert parse_publication_date(value) == NOW - seconds
+
+
+@pytest.mark.parametrize("value,expected", [
+    ("Publicado hoy", NOW),
+    # Mercado Libre's page of an ad «Publicados hoy» lists, under a day old.
+    ("Publicado hace 1 día", NOW),
+    ("hace 2 días", NOW - DAY),
+    ("3 días", NOW - 2 * DAY),
+    ("Ayer", TODAY_ART),
+    ("Anteayer", TODAY_ART - DAY),
+])
+def test_day_level_phrases_give_the_latest_instant_they_allow(value, expected):
+    """2026-11-08: "hace 1 día" read as now - 24 h dated every fresh Mercado
+    Libre match a day back (23.9 h at p25-p75), and "hace 2 días" two."""
+    with patch("collectors._dates.time.time", return_value=NOW):
+        assert parse_publication_date(value) == expected
+
+
+def test_yesterday_is_argentina_s_yesterday_not_the_hosts():
+    late = int(datetime(2026, 10, 6, 1, 30, tzinfo=timezone.utc).timestamp())     # 22:30 on 5/10 in Argentina
+    with patch("collectors._dates.time.time", return_value=late):
+        assert parse_publication_date("ayer") == TODAY_ART
+        assert parse_publication_date("hace 1 día") == late
+
+
+def test_mercado_libre_ad_of_today_keeps_its_hour():
+    page = fixtures.html("mercadolibre_detail.html").replace("Publicado hace 7 meses", "Publicado hace 1 día")
+    url = "https://auto.mercadolibre.com.ar/MLA-1675249827-toyota-corolla-cross-18-hev-seg-ecvt-_JM"
+    with patch("collectors._dates.time.time", return_value=NOW):
+        assert fixtures.mercadolibre.parse_detail(page, url).listing.published_at == NOW
+
+
+def test_a_publication_is_never_stored_after_first_detection():
+    seen = datetime(2026, 10, 5, 8, tzinfo=timezone.utc)
+    # Enrichment read "hace 1 día" (now) an hour after the crawl first saw the ad.
+    values, _ = merge(_stored(first_seen_at=seen), _stored(published_at=seen + timedelta(hours=1)), detail=True)
+    assert values["published_at"] == seen
+    older = seen - timedelta(days=3)
+    values, _ = merge(_stored(first_seen_at=seen), _stored(published_at=older), detail=True)
+    assert values["published_at"] == older
+    # Stored after its detection before this rule: pulled back on its next sighting.
+    values, _ = merge(_stored(first_seen_at=seen, published_at=seen + timedelta(hours=5)), _stored(), detail=False)
+    assert values["published_at"] == seen
+    # The first date read still wins over a later reading.
+    values, _ = merge(_stored(first_seen_at=seen, published_at=older), _stored(published_at=seen), detail=True)
+    assert values["published_at"] == older
 
 
 @pytest.mark.parametrize("value", [None, "", "31/02/2026", "2028-01-01", "modelo 2025",

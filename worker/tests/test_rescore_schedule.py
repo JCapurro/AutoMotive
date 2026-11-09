@@ -134,3 +134,73 @@ def test_a_duplicates_error_is_logged_and_the_rescore_runs():
     assert calls == ["duplicates:startup", "duplicates:nightly", "rescore_recent"]
     assert [c.args[:2] for c in log_error.await_args_list] == [
         ("risk_duplicates", "startup"), ("risk_duplicates", "nightly")]
+
+
+# ---------------------------------------------------------------------------
+# app_config.rescore bounds (same as /admin/config): a bad value falls back to
+# its default, key by key, so next_slot always gets a valid HH:MM.
+# ---------------------------------------------------------------------------
+
+import pytest
+
+from intelligence.config import DEFAULT_RESCORE, rescore_config
+
+
+def test_rescore_config_keeps_production():
+    production = {"days": 14, "hour": "04:00", "every_hours": 6}
+    assert rescore_config(production) == production
+    assert rescore_config({"days": 180, "hour": "23:59", "every_hours": 1}) == \
+        {"days": 180, "hour": "23:59", "every_hours": 1}
+
+
+@pytest.mark.parametrize("raw", [None, [], "04:00", {}])
+def test_rescore_config_without_an_object_gives_the_defaults(raw):
+    assert rescore_config(raw) == DEFAULT_RESCORE
+
+
+@pytest.mark.parametrize("hour", ["25:00", "24:00", "04:60", "4:00", "4", "ab:00", "04:00:00", 400, True])
+def test_a_bad_hour_falls_back(hour):
+    assert rescore_config({"hour": hour, "every_hours": 6}) == {**DEFAULT_RESCORE, "every_hours": 6}
+
+
+@pytest.mark.parametrize("every", [0, 25, 1.5, "6", True, -6, 5, 7, 9, 10, 16])
+def test_a_bad_interval_falls_back(every):
+    assert rescore_config({"every_hours": every})["every_hours"] == 24
+
+
+@pytest.mark.parametrize("every", [1, 2, 3, 4, 6, 8, 12, 24])
+def test_every_divisor_of_24_is_kept(every):
+    assert rescore_config({"every_hours": every})["every_hours"] == every
+
+
+@pytest.mark.parametrize("days", [0, 181, "14", 7.5])
+def test_bad_days_fall_back(days):
+    assert rescore_config({"days": days})["days"] == 14
+
+
+@pytest.mark.parametrize("hour", ["04:60", "4", "ab:00"])
+def test_a_bad_hour_does_not_end_the_nightly_loop(hour):
+    # Before: next_slot raised outside the loop's try and the re-score stopped for good.
+    with pytest.raises(ValueError):
+        next_slot(hour, 24, at(10))
+    seen: list[tuple[str, int]] = []
+    stop = asyncio.Event()
+
+    def slot(h, every, now):
+        seen.append((h, every))
+        next_slot(h, every, now)
+        return 0, False
+
+    async def recent():
+        stop.set()
+
+    with patch.object(rescore, "classify_sellers", AsyncMock()), \
+            patch.object(rescore, "detect_duplicates", AsyncMock()), \
+            patch.object(rescore, "rescore_outdated", AsyncMock()), \
+            patch.object(rescore, "rescore_recent", side_effect=recent) as rescored, \
+            patch.object(rescore, "log_error", AsyncMock()), \
+            patch.object(rescore, "next_slot", side_effect=slot), \
+            patch.object(rescore.db, "get_config", AsyncMock(return_value={"hour": hour, "every_hours": 6})):
+        asyncio.run(rescore.nightly_loop(stop))
+    assert seen == [("04:00", 6)]
+    assert rescored.await_count == 1

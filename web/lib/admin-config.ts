@@ -240,6 +240,121 @@ export function scoreModelF3Problem(value: unknown): string | null {
   return null;
 }
 
+/**
+ * Bounds of the scoring, re-score and alert keys: the same table as
+ * worker/intelligence/config.py (Bound, _merge), which falls back to the
+ * default key by key. Before them a threshold saved as "80", a 0 divisor or
+ * every weight at 0 broke the scoring of every search within a minute.
+ */
+type NumberBound = { min: number; max: number; integer?: boolean; aboveMin?: boolean };
+const share: NumberBound = { min: 0, max: 1 };
+const whole = (min: number, max: number): NumberBound => ({ min, max, integer: true });
+const SCORE_WEIGHT_DEFAULTS = { price: 35, match: 25, km: 15, trim: 10, recency: 10, completeness: 5 };
+const LEVEL_THRESHOLD_DEFAULTS = { high: 85, good: 70, match: 50 };
+const GUARD_DEFAULTS = { suspicious_pct: 50, partial_pct: 65 };
+const SCORE_WEIGHT_BOUNDS = Object.fromEntries(Object.keys(SCORE_WEIGHT_DEFAULTS).map((k) => [k, { min: 0, max: 1000 }]));
+const LEVEL_THRESHOLD_BOUNDS = Object.fromEntries(Object.keys(LEVEL_THRESHOLD_DEFAULTS).map((k) => [k, { min: 0, max: 100 }]));
+const SCORE_CURVE_BOUNDS: Record<string, Record<string, NumberBound>> = {
+  price: { base: share, pct_per_unit: { min: 0, max: 100, aboveMin: true } },
+  match: { unknown_penalty: share },
+  km: { base: share, slope: { min: 0, max: 10 } },
+  trim: { preferred: share, unknown: share, other: share, no_preference: share },
+  recency: { half_life_hours: { min: 0, max: 720, aboveMin: true } },
+  completeness: { min_description_chars: whole(0, 5000), min_images: whole(0, 50) },
+  // From 25% below the median a price is still a deal, not a down payment.
+  guards: { suspicious_pct: { min: 25, max: 100 }, partial_pct: { min: 25, max: 100 } },
+};
+// public.comparables() casts year_tol, max_age_days and gone_max_age_days to integer.
+const COMPARABLES_BOUNDS = {
+  min_n: whole(1, 1000), year_tol: whole(0, 10), km_tol_pct: whole(0, 100), max_age_days: whole(1, 180),
+  confirm_grace_hours: whole(0, 720), gone_max_age_days: whole(1, 180),
+};
+const RESCORE_BOUNDS = { days: whole(1, 180) };
+// The re-score slots are hour + k · every_hours within the day (worker/pipeline/rescore.py next_slot),
+// so only a divisor of 24 keeps them evenly spaced; the worker runs any other value once a day.
+const RESCORE_EVERY_HOURS = [1, 2, 3, 4, 6, 8, 12, 24];
+// SQL casts alerts_max_per_user_day to integer (immediate_alert_cap): a 7.5 would stop every batch.
+const SCALAR_BOUNDS: Record<string, NumberBound> = {
+  digest_top_n: whole(1, 50), price_drop_min_pct: { min: 0, max: 100 }, alerts_max_per_user_day: whole(0, MAX_CONFIG_INTEGER),
+};
+
+function formatBound(n: number): string {
+  return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+}
+function describeBound(b: NumberBound): string {
+  const kind = b.integer ? "un entero" : "un número";
+  return b.aboveMin ? `${kind} mayor que ${formatBound(b.min)} y hasta ${formatBound(b.max)}` : `${kind} de ${formatBound(b.min)} a ${formatBound(b.max)}`;
+}
+function withinBound(value: unknown, b: NumberBound): boolean {
+  return typeof value === "number" && Number.isFinite(value) && (!b.integer || Number.isInteger(value))
+    && (b.aboveMin ? value > b.min : value >= b.min) && value <= b.max;
+}
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+function unknownKeysProblem(path: string, value: Record<string, unknown>, known: readonly string[]): string | null {
+  const unknown = Object.keys(value).filter((k) => !known.includes(k));
+  return unknown.length ? `${path} no usa ${unknown.join(", ")}; sus claves son ${known.join(", ")}.` : null;
+}
+/** The first field of `value` outside its bound, as a message. Missing fields keep the worker's default. */
+function boundsProblem(path: string, value: Record<string, unknown>, bounds: Record<string, NumberBound>, nullable: readonly string[] = []): string | null {
+  for (const [name, bound] of Object.entries(bounds)) {
+    if (!Object.hasOwn(value, name) || (value[name] === null && nullable.includes(name))) continue;
+    if (!withinBound(value[name], bound)) return `${path}.${name} tiene que ser ${describeBound(bound)}.`;
+  }
+  return null;
+}
+
+export const SCORE_WEIGHTS_ZERO_MESSAGE = "score_weights no puede tener todos los pesos en 0: cada aviso sacaría 0 y nivel bajo (sin la clave: 35, 25, 15, 10, 10 y 5).";
+export const LEVEL_THRESHOLDS_ORDER_MESSAGE = "level_thresholds tiene que cumplir high > good > match (sin la clave: 85, 70 y 50).";
+export const SCORE_GUARDS_ORDER_MESSAGE = "score_curves.guards.suspicious_pct no puede superar partial_pct (sin la clave: 50 y 65).";
+export const RESCORE_HOUR_MESSAGE = "rescore.hour tiene que ser un horario HH:MM entre 00:00 y 23:59 (hora argentina).";
+export const RESCORE_EVERY_HOURS_MESSAGE = "rescore.every_hours tiene que dividir 24: 1, 2, 3, 4, 6, 8, 12 o 24 horas.";
+export const CONFIRM_SOURCES_MESSAGE = "comparables.confirm_sources tiene que ser una lista de ids de fuentes (texto).";
+
+/** score_weights, level_thresholds, score_curves, comparables, rescore and the scalar keys; null for any other key. */
+function scoringConfigProblem(key: string, value: unknown): string | null {
+  if (Object.hasOwn(SCALAR_BOUNDS, key)) return withinBound(value, SCALAR_BOUNDS[key]) ? null : `${key} tiene que ser ${describeBound(SCALAR_BOUNDS[key])}.`;
+  if (!["score_weights", "level_thresholds", "score_curves", "comparables", "rescore"].includes(key)) return null;
+  if (!isPlainObject(value)) return `${key} tiene que ser un objeto.`;
+  if (key === "score_weights") {
+    const problem = unknownKeysProblem(key, value, Object.keys(SCORE_WEIGHT_BOUNDS)) ?? boundsProblem(key, value, SCORE_WEIGHT_BOUNDS);
+    if (problem) return problem;
+    const weights = { ...SCORE_WEIGHT_DEFAULTS, ...value } as Record<string, number>;
+    return Object.values(weights).some((w) => w > 0) ? null : SCORE_WEIGHTS_ZERO_MESSAGE;
+  }
+  if (key === "level_thresholds") {
+    const problem = unknownKeysProblem(key, value, Object.keys(LEVEL_THRESHOLD_BOUNDS)) ?? boundsProblem(key, value, LEVEL_THRESHOLD_BOUNDS);
+    if (problem) return problem;
+    const t = { ...LEVEL_THRESHOLD_DEFAULTS, ...value } as Record<string, number>;
+    return t.high > t.good && t.good > t.match ? null : LEVEL_THRESHOLDS_ORDER_MESSAGE;
+  }
+  if (key === "score_curves") {
+    const unknown = unknownKeysProblem(key, value, Object.keys(SCORE_CURVE_BOUNDS));
+    if (unknown) return unknown;
+    for (const [name, bounds] of Object.entries(SCORE_CURVE_BOUNDS)) {
+      if (!Object.hasOwn(value, name)) continue;
+      const curve = value[name], path = `${key}.${name}`;
+      if (!isPlainObject(curve)) return `${path} tiene que ser un objeto.`;
+      const problem = unknownKeysProblem(path, curve, Object.keys(bounds)) ?? boundsProblem(path, curve, bounds);
+      if (problem) return problem;
+    }
+    const guards = { ...GUARD_DEFAULTS, ...configObject(value.guards) } as Record<string, number>;
+    return guards.suspicious_pct <= guards.partial_pct ? null : SCORE_GUARDS_ORDER_MESSAGE;
+  }
+  if (key === "comparables") {
+    // Other keys pass: the SQL reads more than these (confirm_sources).
+    const problem = boundsProblem(key, value, COMPARABLES_BOUNDS, ["gone_max_age_days"]);
+    if (problem) return problem;
+    const sources = value.confirm_sources;
+    return sources === undefined || (Array.isArray(sources) && sources.length <= 50 && sources.every((s) => typeof s === "string" && s.trim() !== "")) ? null : CONFIRM_SOURCES_MESSAGE;
+  }
+  const problem = unknownKeysProblem(key, value, ["days", "hour", "every_hours"]) ?? boundsProblem(key, value, RESCORE_BOUNDS);
+  if (problem) return problem;
+  if (Object.hasOwn(value, "every_hours") && !RESCORE_EVERY_HOURS.includes(value.every_hours as number)) return RESCORE_EVERY_HOURS_MESSAGE;
+  return !Object.hasOwn(value, "hour") || clock.safeParse(value.hour).success ? null : RESCORE_HOUR_MESSAGE;
+}
+
 export function configObject(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
@@ -310,7 +425,7 @@ export function validateConfigChange(key: string, value: unknown, current: unkno
     const parsed = AdminLifecycleInput.safeParse(value);
     if (!parsed.success) return parsed.error.issues[0]?.message ?? "Revisá los horarios, tipos y topes de emails.";
   }
-  return null;
+  return scoringConfigProblem(key, value);
 }
 
 /** Object key order does not make a setting change. Arrays retain their order. */

@@ -22,7 +22,6 @@ from db.repos import listings as listings_repo
 from db.repos import notifications as repo
 from intelligence import cost_estimator, margin
 from intelligence import config
-from intelligence.config import DEFAULT_COMPARABLES
 from intelligence import contact_message
 from intelligence.matching import strict_seller_unknown
 from intelligence.guides import GuideIndex, pick as pick_guide
@@ -52,8 +51,10 @@ class MatchCandidate:
 
 
 async def load_rules() -> Rules:
-    return Rules(alerts_max_per_user_day=int(await db.get_config("alerts_max_per_user_day", 10)),
-                 price_drop_min_pct=float(await db.get_config("price_drop_min_pct", 3)))
+    return Rules(alerts_max_per_user_day=int(config.config_number(
+                     "alerts_max_per_user_day", await db.get_config("alerts_max_per_user_day"))),
+                 price_drop_min_pct=float(config.config_number(
+                     "price_drop_min_pct", await db.get_config("price_drop_min_pct"))))
 
 
 def start_of_day(now: datetime) -> datetime:
@@ -237,8 +238,7 @@ async def _guides() -> tuple[GuideIndex, int]:
 
 
 async def _min_n() -> int:
-    cfg = await db.get_config("comparables", {}) or {}
-    return int(cfg.get("min_n", DEFAULT_COMPARABLES["min_n"]))
+    return int(config.comparables_config(await db.get_config("comparables"))["min_n"])
 
 
 # ---------------------------------------------------------------------------
