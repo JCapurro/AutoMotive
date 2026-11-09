@@ -324,6 +324,26 @@ class NotVehicleTests(unittest.TestCase):
         # A year alone is no car: «Faro ... tracker 2025».
         self.assertIsNotNone(not_vehicle.classify("Faro auxiliar led Chevrolet tracker 2025", year=2025))
 
+    def test_zero_km_is_no_mileage(self):
+        # Kept as cars in production (09/11/2026) by «0km» read as a mileage:
+        # a new part says it too.
+        for title in ("Farol trasero izquierdo Chevrolet prisma 0km",
+                      "Depósito de Agua Fiat Mobi Uno Argo Cronos original Mopar 0km 22260",
+                      "Faro Peugeot 206 0 KM", "Paragolpe trasero Ford Ecosport 0 kms"):
+            self.assertIsNotNone(not_vehicle.classify(title), title)
+        self.assertIsNone(not_vehicle.car_evidence("Peugeot 208 0km"))
+        # The zeros of a real mileage still count.
+        for title in ("Faro Peugeot 206 con 140.000 km", "Faro Peugeot 206 100km", "Faro Peugeot 206 10.0 km"):
+            self.assertEqual(not_vehicle.car_evidence(title), "kilometraje en el título", title)
+        # A title that opens with equipment and says «0km» may be a new car, as
+        # one naming a single model year («Caja automática Peugeot 208 Allure 2020»).
+        for title in ("Caja automática Peugeot 208 0km", "Techo solar Jeep Compass 0 km",
+                      "Rueda de auxilio Chevrolet Tracker 0KM"):
+            self.assertIsNone(not_vehicle.classify(title), title)
+        # A new car's own title is no part: «2026 Hyundai hb20 0km», «Toyota Corolla Cross 0km A Patentar».
+        for title in ("2026 Hyundai hb20 0km", "Toyota Corolla Cross 0km A Patentar", "Nuevo Peugeot 208 0km"):
+            self.assertIsNone(not_vehicle.classify(title), title)
+
     def test_rows_only_from_facebook_and_only_with_the_sources_own_mileage(self):
         row = {"source": "facebook", "title": "Puertas peugeot 408", "year": 2015, "mileage_km": 90_000,
                "attributes": {"_description_filled": ["mileage_km"]}}
