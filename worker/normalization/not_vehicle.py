@@ -18,7 +18,8 @@ part only when
   with «Faro» or «Puerta»; with a piece of equipment a car's title may lead
   with too («Caja automática», «Techo solar», «Llantas», «Alarma»), or a word
   that may be something else («Insignia», «Campana»), only when it names no
-  single model year; or the title says «desarme», «autopartes» or
+  single model year and no «0km» (a new car's title may say «Caja automática
+  Peugeot 208 0km»); or the title says «desarme», «autopartes» or
   «repuestos de/para» anywhere, not negated («no es desarme»);
 * or the title says, anywhere, what only a scale model or a toy says: a
   scale with its word («escala 1/87», «a escala») or next to a model maker
@@ -29,9 +30,11 @@ part only when
 * and nothing says it is a whole car: the source's own mileage together with
   a year (Facebook only shows «Conducido 112.000 km» on vehicles), a title
   that starts with the year (Facebook's own vehicle titles: «2017 Ford ka
-  se»), a mileage in the title, or words only a car's seller uses («vendo mi»,
-  «permuto», «titular», «papeles al día», «VTV», «formulario 08», «único
-  dueño», «km reales»), in the title or the description.
+  se»), a mileage in the title (not «0km»: a new part is «0km» too, «Farol
+  trasero izquierdo Chevrolet prisma 0km»), or words only a car's seller
+  uses («vendo mi», «permuto», «titular», «papeles al día», «VTV»,
+  «formulario 08», «único dueño», «km reales»), in the title or the
+  description.
 
 Pure: no I/O.
 """
@@ -159,7 +162,10 @@ _CAR_WORDS = re.compile(
     r"\bvendo mi\b|\bpermut\w*|\btitular\b|\bpapeles al dia\b|\bvtv\b|\bformulario 08\b|\b08 firmado\b"
     r"|\bunico dueno\b|\bkm reales\b|\bkilometros reales\b|\bdueno directo\b")
 _YEAR_FIRST = re.compile(r"^(?:19[89]\d|20[0-3]\d)\s+\S")
-_KM_IN_TITLE = re.compile(r"\b\d[\d.,]*\s*(?:mil\s*)?(?:km|kms|kilometros)\b")
+# A mileage that is all zeros («0km», «0 KM») says new, not driven: a new
+# part says it too. Not the zeros of «140.000 km».
+_KM_IN_TITLE = re.compile(r"\b(?![0.,]+\s*(?:km|kms|kilometros)\b)\d[\d.,]*\s*(?:mil\s*)?(?:km|kms|kilometros)\b")
+_ZERO_KM = re.compile(r"(?<![\d.,])\b0+\s*(?:km|kms|kilometros)\b")
 
 
 def _plain(text: str | None) -> str:
@@ -174,7 +180,7 @@ def part_reason(title: str | None) -> str | None:
     t = _NEGATED.sub(" ", _plain(title)).strip()
     if m := _PART_START.match(t):
         return f"título: «{m.group(0).strip()}»"
-    if (m := _EQUIPMENT_START.match(t)) and not _single_year(t):
+    if (m := _EQUIPMENT_START.match(t)) and not _single_year(t) and not _ZERO_KM.search(t):
         return f"título: «{m.group(0).strip()}»"
     if m := _PART_ANYWHERE.search(t):
         return f"título: «{m.group(0)}»"
