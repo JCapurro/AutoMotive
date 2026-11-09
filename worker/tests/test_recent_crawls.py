@@ -354,6 +354,9 @@ class FacebookPage:
         response.text = AsyncMock(return_value=self.reload_html or "")
         return response
 
+    async def content(self):
+        return self.html or ""
+
     def locator(self, selector):
         if selector == "body":
             return MagicMock(inner_text=AsyncMock(return_value=self.body))
@@ -641,6 +644,112 @@ class FacebookWindowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([l.listing_id for l in results], ['1'])
         self.assertEqual(results.unknown_dates, 1)
         detail.assert_awaited_once()
+
+
+# The search page's own data on the VPS, 2026-11-09 15:08 (ids shortened):
+# the account logged in, its search answered with a server error.
+RESTRICTED_HTML = (
+    '{"data":{"marketplace_search":{"feed_units":{"edges":[],"page_info":null,"session_id":null}}},'
+    '"errors":[{"message":"A server error field_exception occured. Check server logs for details.",'
+    '"severity":"ERROR","mids":["6cdfcb14"],"debug_link":"https:\\/\\/www.meta.com\\/debug\\/?mid=6cdfcb14",'
+    '"path":["marketplace_search","feed_units","edges"]}]}')
+
+
+class FacebookRestrictedSearchTests(unittest.IsolatedAsyncioTestCase):
+    """2026-11-09: the account's searches answered with field_exception while
+    the session stayed logged in; the same search logged out listed cars."""
+
+    async def search(self, *pages, cookies=({"name": "c_user"},)):
+        opened = []
+        pages = list(pages)
+
+        @asynccontextmanager
+        async def context(**kwargs):
+            opened.append(kwargs.get("storage_state"))
+            yield MagicMock(new_page=AsyncMock(return_value=pages.pop(0)),
+                            cookies=AsyncMock(return_value=list(cookies) if kwargs.get("storage_state") else []))
+
+        with patch.object(fb, "browser_context", context), \
+                patch.object(fb.Path, "exists", return_value=True), \
+                patch("collectors._recency.time.time", return_value=NOW):
+            try:
+                return await fb.FacebookMarketplaceScraper().search(
+                    {"marca": "Ford", "modelo": "Fiesta", "publication_days": 30, "publication_until": NOW}), opened
+            finally:
+                self.opened = opened
+
+    def test_the_server_error_is_recognized_only_on_the_search_results(self):
+        self.assertTrue(fb.search_restricted(RESTRICTED_HTML))
+        self.assertFalse(fb.search_restricted('{"oz_www_block_representation_status_codes_temporarily_json":"{}"}'))
+        self.assertFalse(fb.search_restricted(
+            '{"errors":[{"message":"A server error field_exception occured.","path":["viewer","settings"]}]}'))
+        self.assertFalse(fb.search_restricted(""))
+
+    async def test_a_restricted_search_is_read_again_without_the_session(self):
+        restricted = FacebookPage([[]], html=RESTRICTED_HTML)
+        public = FacebookPage([[("1", 2), ("2", 3)]])
+        with patch.object(fb, "_keep_session", AsyncMock(return_value=False)) as kept:
+            (results, opened) = await self.search(restricted, public)
+        self.assertEqual([l.listing_id for l in results], ["1", "2"])
+        self.assertTrue(results.complete)
+        self.assertEqual(opened, [fb.FB_STORAGE_STATE, None])
+        self.assertEqual(restricted.reloads, 0)               # one search less for the account
+        self.assertEqual(results.probe["no_session"], 1)
+        # The logged-out run never writes its cookies over the session.
+        self.assertEqual([c.args[1] for c in kept.await_args_list][1], None)
+        restricted.close.assert_awaited_once()
+        public.close.assert_awaited_once()
+
+    async def test_without_the_fallback_a_restricted_search_fails_as_unconfirmed(self):
+        restricted = FacebookPage([[]], html=RESTRICTED_HTML)
+        with patch.object(fb.config, "FB_NO_SESSION_FALLBACK", False), \
+                self.assertRaisesRegex(fb.SearchRestricted, "search restricted") as caught:
+            await self.search(restricted)
+        self.assertIsInstance(caught.exception, fb.FeedUnconfirmed)
+        self.assertNotIsInstance(caught.exception, fb.CollectorBlocked)
+        self.assertEqual(self.opened, [fb.FB_STORAGE_STATE])
+
+    async def test_a_login_wall_without_the_session_is_not_an_expired_session(self):
+        restricted = FacebookPage([[]], html=RESTRICTED_HTML)
+        walled = FacebookPage([[]], expire_after=1)
+        with self.assertRaisesRegex(fb.FeedUnconfirmed, "search restricted.*login wall") as caught:
+            await self.search(restricted, walled)
+        self.assertNotIsInstance(caught.exception, fb.CollectorBlocked)
+        self.assertNotIn("session expired", str(caught.exception))
+
+    async def test_an_empty_feed_without_the_error_still_reloads_and_never_drops_the_session(self):
+        page = FacebookPage([[]], html='{"data":{"marketplace_search":{"feed_units":{"edges":[]}}}}')
+        with self.assertRaisesRegex(fb.FeedUnconfirmed, "empty feed without"):
+            await self.search(page)
+        self.assertEqual(page.reloads, 1)
+        self.assertEqual(self.opened, [fb.FB_STORAGE_STATE])
+
+    async def test_an_item_page_s_login_wall_without_the_session_only_fails_its_date(self):
+        restricted = FacebookPage([[]], html=RESTRICTED_HTML)
+        public = FacebookPage([[("1", None)]])
+        item = MagicMock(url="https://www.facebook.com/login/?next=x", close=AsyncMock(),
+                         goto=AsyncMock(return_value=MagicMock(status=200)), wait_for_timeout=AsyncMock())
+        public_ctx_pages = [public, item]
+
+        @asynccontextmanager
+        async def context(**kwargs):
+            if kwargs.get("storage_state"):
+                yield MagicMock(new_page=AsyncMock(return_value=restricted),
+                                cookies=AsyncMock(return_value=[{"name": "c_user"}]))
+            else:
+                yield MagicMock(new_page=AsyncMock(side_effect=lambda: public_ctx_pages.pop(0)),
+                                cookies=AsyncMock(return_value=[]))
+
+        with patch.object(fb, "browser_context", context), \
+                patch.object(fb.Path, "exists", return_value=True), \
+                patch.object(fb.config, "RECENT_FB_DETAIL_SECONDS", 0), \
+                patch.object(fb.config, "FB_FEED_DATES", False), \
+                patch("collectors._recency.time.time", return_value=NOW):
+            results = await fb.FacebookMarketplaceScraper().search(
+                {"marca": "Ford", "modelo": "Fiesta", "publication_days": 30, "publication_until": NOW})
+        self.assertFalse(results.complete)
+        self.assertIn("date fetch failed: RuntimeError", results.reason)
+        self.assertEqual(list(results), [])
 
 
 class FeedProbeTests(unittest.TestCase):
