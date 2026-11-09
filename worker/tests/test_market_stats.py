@@ -3,6 +3,7 @@ flat rows made up by hand. No database."""
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import io
 import threading
 import unittest
@@ -443,6 +444,64 @@ class CliTests(unittest.IsolatedAsyncioTestCase):
                                               "report": None})
         self.assertEqual(code, 2)
         self.assertIn("la semana 2026-W30 es anterior", out)
+
+
+class ComparablesBoundsTests(unittest.IsolatedAsyncioTestCase):
+    """app_config.comparables with the /admin/config bounds (intelligence/config.py
+    comparables_config): a bad max_age_days or confirm_grace_hours never reaches SQL."""
+    PRODUCTION = {"min_n": 5, "year_tol": 1, "km_tol_pct": 25, "max_age_days": 30, "confirm_grace_hours": 36,
+                  "confirm_sources": ["autocity", "carone", "deruedas", "gruporandazzo", "mardelusados",
+                                      "rosariogarage", "mercadolibre"]}
+
+    async def configs(self, comparables):
+        values = {"comparables": comparables}
+        with patch.object(ms.db, "get_config", AsyncMock(side_effect=lambda key, default=None: values.get(key, default))):
+            return await ms._configs()
+
+    async def fetch_params(self, comparables) -> dict:
+        seen: dict = {}
+
+        class Cx:
+            async def execute(self, sql, params):
+                seen.update(params)
+                return AsyncMock(fetchall=AsyncMock(return_value=[]))
+
+        @contextlib.asynccontextmanager
+        async def connection():
+            yield Cx()
+
+        with patch.object(ms.db, "connection", connection):
+            await ms.fetch_rows(WEEK, comparables)
+        return seen
+
+    async def test_production_values_are_kept(self):
+        _, comparables, _ = await self.configs(self.PRODUCTION)
+        self.assertEqual(comparables, self.PRODUCTION)
+        params = await self.fetch_params(comparables)
+        self.assertEqual(params["grace"], 36)
+        self.assertEqual(params["since"], START - timedelta(days=30))
+        self.assertEqual(params["confirm"].obj, self.PRODUCTION["confirm_sources"])
+
+    async def test_bad_values_fall_back_to_their_defaults(self):
+        for max_age_days, grace in (("30", -1), (0, 12.5), (1.5, "36"), (181, 721), (None, None)):
+            _, comparables, _ = await self.configs({**self.PRODUCTION, "max_age_days": max_age_days,
+                                                    "confirm_grace_hours": grace})
+            self.assertEqual(comparables["max_age_days"], 30, max_age_days)
+            self.assertNotIn("confirm_grace_hours", comparables)
+            params = await self.fetch_params(comparables)
+            self.assertEqual((params["grace"], params["since"]), (36, START - timedelta(days=30)))
+            self.assertEqual(params["confirm"].obj, self.PRODUCTION["confirm_sources"])
+
+    async def test_valid_values_within_the_bounds_are_used(self):
+        _, comparables, _ = await self.configs({"max_age_days": 180, "confirm_grace_hours": 0})
+        params = await self.fetch_params(comparables)
+        self.assertEqual((params["grace"], params["since"]), (0, START - timedelta(days=180)))
+
+    async def test_a_missing_or_bad_key_gives_the_defaults(self):
+        for raw in (None, [], "x"):
+            _, comparables, _ = await self.configs(raw)
+            self.assertEqual(comparables["max_age_days"], 30)
+            self.assertEqual((await self.fetch_params(comparables))["confirm"].obj, [])
 
 
 if __name__ == "__main__":
