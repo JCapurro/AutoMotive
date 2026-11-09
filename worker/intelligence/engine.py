@@ -5,6 +5,11 @@
 None means no match: a hard filter failed, or the price is a down payment
 (price_partial or the ≥65% guard). The pipeline (pipeline/scoring.py) does
 the I/O around it: loads rows, comparables and config, writes `matches`.
+
+f3 in shadow (intelligence/f3.py): for a match, and only while
+app_config.score_model_f3.mode is 'shadow' (or 'live'), f3 is computed after
+f2 is complete and stored as score_breakdown.shadow_f3. Nothing of f2 reads
+it, and an f3 failure leaves the evaluation exactly as without it.
 """
 from __future__ import annotations
 
@@ -12,6 +17,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Mapping
 
+from intelligence import f3
 from intelligence.comparables import PriceRef
 from intelligence.config import SCORING_VERSION, IntelligenceConfig
 from intelligence.matching import MatchResult, evaluate as evaluate_filters
@@ -35,6 +41,8 @@ class Evaluation:
     margin_ref: dict[str, Any] | None = None
     # PAR-04: where each question of `questions` came from (matches.question_origins).
     question_origins: list[dict[str, Any]] = field(default_factory=list)
+    # f3 in shadow: f3.shadow()'s JSON, or None (mode off, no match, or f3 failed).
+    shadow_f3: dict[str, Any] | None = None
 
     @property
     def level(self) -> str:
@@ -42,10 +50,13 @@ class Evaluation:
 
     def row(self) -> dict[str, Any]:
         """The columns of `matches` this evaluation fills."""
+        breakdown = self.score.breakdown()
+        if self.shadow_f3 is not None:
+            breakdown["shadow_f3"] = self.shadow_f3
         return {
             "score": self.score.score,
             "level": self.score.level,
-            "score_breakdown": self.score.breakdown(),
+            "score_breakdown": breakdown,
             "match_reasons": self.match.to_json(),
             "price_ref": self.price_ref.to_json() if self.price_ref else None,
             "red_flags": [f.to_json() for f in self.red_flags],
@@ -71,8 +82,11 @@ def assess(listing: Mapping[str, Any], profile: Mapping[str, Any], *,
     questions = " ".join(q.text for q in items)
     # question_texts: the specific ones, without the questions every seller gets.
     contact = [q.text for q in items if q.key not in GENERIC_KEYS][:3]
+    # f3 after f2 is complete, for f2's matches only (f3's exclusion is f2's); never raises.
+    shadow = (f3.shadow(listing, profile, result, price_ref, s, cfg, fx_rate=fx_rate)
+              if result.is_match and not s.excluded else None)
     return result, s, Evaluation(result, s, price_ref, flags, questions, contact_questions=contact,
-                                 question_origins=[q.origin_json() for q in items])
+                                 question_origins=[q.origin_json() for q in items], shadow_f3=shadow)
 
 
 def evaluate(listing: Mapping[str, Any], profile: Mapping[str, Any], *,

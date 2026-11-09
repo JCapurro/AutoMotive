@@ -128,6 +128,119 @@ export const TRIAL_RESERVE_CONFIG_MESSAGE = "trial_reserve necesita enabled (tru
 export const TrialReserveConfigInput = z.object({ enabled: z.boolean(), backfill_max: z.number().int().min(0).max(1000) }).passthrough();
 
 /**
+ * f3 «precio × encaje» (docs/superpowers/specs/2026-11-08-recalibracion-score-design.md §8):
+ * app_config.score_model_f3, read only by worker/intelligence/f3.py. The same bounds and
+ * cross-key rules as worker/intelligence/config.py score_model_f3 (F3_BOUNDS, _f3_group_ok).
+ * The worker falls back to the default key by key (a group that breaks a cross-key rule as a
+ * whole), so a value it would drop silently is refused here: the admin sees it. Every key is
+ * optional (a missing one keeps its default; a missing mode is 'off') but an unknown key is
+ * refused, so a typo can't look applied. Mode 'off' is the code default; the migration
+ * 20261212120000_score_f3_shadow seeds 'shadow'. 'live' is accepted and, until the live PR,
+ * behaves as 'shadow' (f2 keeps deciding).
+ */
+export const SCORE_MODEL_F3_MODES = ["off", "shadow", "live"] as const;
+export const SCORE_MODEL_F3_DEFAULTS = {
+  mode: "off",
+  deal: { d_floor: 12, d_ceil: 20, d_mult: 2.5, cred_min: 5, cred_max: 35, r_model: 0.9, r_noyear: 0.3, kavak_offset: 9 },
+  fit: { unknown: 0.75, fail: 0.4, trim_other: 0.5, unknown_hard: 0.03, price_target_at_max: 0.6 },
+  levels: { x_high: 0.7, y_high: 0.7, c_high: 0.82, x_good: 0.65, y_deal: 0.45, y_good: 0.85, y_min: 0.3, n_min_high: 10, fair_min_d: -2, low_d: -10 },
+  rules: { seller_cap: true, agency_voice: true, placeholder: true, pro_deal_d: true },
+} as const;
+type F3Group = "deal" | "fit" | "levels";
+/** [low, high, high excluded]: closed intervals except deal.cred_max, [20, 50) (below score_curves.guards.suspicious_pct). */
+type F3Bound = readonly [number, number, boolean];
+export const SCORE_MODEL_F3_BOUNDS: Record<F3Group, Record<string, F3Bound>> = {
+  deal: { d_floor: [5, 30, false], d_ceil: [5, 30, false], d_mult: [1, 4, false], cred_min: [0, 15, false], cred_max: [20, 50, true],
+    r_model: [0.1, 1, false], r_noyear: [0.1, 1, false], kavak_offset: [0, 20, false] },
+  fit: { unknown: [0, 1, false], fail: [0, 1, false], trim_other: [0, 1, false], unknown_hard: [0, 0.15, false], price_target_at_max: [0.3, 1, false] },
+  levels: { x_high: [0.5, 0.95, false], y_high: [0.5, 0.95, false], c_high: [0.7, 0.95, false], x_good: [0.3, 0.95, false],
+    y_deal: [0.1, 0.95, false], y_good: [0.5, 1, false], y_min: [0.1, 0.6, false], n_min_high: [5, 100, false],
+    fair_min_d: [-10, 5, false], low_d: [-30, 0, false] },
+};
+const F3_GROUPS: readonly F3Group[] = ["deal", "fit", "levels"];
+/** levels.n_min_high is a whole count; the worker also lifts it to comparables.min_n. */
+const F3_INTEGERS: ReadonlySet<string> = new Set(["levels.n_min_high"]);
+/** The worker's slack on the combined 🔥 rule (config._EPS), so 0.6·0.9 + 0.4·0.9 still allows c_high 0.9. */
+const F3_EPS = 1e-9;
+
+function f3Number(path: string, [low, high, open]: F3Bound) {
+  const atLeast = z.number().min(low);
+  const bounded = open ? atLeast.lt(high) : atLeast.max(high);
+  return F3_INTEGERS.has(path) ? bounded.int() : bounded;
+}
+function f3Group(group: F3Group) {
+  return z.object(Object.fromEntries(Object.entries(SCORE_MODEL_F3_BOUNDS[group]).map(([name, bound]) => [name, f3Number(`${group}.${name}`, bound).optional()]))).strict();
+}
+export const ScoreModelF3Input = z.object({
+  mode: z.enum(SCORE_MODEL_F3_MODES).optional(),
+  deal: f3Group("deal").optional(),
+  fit: f3Group("fit").optional(),
+  levels: f3Group("levels").optional(),
+  rules: z.object(Object.fromEntries(Object.keys(SCORE_MODEL_F3_DEFAULTS.rules).map((name) => [name, z.boolean().optional()]))).strict().optional(),
+}).strict();
+
+/** «a, b y c». */
+function spanishList(items: readonly string[]): string {
+  return items.length > 1 ? `${items.slice(0, -1).join(", ")} y ${items[items.length - 1]}` : (items[0] ?? "");
+}
+/** A bound as the spec writes it: 0,15 and −10. */
+function f3Figure(n: number): string {
+  return String(Number(n.toFixed(4))).replace(".", ",").replace(/^-/, "−");
+}
+function f3Keys(path: readonly string[]): string[] {
+  const [group] = path;
+  if (!path.length) return Object.keys(SCORE_MODEL_F3_DEFAULTS);
+  return group === "rules" ? Object.keys(SCORE_MODEL_F3_DEFAULTS.rules) : Object.keys(SCORE_MODEL_F3_BOUNDS[group as F3Group] ?? {});
+}
+function f3IssueMessage(issue: z.ZodError["issues"][number]): string {
+  const path = issue.path.map(String);
+  if (issue.code === "unrecognized_keys") {
+    const where = path.length ? path.join(".") : "score_model_f3";
+    const extra = issue.keys.map((name) => `«${name}»`);
+    return `${where} no tiene ${extra.length > 1 ? "las claves" : "la clave"} ${spanishList(extra)}: revisá cómo está escrita. Sus claves son ${spanishList(f3Keys(path))}.`;
+  }
+  const [group, name] = path;
+  if (group === "mode") return "mode tiene que ser off, shadow o live.";
+  if (path.length === 1) return `${group} tiene que ser un objeto con sus claves (${spanishList(f3Keys(path))}).`;
+  if (group === "rules") return `rules.${name} tiene que ser true o false (sin comillas).`;
+  const bound = SCORE_MODEL_F3_BOUNDS[group as F3Group]?.[name];
+  if (!bound) return "Revisá score_model_f3: todas sus claves son números (sin comillas) o true/false.";
+  const [low, high, open] = bound;
+  const what = F3_INTEGERS.has(`${group}.${name}`) ? "un entero" : "un número";
+  // deal.cred_max: f3's «sospechoso» is f2's guard (score_curves.guards.suspicious_pct, 50).
+  const range = open ? `desde ${f3Figure(low)} y menor que ${f3Figure(high)} (el «sospechoso» de score_curves.guards)` : `entre ${f3Figure(low)} y ${f3Figure(high)}`;
+  return `${group}.${name} tiene que ser ${what} (sin comillas) ${range}.`;
+}
+
+/**
+ * Why /admin/config refuses this score_model_f3, in Spanish and naming the key, or null.
+ * Bounds and types first; then the cross-key rules on the value over the defaults, as the
+ * worker checks them (a missing key counts with its default).
+ */
+export function scoreModelF3Problem(value: unknown): string | null {
+  const parsed = ScoreModelF3Input.safeParse(value);
+  if (!parsed.success) return f3IssueMessage(parsed.error.issues[0]);
+  const given = parsed.data;
+  const [deal, fit, levels] = F3_GROUPS.map((group) => ({ ...SCORE_MODEL_F3_DEFAULTS[group], ...given[group] })) as [
+    Record<keyof typeof SCORE_MODEL_F3_DEFAULTS.deal, number>,
+    Record<keyof typeof SCORE_MODEL_F3_DEFAULTS.fit, number>,
+    Record<keyof typeof SCORE_MODEL_F3_DEFAULTS.levels, number>,
+  ];
+  if (!(deal.d_floor < deal.d_ceil)) return "deal.d_floor tiene que ser menor que deal.d_ceil (los dos entre 5 y 30).";
+  if (!(deal.cred_min < deal.cred_max)) return "deal.cred_min tiene que ser menor que deal.cred_max (la banda creíble va de cred_min a cred_max % debajo).";
+  if (!(fit.fail <= fit.unknown)) return "fit.fail no puede ser mayor que fit.unknown: una preferencia sin dato nunca pesa menos que una que no se cumple.";
+  const combined = 0.6 * levels.x_high + 0.4 * levels.y_high;
+  if (!(levels.c_high + F3_EPS >= combined)) {
+    return `levels.c_high tiene que ser al menos 0,6·x_high + 0,4·y_high (con estos valores, ${f3Figure(combined)}); si no, el mínimo combinado de 🔥 no hace nada.`;
+  }
+  if (!(levels.x_good < levels.x_high)) return "levels.x_good tiene que ser menor que levels.x_high (el piso de precio de «buena» queda debajo del de 🔥).";
+  if (!(levels.y_deal < levels.y_high)) return "levels.y_deal tiene que ser menor que levels.y_high (el piso de encaje de «buena» queda debajo del de 🔥).";
+  if (!(levels.y_good > levels.y_min)) return "levels.y_good tiene que ser mayor que levels.y_min.";
+  if (!(levels.low_d < levels.fair_min_d)) return "levels.low_d tiene que ser menor que levels.fair_min_d.";
+  return null;
+}
+
+/**
  * Bounds of the scoring, re-score and alert keys: the same table as
  * worker/intelligence/config.py (Bound, _merge), which falls back to the
  * default key by key. Before them a threshold saved as "80", a 0 divisor or
@@ -290,6 +403,8 @@ export function validateConfigChange(key: string, value: unknown, current: unkno
   if (key === "trial_reserve" && !TrialReserveConfigInput.safeParse(value).success) return TRIAL_RESERVE_CONFIG_MESSAGE;
   // PAR-01: every block with source and as_of, valid ranges and scales (lib/cost-estimator.ts, the parser's own rules).
   if (key === "cost_estimator") return costEstimatorProblem(value);
+  // f3 «precio × encaje» (shadow): the worker's bounds and cross-key rules (worker/intelligence/config.py score_model_f3).
+  if (key === "score_model_f3") return scoreModelF3Problem(value);
   if (key === "risk") {
     // PAR-02: the «Antes de señar» switch and its official links (https only).
     const parsed = RiskConfigInput.safeParse(value);
@@ -325,6 +440,37 @@ export function sameConfig(a: unknown, b: unknown): boolean {
 }
 
 export type ConfigDifference = { path: string; before: unknown; after: unknown };
+/** score_model_f3 in the change preview: what each key rules (spec §3 and §14 «Parámetros»), with the key. */
+export const SCORE_MODEL_F3_LABELS: Record<string, string> = {
+  mode: "Modo de f3 (off, shadow o live)",
+  "deal.d_floor": "Precio: crédito completo, como mínimo a este % debajo (d_floor)",
+  "deal.d_ceil": "Precio: crédito completo, como máximo a este % debajo (d_ceil)",
+  "deal.d_mult": "Precio: spreads debajo de la mediana para el crédito completo (d_mult)",
+  "deal.cred_min": "Precio: inicio de la banda creíble, % debajo (cred_min)",
+  "deal.cred_max": "Precio: fin de la banda creíble, % debajo (cred_max)",
+  "deal.r_model": "Precio: confiabilidad con comparables del modelo (r_model)",
+  "deal.r_noyear": "Precio: confiabilidad sin año (r_noyear)",
+  "deal.kavak_offset": "Precio: sesgo de Kavak, en puntos (kavak_offset)",
+  "fit.unknown": "Encaje: preferencia sin dato (unknown)",
+  "fit.fail": "Encaje: preferencia que no se cumple (fail)",
+  "fit.trim_other": "Encaje: otra versión que la preferida (trim_other)",
+  "fit.unknown_hard": "Encaje: descuento por filtro sin dato, solo en el score (unknown_hard)",
+  "fit.price_target_at_max": "Encaje: precio ideal superado, en el precio máximo (price_target_at_max)",
+  "levels.x_high": "🔥: piso de precio (x_high)",
+  "levels.y_high": "🔥: piso de encaje (y_high)",
+  "levels.c_high": "🔥: mínimo combinado 0,6·precio + 0,4·encaje e inicio de la banda 85–99 (c_high)",
+  "levels.n_min_high": "🔥: comparables mínimos (n_min_high)",
+  "levels.x_good": "🟢: piso de precio de «buen precio» (x_good)",
+  "levels.y_deal": "🟢: piso de encaje de «buen precio» (y_deal)",
+  "levels.y_good": "🟢: encaje de «coincide, precio en línea» (y_good)",
+  "levels.fair_min_d": "🟢: % debajo mínimo de «precio en línea» (fair_min_d)",
+  "levels.y_min": "🟡: piso de encaje (y_min)",
+  "levels.low_d": "🟡: % debajo mínimo; más caro es ⚪ (low_d)",
+  "rules.seller_cap": "Tope de vendedor: vendedor distinto del pedido, como mucho 🟡",
+  "rules.agency_voice": "Voz de agencia: un particular que escribe como agencia cuenta como agencia para la preferencia",
+  "rules.placeholder": "Precio de relleno (11.111, 1.111.111): como sin precio",
+  "rules.pro_deal_d": "Umbral Pro con el % ajustado de Kavak (pro_deal_d)",
+};
 export function configFieldLabel(key: string, path: string): string {
   if (key === "pro_offer") return ({ version: "Versión de la oferta", "pass_30.amount": "Particular: importe (ARS)", "pass_7.amount": "Particular 7 días: importe (ARS)", "pro_monthly.amount": "Pro: importe (ARS)" } as Record<string, string>)[path] ?? path;
   if (key === "plan_limits") {
@@ -353,6 +499,7 @@ export function configFieldLabel(key: string, path: string): string {
   if (key === "trial_reserve") {
     return ({ enabled: "Reserva de la prueba para autos nuevos", backfill_max: "Máximo de resultados ya publicados" } as Record<string, string>)[path] ?? path;
   }
+  if (key === "score_model_f3") return SCORE_MODEL_F3_LABELS[path] ?? path;
   if (key === "lifecycle_emails") {
     if (path.startsWith("kinds.")) return LIFECYCLE_KINDS[path.slice(6) as keyof typeof LIFECYCLE_KINDS]?.label ?? path;
     return ({ enabled: "Envío de emails del plan", send_from: "Enviar desde (hora argentina)", send_until: "Enviar hasta (hora argentina)", window_hours: "Vigencia del evento (horas)", max_per_day: "Emails del plan por día" } as Record<string, string>)[path] ?? path;

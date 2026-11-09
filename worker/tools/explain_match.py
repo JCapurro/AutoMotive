@@ -116,6 +116,11 @@ def render(data: dict[str, Any], stored: dict | None) -> str:
         c = b[name]
         lines.append(f"  {name:<13} {c['c']:>6.2f} {c['w']:>5g} {c['contribution']:>7.2f}  {c['explanation']}")
 
+    shadow = b.get("shadow_f3") if isinstance(b, dict) else None
+    if isinstance(shadow, dict):
+        lines.append("")
+        lines += shadow_lines(shadow)
+
     lines.append("")
     lines.append("Red flags" if data["red_flags"] else "Red flags: ninguna")
     for f in data["red_flags"]:
@@ -134,6 +139,65 @@ def render(data: dict[str, Any], stored: dict | None) -> str:
     else:
         lines.append("Sin match guardado para este par.")
     return "\n".join(lines)
+
+
+_F3_LEVEL = {**copy.LEVEL_LABEL, "excluded": "excluido"}
+
+
+def _f(x: Any, digits: int = 2) -> str:
+    return "—" if not isinstance(x, (int, float)) or isinstance(x, bool) else f"{x:.{digits}f}"
+
+
+def _pct(x: Any) -> str:
+    return "—" if not isinstance(x, (int, float)) or isinstance(x, bool) else f"{x:.1f}%"
+
+
+def shadow_lines(s: dict[str, Any]) -> list[str]:
+    """The «Sombra f3» block: f3 «precio × encaje» as the shadow computed it (score_breakdown.shadow_f3).
+    f2 decides everything; this is what f3 would say
+    (docs/superpowers/specs/2026-11-08-recalibracion-score-design.md)."""
+    deal, fit, seller = s.get("deal") or {}, s.get("fit") or {}, s.get("seller") or {}
+    out = [f"Sombra f3 ({s.get('v')} · params {s.get('params')} · modo {s.get('mode')}): "
+           "no decide, f2 sigue decidiendo"]
+    level = f"  nivel {_F3_LEVEL.get(s.get('level'), s.get('level'))} · score {s.get('score')}"
+    if s.get("level_uncapped") != s.get("level"):
+        uncapped = s.get("level_uncapped")
+        level += f"  (sin el tope de vendedor: {_F3_LEVEL.get(uncapped, uncapped)})"
+    out.append(level)
+    ref = f"n={deal.get('n')}, {deal.get('level_used')}" if deal.get("n") is not None else "sin comparables"
+    d = f"d {_pct(deal.get('d'))}"
+    if deal.get("d_eff") != deal.get("d"):
+        d += f" · d_eff {_pct(deal.get('d_eff'))}"
+    if deal.get("diff_pct") != deal.get("d"):
+        d += f" · publicado {_pct(deal.get('diff_pct'))}"
+    notes = ((" · creíble" if deal.get("credible") else "")
+             + (" · precio de relleno" if deal.get("placeholder") else ""))
+    out.append(f"  precio {_f(deal.get('value'))} (crudo {_f(deal.get('raw'))} · confianza {_f(deal.get('r'))} · "
+               f"{d} · pleno desde {_pct(deal.get('d_full'))} · {ref} · {deal.get('tier')}{notes})")
+    prefs = ", ".join(f"{k} {_f(v)}" for k, v in (fit.get("prefs") or {}).items()) or "sin preferencias"
+    out.append(f"  encaje {_f(fit.get('level'))} (en el score {_f(fit.get('score'))}) · {prefs}")
+    out.append(f"  flags: {', '.join(s.get('flags') or []) or 'ninguna'}")
+    if s.get("a_verificar"):
+        out.append(f"  a verificar: {', '.join(s['a_verificar'])}")
+    if seller.get("wanted") or seller.get("agency_voice"):
+        parts = []
+        if seller.get("wanted"):
+            how = "filtro estricto" if seller.get("strict") else "preferencia"
+            parts.append(f"busca {'/'.join(seller['wanted'])} ({how})")
+        parts.append(f"efectivo {seller.get('effective') or 'sin dato'}")
+        parts.append(f"para la preferencia {seller.get('for_preference') or 'sin dato'}")
+        if seller.get("agency_voice"):
+            parts.append(f"voz de agencia «{seller['agency_voice']}»")
+        if seller.get("capped"):
+            parts.append("tope aplicado")
+        out.append(f"  vendedor: {' · '.join(parts)}")
+    if s.get("would_defer"):
+        out.append("  esperaría al detalle (la tarjeta no trae vendedor)")
+    alts = s.get("alternatives") or {}
+    if alts:
+        out.append("  alternativas: " + ", ".join(
+            f"{k} → {_F3_LEVEL.get(a.get('level'), a.get('level'))} {a.get('score')}" for k, a in alts.items()))
+    return out
 
 
 async def main(argv: list[str] | None = None) -> int:

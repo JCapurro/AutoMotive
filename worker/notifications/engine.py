@@ -37,6 +37,11 @@ Rules:
   * a listing the user discarded is not notified again.
   * several profiles of a user, one listing: `decide_all` keeps one alert, the
     one with the highest level.
+
+f3 shadow (docs/superpowers/specs/2026-11-08-recalibracion-score-design.md
+§4.4): `decide_all(..., outcomes={})` also records, per event, which exit it
+took (Outcome: queued / digest / none, and why). It is a side channel only:
+the decisions are the same with or without it.
 """
 from __future__ import annotations
 
@@ -51,6 +56,27 @@ FOLLOWED_STATUSES = frozenset({"interested", "contacted", "visit_scheduled"})
 
 QUEUED, DIGEST = "queued", "digest"
 DEGRADED_CAP = "daily_cap"
+# Outcome.result of an event that got no notification.
+NONE = "none"
+
+# Outcome.reason: why an event got no notification, or went to the digest, or skipped the cap.
+R_DISCARDED = "discarded"                 # the user discarded the listing
+R_BACKFILL = "backfill"
+R_NO_LEVEL = "no_level"
+R_BELOW_MIN_LEVEL = "below_min_level"
+R_DROP_BELOW_MIN = "drop_below_min"       # price_drop under rules.price_drop_min_pct
+R_NOT_MATCHED = "not_matched"             # price_drop of a listing neither saved nor matched at «match» or more
+R_NOT_FOLLOWED = "not_followed"           # listing_gone of a listing neither saved nor followed
+R_UNKNOWN_KIND = "unknown_kind"
+R_DEDUPE_EXISTING = "dedupe_existing"     # the key was notified before this batch
+R_DEDUPE_BATCH = "dedupe_batch"           # another event of this batch (another profile) took the key
+R_NO_CHANNELS = "no_channels"
+R_THRESHOLD = "threshold"                 # reached the Pro threshold: outside the cap
+R_THRESHOLD_NOT_REACHED = "threshold_not_reached"   # a search with a Pro threshold sends the rest to the digest
+R_DAILY_CAP = DEGRADED_CAP
+R_FREQUENCY = "frequency"                 # notification_frequency daily
+R_HIDDEN_TRIAL = "hidden_trial"           # set by notifications.service (the trial hides it)
+R_NO_AUDIENCE = "no_audience"             # set by notifications.service (no access or no profile)
 
 
 @dataclass(frozen=True)
@@ -107,6 +133,15 @@ class Decision:
     @property
     def immediate(self) -> bool:
         return self.status == QUEUED
+
+
+@dataclass(frozen=True)
+class Outcome:
+    """What decide_all did with one event (the f3 shadow's decision log)."""
+    result: str                    # QUEUED | DIGEST | NONE
+    reason: str | None = None      # R_* above; None for a plain immediate alert
+    kind: str | None = None        # opportunity | new_match | price_drop | listing_gone, when a plan existed
+    threshold: bool = False        # reached the search's Pro threshold
 
 
 @dataclass(frozen=True)
@@ -189,6 +224,45 @@ def classify(event: Event, rules: Rules) -> _Plan | None:
     return None
 
 
+def why_not(event: Event, rules: Rules | None = None) -> str | None:
+    """Why classify() gives no plan for this event (R_*), or None when it gives one. Mirrors classify's
+    branches for the decision log; MATCH reads no rule."""
+    rules = rules or Rules()
+    if classify(event, rules) is not None:
+        return None
+    a = event.audience
+    if event.status == "discarded" and not event.saved:
+        return R_DISCARDED
+    if event.kind == MATCH:
+        if event.backfill:
+            return R_BACKFILL
+        if event.level is None:
+            return R_NO_LEVEL
+        return R_BELOW_MIN_LEVEL if not at_least(event.level, a.min_level) else R_UNKNOWN_KIND
+    if event.kind == PRICE_DROP:
+        if event.drop_pct is None or event.drop_pct < rules.price_drop_min_pct:
+            return R_DROP_BELOW_MIN
+        return R_NOT_MATCHED
+    if event.kind == LISTING_GONE:
+        return R_NOT_FOLLOWED
+    return R_UNKNOWN_KIND
+
+
+def _decided(event: Event, plan: _Plan, decision: Decision) -> Outcome:
+    """The Outcome of an event that got notifications (its first decision speaks for all channels)."""
+    if plan.threshold:
+        reason = R_THRESHOLD
+    elif decision.status == DIGEST and decision.payload.get("degraded") == DEGRADED_CAP:
+        reason = R_DAILY_CAP
+    elif decision.status == DIGEST and _has_threshold(event.audience) and event.kind in (MATCH, PRICE_DROP):
+        reason = R_THRESHOLD_NOT_REACHED
+    elif decision.status == DIGEST and event.audience.frequency != "immediate":
+        reason = R_FREQUENCY
+    else:
+        reason = None
+    return Outcome(decision.status, reason, plan.kind, plan.threshold)
+
+
 def decide(event: Event, rules: Rules, *, sent_today: int = 0, cap: int | None = None) -> list[Decision]:
     """Notifications for one event, one per deliverable channel. `sent_today`
     is how many immediate alerts the user already got today (ART); `cap` is
@@ -223,26 +297,39 @@ def _priority(event: Event) -> tuple:
 
 def decide_all(events: Iterable[Event], rules: Rules, *, sent_today: Mapping[str, int] | None = None,
                existing: set[tuple[str, str]] | None = None,
-               caps: Mapping[str, int] | None = None) -> list[Decision]:
+               caps: Mapping[str, int] | None = None,
+               outcomes: dict[int, Outcome] | None = None) -> list[Decision]:
     """Decide a batch. One alert per (user, dedupe_key), from the event with
     the highest level; keys in `existing` (user_id, dedupe_key) were already
     notified and are skipped without counting towards the cap. `caps` is each
-    user's daily limit; a user without one gets rules.alerts_max_per_user_day."""
+    user's daily limit; a user without one gets rules.alerts_max_per_user_day.
+    `outcomes`, when given, gets outcomes[id(event)] = Outcome(...) for every
+    event (the f3 shadow's log); it changes nothing of the decisions."""
     counts = dict(sent_today or {})
     caps = caps or {}
-    done = set(existing or ())
+    before = set(existing or ())
+    done = set(before)
     out: list[Decision] = []
     for event in sorted(events, key=_priority):
         plan = classify(event, rules)
         if plan is None:
+            if outcomes is not None:
+                outcomes[id(event)] = Outcome(NONE, why_not(event, rules))
             continue
         key = (event.audience.user_id, plan.dedupe_key)
         if key in done:
+            if outcomes is not None:
+                reason = R_DEDUPE_EXISTING if key in before else R_DEDUPE_BATCH
+                outcomes[id(event)] = Outcome(NONE, reason, plan.kind, plan.threshold)
             continue
         decisions = decide(event, rules, sent_today=counts.get(event.audience.user_id, 0),
                            cap=caps.get(event.audience.user_id))
         if not decisions:
+            if outcomes is not None:
+                outcomes[id(event)] = Outcome(NONE, R_NO_CHANNELS, plan.kind, plan.threshold)
             continue
+        if outcomes is not None:
+            outcomes[id(event)] = _decided(event, plan, decisions[0])
         done.add(key)
         if decisions[0].immediate and not plan.threshold:
             counts[event.audience.user_id] = counts.get(event.audience.user_id, 0) + 1
