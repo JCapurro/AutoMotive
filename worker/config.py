@@ -66,8 +66,9 @@ FB_FEED_DATES = os.getenv("FB_FEED_DATES", "1").strip().lower() in {"1", "true",
 # FB_STORAGE_STATE (collectors/facebook.py _keep_session); 0 keeps the login's
 # snapshot frozen, as before 2026-11-07.
 FB_KEEP_SESSION = os.getenv("FB_KEEP_SESSION", "1").strip().lower() in {"1", "true", "yes", "on"}
-# A Facebook search the account is refused (collectors/facebook.py
-# SearchRestricted) is read again logged out; 0 fails the run as before.
+# A Facebook search the account is refused, with an error or with an empty
+# feed that doesn't say «no results» (collectors/facebook.py SearchRestricted),
+# is read again logged out; 0 reloads it with the account and fails as before.
 FB_NO_SESSION_FALLBACK = os.getenv("FB_NO_SESSION_FALLBACK", "1").strip().lower() in {"1", "true", "yes", "on"}
 # Enrichment of matched listings (sección 5.5) and the watchlist refresher
 # (sección 5.6) wake up this often; each listing is checked at most daily.

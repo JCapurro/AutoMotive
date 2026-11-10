@@ -73,6 +73,7 @@ _NO_RESULTS = ("no se encontraron resultados", "no se encontraron publicaciones"
                "no hay resultados", "no results found", "no listings found")
 
 RESTRICTED = "facebook: search restricted for the account (field_exception)"
+EMPTY_FOR_ACCOUNT = "facebook: empty feed for the account"
 NO_SESSION = "facebook without session"
 
 
@@ -83,7 +84,13 @@ class SearchRestricted(FeedUnconfirmed):
     page still listed cars, and the same search logged out, from the same
     VPS, listed 24: the account's searches were restricted, not the IP, and
     renewing the session wouldn't help. search() then reads it logged out
-    (config.FB_NO_SESSION_FALLBACK)."""
+    (config.FB_NO_SESSION_FALLBACK).
+
+    From 19:52 the same day the restriction came back silent: an empty feed
+    (`"edges":[]`, no error, no «no results» text) while the same search
+    logged out listed 24. So any empty feed of the account's that doesn't
+    say «no results» is read logged out too (EMPTY_FOR_ACCOUNT), instead of
+    one more reload with the account."""
 
 
 # The search results' data embedded in the page, answered with an error.
@@ -877,16 +884,17 @@ class FacebookMarketplaceScraper(BaseScraper):
         if window := PublicationWindow.from_filters(filters):
             try:
                 return await self._search_recent(filters, window)
-            except SearchRestricted:
+            except SearchRestricted as exc:
                 if not config.FB_NO_SESSION_FALLBACK:
                     raise
-                log.warning("%s; reading %s without the session", RESTRICTED, self._build_url(filters))
+                why = str(exc)
+                log.warning("%s; reading %s without the session", why, self._build_url(filters))
             try:
                 return await self._search_recent(filters, window, session=False)
             except FeedUnconfirmed as exc:
-                raise FeedUnconfirmed(f"{RESTRICTED}; {exc}") from exc
+                raise FeedUnconfirmed(f"{why}; {exc}") from exc
             except Exception as exc:
-                raise RuntimeError(f"{RESTRICTED}; {NO_SESSION}: {type(exc).__name__}: {exc}") from exc
+                raise RuntimeError(f"{why}; {NO_SESSION}: {type(exc).__name__}: {exc}") from exc
 
         url = self._build_url(filters)
         out: list[Listing] = []
@@ -1064,6 +1072,10 @@ class FacebookMarketplaceScraper(BaseScraper):
                             if session and search_restricted(await _html(page)):
                                 # No reload: it answers the same, and is one more search for the account.
                                 raise SearchRestricted(RESTRICTED)
+                            if session and config.FB_NO_SESSION_FALLBACK:
+                                # Also restricted, silently (SearchRestricted): reading it logged out
+                                # replaces the reload, and confirms an empty search with its own text.
+                                raise SearchRestricted(EMPTY_FOR_ACCOUNT)
                             if not reloaded:
                                 # Often a feed that didn't render: one more load before failing.
                                 reloaded, stalls = True, 0
