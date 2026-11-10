@@ -409,8 +409,10 @@ class FacebookWindowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(page.card_reads, page.mouse.wheel.await_count + 1)
 
     async def test_an_empty_feed_is_loaded_again_once_before_failing(self):
+        # With the session it is read logged out instead (FacebookRestrictedSearchTests).
         page = FacebookPage([[]], after_reload=[[("1", 2)]])
-        results = await self.search(page)
+        with patch.object(fb.config, "FB_NO_SESSION_FALLBACK", False):
+            results = await self.search(page)
         self.assertEqual(page.reloads, 1)
         self.assertEqual([l.listing_id for l in results], ["1"])
         self.assertTrue(results.complete)
@@ -471,7 +473,7 @@ class FacebookWindowTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_a_failed_reload_of_an_empty_feed_is_still_unconfirmed(self):
         page = FacebookPage([[]], after_reload=TimeoutError("Timeout 45000ms exceeded"))
-        with self.assertRaisesRegex(fb.FeedUnconfirmed, "reload failed"):
+        with patch.object(fb.config, "FB_NO_SESSION_FALLBACK", False),                 self.assertRaisesRegex(fb.FeedUnconfirmed, "reload failed"):
             await self.search(page)
         page.close.assert_awaited_once()
 
@@ -480,7 +482,7 @@ class FacebookWindowTests(unittest.IsolatedAsyncioTestCase):
                      "Iniciar sesión\nCorreo electrónico\nContraseña"):
             with self.subTest(body=body):
                 page = FacebookPage([[]], body=body)
-                with self.assertRaisesRegex(fb.FeedUnconfirmed, "empty feed") as caught:
+                with patch.object(fb.config, "FB_NO_SESSION_FALLBACK", False),                         self.assertRaisesRegex(fb.FeedUnconfirmed, "empty feed") as caught:
                     await self.search(page)
                 self.assertNotIsInstance(caught.exception, fb.CollectorBlocked)
                 self.assertEqual(page.reloads, 1)
@@ -717,9 +719,37 @@ class FacebookRestrictedSearchTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIsInstance(caught.exception, fb.CollectorBlocked)
         self.assertNotIn("session expired", str(caught.exception))
 
-    async def test_an_empty_feed_without_the_error_still_reloads_and_never_drops_the_session(self):
+    async def test_a_silent_empty_feed_of_the_account_is_read_again_without_the_session(self):
+        # From 19:52 on 2026-11-09: edges [] with no error, while logged out listed 24.
+        silent = FacebookPage([[]], html='{"data":{"marketplace_search":{"feed_units":{"edges":[]}}}}')
+        public = FacebookPage([[("1", 2), ("2", 3)]])
+        with patch.object(fb, "_keep_session", AsyncMock(return_value=False)), \
+                self.assertLogs(fb.log, "WARNING") as logs:
+            (results, opened) = await self.search(silent, public)
+        self.assertEqual([l.listing_id for l in results], ["1", "2"])
+        self.assertEqual(opened, [fb.FB_STORAGE_STATE, None])
+        self.assertEqual(silent.reloads, 0)                 # the logged-out read replaces the reload
+        self.assertEqual(results.probe["no_session"], 1)
+        self.assertIn("empty feed for the account; reading", logs.output[0])
+
+    async def test_an_empty_search_logged_out_too_is_confirmed_by_its_own_text(self):
+        silent = FacebookPage([[]])
+        empty = FacebookPage([[]], body="Marketplace No se encontraron resultados")
+        (results, _) = await self.search(silent, empty)
+        self.assertEqual(list(results), [])
+        self.assertTrue(results.complete)
+        self.assertEqual(empty.reloads, 0)
+
+    async def test_an_empty_feed_both_ways_fails_as_unconfirmed_saying_so(self):
+        with self.assertRaisesRegex(fb.FeedUnconfirmed,
+                                    "empty feed for the account; facebook: empty feed without") as caught:
+            await self.search(FacebookPage([[]]), FacebookPage([[]]))
+        self.assertNotIsInstance(caught.exception, fb.CollectorBlocked)
+
+    async def test_without_the_fallback_an_empty_feed_still_reloads_and_never_drops_the_session(self):
         page = FacebookPage([[]], html='{"data":{"marketplace_search":{"feed_units":{"edges":[]}}}}')
-        with self.assertRaisesRegex(fb.FeedUnconfirmed, "empty feed without"):
+        with patch.object(fb.config, "FB_NO_SESSION_FALLBACK", False), \
+                self.assertRaisesRegex(fb.FeedUnconfirmed, "empty feed without"):
             await self.search(page)
         self.assertEqual(page.reloads, 1)
         self.assertEqual(self.opened, [fb.FB_STORAGE_STATE])
