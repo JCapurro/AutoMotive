@@ -1,7 +1,7 @@
 
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
 
-type BillingCheckoutRow = { id: string; user_id: string; offer: string; offer_version: string; amount: number; currency: string; billing_email: string; status: string; provider_id: string | null; init_point: string | null; created_at: string; last_synced_at: string | null; sync_error: string | null; next_payment_at: string | null; ad_attribution: Json | null; founder_number: number | null; founder_price_until: string | null }
+type BillingCheckoutRow = { id: string; user_id: string; offer: string; offer_version: string; amount: number; currency: string; billing_email: string; status: string; provider_id: string | null; init_point: string | null; created_at: string; last_synced_at: string | null; sync_error: string | null; next_payment_at: string | null; ad_attribution: Json | null; founder_number: number | null; founder_price_until: string | null; founder_offer: boolean }
 
 export type Database = {
 
@@ -1175,7 +1175,8 @@ isOneToOne: false
             admin_guide_event_counts: { Args: { p_days?: number }; Returns: { guide_id: number; viewed: number; cta_clicked: number; questions_copied: number }[] },
             model_guide_jobs_since: { Args: { p_since: string }; Returns: number },
             log_guide_event: { Args: { p_name: string; p_slug_make: string; p_slug_model: string }; Returns: undefined },
-            begin_billing_checkout: { Args: { p_user: string; p_offer: string; p_email: string; p_version: string; p_expected_amount: number }; Returns: Json },
+            begin_billing_checkout: { Args: { p_user: string; p_offer: string; p_email: string; p_version: string; p_expected_amount: number; p_founder_code?: string }; Returns: Json },
+            founder_offer: { Args: { p_code: string }; Returns: Json },
             apply_mercadopago_payment: { Args: { p_checkout: string; p_reference: string; p_status: string; p_amount: number; p_currency: string; p_paid_at: string; p_start: string; p_end: string }; Returns: number },
             claim_auth_throttle: { Args: { p_kind: string; p_key: string; p_limit: number; p_window_seconds: number }; Returns: boolean },
             auth_account_for_email: { Args: { p_email: string }; Returns: { user_id: string; email_only: boolean; confirmed: boolean }[] },

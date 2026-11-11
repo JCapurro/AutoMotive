@@ -19,7 +19,7 @@ beforeEach(() => {
 
 it.each([ ["pass_30", 15000], ["pro_monthly", 75000] ] as const)("uses the signed-in account email for %s", async (offer, amount) => {
   await expect(startPayment(offer, true, "ars-launch-2026-10", amount)).resolves.toHaveProperty("url");
-  expect(mocks.createCheckout).toHaveBeenCalledWith("account", offer, "account@example.com", "ars-launch-2026-10", amount, { consent: false });
+  expect(mocks.createCheckout).toHaveBeenCalledWith("account", offer, "account@example.com", "ars-launch-2026-10", amount, { consent: false }, undefined);
 });
 
 it("requires consent before creating a checkout", async () => {

@@ -8,19 +8,22 @@ import { WAITLIST_PLANS } from "@/lib/pro";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /** `needsAccount`: an email-only account (free search) must confirm its email and choose a password first (/app/cuenta). */
-export async function startPayment(offer: string, accepted: boolean, version: string, amount: number): Promise<{ url?: string; error?: string; needsAccount?: boolean }> {
+/** `founderCode`: the code of the private founder link (/fundador/<code>); Pro only. */
+export async function startPayment(offer: string, accepted: boolean, version: string, amount: number, founderCode?: string): Promise<{ url?: string; error?: string; needsAccount?: boolean }> {
   // getUser, not the JWT: a revoked session must not start a payment, and the payer email must be the current one.
   const user = await liveAccount();
   if (!user) return { error: "Tu sesión venció. Volvé a ingresar." };
   if (user.emailOnly) return { needsAccount: true };
   const email = user.email;
   if (!z.email().max(254).safeParse(email).success) return { error: "Tu cuenta necesita un email válido para pagar. Volvé a ingresar." };
-  const input = z.object({ offer: z.enum(WAITLIST_PLANS), email: z.email().max(254), accepted: z.literal(true), version: z.string().min(1).max(80), amount: z.number().int().positive() }).safeParse({ offer, email, accepted, version, amount });
+  const input = z.object({ offer: z.enum(WAITLIST_PLANS), email: z.email().max(254), accepted: z.literal(true), version: z.string().min(1).max(80), amount: z.number().int().positive(), founderCode: z.string().regex(/^[a-f0-9]{8,32}$/).optional() }).safeParse({ offer, email, accepted, version, amount, founderCode });
   if (!input.success) return { error: "Revisá el plan y aceptá las condiciones." };
-  try { return { url: await createCheckout(user.id, input.data.offer, input.data.email, input.data.version, input.data.amount, await readAttribution()) }; }
+  try { return { url: await createCheckout(user.id, input.data.offer, input.data.email, input.data.version, input.data.amount, await readAttribution(), input.data.founderCode) }; }
   catch (error) {
     const message = error instanceof Error ? error.message : "";
     if (message === "account_required") return { needsAccount: true };
+    if (message === "founder_full") return { error: "Ya se ocuparon los lugares con precio fundador. Podés contratar Pro al precio normal." };
+    if (message === "founder_invalid") return { error: "Este link de precio fundador ya no está vigente." };
     return { error: message === "offer_changed" ? "La oferta cambió. Actualizá la página y revisá el precio antes de pagar." : message === "paid_plan_already_active" ? "Ya tenés un plan pago vigente." : message === "checkout_already_open" || message === "checkout_in_progress" ? "Ya tenés una contratación en curso. Revisala abajo antes de iniciar otra." : "No pudimos iniciar el cobro. Revisá el estado de la contratación; si sigue pendiente, contactanos antes de volver a pagar." };
   }
 }

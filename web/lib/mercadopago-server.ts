@@ -48,10 +48,10 @@ async function saveCheckout(id: string, update: Database["public"]["Tables"]["bi
   if (error) throw new Error("billing_database_error");
 }
 
-export async function createCheckout(userId: string, offer: WaitlistPlan, email: string, version: string, amount: number, attribution?: AdAttribution) {
+export async function createCheckout(userId: string, offer: WaitlistPlan, email: string, version: string, amount: number, attribution?: AdAttribution, founderCode?: string) {
   if (!paymentsEnabled()) throw new Error("payments_not_configured");
-  const { data, error } = await createAdminClient().rpc("begin_billing_checkout", { p_user: userId, p_offer: offer, p_email: email, p_version: version, p_expected_amount: amount });
-  if (error) throw new Error(error.message.includes("account_required") ? "account_required" : error.message.includes("offer_changed") ? "offer_changed" : error.message.includes("paid_plan_already_active") ? "paid_plan_already_active" : error.message.includes("checkout_already_open") ? "checkout_already_open" : "billing_database_error");
+  const { data, error } = await createAdminClient().rpc("begin_billing_checkout", { p_user: userId, p_offer: offer, p_email: email, p_version: version, p_expected_amount: amount, ...(founderCode ? { p_founder_code: founderCode } : {}) });
+  if (error) throw new Error(error.message.includes("founder_full") ? "founder_full" : error.message.includes("founder_invalid") ? "founder_invalid" : error.message.includes("account_required") ? "account_required" : error.message.includes("offer_changed") ? "offer_changed" : error.message.includes("paid_plan_already_active") ? "paid_plan_already_active" : error.message.includes("checkout_already_open") ? "checkout_already_open" : "billing_database_error");
   const checkout = data as BillingCheckout & { new: boolean };
   if (checkout.init_point && ["pending", "creating"].includes(checkout.status)) {
     const url = checkoutUrl(checkout.init_point, process.env.MERCADOPAGO_TEST_MODE === "true");
@@ -73,7 +73,7 @@ export async function createCheckout(userId: string, offer: WaitlistPlan, email:
       external_reference: checkout.id, payer: { email }, back_urls: { success: back, pending: back, failure: back }, auto_return: "approved",
       notification_url: new URL("/api/mercadopago/webhook", site).href,
     } : {
-      reason: "Ese Auto · Pro", external_reference: checkout.id, payer_email: email, status: "pending", back_url: back,
+      reason: checkout.founder_offer ? "Ese Auto · Pro · precio fundador" : "Ese Auto · Pro", external_reference: checkout.id, payer_email: email, status: "pending", back_url: back,
       auto_recurring: { frequency: 1, frequency_type: "months", transaction_amount: checkout.amount, currency_id: checkout.currency },
     };
     const result = await api(isPassOffer(offer) ? "/checkout/preferences" : "/preapproval", "POST", body, checkout.id);

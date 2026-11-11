@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ config: vi.fn(), waitlist: vi.fn(), access: vi.fn() }));
+const mocks = vi.hoisted(() => ({ config: vi.fn(), waitlist: vi.fn(), access: vi.fn(), founder: vi.fn() }));
 vi.mock("@/lib/auth", () => ({ requireUser: vi.fn().mockResolvedValue({ id: "account" }) }));
 vi.mock("@/lib/config", () => ({ webConfig: mocks.config }));
 vi.mock("@/lib/supabase/server", () => ({
@@ -18,6 +18,7 @@ vi.mock("@/lib/supabase/server", () => ({
 vi.mock("@/app/app/pro/actions", () => ({ joinWaitlist: vi.fn() }));
 vi.mock("@/app/app/pro/billing-actions", () => ({ startPayment: vi.fn() }));
 vi.mock("@/components/app/billing-status", () => ({ BillingStatus: () => null }));
+vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({ rpc: async (_fn: string, args: { p_code: string }) => ({ data: mocks.founder(args.p_code) }) }) }));
 vi.mock("@/lib/meta-pixel", () => ({ pixel: vi.fn() }));
 vi.mock("@/lib/google-analytics", () => ({ analyticsEvent: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
@@ -159,4 +160,20 @@ it("lists the search by body type where plan_limits gives it (docs/CARROCERIA.md
     pro: { ...DEFAULT_PLAN_LIMITS.pro, modelLessSearch: false } } };
   const without = renderToStaticMarkup(createElement(PublicPlans, { cfg: none, signedIn: false }));
   expect(without).not.toContain("carrocería");
+});
+
+
+it("shows the founder price only to whoever opens the private link", async () => {
+  mocks.config.mockResolvedValue({ proOffer: DEFAULT_PRO_OFFER, planLimits: DEFAULT_PLAN_LIMITS, automaticPayments: true, commercialPilot: true });
+  mocks.founder.mockImplementation((code: string) => code === "abc123def456" ? { amount: 50000, months: 6, slots: 10, left: 7, regular: 100000 } : null);
+  const open = async (params: Record<string, string>) => renderToStaticMarkup(await ProPage({ searchParams: Promise.resolve(params), params: Promise.resolve({}) }));
+  const html = await open({ plan: "pro_monthly", fundador: "abc123def456" });
+  expect(html).toContain('data-testid="founder-offer"');
+  expect(html).toContain("Quedan 7 de 10 lugares.");
+  expect(html).toContain(`Contratar Pro a ${planPrice(50000)}`);
+  expect(html).toContain(`>${planPrice(100000)}</span>`);
+  expect(await open({ plan: "pro_monthly", fundador: "ffffffffffff" })).toContain("Este link de precio fundador ya no está vigente.");
+  const plain = await open({});
+  expect(plain).not.toContain("founder-offer");
+  expect(plain).not.toContain("precio fundador");
 });

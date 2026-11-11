@@ -8,6 +8,9 @@ import db
 
 pytestmark = [pytest.mark.db, requires_db]
 
+# The founder link config in tests (agency_founders, 20261213120000_pro_founder_link.sql).
+FOUNDER = {"slots": 10, "months": 6, "amount": 50000, "code": "abc123def456"}
+
 class MercadoPagoTests(PostgresTestCase):
     account = commercial.CommercialTests.account
     rows = commercial.CommercialTests.rows
@@ -96,11 +99,19 @@ class MercadoPagoTests(PostgresTestCase):
 
     # -- precio fundador (docs/PLANES_2026-10.md) ----------------------------
 
-    async def subscribe(self, ref, status='approved'):
-        """A new account's Agencia subscription and its first Mercado Pago payment."""
+    async def begin_founder(self, user, ref, code=None, amount=None):
+        """A Pro checkout from the private founder link (20261213120000_pro_founder_link.sql)."""
+        return (await self.rows("SELECT begin_billing_checkout(%s,'pro_monthly',%s,%s,%s,%s) AS v", user, f"buyer{ref}@automotive.test",
+                                self.offer['version'], amount or FOUNDER['amount'], code or FOUNDER['code']))[0]['v']
+
+    async def subscribe(self, ref, status='approved', founder=True):
+        """A new account's Pro subscription and its first Mercado Pago payment; from the founder link unless `founder` is False."""
         user = await self.account()
-        checkout = (await self.rows("SELECT begin_billing_checkout(%s,'pro_monthly',%s,%s,%s) AS v", user, f"buyer{ref}@automotive.test",
-                                    self.offer['version'], self.offer['pro_monthly']['amount']))[0]['v']
+        if founder:
+            checkout = await self.begin_founder(user, ref)
+        else:
+            checkout = (await self.rows("SELECT begin_billing_checkout(%s,'pro_monthly',%s,%s,%s) AS v", user, f"buyer{ref}@automotive.test",
+                                        self.offer['version'], self.offer['pro_monthly']['amount']))[0]['v']
         await self.apply(checkout, ref=ref, status=status)
         return checkout
 
@@ -110,20 +121,29 @@ class MercadoPagoTests(PostgresTestCase):
     async def founder_slots(self, value):
         await self.rows("UPDATE app_config SET value=%s WHERE key='agency_founders'", Jsonb(value))
 
-    async def test_the_first_agency_subscriptions_keep_their_price_for_six_months(self):
-        await self.founder_slots({"slots": 10, "months": 6})     # the launch's; 20261026120000 closed them
+    async def offer_left(self):
+        return (await self.rows("SELECT founder_offer(%s) AS v", FOUNDER['code']))[0]['v']
+
+    async def test_founder_link_subscriptions_keep_their_price_for_six_months(self):
+        await self.founder_slots({**FOUNDER, "slots": 10})
         first = await self.subscribe('901')
+        self.assertEqual(first['amount'], FOUNDER['amount'])
         row = await self.founder(first)
         self.assertEqual(row['founder_number'], 1)
         [paid] = await self.rows("SELECT paid_at + interval '6 months' AS until, amount FROM commercial_payments WHERE checkout_id=%s", first['id'])
-        self.assertEqual(row['founder_price_until'], paid['until'])
+        self.assertEqual((row['founder_price_until'], paid['amount']), (paid['until'], FOUNDER['amount']))
         [event] = await self.rows("SELECT props FROM events WHERE name='agency_founder_marked' AND user_id=%s", row['user_id'])
-        self.assertEqual((event['props']['founder_number'], event['props']['amount']),
-                         (1, self.offer['pro_monthly']['amount']))
+        self.assertEqual((event['props']['founder_number'], event['props']['amount']), (1, FOUNDER['amount']))
+        [started] = await self.rows("SELECT props FROM events WHERE name='checkout_started' AND user_id=%s", row['user_id'])
+        self.assertEqual((started['props']['founder'], started['props']['amount']), (True, FOUNDER['amount']))
         # Later payments neither move the date nor take another slot.
         await self.apply(first, ref='902', start="now()-interval '30 days'", end="now()")
         self.assertEqual(await self.founder(first), row)
         self.assertEqual((await self.founder(await self.subscribe('903')))['founder_number'], 2)
+        # Pro at the normal price, without the link, is not a founder.
+        regular = await self.subscribe('906', founder=False)
+        self.assertEqual((regular['amount'], (await self.founder(regular))['founder_number']),
+                         (self.offer['pro_monthly']['amount'], None))
         # A pass is not a subscription.
         particular = await self.checkout()
         await self.apply(particular, ref='904')
@@ -131,34 +151,67 @@ class MercadoPagoTests(PostgresTestCase):
         # An authorized subscription without an approved payment has not started.
         self.assertIsNone((await self.founder(await self.subscribe('905', status='authorized')))['founder_number'])
 
+    async def test_the_founder_link_needs_its_code_its_price_and_a_free_place(self):
+        await self.founder_slots({**FOUNDER, "slots": 1})
+        self.assertEqual(await self.offer_left(), {"amount": 50000, "months": 6, "slots": 1, "left": 1,
+                                                   "regular": self.offer['pro_monthly']['amount']})
+        for code in ('ffffffffffff', 'abc', None):
+            [none] = await self.rows("SELECT founder_offer(%s) AS v", code)
+            self.assertIsNone(none['v'])
+        user = await self.account()
+        with self.assertRaisesRegex(Exception, 'founder_invalid'):
+            await self.begin_founder(user, '941', code='ffffffffffff')
+        with self.assertRaisesRegex(Exception, 'offer_changed'):          # the link's price, not the normal one
+            await self.begin_founder(user, '941', amount=self.offer['pro_monthly']['amount'])
+        with self.assertRaisesRegex(Exception, 'invalid_checkout'):       # Pro only
+            await self.rows("SELECT begin_billing_checkout(%s,'pass_30','b@automotive.test',%s,%s,%s)", user,
+                            self.offer['version'], self.offer['pass_30']['amount'], FOUNDER['code'])
+        # A founder checkout waiting for its first payment holds the place.
+        await self.begin_founder(user, '941')
+        self.assertEqual((await self.offer_left())['left'], 0)
+        with self.assertRaisesRegex(Exception, 'founder_full'):
+            await self.begin_founder(await self.account(), '942')
+        # After two days it no longer does.
+        await self.rows("UPDATE billing_checkouts SET created_at = now() - interval '3 days' WHERE user_id=%s", user)
+        self.assertEqual((await self.offer_left())['left'], 1)
+        # No code configured, or no places: the link is closed.
+        for closed in ({**FOUNDER, "code": None}, {**FOUNDER, "slots": 0}):
+            await self.founder_slots(closed)
+            self.assertIsNone(await self.offer_left())
+
     async def test_founder_slots_run_out_and_a_bad_config_never_blocks_a_payment(self):
-        await self.founder_slots({"slots": 2, "months": 6})
-        numbers = [(await self.founder(await self.subscribe(ref)))['founder_number'] for ref in ('911', '912', '913')]
-        self.assertEqual(numbers, [1, 2, None])
+        await self.founder_slots({**FOUNDER, "slots": 2})
+        numbers = [(await self.founder(await self.subscribe(ref)))['founder_number'] for ref in ('911', '912')]
+        self.assertEqual(numbers, [1, 2])
+        with self.assertRaisesRegex(Exception, 'founder_full'):
+            await self.subscribe('913')
         for i, broken in enumerate(({"slots": "diez", "months": 6}, {"slots": 2.5, "months": 6}, {"slots": 10, "months": 0}, {})):
-            await self.founder_slots(broken)
-            late = await self.subscribe(f"92{i}")
+            await self.founder_slots({**FOUNDER, "slots": 10})
+            late = await self.begin_founder(await self.account(), f"92{i}")
+            await self.founder_slots(broken)                               # broken between the checkout and its payment
+            await self.apply(late, ref=f"92{i}")
             row = await self.founder(late)
             self.assertIsNone(row['founder_number'])
             self.assertEqual((await self.rows("SELECT plan FROM profiles WHERE id=%s", row['user_id']))[0]['plan'], 'pro')
 
     async def test_a_fully_refunded_subscription_frees_its_founder_slot(self):
-        await self.founder_slots({"slots": 1, "months": 6})
+        await self.founder_slots({**FOUNDER, "slots": 1})
         first = await self.subscribe('931')
         self.assertEqual((await self.founder(first))['founder_number'], 1)
         # One of two payments refunded: the subscription did start.
         await self.apply(first, ref='932', start="now()-interval '30 days'", end="now()")
         await self.apply(first, ref='932', status='refunded')
         self.assertEqual((await self.founder(first))['founder_number'], 1)
-        self.assertIsNone((await self.founder(await self.subscribe('933')))['founder_number'])
-        # Every payment refunded: it never started, and the next new subscription takes the slot.
+        with self.assertRaisesRegex(Exception, 'founder_full'):
+            await self.subscribe('933')
+        # Every payment refunded: it never started, and the next founder checkout takes the slot.
         await self.apply(first, ref='931', status='charged_back')
         row = await self.founder(first)
         self.assertEqual((row['founder_number'], row['founder_price_until']), (None, None))
         self.assertEqual(len(await self.rows("SELECT 1 FROM events WHERE name='agency_founder_released' AND user_id=%s", row['user_id'])), 1)
         self.assertEqual((await self.founder(await self.subscribe('934')))['founder_number'], 1)
         # A refund that arrives before its approval never makes a founder.
-        await self.founder_slots({"slots": 5, "months": 6})
+        await self.founder_slots({**FOUNDER, "slots": 5})
         self.assertIsNone((await self.founder(await self.subscribe('935', status='refunded')))['founder_number'])
 
     # -- 2.4: extending Particular (docs/PLANES_2026-10.md) -----------------
