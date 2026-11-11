@@ -40,9 +40,22 @@ class RedFlag:
 _OWNERS = re.compile(r"\b(duen[oa]s?|titular(es)?|unico dueno|primer dueno|1 dueno|(unica|primera|segunda) mano)\b")
 _SERVICE = re.compile(r"\b(services?|servicios? oficial\w*|mantenimiento|service oficial)\b")
 _TIMING_BELT = re.compile(r"\b(distribucion|correa|kit de distribucion)\b")
+# A title that says the car is damaged («2013 Fiat palio -chocado-», «Peugeot
+# 208 en marcha y andando chocado»): 15 active Facebook listings with 11 matches
+# had no flag on 2026-11-11, since a card has no description. Not «nunca
+# chocado», «sin choques».
+_TITLE_DAMAGE = re.compile(r"\b(chocad[oa]s?|siniestrad[oa]s?|granizad[oa]s?|volcad[oa]s?|incendiad[oa]s?"
+                           r"|con choque|para reparar|para arreglar)\b")
+_DAMAGE_NEGATED = re.compile(r"\b(no|sin|nunca|jamas|cero)\s+(?:\w+\s+)?$")
 # km the description and the listing may disagree on before it's worth a flag.
 _KM_MISMATCH_MIN = 5_000
 _KM_MISMATCH_SHARE = 0.10
+
+
+def title_damage(title: str | None) -> bool:
+    """Whether the title says the car is damaged, not that it never was."""
+    text = normalize_text(title)
+    return any(not _DAMAGE_NEGATED.search(text[:m.start()]) for m in _TITLE_DAMAGE.finditer(text))
 
 
 def description_known(listing: Mapping[str, Any]) -> bool:
@@ -103,6 +116,8 @@ def red_flags(listing: Mapping[str, Any], *, diff_pct: float | None, guard: str 
         for field, key in (("damage_mentioned", "damage_mentioned"), ("commercial_use", "commercial_use")):
             if claim(facts, field) is True:
                 flags.append(RedFlag(key, copy.RED_FLAG[key], "info"))
+    if not any(f.id == "damage_mentioned" for f in flags) and title_damage(listing.get("title")):
+        flags.append(RedFlag("damage_mentioned", copy.RED_FLAG["damage_mentioned"], "info"))
         if claim(facts, "vtv_current") is False:
             flags.append(RedFlag("vtv_pending", copy.RED_FLAG["vtv_pending"], "info"))
 

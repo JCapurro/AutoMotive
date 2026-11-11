@@ -844,5 +844,75 @@ class MergeDoubtfulTests(unittest.TestCase):
         self.assertEqual((again["price"], again["price_partial"]), (None, True))
 
 
+class FacebookPendingsOf1111Tests(unittest.TestCase):
+    """2026-11-11: «You» titles of ads that no longer exist, «Just listed» titles
+    of logged-out cards, and «chocado» in a title with no flag."""
+
+    def test_a_logged_out_card_s_title_is_the_part_after_its_badge(self):
+        # Labels and texts as the VPS read them logged out (Renault Clio, 2026-11-11).
+        card = parse_card("/marketplace/item/1/", "Recién publicado\n$120.000\nMolduras lateral Renault Clio mio "
+                          "3 ptas.\nTemperley, BA", label="Just listed, Molduras lateral Renault Clio mio 3 ptas., "
+                          "$120.000, Temperley, BA, listing 1")
+        self.assertEqual((card.titulo, card.ubicacion), ("Molduras lateral Renault Clio mio 3 ptas.", "Temperley, BA"))
+        # A price inside the title stays in it.
+        title = "2014 RENAULT  CLIO 1.2 FULL FULL oferta! $7.350.000 final contado"
+        card = parse_card("/marketplace/item/2/", f"Recién publicado\n$7.350.000\n{title}\nCiudad de Buenos Aires, CF",
+                          label=f"Just listed, {title}, $7.350.000, Ciudad de Buenos Aires, CF, listing 2")
+        self.assertEqual(card.titulo, title)
+        self.assertEqual(card.anio, 2014)
+
+    def test_a_card_without_a_title_is_skipped(self):
+        self.assertIsNone(parse_card("/marketplace/item/3/", "Recién publicado\n$16.000\nCiudad de Buenos Aires, CF",
+                                     label="Just listed, , $16.000, Ciudad de Buenos Aires, CF, listing 3"))
+        # Logged in, as before.
+        card = parse_card("/marketplace/item/4/", "US$ 12.500\n2019 Volkswagen golf\nRosario, SF",
+                          label="2019 Volkswagen golf, US$ 12.500, Rosario, SF")
+        self.assertEqual(card.titulo, "2019 Volkswagen golf")
+
+    def test_an_ad_that_sends_to_marketplace_s_home_is_gone(self):
+        from unittest.mock import AsyncMock, patch
+
+        from collectors import facebook as fb
+        from collectors._http import Page
+
+        home = "https://www.facebook.com/marketplace/107923669227888/?unavailable_product=1"
+        self.assertEqual(fb.parse_detail("<html><body><div role='main'>You</div></body></html>", home).gone_reason,
+                         "unavailable_product")
+        landed = Page(200, home, "<html><body><div role='main'><span>You</span></div></body></html>")
+        with patch.object(fb, "fetch_rendered", AsyncMock(return_value=landed)), \
+                patch.object(fb.Path, "exists", return_value=True):
+            page = asyncio.run(fb.FacebookMarketplaceScraper().fetch_detail_page(
+                "https://www.facebook.com/marketplace/item/2538803896615518/"))
+        self.assertEqual((page.status, page.url), (404, home))
+        detail = fb.parse_detail(page.html, "https://www.facebook.com/marketplace/item/2538803896615518/", page.status)
+        self.assertEqual((detail.gone, detail.listing), (True, None))
+
+    def test_a_title_that_says_damaged_flags_it(self):
+        from intelligence.red_flags import title_damage
+
+        for title in ("2013 Fiat palio -chocado-", "2023 Chocado Volkswagen Nivus 1.0 Tsi",
+                      "2018 Peugeot 208 allure 1.6 en marcha y andando chocado poloautos",
+                      "2017 Chevrolet cruze 4p 1.4 turbo lt mt (chocado)", "Gol 2010 para reparar"):
+            self.assertTrue(title_damage(title), title)
+        for title in ("Impecable, nunca chocado", "Gol 2010 sin choques", "Vendo Corsa, no chocado",
+                      "Gol jamás chocado", "Fiat Uno 2008 impecable", None):
+            self.assertFalse(title_damage(title), title)
+
+    def test_the_repair_plan_ends_the_ads_that_no_longer_exist(self):
+        from tools import repair_facebook as rf
+
+        def row(i, **kw):
+            return {"id": i, "source": "facebook", "external_id": str(i), "title": "You", "description": None,
+                    "make": "Ford", "model": "Ka", "year": 2015, "mileage_km": None, "price": 12_500,
+                    "currency": "USD", "price_usd": 12_500, "price_published": 12_500,
+                    "price_published_currency": "USD", "price_partial": False, "price_partial_reason": None,
+                    "description_facts": None, "attributes": {"moneda": "USD"}, "n_matches": 3,
+                    "watched": False, "unavailable": True, **kw}
+        p = rf.plan([row(1), row(2, watched=True), row(3, unavailable=False, title="2015 Ford Ka SE")], FX)
+        self.assertEqual(p.card_gone, [1])
+        self.assertEqual(p.counts[("facebook", rf.UNAVAILABLE)], 1)
+        self.assertEqual(p.counts[("facebook", rf.UNAVAILABLE_WATCHED)], 1)
+
+
 if __name__ == "__main__":
     unittest.main()

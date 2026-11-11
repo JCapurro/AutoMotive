@@ -22,6 +22,10 @@ transaction:
   one (reserved, it may open again) stays active and loses the mark in its
   title, which the crawl's card can't give it back to an enriched listing
   (ingest.merge keeps its stored title);
+* ads whose last item page sent to Marketplace's home («?unavailable_product=1»,
+  raw_pages): they no longer exist, and the page read as theirs stored «You»
+  as their title (collectors.facebook.fetch_detail_page now reads that as a
+  404). Ended as a sold card's are, and the same ones left to the watchlist;
 * doubtful prices (money.facebook_currency gives None): a "USD" price written
   with a bare "$" (not «US$», «U$S», «USD») of a car that is not high-end,
   with FB_USD_CEILING <= amount < 1.000.000. Neither dollars nor pesos make it
@@ -83,6 +87,8 @@ log = logging.getLogger("repair_facebook")
 PART = "repuestos a excluir"
 CARD_GONE = "vendidos en la tarjeta a terminar"
 CARD_WATCHED = "vendidos guardados: los cierra la watchlist"
+UNAVAILABLE = "avisos que ya no existen a terminar"
+UNAVAILABLE_WATCHED = "avisos que ya no existen guardados: watchlist"
 TITLE = "títulos «Pending ·» a limpiar"
 PART_MATCHES = "matches de repuestos a borrar"
 TO_ARS = "monedas USD -> ARS"
@@ -101,7 +107,12 @@ _SELECT = ("SELECT l.id, l.source, l.external_id, l.title, l.description, l.make
            "       EXISTS (SELECT 1 FROM user_listing_interactions i "
            "                WHERE i.listing_id = l.id AND public.commercial_access_active(i.user_id) "
            "                  AND (i.saved OR i.status IN ('interested', 'contacted', 'visit_scheduled'))) "
-           "         AS watched "
+           "         AS watched, "
+           # Its last item page sent to Marketplace's home: the ad no longer exists
+           # (collectors.facebook.fetch_detail_page, before which it stored «You»).
+           "       coalesce((SELECT r.url ~ 'unavailable_product' FROM raw_pages r "
+           "                  WHERE r.listing_id = l.id ORDER BY r.fetched_at DESC LIMIT 1), false) "
+           "         AS unavailable "
            "  FROM listings l WHERE l.status = 'active' AND l.source = ANY(%s) ORDER BY l.id")
 
 
@@ -202,7 +213,13 @@ def plan(rows: list[dict[str, Any]], fx: FxQuote | None, *, examples: int = 5) -
             if row.get("n_matches"):
                 out.note(source, PART_MATCHES, f"{label}: {row['n_matches']}", row["n_matches"], keep=examples)
             continue
-        if status == "sold" and row.get("watched"):
+        if row.get("unavailable") and row.get("watched"):
+            # As a sold one: the watchlist's detail read (now a 404) tells its end.
+            out.note(source, UNAVAILABLE_WATCHED, label, keep=examples)
+        elif row.get("unavailable"):
+            out.card_gone.append(row["id"])
+            out.note(source, UNAVAILABLE, label, keep=examples)
+        elif status == "sold" and row.get("watched"):
             # Left to the watchlist, whose detail read tells its end to who
             # saved or follows it; the repair would end it in silence.
             out.note(source, CARD_WATCHED, label, keep=examples)

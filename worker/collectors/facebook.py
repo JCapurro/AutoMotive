@@ -244,14 +244,22 @@ def card_status(title: str) -> tuple[str, str | None]:
     return title[m.end():].strip(), _CARD_STATUS_NAME[m.group(1).lower()]
 
 
-def _title_from_card(label: str, lines: list[str]) -> str:
-    label_title = (label or "").split(",", 1)[0].strip()
-    if label_title:
+def _title_from_card(label: str, lines: list[str]) -> str | None:
+    """The card's title; None for a card that has none (parse_card skips it)."""
+    parts = (label or "").split(",")
+    if parts[0].strip().lower() in _DATE_LINE_VALUES:
+        # Logged out the label opens with the card's badge: «Just listed, 2014
+        # RENAULT CLIO 1.2 FULL oferta! $7.350.000 final contado, $7.350.000,
+        # Ciudad de Buenos Aires, CF, listing 29…». 43 listings stored «Just
+        # listed» as their title (2026-11-10). The title is the part right after
+        # it, empty on a card with none («Just listed, , $16.000, Moreno, BA»).
+        return parts[1].strip() or None if len(parts) > 1 else None
+    if label_title := parts[0].strip():
         return label_title
     for line in lines:
         if _PRICE_RE.search(line):
             continue
-        if line.lower() in {"just listed", "publicado recientemente"}:
+        if line.lower() in _DATE_LINE_VALUES:
             continue
         return line
     return ""
@@ -312,7 +320,12 @@ def parse_card(href: str, text: str, label: str = "", img: str | None = None) ->
     price, moneda, sign = _parse_price_sign(text)
     if price is None:
         price, moneda, sign = _parse_price_sign(label)
-    raw_title = _title_from_card(label, lines) or (text or "")[:120]
+    raw_title = _title_from_card(label, lines)
+    if raw_title is None:
+        # A card without a title says nothing of the car (and no line of it
+        # would be one: the price, the place).
+        return None
+    raw_title = raw_title or (text or "")[:120]
     title, status = card_status(raw_title)
     extra: dict[str, str] = {"price_sign": sign} if sign else {}
     if status:
@@ -458,11 +471,19 @@ def _own_creation_time(html: str, listing_id: str) -> int | None:
     return value if 1_000_000_000 < value <= int(time.time()) + 3_600 else None
 
 
+def _item_page(url: str) -> bool:
+    """Whether `url` is an ad's own page, not where a gone ad sends to."""
+    return bool(re.search(r"/marketplace/item/\d+", url or "")) and "unavailable_product" not in (url or "")
+
+
 def parse_detail(html: str, url: str, status: int = 200) -> ListingDetail:
     """An item page, read from the visible text of its main region: FB's
     class names are generated, so only text cues are stable."""
     if status == 404:
         return ListingDetail(url, gone=True, gone_reason="404")
+    if not _item_page(url):
+        # tools/reprocess.py passes the URL the page landed on (fetch_detail_page).
+        return ListingDetail(url, gone=True, gone_reason="unavailable_product")
     doc = soup(html)
     main = doc.select_one("[role='main']") or doc.body
     if main is None:
@@ -1133,6 +1154,13 @@ class FacebookMarketplaceScraper(BaseScraper):
                                     native=True)
         if "/login" in page.url or "checkpoint" in page.url:
             raise CollectorBlocked("facebook: session expired")
+        if not _item_page(page.url):
+            # An ad that no longer exists sends to Marketplace's home
+            # («/marketplace/107923669227888/?unavailable_product=1»): its page
+            # read as the ad stored «You» as the title of 179 ended ads that
+            # stayed active with their matches (2026-10-23 to 2026-11-11). A 404
+            # for parse_detail, which ends it; raw_pages keeps the URL it landed on.
+            return Page(404, page.url, page.html)
         return page
 
     def slim_page(self, page: Page) -> str:
