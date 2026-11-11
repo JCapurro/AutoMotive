@@ -312,6 +312,20 @@ export function accessDate(value: string): string {
  * the amount they started with until founder_price_until (billing_checkouts).
  * Null otherwise.
  */
+/** The founder offer behind the private link (public.founder_offer). */
+export type FounderOffer = { amount: number; months: number; slots: number; left: number; regular: number | null };
+export function parseFounderOffer(value: unknown): FounderOffer | null {
+  if (!value || typeof value !== "object") return null;
+  const v = value as Record<string, unknown>;
+  const whole = (x: unknown) => typeof x === "number" && Number.isInteger(x) && x >= 0;
+  if (!whole(v.amount) || !whole(v.months) || !whole(v.slots) || !whole(v.left) || (v.amount as number) <= 0) return null;
+  return { amount: v.amount as number, months: v.months as number, slots: v.slots as number, left: v.left as number,
+    regular: typeof v.regular === "number" && v.regular > (v.amount as number) ? v.regular : null };
+}
+export function founderOfferTerms(offer: FounderOffer): string {
+  const after = offer.regular ? `; después pasa a ${planPrice(offer.regular)} por mes, con aviso 30 días antes` : "";
+  return `Todo Pro, con el precio fijo por ${offer.months} meses desde tu primer pago${after}.`;
+}
 export function founderNote(checkout: { amount: number; founder_number?: number | null; founder_price_until?: string | null }): string | null {
   if (checkout.founder_number == null || !checkout.founder_price_until) return null;
   const until = new Intl.DateTimeFormat("es-AR", { dateStyle: "long", timeZone: "America/Argentina/Buenos_Aires" })

@@ -3,16 +3,19 @@ import type { Metadata } from "next";
 
 import { ProPlans } from "@/components/app/pro-plans";
 import { BillingStatus } from "@/components/app/billing-status";
+import { FounderOfferCard } from "@/components/app/founder-offer";
 import { requireUser } from "@/lib/auth";
 import { webConfig } from "@/lib/config";
-import { accessDate, alertCapsText, extendsPass, isPlacement, isWaitlistPlan, type PlanLimits, PRO_BENEFITS } from "@/lib/pro";
+import { accessDate, alertCapsText, extendsPass, isPlacement, isWaitlistPlan, parseFounderOffer, type PlanLimits, PRO_BENEFITS } from "@/lib/pro";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = { title: "Planes" };
 
 export default async function ProPage({ searchParams }: PageProps<"/app/pro">) {
   await requireUser();
-  const { from, plan } = await searchParams;
+  const { from, plan, fundador } = await searchParams;
+  const founderCode = typeof fundador === "string" && /^[a-f0-9]{8,32}$/.test(fundador) ? fundador : null;
   const supabase = await createClient();
   const [{ data: waitlist }, cfg, { data: checkouts }, { data: snapshot }] = await Promise.all([
     supabase.from("pro_waitlist").select("plan").maybeSingle(),
@@ -20,6 +23,8 @@ export default async function ProPage({ searchParams }: PageProps<"/app/pro">) {
     supabase.from("billing_checkouts").select("id,offer,amount,status,init_point,next_payment_at,sync_error,created_at,founder_number,founder_price_until").order("created_at", { ascending: false }).limit(3),
     supabase.rpc("my_plan_snapshot"),
   ]);
+  // The code is the secret: only the service role can check it.
+  const founder = founderCode ? parseFounderOffer((await createAdminClient().rpc("founder_offer", { p_code: founderCode })).data) : null;
   const access = (snapshot ?? null) as PlanLimits | null;
   const extending = extendsPass(access);
 
@@ -37,6 +42,9 @@ export default async function ProPage({ searchParams }: PageProps<"/app/pro">) {
       {extending && access?.expires_at ? <p role="status" className="rounded-xl bg-emerald-50 p-4 text-sm text-emerald-950 ring-1 ring-emerald-200">
         Tenés Particular hasta el {accessDate(access.expires_at)}. Si lo extendés, los 30 días se suman a tu vencimiento.
       </p> : null}
+
+      {founderCode && founder ? <FounderOfferCard code={founderCode} founder={founder} version={cfg.proOffer.version} automatic={cfg.automaticPayments} /> : null}
+      {founderCode && !founder ? <p role="status" className="rounded-xl bg-muted p-4 text-sm">Este link de precio fundador ya no está vigente. Podés contratar Pro al precio normal.</p> : null}
 
       <ul className="grid gap-2 sm:grid-cols-2">
         {PRO_BENEFITS.map((b) => (
