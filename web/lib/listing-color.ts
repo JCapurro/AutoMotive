@@ -2,7 +2,8 @@
  * A listing's color in the card and the ficha (docs/PLAN_FILTRO_COLOR.md §8):
  * «Color: gris · según la foto» when the photo decided it, «· dato del aviso»
  * when the source or the text did; «Color sin confirmar» when the search
- * filters by color and the listing has none.
+ * filters by color and the listing has none. A neighbor color the photo
+ * suggested («color parecido: puede ser verde») comes in the match reason.
  */
 import { COLOR_METHOD, COLOR_UNCONFIRMED, colorName, isColor } from "@/lib/copy";
 
