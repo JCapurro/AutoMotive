@@ -79,7 +79,7 @@ class Financing:
 @dataclass
 class DescriptionFacts:
     amounts: list[Amount] = field(default_factory=list)
-    published_is: str | None = None                  # the text says the published price is cash | list
+    published_is: str | None = None                  # the text says the published price is cash | list | down_payment
     financing: Financing = field(default_factory=Financing)
     mileage_km: int | None = None
     year: int | None = None
@@ -193,6 +193,9 @@ _PUBLISHED_CASH = re.compile(
 _PUBLISHED_LIST = re.compile(
     r"(?:precio|valor)(?:es)? publicados? (?:es |son )?(?:el |los )?(?:de )?lista|"
     r"(?:precio|valor)(?:es)? de lista (?:el )?publicado")
+# An Autocosmos dealer's template leaves the total blank: «LLEVATE este Polo
+# (2024) por . Solo $6.000.000». The «Solo» amount is the down payment.
+_PUBLISHED_DOWN = re.compile(r"\bpor\s*\.\s*solo\s*(?:u\$[sd]|us\$|\$)")
 
 _FINANCING = re.compile(r"financ\w*|cuotas?\b|credito|prendari\w*|leasing|anticipo|entrega minima|"
                         r"retir\w* con|subite con|llevatelo con")
@@ -308,6 +311,8 @@ def _published_is(text: str) -> str | None:
         return "cash"
     if _PUBLISHED_LIST.search(text):
         return "list"
+    if _PUBLISHED_DOWN.search(text):
+        return "down_payment"
     return None
 
 
