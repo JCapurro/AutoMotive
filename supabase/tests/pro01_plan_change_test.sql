@@ -176,7 +176,7 @@ select is((select array_agg(seller_unknown order by listing_id) from public.matc
           array[true, false, false, false],
           'true only when the strict filter let an unknown seller through; not a known seller, not the soft preference, not no reason');
 select is((select attname from pg_attribute where attrelid = 'public.match_cards'::regclass and attnum > 0 and not attisdropped
-            order by attnum desc limit 1), 'seller_unknown', '... appended last');
+            order by attnum desc limit 1 offset 2), 'seller_unknown', '... appended last (before the color, 20261214120000)');
 
 set local role authenticated;
 set local request.jwt.claims = '{"sub": "c2000000-0000-0000-0000-000000000001", "role": "authenticated"}';
