@@ -24,18 +24,21 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import type { Catalog } from "@/lib/catalog";
-import { BODY_TYPE, BODY_TYPE_CODES, type BodyType, FREQUENCY, FUEL, MARGIN, MIN_LEVEL_OPTIONS, PRO_LOCKED, SELLER, SELLER_FORM_HINT, SELLER_STRICT, TRANSMISSION, isBodyType } from "@/lib/copy";
+import { ANY_COLOR, BODY_TYPE, BODY_TYPE_CODES, type BodyType, COLOR, COLOR_CODES, type ColorCode, FREQUENCY, FUEL, MARGIN, MIN_LEVEL_OPTIONS, PRO_LOCKED, SELLER, SELLER_FORM_HINT, SELLER_STRICT, TRANSMISSION, isBodyType } from "@/lib/copy";
 import { number } from "@/lib/format";
 import { PROVINCES, citiesInProvince, cityById, cityByLocation } from "@/lib/argentina-locations";
 import {
+  ANY_COLOR_VALUE,
   MODEL_LESS_UNAVAILABLE,
   MODEL_LESS_UPSELL,
   type SearchInput,
   type SearchValues,
+  checkedColors,
   defaultName,
   isModelLess,
   modelBodyTypes,
   selectedTrims,
+  toggleColor,
 } from "@/lib/search-form";
 import { type ProLocked, locationCapText } from "@/lib/pro";
 import { cn } from "@/lib/utils";
@@ -79,6 +82,8 @@ type Draft = {
   fuel: string;
   /** In "model" mode only the ones the model offers count (toInput); the rest wait for another model. */
   body_types: BodyType[];
+  /** filters.colors (docs/PLAN_FILTRO_COLOR.md); empty = «Cualquier color». Both modes, every plan. */
+  colors: ColorCode[];
   sources: string[];
   /** "" = todo el país; "current" = the device's location; "manual" = cities picked by hand (zones). */
   place: "" | "current" | "manual";
@@ -175,6 +180,7 @@ function draftFrom(
     transmission: v.transmission,
     fuel: v.fuel,
     body_types: v.body_types,
+    colors: v.colors,
     sources: v.sources,
     place,
     radius: isNew ? "30" : "",
@@ -226,6 +232,7 @@ function toInput(d: Draft, offered: readonly string[]): SearchInput {
     transmission: d.transmission,
     fuel: d.fuel,
     body_types: byBody ? d.body_types : d.body_types.filter((code) => offered.includes(code)),
+    colors: d.colors,
     sources: d.sources,
     ...places(d),
     km_target: amount(d.km_target),
@@ -445,6 +452,10 @@ export function SearchForm({
       ...prev,
       body_types: on ? [...new Set([...prev.body_types, code])] : prev.body_types.filter((c) => c !== code),
     }));
+  }
+
+  function chooseColor(value: string, on: boolean) {
+    setDraft((prev) => ({ ...prev, colors: toggleColor(prev.colors, value, on) }));
   }
 
   function toggleSource(id: string, on: boolean) {
@@ -688,6 +699,22 @@ export function SearchForm({
             ) : null}
             </>
             )}
+            <fieldset className="space-y-2 sm:col-span-2" data-testid="color-filter">
+              <legend className="text-sm font-medium">Color</legend>
+              <ChipToggles
+                name={fid("colors")}
+                value={checkedColors(d.colors)}
+                onToggle={chooseColor}
+                options={[
+                  { value: ANY_COLOR_VALUE, label: ANY_COLOR },
+                  ...COLOR_CODES.map((code) => ({ value: code, label: COLOR[code] })),
+                ]}
+              />
+              <p className="text-xs text-muted-foreground">
+                {d.colors.length ? "Si no sabemos el color de un auto, igual te lo mostramos como «color sin confirmar»." : "Elegí uno o más para buscar solo esos colores."}
+              </p>
+              {fieldError("colors")}
+            </fieldset>
             <Field id={fid("year_min")} label="Año desde">
               <NativeSelect id={fid("year_min")} value={d.year_min} onChange={(e) => set("year_min", e.target.value)} className="w-full">
                 <NativeSelectOption value="">Cualquiera</NativeSelectOption>

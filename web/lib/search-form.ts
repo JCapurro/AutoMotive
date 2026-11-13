@@ -6,7 +6,9 @@
  */
 import { z } from "zod";
 
-import { BODY_TYPE_CODES, type BodyType, type Level, SELLER_STRICT, bodyTypeCodes, bodyTypesText, isBodyType } from "@/lib/copy";
+import {
+  BODY_TYPE_CODES, type BodyType, COLOR_CODES, type ColorCode, type Level, SELLER_STRICT, bodyTypeCodes, bodyTypesText, colorCodes, isBodyType, isColor,
+} from "@/lib/copy";
 import { money, number } from "@/lib/format";
 import type { Filters, Preferences, SearchProfile, SellerType } from "@/lib/types";
 
@@ -35,6 +37,8 @@ export const SearchInput = z
     transmission: z.enum(["", "manual", "automatic"]).default(""),
     fuel: z.string().max(20).default(""),
     body_types: z.array(z.enum(BODY_TYPE_CODES)).max(BODY_TYPE_CODES.length).default([]),
+    // docs/PLAN_FILTRO_COLOR.md §8: a hard filter in both modes and every plan; none = «Cualquier color».
+    colors: z.array(z.enum(COLOR_CODES, "Elegí un color de la lista.")).max(COLOR_CODES.length).default([]),
     sources: z.array(z.string().max(40)).max(20).default([]),
     location: z
       .object({
@@ -134,6 +138,25 @@ export function modelBodyTypes(catalog: readonly string[] | null | undefined): B
   return codes.length >= 2 ? codes : [];
 }
 
+/** The form's value for «Cualquier color», the first checkbox (no filter). */
+export const ANY_COLOR_VALUE = "any";
+
+/**
+ * A color checkbox toggled: checking a color unchecks «Cualquier color»,
+ * checking that one clears the colors, and unchecking the last color goes
+ * back to it (an empty list). Canonical order, once each.
+ */
+export function toggleColor(colors: readonly ColorCode[], value: string, on: boolean): ColorCode[] {
+  if (value === ANY_COLOR_VALUE) return on ? [] : [...colors];
+  if (!isColor(value)) return [...colors];
+  return colorCodes(on ? [...colors, value] : colors.filter((c) => c !== value));
+}
+
+/** What the color checkboxes show as checked: the colors, or «Cualquier color» without any. */
+export function checkedColors(colors: readonly ColorCode[]): string[] {
+  return colors.length ? [...colors] : [ANY_COLOR_VALUE];
+}
+
 /** "USD 20.000" · "$ 25.000.000" */
 function priceText(amount: number, currency: string | undefined): string {
   return currency === "ARS" ? `$ ${number(amount)}` : money(amount, "USD");
@@ -193,6 +216,8 @@ export function toFilters(v: SearchValues, allSources: string[] = []): Filters {
   if (v.fuel) f.fuel = v.fuel;
   const bodyTypes = bodyTypeCodes(v.body_types);
   if (bodyTypes.length) f.body_types = bodyTypes;
+  const colors = colorCodes(v.colors);
+  if (colors.length) f.colors = colors;
   // Every source selected = no restriction, so sources added later are searched too.
   const chosen = [...new Set(v.sources)];
   if (chosen.length && !allSources.every((s) => chosen.includes(s))) f.sources = chosen;
@@ -248,6 +273,7 @@ export function fromProfile(p: SearchProfile, allSources: string[]): SearchValue
     transmission: f.transmission ?? "",
     fuel: f.fuel ?? "",
     body_types: bodyTypeCodes(f.body_types),
+    colors: colorCodes(f.colors),
     sources: f.sources?.length ? f.sources : allSources,
     location:
       p.origin_lat != null && p.origin_lon != null && p.radius_km != null

@@ -15,6 +15,9 @@ describe("filterSummary", () => {
   it("adds a model's body types at the end", () => {
     expect(filterSummary({ make: "Chevrolet", model: "Corsa", body_types: ["rural", "sedan"] })).toBe("Chevrolet Corsa · Sedán o Rural");
   });
+  it("adds the colors at the end (docs/PLAN_FILTRO_COLOR.md)", () => {
+    expect(filterSummary({ make: "Volkswagen", model: "Gol", colors: ["gris", "blanco"] })).toBe("Volkswagen Gol · blanco o gris");
+  });
   it("writes a reason as §45 does", () => {
     expect([reasonValue("ok"), reasonValue("fail"), reasonValue("unknown")]).toEqual(["true", "false", "unknown"]);
   });

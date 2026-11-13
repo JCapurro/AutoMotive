@@ -92,3 +92,17 @@ it("keeps the km / body / location line in the text column, with or without a co
     expect(meta.length).toBeGreaterThan(0);
   }
 });
+
+it("shows the color and how it was decided (docs/PLAN_FILTRO_COLOR.md)", () => {
+  const color = (extra: Partial<Card>, colorWanted = false) =>
+    renderToStaticMarkup(createElement(ListingCard, { card: { ...card, ...extra }, colorWanted })).match(/data-testid="card-color">([^<]*)</)?.[1] ?? null;
+  expect(color({ color: "gris", color_method: "vision" })).toBe("Color: gris · según la foto");
+  expect(color({ color: "gris", color_method: "source" })).toBe("Color: gris · dato del aviso");
+  expect(color({ color: "blanco", color_method: "text" })).toBe("Color: blanco · dato del aviso");
+  expect(color({ color: "azul", color_method: null })).toBe("Color: azul");
+  // Without a color: «Color sin confirmar» only when the search filters by color.
+  expect(color({ color: null, color_method: null })).toBeNull();
+  expect(color({})).toBeNull();
+  expect(color({ color: null, color_method: "vision" }, true)).toBe("Color sin confirmar");
+  expect(color({ color: "violeta" })).toBeNull();
+});

@@ -172,3 +172,15 @@ describe("body types in the drafts (docs/CARROCERIA.md)", () => {
     expect(addedVehicle(draftToValues(suv, BASE).values).body_types).toEqual([]);
   });
 });
+
+describe("color (docs/PLAN_FILTRO_COLOR.md: «un Gol blanco»)", () => {
+  const [fiesta] = AssistedOutput.parse(WORKER_OUTPUT).drafts;
+  it("carries the draft's colors into the form, known codes only", () => {
+    const withColor = { ...fiesta, values: { ...fiesta.values, colors: ["blanco", "violeta"] } };
+    expect(draftToValues(withColor, BASE).values.colors).toEqual(["blanco"]);
+  });
+  it("leaves «Cualquier color» for a draft without colors (older outputs)", () => {
+    const { colors: _colors, ...older } = fiesta.values;
+    expect(draftToValues({ ...fiesta, values: older }, BASE).values.colors).toEqual([]);
+  });
+});

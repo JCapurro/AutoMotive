@@ -1,4 +1,4 @@
-import { bodyTypesText } from "@/lib/copy";
+import { bodyTypesText, colorsText } from "@/lib/copy";
 import { dateTime, number, pct } from "@/lib/format";
 
 /** Formatting for the admin tables. */
@@ -26,6 +26,8 @@ export function filterSummary(filters: unknown): string {
   if (f.km_max) parts.push(`≤ ${number(Number(f.km_max))} km`);
   if (f.transmission) parts.push(String(f.transmission));
   if (vehicle && bodyTypes) parts.push(bodyTypes);
+  const colors = colorsText(Array.isArray(f.colors) ? f.colors : []);
+  if (colors) parts.push(colors);
   return parts.join(" · ");
 }
 

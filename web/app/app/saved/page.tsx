@@ -98,7 +98,7 @@ export default async function SavedPage({ searchParams }: PageProps<"/app/saved"
   const [{ data: listings }, { data: snapshots }, { data: matches }, { data: ownProfile }] = await Promise.all([
     supabase
       .from("listings")
-      .select("id, title, make, model, trim, year, price, currency, price_usd, mileage_km, location_text, published_at, first_seen_at, images, status, probable_repost_of, body_type")
+      .select("id, title, make, model, trim, year, price, currency, price_usd, mileage_km, location_text, published_at, first_seen_at, images, status, probable_repost_of, body_type, color, color_method:attributes->_color->>method")
       .in("id", ids),
     supabase
       .from("listing_snapshots")

@@ -176,9 +176,59 @@ export function bodyTypeCodes(codes: readonly unknown[] | null | undefined): Bod
 
 /** ["suv", "pickup"] → "SUV o Pick-up"; three or more: "Sedán, SUV o Pick-up". */
 export function bodyTypesText(codes: readonly unknown[] | null | undefined): string {
-  const labels = bodyTypeCodes(codes).map((code) => BODY_TYPE[code]);
+  return orList(bodyTypeCodes(codes).map((code) => BODY_TYPE[code]));
+}
+
+/** "a", "a o b", "a, b o c". */
+function orList(labels: readonly string[]): string {
   return labels.length > 1 ? `${labels.slice(0, -1).join(", ")} o ${labels[labels.length - 1]}` : (labels[0] ?? "");
 }
+
+// docs/PLAN_FILTRO_COLOR.md §8: the same codes and order as the database, the
+// worker (normalization/color.py) and the LLM. The one place for their labels.
+export const COLOR_CODES = ["blanco", "negro", "gris", "azul", "rojo", "verde", "beige", "otro"] as const;
+export type ColorCode = (typeof COLOR_CODES)[number];
+/** The form's checkboxes. */
+export const COLOR: Record<ColorCode, string> = {
+  blanco: "Blanco",
+  negro: "Negro",
+  gris: "Gris o plata",
+  azul: "Azul o celeste",
+  rojo: "Rojo o bordó",
+  verde: "Verde",
+  beige: "Beige o marrón",
+  otro: "Otro color",
+};
+/** The form's first checkbox: no color filter. */
+export const ANY_COLOR = "Cualquier color";
+
+export function isColor(value: unknown): value is ColorCode {
+  return typeof value === "string" && (COLOR_CODES as readonly string[]).includes(value);
+}
+
+/** The known color codes of a list, once each, in the canonical order. */
+export function colorCodes(codes: readonly unknown[] | null | undefined): ColorCode[] {
+  return COLOR_CODES.filter((code) => codes?.includes(code));
+}
+
+/** A color in a sentence, as the worker writes it: "gris", "azul", "otro" (the label's first word). */
+export function colorName(code: ColorCode): string {
+  return COLOR[code].split(" ")[0].toLocaleLowerCase("es");
+}
+
+/** ["blanco", "gris"] → "blanco o gris"; three or more: "blanco, negro o gris". */
+export function colorsText(codes: readonly unknown[] | null | undefined): string {
+  return orList(colorCodes(codes).map(colorName));
+}
+
+/** How the listing's color was decided (attributes._color.method), in the card's words. */
+export const COLOR_METHOD: Record<string, string> = {
+  vision: "según la foto",
+  source: "dato del aviso",
+  text: "dato del aviso",
+};
+/** The card and the ficha when the search filters by color and the listing has none. */
+export const COLOR_UNCONFIRMED = "Color sin confirmar";
 
 export const CHANNEL: Record<string, string> = { telegram: "Telegram", email: "Email", web: "Web" };
 
@@ -191,6 +241,7 @@ export const REASON_OK: Record<string, string> = {
   transmission: "Caja buscada",
   fuel: "Combustible buscado",
   body_type: "Carrocería buscada",
+  color: "Color buscado",
   location: "Zona compatible",
   source: "Fuente elegida",
   trim: "Versión buscada",
@@ -198,7 +249,6 @@ export const REASON_OK: Record<string, string> = {
   km_target: "Km por debajo del objetivo",
   price_target: "Precio por debajo del objetivo",
   seller_type: "Tipo de vendedor preferido",
-  colors: "Color preferido",
   max_distance_km: "Distancia preferida",
 };
 export const REASON_NAME: Record<string, string> = {
@@ -209,6 +259,7 @@ export const REASON_NAME: Record<string, string> = {
   transmission: "Caja",
   fuel: "Combustible",
   body_type: "Carrocería",
+  color: "Color",
   location: "Ubicación",
   source: "Fuente",
   trim: "Versión",
@@ -216,7 +267,6 @@ export const REASON_NAME: Record<string, string> = {
   km_target: "Km objetivo",
   price_target: "Precio objetivo",
   seller_type: "Vendedor",
-  colors: "Color",
   max_distance_km: "Distancia",
 };
 export const REASON_ORDER = Object.keys(REASON_OK);

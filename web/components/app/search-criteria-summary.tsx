@@ -1,6 +1,6 @@
-import { Banknote, CalendarDays, CarFront, Check, ChevronDown, Gauge, Loader2, MapPin, Settings2, Store, type LucideIcon } from "lucide-react";
+import { Banknote, CalendarDays, CarFront, Check, ChevronDown, Gauge, Loader2, MapPin, Palette, Settings2, Store, type LucideIcon } from "lucide-react";
 
-import { FUEL, SELLER, SELLER_STRICT, TRANSMISSION, bodyTypesText } from "@/lib/copy";
+import { FUEL, SELLER, SELLER_STRICT, TRANSMISSION, bodyTypesText, colorsText } from "@/lib/copy";
 import { number } from "@/lib/format";
 import type { SearchSource } from "@/lib/search-collection";
 import { storedSellerTypes } from "@/lib/search-form";
@@ -67,6 +67,14 @@ export function SearchCriteriaSummary({ name, filters: f, preferences: p, radius
     else extra.push(fact);
   }
 
+  // docs/PLAN_FILTRO_COLOR.md: «Color: blanco o gris», a main fact while the grid has room.
+  const colors = colorsText(f.colors);
+  if (colors) {
+    const fact = { label: "Color", value: colors, icon: Palette };
+    if (main.length < 6) main.push(fact);
+    else extra.push(fact);
+  }
+
   if (f.fuel) extra.push({ label: "Combustible", value: FUEL[f.fuel] ?? f.fuel });
   if (vehicle && bodyTypes) extra.push({ label: "Carrocería", value: bodyTypes });
   const strictTrims = f.trim_strict && f.trims?.length ? f.trims : [];
@@ -74,7 +82,6 @@ export function SearchCriteriaSummary({ name, filters: f, preferences: p, radius
   const preferredTrims = [...new Set([...(strictTrims.length ? [] : f.trims ?? []), ...(p.preferred_trims ?? [])])];
   if (preferredTrims.length) extra.push({ label: "Versión preferida", value: preferredTrims.join(", ") });
   if (p.seller_type && !strictSeller) extra.push({ label: "Vendedor preferido", value: SELLER[p.seller_type] ?? p.seller_type });
-  if (p.colors?.length) extra.push({ label: "Colores preferidos", value: p.colors.join(", ") });
   if (p.km_target != null) extra.push({ label: "Kilometraje preferido", value: `${number(p.km_target)} km` });
   if (p.price_target != null) {
     extra.push({ label: "Precio preferido", value: `${currency(p.price_target, p.price_target_currency ?? f.currency)} ${number(p.price_target)}` });
