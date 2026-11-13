@@ -28,8 +28,8 @@ from intelligence import copy
 from intelligence.matching import FAIL, evaluate, model_less, seller_types, strict_seller
 
 # The filters the funnel reports, in the order a person reads them.
-FILTERS = ("year", "price", "km", "location", "transmission", "fuel", "body_type", "trim", "seller", "source",
-           "model")
+FILTERS = ("year", "price", "km", "location", "transmission", "fuel", "body_type", "color", "trim", "seller",
+           "source", "model")
 
 LABEL = {
     "year": "año",
@@ -39,6 +39,7 @@ LABEL = {
     "transmission": "transmisión",
     "fuel": "combustible",
     "body_type": "carrocería",
+    "color": "color",
     "trim": "versión",
     "seller": "vendedor",
     "source": "fuentes",

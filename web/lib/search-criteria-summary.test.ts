@@ -80,7 +80,7 @@ describe("saved search criteria", () => {
   });
   it("keeps secondary criteria in a closed disclosure and labels soft preferences", () => {
     const result = html({ filters: { fuel: "nafta", trims: ["Titanium"] },
-      preferences: { preferred_trims: ["Titanium", "SE"], seller_type: "private", colors: ["Blanco"],
+      preferences: { preferred_trims: ["Titanium", "SE"], seller_type: "private",
         price_target: 10_000, price_target_currency: "USD", km_target: 80_000, max_distance_km: 20 } });
     expect(result).toContain("<details");
     expect(result).not.toMatch(/<details[^>]*\sopen/);
@@ -122,5 +122,17 @@ describe("body types in the criteria", () => {
     expect(result.match(/<dt/g)?.length).toBe(7);
     expect(result).toContain("Chevrolet Corsa");
     expect(result).toMatch(/<details[\s\S]*Carrocería[\s\S]*Rural/);
+  });
+});
+
+describe("color (docs/PLAN_FILTRO_COLOR.md)", () => {
+  it("shows the chosen colors as «Color: blanco o gris», in both modes", () => {
+    const fact = /<dt[^>]*>(?:<svg[\s\S]*?<\/svg>)?Color<\/dt><dd[^>]*>blanco o gris<\/dd>/;
+    expect(html({ filters: { make: "Volkswagen", model: "Gol", colors: ["gris", "blanco"] } })).toMatch(fact);
+    expect(html({ name: "SUV hasta USD 20.000", filters: { body_types: ["suv"], price_max: 20000, colors: ["blanco", "gris"] } })).toMatch(fact);
+  });
+  it("says nothing without a color filter, and drops unknown codes", () => {
+    expect(html({ filters: { make: "Volkswagen", model: "Gol" } })).not.toContain(">Color<");
+    expect(html({ filters: { make: "Volkswagen", model: "Gol", colors: ["violeta"] } })).not.toContain(">Color<");
   });
 });

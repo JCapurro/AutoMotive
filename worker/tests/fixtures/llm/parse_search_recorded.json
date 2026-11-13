@@ -1240,6 +1240,132 @@
       "models": [
         "claude-haiku-5-5"
       ]
+    },
+    "un Gol blanco": {
+      "type": "result",
+      "subtype": "success",
+      "is_error": false,
+      "result": "{\"vehicles\":[{\"make\":\"Volkswagen\",\"model\":\"Gol\",\"trim\":null,\"trims\":[],\"trim_strict\":false,\"body_types\":[],\"colors\":[\"blanco\"],\"year_min\":null,\"year_max\":null,\"price_max\":null,\"price_target\":null,\"currency\":null,\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null,\"locations\":[],\"timing\":null}]}",
+      "structured_output": {
+        "vehicles": [
+          {
+            "make": "Volkswagen",
+            "model": "Gol",
+            "trim": null,
+            "trims": [],
+            "trim_strict": false,
+            "body_types": [],
+            "colors": [
+              "blanco"
+            ],
+            "year_min": null,
+            "year_max": null,
+            "price_max": null,
+            "price_target": null,
+            "currency": null,
+            "km_max": null,
+            "km_target": null,
+            "transmission": null,
+            "fuel": null,
+            "seller_type": null,
+            "location": null,
+            "radius_km": null,
+            "locations": [],
+            "timing": null
+          }
+        ]
+      },
+      "duration_ms": 0,
+      "models": [
+        "hand-written"
+      ]
+    },
+    "Onix gris o plata, hasta 15 millones": {
+      "type": "result",
+      "subtype": "success",
+      "is_error": false,
+      "result": "{\"vehicles\":[{\"make\":\"Chevrolet\",\"model\":\"Onix\",\"trim\":null,\"trims\":[],\"trim_strict\":false,\"body_types\":[],\"colors\":[\"gris\"],\"year_min\":null,\"year_max\":null,\"price_max\":15000000,\"price_target\":null,\"currency\":\"ARS\",\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null,\"locations\":[],\"timing\":null}]}",
+      "structured_output": {
+        "vehicles": [
+          {
+            "make": "Chevrolet",
+            "model": "Onix",
+            "trim": null,
+            "trims": [],
+            "trim_strict": false,
+            "body_types": [],
+            "colors": [
+              "gris"
+            ],
+            "year_min": null,
+            "year_max": null,
+            "price_max": 15000000,
+            "price_target": null,
+            "currency": "ARS",
+            "km_max": null,
+            "km_target": null,
+            "transmission": null,
+            "fuel": null,
+            "seller_type": null,
+            "location": null,
+            "radius_km": null,
+            "locations": [],
+            "timing": null
+          }
+        ]
+      },
+      "duration_ms": 0,
+      "models": [
+        "hand-written"
+      ]
+    },
+    "Corolla blanco o negro 2018 en adelante, interior negro": {
+      "type": "result",
+      "subtype": "success",
+      "is_error": false,
+      "result": "{\"vehicles\":[{\"make\":\"Toyota\",\"model\":\"Corolla\",\"trim\":null,\"trims\":[],\"trim_strict\":false,\"body_types\":[],\"colors\":[\"blanco\",\"negro\"],\"year_min\":2018,\"year_max\":null,\"price_max\":null,\"price_target\":null,\"currency\":null,\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null,\"locations\":[],\"timing\":null}]}",
+      "structured_output": {
+        "vehicles": [
+          {
+            "make": "Toyota",
+            "model": "Corolla",
+            "trim": null,
+            "trims": [],
+            "trim_strict": false,
+            "body_types": [],
+            "colors": [
+              "blanco",
+              "negro"
+            ],
+            "year_min": 2018,
+            "year_max": null,
+            "price_max": null,
+            "price_target": null,
+            "currency": null,
+            "km_max": null,
+            "km_target": null,
+            "transmission": null,
+            "fuel": null,
+            "seller_type": null,
+            "location": null,
+            "radius_km": null,
+            "locations": [],
+            "timing": null
+          }
+        ]
+      },
+      "duration_ms": 0,
+      "models": [
+        "hand-written"
+      ]
     }
+  },
+  "hand_written": {
+    "texts": [
+      "un Gol blanco",
+      "Onix gris o plata, hasta 15 millones",
+      "Corolla blanco o negro 2018 en adelante, interior negro"
+    ],
+    "why": "Color (docs/PLAN_FILTRO_COLOR.md): written by hand, without calling a provider; re-record with `python -m tools.record_llm` when one is approved."
   }
 }

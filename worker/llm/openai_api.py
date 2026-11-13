@@ -7,18 +7,20 @@ transport errors, 429 and 5xx receive one retry. No tools or stored response.
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import logging
 from collections.abc import Sequence
-from typing import TypeVar
+from typing import Any, TypeVar
 
 import httpx
 from pydantic import BaseModel, ValidationError
 
 from llm import prompts
-from llm.provider import LLMError, LLMTimeout
-from llm.schemas import (ListingFacts, LowResultsExplanation, ModelGuideDraft, PolishedQuestions, SearchDraft,
-                         SearchDrafts, json_schema)
+from llm.provider import LLMError, LLMTimeout, color_result
+from llm.schemas import (LISTING_COLOR_MAX_IMAGES, LISTING_COLOR_SCHEMA, ListingColorAnswer, ListingFacts,
+                         LowResultsExplanation, ModelGuideDraft, PolishedQuestions, SearchDraft, SearchDrafts,
+                         json_schema)
 from normalization.vehicle import CatalogModel
 
 log = logging.getLogger(__name__)
@@ -27,6 +29,8 @@ _URL = "https://api.openai.com/v1/responses"
 _MAX_OUTPUT_TOKENS = 4096
 # A guide is several sections long.
 _GUIDE_MAX_OUTPUT_TOKENS = 8192
+# The color answer is a handful of codes (docs/COLOR.md measured it with 200).
+_COLOR_MAX_OUTPUT_TOKENS = 200
 
 
 class OpenAIApiProvider:
@@ -65,6 +69,17 @@ class OpenAIApiProvider:
 
     async def _structured(self, system_prompt: str, user: str, out: type[M], *,
                           timeout: float | None = None, max_output_tokens: int = _MAX_OUTPUT_TOKENS) -> M:
+        result, _ = await self._structured_usage(system_prompt, user, out, timeout=timeout,
+                                                 max_output_tokens=max_output_tokens)
+        return result
+
+    async def _structured_usage(self, system_prompt: str, user: str | list[dict[str, Any]], out: type[M], *,
+                                timeout: float | None = None, max_output_tokens: int = _MAX_OUTPUT_TOKENS,
+                                schema: dict[str, Any] | None = None, schema_name: str | None = None
+                                ) -> tuple[M, dict[str, Any]]:
+        """The validated answer and the usage the API reported ({} without it).
+        `user` is a text or a list of content parts (input_text, input_image);
+        `schema` replaces the model's own (the color pass sends the measured one)."""
         # Check on use, so preparing a blank key does not stop crawl/alerts.
         if not self.api_key:
             raise LLMError("falta OPENAI_API_KEY para LLM_PROVIDER=openai")
@@ -75,8 +90,8 @@ class OpenAIApiProvider:
             "reasoning": {"effort": "none"},
             "max_output_tokens": max_output_tokens,
             "store": False,
-            "text": {"format": {"type": "json_schema", "name": out.__name__,
-                                "strict": True, "schema": json_schema(out)}},
+            "text": {"format": {"type": "json_schema", "name": schema_name or out.__name__,
+                                "strict": True, "schema": schema or json_schema(out)}},
         }
         budget = timeout or self.timeout
         try:
@@ -137,7 +152,7 @@ class OpenAIApiProvider:
         if isinstance(usage, dict):
             log.info("openai %s: %s in / %s out tokens", self.model,
                      usage.get("input_tokens"), usage.get("output_tokens"))
-        return result
+        return result, (usage if isinstance(usage, dict) else {})
 
     async def parse_search(self, text: str,
                            catalog: Sequence[CatalogModel] = ()) -> list[SearchDraft]:
@@ -161,3 +176,22 @@ class OpenAIApiProvider:
     async def model_guide(self, context: dict, *, timeout: float | None = None) -> ModelGuideDraft:
         return await self._structured(prompts.load("model_guide"), prompts.model_guide_user(context),
                                       ModelGuideDraft, timeout=timeout, max_output_tokens=_GUIDE_MAX_OUTPUT_TOKENS)
+
+    async def listing_color(self, images: list[bytes]) -> dict[str, Any]:
+        """The body color from a listing's photos (docs/COLOR.md, variant
+        «todas»): each JPEG a separate input_image at detail low, the
+        measured prompt and schema. {visible, colors: [{color, prob}],
+        tokens_in, tokens_out, model}, colors most probable first."""
+        images = [i for i in images if i][:LISTING_COLOR_MAX_IMAGES]
+        if not images:
+            raise LLMError("no hay fotos para leer el color")
+        content: list[dict[str, Any]] = [
+            {"type": "input_text", "text": prompts.LISTING_COLOR_USER_TEXT},
+            *({"type": "input_image", "detail": "low",
+               "image_url": "data:image/jpeg;base64," + base64.b64encode(data).decode("ascii")} for data in images),
+        ]
+        answer, usage = await self._structured_usage(
+            prompts.listing_color_system(), content, ListingColorAnswer,
+            max_output_tokens=_COLOR_MAX_OUTPUT_TOKENS, schema=LISTING_COLOR_SCHEMA, schema_name="ListingColor")
+        return color_result(answer, usage.get("input_tokens"), usage.get("output_tokens"), self.model)
+

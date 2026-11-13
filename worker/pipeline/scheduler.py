@@ -18,6 +18,12 @@ Each tick:
      listings they would have matched (expired_search_matches, 2.5): no
      match, no notification (docs/MAILS_DE_PLAN.md).
 
+Before step 4 stores anything, the listings a search with a color filter
+could match and whose color is unknown get it from their photos, within
+~20 s per batch (pipeline/color_vision.py), so the notification carries it.
+The color pass (color_vision.color_vision_pass) runs beside the loop every
+COLOR_VISION_TICK_SECONDS and fills in the rest, never notifying.
+
 Scraping no longer happens per alert: two users searching the same model
 share one crawl.
 """
@@ -31,7 +37,8 @@ from datetime import datetime
 from typing import Any, Iterable
 
 import db
-from config import TICK_INTERVAL_SECONDS, RECOMMENDED_MAX_AGE_DAYS, CRAWL_JITTER_SECONDS
+from config import (COLOR_VISION_TICK_SECONDS, CRAWL_JITTER_SECONDS, RECOMMENDED_MAX_AGE_DAYS,
+                    TICK_INTERVAL_SECONDS)
 from db.repos import expired_matches
 from db.repos import matches as matches_repo
 from db.repos.runs import bootstrapped_at, log_error
@@ -39,7 +46,8 @@ from intelligence.engine import Evaluation
 from intelligence.matching import malformed_vehicle, model_less, wanted_body_types
 from normalization.normalize import normalize_brand, normalize_text
 from notifications.service import MatchCandidate, Notifier
-from pipeline import crawl, news, rematch
+from normalization.color import wanted_colors
+from pipeline import color_vision, crawl, news, rematch
 from pipeline.scoring import Scorer
 
 log = logging.getLogger("scheduler")
@@ -99,6 +107,25 @@ def _candidates(profile: dict, keys: dict[int, _VehicleKey]) -> list[int]:
     return [lid for lid, (l_make, l_model) in keys.items()
             if (not want_make or (l_make is not None and l_make == make))
             and (not want_model or (l_model is not None and l_model == model))]
+
+
+async def resolve_colors(alerts: list[dict], keys: dict[int, _VehicleKey], scorer: Scorer) -> int:
+    """The batch's listings without a color that a search with filters.colors
+    would match otherwise (its other filters pass: an unknown color never
+    fails), read from their photos within color_vision's inline budget. The
+    rows are updated in place, so the staging below sees the color. Never raises."""
+    color_alerts = [a for a in alerts if wanted_colors((a.get("profile") or {}).get("filters") or {})]
+    if not color_alerts:
+        return 0
+    try:
+        def passing(profile: dict) -> list[int]:
+            return [lid for lid in _candidates(profile, keys) if scorer.evaluate(lid, profile) is not None]
+
+        wanted = color_vision.inline_wanted(color_alerts, passing, scorer.rows)
+        return await color_vision.resolve_inline([scorer.rows[lid] for lid in wanted]) if wanted else 0
+    except Exception:
+        await log_error("color_vision", "inline", traceback.format_exc())
+        return 0
 
 
 async def _stage(alert: dict, listing_ids: list[int], scorer: Scorer) -> _Staged:
@@ -299,6 +326,9 @@ async def process_batch(notifier: Notifier, target: dict, listing_ids: list[int]
     band = news.band_ids(target, rows, max_age_days=max_age_days)
     backfill_ids |= await news.old_band(target, [r for r in rows if r["id"] in band])
     members = frozenset((target.get("query") or {}).get("profile_ids") or ())
+    if not first_run:
+        # A first run is backfill, never notified: the color pass fills it in later.
+        await resolve_colors(alerts, keys, scorer)
     staged: list[_Staged] = []
     for alert in alerts:
         try:
@@ -418,6 +448,7 @@ async def run_loop(notifier: Notifier, stop_event: asyncio.Event,
                    on_health: crawl.HealthHandler | None = None) -> None:
     global _last_round
     lanes = crawl.Lanes()
+    colors_task = asyncio.create_task(color_vision.run_loop(stop_event, COLOR_VISION_TICK_SECONDS))
     try:
         while not stop_event.is_set():
             try:
@@ -430,4 +461,5 @@ async def run_loop(notifier: Notifier, stop_event: asyncio.Event,
             except asyncio.TimeoutError:
                 pass
     finally:
+        colors_task.cancel()
         await lanes.close()

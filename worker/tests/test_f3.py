@@ -214,9 +214,9 @@ class LevelTests(unittest.TestCase):
         r = run(listing_at(7.1429), ref=ref_at(7.1429))
         self.assertAlmostEqual(r.deal, 0.72, places=4)
         self.assertEqual(r.level, "high")
-        # price_target met, the color failed: fit (1 + 0.4) / 2 = 0.70.
-        p = with_prefs(price_target=10_500, colors=["Rojo"])
-        r = run(listing_at(8.9286, attributes={"color": "Azul"}), p, ref=ref_at(8.9286))
+        # price_target met, the distance failed (Vicente López is ~12 km away): fit (1 + 0.4) / 2 = 0.70.
+        p = with_prefs(price_target=10_500, max_distance_km=10)
+        r = run(listing_at(8.9286), p, ref=ref_at(8.9286))
         self.assertAlmostEqual(r.deal, 0.80, places=4)
         self.assertAlmostEqual(r.fit_level, 0.70)
         self.assertEqual(r.level, "good")
@@ -243,7 +243,7 @@ class LevelTests(unittest.TestCase):
         for d in [x / 2 for x in range(-50, 130)]:
             for listing_kw, profile in (({}, fiesta_profile()), ({"transmission": None, "mileage_km": None},
                                                                  fiesta_profile()),
-                                        ({}, with_prefs(price_target=8_000, colors=["Rojo"])),
+                                        ({}, with_prefs(price_target=8_000, max_distance_km=10)),
                                         ({"year": None}, fiesta_profile(year_min=None, year_max=None))):
                 for n in (6, 12, 40):
                     r = run(listing_at(d, **listing_kw), profile, ref=ref_at(d, n=n))
@@ -396,15 +396,16 @@ class FitTests(unittest.TestCase):
         self.assertAlmostEqual(run(fiesta_listing(mileage_km=115_000), p).prefs["km_target"], 0.7)
         self.assertEqual(run(fiesta_listing(mileage_km=90_000), p).prefs["km_target"], 1.0)
 
-    def test_trim_colors_and_distance(self):
+    def test_trim_and_distance(self):
         other = run(fiesta_listing(trim="S"))
         self.assertEqual(other.prefs["trim"], 0.5)
         self.assertEqual(run(fiesta_listing(trim=None)).prefs["trim"], 0.75)
-        p = with_prefs(colors=["Rojo"], max_distance_km=10)
+        p = with_prefs(max_distance_km=10)
         r = run(fiesta_listing(attributes={"color": "Rojo"}), p)
-        self.assertEqual(r.prefs, {"colors": 1.0, "max_distance_km": 0.4})        # Vicente López is ~12 km away
-        self.assertEqual(run(fiesta_listing(), p).prefs["colors"], 0.75)
+        self.assertEqual(r.prefs, {"max_distance_km": 0.4})                       # Vicente López is ~12 km away
         self.assertEqual(run(fiesta_listing(), with_prefs()).fit_level, 1.0)       # no preferences
+        # The soft preferences.colors is gone (filters.colors is a hard filter now).
+        self.assertEqual(run(fiesta_listing(), with_prefs(colors=["Rojo"])).prefs, {})
 
 
 class SellerTests(unittest.TestCase):

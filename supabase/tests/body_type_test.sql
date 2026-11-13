@@ -63,8 +63,8 @@ select throws_ok($$insert into public.crawl_targets (source, body_type) values (
                  '23514', null, '... of a known body type');
 select is(array(select attname::text from pg_attribute
                   where attrelid = 'public.match_cards'::regclass and attnum > 0 and not attisdropped
-                  order by attnum desc limit 3), array['seller_unknown', 'note', 'body_type'],
-          'match_cards: body_type stays after the old columns, then X-01''s note and PRO-01''s seller_unknown');
+                  order by attnum desc limit 5), array['color_method', 'color', 'seller_unknown', 'note', 'body_type'],
+          'match_cards: body_type stays after the old columns, then X-01''s note, PRO-01''s seller_unknown and the color');
 select ok(has_column_privilege('authenticated', 'public.search_profiles', 'opportunity_threshold_pct', 'UPDATE'),
           'the web can edit a search: it always sends opportunity_threshold_pct');
 

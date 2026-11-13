@@ -326,3 +326,39 @@ describe("PRO-01: the strict seller filter (decisión 8)", () => {
     expect(events("seller_filter_set")).toEqual([{ profile_id: 9, seller_types: ["dealer"], mode: "edit" }]);
   });
 });
+
+// docs/PLAN_FILTRO_COLOR.md §8: filters.colors, every plan, both modes, codes checked on the server.
+describe("color filter", () => {
+  beforeEach(() => { state.catalog = { make: "Volkswagen", model: "Gol", body_types: [] }; });
+  const GOL = { make: "volkswagen", model: "gol", sources: ["mercadolibre", "kavak"] };
+
+  it("saves the colors of a model search without any plan feature", async () => {
+    expect(await saveSearch(null, { ...GOL, colors: ["gris", "blanco"] }, STAY)).toEqual({ savedId: 9 });
+    expect(state.inserted).toMatchObject({ filters: { make: "Volkswagen", model: "Gol", colors: ["blanco", "gris"] } });
+    expect(state.rpc.map(([, args]) => args?.p_feature)).not.toContain("color");
+  });
+
+  it("saves them in a search by body type too", async () => {
+    state.features.model_less_search = true;
+    await saveSearch(null, { ...SUV, colors: ["blanco"] }, STAY);
+    expect(state.inserted).toMatchObject({ filters: { body_types: ["suv", "pickup"], colors: ["blanco"] } });
+  });
+
+  it("leaves filters.colors out with «Cualquier color»", async () => {
+    await saveSearch(null, { ...GOL, colors: [] }, STAY);
+    expect(state.inserted?.filters).not.toHaveProperty("colors");
+  });
+
+  it("refuses an unknown code before writing", async () => {
+    const result = await saveSearch(null, { ...GOL, colors: ["violeta" as never] }, STAY);
+    expect(result.error).toBe("Revisá los campos marcados.");
+    expect(result.fields).toHaveProperty("colors");
+    expect(state.inserted).toBeNull();
+  });
+
+  it("counts the preview with the colors", async () => {
+    await previewSearch({ ...GOL, colors: ["rojo"] });
+    const [, args] = state.rpc.find(([name]) => name === "preview_search")!;
+    expect(args?.p_filters).toMatchObject({ colors: ["rojo"] });
+  });
+});

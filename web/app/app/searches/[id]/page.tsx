@@ -28,6 +28,7 @@ import { collectionPending } from "@/lib/search-collection";
 import { loadSearchCollection } from "@/lib/search-collection-server";
 import { storedSellerTypes } from "@/lib/search-form";
 import { effectiveSort, type Sort, sortsFor } from "@/lib/sorts";
+import { wantsColor } from "@/lib/listing-color";
 import { createClient } from "@/lib/supabase/server";
 import type { Filters, Preferences } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -279,6 +280,7 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
               costLine={card.listing_id != null ? costLines.get(card.listing_id) : null}
               marginLine={card.listing_id != null ? marginLines.get(card.listing_id) : null}
               marginTeaser={card.listing_id != null && marginTeasers.has(card.listing_id)}
+              colorWanted={wantsColor(filters)}
             />
           ))}
         </div>

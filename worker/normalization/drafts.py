@@ -29,6 +29,11 @@ Without one, the draft becomes one search per catalog model with that drive
 asked, the most listed first and, given a top price, those whose typical
 price fits it (`Market`, db/repos/catalog.load_market); up to MAX_VEHICLES,
 and the web lets the user pick which to activate.
+
+Colors (docs/PLAN_FILTRO_COLOR.md §8) arrive as `values.colors`, codes in
+the form's order («un Gol blanco» → ["blanco"]; «gris o plata» is one code,
+gris). A color word a provider leaves after the model («Gol blanco») moves
+there too. Grouped drafts keep the union, or none if one of them has none.
 """
 from __future__ import annotations
 
@@ -40,6 +45,7 @@ from typing import Any
 
 from llm.schemas import MAX_VEHICLES, SearchDraft
 from normalization import body_type
+from normalization import color as color_codes
 from normalization.body_type import CODES as BODY_TYPES, LABELS as BODY_TYPE_LABELS
 from normalization.normalize import normalize_brand, normalize_text
 from normalization.vehicle import CatalogModel, resolve_trim, resolve_vehicle
@@ -140,6 +146,29 @@ def _without_body_words(d: SearchDraft) -> SearchDraft:
     if not update:
         return d
     return d.model_copy(update={**update, "body_types": [*d.body_types, *found]})
+
+
+def _ordered_colors(codes: Iterable[str]) -> list[str]:
+    wanted = set(codes)
+    return [c for c in color_codes.CODES if c in wanted]
+
+
+def _without_colors(d: SearchDraft) -> SearchDraft:
+    """Color words at the end of the model («Gol blanco», «Onix gris o plata»)
+    out of it and into `colors`: the prompt sends them as colors, but a
+    provider may still leave them there. Only trailing words, only in the
+    model: versions like «Black Edition» stay."""
+    words = normalize_text(d.model).split()
+    found: list[str] = []
+    while words and (words[-1] in color_codes.WORDS or (words[-1] in {"o", "y"} and found)):
+        word = words.pop()
+        if word in color_codes.WORDS:
+            found.append(color_codes.WORDS[word])
+    if not found:
+        return d
+    # Back to the provider's spelling, minus the color words (none left: no model).
+    kept = " ".join((d.model or "").split()[:len(words)]) or None
+    return d.model_copy(update={"model": kept, "colors": [*d.colors, *found]})
 
 
 def _without_traits(d: SearchDraft) -> SearchDraft:
@@ -281,7 +310,7 @@ def normalize_draft(models: Sequence[CatalogModel], d: SearchDraft,
                     today: dt.date | None = None) -> dict[str, Any]:
     this_year = (today or dt.date.today()).year
     notes: list[str] = []
-    d = _without_traits(_without_body_words(d))
+    d = _without_colors(_without_traits(_without_body_words(d)))
     entry, make, model = _vehicle(models, d, notes)
     if note := _timing_note(entry, d.timing):
         notes.append(note)
@@ -340,6 +369,7 @@ def normalize_draft(models: Sequence[CatalogModel], d: SearchDraft,
         "trims": trims,
         "trim_strict": bool(trim) and d.trim_strict,
         "body_types": body_types,
+        "colors": _ordered_colors(d.colors),
         "year_min": year_min,
         "year_max": year_max,
         "price_max": price_max,
@@ -429,7 +459,7 @@ def catalog_misses(models: Sequence[CatalogModel], drafts: Sequence[SearchDraft]
     catalog doesn't know; a known make without a model ("un Chery") doesn't."""
     out: dict[str, str | None] = {}
     for d in drafts:
-        d = _without_traits(_without_body_words(d))
+        d = _without_colors(_without_traits(_without_body_words(d)))
         entry, make, _ = _vehicle(models, d, [])
         said_make, said_model = normalize_text(d.make), normalize_text(d.model)
         if said_make and said_model.startswith(said_make + " "):
@@ -455,7 +485,7 @@ def _group_key(draft: dict[str, Any]) -> tuple | None:
 def _normalized(models: Sequence[CatalogModel], drafts: Sequence[SearchDraft], market: Market,
                 today: dt.date | None) -> Iterable[dict[str, Any]]:
     for d in drafts:
-        cleaned = _without_traits(_without_body_words(d))
+        cleaned = _without_colors(_without_traits(_without_body_words(d)))
         if cleaned.timing and not (cleaned.model or "").strip():
             yield from _expand_timing(models, cleaned, market, today)
         else:
@@ -485,6 +515,9 @@ def normalize_drafts(models: Sequence[CatalogModel], drafts: Sequence[SearchDraf
             # The same for body types: one without them means any body type of the model.
             previous["body_types"] = (_ordered(previous["body_types"] + v["body_types"])
                                       if previous["body_types"] and v["body_types"] else [])
+            # And for colors: one without them means any color.
+            previous["colors"] = (_ordered_colors(previous["colors"] + v["colors"])
+                                  if previous["colors"] and v["colors"] else [])
             for field in ("year_min", "year_max", "price_max", "km_max"):
                 a, b = previous[field], v[field]
                 if a != b:

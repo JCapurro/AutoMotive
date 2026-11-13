@@ -156,6 +156,8 @@ NOTIFY_TICK_SECONDS = int(os.getenv("NOTIFY_TICK_SECONDS", "60"))
 TRIAL_REMINDER_TICK_SECONDS = int(os.getenv("TRIAL_REMINDER_TICK_SECONDS", "900"))
 # Bot de pocos resultados (pipeline/low_results.py); app_config.low_results rules the rest.
 LOW_RESULTS_TICK_SECONDS = int(os.getenv("LOW_RESULTS_TICK_SECONDS", "3600"))
+# The color pass (pipeline/color_vision.py): new matches without a color, within app_config.color_vision.
+COLOR_VISION_TICK_SECONDS = int(os.getenv("COLOR_VISION_TICK_SECONDS", "900"))
 
 # LLM layer (sección 8): OpenAI Luna for the assisted parser; the Claude
 # providers remain available. `local` is an OpenAI-compatible server stub.

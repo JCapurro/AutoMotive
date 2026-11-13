@@ -9,7 +9,7 @@ import { z } from "zod";
 
 import { cityById, cityFromText, provinceCapital } from "@/lib/argentina-locations";
 
-import { SELLER_STRICT, bodyTypeCodes, bodyTypesText } from "@/lib/copy";
+import { SELLER_STRICT, bodyTypeCodes, bodyTypesText, colorCodes } from "@/lib/copy";
 import { AMBA, PLACES, type Place } from "@/lib/locations";
 import { inWords } from "@/lib/pro";
 import { type SearchValues, isModelLess } from "@/lib/search-form";
@@ -49,6 +49,8 @@ const DraftValues = z.object({
   fuel: z.string(),
   // docs/CARROCERIA.md. Outputs written before it have none; unknown codes are dropped.
   body_types: z.array(z.string()).default([]),
+  // docs/PLAN_FILTRO_COLOR.md («un Gol blanco»): filters.colors' codes. Outputs written before it have none; unknown codes are dropped.
+  colors: z.array(z.string()).optional(),
   seller_type: z.enum(["", "private", "dealer"]),
   location: z.string(),
   // Every place the text names, the first also in `location`; outputs written before it have none.
@@ -246,6 +248,7 @@ export function draftToValues(
       transmission: v.transmission,
       fuel: v.fuel,
       body_types: bodyTypeCodes(v.body_types),
+      colors: colorCodes(v.colors),
       location,
       extra_locations: extraLocations,
       km_target: v.km_target,

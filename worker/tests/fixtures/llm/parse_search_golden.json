@@ -260,5 +260,29 @@
       {"make": "Honda", "model": "City", "price_max": 10000, "currency": "USD",
        "notes_contain": "distribución a cadena"}
     ]
+  },
+  {
+    "id": "gol-blanco",
+    "text": "un Gol blanco",
+    "llm_colors": ["blanco"],
+    "drafts": [
+      {"make": "Volkswagen", "model": "Gol", "colors": ["blanco"]}
+    ]
+  },
+  {
+    "id": "onix-gris-o-plata",
+    "text": "Onix gris o plata, hasta 15 millones",
+    "llm_colors": ["gris"],
+    "drafts": [
+      {"make": "Chevrolet", "model": "Onix", "colors": ["gris"], "price_max": 15000000, "currency": "ARS"}
+    ]
+  },
+  {
+    "id": "corolla-blanco-o-negro",
+    "text": "Corolla blanco o negro 2018 en adelante, interior negro",
+    "llm_colors": ["blanco", "negro"],
+    "drafts": [
+      {"make": "Toyota", "model": "Corolla", "colors": ["blanco", "negro"], "year_min": 2018}
+    ]
   }
 ]

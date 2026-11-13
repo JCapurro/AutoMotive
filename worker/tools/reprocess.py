@@ -7,13 +7,16 @@ Read again what is already stored, without asking the sources (normalization v3)
         listings stored before the description counted (they have no raw
         page). Year, km, transmission and fuel are filled where missing, and
         the body type from the title, version and attributes (never the text).
+        The color too, from the source's value or an anchored text ("color
+        blanco"), over a color from the photos but never over the source's.
         --llm: ask the LLM for the descriptions the rules find ambiguous
         (within app_config.description_facts.llm_daily_cap).
 
     python -m tools.reprocess --raw [--source facebook] [--outdated] [--dry-run]
         Parse the stored detail pages (raw_pages) again and ingest them like a
         detail pass that saw nothing new. --outdated: only the pages parsed
-        with an older DETAIL_PARSER_VERSION of their collector.
+        with an older DETAIL_PARSER_VERSION of their collector (Autocosmos 5:
+        its itemprop="color").
 
 Both print what changes and re-score the matches of the listings whose
 price changed. Run from worker/.
@@ -35,7 +38,8 @@ from db.repos.catalog import load_models
 from db.repos.fx import quote_for_today
 from intelligence.copy import money
 from normalization.description_facts import DescriptionFacts, parse, resolve_price
-from normalization.listing import stored_body_type
+from normalization import color as paint
+from normalization.listing import stored_body_type, stored_color_update
 from normalization.price_check import keyword_partial
 from normalization.vehicle import CatalogModel, resolve_trim
 from pipeline.enrich import DescriptionLLM, ingest_detail, rescore_changed
@@ -94,6 +98,9 @@ def recompute(row: dict[str, Any], facts: DescriptionFacts | None, *,
         if code:
             new["body_type"] = code
             new["attributes"] = {**(new.get("attributes") or row.get("attributes") or {}), "_body_type": how}
+    if update := stored_color_update(row):
+        new["color"] = update[0]
+        new["attributes"] = {**(new.get("attributes") or row.get("attributes") or {}), "_color": update[1]}
     return {k: v for k, v in new.items() if v != row.get(k)}
 
 
@@ -112,7 +119,7 @@ def _line(row: dict[str, Any], changed: dict[str, Any]) -> str:
     if check.get("mismatch"):
         m = check["mismatch"]
         notes.append(f"otro precio en la descripción: {money(m['amount'], m['currency'])}")
-    filled = [c for c in ("year", "mileage_km", "transmission", "fuel", "body_type") if c in changed]
+    filled = [c for c in ("year", "mileage_km", "transmission", "fuel", "body_type", "color") if c in changed]
     if filled:
         notes.append("completa " + ", ".join(filled))
     return f"#{row['id']:<6} {row['source']:<12} " + " · ".join(notes)
@@ -178,8 +185,10 @@ async def reprocess_raw(*, dry_run: bool, source: str | None = None, outdated: b
         if row is None or row["status"] != "active":
             continue
         if dry_run:
+            found = None if detail.gone else paint.source_color(detail.listing.atributos)
             what = "ya no está" if detail.gone else \
-                f"descripción de {len(detail.listing.descripcion or '')} caracteres"
+                f"descripción de {len(detail.listing.descripcion or '')} caracteres" + \
+                (f" · color {found[0]} ({found[1]})" if found else "")
             print(f"#{page.listing_id:<6} {page.source:<12} {what}")
             continue
         result = await ingest_detail(dict(row), detail, stage="reprocess", seen=False)

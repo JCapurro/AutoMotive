@@ -185,3 +185,8 @@ class ClaudeCliProvider:
     async def model_guide(self, context: dict, *, timeout: float | None = None) -> ModelGuideDraft:
         return await self._structured(prompts.load("model_guide"), prompts.model_guide_user(context),
                                       ModelGuideDraft, timeout=timeout)
+
+    async def listing_color(self, images: list[bytes]) -> dict:
+        """`claude -p` takes the prompt on stdin, not images: the color pass
+        needs the openai or anthropic provider (the replay inherits this)."""
+        raise LLMError("claude_cli no manda fotos: el color necesita LLM_PROVIDER=openai o anthropic")

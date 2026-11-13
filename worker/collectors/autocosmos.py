@@ -53,6 +53,11 @@ from ._http import HEADERS, Page, dedupe, fetch_page, multiline_text, soup, text
 log = logging.getLogger("collectors.autocosmos")
 
 _NEXT_PAGE_RE = re.compile(r"<link[^>]*\brel=['\"]?next\b", re.IGNORECASE)
+# A card's description and link title: "FIAT Pulse 1.3 Drive usado (2022) color
+# Negro Vulcano precio $24.900.000", "… color Blanco Crema financiado en cuotas…".
+_CARD_COLOR_RE = re.compile(
+    r"\)\s+color\s+(.+?)(?:\s+(?:precio|financiado|financiaci[oó]n|en cuotas|anticipo)\b|\s*\(|$)",
+    re.IGNORECASE)
 
 
 def _slug(s: str) -> str:
@@ -132,6 +137,17 @@ def _to_int(s: str | None) -> int | None:
     return int(digits) if digits else None
 
 
+def card_color(art) -> str | None:
+    """The color a search card states in its description ("… usado (2022)
+    color Negro Vulcano precio …"), as the site writes it; None without one."""
+    meta_desc = art.select_one("meta[itemprop='description']")
+    link = art.select_one("a[itemprop='url']")
+    for text in ((meta_desc.get("content") if meta_desc else None), (link.get("title") if link else None)):
+        if text and (m := _CARD_COLOR_RE.search(text)):
+            return m.group(1).strip() or None
+    return None
+
+
 def _price(container, block: str) -> tuple[float | None, str | None, str | None]:
     """(price, currency, partial reason) from the price blocks of a card or detail.
 
@@ -154,7 +170,7 @@ def _price(container, block: str) -> tuple[float | None, str | None, str | None]
 
 
 class AutoCosmosScraper(BaseScraper):
-    DETAIL_PARSER_VERSION = 4  # 4: a sold ad is gone ('vendido')
+    DETAIL_PARSER_VERSION = 5  # 4: a sold ad is gone ('vendido'); 5: the color (itemprop="color")
     name = "autocosmos"
     BASE = "https://www.autocosmos.com.ar"
     # One target reads every make's pages for every search (06/11/2026: 6.206 cars).
@@ -236,6 +252,7 @@ class AutoCosmosScraper(BaseScraper):
         prov = prov_el.get_text(strip=True) if prov_el else ""
         ubic = ", ".join(p for p in (city, prov) if p) or None
         dealer_logo = art.select_one(".listing-card__logoimg img")
+        color = card_color(art)
 
         return Listing(
             source="autocosmos",
@@ -255,6 +272,8 @@ class AutoCosmosScraper(BaseScraper):
             price_partial=partial is not None,
             price_partial_reason=partial,
             imagenes=[img.get("src")] if img and img.get("src") else [],
+            # normalization/color.py reads it (source_color).
+            atributos={"Color": color} if color else {},
         )
 
     @classmethod
@@ -307,6 +326,10 @@ class AutoCosmosScraper(BaseScraper):
         # <meta name="dfp_segmentoNick" content="pick-up"> (the site's ?s=N segments).
         segment = doc.select_one("meta[name='dfp_segmentoNick'][content]")
         segment = (segment.get("content") or "").strip() or None if segment else None
+        # <span itemprop="color">Negro Vulcano</span>, the ad's own (not a related card's).
+        color_el = next((el for el in car.select("[itemprop='color']") if el.find_parent("article") is car), None)
+        if (color := text_of(color_el)) and "Color" not in specs:
+            specs["Color"] = color
 
         return ListingDetail(url, listing=Listing(
             source="autocosmos",

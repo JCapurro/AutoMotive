@@ -29,6 +29,11 @@ Timing = Literal["chain", "belt"]
 # docs/CARROCERIA.md: the same codes, in the same order, everywhere.
 BodyType = Literal[BODY_TYPE_CODES]  # type: ignore[valid-type]
 
+# docs/PLAN_FILTRO_COLOR.md §8: the color codes, in the form's order. The
+# same list as normalization/color.py CODES (tests/test_color_vision.py checks it).
+COLOR_CODES = ("blanco", "negro", "gris", "azul", "rojo", "verde", "beige", "otro")
+ColorCode = Literal[COLOR_CODES]  # type: ignore[valid-type]
+
 MAX_VEHICLES = 5
 # Places a request may name; the plan decides how many are kept (web: maxLocations).
 MAX_LOCATIONS = 10
@@ -69,6 +74,10 @@ class SearchDraft(_Strict):
     locations: list[str] = Field(default_factory=list, max_length=MAX_LOCATIONS,
                                  description="Todas las zonas o ciudades que nombra, en el orden en que las dice "
                                              "(«Chaco o Corrientes» → [«Chaco», «Corrientes»]); vacío si no nombra ninguna.")
+    # Defaulted, like body_types, so recordings from before the field stay valid.
+    colors: list[ColorCode] = Field(default_factory=list, max_length=len(COLOR_CODES),
+                                    description="Colores de carrocería que la persona pide («blanco», «gris o plata» → "
+                                                "gris); vacío si no pide ninguno. Nunca el del interior ni el de las llantas.")
     # Defaulted, like body_types, so recordings from before the field stay valid.
     timing: Timing | None = Field(default=None,
                                   description="chain si pide distribución a cadena («cadenero», «con cadena», "
@@ -199,6 +208,40 @@ class ModelGuideDraft(_Strict):
     body: GuideBody
     questions: list[GuideQuestion] = Field(max_length=20, description="De 3 a 8 preguntas para hacerle al vendedor.")
     sources: list[GuideSource] = Field(max_length=10, description="Fuentes sugeridas, que el redactor humano va a verificar.")
+
+
+# ---------------------------------------------------------------------------
+# The color of a listing from its photos (docs/PLAN_FILTRO_COLOR.md §8,
+# docs/COLOR.md: variant «todas»). The schema the provider receives is the
+# Fase 0 one, verbatim (SCHEMA_MULTI of the measurement script): it is what
+# was measured. ListingColorAnswer validates the answer against the same shape.
+# ---------------------------------------------------------------------------
+
+LISTING_COLOR_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "visible": {"type": "boolean"},
+        "colors": {"type": "array", "items": {
+            "type": "object",
+            "properties": {"color": {"type": "string", "enum": [*COLOR_CODES, "sin_dato"]},
+                           "prob": {"type": "integer"}},
+            "required": ["color", "prob"], "additionalProperties": False}},
+    },
+    "required": ["visible", "colors"],
+    "additionalProperties": False,
+}
+# Up to 10 photos per listing, each a separate image at detail low.
+LISTING_COLOR_MAX_IMAGES = 10
+
+
+class ColorGuess(_Strict):
+    color: Literal[(*COLOR_CODES, "sin_dato")]  # type: ignore[valid-type]
+    prob: int
+
+
+class ListingColorAnswer(_Strict):
+    visible: bool
+    colors: list[ColorGuess]
 
 
 def json_schema(model: type[BaseModel]) -> dict[str, Any]:

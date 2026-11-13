@@ -32,14 +32,13 @@ import {
   type Level,
   lintContactTemplate,
   PRICE_TRACK,
-  REASON_NAME,
-  REASON_OK,
   TRANSMISSION,
 } from "@/lib/copy";
 import { ageLine, daysSince, imageUrls, km, money, number, pct, vehicle } from "@/lib/format";
 import { fetchPriceTracks, summaryLine, trackingNote } from "@/lib/price-track";
 import { financingOffered, financingTerms, isCashPrice, publishedIsPartial, publishedKind } from "@/lib/price";
 import { priceGap, priceGapLine } from "@/lib/price-gap";
+import { colorLine, colorMethodOf, wantsColor } from "@/lib/listing-color";
 import { linkedListingIds, sortFlags } from "@/lib/red-flags";
 import { emphasize, RISK_HINT, RISK_TITLE } from "@/lib/risk-checklist";
 import { sellerFact, strictSellerFilterOn } from "@/lib/seller";
@@ -51,7 +50,7 @@ import { type GuideIndexEntry, publishedGuideIndex } from "@/lib/guides-data";
 import { createClient } from "@/lib/supabase/server";
 import type { Component, Listing, PriceRef, Reason, RedFlag } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { orderReasons } from "@/lib/why";
+import { orderReasons, reasonText } from "@/lib/why";
 
 export const metadata: Metadata = { title: "Publicación" };
 
@@ -181,6 +180,12 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
   const gap = gone ? null : priceGap(listing, priceRef, cfg.minComparables);
   const gapLine = gap ? priceGapLine(gap) : null;
   const scored = best != null && !gone;
+  // docs/PLAN_FILTRO_COLOR.md: listings.color and how it was decided (attributes._color).
+  const color = colorLine(
+    listing.color,
+    colorMethodOf(listing.attributes),
+    wantsColor(best?.search_profiles?.filters) || reasons.color != null,
+  );
 
   return (
     <div className="max-lg:pb-20">
@@ -205,6 +210,7 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
               En <b className="font-semibold text-foreground">{sourceName}</b>
             </span>
             {isBodyType(listing.body_type) ? <span data-testid="body-type">{BODY_TYPE[listing.body_type]}</span> : null}
+            {color ? <span data-testid="listing-color">{color}</span> : null}
             {listing.location_text ? <span>{listing.location_text}</span> : null}
             {ageLine(listing) ? <span>{ageLine(listing)}</span> : null}
             {listing.probable_repost_of ? <span>Re-publicada</span> : null}
@@ -450,21 +456,13 @@ function Fact({ label, className, children }: { label: string; className?: strin
 
 /** ✅ versión buscada · ❔ caja no informada · ➖ preferencia que no se cumple (§23). */
 function ReasonRow({ name, reason }: { name: string; reason: Reason }) {
-  const label = REASON_NAME[name] ?? name;
-  let title: string;
+  const { title, detail } = reasonText(name, reason);
   let Icon = CircleCheck;
   let tone = "text-ok";
-  if (reason.result === "ok") {
-    title =
-      name === "transmission" || name === "fuel"
-        ? `${label} ${reason.detail.toLowerCase()}`
-        : (REASON_OK[name] ?? label);
-  } else if (reason.result === "unknown") {
-    title = `${label}: no informado`;
+  if (reason.result === "unknown") {
     Icon = CircleHelp;
     tone = "text-faint";
-  } else {
-    title = `${label}: no coincide con tu preferencia`;
+  } else if (reason.result === "fail") {
     Icon = CircleMinus;
     tone = "text-warn";
   }
@@ -479,7 +477,7 @@ function ReasonRow({ name, reason }: { name: string; reason: Reason }) {
           {title}
           {reason.kind === "soft" ? <span className="ml-1 text-xs font-normal text-muted-foreground">(preferencia)</span> : null}
         </p>
-        {reason.detail && reason.result !== "unknown" ? <p className="text-sm text-muted-foreground">{reason.detail}</p> : null}
+        {detail ? <p className="text-sm text-muted-foreground">{detail}</p> : null}
       </div>
     </li>
   );

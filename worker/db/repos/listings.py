@@ -20,7 +20,7 @@ Key = tuple[str, str]
 # Columns the pipeline writes; id, first_seen_at, last_seen_at and status are managed here.
 COLUMNS = ("source", "external_id", "url", "title", "description", "make", "model", "trim",
            "year", "price", "currency", "price_usd", "mileage_km", "transmission", "fuel",
-           "body_type", "location_text", "lat", "lon", "seller_name", "seller_type", "images", "attributes",
+           "body_type", "color", "location_text", "lat", "lon", "seller_name", "seller_type", "images", "attributes",
            "published_at", "price_partial", "price_partial_reason", "normalization_confidence",
            "fingerprint", "probable_repost_of", "price_published", "price_published_currency",
            "price_source", "description_facts")

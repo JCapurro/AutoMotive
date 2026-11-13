@@ -64,6 +64,7 @@ export default async function NewSearchPage({ searchParams }: PageProps<"/app/se
     transmission: "",
     fuel: "",
     body_types: [],
+    colors: [],
     sources: sources.map((s) => s.id),
     location: null,
     extra_locations: [],

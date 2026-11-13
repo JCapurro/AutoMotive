@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { BODY_TYPE, MARGIN_TEASER, SELLER_UNKNOWN, isBodyType } from "@/lib/copy";
 import { ageLine, firstImage, km, money, vehicle } from "@/lib/format";
+import { colorLine } from "@/lib/listing-color";
 import { cardTrackLine, type PriceTrack } from "@/lib/price-track";
 import type { MatchCard } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -25,6 +26,7 @@ export function ListingCard({
   costLine,
   marginLine,
   marginTeaser = false,
+  colorWanted = false,
 }: {
   card: Pick<
     MatchCard,
@@ -49,7 +51,7 @@ export function ListingCard({
     | "listing_status"
     | "probable_repost_of"
   > &
-    Partial<Pick<MatchCard, "price_kind" | "financing_offered" | "price_usd" | "body_type" | "price_source" | "seller_unknown">>;
+    Partial<Pick<MatchCard, "price_kind" | "financing_offered" | "price_usd" | "body_type" | "price_source" | "seller_unknown" | "color" | "color_method">>;
   showProfile?: boolean;
   footer?: React.ReactNode;
   /** PAR-03: the listing's drops since we first saw it (listing_price_tracks); a line only with a net drop of the price shown. */
@@ -60,12 +62,15 @@ export function ListingCard({
   marginLine?: string | null;
   /** Juan, 02/11: without Pro, Pro would show a margin here (marginTeasersFor): the line, unreadable. */
   marginTeaser?: boolean;
+  /** The card's search filters by color (filters.colors): a listing without one says «Color sin confirmar». */
+  colorWanted?: boolean;
 }) {
   const image = firstImage(card.images);
   const name = vehicle(card);
   const gone = card.listing_status === "gone";
   const mileage = km(card.mileage_km);
   const drops = cardTrackLine(track, card);
+  const color = colorLine(card.color, card.color_method, colorWanted);
 
   return (
     <article
@@ -132,6 +137,7 @@ export function ListingCard({
       <p data-testid="card-meta" className="col-start-2 flex min-w-0 flex-wrap gap-x-3.5 text-[13px] text-muted-foreground">
         {mileage ? <span>{mileage}</span> : null}
         {isBodyType(card.body_type) ? <span>{BODY_TYPE[card.body_type]}</span> : null}
+        {color ? <span data-testid="card-color">{color}</span> : null}
         {/* PRO-01, option C: the strict seller filter let it through without a known seller. */}
         {card.seller_unknown ? <span data-testid="card-seller-unknown">{SELLER_UNKNOWN}</span> : null}
         {card.location_text ? (

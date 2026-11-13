@@ -52,6 +52,8 @@ export type Filters = {
   fuel?: string;
   /** Body type codes (docs/CARROCERIA.md); omitted when empty. Without make and model: a model-less search. */
   body_types?: string[];
+  /** Color codes (docs/PLAN_FILTRO_COLOR.md §8), a hard filter; omitted when empty. */
+  colors?: string[];
   sources?: string[];
   location_label?: string;
   /** Places added to the search's own (origin_*, radius_km): a listing in any of them qualifies. */
@@ -76,6 +78,5 @@ export type Preferences = {
   price_target_currency?: "USD" | "ARS";
   seller_type?: "private" | "dealer";
   preferred_trims?: string[];
-  colors?: string[];
   max_distance_km?: number;
 };
