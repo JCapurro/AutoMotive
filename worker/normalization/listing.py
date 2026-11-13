@@ -246,7 +246,7 @@ def normalize_listing(item: Listing, *, catalog: list[CatalogModel], target: Tar
     # already say the published number isn't the total. A Facebook price that
     # can't be read leaves no price, flagged partial: no match, no comparable.
     partial_reason = doubtful_price(currency_note) or (
-        (item.price_partial_reason or "parcial") if item.price_partial else keyword_partial(item.titulo))
+        (item.price_partial_reason or "parcial") if item.price_partial else keyword_partial(item.titulo, item.descripcion))
     usd_rate = fx.rate if fx and fx.rate > 0 else None
     price = resolve_price(published, currency, partial_reason=partial_reason, facts=facts,
                           usd_rate=usd_rate)

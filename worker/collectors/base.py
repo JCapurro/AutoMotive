@@ -163,7 +163,7 @@ class BaseScraper:
         once we have comparables to compare against."""
         if item.price_partial:
             return item
-        reason = keyword_partial(item.titulo)
+        reason = keyword_partial(item.titulo, item.descripcion)
         if reason:
             item.price_partial = True
             item.price_partial_reason = reason

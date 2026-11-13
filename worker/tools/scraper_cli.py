@@ -128,7 +128,7 @@ async def detail(url: str, html_out: str | None, source: str | None = None) -> N
         return
     item = d.listing
     facts = parse_facts(item.descripcion, item.titulo, now_year=datetime.now(timezone.utc).year)
-    reason = (item.price_partial_reason or "parcial") if item.price_partial else keyword_partial(item.titulo)
+    reason = (item.price_partial_reason or "parcial") if item.price_partial else keyword_partial(item.titulo, item.descripcion)
     currency = _CURRENCIES.get((item.moneda or "").strip().upper())
     price = resolve_price(item.precio, currency, partial_reason=reason, facts=facts, usd_rate=usd_ars_rate())
     print(f"título:      {item.titulo}")

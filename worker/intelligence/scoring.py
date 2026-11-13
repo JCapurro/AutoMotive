@@ -9,7 +9,9 @@ without a deploy.
 
 Guards carried over from price_check:
   * d ≥ partial_pct (65%)  → the price is taken for a down payment: excluded;
-  * suspicious_pct (50%) ≤ d < partial_pct → level capped at `good` (+ red flag);
+  * suspicious_pct (50%) ≤ d < partial_pct → level capped at `good` (+ red flag),
+    or excluded when the ad offers financing (anticipo, cuotas, «con DNI»):
+    that far below the median, a financed car's price is the down payment;
   * price_partial = true   → excluded.
 """
 from __future__ import annotations
@@ -172,6 +174,12 @@ def completeness_component(listing: Mapping[str, Any], cfg: IntelligenceConfig) 
 # Score
 # ---------------------------------------------------------------------------
 
+def offers_financing(listing: Mapping[str, Any]) -> bool:
+    """The title or description offers financing (description_facts.financing)."""
+    facts = listing.get("description_facts") or {}
+    return bool(isinstance(facts, Mapping) and (facts.get("financing") or {}).get("offered"))
+
+
 def score(listing: Mapping[str, Any], profile: Mapping[str, Any], result: MatchResult,
           ref: PriceRef | None, cfg: IntelligenceConfig, *, now: datetime) -> Score:
     price, d = price_component(listing, ref, cfg)
@@ -194,6 +202,9 @@ def score(listing: Mapping[str, Any], profile: Mapping[str, Any], result: MatchR
         guard, excluded = "partial", listing.get("price_partial_reason") or "precio parcial"
     elif d is not None and d >= guards["partial_pct"]:
         guard, excluded = "partial", f"{d:.0f}% bajo la mediana: el precio publicado parece un anticipo"
+    elif d is not None and d >= guards["suspicious_pct"] and offers_financing(listing):
+        guard, excluded = "partial", (f"{d:.0f}% bajo la mediana y ofrece financiación: "
+                                      "el precio publicado parece un anticipo")
     elif d is not None and d >= guards["suspicious_pct"]:
         guard, cap = "suspicious", "good"
     return Score(value, level_for(value, cfg.thresholds, cap=cap), components, weights,

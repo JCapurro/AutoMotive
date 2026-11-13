@@ -55,16 +55,26 @@ def _strip_accents(s: str) -> str:
     )
 
 
+# Descriptions mention «cuotas», «anticipo» or «plan» even when the published
+# number is the total, so the title's keywords would hide real prices there.
+# Only phrasings that say the published number can't be the total count:
+#   «LLEVATE este Polo (2024) por . Solo $6.000.000» — an Autocosmos dealer's
+#   template whose total is left blank; the «Solo» amount is the anticipo
+#   (181 ads on 2026-11-13, a 2024 Amarok «Solo $4.999.999»).
+_DESC_PATTERNS = [
+    r"\bpor\s*\.\s*solo\s*(?:u\$[sd]|us\$|\$)",
+]
+
+_DESC_RE = re.compile("|".join(_DESC_PATTERNS), re.IGNORECASE)
+
+
 def keyword_partial(title: str | None, description: str | None = None) -> str | None:
-    """Return a reason string if title/description looks like an anticipo/plan,
-    else None."""
-    haystack = " ".join(filter(None, [title, description]))
-    if not haystack:
-        return None
-    norm = _strip_accents(haystack).lower()
-    m = _KW_RE.search(norm)
-    if m:
+    """Return a reason string if the title looks like an anticipo/plan, or the
+    description says the published number isn't the total, else None."""
+    if title and (m := _KW_RE.search(_strip_accents(title).lower())):
         return f"keyword: {m.group(0).strip()}"
+    if description and _DESC_RE.search(_strip_accents(description).lower()):
+        return "keyword: precio total en blanco"
     return None
 
 
