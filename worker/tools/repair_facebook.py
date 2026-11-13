@@ -187,7 +187,7 @@ def reprice(row: dict[str, Any], fx: FxQuote | None) -> dict[str, Any] | None:
         return _without_price(row, note, doubtful_price(note))
     facts_json = row.get("description_facts")
     facts = DescriptionFacts.from_json(facts_json)
-    partial_reason = keyword_partial(row.get("title"))
+    partial_reason = keyword_partial(row.get("title"), row.get("description"))
     rate = fx.rate if fx and fx.rate > 0 else None
     price = resolve_price(amount, currency, partial_reason=partial_reason, facts=facts, usd_rate=rate)
     if facts is not None:

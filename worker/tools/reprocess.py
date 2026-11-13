@@ -58,7 +58,7 @@ def _published_reason(row: dict[str, Any]) -> str | None:
     reason = row.get("price_partial_reason")
     if row.get("price_partial") and reason and not reason.startswith("descripción"):
         return reason
-    return keyword_partial(row.get("title"))
+    return keyword_partial(row.get("title"), row.get("description"))
 
 
 def recompute(row: dict[str, Any], facts: DescriptionFacts | None, *,

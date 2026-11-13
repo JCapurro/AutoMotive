@@ -220,6 +220,19 @@ class GuardAndLevelTests(unittest.TestCase):
         listing = fiesta_listing(price=3_000.0, price_usd=3_000.0)        # 73% below
         self.assertIsNone(evaluate(listing, fiesta_profile(), price_ref=self.ref(3_000), cfg=CFG, now=NOW))
 
+    def test_a_suspicious_discount_that_offers_financing_is_excluded(self):
+        # «ANTICIPO Y CUOTAS CON DNI» and 55% below: the price is the down payment.
+        listing = fiesta_listing(price=5_000.0, price_usd=5_000.0,
+                                 description_facts={"financing": {"offered": True}})
+        self.assertIsNone(evaluate(listing, fiesta_profile(), price_ref=self.ref(5_000), cfg=CFG, now=NOW))
+        _, s, _ = assess(listing, fiesta_profile(), price_ref=self.ref(5_000), cfg=CFG, now=NOW)
+        self.assertIn("ofrece financiación", s.excluded)
+
+    def test_financing_on_a_normal_price_changes_nothing(self):
+        listing = fiesta_listing(price=10_000.0, price_usd=10_000.0,             # 11% below
+                                 description_facts={"financing": {"offered": True}})
+        self.assertIsNotNone(evaluate(listing, fiesta_profile(), price_ref=self.ref(10_000), cfg=CFG, now=NOW))
+
     def test_price_partial_is_excluded(self):
         listing = fiesta_listing(price_partial=True, price_partial_reason="keyword: anticipo")
         self.assertIsNone(evaluate(listing, fiesta_profile(), price_ref=MARKET, cfg=CFG, now=NOW))
