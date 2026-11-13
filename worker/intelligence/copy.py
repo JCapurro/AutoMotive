@@ -8,7 +8,7 @@ FORBIDDEN_TERMS and must not appear in any template.
 """
 from __future__ import annotations
 
-from normalization import body_type
+from normalization import body_type, color
 
 
 # §19: "vale exactamente", "precio real", "tasación oficial" — and their stems.
@@ -72,12 +72,21 @@ REASON = {
     "seller_only_other": "vendedor {kind}, se busca solo {wanted}",
     # F-02: why a seller is a «posible agencia» (intelligence/seller.py).
     "seller_inferred": "publica {n} autos",
-    "color_ok": "color {color}",
-    "color_other": "color {color}, se prefiere {wanted}",
+    # The color filter (docs/PLAN_FILTRO_COLOR.md, sección 8).
+    "color_ok": "{color} · {how}",
+    "color_maybe": "color parecido: puede ser {color}",
+    "color_unknown": "color sin confirmar",
+    "color_other": "es {actual}, se busca {wanted}",
 }
 TRANSMISSION = {"manual": "manual", "automatic": "automática"}
 # Sedán, Hatchback, SUV, Pick-up…: the one list of normalization/body_type.py.
 BODY_TYPE = dict(body_type.LABELS)
+# blanco, gris, otro color…: normalization/color.py's names inside a sentence.
+COLOR = dict(color.NAMES)
+# «es rojo», «es de otro color».
+COLOR_IS = {**COLOR, "otro": "de otro color"}
+# How the color was decided (attributes._color.method): «gris · según la foto».
+COLOR_HOW = {"source": "dato del aviso", "text": "dato del aviso", "vision": "según la foto"}
 SELLER = {"private": "particular", "dealer": "concesionaria"}
 # F-02: a seller with min_listings or more cars in the same source (dealer_inferred).
 SELLER_INFERRED = "posible agencia"
@@ -116,7 +125,7 @@ EXPLAIN = {
 # Hard-filter names in "transmisión no informada".
 FILTER_NAMES = {"model": "modelo", "year": "año", "price": "precio", "km": "km",
                 "transmission": "transmisión", "fuel": "combustible", "body_type": "carrocería",
-                "location": "ubicación", "trim": "versión", "seller": "vendedor"}
+                "color": "color", "location": "ubicación", "trim": "versión", "seller": "vendedor"}
 
 LEVEL_LABEL = {"high": "🔥 Alta oportunidad", "good": "🟢 Buena coincidencia",
                "match": "🟡 Coincidencia", "low": "⚪ Baja prioridad"}

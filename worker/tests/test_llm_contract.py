@@ -5,7 +5,9 @@ against the seed catalog, carry the filters the phrase asks for. A case's
 catalog drops a body type the model only comes in, so the normalized drafts
 alone can't show that the provider inferred one ("auto chico", "para trabajo").
 `llm_timing` is the same for the timing drive: «cadenero» must reach `timing`,
-not the model.
+not the model; `llm_colors` for the colors («un Gol blanco», «gris o plata»
+is gris). The color phrases' recordings are written by hand until a provider
+is approved (the recordings file lists them under "hand_written").
 
 By default the provider is ClaudeCliProvider answering from recorded
 `claude -p` envelopes (fixtures/llm/parse_search_recorded.json, made with
@@ -43,6 +45,9 @@ def check_contract(case: dict, drafts: list[SearchDraft]) -> None:
     if "llm_body_types" in case:
         said = [d.body_types for d in drafts]
         assert all(b == case["llm_body_types"] for b in said), f"{case['id']}: body_types {said}"
+    if "llm_colors" in case:
+        said_colors = [d.colors for d in drafts]
+        assert all(c == case["llm_colors"] for c in said_colors), f"{case['id']}: colors {said_colors}"
     if "llm_timing" in case:
         timing = [d.timing for d in drafts]
         assert all(t == case["llm_timing"] for t in timing), f"{case['id']}: timing {timing}"
@@ -75,9 +80,9 @@ def check_contract(case: dict, drafts: list[SearchDraft]) -> None:
         assert values["model"] == "" or resolved
 
 
-def test_there_are_31_golden_phrases():
-    assert len(GOLDEN) == 31
-    assert len({c["id"] for c in GOLDEN}) == 31
+def test_there_are_34_golden_phrases():
+    assert len(GOLDEN) == 34
+    assert len({c["id"] for c in GOLDEN}) == 34
 
 
 def test_every_golden_phrase_has_a_recording():

@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from collectors.base import Listing
-from normalization import body_type, not_vehicle
+from normalization import body_type, color, not_vehicle
 from normalization import transmission as tx
 from normalization.description_facts import DescriptionFacts, parse as parse_facts, resolve_price
 from normalization.fx import FxQuote
@@ -27,8 +27,8 @@ _CURRENCIES = {"USD": "USD", "U$S": "USD", "US$": "USD", "U$D": "USD", "ARS": "A
 
 # Columns whose change is an 'attrs' snapshot (sección 5.3, "hash(attrs clave)").
 # published_at is left out on purpose: relative dates ("hace 3 días") drift a
-# little on every crawl. body_type too: filling it in is no news about the car
-# (docs/CARROCERIA.md).
+# little on every crawl. body_type and color too: filling them in is no news
+# about the car (docs/CARROCERIA.md, docs/PLAN_FILTRO_COLOR.md).
 KEY_ATTRS = ("title", "make", "model", "trim", "year", "transmission", "fuel",
              "location_text", "seller_type", "seller_name")
 
@@ -136,6 +136,31 @@ def stored_body_type(row: dict[str, Any], catalog: list[CatalogModel]) -> tuple[
     return code, {"method": method, "raw": raw}
 
 
+def stored_color(row: dict[str, Any]) -> tuple[str | None, dict[str, Any] | None]:
+    """normalize_listing's color for a stored `listings` row, from what it
+    kept: the source's value in `attributes`, else the anchored title or
+    description (normalization/color.py). (code, attributes._color) or
+    (None, None). The photos are not read here."""
+    return color.resolve(row.get("attributes") or {}, row.get("title"), row.get("description"))
+
+
+def stored_color_update(row: dict[str, Any]) -> tuple[str, dict[str, Any]] | None:
+    """(color, attributes._color) to write on a stored row, or None when what
+    it has stands: nothing found (not knowing never erases a color), a
+    stronger method already decided it (a source value over this text; the
+    photos never overwrite either, color.merge_color), or the same color read
+    the same way. tools/backfill_color.py and tools/reprocess.py --facts."""
+    code, how = stored_color(row)
+    if code is None or how is None:
+        return None
+    current = (row.get("attributes") or {}).get("_color")
+    if color.merge_color(current, how) is None:
+        return None
+    if code == row.get("color") and isinstance(current, dict)             and (current.get("method"), current.get("raw")) == (how["method"], how["raw"]):
+        return None
+    return code, how
+
+
 def listing_facts(item: Listing, *, now_year: int | None = None) -> DescriptionFacts | None:
     """What the item's title and description state, or what the LLM already
     read from them (item.extra["description_facts"], pipeline/enrich.py)."""
@@ -156,6 +181,8 @@ def normalize_listing(item: Listing, *, catalog: list[CatalogModel], target: Tar
     payment (the total wins). The published number goes to price_published.
     Year, km, transmission and fuel fall back to what the description says.
     The body type never does (docs/CARROCERIA.md): see normalization/body_type.py.
+    The color comes from the source's value or an anchored text ("color
+    blanco"), never a bare word: see normalization/color.py.
     """
     target = target or Target()
     vehicle = resolve_vehicle(
@@ -187,6 +214,11 @@ def normalize_listing(item: Listing, *, catalog: list[CatalogModel], target: Tar
         item.version, item.titulo, item.url, doors_value=item.atributos.get("Puertas"),
         listing_source=item.source)
     attributes["_body_type"] = {"method": body_method, "raw": body_raw}
+    # The source's value, else the anchored text; the photos come later
+    # (merge in pipeline/ingest.py keeps the stronger method).
+    paint, paint_how = color.resolve(item.atributos, item.titulo, item.descripcion)
+    if paint_how:
+        attributes["_color"] = paint_how
     described = {
         "year": not item.anio,
         "mileage_km": item.km is None,
@@ -241,6 +273,7 @@ def normalize_listing(item: Listing, *, catalog: list[CatalogModel], target: Tar
                         or (facts.transmission if facts else None),
         "fuel": tx.fuel(item.combustible, item.version, item.titulo) or (facts.fuel if facts else None),
         "body_type": body,
+        "color": paint,
         "location_text": None if is_not_a_place(item.ubicacion) else item.ubicacion or None,
         "seller_name": item.vendedor_nombre or None,
         "seller_type": tx.seller_type(item.vendedor),

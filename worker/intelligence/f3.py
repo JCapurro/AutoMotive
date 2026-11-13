@@ -86,7 +86,7 @@ KM_TARGET_SPAN = 0.30          # down to fit.fail at +30 % of the target
 DEFER_SOURCES = frozenset({"facebook", "mercadolibre"})
 
 # The order the SQL measured the fit mean in (sum order, so ties land the same).
-PREF_KEYS = ("price_target", "km_target", "seller_type", "colors", "max_distance_km", "trim")
+PREF_KEYS = ("price_target", "km_target", "seller_type", "max_distance_km", "trim")
 
 
 # ---------------------------------------------------------------------------
@@ -453,7 +453,7 @@ def assess_f3(listing: Mapping[str, Any], profile: Mapping[str, Any], result: Ma
             put(key, None if seller2 is None else 1.0 if wanted and seller2 in wanted else fit_p["fail"])
         elif key == "trim":
             put(key, {OK: 1.0, FAIL: fit_p["trim_other"], UNKNOWN: None}[soft[key].result])
-        else:                               # colors, max_distance_km
+        else:                               # max_distance_km
             put(key, by_result[soft[key].result])
     fit_level = sum(values.values()) / len(values) if values else 1.0
     unknown_hard = tuple(result.unknown)

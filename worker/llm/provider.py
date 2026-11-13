@@ -14,10 +14,10 @@ sees it (§44). Providers:
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 import config
-from llm.schemas import ListingFacts, LowResultsExplanation, ModelGuideDraft, SearchDraft
+from llm.schemas import ListingColorAnswer, ListingFacts, LowResultsExplanation, ModelGuideDraft, SearchDraft
 from normalization.vehicle import CatalogModel
 
 
@@ -60,6 +60,23 @@ class LLMProvider(Protocol):
         its own time budget (llm_limits.model_guide.timeout_seconds). Only a
         draft: intelligence/guides.py validates it and Juan reviews it."""
         ...
+
+    async def listing_color(self, images: list[bytes]) -> dict[str, Any]:
+        """Optional: the body color from up to 10 photos of a listing, each a
+        JPEG already fitted to 512x384 (pipeline/color_vision.py,
+        docs/COLOR.md). Returns {"visible": bool, "colors": [{"color", "prob"}],
+        "tokens_in", "tokens_out", "model"}, the most probable color first.
+        Providers that can't send images raise LLMError."""
+        ...
+
+
+def color_result(answer: ListingColorAnswer, tokens_in: Any, tokens_out: Any, model: str) -> dict[str, Any]:
+    """The provider-neutral shape of a color answer."""
+    colors = sorted(({"color": c.color, "prob": c.prob} for c in answer.colors), key=lambda c: -c["prob"])
+    return {"visible": answer.visible, "colors": colors,
+            "tokens_in": tokens_in if isinstance(tokens_in, int) else None,
+            "tokens_out": tokens_out if isinstance(tokens_out, int) else None,
+            "model": model}
 
 
 def build_provider(name: str | None = None) -> LLMProvider:

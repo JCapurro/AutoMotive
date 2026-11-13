@@ -19,7 +19,10 @@ https URLs already stored, no cookies, at most max_bytes (Content-Length and
 streamed), only image/*, one image per host every per_host_interval_seconds,
 never a source in skip_sources (Facebook and Instagram by default: facebook,
 onlycarsusados, sc_clasificados) nor a Meta image host (BLOCKED_HOSTS, whatever
-the config says), an IP literal or a localhost host. Redirects are followed by
+the config says), an IP literal or a localhost host. The color pass
+(pipeline/color_vision.py) reuses this downloader with `allow_meta=True`, the
+only caller that may fetch Meta hosts (docs/PLAN_FILTRO_COLOR.md, decision 1);
+the duplicates pass never passes it. Redirects are followed by
 hand, at most MAX_REDIRECTS, and every hop is checked the same way before it is
 requested, its host name resolved first: one that resolves to a non-public
 address (private, loopback, link-local, reserved) is never requested. Without
@@ -64,18 +67,24 @@ class DownloadError(Exception):
     pass
 
 
-def first_urls(images: Any, n: int) -> list[str]:
+def first_urls(images: Any, n: int, *, allow_meta: bool = False) -> list[str]:
     """The first n photo URLs that may be downloaded (https, a host name)."""
     out = []
     for url in image_urls(images, limit=max(n, 1) * 3):
-        if downloadable(url):
+        if downloadable(url, allow_meta=allow_meta):
             out.append(url)
         if len(out) == n:
             break
     return out
 
 
-def downloadable(url: str) -> bool:
+def meta_host(host: str) -> bool:
+    return any(host == b or host.endswith("." + b) for b in BLOCKED_HOSTS)
+
+
+def downloadable(url: str, *, allow_meta: bool = False) -> bool:
+    """A public https URL with a host name. Meta's image hosts only with
+    `allow_meta` (the color pass; never the duplicates pass)."""
     try:
         parts = urlsplit(url)
     except ValueError:
@@ -83,7 +92,7 @@ def downloadable(url: str) -> bool:
     host = (parts.hostname or "").lower()
     if parts.scheme != "https" or not host or host == "localhost" or host.endswith(".localhost"):
         return False
-    if any(host == b or host.endswith("." + b) for b in BLOCKED_HOSTS):
+    if not allow_meta and meta_host(host):
         return False
     try:
         ipaddress.ip_address(host)
@@ -121,13 +130,15 @@ def public_address(address: str) -> bool:
     return ip.is_global and not ip.is_multicast
 
 
-def fetcher(client: httpx.AsyncClient, cfg: Mapping[str, Any], resolve: Resolve = system_resolve) -> Fetch:
-    """Download one image within max_bytes and timeout_seconds."""
+def fetcher(client: httpx.AsyncClient, cfg: Mapping[str, Any], resolve: Resolve = system_resolve, *,
+            allow_meta: bool = False) -> Fetch:
+    """Download one image within max_bytes and timeout_seconds. Every hop is
+    checked with the same `allow_meta`."""
     max_bytes = int(cfg["max_bytes"])
     timeout = float(cfg["timeout_seconds"])
 
     async def check(url: str) -> None:
-        if not downloadable(url):
+        if not downloadable(url, allow_meta=allow_meta):
             raise DownloadError("disallowed URL")
         host = urlsplit(url).hostname or ""
         try:

@@ -406,3 +406,38 @@ def test_the_schema_offers_timing_and_old_recordings_stay_valid():
     item = json_schema(SearchDrafts)["properties"]["vehicles"]["items"]
     assert "timing" in item["required"]
     assert SearchDraft(**EMPTY).timing is None
+
+
+# Colors (docs/PLAN_FILTRO_COLOR.md §8).
+
+def test_colors_reach_the_form_in_the_contract_order():
+    out = norm(make="Volkswagen", model="Gol", colors=["negro", "blanco", "negro"])
+    assert out["values"]["colors"] == ["blanco", "negro"]
+    assert norm(make="Volkswagen", model="Gol")["values"]["colors"] == []
+
+
+def test_a_color_left_in_the_model_moves_to_colors():
+    out = norm(model="Gol blanco")
+    assert (out["values"]["make"], out["values"]["model"], out["values"]["colors"]) == ("Volkswagen", "Gol", ["blanco"])
+    out = norm(make="Chevrolet", model="Onix gris o plata")
+    assert (out["values"]["model"], out["values"]["colors"]) == ("Onix", ["gris"])
+    # A version that names a color is a version, not the paint.
+    out = norm(make="Volkswagen", model="Gol", trim="Black Edition")
+    assert out["values"]["colors"] == []
+
+
+def test_the_color_schema_is_strict_and_required():
+    schema = json_schema(SearchDrafts)["properties"]["vehicles"]["items"]
+    assert "colors" in schema["required"]
+    assert schema["properties"]["colors"]["items"]["enum"] == ["blanco", "negro", "gris", "azul", "rojo", "verde",
+                                                               "beige", "otro"]
+
+
+def test_grouped_drafts_keep_the_union_of_colors_or_none():
+    both = normalize_drafts(seed_catalog(), [draft(make="Ford", model="Fiesta", trim="Titanium", colors=["rojo"]),
+                                             draft(make="Ford", model="Fiesta", trim="SE", colors=["blanco"])],
+                            today=TODAY)["drafts"]
+    assert len(both) == 1 and both[0]["values"]["colors"] == ["blanco", "rojo"]
+    one = normalize_drafts(seed_catalog(), [draft(make="Ford", model="Fiesta", trim="Titanium", colors=["rojo"]),
+                                            draft(make="Ford", model="Fiesta", trim="SE")], today=TODAY)["drafts"]
+    assert one[0]["values"]["colors"] == []

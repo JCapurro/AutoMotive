@@ -15,6 +15,10 @@ type, the detail's does). So that a listing doesn't flip between the two on
 every crawl, once a listing is enriched only fetch_detail() rewrites its
 descriptive fields; cards keep refreshing price and mileage.
 
+The color (docs/PLAN_FILTRO_COLOR.md) goes by method instead: the source's
+value beats an anchored text, which beats the photos (the color pass writes
+those itself). It is no key attribute: filling it is no snapshot and no event.
+
 Prices (normalization v3): cards and detail pages report the *published*
 price (price_published); the effective one (price) is re-resolved on every
 merge against the stored description facts, so a card showing the list
@@ -38,7 +42,7 @@ from db.repos.fx import quote_for_today
 from db.repos.runs import log_error
 from intelligence.config import config_number
 from normalization.description_facts import PARTIAL_KINDS, DescriptionFacts, resolve_price
-from normalization import not_vehicle
+from normalization import color as paint, not_vehicle
 from normalization.geo import SOURCE_DEFAULT_LOCATIONS, geocode_location
 from normalization.listing import Target, attrs_hash, doubtful_price, facebook_price, fingerprint, normalize_listing
 from normalization.seller import seller_key
@@ -271,6 +275,11 @@ def merge(existing: dict[str, Any], incoming: dict[str, Any], *,
     side = attrs_new if out["body_type"] == incoming.get("body_type") else attrs_old
     if "_body_type" in side:
         out["attributes"]["_body_type"] = side["_body_type"]
+    out["color"], color_how = merge_color_columns(existing, incoming, authoritative=authoritative)
+    if color_how is None:
+        out["attributes"].pop("_color", None)
+    else:
+        out["attributes"]["_color"] = color_how
 
     # Price: the newest published value wins (cards are for that); the
     # effective one is resolved again from it and the stored facts.
@@ -356,6 +365,28 @@ def merge(existing: dict[str, Any], incoming: dict[str, Any], *,
     if attrs_hash(out) != attrs_hash(existing):
         changes.append("attrs")
     return out, changes
+
+
+def merge_color_columns(existing: dict[str, Any], incoming: dict[str, Any], *,
+                        authoritative: bool) -> tuple[str | None, dict[str, Any] | None]:
+    """(color, attributes._color) after a merge. The incoming color stands
+    when normalization/color.merge_color lets its method overwrite the
+    stored one (source > text > vision); not knowing never erases a color.
+    Between two readings of the same method a card doesn't overwrite an
+    enriched listing (a card's title against the detail's description would
+    flip on every crawl), and the same color read the same way keeps its _color."""
+    old_color = existing.get("color")
+    old_how = (existing.get("attributes") or {}).get("_color")
+    new_color = incoming.get("color")
+    new_how = (incoming.get("attributes") or {}).get("_color")
+    if not new_color or not new_how or paint.merge_color(old_how, new_how) is None:
+        return old_color, old_how
+    same_rank = paint.rank(new_how) == paint.rank(old_how)
+    if same_rank and old_color and not authoritative:
+        return old_color, old_how
+    if same_rank and new_color == old_color and (old_how or {}).get("raw") == new_how.get("raw"):
+        return old_color, old_how
+    return new_color, new_how
 
 
 def published_view(row: dict[str, Any]) -> dict[str, Any]:

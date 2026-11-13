@@ -42,3 +42,6 @@ class LocalProvider:
 
     async def model_guide(self, context: dict, *, timeout: float | None = None) -> ModelGuideDraft:
         raise self._unavailable()
+
+    async def listing_color(self, images: list[bytes]) -> dict:
+        raise self._unavailable()

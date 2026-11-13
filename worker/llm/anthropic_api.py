@@ -16,17 +16,19 @@ default: the plan's choice for turning a short request into filters).
 """
 from __future__ import annotations
 
+import base64
 import json
 import logging
 from collections.abc import Sequence
-from typing import TypeVar
+from typing import Any, TypeVar
 
 import anthropic
 from pydantic import BaseModel, ValidationError
 
 from llm import prompts
-from llm.provider import LLMError, LLMTimeout
-from llm.schemas import ListingFacts, LowResultsExplanation, ModelGuideDraft, PolishedQuestions, SearchDraft, SearchDrafts
+from llm.provider import LLMError, LLMTimeout, color_result
+from llm.schemas import (LISTING_COLOR_MAX_IMAGES, ListingColorAnswer, ListingFacts, LowResultsExplanation,
+                         ModelGuideDraft, PolishedQuestions, SearchDraft, SearchDrafts)
 from normalization.vehicle import CatalogModel
 
 log = logging.getLogger(__name__)
@@ -37,6 +39,8 @@ M = TypeVar("M", bound=BaseModel)
 _MAX_TOKENS = 4096
 # PAR-04: a guide is several sections long.
 _GUIDE_MAX_TOKENS = 8192
+# The color answer: a handful of codes.
+_COLOR_MAX_TOKENS = 200
 
 
 class AnthropicApiProvider:
@@ -51,6 +55,14 @@ class AnthropicApiProvider:
 
     async def _structured(self, system_prompt: str, user: str, out: type[M], *,
                           timeout: float | None = None, max_tokens: int = _MAX_TOKENS) -> M:
+        result, _ = await self._structured_usage(system_prompt, user, out, timeout=timeout, max_tokens=max_tokens)
+        return result
+
+    async def _structured_usage(self, system_prompt: str, user: str | list[dict[str, Any]], out: type[M], *,
+                                timeout: float | None = None, max_tokens: int = _MAX_TOKENS
+                                ) -> tuple[M, tuple[int | None, int | None]]:
+        """The validated answer and (input, output) tokens. `user` is a text
+        or a list of content blocks (text, image)."""
         budget = timeout or self.timeout
         try:
             response = await self.client.messages.create(
@@ -79,8 +91,9 @@ class AnthropicApiProvider:
         log.info("anthropic %s: %d in / %d out tokens", self.model,
                  response.usage.input_tokens, response.usage.output_tokens)
         text = next((b.text for b in response.content if b.type == "text"), "")
+        tokens = (response.usage.input_tokens, response.usage.output_tokens)
         try:
-            return out.model_validate(json.loads(text))
+            return out.model_validate(json.loads(text)), tokens
         except json.JSONDecodeError:
             raise LLMError("la API de Claude no devolvió JSON") from None
         except ValidationError as e:
@@ -109,3 +122,19 @@ class AnthropicApiProvider:
     async def model_guide(self, context: dict, *, timeout: float | None = None) -> ModelGuideDraft:
         return await self._structured(prompts.load("model_guide"), prompts.model_guide_user(context),
                                       ModelGuideDraft, timeout=timeout, max_tokens=_GUIDE_MAX_TOKENS)
+
+    async def listing_color(self, images: list[bytes]) -> dict[str, Any]:
+        """The same contract as OpenAIApiProvider.listing_color: the measured
+        prompt, each photo a base64 image block before the text, and the same
+        schema (as a Pydantic model, through the SDK's transform_schema)."""
+        images = [i for i in images if i][:LISTING_COLOR_MAX_IMAGES]
+        if not images:
+            raise LLMError("no hay fotos para leer el color")
+        content: list[dict[str, Any]] = [
+            *({"type": "image", "source": {"type": "base64", "media_type": "image/jpeg",
+                                           "data": base64.b64encode(data).decode("ascii")}} for data in images),
+            {"type": "text", "text": prompts.LISTING_COLOR_USER_TEXT},
+        ]
+        answer, (tokens_in, tokens_out) = await self._structured_usage(
+            prompts.listing_color_system(), content, ListingColorAnswer, max_tokens=_COLOR_MAX_TOKENS)
+        return color_result(answer, tokens_in, tokens_out, self.model)

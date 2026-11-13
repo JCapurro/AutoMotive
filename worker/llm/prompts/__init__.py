@@ -23,6 +23,16 @@ _DIR = Path(__file__).resolve().parent
 MODEL_GUIDE_PROMPT_VERSION = "model_guide-v1"
 MODEL_GUIDE_PROMPT_SHA256 = "5686bc852d98b1443dbc086f87549a0927fec85f9ce17166453b320f64bade06"
 
+# The color pass (docs/COLOR.md, variant «todas»): listing_color.md is the
+# measured prompt verbatim (PROMPT_TODAS of the Fase 0 script). Editing it
+# means a new version here, which re-reads every listing the pass saw
+# (pipeline/color_vision.py keeps it in attributes._color.prompt), and its
+# hash (tests/test_llm_listing_color.py fails otherwise).
+LISTING_COLOR_PROMPT_VERSION = "listing_color-v1"
+LISTING_COLOR_PROMPT_SHA256 = "05bb7667683ab3574801648c0a8a4a37216f33ebd21701ab57eb57d4c607ce73"
+# The text that goes with the photos, as measured.
+LISTING_COLOR_USER_TEXT = "Fotos de la publicación."
+
 
 @cache
 def load(name: str) -> str:
@@ -42,6 +52,11 @@ def parse_search_system(catalog: Sequence[CatalogModel], today: dt.date | None =
     return (load("parse_search")
             .replace("{year}", str(year))
             .replace("{catalog}", catalog_text(catalog)))
+
+
+def listing_color_system() -> str:
+    """The measured prompt, without the file's trailing newline."""
+    return load("listing_color").strip()
 
 
 def parse_search_user(text: str) -> str:

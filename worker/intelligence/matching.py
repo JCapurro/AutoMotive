@@ -6,6 +6,8 @@ preference. A hard `fail` means no match (None). `unknown` never discards
 (the listing may not say its transmission yet, enrichment may fill it) but
 lowers the score's match component. The exception is the body type of a
 search without a model (docs/CARROCERIA.md): unknown there is a `fail`.
+The color (filters.colors) is a hard filter too, after the body type
+(docs/PLAN_FILTRO_COLOR.md); the old soft preferences.colors is gone.
 
 `listing` is a row of `listings`; `profile` a row of `search_profiles`
 (filters and preferences as in sección 4.3, plus origin_* / radius_km).
@@ -20,6 +22,7 @@ from typing import Any, Literal, Mapping
 
 from intelligence import copy
 from intelligence.seller import effective_seller, seller_kind
+from normalization import color as paint
 from normalization.geo import haversine_km
 from normalization.normalize import normalize_brand, normalize_text
 
@@ -251,6 +254,30 @@ def _body_type(listing, f) -> Reason | None:
     return Reason(FAIL, copy.REASON["body_type_other"].format(actual=shown, wanted=names))
 
 
+def _color(listing, f) -> Reason | None:
+    """filters.colors (docs/PLAN_FILTRO_COLOR.md, sección 8), the same in a
+    search by model or by body type. The color wanted: ok. Another one, but
+    the photos left a wanted candidate with prob >= CANDIDATE_MIN_PROB:
+    unknown («puede ser verde»). No color yet: unknown («sin confirmar»), it
+    may be decided later. Any other color: fail. public.listing_color_fits."""
+    wanted = paint.wanted_colors(f)
+    if not wanted:
+        return None
+    have = listing.get("color")
+    how = (listing.get("attributes") or {}).get("_color")
+    how = how if isinstance(how, Mapping) else {}
+    if have and have in wanted:
+        return Reason(OK, copy.REASON["color_ok"].format(
+            color=copy.COLOR.get(have, have), how=copy.COLOR_HOW.get(how.get("method"), copy.COLOR_HOW["source"])))
+    maybe = next((code for code, _ in paint.candidates(how) if code in wanted), None)
+    if maybe:
+        return Reason(UNKNOWN, copy.REASON["color_maybe"].format(color=copy.COLOR.get(maybe, maybe)))
+    if not have:
+        return Reason(UNKNOWN, copy.REASON["color_unknown"])
+    names = " o ".join(copy.COLOR.get(c, c) for c in wanted)
+    return Reason(FAIL, copy.REASON["color_other"].format(actual=copy.COLOR_IS.get(have, have), wanted=names))
+
+
 def search_zones(profile) -> list[tuple[float, float, float]]:
     """The zones a search looks in as (lat, lon, radius_km): its own place
     (origin_*, radius_km) and the ones it adds (filters.extra_locations, "Chaco
@@ -415,14 +442,6 @@ def _preferences(listing, profile, fx_rate) -> dict[str, Reason]:
                               _soft(OK, copy.REASON["seller_ok"].format(kind=kind)) if have == seller else
                               _soft(FAIL, copy.REASON["seller_other"].format(kind=kind, wanted=want)))
 
-    if colors := p.get("colors"):
-        color = (listing.get("attributes") or {}).get("color") or (listing.get("attributes") or {}).get("Color")
-        wanted = {normalize_text(c) for c in colors}
-        out["colors"] = (_soft(UNKNOWN, copy.NOT_INFORMED) if not color else
-                         _soft(OK, copy.REASON["color_ok"].format(color=color))
-                         if normalize_text(color) in wanted else
-                         _soft(FAIL, copy.REASON["color_other"].format(color=color, wanted=", ".join(colors))))
-
     if (max_km := p.get("max_distance_km")) is not None:
         dist = distance_km(listing, profile)
         out["max_distance_km"] = (_soft(UNKNOWN, copy.REASON["no_coords"]) if dist is None else
@@ -444,6 +463,7 @@ def evaluate(listing: Mapping[str, Any], profile: Mapping[str, Any], *,
                                 copy.TRANSMISSION, "transmission_other"),
         "fuel": _choice(listing.get("fuel"), f.get("fuel"), {}, "fuel_other"),
         "body_type": _body_type(listing, f),
+        "color": _color(listing, f),
         "location": _location(listing, profile),
         "source": _source(listing, f),
         "seller": _seller(listing, profile),
