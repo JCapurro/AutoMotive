@@ -65,6 +65,8 @@ _DESC_PATTERNS = [
     r"\bpor\s*\.\s*solo\s*(?:u\$[sd]|us\$|\$)",
 ]
 
+BLANK_TOTAL_REASON = "keyword: precio total en blanco"
+
 _DESC_RE = re.compile("|".join(_DESC_PATTERNS), re.IGNORECASE)
 
 
@@ -74,7 +76,7 @@ def keyword_partial(title: str | None, description: str | None = None) -> str | 
     if title and (m := _KW_RE.search(_strip_accents(title).lower())):
         return f"keyword: {m.group(0).strip()}"
     if description and _DESC_RE.search(_strip_accents(description).lower()):
-        return "keyword: precio total en blanco"
+        return BLANK_TOTAL_REASON
     return None
 
 

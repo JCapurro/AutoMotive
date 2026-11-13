@@ -28,6 +28,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any, Mapping
 
 from normalization import transmission as tx
+from normalization.price_check import BLANK_TOTAL_REASON
 from normalization.description_claims import CLAIM_FIELDS, grounded_values, input_hash, quote_contexts
 from normalization.money import (MIN_ARS_VEHICLE_PRICE, MIN_USD_VEHICLE_PRICE, parse_number,
                                  plain_dollar_currency, plausible_vehicle_price)
@@ -498,6 +499,10 @@ def resolve_price(published: float | None, currency: str | None, *,
         return u is not None and pub_usd is not None and _close(u, pub_usd, 0.03)
 
     kind = facts.published_is or next((a.kind for a in facts.amounts if same(a)), None)
+    if partial_reason == BLANK_TOTAL_REASON:
+        # The template's «Solo $X» reads as a plain or cash price, and an LLM
+        # reading stored before the rule may call it one too: the total is blank.
+        kind = "down_payment"
     comparable = [a for a in facts.amounts if usd(a) is not None and pub_usd is not None]
 
     def from_text(a: Amount, *, published_partial: bool = False) -> PriceResolution:

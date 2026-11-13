@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import unittest
 
-from normalization.description_facts import parse, resolve_price
+from normalization.description_facts import DescriptionFacts, parse, resolve_price
 from normalization.price_check import keyword_partial
 
 TEMPLATE = ("LLEVATE este Volkswagen Amarok DC 4x2 Trendline (2024) por . Solo $4.999.999. "
@@ -26,6 +26,16 @@ class KeywordPartialTests(unittest.TestCase):
         title = "Volkswagen Amarok DC 4x2 Trendline"
         facts = parse(TEMPLATE, title, now_year=2026)
         self.assertEqual(facts.published_is, "down_payment")
+        price = resolve_price(4_999_999, "ARS", partial_reason=keyword_partial(title, TEMPLATE),
+                              facts=facts, usd_rate=1_550)
+        self.assertTrue(price.partial)
+        self.assertEqual(price.partial_reason, "keyword: precio total en blanco")
+
+    def test_the_template_wins_over_an_older_reading_that_calls_it_cash(self):
+        # An LLM reading stored before the rule: no published_is, «Solo $X» as cash.
+        title = "Volkswagen Amarok DC 4x2 Trendline"
+        facts = DescriptionFacts.from_json({"source": "llm", "amounts": [
+            {"kind": "cash", "amount": 4_999_999, "currency": "ARS", "text": "solo $4.999.999"}]})
         price = resolve_price(4_999_999, "ARS", partial_reason=keyword_partial(title, TEMPLATE),
                               facts=facts, usd_rate=1_550)
         self.assertTrue(price.partial)
