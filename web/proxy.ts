@@ -1,8 +1,10 @@
 import { createServerClient } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
 
+import { encodeOrigin, ORIGIN_COOKIE, ORIGIN_MAX_AGE, originFromRequest, skipsOrigin } from "@/lib/acquisition";
 import { supabaseAnonKey, supabaseUrl } from "@/lib/env";
 import { isHealthOwner } from "@/lib/health-access";
+import { trackingAllowed } from "@/lib/meta-pixel";
 import { requestOrigin } from "@/lib/origin";
 
 /**
@@ -52,7 +54,28 @@ export async function proxy(request: NextRequest) {
   if (signedIn && pathname === "/login") {
     return redirectWith(new URL("/app", requestOrigin(request)), response);
   }
+  if (!signedIn) keepFirstTouch(request, response);
   return response;
+}
+
+/**
+ * The first page an anonymous visitor opens, with its UTM, ad click id and
+ * referrer (lib/acquisition.ts), kept until signup copies it into the
+ * signup_completed event. Not when tracking was refused, not on prefetches or
+ * RSC requests, and never rewritten while it lives.
+ */
+function keepFirstTouch(request: NextRequest, response: NextResponse) {
+  if (request.method !== "GET" || request.cookies.has(ORIGIN_COOKIE)) return;
+  if (!trackingAllowed(request.headers.get("cookie") ?? "")) return;
+  const h = request.headers;
+  if (h.has("rsc") || h.has("next-router-prefetch") || /prefetch/i.test(h.get("purpose") ?? h.get("sec-purpose") ?? "")) return;
+  const dest = h.get("sec-fetch-dest");
+  if (dest && dest !== "document") return;
+  if (skipsOrigin(request.nextUrl.pathname)) return;
+  const url = new URL(request.nextUrl.pathname + request.nextUrl.search, requestOrigin(request));
+  response.cookies.set(ORIGIN_COOKIE, encodeOrigin(originFromRequest(url, h.get("referer"))), {
+    httpOnly: true, sameSite: "lax", secure: url.protocol === "https:", path: "/", maxAge: ORIGIN_MAX_AGE,
+  });
 }
 
 /** A redirect that keeps the refreshed session cookies. */
