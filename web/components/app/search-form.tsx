@@ -24,11 +24,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import type { Catalog } from "@/lib/catalog";
-import { ANY_COLOR, BODY_TYPE, BODY_TYPE_CODES, type BodyType, COLOR, COLOR_CODES, type ColorCode, FREQUENCY, FUEL, MARGIN, MIN_LEVEL_OPTIONS, PRO_LOCKED, SELLER, SELLER_FORM_HINT, SELLER_STRICT, TRANSMISSION, isBodyType } from "@/lib/copy";
+import { ANY_COLOR, BODY_TYPE, BODY_TYPE_CODES, type BodyType, COLOR, type ColorCode, FREQUENCY, FUEL, MARGIN, MIN_LEVEL_OPTIONS, PRO_LOCKED, SELLER, SELLER_FORM_HINT, SELLER_STRICT, TRANSMISSION, isBodyType } from "@/lib/copy";
 import { number } from "@/lib/format";
 import { PROVINCES, citiesInProvince, cityById, cityByLocation } from "@/lib/argentina-locations";
 import {
   ANY_COLOR_VALUE,
+  colorOptions,
   MODEL_LESS_UNAVAILABLE,
   MODEL_LESS_UPSELL,
   type SearchInput,
@@ -707,7 +708,7 @@ export function SearchForm({
                 onToggle={chooseColor}
                 options={[
                   { value: ANY_COLOR_VALUE, label: ANY_COLOR },
-                  ...COLOR_CODES.map((code) => ({ value: code, label: COLOR[code] })),
+                  ...colorOptions(d.colors).map((code) => ({ value: code, label: COLOR[code] })),
                 ]}
               />
               <p className="text-xs text-muted-foreground">

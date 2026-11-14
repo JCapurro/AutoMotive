@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { COLOR, COLOR_CODES, colorName, colorsText } from "@/lib/copy";
-import { ANY_COLOR_VALUE, SearchInput, checkedColors, fromProfile, toFilters, toggleColor } from "@/lib/search-form";
+import { ANY_COLOR_VALUE, SearchInput, checkedColors, colorOptions, fromProfile, toFilters, toggleColor } from "@/lib/search-form";
 import type { SearchProfile } from "@/lib/types";
 
 // docs/PLAN_FILTRO_COLOR.md §8: «Cualquier color» plus the 8 colors, in both modes, stored as filters.colors.
@@ -21,6 +21,12 @@ describe("color codes and labels", () => {
 });
 
 describe("the color checkboxes", () => {
+  // Juan 14/11: «Otro color» read as "type another" with nowhere to type.
+  it("no longer offers «Otro color», except to a search that already has it", () => {
+    expect(colorOptions([])).toEqual(["blanco", "negro", "gris", "azul", "rojo", "verde", "beige"]);
+    expect(colorOptions(["gris"])).not.toContain("otro");
+    expect(colorOptions(["otro", "gris"])).toEqual([...COLOR_CODES]);
+  });
   it("starts on «Cualquier color»", () => {
     expect(checkedColors([])).toEqual([ANY_COLOR_VALUE]);
     expect(checkedColors(["gris"])).toEqual(["gris"]);

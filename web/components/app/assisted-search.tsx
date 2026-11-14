@@ -1,6 +1,6 @@
 "use client";
 
-import { BellRing, Check, CheckCircle2, CircleAlert, Loader2, PenLine, Plus, RotateCcw, Sparkles, Trash2 } from "lucide-react";
+import { BellRing, Check, CheckCircle2, CircleAlert, Loader2, PenLine, Plus, RotateCcw, SlidersHorizontal, Sparkles, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
@@ -413,10 +413,11 @@ export function AssistedSearch({
     };
     return (
       <div className="space-y-4">
-        <Card data-testid="assisted-active" className="border-emerald-600/30">
-          <CardContent className="space-y-3">
-            <div className="flex items-start gap-3">
-              <CheckCircle2 className="mt-0.5 size-6 shrink-0 text-emerald-600" aria-hidden />
+        {/* Short on a phone, so the filters right below it are in sight (Juan 14/11). */}
+        <Card data-testid="assisted-active" className="border-emerald-600/30 max-sm:py-3">
+          <CardContent className="space-y-2.5 sm:space-y-3">
+            <div className="flex items-start gap-2.5 sm:gap-3">
+              <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-emerald-600 sm:size-6" aria-hidden />
               <div className="space-y-1">
                 <h2 ref={activeTitle} tabIndex={-1} className="text-base font-semibold outline-none">Búsqueda guardada y activa</h2>
                 <p aria-live="polite" className="text-sm">
@@ -428,9 +429,10 @@ export function AssistedSearch({
                 <p role="status" className="text-sm font-medium">{answered?.text ?? ""}</p>
               </div>
             </div>
-            <ul aria-label="Lo que guardamos" className="flex flex-wrap gap-2">
+            {/* One row that scrolls sideways on a phone; wider screens wrap it. */}
+            <ul aria-label="Lo que guardamos" className="-mx-4 flex gap-2 overflow-x-auto px-4 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 [&::-webkit-scrollbar]:hidden">
               {[...filterParts(toFilters(draft.values, sources.map((s) => s.id)), location?.radius_km), ...(location ? [] : ["Todo el país"])].map((part) => (
-                <li key={part} className="rounded-full border bg-muted/40 px-3 py-1 text-xs">{part}</li>
+                <li key={part} className="shrink-0 rounded-full border bg-muted/40 px-3 py-1 text-xs whitespace-nowrap">{part}</li>
               ))}
             </ul>
             {notice ? (
@@ -447,13 +449,16 @@ export function AssistedSearch({
               <Button asChild variant={notice ? "outline" : "default"}>
                 <Link href={`/app/searches/${savedId}`}>Ver mi búsqueda</Link>
               </Button>
-              <p className="text-xs text-muted-foreground">¿Querés cambiar algo? Editá los datos de abajo y tocá «Guardar cambios».</p>
+              <Button asChild variant="outline">
+                <a href={`#${ACTIVE_FILTERS_ID}`}><SlidersHorizontal aria-hidden /> Ajustar filtros</a>
+              </Button>
             </div>
           </CardContent>
         </Card>
-        <RequestSummary text={text} onEdit={() => setPhase({ kind: "idle" })}>
-          Así leímos tu pedido. Escribir otro crea una búsqueda nueva.
-        </RequestSummary>
+        <div id={ACTIVE_FILTERS_ID} className="scroll-mt-20 space-y-1">
+          <h3 className="text-base font-semibold">Ajustá los filtros de tu búsqueda</h3>
+          <p className="text-sm text-muted-foreground">Años, kilómetros, precio, color, zona y más. Cambiá lo que quieras y tocá «Guardar cambios».</p>
+        </div>
         <div inert={zonePending}>
           <SearchForm
             // A widened zone opens the form again with it.
@@ -472,6 +477,10 @@ export function AssistedSearch({
             maxLocations={maxLocations}
           />
         </div>
+        {/* Under the form: on a phone it used to push the filters out of sight. */}
+        <RequestSummary text={text} onEdit={() => setPhase({ kind: "idle" })}>
+          Así leímos tu pedido. Escribir otro crea una búsqueda nueva.
+        </RequestSummary>
       </div>
     );
   }
@@ -698,6 +707,9 @@ export function AssistedSearch({
     </form>
   );
 }
+
+/** Where «Ajustar filtros» on the card of a search just saved lands: the form under it. */
+const ACTIVE_FILTERS_ID = "ajustar-filtros";
 
 function RequestSummary({ text, onEdit, children }: { text: string; onEdit: () => void; children: React.ReactNode }) {
   return (
