@@ -201,6 +201,17 @@ export function sellerForPlan(v: SearchValues, sellerFilter: boolean, stored: Se
 }
 
 /** The hard filters of the form, as `filters` stores them. `allSources`: every enabled source. */
+/**
+ * The colors the form offers. «Otro color» (the colors outside the list:
+ * yellow, orange, violet…) is not one of them (Juan 14/11: it read as "type
+ * another" and there is nowhere to type); a search that already has it keeps
+ * the chip, so it can be taken off. The code itself stays valid everywhere
+ * else: a request that says «un Gol amarillo» still saves it.
+ */
+export function colorOptions(selected: readonly ColorCode[]): ColorCode[] {
+  return COLOR_CODES.filter((code) => code !== "otro" || selected.includes("otro"));
+}
+
 export function toFilters(v: SearchValues, allSources: string[] = []): Filters {
   const trims = selectedTrims(v);
   // A model-less search stores neither make nor model (nor versions): docs/CARROCERIA.md.
