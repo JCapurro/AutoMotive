@@ -55,6 +55,15 @@ it("reads app_config.trial_reserve: off without the row, null when app_config ca
   mock.error = { message: "timeout" };
   expect((await webConfig()).trialReserve).toBeNull();
 });
+// Portada nueva (lib/landing-hero.ts): the hero test's switch and share.
+it("reads app_config.landing_hero: off and half without the row, null when app_config can't be read", async () => {
+  expect((await webConfig()).landingHero).toEqual({ enabled: false, share: 50 });
+  expect(mock.keys).toContain("landing_hero");
+  mock.rows = [{ key: "landing_hero", value: { enabled: true, share: 20, events_per_minute: 300 } }];
+  expect((await webConfig()).landingHero).toEqual({ enabled: true, share: 20 });
+  mock.error = { message: "timeout" };
+  expect((await webConfig()).landingHero).toBeNull();
+});
 it("reads app_config.zone_notice: off without the row, null when app_config can't be read", async () => {
   expect((await webConfig()).zoneNotice).toEqual({ enabled: false });
   expect(mock.keys).toContain("zone_notice");

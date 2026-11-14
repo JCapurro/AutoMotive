@@ -123,6 +123,9 @@ export const SellIntentConfigInput = z.object({
 /** Aviso de zona: app_config.zone_notice, the notice's switch (lib/zone-notice.ts zoneNoticeConfig). */
 export const ZONE_NOTICE_CONFIG_MESSAGE = "zone_notice necesita enabled (true/false).";
 export const ZoneNoticeConfigInput = z.object({ enabled: z.boolean() }).passthrough();
+/** Portada: app_config.landing_hero, the new hero's switch and the share of visitors who see it (lib/landing-hero.ts). */
+export const LANDING_HERO_CONFIG_MESSAGE = "landing_hero necesita enabled (true/false), share (entero de 0 a 100) y events_per_minute (entero de 0 a 10000).";
+export const LandingHeroConfigInput = z.object({ enabled: z.boolean(), share: z.number().int().min(0).max(100), events_per_minute: z.number().int().min(0).max(10000) }).passthrough();
 /** Prueba gratis: app_config.trial_reserve, room in the trial for new listings (lib/trial-reserve.ts). */
 export const TRIAL_RESERVE_CONFIG_MESSAGE = "trial_reserve necesita enabled (true/false) y backfill_max (entero de 0 a 1000).";
 export const TrialReserveConfigInput = z.object({ enabled: z.boolean(), backfill_max: z.number().int().min(0).max(1000) }).passthrough();
@@ -401,6 +404,7 @@ export function validateConfigChange(key: string, value: unknown, current: unkno
   if (key === "sell_intent" && !SellIntentConfigInput.safeParse(value).success) return SELL_INTENT_CONFIG_MESSAGE;
   if (key === "zone_notice" && !ZoneNoticeConfigInput.safeParse(value).success) return ZONE_NOTICE_CONFIG_MESSAGE;
   if (key === "trial_reserve" && !TrialReserveConfigInput.safeParse(value).success) return TRIAL_RESERVE_CONFIG_MESSAGE;
+  if (key === "landing_hero" && !LandingHeroConfigInput.safeParse(value).success) return LANDING_HERO_CONFIG_MESSAGE;
   // PAR-01: every block with source and as_of, valid ranges and scales (lib/cost-estimator.ts, the parser's own rules).
   if (key === "cost_estimator") return costEstimatorProblem(value);
   // f3 «precio × encaje» (shadow): the worker's bounds and cross-key rules (worker/intelligence/config.py score_model_f3).
@@ -496,6 +500,9 @@ export function configFieldLabel(key: string, path: string): string {
     return ({ ask: "Pregunta «¿Tenés que vender tu auto?» (bienvenida y ficha)", agencies_contact: "Casilla «agencias me contacten» y su línea en Privacidad (solo con OK de Juan)", since: "Inicio de la prueba (métricas)" } as Record<string, string>)[path] ?? path;
   }
   if (key === "zone_notice" && path === "enabled") return "Aviso de zona visible (resultados y modo asistido)";
+  if (key === "landing_hero") {
+    return ({ enabled: "Prueba de la portada nueva", share: "Visitantes que ven la portada nueva (%)", events_per_minute: "Tope de eventos de la portada por minuto" } as Record<string, string>)[path] ?? path;
+  }
   if (key === "trial_reserve") {
     return ({ enabled: "Reserva de la prueba para autos nuevos", backfill_max: "Máximo de resultados ya publicados" } as Record<string, string>)[path] ?? path;
   }

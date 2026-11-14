@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Script from "next/script";
-import { useEffect, useRef, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 
 import { Button } from "@/components/ui/button";
 import { googleAnalyticsId } from "@/lib/google-analytics";
@@ -127,16 +128,37 @@ s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebo
 fbq('consent',/(^|; )${CONSENT_COOKIE}=denied/.test(document.cookie)?'revoke':'grant');
 fbq('init','${metaPixelId}');fbq('track','PageView');`}
       </Script> : null}
-      {banner ? <ConsentBanner /> : null}
+      {banner ? <ConsentBanner pathname={pathname} /> : null}
     </>
   );
 }
 
-function ConsentBanner() {
+/** The id of the place a page reserves for the notice (the home's new hero, under its form). */
+export const CONSENT_SLOT_ID = "consent-slot";
+
+/**
+ * Floats over the bottom of the page, except where the page reserves a place
+ * for it (CONSENT_SLOT_ID): there it is a line of the page and covers nothing.
+ */
+function ConsentBanner({ pathname }: { pathname: string }) {
+  const [slot, setSlot] = useState<HTMLElement | null>(() => (typeof document === "undefined" ? null : document.getElementById(CONSENT_SLOT_ID)));
+  useEffect(() => {
+    // After the page's own render: the slot comes and goes with the route.
+    const found = document.getElementById(CONSENT_SLOT_ID);
+    const id = window.setTimeout(() => setSlot(found), 0);
+    return () => window.clearTimeout(id);
+  }, [pathname]);
+  if (slot && slot.isConnected) return createPortal(<ConsentNotice inline />, slot);
+  return <ConsentNotice />;
+}
+
+function ConsentNotice({ inline = false }: { inline?: boolean }) {
   return (
     <section
       aria-label="Uso de cookies"
-      className="fixed inset-x-4 bottom-4 z-50 mx-auto flex max-w-2xl flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl border bg-background px-4 py-2 text-xs shadow-lg"
+      className={inline
+        ? "flex flex-wrap items-center justify-center gap-x-3 gap-y-1 pt-1 text-xs sm:justify-start"
+        : "fixed inset-x-4 bottom-4 z-50 mx-auto flex max-w-2xl flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl border bg-background px-4 py-2 text-xs shadow-lg"}
     >
       <p className="text-muted-foreground">
         Usamos cookies de medición.{" "}

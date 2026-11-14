@@ -3,6 +3,7 @@ import "server-only";
 import { cache } from "react";
 
 import { type CostConfig, parseCostEstimator } from "@/lib/cost-estimator";
+import { type LandingHeroConfig, landingHeroConfig } from "@/lib/landing-hero";
 import { type PlanLimitsConfig, planLimits, type ProOffer, proOffer } from "@/lib/pro";
 import { type RiskConfig, riskConfig } from "@/lib/risk-checklist";
 import { type SellIntentConfig, sellIntentConfig } from "@/lib/sell-intent";
@@ -37,6 +38,8 @@ export type WebConfig = {
   zoneNotice: ZoneNoticeConfig | null;
   /** app_config.trial_reserve (docs/PRUEBA_HONESTA.md): room in the trial for new listings, off without the row; null when app_config couldn't be read. */
   trialReserve: TrialReserveConfig | null;
+  /** app_config.landing_hero: the home's new hero and the share of visitors who see it, off without the row; null when app_config couldn't be read (today's hero stays). */
+  landingHero: LandingHeroConfig | null;
 };
 
 export type EmailOnlySignup = {
@@ -72,7 +75,7 @@ export const webConfig = cache(async (): Promise<WebConfig> => {
   const { data, error } = await createAdminClient()
     .from("app_config")
     .select("key, value")
-    .in("key", ["comparables", "watchlist_stale_days", "pro_offer", "commercial_pilot", "plan_limits", "alerts_max_per_user_day", "email_only_signup", "risk", "cost_estimator", "sell_intent", "zone_notice", "trial_reserve"]);
+    .in("key", ["comparables", "watchlist_stale_days", "pro_offer", "commercial_pilot", "plan_limits", "alerts_max_per_user_day", "email_only_signup", "risk", "cost_estimator", "sell_intent", "zone_notice", "trial_reserve", "landing_hero"]);
   const values = Object.fromEntries((data ?? []).map((row) => [row.key, row.value]));
   const comparables = (values.comparables ?? {}) as { min_n?: number; year_tol?: number; km_tol_pct?: number; max_age_days?: number };
   return {
@@ -93,5 +96,6 @@ export const webConfig = cache(async (): Promise<WebConfig> => {
     sellIntent: sellIntentConfig(values.sell_intent),
     zoneNotice: error ? null : zoneNoticeConfig(values.zone_notice),
     trialReserve: error ? null : trialReserveConfig(values.trial_reserve),
+    landingHero: error ? null : landingHeroConfig(values.landing_hero),
   };
 });

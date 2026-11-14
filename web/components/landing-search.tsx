@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useId, useRef, useState, useSyncExternalStore, useTransition } from "react";
+import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore, useTransition } from "react";
 
 import { codeForFreeSearch, enterForFreeSearch, type FreeSearchResult, linkForFreeSearch, startFreeSearch } from "@/app/actions";
+import { LandingBuilder } from "@/components/landing-builder";
+import { type LandingHow, logLandingEvent } from "@/components/landing-events";
 import { SearchPromptInput } from "@/components/search-prompt-input";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -14,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { ASSISTED_MIN_CHARS } from "@/lib/assisted";
 import { emailSuggestion } from "@/lib/email-typos";
 import { analyticsEvent } from "@/lib/google-analytics";
+import { type Builder, builderPrompt, EMPTY_BUILDER, type HeroVariant } from "@/lib/landing-hero";
 import { pixel } from "@/lib/meta-pixel";
 import { searchStartHref } from "@/lib/search-intent";
 
@@ -73,16 +76,34 @@ function useClientSession(skip: boolean): boolean | null {
  * PAR-04: a guide page passes `initialText` (the prefilled search), leaves
  * `signedIn` out (the session is read here, in the browser) and `onStart`
  * (guide_cta_clicked).
+ *
+ * The home passes `hero`, the variant of its hero test (lib/landing-hero.ts),
+ * so both are counted the same way, and with variant b also `quick`: the
+ * search is then built by tapping (LandingBuilder) instead of typed.
  */
-export function LandingSearch({ signedIn: serverSignedIn, initialText = "", onStart }: {
+export function LandingSearch({ signedIn: serverSignedIn, initialText = "", onStart, hero, quick }: {
   signedIn?: boolean;
   initialText?: string;
   onStart?: () => void;
+  hero?: HeroVariant;
+  quick?: { models: string[] };
 }) {
   const clientSignedIn = useClientSession(serverSignedIn !== undefined);
   const signedIn = serverSignedIn ?? Boolean(clientSignedIn);
   const sessionKnown = serverSignedIn !== undefined || clientSignedIn !== null;
   const [text, setText] = useState(initialText);
+  const [builder, setBuilder] = useState<Builder>(EMPTY_BUILDER);
+  /** What is sent to be read: the box as typed, or the builder's text without «cerca de mi ubicación». */
+  const prompt = quick ? builderPrompt(builder) : text;
+  const started = useRef(false);
+  const startedOnce = useCallback((how: LandingHow) => {
+    if (started.current || !hero) return;
+    started.current = true;
+    logLandingEvent("landing_search_started", hero, how);
+  }, [hero]);
+  useEffect(() => {
+    if (hero) logLandingEvent("landing_viewed", hero);
+  }, [hero]);
   const [promptError, setPromptError] = useState("");
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
@@ -162,10 +183,10 @@ export function LandingSearch({ signedIn: serverSignedIn, initialText = "", onSt
         if (pending || !sessionKnown) return;
         onStart?.();
         if (signedIn) {
-          start(() => router.push(searchStartHref(true, text)));
+          start(() => router.push(searchStartHref(true, prompt)));
           return;
         }
-        if (text.trim().length < ASSISTED_MIN_CHARS) {
+        if (prompt.trim().length < ASSISTED_MIN_CHARS) {
           setPromptError("Contanos qué auto buscás.");
           event.currentTarget.querySelector("textarea")?.focus();
           return;
@@ -178,26 +199,45 @@ export function LandingSearch({ signedIn: serverSignedIn, initialText = "", onSt
         setSent(null);
         setStep("email");
         setOpen(true);
+        if (hero) logLandingEvent("landing_dialog_opened", hero);
       }}>
-        <SearchPromptInput value={text} onChange={(value) => { setText(value); setPromptError(""); }} disabled={pending} showExamples={false} compact
-          invalid={Boolean(promptError)} describedBy={promptError ? promptErrorId : undefined} />
+        {quick ? (
+          <LandingBuilder state={builder} onState={(update) => { setBuilder(update); setPromptError(""); }} models={quick.models} disabled={pending}
+            invalid={Boolean(promptError)} describedBy={promptError ? promptErrorId : undefined} onStarted={startedOnce} />
+        ) : (
+          <SearchPromptInput value={text} onChange={(value) => { if (value.trim()) startedOnce("typed"); setText(value); setPromptError(""); }} disabled={pending} showExamples={false} compact
+            invalid={Boolean(promptError)} describedBy={promptError ? promptErrorId : undefined} />
+        )}
         {promptError ? <p id={promptErrorId} role="alert" className="-mt-2 text-sm text-destructive">{promptError}</p> : null}
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
-          <Button type="submit" disabled={pending || !hydrated || !sessionKnown} className="h-11 px-4.5 text-[15px]">
-            {pending && signedIn ? "Continuando…" : "Crear mi búsqueda"}
-          </Button>
-          <Link href="/planes" className="inline-flex min-h-11 items-center text-[15px] font-medium underline underline-offset-4">Ver planes</Link>
-        </div>
-        <p className="text-sm text-muted-foreground">
+        {quick ? (
+          // Once there is a search the button follows the screen while the form is in view.
+          <div className={prompt.trim().length >= ASSISTED_MIN_CHARS
+            ? "sticky bottom-0 z-10 -mx-4 bg-[linear-gradient(to_bottom,transparent,var(--background)_10px)] px-4 py-2.5 sm:static sm:mx-0 sm:bg-none sm:p-0"
+            : ""}>
+            <Button type="submit" disabled={pending || !hydrated || !sessionKnown} className="h-13 w-full text-[16.5px] sm:h-11 sm:w-auto sm:px-4.5 sm:text-[15px]">
+              {pending && signedIn ? "Continuando…" : "Crear mi búsqueda"}
+            </Button>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+            <Button type="submit" disabled={pending || !hydrated || !sessionKnown} className="h-11 px-4.5 text-[15px]">
+              {pending && signedIn ? "Continuando…" : "Crear mi búsqueda"}
+            </Button>
+            <Link href="/planes" className="inline-flex min-h-11 items-center text-[15px] font-medium underline underline-offset-4">Ver planes</Link>
+          </div>
+        )}
+        <p className={quick ? "text-center text-sm text-muted-foreground sm:text-left" : "text-sm text-muted-foreground"}>
           {signedIn ? "Prueba gratis por 3 días. Sin tarjeta." : "Probá gratis 3 días. Sin tarjeta y sin contraseña: solo tu email."}
         </p>
+        {/* The cookie notice sits here, in the page, so it never covers the button (components/meta-pixel.tsx). */}
+        {quick ? <div id="consent-slot" /> : null}
       </form>
 
       {signedIn ? null : <Dialog open={open} onOpenChange={(next) => { if (!pending) setOpen(next); }}>
         <DialogContent className="sm:max-w-md">
           {step === "email" ? <form className="space-y-4" noValidate onSubmit={(event) => {
             event.preventDefault();
-            if (!pending) run(() => startFreeSearch({ prompt: text, email, company, resume: signupCode() }));
+            if (!pending) run(() => startFreeSearch({ prompt, email, company, resume: signupCode() }));
           }}>
             <DialogHeader>
               <DialogTitle>¿A qué email te avisamos?</DialogTitle>
@@ -248,7 +288,7 @@ export function LandingSearch({ signedIn: serverSignedIn, initialText = "", onSt
 
           {step === "password" ? <form className="space-y-4" onSubmit={(event) => {
             event.preventDefault();
-            if (!pending) run(() => enterForFreeSearch({ prompt: text, email, password }));
+            if (!pending) run(() => enterForFreeSearch({ prompt, email, password }));
           }}>
             <DialogHeader>
               <DialogTitle>Ya tenés una cuenta</DialogTitle>
@@ -264,7 +304,7 @@ export function LandingSearch({ signedIn: serverSignedIn, initialText = "", onSt
             {message ? <p role="alert" className="text-sm text-destructive">{message}</p> : null}
             <Button type="submit" className="h-11 w-full text-[15px]" disabled={pending}>{pending ? "Entrando…" : "Entrar y crear la búsqueda"}</Button>
             <div className="flex flex-col gap-2 text-center text-sm">
-              <button type="button" className="underline underline-offset-4" disabled={pending} onClick={() => run(() => linkForFreeSearch({ prompt: text, email }))}>
+              <button type="button" className="underline underline-offset-4" disabled={pending} onClick={() => run(() => linkForFreeSearch({ prompt, email }))}>
                 No me acuerdo: mandame un código
               </button>
               <button type="button" className="underline underline-offset-4" disabled={pending} onClick={otherEmail}>Usar otro email</button>
@@ -284,7 +324,7 @@ export function LandingSearch({ signedIn: serverSignedIn, initialText = "", onSt
 
           {step === "code" && sent ? <form className="space-y-4" noValidate onSubmit={(event) => {
             event.preventDefault();
-            if (!pending) run(() => codeForFreeSearch({ prompt: text, email: sent.email, code }));
+            if (!pending) run(() => codeForFreeSearch({ prompt, email: sent.email, code }));
           }}>
             <DialogHeader>
               <DialogTitle>Revisá tu email</DialogTitle>
@@ -303,7 +343,7 @@ export function LandingSearch({ signedIn: serverSignedIn, initialText = "", onSt
             {message ? <p role="alert" className="text-sm text-destructive">{message}</p> : null}
             <Button type="submit" className="h-11 w-full text-[15px]" disabled={pending}>{pending ? "Entrando…" : "Entrar y crear la búsqueda"}</Button>
             <div className="flex flex-col gap-2 text-center text-sm">
-              <button type="button" className="underline underline-offset-4" disabled={pending} onClick={() => run(() => linkForFreeSearch({ prompt: text, email: sent.email }))}>Mandame otro código</button>
+              <button type="button" className="underline underline-offset-4" disabled={pending} onClick={() => run(() => linkForFreeSearch({ prompt, email: sent.email }))}>Mandame otro código</button>
               <button type="button" className="underline underline-offset-4" disabled={pending} onClick={otherEmail}>Usar otro email</button>
             </div>
           </form> : null}

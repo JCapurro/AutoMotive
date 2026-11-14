@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { AdminLifecycleInput, AdminOfferInput, AdminPlanLimitsInput, configDifferences, configFieldLabel, CONFIRM_SOURCES_MESSAGE, DEALER_MARGIN_MESSAGE, LEVEL_THRESHOLDS_ORDER_MESSAGE, LIFECYCLE_KINDS, MAX_OFFER_ARS, RESCORE_EVERY_HOURS_MESSAGE, RESCORE_HOUR_MESSAGE, sameConfig, SCORE_GUARDS_ORDER_MESSAGE, SCORE_MODEL_F3_BOUNDS, SCORE_MODEL_F3_DEFAULTS, SCORE_MODEL_F3_LABELS, SCORE_MODEL_F3_MODES, SCORE_WEIGHTS_ZERO_MESSAGE, ScoreModelF3Input, scoreModelF3Problem, SourceUpdateInput, TRIAL_RESERVE_CONFIG_MESSAGE, validateConfigChange, visibleConfigRows, ZONE_NOTICE_CONFIG_MESSAGE } from "@/lib/admin-config";
+import { AdminLifecycleInput, AdminOfferInput, AdminPlanLimitsInput, configDifferences, configFieldLabel, CONFIRM_SOURCES_MESSAGE, DEALER_MARGIN_MESSAGE, LEVEL_THRESHOLDS_ORDER_MESSAGE, LIFECYCLE_KINDS, MAX_OFFER_ARS, RESCORE_EVERY_HOURS_MESSAGE, RESCORE_HOUR_MESSAGE, sameConfig, SCORE_GUARDS_ORDER_MESSAGE, SCORE_MODEL_F3_BOUNDS, SCORE_MODEL_F3_DEFAULTS, SCORE_MODEL_F3_LABELS, SCORE_MODEL_F3_MODES, SCORE_WEIGHTS_ZERO_MESSAGE, ScoreModelF3Input, scoreModelF3Problem, SourceUpdateInput, TRIAL_RESERVE_CONFIG_MESSAGE, validateConfigChange, visibleConfigRows, ZONE_NOTICE_CONFIG_MESSAGE, LANDING_HERO_CONFIG_MESSAGE } from "@/lib/admin-config";
 import { DEFAULT_PRO_OFFER } from "@/lib/pro";
 
 describe("guided config validators", () => {
@@ -112,6 +112,15 @@ describe("guided config validators", () => {
       expect(validateConfigChange("zone_notice", value, { enabled: true })).toBe(ZONE_NOTICE_CONFIG_MESSAGE);
     }
     expect(configFieldLabel("zone_notice", "enabled")).toBe("Aviso de zona visible (resultados y modo asistido)");
+  });
+  it("keeps landing_hero a switch with a share from 0 to 100 and names it (portada nueva)", () => {
+    const current = { enabled: false, share: 50, events_per_minute: 300 };
+    expect(validateConfigChange("landing_hero", { ...current, enabled: true, share: 100 }, current)).toBeNull();
+    for (const value of [{ ...current, enabled: "true" }, { ...current, share: 101 }, { ...current, share: 12.5 }, { enabled: true, share: 50 }, { ...current, events_per_minute: -1 }]) {
+      expect(validateConfigChange("landing_hero", value, current)).toBe(LANDING_HERO_CONFIG_MESSAGE);
+    }
+    expect(configFieldLabel("landing_hero", "enabled")).toBe("Prueba de la portada nueva");
+    expect(configFieldLabel("landing_hero", "share")).toBe("Visitantes que ven la portada nueva (%)");
   });
   it("keeps the much_cheaper bands reachable in red_flags (PAR-02)", () => {
     const current = { much_cheaper_pct: 25, anticipo_pct: 50, min_km_per_year: 5000, min_description_chars: 150 };
