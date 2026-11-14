@@ -216,6 +216,17 @@ class GuardAndLevelTests(unittest.TestCase):
         self.assertIn("anticipo", next(f.text for f in ev.red_flags if f.id == "much_cheaper"))
         self.assertIn("¿El precio publicado es el total o es un anticipo?", ev.questions)
 
+    def test_no_year_caps_the_level_at_good(self):
+        # 66971: a 1:24 Camaro with no year, 38% below the model's median, was 🔥.
+        listing = fiesta_listing(price=7_000.0, price_usd=7_000.0, year=None)   # 37.5% below
+        ev = evaluate(listing, fiesta_profile(), price_ref=self.ref(7_000), cfg=CFG, now=NOW)
+        self.assertEqual(ev.level, "good")
+        _, s, _ = assess(listing, fiesta_profile(), price_ref=self.ref(7_000), cfg=CFG, now=NOW)
+        self.assertEqual(s.guard, "no_year")
+        with_year = fiesta_listing(price=7_000.0, price_usd=7_000.0)
+        self.assertEqual(evaluate(with_year, fiesta_profile(), price_ref=self.ref(7_000), cfg=CFG, now=NOW).level,
+                         "high")
+
     def test_a_price_that_looks_like_a_down_payment_is_excluded(self):
         listing = fiesta_listing(price=3_000.0, price_usd=3_000.0)        # 73% below
         self.assertIsNone(evaluate(listing, fiesta_profile(), price_ref=self.ref(3_000), cfg=CFG, now=NOW))

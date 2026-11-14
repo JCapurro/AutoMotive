@@ -12,7 +12,9 @@ Guards carried over from price_check:
   * suspicious_pct (50%) ≤ d < partial_pct → level capped at `good` (+ red flag),
     or excluded when the ad offers financing (anticipo, cuotas, «con DNI»):
     that far below the median, a financed car's price is the down payment;
-  * price_partial = true   → excluded.
+  * price_partial = true   → excluded;
+  * no year                → level capped at `good`: the comparison is by model
+    alone, so the price says nothing on its own.
 """
 from __future__ import annotations
 
@@ -207,5 +209,10 @@ def score(listing: Mapping[str, Any], profile: Mapping[str, Any], result: MatchR
                                       "el precio publicado parece un anticipo")
     elif d is not None and d >= guards["suspicious_pct"]:
         guard, cap = "suspicious", "good"
+    elif listing.get("year") is None:
+        # Without the year the model's median says nothing of this car's price
+        # (a 2012 Camaro next to a 2023 one): no 🔥 on it, as f3's «credible»
+        # asks too. Listing 66971, a 1:24 scale Camaro read as USD 40.000.
+        guard, cap = "no_year", "good"
     return Score(value, level_for(value, cfg.thresholds, cap=cap), components, weights,
                  guard=guard, excluded=excluded, extra={"diff_pct": d})

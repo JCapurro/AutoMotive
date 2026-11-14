@@ -28,7 +28,8 @@ part only when
   («Welly 1 36», «Solido 1:43»), «auto a control remoto», «fascículos»; or
   «colección» together with a maker only toys have («Hot Wheels»), a bare
   scale («1/24») or «rápido y furioso», or «Hot Wheels», «maqueta» or
-  «miniatura» alone, when the title names no single model year. Never «de
+  «miniatura» alone, when the title names no single model year; or a scale
+  with a space as its last words and no year at all («Camaro 1 24»). Never «de
   colección» alone: a classic car is sold «de colección»;
 * and nothing says it is a whole car: the source's own mileage together with
   a year (Facebook only shows «Conducido 112.000 km» on vehicles), a title
@@ -194,6 +195,11 @@ _TOY = re.compile(
 _TOY_HINT = re.compile(rf"\b(?:{'|'.join(_TOY_MAKERS)})\b|\b1\s*[:/]\s*{_DENOMINATOR}"
                        r"|\brapido y furioso\b|\bfast (?:and )?furious\b|\bautos inolvidables\b")
 _COLLECTION = re.compile(r"\bcolecci\w*")
+# A scale written with a space as the title's last words, when the title names
+# no single model year: «Auto deportivo Chevrolet Camaro 1 24» (listing 66971,
+# 14/11/2026, matched as a USD 40.000 Camaro and flagged 🔥). Only the common
+# model scales, and only at the end: «BMW X1 X 1 18 I sDRIVE» (a 118i) goes on.
+_TRAILING_SCALE = re.compile(r"\b1\s+(?:18|24|32|36|43|64)$")
 # Enough alone, when the title names no single model year: «HONDA CIVIC
 # CUSTOM HOTWHEELS». Not «juguete»: a car in great shape «es un juguete».
 _TOY_WORD = re.compile(r"\b(?:hot ?wheels?|maquetas?|miniaturas?)\b")
@@ -255,6 +261,8 @@ def toy_reason(title: str | None) -> str | None:
         return f"título: «{m.group(0)}» y «{c.group(0)}»"
     if (m := _TOY_WORD.search(t)) and not _single_year(t):
         return f"título: «{m.group(0)}»"
+    if (m := _TRAILING_SCALE.search(t)) and not _YEAR.search(t):
+        return f"título: escala «{m.group(0)}»"
     return None
 
 

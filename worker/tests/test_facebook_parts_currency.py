@@ -225,6 +225,8 @@ TOYS = [
     "Solido 1:43 Peugeot 207 Spider CUP #30 Dino Lunardi 2008. NUEVO",
     "Ford Maverick a escala 1/8",
     "Honda civic Salvat 1:43",
+    # Flagged 🔥 as a USD 40.000 Camaro (66971, 14/11/2026), posted five times.
+    "Auto deportivo Chevrolet Camaro 1 24",
 ]
 
 # Cars with a word a scale model's title has too.
@@ -242,6 +244,9 @@ TOY_CARS = [
     "BMW X1 X 1 18 I sDRIVE",
     "BMW X1 X 1 18 I sDRIVE - Motormax",
     "Toyota Corolla XEI PACK 1 8 CVT",
+    "Toyota Corolla XEI 1 8",
+    "BMW Serie 1 118i",
+    "Chevrolet Camaro 2016 1 24",
     "Ford Ka 2012 cierre centralizado a control remoto",
     "Mitsubishi Eclipse 1997 de colección, réplica rápido y furioso",
     "Chevrolet Camaro 2010 Hot Wheels edition de colección",
