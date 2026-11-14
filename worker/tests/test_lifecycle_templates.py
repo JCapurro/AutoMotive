@@ -61,6 +61,15 @@ MISSED = {"model": "Ford Focus", "found": 9, "below": 2, "stage": 7, "ended_at":
                   "below": True, "diff_pct": 18.4, "gone": True, "days_listed": 3}}
 
 
+# payload.cars of the welcome (public.welcome_cars): the last one has no price and is left out.
+WELCOME_CARS = [{"listing_id": 2, "title": "Ford Focus SE 2017", "make": "Ford", "model": "Focus", "trim": "SE",
+                 "year": 2017, "price": 15900, "currency": "USD", "km": 68000, "location": "San Isidro",
+                 "image": "https://img.example/focus-1.jpg", "level": "high", "diff_pct": 18.4},
+                {"listing_id": 3, "title": "Ford Focus Titanium 2016", "make": "Ford", "model": "Focus",
+                 "year": 2016, "price": 21500000, "currency": "ARS", "km": 91000, "level": "good"},
+                {"listing_id": 4, "title": "Ford Focus S 2015", "level": "match"}]
+
+
 BONUS = {"model": "Ford Ka", "found": 652, "new": 41, "below": 5,
          "cars": [{"title": "Ford Ka 1.5 S", "year": 2018, "price": 9800, "currency": "USD", "km": 72000, "below": True},
                   {"title": "Ford Ka SE 2019", "year": 2019, "price": 14500000, "currency": "ARS", "km": 51000}]}
@@ -85,6 +94,8 @@ class PlanEmailSnapshotTests(unittest.TestCase):
                           "lifecycle_search_activated_trial_full": email(
                               "search_activated", {"model": "Ford Focus", "found": 50, "below": 2, "hidden": 17,
                                                    "trial_limit": 50, "trial_left": 0}),
+                          "lifecycle_search_activated_cars": email(
+                              "search_activated", {"model": "Ford Focus", "found": 14, "below": 2, "cars": WELCOME_CARS}),
                           "lifecycle_trial_ended_hidden": email("trial_ended",
                                                                 {"model": "Ford Focus", "found": 30, "below": 3,
                                                                  "hidden": 37}),
