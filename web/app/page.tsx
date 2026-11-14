@@ -1,5 +1,7 @@
+import { cookies } from "next/headers";
 import Link from "next/link";
 
+import { LandingFeedList } from "@/components/landing-feed";
 import { LandingSearch } from "@/components/landing-search";
 import { PublicPlans } from "@/components/public-plans";
 import { SiteFooter } from "@/components/site-footer";
@@ -10,6 +12,8 @@ import { money } from "@/lib/format";
 import { webConfig } from "@/lib/config";
 import { siteUrl } from "@/lib/env";
 import { jsonLdScript } from "@/lib/guides";
+import { landingFeed } from "@/lib/landing-feed";
+import { HERO_COOKIE, heroBucket, heroModels, heroVariant } from "@/lib/landing-hero";
 import { HOME_FAQ, homeJsonLd } from "@/lib/site-jsonld";
 
 // §50: hero, an example of what we flag, how it works, the four benefits and
@@ -56,7 +60,16 @@ const BENEFITS = [
 const WRAP = "mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-10";
 
 export default async function Landing({ searchParams }: PageProps<"/">) {
-  const [user, params, cfg] = await Promise.all([currentUser(), searchParams, webConfig()]);
+  const [user, params, cfg, store] = await Promise.all([currentUser(), searchParams, webConfig(), cookies()]);
+  // The hero test (lib/landing-hero.ts): b is the hero built by tapping, a the one of today.
+  const bucket = store.get(HERO_COOKIE)?.value;
+  // In development, /?hero=b shows the new hero without touching the switch.
+  const preview = process.env.NODE_ENV !== "production" && params.hero === "b";
+  const variant = preview ? "b" : heroVariant(cfg.landingHero, bucket, Boolean(user));
+  // Counted only while the test runs, and only visitors who were given a bucket.
+  const counted = cfg.landingHero?.enabled && !user && heroBucket(bucket) !== null ? variant : undefined;
+  const feed = variant === "b" ? await landingFeed() : null;
+  const number = new Intl.NumberFormat("es-AR");
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -70,20 +83,44 @@ export default async function Landing({ searchParams }: PageProps<"/">) {
           </p>
         ) : null}
 
-        <section className={`${WRAP} pt-6 pb-14 sm:pt-8 md:pt-16`}>
-          <h1 className="type-display max-w-[27ch] text-[2.15rem] leading-[1.02] text-balance sm:text-[2.4rem] md:text-[4.2rem] lg:text-[4.6rem]">
-            Decinos cuál. Te avisamos cuando aparezca.
-          </h1>
-          <div className="mt-8 grid items-start gap-10 md:mt-12 md:grid-cols-2 md:gap-12">
-            <div id="crear-busqueda" className="scroll-mt-24">
-              <div className="max-w-[42ch] space-y-2 text-[19px] leading-snug text-muted-foreground">
-                <p>Ese Auto monitorea las publicaciones y te avisa cuando aparece uno que vale la pena mirar.</p>
+        {variant === "b" ? (
+          <section className={`${WRAP} pt-5 pb-14 sm:pt-8 md:pt-14`}>
+            {feed && feed.flagged24h >= 10 ? (
+              <a href={feed.rows.length >= 3 ? "#hoy" : "#crear-busqueda"} className="mb-3 inline-flex min-h-8 items-center gap-2 rounded-full bg-muted py-1 pr-3 pl-2.5 text-[13.5px] font-semibold">
+                <span aria-hidden className="size-2 rounded-full bg-emerald-600 motion-safe:animate-pulse" />
+                {number.format(feed.flagged24h)} oportunidades en las últimas 24 h
+              </a>
+            ) : null}
+            <h1 className="type-display max-w-[27ch] text-[2.15rem] leading-[1.02] text-balance sm:text-[2.4rem] md:text-[4.2rem] lg:text-[4.6rem]">
+              Decinos cuál. Te avisamos cuando aparezca.
+            </h1>
+            <div className="mt-3 grid items-start gap-9 md:mt-10 md:grid-cols-2 md:gap-12">
+              {/* min-w-0: the chip rows scroll inside the column instead of widening it. */}
+              <div id="crear-busqueda" className="min-w-0 scroll-mt-24">
+                <p className="max-w-[42ch] text-[16.5px] leading-snug text-muted-foreground md:text-[19px]">
+                  Revisamos las publicaciones por vos y te escribimos cuando aparece uno a buen precio.
+                </p>
+                <LandingSearch signedIn={false} hero={counted} quick={{ models: heroModels(feed) }} />
               </div>
-              <LandingSearch signedIn={Boolean(user)} />
+              {feed && feed.rows.length >= 3 ? <LandingFeedList feed={feed} /> : <Example />}
             </div>
-            <Example />
-          </div>
-        </section>
+          </section>
+        ) : (
+          <section className={`${WRAP} pt-6 pb-14 sm:pt-8 md:pt-16`}>
+            <h1 className="type-display max-w-[27ch] text-[2.15rem] leading-[1.02] text-balance sm:text-[2.4rem] md:text-[4.2rem] lg:text-[4.6rem]">
+              Decinos cuál. Te avisamos cuando aparezca.
+            </h1>
+            <div className="mt-8 grid items-start gap-10 md:mt-12 md:grid-cols-2 md:gap-12">
+              <div id="crear-busqueda" className="scroll-mt-24">
+                <div className="max-w-[42ch] space-y-2 text-[19px] leading-snug text-muted-foreground">
+                  <p>Ese Auto monitorea las publicaciones y te avisa cuando aparece uno que vale la pena mirar.</p>
+                </div>
+                <LandingSearch signedIn={Boolean(user)} hero={counted} />
+              </div>
+              <Example />
+            </div>
+          </section>
+        )}
 
         <section className="border-t py-16">
           <div className={WRAP}>

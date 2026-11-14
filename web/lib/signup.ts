@@ -6,6 +6,8 @@ import { cookies } from "next/headers";
 import { channelOf, ORIGIN_COOKIE, parseOrigin } from "@/lib/acquisition";
 
 import { track } from "@/lib/events";
+import { webConfig } from "@/lib/config";
+import { HERO_COOKIE, heroBucket, heroVariant } from "@/lib/landing-hero";
 import { CONSENT_COOKIE } from "@/lib/meta-pixel";
 import { queuePixel } from "@/lib/meta-pixel-server";
 import { reportXConversion } from "@/lib/x-capi";
@@ -25,10 +27,26 @@ export async function afterSignIn(supabase: SupabaseClient<Database>, method: "e
     .select("id", { count: "exact", head: true })
     .eq("name", "signup_completed");
   if (count) return false;
-  await track(supabase, userId, "signup_completed", { method, ...(await firstTouch()) });
+  await track(supabase, userId, "signup_completed", { method, ...(await firstTouch()), ...(await heroSeen()) });
   await queuePixel("CompleteRegistration", { content_name: method }, `signup:${userId}`);
   await reportXConversion("signup", `signup:${userId}`);
   return true;
+}
+
+/**
+ * Which hero of the home this visitor was shown (lib/landing-hero.ts), while
+ * the test is on: what the two are compared by. Nothing for a visitor who was
+ * never given a bucket.
+ */
+async function heroSeen(): Promise<{ hero?: "a" | "b" }> {
+  try {
+    const bucket = (await cookies()).get(HERO_COOKIE)?.value;
+    const cfg = (await webConfig()).landingHero;
+    if (!cfg?.enabled || heroBucket(bucket) === null) return {};
+    return { hero: heroVariant(cfg, bucket, false) };
+  } catch {
+    return {};
+  }
 }
 
 /** The first visit the proxy kept (lib/acquisition.ts), as the event's origin and channel. */

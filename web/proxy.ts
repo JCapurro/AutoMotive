@@ -4,6 +4,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { encodeOrigin, ORIGIN_COOKIE, ORIGIN_MAX_AGE, originFromRequest, skipsOrigin } from "@/lib/acquisition";
 import { supabaseAnonKey, supabaseUrl } from "@/lib/env";
 import { isHealthOwner } from "@/lib/health-access";
+import { HERO_COOKIE, HERO_MAX_AGE } from "@/lib/landing-hero";
 import { trackingAllowed } from "@/lib/meta-pixel";
 import { requestOrigin } from "@/lib/origin";
 
@@ -14,6 +15,9 @@ import { requestOrigin } from "@/lib/origin";
  * before the user signs in.
  */
 export async function proxy(request: NextRequest) {
+  // Set on the request too, so the home this very visit renders already has it.
+  const bucket = newHeroBucket(request);
+  if (bucket !== null) request.cookies.set(HERO_COOKIE, String(bucket));
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
@@ -54,8 +58,35 @@ export async function proxy(request: NextRequest) {
   if (signedIn && pathname === "/login") {
     return redirectWith(new URL("/app", requestOrigin(request)), response);
   }
-  if (!signedIn) keepFirstTouch(request, response);
+  if (!signedIn) {
+    keepFirstTouch(request, response);
+    if (bucket !== null) {
+      response.cookies.set(HERO_COOKIE, String(bucket), {
+        httpOnly: true, sameSite: "lax", secure: request.nextUrl.protocol === "https:", path: "/", maxAge: HERO_MAX_AGE,
+      });
+    }
+  }
   return response;
+}
+
+/** A person opening a page: not a prefetch, an RSC request or a subresource. */
+function documentVisit(request: NextRequest): boolean {
+  if (request.method !== "GET") return false;
+  const h = request.headers;
+  if (h.has("rsc") || h.has("next-router-prefetch") || /prefetch/i.test(h.get("purpose") ?? h.get("sec-purpose") ?? "")) return false;
+  const dest = h.get("sec-fetch-dest");
+  return !dest || dest === "document";
+}
+
+/**
+ * The home's hero test (lib/landing-hero.ts): a visitor's bucket, 0 to 99,
+ * drawn once on their first visit to the home and kept, so they always see the
+ * same hero. Not when tracking was refused: they see today's and are not counted.
+ */
+function newHeroBucket(request: NextRequest): number | null {
+  if (request.nextUrl.pathname !== "/" || request.cookies.has(HERO_COOKIE) || !documentVisit(request)) return null;
+  if (!trackingAllowed(request.headers.get("cookie") ?? "")) return null;
+  return Math.floor(Math.random() * 100);
 }
 
 /**
@@ -65,12 +96,9 @@ export async function proxy(request: NextRequest) {
  * RSC requests, and never rewritten while it lives.
  */
 function keepFirstTouch(request: NextRequest, response: NextResponse) {
-  if (request.method !== "GET" || request.cookies.has(ORIGIN_COOKIE)) return;
+  if (request.cookies.has(ORIGIN_COOKIE) || !documentVisit(request)) return;
   if (!trackingAllowed(request.headers.get("cookie") ?? "")) return;
   const h = request.headers;
-  if (h.has("rsc") || h.has("next-router-prefetch") || /prefetch/i.test(h.get("purpose") ?? h.get("sec-purpose") ?? "")) return;
-  const dest = h.get("sec-fetch-dest");
-  if (dest && dest !== "document") return;
   if (skipsOrigin(request.nextUrl.pathname)) return;
   const url = new URL(request.nextUrl.pathname + request.nextUrl.search, requestOrigin(request));
   response.cookies.set(ORIGIN_COOKIE, encodeOrigin(originFromRequest(url, h.get("referer"))), {

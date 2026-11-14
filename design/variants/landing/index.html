@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="es-AR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Landing · Hero para tocar</title>
+<link rel="stylesheet" href="../guias/base.css">
+<style>
+/* Prototype of the landing's hero for the traffic it actually gets: a phone,
+   inside Instagram's browser. Two changes over today's page:
+   1. the search can be built by tapping (model, budget, zone), typing optional;
+   2. the proof is real and on the first screen: what was flagged today.
+   Data: production, 2026-11-14 (see DATA below). Nothing here is wired. */
+h1, h2, h3, p { margin: 0; }
+.nav { display: flex; justify-content: center; gap: 28px; border-top: 1px solid var(--muted); font-size: 15px; }
+.nav a { padding: 10px 2px; text-decoration: none; color: var(--muted-ink); }
+.nav a.on { color: var(--ink); box-shadow: inset 0 -2px 0 var(--ink); }
+.hero { padding-top: 18px; }
+.live { display: inline-flex; align-items: center; gap: 8px; min-height: 32px; padding: 0 10px 0 9px; border-radius: 999px; background: var(--muted); font-size: 13.5px; font-weight: 600; text-decoration: none; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: #1f9d55; box-shadow: 0 0 0 0 rgba(31,157,85,.5); animation: pulse 2s infinite; }
+@keyframes pulse { 70% { box-shadow: 0 0 0 7px rgba(31,157,85,0); } 100% { box-shadow: 0 0 0 0 rgba(31,157,85,0); } }
+.hero h1 { font-size: 34px; line-height: 1.02; margin-top: 12px; text-wrap: balance; }
+.sub { margin-top: 10px; font-size: 16.5px; line-height: 1.4; color: var(--muted-ink); }
+
+/* The search, built by tapping. */
+.build { margin-top: 18px; }
+.step { margin-top: 14px; }
+.step:first-child { margin-top: 0; }
+.step[hidden] { display: none; }
+.step-h { font-size: 15px; font-weight: 700; }
+.step-h small { font-weight: 500; color: var(--muted-ink); font-size: 13.5px; }
+.chips { list-style: none; margin: 8px -16px 0; padding: 0 16px 2px; display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
+.chips::-webkit-scrollbar { display: none; }
+.chips.wrap-row { flex-wrap: wrap; overflow: visible; margin: 8px 0 0; padding: 0; }
+.chip { flex: none; min-height: 44px; padding: 0 14px; border-radius: 999px; border: 0; background: var(--muted); font-size: 15.5px; font-weight: 600; cursor: pointer; white-space: nowrap; box-shadow: inset 0 0 0 1.5px transparent; transition: background .12s, box-shadow .12s; }
+.chip:active { background: var(--panel-2); }
+.chip.geo { display: inline-flex; align-items: center; gap: 6px; }
+.chip:disabled { color: var(--muted-ink); cursor: default; }
+.chip[aria-pressed="true"] { background: var(--mark); box-shadow: inset 0 0 0 1.5px var(--ink); }
+/* «Otro» stays in sight at the end of the row while the models scroll under it. */
+.chips li.pin { position: sticky; right: -16px; margin-right: -16px; padding: 0 16px 0 14px; background: linear-gradient(to right, rgba(255,255,255,0), #fff 12px); }
+.field { margin-top: 14px; }
+.field textarea { width: 100%; height: 68px; resize: none; padding: 10px 12px; border-radius: var(--r); border: 1.5px solid var(--border); font: inherit; font-size: 16px; line-height: 1.4; color: var(--ink); background: #fff; }
+.field textarea:focus { outline: none; border-color: var(--ink); }
+.hint { margin-top: 6px; font-size: 13px; color: var(--muted-ink); }
+.hint[hidden] { display: none; }
+/* Once there is a search the button follows the screen while the form is in view. */
+.cta { margin: 12px -16px 0; padding: 0 16px; }
+.cta.ready { position: sticky; bottom: 0; z-index: 5; padding-top: 10px; padding-bottom: 10px; background: linear-gradient(to bottom, rgba(255,255,255,0), #fff 10px); }
+.cta .btn { min-height: 52px; font-size: 16.5px; }
+.cta .btn[disabled] { background: #9aa3b5; cursor: default; }
+.fine { margin-top: 8px; font-size: 13.5px; color: var(--muted-ink); text-align: center; }
+
+/* The proof: what was flagged today. */
+.feed { margin-top: 30px; padding-top: 22px; border-top: 2px solid var(--ink); scroll-margin-top: 64px; }
+.feed h2 { font-size: 23px; line-height: 1.12; text-wrap: balance; }
+.feed .lead { margin-top: 6px; font-size: 15px; color: var(--muted-ink); }
+.rows { list-style: none; margin: 12px 0 0; padding: 0; }
+.row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; padding: 13px 0; border-bottom: 1px solid var(--border); }
+.row .name { font-weight: 700; font-size: 16.5px; line-height: 1.2; }
+.row .meta { grid-column: 1; font-size: 13.5px; color: var(--muted-ink); }
+.row .price { grid-row: 1 / span 2; grid-column: 2; text-align: right; font-size: 18px; line-height: 1.15; }
+.row .price small { display: block; font-size: 12.5px; font-weight: 500; font-stretch: 100%; color: var(--muted-ink); text-decoration: line-through; }
+.row .why { grid-column: 1 / -1; margin-top: 6px; font-size: 14.5px; line-height: 1.35; }
+.row .like { grid-column: 1 / -1; justify-self: start; margin-top: 8px; min-height: 40px; padding: 0 12px; border-radius: var(--r); border: 0; background: #fff; box-shadow: inset 0 0 0 1.5px var(--ink); font-size: 14.5px; font-weight: 600; cursor: pointer; }
+.row.fresh { animation: drop .5s ease-out both; }
+.row.fresh .name span { background-size: 0% 78%; animation: swipe .6s .45s ease-out forwards; }
+@keyframes drop { from { opacity: 0; transform: translateY(-10px); } }
+@keyframes swipe { to { background-size: 100% 78%; } }
+.new { display: inline-block; margin-left: 6px; font-size: 11.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #1f7a45; vertical-align: 2px; }
+.feed .foot { margin-top: 12px; font-size: 13px; color: var(--muted-ink); }
+.again { margin: 22px 0 0; }
+
+/* The cookie notice sits in the page, under the form: it never covers anything. */
+.cookies { margin-top: 14px; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 2px 6px; font-size: 13px; color: var(--muted-ink); }
+.cookies button { min-height: 36px; padding: 0 8px; border: 0; background: transparent; font-size: 13px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; color: var(--ink); }
+
+dialog { border: 0; border-radius: 12px; padding: 22px 20px; width: min(420px, calc(100vw - 32px)); color: var(--ink); }
+dialog::backdrop { background: rgba(20, 33, 61, .55); }
+dialog h2 { font-size: 21px; }
+dialog p { margin-top: 8px; font-size: 14.5px; color: var(--muted-ink); line-height: 1.4; }
+dialog .q { margin-top: 12px; padding: 10px 12px; border-radius: var(--r); background: var(--muted); font-size: 14.5px; color: var(--ink); }
+dialog input { width: 100%; height: 48px; margin-top: 14px; padding: 0 12px; border-radius: var(--r); border: 1.5px solid var(--border); font: inherit; }
+dialog .btn { margin-top: 12px; }
+.proto { margin: 28px 0 0; padding: 12px; border: 1px dashed var(--border); border-radius: var(--r); font-size: 13px; color: var(--muted-ink); line-height: 1.45; }
+@media (prefers-reduced-motion: reduce) { .dot, .row.fresh, .row.fresh .name span { animation: none; } .row.fresh .name span { background-size: 100% 78%; } }
+@media (min-width: 760px) { .hero h1 { font-size: 46px; } }
+</style>
+</head>
+<body>
+<header class="site">
+  <div class="site-top"><a class="logo" href="#">S Auto</a><a class="login" href="#">Ingresar</a></div>
+  <nav class="nav"><a class="on" href="#">Inicio</a><a href="#">Planes</a><a href="#">Guías</a></nav>
+</header>
+
+<main class="wrap">
+  <section class="hero">
+    <a class="live" href="#hoy"><span class="dot"></span><span id="live-text"></span></a>
+    <h1 class="display">Decinos cuál. Te avisamos cuando aparezca.</h1>
+    <p class="sub">Revisamos las publicaciones por vos y te escribimos cuando aparece uno a buen precio.</p>
+
+    <form class="build" id="build" novalidate>
+      <div class="step">
+        <p class="step-h">¿Qué auto buscás? <small>Tocá uno, o «Otro» y escribilo.</small></p>
+        <ul class="chips" id="models" aria-label="Modelos más buscados"></ul>
+      </div>
+      <div class="step" id="step-budget" hidden>
+        <p class="step-h">¿Hasta cuánto? <small>Opcional.</small></p>
+        <ul class="chips" id="budgets" aria-label="Presupuesto"></ul>
+      </div>
+      <div class="step" id="step-zone" hidden>
+        <p class="step-h">¿Dónde? <small>Opcional.</small></p>
+        <ul class="chips" id="zones" aria-label="Zona"></ul>
+      </div>
+      <div class="field">
+        <label class="sr" for="q">Tu búsqueda</label>
+        <textarea id="q" maxlength="400" placeholder="O escribilo: Fiesta Titanium manual 2016 a 2018 hasta USD 11.500"></textarea>
+        <p class="hint" id="hint" hidden>Podés sumar años, kilómetros, versión, color, caja, combustible y si lo querés de particular o de agencia.</p>
+      </div>
+      <div class="cta"><button class="btn block" id="go" disabled>Crear mi búsqueda</button></div>
+      <p class="fine">Gratis 3 días. Sin tarjeta y sin contraseña: solo tu email.</p>
+      <div class="cookies" id="cookies"><span>Usamos cookies de medición.</span><button type="button">Rechazar</button><button type="button">Aceptar</button></div>
+    </form>
+  </section>
+
+  <section class="feed" id="hoy">
+    <h2 class="heading" id="feed-title"></h2>
+    <p class="lead">Autos reales que marcamos hoy porque piden menos que otros parecidos.</p>
+    <ol class="rows" id="rows"></ol>
+    <p class="foot">Comparado con la mediana de autos del mismo modelo, año y caja publicados en el país. Precios en dólares al tipo de cambio del día.</p>
+    <p class="again"><a class="btn block ghost" href="#build">Quiero que me avisen del mío</a></p>
+  </section>
+
+  <p class="proto"><b>Prototipo.</b> Los modelos son los más buscados de los últimos 30 días y los autos son oportunidades reales del 14/11. El resto de la home (cómo funciona, planes, preguntas) sigue igual debajo. El botón no crea nada.</p>
+</main>
+<footer class="legal">Ese Auto · prototipo de la home</footer>
+
+<dialog id="email">
+  <h2 class="heading">¿A qué email te avisamos?</h2>
+  <p>Ahí te mandamos las alertas. Con este email creamos tu cuenta, sin contraseña y sin confirmar nada.</p>
+  <p class="q" id="email-q"></p>
+  <input type="email" inputmode="email" placeholder="vos@email.com" aria-label="Tu email">
+  <button class="btn block" type="button" id="email-go">Seguir</button>
+</dialog>
+
+<script>
+// Production, read on 2026-11-14.
+const DATA = {
+  // Listings first seen in the last 24 h with a «high» match.
+  flagged24h: 56,
+  // search_profiles by model, in order of people who searched it (last 30 days):
+  // Golf 41, Focus 31, Gol Trend 27, Gol 22, Corolla 20, Cruze 20, Polo 18, Vento 16, Fiesta 14, Civic 14.
+  models: ["Volkswagen Golf", "Ford Focus", "Volkswagen Gol Trend", "Volkswagen Gol", "Toyota Corolla", "Chevrolet Cruze", "Volkswagen Polo", "Volkswagen Vento", "Ford Fiesta", "Honda Civic"],
+  // The six most typed USD ceilings (12.000, 14.000, 10.000, 7.000, 16.000, 25.000); median 12.500.
+  budgets: [7000, 10000, 12000, 14000, 16000, 25000],
+  // Zones of the saved searches: Buenos Aires and around (AMBA, CABA, GBA) first, then the whole
+  // country (74), Córdoba (27), Rosario (9), La Plata (9).
+  zones: ["AMBA", "Todo el país", "Córdoba", "Rosario", "La Plata"],
+  // matches.level = 'high', listing active, first seen today (hour in Argentina).
+  rows: [
+    { model: "Volkswagen Polo", name: "Volkswagen Polo Comfortline 2018", km: 86000, usd: 11457, median: 12881, n: 18, where: "Buenos Aires", source: "Kavak", at: "10:20" },
+    { model: "Volkswagen Gol Trend", name: "Volkswagen Gol Trend Pack I 2013", km: 150700, usd: 6390, median: 7372, n: 41, where: "Malvinas Argentinas", source: "MercadoLibre", at: "9:11" },
+    { model: "Ford Ranger", name: "Ford Ranger 2021", km: 124000, usd: 23642, median: 26945, n: 57, where: "Rosario", source: "Rosario Garage", at: "9:05" },
+    { model: "Ford Focus", name: "Ford Focus Trend 2009", km: 280000, usd: 4792, median: 5483, n: 22, where: "San Martín, Mendoza", source: "DeRuedas", at: "10:15" },
+  ],
+};
+
+const $ = (id) => document.getElementById(id);
+const num = (n) => n.toLocaleString("es-AR");
+const usd = (n) => `USD ${num(n)}`;
+const q = $("q"), go = $("go");
+const PLACEHOLDER = q.placeholder;
+// base: what the search says about the car (a chip's «Busco Volkswagen Golf» or whatever was typed);
+// budget and zone are appended after it, and `shown` is that tail as it sits in the box right now.
+const state = { model: "", other: false, base: "", budget: 0, zone: "" };
+let shown = "";
+// «Mi ubicación»: the zone taken from the phone. `state.coords` is what the real form would send.
+const HERE = "Mi ubicación";
+const PIN = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M12 21s7-6.2 7-11.5a7 7 0 1 0-14 0C5 14.800 12 21 12 21Z"/><circle cx="12" cy="9.500" r="2.500"/></svg>`;
+
+function tail() {
+  return (state.budget ? ` hasta ${usd(state.budget)}` : "") + (state.zone ? (state.zone === HERE ? " cerca de mi ubicación" : state.zone === "Todo el país" ? " en todo el país" : ` en ${state.zone}`) : "");
+}
+function write() {
+  shown = state.base.trim() ? tail() : "";
+  q.value = state.base.trim() ? state.base.trimEnd() + shown : "";
+}
+function sync(fromChip) {
+  if (fromChip) write();
+  const picking = Boolean(state.model) || state.other;
+  go.disabled = state.base.trim().length < 3;
+  go.parentElement.classList.toggle("ready", !go.disabled);
+  $("hint").hidden = !picking;
+  $("step-budget").hidden = !picking;
+  $("step-zone").hidden = !picking;
+  $("other").setAttribute("aria-pressed", String(state.other));
+  $("geo").setAttribute("aria-pressed", String(state.zone === HERE));
+  q.placeholder = state.other ? "¿Cuál? Ej.: Peugeot 208 2019 en adelante" : PLACEHOLDER;
+  for (const b of document.querySelectorAll(".chip[data-k]")) b.setAttribute("aria-pressed", String(state[b.dataset.k] == b.dataset.v));
+}
+function pick(model) {
+  Object.assign(state, model ? { model, other: false, base: `Busco ${model}` } : { model: "", other: false, base: "", budget: 0, zone: "" });
+}
+function chips(el, key, items, label) {
+  el.innerHTML = items.map((v) => `<li><button type="button" class="chip" data-k="${key}" data-v="${v}" aria-pressed="false">${label(v)}</button></li>`).join("");
+  el.addEventListener("click", (e) => {
+    const b = e.target.closest(".chip[data-k]");
+    if (!b) return;
+    if (key === "model") pick(state.model === b.dataset.v ? "" : b.dataset.v);
+    else {
+      const v = key === "budget" ? Number(b.dataset.v) : b.dataset.v;
+      state[key] = state[key] === v ? (key === "budget" ? 0 : "") : v;
+    }
+    sync(true);
+  });
+}
+chips($("models"), "model", DATA.models, (v) => v.split(" ").slice(1).join(" "));
+// «Otro»: the same chip as the rest; the model is typed, price and place are still tapped.
+$("models").insertAdjacentHTML("beforeend", `<li class="pin"><button type="button" class="chip" id="other" aria-pressed="false">Otro</button></li>`);
+$("other").addEventListener("click", () => {
+  const on = !state.other;
+  pick("");
+  state.other = on;
+  sync(true);
+  if (on) q.focus();
+});
+chips($("budgets"), "budget", DATA.budgets, (v) => usd(v));
+chips($("zones"), "zone", DATA.zones, (v) => v);
+$("zones").insertAdjacentHTML("afterbegin", `<li><button type="button" class="chip geo" id="geo" aria-pressed="false">${PIN}<span>${HERE}</span></button></li>`);
+$("geo").addEventListener("click", () => {
+  const geo = $("geo"), label = geo.querySelector("span");
+  if (geo.disabled) return;
+  if (state.zone === HERE) { state.zone = ""; state.coords = null; sync(true); return; }
+  const fail = () => U.toast("No pudimos ver tu ubicación. Elegí una zona de la lista.");
+  if (!navigator.geolocation) { fail(); return; }
+  geo.disabled = true;
+  label.textContent = "Buscando…";
+  const done = () => { geo.disabled = false; label.textContent = HERE; };
+  navigator.geolocation.getCurrentPosition(
+    (pos) => { done(); state.zone = HERE; state.coords = { lat: pos.coords.latitude, lon: pos.coords.longitude }; sync(true); },
+    () => { done(); fail(); },
+    { timeout: 10000, maximumAge: 600000 },
+  );
+});
+q.addEventListener("input", () => {
+  const v = q.value;
+  if (shown && v.endsWith(shown)) state.base = v.slice(0, -shown.length);
+  else {
+    // The tail was edited by hand: the text is theirs now, the chips let go.
+    if (shown) Object.assign(state, { budget: 0, zone: "" });
+    state.base = v;
+    shown = "";
+  }
+  sync(false);
+});
+// Price and place tapped before the model was typed join the text once it is.
+q.addEventListener("blur", () => { if (!shown && tail() && state.base.trim()) sync(true); });
+
+$("live-text").textContent = `${DATA.flagged24h} oportunidades en las últimas 24 h`;
+$("feed-title").textContent = `En las últimas 24 h marcamos ${DATA.flagged24h} autos.`;
+$("rows").innerHTML = DATA.rows.map((r, i) => `
+  <li class="row${i === 0 ? " fresh" : ""}">
+    <span class="name"><span class="${i === 0 ? "mark" : ""}">${r.name}</span>${i === 0 ? `<span class="new">Nuevo</span>` : ""}</span>
+    <span class="price figure">${usd(r.usd)}<small>${usd(r.median)}</small></span>
+    <span class="meta">${num(r.km)} km · ${r.where} · ${r.source} · hoy ${r.at}</span>
+    <span class="why">Pide <b>${usd(r.median - r.usd)} menos</b> que la mediana de ${r.n} parecidos.</span>
+    <button type="button" class="like" data-model="${r.model}">Avisame de un ${r.model.split(" ").slice(1).join(" ")} así</button>
+  </li>`).join("");
+$("rows").addEventListener("click", (e) => {
+  const b = e.target.closest(".like");
+  if (!b) return;
+  pick("");
+  pick(b.dataset.model);
+  sync(true);
+  $("build").scrollIntoView({ behavior: "smooth", block: "start" });
+});
+
+$("build").addEventListener("submit", (e) => {
+  e.preventDefault();
+  if (go.disabled) return;
+  $("email-q").textContent = q.value.trim();
+  $("email").showModal();
+});
+$("email-go").addEventListener("click", () => { $("email").close(); U.toast("Prototipo: acá sigue el flujo de hoy."); });
+$("email").addEventListener("click", (e) => { if (e.target === $("email")) $("email").close(); });
+$("cookies").addEventListener("click", (e) => { if (e.target.tagName === "BUTTON") $("cookies").remove(); });
+</script>
+<script src="../guias/common.js"></script>
+</body>
+</html>

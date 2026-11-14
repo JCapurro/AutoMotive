@@ -10,6 +10,7 @@ import { type SaveResult, finishAssisted, saveSearch, startAssisted, trackAssist
 import { SearchForm } from "@/components/app/search-form";
 import { ZoneNoticeOptions, useZoneNoticePoll } from "@/components/app/zone-notice";
 import { SearchPromptInput } from "@/components/search-prompt-input";
+import { takeHere } from "@/lib/landing-here";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -210,7 +211,7 @@ export function AssistedSearch({
         }));
         const next = afterParse(drafts.length, limit);
         const auto = next === "review" && drafts.length === 1
-          ? autoSaveValues({ drafts: parsed.data.drafts, values: drafts[0].values, notes: drafts[0].notes, catalog, limit, approximateLocation })
+          ? autoSaveValues({ drafts: parsed.data.drafts, values: drafts[0].values, notes: drafts[0].notes, catalog, limit, approximateLocation: takeHere() ?? approximateLocation })
           : null;
         if (auto) {
           setPhase({ kind: "autosaving", jobId: waitingJob, draft: drafts[0] });
