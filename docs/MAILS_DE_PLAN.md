@@ -96,7 +96,14 @@ No lleva a pagar: es el primer mail que recibe la cuenta y existe para que los q
 - **Lo que la prueba oculta.** X cuenta solo lo que la prueba muestra, en la búsqueda que más muestra. Si oculta coincidencias que siguen publicadas: «Hay {N} más que coinciden y tu prueba no muestra.» Si no muestra ninguna: «Encontramos {N} autos que coinciden con tu búsqueda de {modelo}, pero tu prueba no los muestra.», nunca «Todavía no apareció ninguno».
 - **Al final:** «Para que nuestras alertas no terminen en Spam o Promociones, agregá este remitente a tus contactos o mové este email a Principal.»
 - **Botón.** «Ver mis resultados», a `/app/searches/<id>` (la búsqueda activa que más muestra).
-- **Código.** [`20261109130000_search_activated_email.sql`](../supabase/migrations/20261109130000_search_activated_email.sql): las funciones de reserva y re-chequeo de los demás tipos quedan como `*_base` y las nuevas las llaman.
+- **Los mejores autos (14/11/2026).** Debajo del botón, hasta 3 tarjetas con foto, modelo, precio, km y lugar: «Los mejores hasta ahora» (con uno solo, «El mejor hasta ahora»). Medido ese día: 98 de 480 cuentas con una búsqueda tenían coincidencias ya publicadas y ninguna alerta, porque una alerta solo sale por un auto nuevo.
+  - Los elige `welcome_cars` al reservar el mail y quedan en `payload.cars`: de la búsqueda del mail, primero nivel `high`, después `good` y `match`, y dentro de cada uno el mejor puntaje. Nunca nivel `low`.
+  - Solo lo que la cuenta puede ver: publicaciones activas, con precio completo, dentro del cupo de la prueba y que no descartó.
+  - Las de nivel `high` con diferencia calculada llevan «{N}% debajo de publicaciones comparables».
+  - Cada tarjeta abre el mismo link del botón (`/m/<id>`), que registra el clic y lleva a la búsqueda.
+  - Sin autos para mostrar, el mail sale como antes.
+- **Orden de reserva (14/11/2026).** La bienvenida se reserva antes que el fin de prueba. Con el tope diario lleno salía lo que sobraba: 194 bienvenidas para 480 cuentas, y una bienvenida que no sale en `window_hours` se pierde.
+- **Código.** [`20261109130000_search_activated_email.sql`](../supabase/migrations/20261109130000_search_activated_email.sql): las funciones de reserva y re-chequeo de los demás tipos quedan como `*_base` y las nuevas las llaman. [`20261217120000_welcome_cars.sql`](../supabase/migrations/20261217120000_welcome_cars.sql) suma los autos.
 
 ## Remarketing: cuentas sin búsqueda
 
@@ -147,7 +154,7 @@ Se edita desde `/admin/config`. Un valor inválido se reemplaza por su valor por
 | `kinds` | Prendidos: 2.1, 2.2, 2.3, 2.5 y `search_activated` (bienvenida). Apagados: `search_abandoned`, `search_not_started` y `search_feedback` (remarketing) | Prende o apaga cada tipo. Apagar `count_after_expiry` también corta su rastreo. |
 | `send_from` / `send_until` | `"09:00"` / `"21:00"` | Horario de envío, hora argentina. |
 | `window_hours` | `48` | Plazo para mandar una fila reservada. Pasado ese plazo queda `skipped` (`outside_window`). Tiene que superar la noche sin envíos. |
-| `max_per_day` | `30` | Mails reservados por día calendario argentino, entre todos los tipos. Resend gratis permite 100 por día entre alertas y estos mails. |
+| `max_per_day` | `30` | Mails reservados por día calendario argentino, entre todos los tipos. Resend gratis permite 100 por día entre alertas y estos mails. En producción está en `100` desde el 14/11/2026 (decisión de Juan, con Resend pago): en 30 se llenaba todos los días desde el 01/11. |
 
 El worker revisa cada `TRIAL_REMINDER_TICK_SECONDS` (900 s). El nombre se conserva por compatibilidad con el `.env` del VPS.
 

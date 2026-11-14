@@ -8,7 +8,7 @@ from telegram import Bot
 from telegram.ext import Application
 
 from config import (CRAWL_LOOP_STALE_SECONDS, EMAIL_FROM, ENRICH_TICK_SECONDS, HEARTBEAT_SECONDS, LOG_FILE, LOG_KEEP_DAYS,
-                    LOW_RESULTS_TICK_SECONDS,
+                    LOW_RESULTS_TICK_SECONDS, NEAR_ZONE_TICK_SECONDS,
                     NOTIFY_TICK_SECONDS, RESEND_API_KEY, TELEGRAM_ADMIN_CHAT_ID, TELEGRAM_ENABLED, TELEGRAM_TOKEN,
                     TRIAL_REMINDER_TICK_SECONDS, WATCHLIST_TICK_SECONDS, WEB_BASE_URL, ALERT_LINK_SECRET,
                     startup_warnings)
@@ -30,6 +30,7 @@ from pipeline import heartbeat
 from pipeline.enrich import enrich_pass
 from pipeline.llm_jobs import llm_jobs_loop
 from pipeline.low_results import run_low_results
+from pipeline.near_zone import run_near_zone
 from pipeline.market_stats import market_stats_loop
 from pipeline.rescore import nightly_loop
 from pipeline.scheduler import loop_stale, run_loop
@@ -196,6 +197,8 @@ async def amain() -> None:
         asyncio.create_task(llm_jobs_loop(provider, stop)),
         asyncio.create_task(_every("low_results", LOW_RESULTS_TICK_SECONDS,
                                    lambda _stop: run_low_results(provider, notifier.channels, links), stop)),
+        asyncio.create_task(_every("near_zone", NEAR_ZONE_TICK_SECONDS,
+                                   lambda _stop: run_near_zone(notifier.channels.get("email"), links), stop)),
     ]
 
     try:
