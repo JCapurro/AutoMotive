@@ -374,6 +374,14 @@ _EXPAND = ("Ver más", "See more")
 _SUGGESTIONS = ("sugerencias de hoy", "today's picks")
 _DETAILS_HEADERS = ("acerca de este vehiculo", "about this vehicle")
 _SELLER_HEADERS = ("informacion del vendedor", "seller information")
+# A car posted as a general item, not in Vehicles, has neither header above:
+# «Details», «Condition», «Used - like new», then the seller's text (listing
+# 55389, «Vendo o permuto Chevrolet corsa modelo 98 full… titular al día»).
+# Until 2026-11-14 that text was lost: 544 of 2772 enriched active Facebook
+# listings had no description, the year and the down payment it tells too.
+_GENERAL_DETAILS_HEADERS = ("detalles", "details")
+_CONDITION_HEADERS = ("estado", "condition")
+_PLACE_NOTE = ("la ubicacion es aproximada", "location is approximate")
 
 
 def _plain(s: str) -> str:
@@ -476,6 +484,30 @@ def _item_page(url: str) -> bool:
     return bool(re.search(r"/marketplace/item/\d+", url or "")) and "unavailable_product" not in (url or "")
 
 
+def _general_description(lines: list[str], plain: list[str], atributos: dict[str, str]) -> str | None:
+    """The seller's text of a general item's page (_GENERAL_DETAILS_HEADERS),
+    or None. Its «Condition» goes to `atributos["Estado"]`. The text ends at
+    «See less», the seller box, a button, or the map: the place, then «·»,
+    then «Location is approximate»."""
+    i = next((k for k, p in enumerate(plain) if p in _GENERAL_DETAILS_HEADERS), None)
+    if i is None:
+        return None
+    j = i + 1
+    if j + 1 < len(plain) and plain[j] in _CONDITION_HEADERS:
+        atributos["Estado"] = lines[j + 1]
+        j += 2
+    body = []
+    for k in range(j, len(lines)):
+        p = plain[k]
+        if p.startswith(_DESCRIPTION_STOP) or p in _DESCRIPTION_STOP_LINES or not p:
+            break
+        after = [q for q in plain[k + 1:k + 3] if q]
+        if after and after[0].startswith(_PLACE_NOTE):
+            break                                       # «· Location is approximate» on the place's line
+        body.append(lines[k])
+    return "\n".join(body) or None
+
+
 def parse_detail(html: str, url: str, status: int = 200) -> ListingDetail:
     """An item page, read from the visible text of its main region: FB's
     class names are generated, so only text cues are stable."""
@@ -558,6 +590,8 @@ def parse_detail(html: str, url: str, status: int = 200) -> ListingDetail:
             rest = [ln for ln, p2 in zip(lines[i + 1:], plain[i + 1:])
                     if p2 not in ("detalles del vendedor", "seller details")]
             vendedor_nombre = rest[0] if rest else None
+    if descripcion is None and not any(p in _DESCRIPTION_HEADERS or p in _DETAILS_HEADERS for p in plain):
+        descripcion = _general_description(lines, plain, atributos)
 
     images = _own_images(main)
     return ListingDetail(url, listing=Listing(
@@ -1144,7 +1178,8 @@ class FacebookMarketplaceScraper(BaseScraper):
         return results
 
     # 2: "Ver más" is expanded and the description stops before the page around it.
-    DETAIL_PARSER_VERSION = 3
+    # 4: the description of a car posted as a general item («Details», «Condition»).
+    DETAIL_PARSER_VERSION = 4
     parse_detail = staticmethod(parse_detail)
 
     async def fetch_detail_page(self, url: str) -> Page:

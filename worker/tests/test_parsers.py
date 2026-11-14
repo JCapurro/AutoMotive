@@ -223,6 +223,30 @@ class FacebookParserTests(unittest.TestCase):
         self.assertEqual(l.descripcion, "-PROMOCION DE CONTADO U$s10.900\n-PRECIO DE PERMUTA U$s11.500\n"
                                         "Ver más fotos en Instagram")
 
+    def test_a_car_posted_as_a_general_item_keeps_its_description(self):
+        # Listing 55389 (14/11/2026): no «Descripción del vendedor», only «Details».
+        page = """<div role='main'><h1><span>Chevrolet corsa 1.6 mpfi 98 full</span></h1><span>$5,500,000</span>
+          <span>·</span><span>In stock</span><span>Listed  in</span><span>Gregorio de Laferrere, BA</span>
+          <span>Send seller a message</span><span>Send</span><span>Message</span>
+          <span>Details</span><span>Condition</span><span>Used - like new</span>
+          <span>Vendo o permuto Chevrolet corsa modelo 98 full titular al dia</span><span>See less</span>
+          <span>Gregorio de Laferrere, BA</span><span>·</span><span>Location is approximate</span>
+          <span>Seller information</span><span>Seller details</span><span>Vendedor Ejemplo</span></div>"""
+        l = facebook.parse_detail(page, "https://www.facebook.com/marketplace/item/9/").listing
+        self.assertEqual(l.descripcion, "Vendo o permuto Chevrolet corsa modelo 98 full titular al dia")
+        self.assertEqual(l.atributos, {"Estado": "Used - like new"})
+        self.assertEqual(l.vendedor_nombre, "Vendedor Ejemplo")
+
+    def test_a_general_item_description_ends_at_the_map(self):
+        # 36551: no «See less» (short text), no «Condition»; the place line ends it.
+        page = """<div role='main'><h1><span>Peugeot 207</span></h1><span>$8.500.000</span>
+          <span>Detalles</span><span>Se va transferido</span><span>Lomas de Zamora, BA</span>
+          <span>·</span><span>La ubicación es aproximada</span></div>"""
+        l = facebook.parse_detail(page, "https://www.facebook.com/marketplace/item/9/").listing
+        self.assertEqual((l.descripcion, l.atributos), ("Se va transferido", {}))
+        empty = page.replace("<span>Se va transferido</span>", "")
+        self.assertIsNone(facebook.parse_detail(empty, "https://www.facebook.com/marketplace/item/9/").listing.descripcion)
+
 
     def test_suggested_ads_never_lend_their_price_or_words(self):
         page = """<div role='main'><h1><span>2020 Ford Ka S</span></h1><span>Consultá precio</span>
