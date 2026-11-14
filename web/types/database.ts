@@ -1182,7 +1182,7 @@ isOneToOne: false
             admin_guide_event_counts: { Args: { p_days?: number }; Returns: { guide_id: number; viewed: number; cta_clicked: number; questions_copied: number }[] },
             model_guide_jobs_since: { Args: { p_since: string }; Returns: number },
             log_guide_event: { Args: { p_name: string; p_slug_make: string; p_slug_model: string }; Returns: undefined },
-            // Landing hero (20261216120000): landing_feed is service role only; log_landing_event is anon and authenticated.
+            // Landing hero (20261219120000): landing_feed is service role only; log_landing_event is anon and authenticated.
             landing_feed: { Args: Record<string, never>; Returns: Json },
             log_landing_event: { Args: { p_name: string; p_variant: string; p_how?: string }; Returns: undefined },
             begin_billing_checkout: { Args: { p_user: string; p_offer: string; p_email: string; p_version: string; p_expected_amount: number; p_founder_code?: string }; Returns: Json },

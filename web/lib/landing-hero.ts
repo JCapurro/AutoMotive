@@ -1,6 +1,6 @@
 /**
  * The landing's hero «para tocar» (design/variants/landing/index.html,
- * migration 20261216120000_landing_hero): the search is built by tapping a
+ * migration 20261219120000_landing_hero): the search is built by tapping a
  * model, a budget and a zone, and the proof is what was flagged today.
  *
  * It is measured against the hero of today: while app_config.landing_hero is

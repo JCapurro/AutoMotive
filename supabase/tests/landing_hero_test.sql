@@ -1,4 +1,4 @@
--- Landing hero (20261216120000_landing_hero): the switch, what the hero shows
+-- Landing hero (20261219120000_landing_hero): the switch, what the hero shows
 -- and the home's anonymous events.
 begin;
 create extension if not exists pgtap with schema extensions;
