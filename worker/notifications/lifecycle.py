@@ -46,9 +46,11 @@ from notifications.service import AR
 log = logging.getLogger("lifecycle")
 
 # The kinds this worker sends, claimed in this order (the daily cap is shared):
-# the ones with a deadline today first, then the welcome (it's only worth it early).
+# the pass that ends today, then the welcome: it is the first email an account
+# gets and it is lost after window_hours. Claimed after trial_ended it starved
+# behind a full cap (14/11/2026: 194 welcomes for 480 accounts).
 # The extra trial's offer goes before 2.5: on day 7 it replaces that day's count.
-KINDS = ("pass_expires_today", "trial_ended", "bonus_trial_ended", "search_activated", "pass_expiring",
+KINDS = ("pass_expires_today", "search_activated", "trial_ended", "bonus_trial_ended", "pass_expiring",
          "trial_no_matches", "bonus_trial_ending", "bonus_trial_offer", "count_after_expiry",
          "search_abandoned", "search_not_started", "search_feedback")
 DEFAULTS: dict[str, Any] = {"enabled": True, "send_from": "09:00", "send_until": "21:00",

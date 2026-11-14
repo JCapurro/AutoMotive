@@ -537,6 +537,10 @@ WELCOME_TRIAL_FULL = ("Tu prueba ya usó sus {limit} resultados, así que no vam
 WELCOME_INBOX = ("Para que nuestras alertas no terminen en Spam o Promociones, agregá este remitente a tus "
                  "contactos o mové este email a Principal.")
 WELCOME_CTA = "Ver mis resultados"
+# The search's best matches so far, as cards under the button (payload.cars).
+WELCOME_MAX_CARS = 3
+WELCOME_CARS = {1: "El mejor hasta ahora", "n": "Los mejores hasta ahora"}
+WELCOME_CAR_BELOW = "{d}% debajo de publicaciones comparables"
 # PAR-05, Prueba B: one question under the button, while app_config.sell_intent.ask
 # is on. Each answer opens /vender-mi-auto, which asks to confirm it.
 SELL_INTENT_QUESTION = "¿Tenés que vender tu auto actual para comprar?"
@@ -715,6 +719,27 @@ def _missed(car: Any, found: int, below: int, link: Link) -> tuple[Content, str]
                    images=image_urls(car.get("images")), price=price(listing)), title
 
 
+def _welcome_cars(cars: Any, url: str) -> list[DigestItem]:
+    """The welcome's cars (payload.cars, public.welcome_cars): the search's
+    best visible matches, as cards. Each one opens the email's own tracked
+    link, which lands on the search. A malformed entry is left out."""
+    out: list[DigestItem] = []
+    for car in cars if isinstance(cars, list) else []:
+        if not isinstance(car, Mapping) or car.get("price") is None:
+            continue
+        listing = {"make": car.get("make"), "model": car.get("model"), "trim": car.get("trim"),
+                   "year": car.get("year"), "title": car.get("title"), "price": car.get("price"),
+                   "currency": car.get("currency"), "mileage_km": car.get("km")}
+        diff = car.get("diff_pct")
+        diff = round(diff) if isinstance(diff, (int, float)) and not isinstance(diff, bool) and math.isfinite(diff) else 0
+        details = [str(x) for x in (km(listing), car.get("location") if isinstance(car.get("location"), str) else None)
+                   if x]
+        out.append(DigestItem(vehicle(listing), url, details=details, price=price(listing),
+                              badge=WELCOME_CAR_BELOW.format(d=diff) if diff > 0 else None, highlighted=diff > 0,
+                              images=image_urls([car.get("image")]), detail_url=url))
+    return out[:WELCOME_MAX_CARS]
+
+
 def lifecycle_content(kind: str, payload: Mapping[str, Any], url: str, *,
                       offer: Mapping[str, Any] | None = None,
                       limits: Mapping[str, Any] | None = None) -> tuple[Content, str]:
@@ -740,7 +765,9 @@ def lifecycle_content(kind: str, payload: Mapping[str, Any], url: str, *,
             lines.append(_plural(WELCOME_TRIAL_LEFT, left, limit=limit))
         else:
             lines.append(WELCOME_TRIAL_FULL.format(limit=limit))
-        return Content(subject, subject, lines=[*lines, WELCOME_INBOX], link=Link(WELCOME_CTA, url)), subject
+        cars = _welcome_cars(payload.get("cars"), url)
+        return Content(subject, subject, lines=[*lines, WELCOME_INBOX], link=Link(WELCOME_CTA, url),
+                       sections=[(_plural(WELCOME_CARS, len(cars)), cars)] if cars else []), subject
     if kind == "trial_no_matches":
         subject = NO_MATCHES_SUBJECT.format(model=model) if model else NO_MATCHES_SUBJECT_ANY
         return Content(subject, subject, lines=[NO_MATCHES_BODY], link=Link(NO_MATCHES_CTA, url)), subject
@@ -832,6 +859,9 @@ def lifecycle_email(row: Mapping[str, Any], links: Links, now: datetime, *,
                           for answer, label in SELL_INTENT_ANSWERS))
 
     text = [c.header, *[x for x in (c.vehicle, c.price) if x], *c.lines, f"{c.link.label}: {c.link.url}"]
+    for section, items in c.sections:
+        text += ["", f"{section}:", *[" · ".join(x for x in (it.text, it.price, *it.details, it.badge) if x)
+                                      for it in items]]
     if question:
         text += ["", question[0], *[f"{a.label}: {a.url}" for a in question[1]]]
     text += ["", "—", footer]
