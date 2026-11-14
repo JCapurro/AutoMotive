@@ -597,7 +597,15 @@ with models (make, model, aliases, year_from, year_to, transmissions, fuels, tri
   ('Peugeot', '205', '{peugeot 205}', null, null, '{manual}', '{nafta,diesel}', '{}'),
   ('Peugeot', '404', '{peugeot 404}', null, null, '{manual}', '{nafta,diesel}', '{}'),
   ('Peugeot', '405', '{peugeot 405}', null, null, '{manual,automatic}', '{nafta,diesel}', '{}'),
-  ('Peugeot', '504', '{peugeot 504}', null, null, '{manual}', '{nafta,diesel}', '{}')
+  ('Peugeot', '504', '{peugeot 504}', null, null, '{manual}', '{nafta,diesel}', '{}'),
+  ('Fiat', '147', '{fiat 147}', null, null, '{manual}', '{nafta}', '{}'),
+  ('Chevrolet', 'Corvette', '{chevrolet corvette,corvette c3}', null, null, '{manual,automatic}', '{nafta}', '{}'),
+  ('Chevrolet', 'Chevy', '{chevrolet chevy}', null, null, '{manual}', '{nafta}', '{}'),
+  ('Ford', 'Falcon', '{ford falcon}', null, null, '{manual,automatic}', '{nafta,diesel}', '{}'),
+  ('Ford', 'Escort', '{ford escort}', null, null, '{manual,automatic}', '{nafta,diesel}', '{}'),
+  ('Volvo', 'V60', '{volvo v60}', 2011, null, '{automatic}', '{nafta,diesel,hibrido}', '{}'),
+  ('Audi', 'S4', '{audi s4}', null, null, '{manual,automatic}', '{nafta}', '{}'),
+  ('Nissan', 'D21', '{nissan d21}', null, null, '{manual}', '{nafta,diesel}', '{}')
 )
 insert into public.vehicle_catalog (make, model, trim, aliases, year_from, year_to, transmissions, fuels)
 select make, model, null, aliases::text[], year_from, year_to, transmissions::text[], fuels::text[]
@@ -1061,6 +1069,14 @@ update public.vehicle_catalog c set body_types = v.body_types::text[]
     ('Peugeot', '205', '{hatchback}'),
     ('Peugeot', '404', '{sedan,pickup}'),
     ('Peugeot', '405', '{sedan,rural}'),
-    ('Peugeot', '504', '{sedan,pickup,rural}')
+    ('Peugeot', '504', '{sedan,pickup,rural}'),
+    ('Fiat', '147', '{hatchback}'),
+    ('Chevrolet', 'Corvette', '{coupe,convertible}'),
+    ('Chevrolet', 'Chevy', '{sedan,pickup}'),
+    ('Ford', 'Falcon', '{sedan,rural}'),
+    ('Ford', 'Escort', '{hatchback,sedan,rural}'),
+    ('Volvo', 'V60', '{rural}'),
+    ('Audi', 'S4', '{sedan}'),
+    ('Nissan', 'D21', '{pickup}')
   ) as v (make, model, body_types)
  where lower(c.make) = lower(v.make) and lower(c.model) = lower(v.model);
