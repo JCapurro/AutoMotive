@@ -22,14 +22,19 @@ Entre las publicaciones activas de esa marca y modelo:
 
 - vista por primera vez después de crear la búsqueda, y publicada hace `max_age_days` días o menos (3);
 - con precio completo y coordenadas;
-- que solo falla el filtro de zona (`intelligence/matching.evaluate`): el resto pasa igual que en un resultado;
+- que solo falla el filtro de zona (`intelligence/matching.evaluate`), con datos confirmados: año siempre conocido y ningún filtro de la búsqueda pasado como «desconocido» (en un resultado común, un dato que falta pasa; acá no);
+- cuyo título no nombra un repuesto, un auto a escala ni un «busco» (`normalization/not_vehicle.py`);
 - a `max_extra_km` km o menos del borde de la zona (100).
 
 Si hay varias, se elige la más cercana. Una publicación se avisa una sola vez por búsqueda (`near_zone_notices`).
 
+## Primera pasada (14/11/2026)
+
+Prendido a las 14:57 UTC, la pasada de las 15:08 mandó 6 avisos y 4 eran malos: tres publicaciones de Facebook sin año para búsquedas que pedían un año, una de ellas un motor («Motor Volkswagen CFZ gol Trend/ Suran/ Fox»), y un asunto que decía «a 72 km de Mi ubicación actual». Se apagó a las 15:11 UTC. De ahí salen la regla de datos confirmados y la limpieza del lugar. Con la regla nueva, una prueba en seco sobre las mismas 30 búsquedas candidatas dio 3 avisos, los tres del año pedido.
+
 ## El email
 
-- Asunto: «Apareció un Ford Focus 2016 a 45 km de Laferrere». Sin nombre de lugar dice «de tu zona».
+- Asunto: «Apareció un Ford Focus 2016 a 45 km de Laferrere». El lugar va sin la nota que le agrega la web («La Plata (zona aproximada)» es «La Plata»); sin nombre de lugar, o con «Mi ubicación actual», dice «de tu zona».
 - Foto, modelo y precio publicado, con la plantilla de marca.
 - «Está a 45 km de Laferrere. Tu búsqueda llega hasta 30 km, por eso no aparece entre tus resultados.»
 - «Cumple el resto de tus filtros.»

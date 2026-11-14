@@ -6,6 +6,7 @@ opens the search, where its owner can widen the zone.
 """
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import Any, Mapping
 
@@ -28,9 +29,17 @@ EYEBROW = "TU BÚSQUEDA"
 FOOTER = "Recibís este email porque tenés una búsqueda activa en Ese Auto con avisos por email."
 
 
+# What the web adds to a place it guessed («La Plata (zona aproximada)», «Morón (GBA)»),
+# and its label for the browser's location, which names no place.
+_PLACE_NOTE = re.compile(r"\s*\([^)]*\)\s*$")
+_PLACE_UNNAMED = "mi ubicación actual"
+
+
 def place(row: Mapping[str, Any]) -> str:
+    """The search's place as a sentence can say it: «La Plata», or «tu zona»."""
     label = (row.get("filters") or {}).get("location_label")
-    return label.strip() if isinstance(label, str) and label.strip() else PLACE_ANY
+    label = _PLACE_NOTE.sub("", label).strip() if isinstance(label, str) else ""
+    return label if label and label.lower() != _PLACE_UNNAMED else PLACE_ANY
 
 
 def email_message(row: Mapping[str, Any], listing: Mapping[str, Any], distance_km: float, links: Links,

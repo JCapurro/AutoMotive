@@ -63,6 +63,49 @@ class PickTest(unittest.TestCase):
         self.assertIsNone(pick([listing(1, 45, year=2010)], profile(year_min=2015)))
         self.assertIsNone(pick([listing(1, 45, price=30_000, price_usd=30_000)], profile(price_max=15_000)))
 
+    def test_a_listing_without_a_year_is_never_told(self):
+        # 14/11/2026, first pass: a search for a 2003 Gol was told about a Facebook listing without a year.
+        self.assertIsNone(pick([listing(1, 45, year=None)], profile(year_min=2003, year_max=2003)))
+        self.assertIsNone(pick([listing(1, 45, year=None)]))
+
+    def test_what_the_search_asked_for_must_be_known(self):
+        self.assertIsNone(pick([listing(1, 45, mileage_km=None)], profile(km_max=100_000)))
+        self.assertIsNone(pick([listing(1, 45, transmission=None)], profile(transmission="automatic")))
+        self.assertEqual(pick([listing(1, 45, mileage_km=None)])[0]["id"], 1)      # nothing asked about km
+
+    def test_a_part_a_scale_model_or_a_wanted_post_is_never_told(self):
+        for title in ("Paragolpes delantero Ford Focus", "Ford Focus escala 1:24 Welly", "Busco Ford Focus 2016"):
+            with self.subTest(title=title):
+                self.assertIsNone(pick([listing(1, 45, title=title)]))
+
+    def test_the_first_pass_of_14_11(self):
+        """The six listings told that day, as stored: only the three with a year are told now."""
+        gol = {"make": "Volkswagen", "model": "Gol"}
+        cases = [
+            (False, {**gol, "title": "Volkswagen Gol 1.6 3 ptas con aire y dirección", "year": None, "mileage_km": None,
+                     "price": 3500}, {**gol, "year_min": 2003, "year_max": 2003}),
+            (True, {**gol, "title": "Volkswagen Gol", "year": 1997, "mileage_km": None, "price": 3_500_000,
+                    "currency": "ARS", "price_usd": 2500}, {**gol, "price_max": 7_000_000, "currency": "ARS"}),
+            (True, {"make": "Volkswagen", "model": "Amarok", "title": "2022 Volkswagen Amarok", "year": 2022,
+                    "mileage_km": None, "price": 25_300_000, "currency": "ARS", "price_usd": 18_000},
+             {"make": "Volkswagen", "model": "Amarok", "year_min": 2020, "year_max": 2026, "price_max": 30_000_000,
+              "currency": "ARS"}),
+            (True, {"title": "FLORENCIO SÁNCHEZ AUTOMOTORES", "year": 2008, "mileage_km": 230_000, "price": 6000},
+             {"year_max": 2015, "price_max": 9500, "currency": "USD"}),
+            (False, {"make": "Volkswagen", "model": "Gol Trend", "title": "Motor Volkswagen CFZ gol Trend/ Suran/ Fox",
+                     "year": None, "mileage_km": None, "price": 1400},
+             {"make": "Volkswagen", "model": "Gol Trend", "year_min": 2004, "year_max": 2008, "price_max": 3400,
+              "currency": "USD"}),
+            (False, {"make": "Toyota", "model": "Etios", "title": "Toyota Etios con cola [hidden information]km",
+                     "year": None, "mileage_km": None, "price": 13_500},
+             {"make": "Toyota", "model": "Etios", "year_min": 2017, "year_max": 2017}),
+        ]
+        for told, car, filters in cases:
+            with self.subTest(title=car["title"]):
+                car = {"price_usd": car["price"], **car}
+                found = pick([listing(1, 45, **car)], profile(**filters), fx_rate=1400.0)
+                self.assertEqual(found is not None, told)
+
     def test_only_what_is_new_for_the_search_and_recent(self):
         old_for_search = listing(1, 45, first_seen_at=CREATED - timedelta(hours=1))
         old_stock = listing(2, 45, published_at=NOW - timedelta(days=10))
@@ -100,6 +143,16 @@ class EmailTest(unittest.TestCase):
         for text in ("https://autos.example/2", "https://automotive.app/app/searches/7",
                      "https://img.example/1.jpg", "Un auto cerca de tu zona"):
             self.assertIn(text, msg.html)
+
+    def test_the_place_is_said_without_the_webs_notes(self):
+        for label, said in (("La Plata (zona aproximada)", "La Plata"), ("Morón (GBA)", "Morón"),
+                            ("Mi ubicación actual", "tu zona"), ("  ", "tu zona"), ("Villa María, Córdoba",
+                                                                                   "Villa María, Córdoba")):
+            with self.subTest(label=label):
+                row = {**self.ROW, "filters": {"make": "Ford", "model": "Focus", "location_label": label}}
+                msg = notice.email_message(row, listing(2, 45), 45, LINKS, NOW)
+                self.assertEqual(msg.subject, f"Apareció un Ford Focus 2016 a 45 km de {said}")
+                self.assertIn(f"Está a 45 km de {said}. ", msg.text)
 
     def test_without_a_place_label_it_says_tu_zona(self):
         row = {**self.ROW, "filters": {"make": "Ford", "model": "Focus"}}

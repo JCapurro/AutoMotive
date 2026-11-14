@@ -2,7 +2,8 @@
 
     a search with one zone of its own and few results
       → its make/model's listings first seen since it exists, still recent
-      → the ones every hard filter passes but the zone (matching.evaluate)
+      → the ones every hard filter passes but the zone (matching.evaluate),
+        with a known year and nothing the search asked for left unknown
       → within max_extra_km of the zone's edge: the closest one
 
 The search is never widened here: the email shows the car and its owner decides.
@@ -14,6 +15,7 @@ from typing import Any, Iterable, Mapping
 
 from intelligence.matching import evaluate, search_zones
 from normalization.geo import haversine_km
+from normalization.not_vehicle import part_reason, toy_reason, wanted_reason
 
 DEFAULTS: dict[str, Any] = {"enabled": False, "max_results": 3, "max_extra_km": 100, "max_age_days": 3,
                             "cooldown_days": 3, "max_per_tick": 10, "send_from": "09:00", "send_until": "21:00"}
@@ -60,14 +62,30 @@ def eligible(profile: Mapping[str, Any]) -> bool:
     return bool(f.get("make") and f.get("model")) and own_zone(profile) is not None
 
 
+def confirmed(listing: Mapping[str, Any], profile: Mapping[str, Any], *, fx_rate: float | None = None) -> bool:
+    """Whether the listing is a car this search would show but for its zone,
+    on known data. A result may pass a filter as unknown; this email shows one
+    car alone, so it may not: on 14/11/2026 the first pass told a search for a
+    2003 Gol about a listing without a year, and another about an engine.
+    The year is always needed (a car without one can't be told from an older
+    one), and a title that names a part, a scale model or a wanted post is out
+    whatever else the listing says."""
+    title = listing.get("title")
+    if listing.get("year") is None or part_reason(title) or toy_reason(title) or wanted_reason(title):
+        return False
+    result = evaluate(listing, profile, fx_rate=fx_rate)
+    return result.failed == ["location"] and not result.unknown
+
+
 def pick(listings: Iterable[Mapping[str, Any]], profile: Mapping[str, Any], *, created_at: datetime,
          now: datetime, cfg: Mapping[str, Any], fx_rate: float | None = None,
          seen: Iterable[int] = ()) -> tuple[Mapping[str, Any], float] | None:
     """The listing to tell this search about and its distance in km, or None.
 
     New for the search (first seen since it was created) and still recent,
-    with a full price and coordinates, failing only the zone, at most
-    max_extra_km past its edge. `seen` are the listings already told."""
+    with a full price and coordinates, failing only the zone on known data
+    (`confirmed`), at most max_extra_km past its edge. `seen` are the
+    listings already told."""
     zone = own_zone(profile)
     if zone is None:
         return None
@@ -84,6 +102,6 @@ def pick(listings: Iterable[Mapping[str, Any]], profile: Mapping[str, Any], *, c
         dist = haversine_km(lat, lon, listing["lat"], listing["lon"])
         if dist <= radius or dist - radius > cfg["max_extra_km"] or (best is not None and dist >= best[1]):
             continue
-        if evaluate(listing, profile, fx_rate=fx_rate).failed == ["location"]:
+        if confirmed(listing, profile, fx_rate=fx_rate):
             best = (listing, dist)
     return best
