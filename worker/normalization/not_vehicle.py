@@ -15,9 +15,10 @@ part only when
 * its title *starts* with a part's name («Paragolpe trasero de Ford
   Ecosport», «Kit Embrague Valeo», «Vendo frente de Chevrolet prisma»): car
   titles start with the year, the make or a word like «Oportunidad», never
-  with «Faro» or «Puerta»; with a piece of equipment a car's title may lead
+  with «Faro», «Puerta» or «Motor Volkswagen»; with a piece of equipment a car's title may lead
   with too («Caja automática», «Techo solar», «Llantas», «Alarma»), or a word
-  that may be something else («Insignia», «Campana»), only when it names no
+  that may be something else («Insignia», «Campana», «Motor» and a model
+  with no make), only when it names no
   single model year and no «0km» (a new car's title may say «Caja automática
   Peugeot 208 0km»), or when it is «para» a car; or the title says
   «desarme», «autopartes», «repuestos de/para» or a body part with its side
@@ -55,6 +56,10 @@ from typing import Any
 # marketplace; the others are vehicle classifieds.
 SOURCES = frozenset({"facebook"})
 
+# Makes, as a title writes them (accents stripped, lowercase).
+_MAKE = (r"(?:alfa romeo|audi|bmw|byd|changan|chery|chevrolet|chevy|citroen|dodge|ds|fiat|ford|geely|haval"
+         r"|honda|hyundai|isuzu|jac|jeep|kia|land rover|lexus|lifan|mercedes(?: benz)?|mini|mitsubishi"
+         r"|nissan|peugeot|porsche|ram|renault|seat|smart|subaru|suzuki|toyota|volkswagen|volks|volvo|vw)")
 # A part's name, as the first word(s) of a title (accents stripped, lowercase).
 _PARTS = (
     # «Parqgolpe delantero de Citroën C4».
@@ -72,7 +77,13 @@ _PARTS = (
     r"guardabarros?", r"compresor\w*", r"condensador\w*", r"evaporador\w*", r"radiador\w*",
     r"electroventilador\w*", r"barras?", r"sensor\w*", r"spoiler\w*", r"deflector\w*", r"guias?",
     r"motor (?:de arranque|limpia\w*|levanta\w*|electroventilador|completo|para|de|y caja|calefac\w*"
-    r"|forzador\w*|soplador\w*)",
+    r"|forzador\w*|soplador\w*|a reparar|paso a paso|y brazo)",
+    # An engine sold alone, the make right after it or after its size: «Motor
+    # Volkswagen CFZ gol Trend/ Suran/ Fox» (67044, mailed as a Gol Trend on
+    # 14/11/2026), «MOTOR FORD KA 1.0», «Motor 1.4 de Chevrolet ónix prisma»,
+    # «Motor Chevrolet Tracker 1.2T 2021». No car's title opens that way: its
+    # engine comes after the car («Ford Ka 1.0 motor rocam»).
+    rf"motor (?:\d[.,]\d\w* )?(?:del? )?{_MAKE}",
     r"limpiaparabrisas", r"parabrisas", r"lunetas?", r"vidrios?", r"desarmes?", r"volantes?",
     r"radiadores?", r"frentes?", r"trompas?", r"cosas de", r"alternador\w*", r"inyector\w*",
     r"bobinas?", r"semiej\w*", r"homocinetic\w*", r"diferencial\w*", r"cardan\w*",
@@ -139,6 +150,12 @@ _EQUIPMENT = (
     r"e?sterios?", r"stereos?", r"pantallas?", r"displays?", r"radios?(?! (?:taxi|llamada|remis))",
     r"alarmas?", r"airbags?", r"accesorios?", r"asesorios?", r"luces", r"leds?", r"insignias?",
     r"campanas?",
+    # «Motor» and then a model or an engine code, no make: «Motor gol trend
+    # 1.6», «Motor CFZ Gol/Suran/Fox». Not what a car's title says of its own
+    # engine («Motor impecable, Gol Trend», «Motor: 1.4 Litros Turbo», a real
+    # title in the vehicle classifieds) nor «Motor home».
+    r"motor(?!:| ?home\b| (?:nuevo|hecho|impecable|excelente|recien|reparado|rectificado|sano|joya|intacto"
+    r"|perfecto|original|cadenero|10|\d+ ?(?:cv|hp)|en|y|con|sin|anda\w*|funciona\w*)\b)",
 )
 _LEADS = rf"^(?:(?:{'|'.join(_LEAD)})\b[\s,/:-]*){{0,3}}"
 _PART_START = re.compile(rf"{_LEADS}(?:{'|'.join(_PARTS)})\b")

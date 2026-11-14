@@ -180,6 +180,36 @@ MATCHED_PARTS = [
     "Insignia Peugeot 207 grande",
     "Campana Ford Ecosport kinetic",
     "Asesorío de Chevrolet Corsa 3 puertas ay todo de interio",
+    # Engines sold alone, active as cars on 14/11/2026 (the 24 active Facebook
+    # titles that opened with «Motor»); the first one was mailed as a Gol Trend.
+    "Motor Volkswagen CFZ gol Trend/ Suran/ Fox",
+    "Motor 1.4 de Chevrolet ónix prisma",
+    "Motor a reparar Peugeot 208 115cv 1.6 16v",
+    "Motor Audi a1 con caja desarmada",
+    "Motor Chevrolet Prisma \n- Con 04 y Garantía -",
+    "Motor chevrolet prisma onix 1.4 con 04",
+    "Motor chevrolet sonic 1.6 16v 2013 con 04d",
+    "Motor Chevrolet Tracker 1.2T 2021",
+    "Motor chevrolet tracker cruze ecotec 1.8",
+    "MOTOR FORD KA 1.0",
+    "Motor Ford Ka viral",
+    "Motor Honda Accord 2.0",
+    "Motor Paso A Paso Renault Clio 19 1.6 Chevrolet Astra $40.000",
+    "Motor Peugeot 207 1.4 + Todos los Periféricos + 04 (Block picado / Repuestos o reparar)",
+    "Motor Peugeot 207 1.4 TU3JP/ET3J4 con Formulario 04 + Periféricos",
+    "MOTOR PEUGEOT 307 1.6 HD 110CV",
+    "MOTOR PEUGEOT 408 1.6 \n16v Nafta - [hidden information]\n- Con 04",
+    "Motor Peugeot Partner/206/207/berlingo/ Fiat qubo 1.4",
+    "Motor Volkswagen Gol 1.6 \n- Con 04 y Garantía \n-",
+    "MOTOR VOLKSWAGEN GOL 1.6 AP 2008✅",
+    "Motor Volkswagen Gol trend",
+    "Motor Volkswagen Gol Trend con 04D",
+    "Motor Volkswagen vento 1.4 Tsi bm tech 2017 con 04d",
+    "Motor y brazo de limpia parabrisas ford  fiesta español",
+    # The same engines with no make: a model or an engine code, no single year.
+    "Motor CFZ gol Trend/ Suran/ Fox",
+    "Vendo motor gol trend 1.6",
+    "Motor AP 1.6 Gol/Saveiro 2008 al 2012",
 ]
 
 # Cars whose titles name one of those parts, or open with a word they share.
@@ -202,6 +232,22 @@ MATCHED_PARTS_CARS = [
     # Real titles of cars in the vehicle classifieds.
     "Distribución recién hecha en Taller Renault Oficial Carlos Trabucco",
     "Motor: 1.4 Litros Turbo (ecotec), 4 Cilindros, 16 Válvulas D",
+    # Cars that say «motor», active on Facebook on 14/11/2026.
+    "🟢OPORTUNIDAD VENDO FORD FIESTA 99 DIESEL 1.7 MOTOR ENDURA FUNCIONANDO EN MARCHA",
+    "Chevrolet Prisma LT Motor 1.4. 2016",
+    "Ford ka 1.0 motor rocam",
+    "Peugeot 207 GTI motor roto (ANDANDO)",
+    "vendo fiat uno motor SCR 1.6 nafta",
+    "Vendo Ford Ecosport año 2012 motor 1.6 nafta",
+    "Peugeot 206. Motor 1.4 año 2010 nunca se tocó mecánica ni nada",
+    # A car's title may open with its own engine, or be a motorhome.
+    "Motorhome Mercedes Benz Sprinter 2015",
+    "Motor home Ford Transit",
+    "Motor Home Fiat Ducato 2018 equipado",
+    "Motor impecable, Gol Trend full",
+    "Motor nuevo Peugeot 206 XS",
+    "Motor hecho a nuevo, Corsa Classic",
+    "Motor 1.6 16v Gol Trend 2015 full",
 ]
 
 # Scale models and collectibles matched to searches as cars in production
@@ -310,6 +356,22 @@ class NotVehicleTests(unittest.TestCase):
             row = {"source": "facebook", "title": title, "description": None, "year": None,
                    "mileage_km": None, "price": price, "currency": "USD" if price else None, "attributes": {}}
             self.assertIsNotNone(not_vehicle.classify_row(row), title)
+
+    def test_an_engine_sold_alone_is_a_part(self):
+        # 67044 as stored: read as a Volkswagen Gol Trend, no year, no mileage,
+        # no description, and mailed to a user as a car (14/11/2026).
+        row = {"source": "facebook", "title": "Motor Volkswagen CFZ gol Trend/ Suran/ Fox", "description": None,
+               "year": None, "mileage_km": None, "price": 2_000_000, "currency": "ARS", "attributes": {}}
+        self.assertEqual(not_vehicle.classify_row(row), "título: «motor volkswagen»")
+        self.assertEqual(not_vehicle.classify("Motor CFZ gol Trend/ Suran/ Fox"), "título: «motor»")
+        # With a make the year does not matter; with only a model, one year may be a car's.
+        self.assertIsNotNone(not_vehicle.classify("Motor Chevrolet Tracker 1.2T 2021", year=2021))
+        self.assertIsNone(not_vehicle.classify("Motor 1.6 16v Gol Trend 2015 full", year=2015))
+        # Whole-car evidence still wins.
+        self.assertIsNone(not_vehicle.classify("Motor Volkswagen Gol 1.6", year=2012, mileage_km=140_000))
+        self.assertIsNone(not_vehicle.classify("Motor Volkswagen Gol 1.6 con 140.000 km"))
+        self.assertIsNone(not_vehicle.classify("Motor Volkswagen Gol 1.6", "Vendo mi auto, titular, VTV al día"))
+        self.assertIsNone(not_vehicle.classify("2012 Motor Volkswagen Gol 1.6"))
 
     def test_equipment_without_a_single_year_is_still_a_part(self):
         for title in ("Llantas Peugeot 206 2008 al 2012", "Radio Peugeot 206", "Caja automatica Peugeot 208",
