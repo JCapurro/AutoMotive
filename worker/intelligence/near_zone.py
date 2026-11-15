@@ -3,7 +3,7 @@
     a search with one zone of its own and few results
       → its make/model's listings first seen since it exists, still recent
       → the ones every hard filter passes but the zone (matching.evaluate),
-        with a known year and nothing the search asked for left unknown
+        with a known year, a version the search asked for if it names any, and nothing it asked for left unknown
       → within max_extra_km of the zone's edge: the closest one
 
 The search is never widened here: the email shows the car and its owner decides.
@@ -13,7 +13,7 @@ from __future__ import annotations
 from datetime import datetime, time, timedelta
 from typing import Any, Iterable, Mapping
 
-from intelligence.matching import evaluate, search_zones
+from intelligence.matching import evaluate, preferred_trims, search_zones, trim_matches
 from normalization.geo import haversine_km
 from normalization.not_vehicle import part_reason, toy_reason, wanted_reason
 
@@ -69,9 +69,14 @@ def confirmed(listing: Mapping[str, Any], profile: Mapping[str, Any], *, fx_rate
     2003 Gol about a listing without a year, and another about an engine.
     The year is always needed (a car without one can't be told from an older
     one), and a title that names a part, a scale model or a wanted post is out
-    whatever else the listing says."""
+    whatever else the listing says. When the search names versions the listing's
+    must be one of them even if the search isn't strict about it (15/11/2026: a
+    search for a Corolla Cross XEI or SEG was told about an XLI)."""
     title = listing.get("title")
     if listing.get("year") is None or part_reason(title) or toy_reason(title) or wanted_reason(title):
+        return False
+    wanted = preferred_trims(profile)
+    if wanted and not any(trim_matches(listing.get("trim"), w) for w in wanted):
         return False
     result = evaluate(listing, profile, fx_rate=fx_rate)
     return result.failed == ["location"] and not result.unknown

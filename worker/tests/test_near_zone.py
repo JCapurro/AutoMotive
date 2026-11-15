@@ -73,6 +73,14 @@ class PickTest(unittest.TestCase):
         self.assertIsNone(pick([listing(1, 45, transmission=None)], profile(transmission="automatic")))
         self.assertEqual(pick([listing(1, 45, mileage_km=None)])[0]["id"], 1)      # nothing asked about km
 
+    def test_a_search_that_names_versions_is_told_only_about_those(self):
+        # 15/11/2026: a Corolla Cross XEI/SEG search was told about an XLI (trim_strict is off).
+        prof = profile(trims=["XEI", "SEG"], trim_strict=False)
+        self.assertIsNone(pick([listing(1, 45, trim="XLI")], prof))
+        self.assertIsNone(pick([listing(1, 45, trim=None)], prof))
+        self.assertEqual(pick([listing(1, 45, trim="2.0 SEG CVT")], prof)[0]["id"], 1)
+        self.assertEqual(pick([listing(1, 45, trim="XLI")])[0]["id"], 1)           # no versions asked
+
     def test_a_part_a_scale_model_or_a_wanted_post_is_never_told(self):
         for title in ("Paragolpes delantero Ford Focus", "Ford Focus escala 1:24 Welly", "Busco Ford Focus 2016"):
             with self.subTest(title=title):
