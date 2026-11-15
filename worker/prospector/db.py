@@ -78,6 +78,7 @@ def paid_phones(conn: psycopg.Connection) -> frozenset[str]:
 HOOK_POOL_SQL = """
 select l.id, l.source, l.make, l.model, l.trim, l.year, l.price, l.currency, l.price_usd, l.mileage_km,
        l.url, l.title, l.location_text, l.first_seen_at, l.seller_type, l.dealer_inferred, l.description,
+       l.images, l.last_seen_at, l.price_published, l.price_published_currency,
        l.lat, l.lon, z.province_id, z.department, z.precision,
        public.comparables(l.id) as ref
   from public.listings l

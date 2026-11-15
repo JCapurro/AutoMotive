@@ -14,8 +14,11 @@ from datetime import datetime, timedelta, timezone
 from statistics import median
 from typing import Any, Callable, Iterable, Mapping
 
+from intelligence.red_flags import title_damage
 from intelligence.seller import agency_voice
+from normalization.price_check import keyword_partial
 from normalization.zone import DEFAULT_ZONE_MAP, _GBA_PARTIDOS, derive_zone, resolve_region
+from prospector.rules import fold
 from prospector.sellers import SOURCE_LABEL, Prospect
 
 PROVINCES = {
@@ -33,6 +36,12 @@ HOOK_HOURS = 72
 HOOK_MIN_PCT = 10.0       # «high» in the worker: 10 % or more below the comparables
 HOOK_MAX_PCT = 35.0       # the worker flags 50 % as suspicious; past 35 % a hook is more often a typo than a deal
 HOOK_MIN_N = 8            # fewer comparables than this is not a credible «X % abajo de N parecidos»
+# Past 25 % a discount needs more proof before Juan offers the car (15/11/2026).
+HOOK_DEEP_PCT = 25.0
+HOOK_DEEP_MIN_N = 20
+HOOK_DEEP_MIN_PHOTOS = 4
+HOOK_MIN_PHOTOS = 2
+HOOK_CHECKS_PER_PROSPECT = 5    # listing pages read to find 2 hooks still published
 DEMAND_RADIUS_KM = 60
 DEMAND_MIN = 3            # below this a count could point at a person
 POSITION_MIN_N = 5
@@ -149,6 +158,8 @@ def stock_facts(prospect: Prospect, now: datetime) -> dict[str, Any]:
         "avisos_activos": len(rows),
         "fuentes": [SOURCE_LABEL.get(s, s) for s in prospect.sources],
         "modelos_principales": [{"modelo": m, "avisos": n} for m, n in models.most_common(5)],
+        # The stock fact of a message: the total, or the models they have several of. One car of a model is not one.
+        "modelos_con_varios": [{"modelo": m, "avisos": n} for m, n in models.most_common(5) if n >= 2],
         "anios": {"desde": min(years), "hasta": max(years)} if years else None,
         "precios_publicados": prices,
         "antiguedad": {
@@ -175,7 +186,7 @@ def hook_candidates(pool: Iterable[Mapping[str, Any]], prospect: Prospect, zone:
         n, diff = ref.get("n") or 0, ref.get("diff_pct")
         if diff is None or n < HOOK_MIN_N or not (HOOK_MIN_PCT <= diff < HOOK_MAX_PCT):
             continue
-        if placeholder_price(row.get("price")):
+        if placeholder_price(row.get("price")) or hook_risk(row, ref):
             continue
         if agency_voice(row.get("description")):
             continue          # a «particular» that writes like an agency (seller_for_preference)
@@ -195,6 +206,51 @@ def hook_candidates(pool: Iterable[Mapping[str, Any]], prospect: Prospect, zone:
         rank = tier * 100 + min(diff, 30) + min(n, 40) / 4
         out.append({"row": row, "tier": tier, "rank": rank})
     return sorted(out, key=lambda c: -c["rank"])
+
+
+# The published price is not the total: down payment, installments, «entrega».
+_PARTIAL_TEXT = re.compile(r"\b(anticip\w*|financiad[oa]s?|financiacion|financio|cuotas?|entrega|"
+                           r"tomo (?:tu )?usado|permuta mas|saldo)\b")
+_PARTIAL_DESC = re.compile(r"\b(anticipo|entrega de \$|entrega minima|\d+ cuotas|cuotas fijas|saldo en cuotas|"
+                           r"financiado en|precio de contado)\b")
+# Damaged or not runnable: what the worker reads in titles plus the usual phrasings in descriptions.
+_DAMAGE_TEXT = re.compile(r"\b(chocad[oa]s?|siniestrad[oa]s?|granizad[oa]s?|volcad[oa]s?|incendiad[oa]s?|"
+                          r"para repuestos?|por partes|sin motor|motor fundido|a reparar|para reparar|para arreglar|"
+                          r"con detalles|no arranca|sin papeles|baja definitiva|desarme)\b")
+_NEGATED = re.compile(r"\b(no|sin|nunca|jamas|cero)\s+(?:\w+\s+)?$")
+
+
+def _photos(row: Mapping[str, Any]) -> int:
+    images = row.get("images")
+    return len(images) if isinstance(images, list) else 0
+
+
+def _damaged(text: str) -> bool:
+    return any(not _NEGATED.search(text[:m.start()]) for m in _DAMAGE_TEXT.finditer(text))
+
+
+def hook_risk(row: Mapping[str, Any], ref: Mapping[str, Any]) -> str | None:
+    """Why the discount of a hook candidate may not be real, or None."""
+    title, desc = fold(row.get("title") or ""), fold(row.get("description") or "")
+    if keyword_partial(row.get("title"), row.get("description")) or _PARTIAL_TEXT.search(title) \
+            or _PARTIAL_DESC.search(desc):
+        return "anticipo o cuotas"
+    if title_damage(row.get("title")) or _damaged(title) or _damaged(desc):
+        return "daño"
+    photos = _photos(row)
+    if photos < HOOK_MIN_PHOTOS:
+        return "una sola foto"
+    price, cur = float(row.get("price") or 0), (row.get("currency") or "").upper()
+    if (cur == "ARS" and price < 1_000_000) or (cur == "USD" and not 1_000 <= price <= 200_000):
+        return "precio que no cierra con la moneda"
+    published, pub_cur = row.get("price_published"), (row.get("price_published_currency") or "").upper()
+    if published and pub_cur and (pub_cur != cur or abs(float(published) - price) > 0.05 * price):
+        return "el precio publicado y el de la descripción no coinciden"
+    if (ref.get("diff_pct") or 0) >= HOOK_DEEP_PCT:
+        if (ref.get("n") or 0) < HOOK_DEEP_MIN_N or photos < HOOK_DEEP_MIN_PHOTOS \
+                or len(desc) < 40 or not row.get("mileage_km"):
+            return "descuento de más del 25 % sin respaldo suficiente"
+    return None
 
 
 def placeholder_price(price) -> bool:
@@ -237,6 +293,7 @@ def hook_fact(candidate: Mapping[str, Any], now: datetime, slot: str) -> dict[st
         "km": row.get("mileage_km"),
         "url": row.get("url"),
         "cercania": {3: "mismo partido o ciudad", 2: "misma provincia", 1: "misma región"}[candidate["tier"]],
+        **({"verificado": candidate["verified"]} if candidate.get("verified") else {}),
     }
 
 
@@ -301,14 +358,17 @@ def demand_facts(prospect: Prospect, zone_rows: list[Mapping[str, Any]], lookups
 def build(prospect: Prospect, *, pool: list[Mapping[str, Any]], zone_map: Mapping[str, Any] | None,
           lookups: Lookups, now: datetime | None = None, step: str = "primero",
           exclude_hooks: Iterable[int] = (), previous: list[dict[str, Any]] | None = None,
-          first_name: str | None = None) -> dict[str, Any]:
+          first_name: str | None = None, alive: Callable[[Mapping[str, Any]], Any] | None = None) -> dict[str, Any]:
+    """alive(row) gives a prospector.alive.Check: with it, only hooks whose listing is still
+    published (read now, or seen by the collector lately) are kept."""
     now = now or datetime.now(timezone.utc)
     rows = prospect.listings
     zone = zone_of(rows, zone_map)
-    hooks = hook_candidates(pool, prospect, zone, zone_map, exclude=exclude_hooks)
+    hooks = live_hooks(hook_candidates(pool, prospect, zone, zone_map, exclude=exclude_hooks), alive)
     stopped = lookups.stopped([(s.source, s.name) for s in prospect.sellers])
     facts: dict[str, Any] = {
         "paso": step,
+        "saludo": greeting(prospect, first_name),
         "prospecto": {
             "tipo": prospect.kind,
             "nombre_del_perfil": prospect.display_name,
@@ -326,6 +386,51 @@ def build(prospect: Prospect, *, pool: list[Mapping[str, Any]], zone_map: Mappin
     if previous:
         facts["mensajes_anteriores"] = previous
     return facts
+
+
+def live_hooks(candidates: list[dict[str, Any]], alive: Callable[[Mapping[str, Any]], Any] | None,
+               *, keep: int = 2) -> list[dict[str, Any]]:
+    """The best `keep` candidates whose listing is still published, each with when and how
+    that was checked. Without `alive` (tests, reports) the first `keep` as they are."""
+    if alive is None:
+        return candidates[:keep]
+    out: list[dict[str, Any]] = []
+    for c in candidates[:HOOK_CHECKS_PER_PROSPECT]:
+        check = alive(c["row"])
+        if check.state != "online":
+            continue
+        out.append({**c, "verified": {"como": check.how, "en": check.at.isoformat()}})
+        if len(out) == keep:
+            break
+    return out
+
+
+# Common Argentine first names: a business named «Julio Quiroga Automotores» is greeted
+# «Hola, Julio»; «Favale Motors» is a surname, so it gets a plain greeting.
+GIVEN_NAMES = frozenset("""
+adrian agustin alberto alejandro alejandra alfredo alicia ana andrea andres angel antonio ariel armando
+beatriz bernardo carina carla carlos carolina cecilia cesar claudia claudio cristian cristina damian
+daniel daniela dario david diego eduardo elena emanuel emiliano enrique ernesto esteban eugenia ezequiel
+fabian fabio facundo federico fernanda fernando florencia franco gabriel gabriela gaston gerardo german
+gisela gonzalo graciela guillermo gustavo hector hernan horacio hugo ignacio ivan javier jesus jonathan jorge
+jose juan julian juliana julio laura leandro leonardo lorena lucas lucia luciano luis luisa marcela marcelo
+marcos maria mariana mariano mario martin matias mauricio maximiliano melina miguel milagros mirta monica
+nahuel natalia nestor nicolas norberto oscar osvaldo pablo patricia patricio paula pedro raul ramiro ramon
+ricardo roberto rodolfo rodrigo romina ruben sandra santiago sebastian sergio silvana silvia sofia susana
+tomas valeria vanesa veronica victor walter
+""".split())
+_CAPITALIZED = re.compile(r"[A-ZÁÉÍÓÚÑ][a-záéíóúñü]+")
+
+
+def greeting(prospect: Prospect, first_name: str | None) -> str:
+    """The message's first line, fixed in code so it never sounds like a mail merge."""
+    if prospect.kind == "persona":
+        return f"Hola, {first_name}." if first_name else "Hola, ¿cómo estás?"
+    words = prospect.display_name.split()
+    if len(words) >= 2 and fold(words[0]) in GIVEN_NAMES and _CAPITALIZED.fullmatch(words[0]) \
+            and _CAPITALIZED.fullmatch(words[1]):
+        return f"Hola, {words[0]}."
+    return "Hola, ¿cómo andan?"
 
 
 def has_hook(facts: Mapping[str, Any]) -> bool:

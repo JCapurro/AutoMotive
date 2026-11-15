@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  artDay, buildBoard, FOUNDER_LINK, hookOf, type MessageRow, phoneLabel, type ProspectRow, REPLIES, replyRates, waLink,
+  artDay, buildBoard, FOUNDER_LINK, hookOf, hoursSince, type MessageRow, phoneLabel, type ProspectRow, REPLIES, replyRates, waLink,
 } from "@/lib/admin-prospecting";
 
 const prospect = (over: Partial<ProspectRow> = {}): ProspectRow => ({
@@ -40,9 +40,16 @@ describe("replies", () => {
   it("reads the hook the final text offers, not the first one", () => {
     const facts = { ganchos: [{ auto: "Focus 2009", precio_publicado: "$7.500.000", url: "u1" },
       { auto: "Hilux 2013", precio_publicado: "US$ 16.800", url: "u2" }] };
-    expect(hookOf({ facts, final_text: "Salió una Hilux a US$ 16.800. ¿Te la paso?" })).toEqual({ car: "Hilux 2013", url: "u2" });
-    expect(hookOf({ facts, final_text: "Hay 7 búsquedas de Gol Trend. ¿Te cuento?" })).toEqual({ car: null, url: null });
-    expect(hookOf(null)).toEqual({ car: null, url: null });
+    expect(hookOf({ facts, final_text: "Salió una Hilux a US$ 16.800. ¿Te la paso?" })).toMatchObject({ car: "Hilux 2013", url: "u2" });
+    expect(hookOf({ facts, final_text: "Hay 7 búsquedas de Gol Trend. ¿Te cuento?" })).toMatchObject({ car: null, url: null });
+    expect(hookOf(null)).toMatchObject({ car: null, url: null });
+  });
+  it("carries when the hook was checked, and asks for a recheck past 24 h", () => {
+    const facts = { ganchos: [{ auto: "Etios", precio_publicado: "$11.900.000", url: "u", verificado: { en: "2026-11-15T10:00:00Z", como: "pagina" } }] };
+    const h = hookOf({ facts, final_text: "Un Etios a $11.900.000. ¿Te lo paso?" });
+    expect(h).toMatchObject({ checkedAt: "2026-11-15T10:00:00Z", checkedBy: "pagina" });
+    expect(hoursSince(h.checkedAt, new Date("2026-11-16T12:30:00Z"))).toBe(26);
+    expect(hoursSince(null, new Date())).toBeNull();
   });
 });
 

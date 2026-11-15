@@ -34,10 +34,10 @@ Cada mensaje es para una persona distinta: no arranques todos con la misma fórm
 Reglas, todas obligatorias:
 1. Castellano rioplatense con voseo ("tenés", "querés", "mirá"), tono de WhatsApp entre personas: frases cortas, nada de lenguaje de folleto, nada de "estimado", "le escribo", "potenciar", "solución", "herramienta innovadora".
 2. Máximo 420 caracteres en total, en 2 o 3 párrafos cortos separados por una línea en blanco.
-3. Saludo con el nombre de pila (campo nombre_de_pila) o con el nombre del negocio escrito como lo diría una persona ("AUTOS PEREZ SRL" → "Autos Perez"; nunca un apodo con números ni un nombre que no esté en los hechos). Si no hay ninguno que suene natural, saludá con "Hola, buen día." (sin "¿qué tal?": la única pregunta va al final).
+3. El mensaje arranca EXACTAMENTE con el campo "saludo" de los hechos ("Hola, Julio.", "Hola, ¿cómo andan?"), sin cambiarlo y sin agregarle el nombre del negocio. La pregunta del saludo no cuenta: la del final es la única otra.
 4. Juan se presenta en una línea: "Soy Juan, armé Ese Auto" y, si entra, media frase de qué hace.
-5. Un dato concreto de SU stock (de "stock", "posicion_de_precios" o "dejaron_de_publicarse") y un gancho concreto.
-6. Termina con UNA sola pregunta, fácil de contestar con "sí" o con una palabra. Es el único signo de pregunta del mensaje y va al final.
+5. Un dato concreto de SU stock (de "stock", "posicion_de_precios" o "dejaron_de_publicarse") y un gancho concreto. El dato de stock es el total de avisos ("vi que tenés 14 autos publicados") o los modelos de "modelos_con_varios" ("varios Gol Trend y Onix"); nunca un modelo del que tiene un solo aviso ("vi que tenés un Gol Trend" es flojo para una agencia). El auto del gancho puede ser de un modelo del que tiene uno solo: el dato de stock va aparte.
+6. Termina con UNA sola pregunta, fácil de contestar con "sí" o con una palabra. Fuera del saludo, es el único signo de pregunta del mensaje y va al final.
 7. Sin links, sin el precio del plan ni ningún precio de Ese Auto, sin la palabra "IA" ni "inteligencia artificial", con 0 o 1 emoji.
 8. Nunca "vendido" ni "se vendió": se dice "dejó de publicarse". Nada de prometer ganancias, márgenes ni "negocio seguro". Los precios son "publicados", no de venta.
 9. TODO número que escribas (precios, porcentajes, cantidades, días, años, km) sale tal cual del JSON de hechos. No sumes, no restes, no redondees distinto, no inventes. Copiá los precios con el formato del JSON ("$14.500.000", "US$ 12.000"). Si un dato no está, no lo uses.
@@ -54,7 +54,7 @@ Por cada prospecto recibís los hechos (JSON verificado) y 2 variantes, cada una
 
 Revisá cada variante, en este orden:
 1. Cotejá CADA número y CADA afirmación contra los hechos: precios (formato y valor exacto), porcentajes, cantidades de comparables, días, años, modelos, versiones, lugar, fuente, que el gancho sea de un particular y de las últimas horas. Una afirmación que los hechos no sostienen ("está muy barato", "se va a vender rápido", "tus autos están caros" sin el dato) es un error.
-2. Reglas: voseo rioplatense; máximo 450 caracteres y 2 o 3 párrafos; saludo con el nombre de pila o el del negocio tal como figura en los hechos (si usa un nombre que no está, es error); "Soy Juan, armé Ese Auto"; un dato de SU stock y un gancho concreto; una sola pregunta, al final, fácil de contestar; sin links, sin precio del plan, sin "IA", 0 o 1 emoji; nunca "vendido" (se dice "dejó de publicarse"); nada de prometer ganancias.
+2. Reglas: voseo rioplatense; máximo 450 caracteres y 2 o 3 párrafos; arranca exactamente con el "saludo" de los hechos (su pregunta no cuenta); el dato de stock es el total o modelos de los que tiene varios, nunca "tenés un X"; "Soy Juan, armé Ese Auto"; un dato de SU stock y un gancho concreto; una sola pregunta, al final, fácil de contestar; sin links, sin precio del plan, sin "IA", 0 o 1 emoji; nunca "vendido" (se dice "dejó de publicarse"); nada de prometer ganancias.
 3. Tono: ¿lo escribiría una persona en WhatsApp? ¿Se entiende en una lectura rápida? ¿Suena a spam, a folleto o a robot? ¿Es respetuoso sin ser servil? ¿El gancho es interesante para ESTE vendedor?
 
 Decisión por prospecto:
@@ -144,7 +144,7 @@ def _facts_for_model(facts: dict[str, Any]) -> dict[str, Any]:
     """The facts without what the writer must never echo (URLs, ids)."""
     def strip(value: Any) -> Any:
         if isinstance(value, dict):
-            return {k: strip(v) for k, v in value.items() if k not in ("url", "listing_id")}
+            return {k: strip(v) for k, v in value.items() if k not in ("url", "listing_id", "verificado")}
         if isinstance(value, list):
             return [strip(v) for v in value]
         return value

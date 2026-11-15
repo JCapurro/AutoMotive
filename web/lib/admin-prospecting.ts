@@ -182,11 +182,28 @@ const spaces = (s: string) => s.replace(/\s+/g, " ");
 
 /** The hook car the message actually offers: the one whose price is in its final text
  *  (Juan may have edited it or picked the other variant). None when it offers no car. */
-export function hookOf(m: Pick<MessageRow, "facts" | "final_text"> | null | undefined): { car: string | null; url: string | null } {
+export type Hook = { car: string | null; url: string | null; checkedAt: string | null; checkedBy: "pagina" | "colector" | null };
+
+export function hookOf(m: Pick<MessageRow, "facts" | "final_text"> | null | undefined): Hook {
   const hooks = Array.isArray(m?.facts?.ganchos) ? (m!.facts.ganchos as Record<string, unknown>[]) : [];
   const text = spaces(m?.final_text ?? "");
   const h = hooks.find((g) => typeof g.precio_publicado === "string" && text.includes(spaces(g.precio_publicado)));
-  return { car: typeof h?.auto === "string" ? h.auto : null, url: typeof h?.url === "string" ? h.url : null };
+  const v = (h?.verificado ?? null) as { en?: unknown; como?: unknown } | null;
+  return {
+    car: typeof h?.auto === "string" ? h.auto : null,
+    url: typeof h?.url === "string" ? h.url : null,
+    checkedAt: typeof v?.en === "string" ? v.en : null,
+    checkedBy: v?.como === "pagina" || v?.como === "colector" ? v.como : null,
+  };
+}
+
+/** Past this, the hook car may be gone: Juan opens the listing before sending. */
+export const HOOK_RECHECK_HOURS = 24;
+
+export function hoursSince(iso: string | null, now: Date): number | null {
+  if (!iso) return null;
+  const t = Date.parse(iso);
+  return Number.isNaN(t) ? null : Math.max(0, Math.floor((now.getTime() - t) / 3_600_000));
 }
 
 // ---------------------------------------------------------------------------

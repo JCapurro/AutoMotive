@@ -189,6 +189,7 @@ def test_shared_phones():
 # ----------------------------------------------------------------------------- facts
 
 def hook_row(i, *, diff=17.0, n=42, dept="Rosario", prov="82", price=11_900_000, description="", **kw):
+    kw.setdefault("images", ["a", "b", "c", "d", "e"])
     r = row(i, seller_name="Particular", description=description, province_id=prov, department=dept,
             first_seen_at=NOW - timedelta(hours=5), price=price, **kw)
     r["ref"] = {"n": n, "diff_pct": diff}
@@ -220,7 +221,7 @@ def test_hook_candidates(change, ok):
 def test_hooks_closer_first_and_exclusions():
     p = prospect_rosario()
     zone = F.zone_of(p.listings, None)
-    pool = [hook_row(100, dept="Santa Fe", diff=30), hook_row(101, dept="Rosario", diff=12)]
+    pool = [hook_row(100, dept="Santa Fe", diff=22), hook_row(101, dept="Rosario", diff=12)]
     got = F.hook_candidates(pool, p, zone, None)
     assert [c["row"]["id"] for c in got] == [101, 100]
     assert [c["row"]["id"] for c in F.hook_candidates(pool, p, zone, None, exclude=[101])] == [100]
@@ -405,3 +406,88 @@ def test_hook_used_is_the_car_the_text_offers():
     assert writer.hook_used("Hay 7 búsquedas de Gol Trend cerca. ¿Te cuento?", hooks) is None
     job = writer.Job("p1", {"ganchos": hooks}, variants=[{"tipo_gancho": "oportunidad", "texto": text}], chosen=0)
     assert job.hook["auto"] == "Toyota Hilux DX 2013"
+
+
+@pytest.mark.parametrize("change, reason", [
+    ({}, None),
+    ({"title": "Toyota Etios 2015 anticipo"}, "anticipo o cuotas"),
+    ({"description": "Entrega de $3.000.000 y el resto en 12 cuotas"}, "anticipo o cuotas"),
+    ({"title": "Etios 2015 -chocado-"}, "daño"),
+    ({"description": "Se vende para repuestos, sin motor"}, "daño"),
+    ({"description": "Nunca chocado, impecable"}, None),
+    ({"images": ["solo"]}, "una sola foto"),
+    ({"price": 11_900, "currency": "ARS"}, "precio que no cierra con la moneda"),
+    ({"price_published": 9_000, "price_published_currency": "USD"}, "el precio publicado y el de la descripción no coinciden"),
+])
+def test_hook_risk(change, reason):
+    from prospector import facts as F
+    r = hook_row(1, description="Toyota Etios 2015 único dueño, service al día, listo para transferir", mileage_km=90_000)
+    r.update(change)
+    assert F.hook_risk(r, r["ref"]) == reason
+
+
+def test_a_deep_discount_needs_more_proof():
+    from prospector import facts as F
+    r = hook_row(1, diff=28.0, n=124, description="Corsa 2007 impecable, papeles al día, listo para transferir",
+                 mileage_km=150_000)
+    assert F.hook_risk(r, r["ref"]) is None
+    assert F.hook_risk({**r, "mileage_km": None}, r["ref"]) == "descuento de más del 25 % sin respaldo suficiente"
+    assert F.hook_risk(r, {"n": 12, "diff_pct": 28.0}) == "descuento de más del 25 % sin respaldo suficiente"
+
+
+def test_only_hooks_still_published_are_kept():
+    from prospector import facts as F
+    from prospector.alive import Check
+    cands = [{"row": {"id": i}, "tier": 3, "rank": 100 - i} for i in range(4)]
+    states = {0: "gone", 1: "online", 2: "unknown", 3: "online"}
+    got = F.live_hooks(cands, lambda r: Check(states[r["id"]], "pagina", NOW))
+    assert [c["row"]["id"] for c in got] == [1, 3]
+    assert got[0]["verified"] == {"como": "pagina", "en": NOW.isoformat()}
+
+
+def test_alive_reads_the_page_and_never_takes_a_failed_read_as_gone():
+    from prospector.alive import Checker
+
+    class Resp:
+        def __init__(self, status, text=""):
+            self.status_code, self.text, self.url = status, text, "https://x"
+
+    seen = []
+    def get(url, follow):
+        seen.append(url)
+        if "boom" in url:
+            raise RuntimeError("timeout")
+        return Resp(404)
+    c = Checker(get=get, now=lambda: NOW, sleep=lambda s: None)
+    assert c.check({"id": 1, "source": "mercadolibre", "url": "https://ml/1"}).state == "gone"
+    assert c.check({"id": 1, "source": "mercadolibre", "url": "https://ml/1"}).state == "gone"   # cached
+    assert c.check({"id": 2, "source": "mercadolibre", "url": "https://ml/boom"}).state == "unknown"
+    assert len(seen) == 2
+    fb = {"id": 3, "source": "facebook", "url": "https://fb/3"}
+    assert c.check({**fb, "last_seen_at": NOW - timedelta(hours=3)}).state == "online"
+    assert c.check({**fb, "id": 4, "last_seen_at": NOW - timedelta(hours=30)}).state == "unknown"
+    assert len(seen) == 2                      # Facebook is never fetched
+
+
+@pytest.mark.parametrize("kind, name, first, expected", [
+    ("agencia", "Julio Quiroga Automotores", None, "Hola, Julio."),
+    ("agencia", "Favale Motors", None, "Hola, ¿cómo andan?"),
+    ("agencia", "ALL MOTORS", None, "Hola, ¿cómo andan?"),
+    ("agencia", "Lasho Lashocito", None, "Hola, ¿cómo andan?"),
+    ("persona", "Marta Gómez", "Marta", "Hola, Marta."),
+    ("persona", "autos_rosario22", None, "Hola, ¿cómo estás?"),
+])
+def test_greeting(kind, name, first, expected):
+    from prospector import facts as F
+    p = Prospect([Seller("facebook", name, [row(i, name=name) for i in range(3)])], kind=kind)
+    assert F.greeting(p, first) == expected
+
+
+def test_rules_greeting_and_one_car_stock_fact():
+    from prospector import rules
+    facts = {"saludo": "Hola, ¿cómo andan?", "stock": {"avisos_activos": 14}}
+    ok = "Hola, ¿cómo andan? Soy Juan, armé Ese Auto.\n\nVi que tienen 14 autos publicados. ¿Les paso uno?"
+    assert rules.check(ok, facts) == []
+    assert any("saludo" in p for p in rules.check(ok.replace("¿cómo andan?", "Favale Motors."), facts))
+    weak = "Hola, ¿cómo andan? Soy Juan, armé Ese Auto.\n\nVi que tienen un Gol Trend. ¿Les paso uno?"
+    assert any("un solo auto" in p for p in rules.check(weak, facts))

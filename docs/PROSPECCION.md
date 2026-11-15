@@ -41,12 +41,31 @@ Criteria (Juan, 15/11/2026):
      below comparables (`public.comparables`), with no placeholder prices;
    - their listings that stopped being published;
    - aggregate search demand near them.
+   A hook must also look like a real total price:
+   - no down payment, installments or «entrega»;
+   - no damage («chocado», «para repuestos», «a reparar», «con detalles»...);
+   - at least 2 photos;
+   - a price that fits its currency and matches the description.
+   Past 25 % below comparables it also needs 20+ comparables, 4+ photos, a description and km.
+   Before a hook goes into a message, its listing page is read and a removed one is dropped:
+   - Mercado Libre, deRuedas and RosarioGarage are read with the collectors' `parse_detail`, one
+     page every 4 s.
+   - Facebook is never fetched: there a hook counts only if the collector saw the card in the
+     last 12 h.
+   - The card shows when that was checked and, past 24 h, asks Juan to open the listing before
+     sending.
    The zone is derived from lat/lon with `normalization.zone`, because `listing_zones` has not
    been filled since 09/11/2026.
 4. **Writing** (`writer.py`). It runs `claude -p` with `claude-opus-5-5` at high effort, in
    batches of 6.
    - It writes 2 variants, each tagged with a hook type: oportunidad, stock_viejo,
      precio_vs_zona, demanda or dejaron_de_publicarse.
+   - The greeting is fixed in code (`saludo`):
+     - a person gets their first name;
+     - a business whose name starts with a first name and surname gets that first name
+       («Hola, Julio.»);
+     - any other business gets «Hola, ¿cómo andan?», never the business name.
+   - The stock fact is the total or the models they have several of, never «tenés un Gol Trend».
    - Rules: voseo, about 450 characters, «Soy Juan, armé Ese Auto», one fact about their stock
      and one hook, one closing question, no links, no price, no «IA», no «vendido», and every
      number taken from the facts.

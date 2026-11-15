@@ -8,7 +8,7 @@ import { Pill } from "@/components/admin/ui";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  greetingName, HOOK_LABEL, type MessageRow, phoneLabel, type ProspectRow, REGION_LABEL, REPLIES,
+  greetingName, type Hook, HOOK_LABEL, HOOK_RECHECK_HOURS, hookOf, hoursSince, type MessageRow, phoneLabel, type ProspectRow, REGION_LABEL, REPLIES,
   SOURCE_LABEL, STATUS_LABEL, STEP_LABEL, waLink,
 } from "@/lib/admin-prospecting";
 
@@ -98,6 +98,24 @@ function FactsView({ facts }: { facts: Fact }) {
 }
 
 /** A message ready to send: editable, the other variant, the facts behind it, WhatsApp and the states. */
+/** The car the text offers, and how fresh the proof is that it is still published. */
+function HookLine({ hook }: { hook: Hook }) {
+  if (!hook.url) return null;
+  const hours = hoursSince(hook.checkedAt, new Date());
+  const stale = hours === null || hours > HOOK_RECHECK_HOURS;
+  const how = hook.checkedBy === "colector" ? "visto por el colector" : "verificado en su aviso";
+  return (
+    <div className={`rounded-lg p-2 text-xs ${stale ? "bg-amber-500/10 text-amber-900 dark:text-amber-200" : "text-muted-foreground"}`}>
+      <a href={hook.url} target="_blank" rel="noreferrer" className="font-medium underline underline-offset-2">{hook.car ?? "Auto del gancho"}</a>
+      {" · "}
+      <span suppressHydrationWarning>
+        {hours === null ? "sin verificar que siga publicado" : hours === 0 ? `${how} hace menos de 1 h` : `${how} hace ${hours} h`}
+      </span>
+      {stale ? <span className="block">Abrí el aviso y fijate que siga publicado antes de mandarlo.</span> : null}
+    </div>
+  );
+}
+
 export function MessageCard({ message, prospect }: { message: MessageRow; prospect: ProspectRow }) {
   const saved = message.final_text ?? "";
   const [text, setText] = useState(saved);
@@ -120,6 +138,7 @@ export function MessageCard({ message, prospect }: { message: MessageRow; prospe
       />
       <Textarea value={text} onChange={(e) => setText(e.target.value)} rows={8} className="text-sm" aria-label={`Mensaje para ${prospect.display_name}`} />
       <p className={`text-xs ${text.length > 450 ? "text-destructive" : "text-muted-foreground"}`}>{text.length} caracteres</p>
+      <HookLine hook={hookOf({ facts: message.facts, final_text: text })} />
       <div className="flex flex-wrap gap-2">
         {link ? (
           <Button asChild>

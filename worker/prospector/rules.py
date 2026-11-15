@@ -91,15 +91,26 @@ def numbers_in(text: str) -> list[str]:
     return found
 
 
+# «Vi que tenés un Gol Trend»: weak for a dealer with 8 to 60 cars.
+_ONE_CAR = re.compile(r"\b(vi|veo) que (tenes|tienen)( publicad[oa]s?)? (un|una|1) ")
+
+
 def check(text: str, facts: Any, *, extra_numbers: Iterable[str] = ()) -> list[str]:
     """What is wrong with a message, in Spanish for the log and the page; [] when it passes."""
     problems: list[str] = []
     body = (text or "").strip()
     if not body:
         return ["mensaje vacío"]
-    if len(body) > MAX_CHARS:
-        problems.append(f"tiene {len(body)} caracteres (máximo {MAX_CHARS})")
-    paragraphs = [p for p in re.split(r"\n\s*\n", body) if p.strip()]
+    full = body
+    hello = facts.get("saludo") if isinstance(facts, dict) else None
+    if hello:
+        if not fold(body).startswith(fold(hello)):
+            problems.append(f"no arranca con el saludo de los hechos («{hello}»)")
+        else:
+            body = body[len(hello):].strip()      # the «¿cómo andan?» of the greeting is not the question
+    if len(full) > MAX_CHARS:
+        problems.append(f"tiene {len(full)} caracteres (máximo {MAX_CHARS})")
+    paragraphs = [p for p in re.split(r"\n\s*\n", full) if p.strip()]
     if len(paragraphs) > MAX_PARAGRAPHS:
         problems.append(f"tiene {len(paragraphs)} párrafos (máximo {MAX_PARAGRAPHS})")
     if _LINK.search(body):
@@ -120,6 +131,8 @@ def check(text: str, facts: Any, *, extra_numbers: Iterable[str] = ()) -> list[s
         problems.append("la pregunta no va al final")
     if "soy juan" not in folded:
         problems.append("Juan no se presenta")
+    if _ONE_CAR.search(folded):
+        problems.append("el dato de su stock es un solo auto: usá el total o un modelo del que tiene varios")
     allowed = allowed_numbers(facts) | set(extra_numbers)
     stray = [n for n in numbers_in(body) if n not in allowed]
     if stray:

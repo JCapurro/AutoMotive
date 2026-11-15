@@ -19,7 +19,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable
 
-from prospector import claude, db, facts as F, lookup, sellers, writer
+from prospector import alive, claude, db, facts as F, lookup, sellers, writer
 from prospector.sellers import Prospect
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -263,13 +263,14 @@ def _run(args) -> int:
     log(f"{len(ready)} con WhatsApp, {len(missing)} sin contacto")
 
     looks = lookups_for(conn)
+    checker = alive.Checker()          # each hook's listing page, read once, a few seconds apart
     examples = [dict(r) for r in db.replied_examples(conn)] if live else []
     jobs: list[writer.Job] = []
     meta: dict[str, dict[str, Any]] = {}
     taken: set[int] = set()          # one hook car per batch: two dealers never get the same one
     for i, c in enumerate(ready):
         fact = F.build(c.prospect, pool=pool, zone_map=zone_map, lookups=looks, now=now,
-                       first_name=sellers.first_name(c.prospect), exclude_hooks=taken)
+                       first_name=sellers.first_name(c.prospect), exclude_hooks=taken, alive=checker.check)
         taken.update(h["listing_id"] for h in fact["ganchos"])   # the writer may use either
         pid = f"p{i + 1}"
         jobs.append(writer.Job(pid, fact))
@@ -289,7 +290,7 @@ def _run(args) -> int:
             fact = F.build(p, pool=pool, zone_map=zone_map, lookups=looks, now=now,
                            step="seguimiento" if step == "followup" else "ultimo",
                            exclude_hooks=db.used_hooks(conn, row["id"]), previous=previous,
-                           first_name=row.get("first_name"))
+                           first_name=row.get("first_name"), alive=checker.check)
             pid = f"s{len(jobs) + 1}"
             jobs.append(writer.Job(pid, fact))
             p.phone = row["phone"]
