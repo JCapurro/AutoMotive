@@ -10,6 +10,7 @@ export const ADMIN_SECTIONS = [
   { href: "/admin/metrics", label: "Métricas" },
   { href: "/admin/notifications", label: "Notificaciones" },
   { href: "/admin/matches", label: "Matches" },
+  { href: "/admin/matches/audit", label: "Auditoría" },
   { href: "/admin/users", label: "Usuarios" },
   { href: "/admin/billing", label: "Cobros" },
   { href: "/admin/searches", label: "Búsquedas" },
