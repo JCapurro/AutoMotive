@@ -13,6 +13,18 @@ export type Database = {
         Update: never
         Relationships: []
       }
+      admin_unmet_demand: {
+        Row: { search_profile_id: number; user_id: string; make: string | null; model: string | null; zone_label: string | null; result_count: number; market: number; market_in_zone: number; relaxed_zone: number; relaxed_price: number; relaxed_trim: number; relaxed_year: number; cause: string; computed_at: string }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
+      admin_unmet_demand_run: {
+        Row: { singleton: boolean; computed_at: string; duration_ms: number; searches: number; skipped_model_less: number; max_results: number; min_age_hours: number; cap_enforced: boolean; hidden_by_level: Json; hidden_accounts: number }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
       admin_search_observations: {
         Row: { search_profile_id: number; user_id: string; search_created_at: string; first_good_at: string | null }
         Insert: never

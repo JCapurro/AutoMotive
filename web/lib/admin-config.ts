@@ -126,6 +126,16 @@ export const ZoneNoticeConfigInput = z.object({ enabled: z.boolean() }).passthro
 /** Portada: app_config.landing_hero, the new hero's switch and the share of visitors who see it (lib/landing-hero.ts). */
 export const LANDING_HERO_CONFIG_MESSAGE = "landing_hero necesita enabled (true/false), share (entero de 0 a 100) y events_per_minute (entero de 0 a 10000).";
 export const LandingHeroConfigInput = z.object({ enabled: z.boolean(), share: z.number().int().min(0).max(100), events_per_minute: z.number().int().min(0).max(10000) }).passthrough();
+/** Demanda insatisfecha: app_config.unmet_demand, the nightly job behind /admin/demand (worker/intelligence/unmet_demand.py). */
+export const UNMET_DEMAND_CONFIG_MESSAGE = "unmet_demand necesita enabled (true/false); max_results (0 a 1000), min_age_hours (0 a 720), batch_size (1 a 1000), pause_seconds (0 a 60) y hour (HH:MM, hora argentina) son opcionales.";
+export const UnmetDemandConfigInput = z.object({
+  enabled: z.boolean(),
+  max_results: z.number().int().min(0).max(1000).optional(),
+  min_age_hours: z.number().min(0).max(720).optional(),
+  batch_size: z.number().int().min(1).max(1000).optional(),
+  pause_seconds: z.number().min(0).max(60).optional(),
+  hour: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional(),
+}).passthrough();
 /** Prueba gratis: app_config.trial_reserve, room in the trial for new listings (lib/trial-reserve.ts). */
 export const TRIAL_RESERVE_CONFIG_MESSAGE = "trial_reserve necesita enabled (true/false) y backfill_max (entero de 0 a 1000).";
 export const TrialReserveConfigInput = z.object({ enabled: z.boolean(), backfill_max: z.number().int().min(0).max(1000) }).passthrough();
@@ -403,6 +413,7 @@ export function validateConfigChange(key: string, value: unknown, current: unkno
   if (key === "dealer_margin" && !DealerMarginInput.safeParse(value).success) return DEALER_MARGIN_MESSAGE;
   if (key === "sell_intent" && !SellIntentConfigInput.safeParse(value).success) return SELL_INTENT_CONFIG_MESSAGE;
   if (key === "zone_notice" && !ZoneNoticeConfigInput.safeParse(value).success) return ZONE_NOTICE_CONFIG_MESSAGE;
+  if (key === "unmet_demand" && !UnmetDemandConfigInput.safeParse(value).success) return UNMET_DEMAND_CONFIG_MESSAGE;
   if (key === "trial_reserve" && !TrialReserveConfigInput.safeParse(value).success) return TRIAL_RESERVE_CONFIG_MESSAGE;
   if (key === "landing_hero" && !LandingHeroConfigInput.safeParse(value).success) return LANDING_HERO_CONFIG_MESSAGE;
   // PAR-01: every block with source and as_of, valid ranges and scales (lib/cost-estimator.ts, the parser's own rules).
@@ -502,6 +513,9 @@ export function configFieldLabel(key: string, path: string): string {
   if (key === "zone_notice" && path === "enabled") return "Aviso de zona visible (resultados y modo asistido)";
   if (key === "landing_hero") {
     return ({ enabled: "Prueba de la portada nueva", share: "Visitantes que ven la portada nueva (%)", events_per_minute: "Tope de eventos de la portada por minuto" } as Record<string, string>)[path] ?? path;
+  }
+  if (key === "unmet_demand") {
+    return ({ enabled: "Cálculo nocturno de demanda insatisfecha", max_results: "Resultados o menos para contar la búsqueda", min_age_hours: "Antigüedad mínima de la búsqueda (horas)", batch_size: "Búsquedas por tanda", pause_seconds: "Pausa entre tandas (segundos)", hour: "Hora del cálculo (hora argentina)" } as Record<string, string>)[path] ?? path;
   }
   if (key === "trial_reserve") {
     return ({ enabled: "Reserva de la prueba para autos nuevos", backfill_max: "Máximo de resultados ya publicados" } as Record<string, string>)[path] ?? path;
