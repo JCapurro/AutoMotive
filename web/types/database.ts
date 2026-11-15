@@ -1167,6 +1167,26 @@ isOneToOne: false
                 }
           }
           Functions: {
+      admin_match_review_draw: {
+        Args: { p_week?: string | null; p_size?: number }
+        Returns: Json
+      }
+      admin_match_review_queue: {
+        Args: { p_week?: string | null }
+        Returns: Json
+      }
+      admin_match_review_save: {
+        Args: { p_id: number; p_verdict: string; p_reasons: string[]; p_note: string | null; p_actor_id: string }
+        Returns: Json
+      }
+      admin_match_review_stats: {
+        Args: { p_weeks?: number }
+        Returns: Json
+      }
+      admin_match_review_week: {
+        Args: { p_at?: string }
+        Returns: string
+      }
       admin_decision_metrics: {
         Args: { p_start: string; p_end: string; p_as_of: string }
         Returns: Json
