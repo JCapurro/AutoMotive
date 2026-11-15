@@ -5,7 +5,7 @@ import { PLAN_CARD, PlanFeatures } from "@/components/plan-card-parts";
 import { PassCard, PlanCarousel, type PassVariant } from "@/components/public-plans-client";
 import { Button } from "@/components/ui/button";
 import type { WebConfig } from "@/lib/config";
-import { alertsText, CUSTOM_PLAN, inWords, modelLessText, OFFER_DAYS, OFFER_TIER, PASS_GUARANTEE, PLAN_COPY, PLAN_NAMES, planFeatures, planPrice, resultsText, searchesText } from "@/lib/pro";
+import { alertsText, CUSTOM_PLAN, inWords, type PassOffer, modelLessText, OFFER_DAYS, OFFER_TIER, PASS_GUARANTEE, PLAN_COPY, PLAN_NAMES, planFeatures, planPrice, resultsText, searchesText } from "@/lib/pro";
 import { cn } from "@/lib/utils";
 
 type PricingConfig = Pick<WebConfig, "proOffer" | "planLimits" | "automaticPayments" | "commercialPilot"> & Partial<Pick<WebConfig, "trialReserve">>;
@@ -27,9 +27,10 @@ type PublicPlan = {
  * Shared by the landing and the public Planes page: Prueba gratis, Particular
  * (7 or 30 days, one card) and Pro, with Custom below. Prices follow the
  * current offer and every limit comes from app_config.plan_limits, as the
- * backend applies it.
+ * backend applies it. `pass` picks the duration Particular opens on: 30 days
+ * unless a link asks for another (/planes?plan=pass_7, the «Pase 7» ad).
  */
-export function PublicPlans({ cfg, signedIn }: { cfg: PricingConfig; signedIn: boolean }) {
+export function PublicPlans({ cfg, signedIn, pass = "pass_30" }: { cfg: PricingConfig; signedIn: boolean; pass?: PassOffer }) {
   // The trial needs only an email: signed out, it starts at the landing's form.
   const start = signedIn ? "/app/searches/new" : "/#crear-busqueda";
   const destination = (plan: string) => signedIn ? `/app/pro?plan=${plan}` : `/login?next=${encodeURIComponent(`/app/pro?plan=${plan}`)}`;
@@ -81,7 +82,7 @@ export function PublicPlans({ cfg, signedIn }: { cfg: PricingConfig; signedIn: b
     <>
       <PlanCarousel labels={["Prueba", PLAN_NAMES.pass, PLAN_NAMES.pro]} start={1}>
         <PlanCard plan={trialPlan} />
-        <PassCard name={PLAN_NAMES.pass} badge="Para tu próximo auto" variants={passes} features={planFeatures(passCaps)} guarantee={PASS_GUARANTEE} initial="pass_30" />
+        <PassCard name={PLAN_NAMES.pass} badge="Para tu próximo auto" variants={passes} features={planFeatures(passCaps)} guarantee={PASS_GUARANTEE} initial={pass} />
         <PlanCard plan={proPlan} />
       </PlanCarousel>
 
