@@ -6,7 +6,7 @@ vi.mock("@/lib/origin", () => ({ requestOrigin: () => "https://www.eseauto.com.a
 import { GET } from "@/app/fundador/[code]/route";
 import { founderOfferTerms, parseFounderOffer, planPrice } from "@/lib/pro";
 
-const OFFER = { amount: 50000, months: 6, slots: 10, left: 7, regular: 100000 };
+const OFFER = { amount: 50000, months: 3, slots: 10, left: 7, regular: 100000 };
 
 describe("precio fundador por link", () => {
   it("lee la oferta de founder_offer y descarta lo que no es una oferta", () => {
@@ -18,8 +18,8 @@ describe("precio fundador por link", () => {
   });
 
   it("dice cuánto dura el precio y a cuánto pasa después", () => {
-    expect(founderOfferTerms(OFFER)).toBe(`Todo Pro, con el precio fijo por 6 meses desde tu primer pago; después pasa a ${planPrice(100000)} por mes, con aviso 30 días antes.`);
-    expect(founderOfferTerms({ ...OFFER, regular: null })).toBe("Todo Pro, con el precio fijo por 6 meses desde tu primer pago.");
+    expect(founderOfferTerms(OFFER)).toBe(`Todo Pro, con el precio fijo por 3 meses desde tu primer pago; después pasa a ${planPrice(100000)} por mes, con aviso 30 días antes.`);
+    expect(founderOfferTerms({ ...OFFER, regular: null })).toBe("Todo Pro, con el precio fijo por 3 meses desde tu primer pago.");
   });
 
   it("el link lleva a Pro con el código, y un código raro no pasa", async () => {

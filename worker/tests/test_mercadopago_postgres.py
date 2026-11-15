@@ -9,7 +9,7 @@ import db
 pytestmark = [pytest.mark.db, requires_db]
 
 # The founder link config in tests (agency_founders, 20261213120000_pro_founder_link.sql).
-FOUNDER = {"slots": 10, "months": 6, "amount": 50000, "code": "abc123def456"}
+FOUNDER = {"slots": 10, "months": 3, "amount": 50000, "code": "abc123def456"}
 
 class MercadoPagoTests(PostgresTestCase):
     account = commercial.CommercialTests.account
@@ -124,13 +124,13 @@ class MercadoPagoTests(PostgresTestCase):
     async def offer_left(self):
         return (await self.rows("SELECT founder_offer(%s) AS v", FOUNDER['code']))[0]['v']
 
-    async def test_founder_link_subscriptions_keep_their_price_for_six_months(self):
+    async def test_founder_link_subscriptions_keep_their_price_for_three_months(self):
         await self.founder_slots({**FOUNDER, "slots": 10})
         first = await self.subscribe('901')
         self.assertEqual(first['amount'], FOUNDER['amount'])
         row = await self.founder(first)
         self.assertEqual(row['founder_number'], 1)
-        [paid] = await self.rows("SELECT paid_at + interval '6 months' AS until, amount FROM commercial_payments WHERE checkout_id=%s", first['id'])
+        [paid] = await self.rows("SELECT paid_at + interval '3 months' AS until, amount FROM commercial_payments WHERE checkout_id=%s", first['id'])
         self.assertEqual((row['founder_price_until'], paid['amount']), (paid['until'], FOUNDER['amount']))
         [event] = await self.rows("SELECT props FROM events WHERE name='agency_founder_marked' AND user_id=%s", row['user_id'])
         self.assertEqual((event['props']['founder_number'], event['props']['amount']), (1, FOUNDER['amount']))
@@ -153,7 +153,7 @@ class MercadoPagoTests(PostgresTestCase):
 
     async def test_the_founder_link_needs_its_code_its_price_and_a_free_place(self):
         await self.founder_slots({**FOUNDER, "slots": 1})
-        self.assertEqual(await self.offer_left(), {"amount": 50000, "months": 6, "slots": 1, "left": 1,
+        self.assertEqual(await self.offer_left(), {"amount": 50000, "months": 3, "slots": 1, "left": 1,
                                                    "regular": self.offer['pro_monthly']['amount']})
         for code in ('ffffffffffff', 'abc', None):
             [none] = await self.rows("SELECT founder_offer(%s) AS v", code)

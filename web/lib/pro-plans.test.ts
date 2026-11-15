@@ -165,7 +165,7 @@ it("lists the search by body type where plan_limits gives it (docs/CARROCERIA.md
 
 it("shows the founder price only to whoever opens the private link", async () => {
   mocks.config.mockResolvedValue({ proOffer: DEFAULT_PRO_OFFER, planLimits: DEFAULT_PLAN_LIMITS, automaticPayments: true, commercialPilot: true });
-  mocks.founder.mockImplementation((code: string) => code === "abc123def456" ? { amount: 50000, months: 6, slots: 10, left: 7, regular: 100000 } : null);
+  mocks.founder.mockImplementation((code: string) => code === "abc123def456" ? { amount: 50000, months: 3, slots: 10, left: 7, regular: 100000 } : null);
   const open = async (params: Record<string, string>) => renderToStaticMarkup(await ProPage({ searchParams: Promise.resolve(params), params: Promise.resolve({}) }));
   const html = await open({ plan: "pro_monthly", fundador: "abc123def456" });
   expect(html).toContain('data-testid="founder-offer"');
