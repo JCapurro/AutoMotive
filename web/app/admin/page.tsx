@@ -7,7 +7,7 @@ import { requireAdmin } from "@/lib/admin";
 import { loadAdminDashboard } from "@/lib/admin-dashboard-data";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-export const metadata: Metadata = { title: "Resumen" };
+export const metadata: Metadata = { title: "Hoy" };
 
 export default async function AdminHome({ searchParams }: PageProps<"/admin">) {
   await requireAdmin();
@@ -22,13 +22,13 @@ export default async function AdminHome({ searchParams }: PageProps<"/admin">) {
 
   return (
     <>
-      <DashboardHeader title="Resumen" description="Cómo se usa Ese Auto, qué valor entrega y qué necesita atención." period={data.period} />
+      <DashboardHeader title="Hoy" description="Qué necesita atención ahora y cómo viene el período." period={data.period} />
+
+      <DashboardAttention data={data} />
 
       <Section title="El período en seis números" description="Cada indicador se compara con los días inmediatamente anteriores. Los admins quedan fuera de los agregados de usuarios.">
         {snapshot ? <><DashboardSummaryKpis snapshot={snapshot} /><DashboardCashNote snapshot={snapshot} /></> : <DashboardUnavailable title="Indicadores del período no disponibles" error={data.metrics.error} />}
       </Section>
-
-      <DashboardAttention data={data} />
 
       {snapshot ? <Section title="Actividad diaria" description="Personas con al menos una acción humana por día. Una persona puede aparecer en más de un día; el total del período cuenta personas únicas.">
         <DashboardTrend daily={snapshot.daily} field="activeUsers" label="Usuarios activos" />

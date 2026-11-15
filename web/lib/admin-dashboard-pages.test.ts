@@ -18,7 +18,7 @@ describe("admin decision pages authorization", () => {
   });
 
   const pages = [
-    { name: "Resumen", render: () => AdminHome({ params: Promise.resolve({}), searchParams: Promise.resolve({}) }) },
+    { name: "Hoy", render: () => AdminHome({ params: Promise.resolve({}), searchParams: Promise.resolve({}) }) },
     { name: "Métricas", render: () => MetricsPage({ params: Promise.resolve({}), searchParams: Promise.resolve({ view: "operation" }) }) },
     { name: "Diagnóstico", render: () => DiagnosticPage() },
   ];
