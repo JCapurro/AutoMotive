@@ -25,6 +25,12 @@ export type Database = {
         Update: never
         Relationships: []
       }
+      admin_experiments: {
+        Row: { slug: string; title: string; config_key: string | null; hypothesis: string; metric: string; baseline_text: string | null; baseline_value: number | null; started_at: string | null; review_at: string | null; status: string; result_text: string | null; result_value: number | null; verdict_note: string | null; decided_at: string | null; created_at: string; updated_at: string }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
       lifecycle_emails: {
         Row: { id: number; user_id: string; kind: string; event_key: string; search_profile_id: number | null; payload: Json; target: string; status: string; attempts: number; error: string | null; provider_id: string | null; created_at: string; sent_at: string | null; clicked_at: string | null; opened_at: string | null }
         Insert: { user_id: string; kind: string; event_key: string; target: string; search_profile_id?: number | null; payload?: Json; status?: string; attempts?: number; error?: string | null; provider_id?: string | null; created_at?: string; sent_at?: string | null; clicked_at?: string | null }
@@ -1169,6 +1175,18 @@ isOneToOne: false
       admin_sell_intent_metrics: {
         Args: { p_since?: string | null }
         Returns: Json
+      }
+      admin_create_experiment: {
+        Args: { p_actor_id: string; p_slug: string; p_title: string; p_config_key: string | null; p_hypothesis: string; p_metric: string; p_baseline_text: string | null; p_baseline_value: number | null; p_started_at: string | null; p_review_at: string | null }
+        Returns: string
+      }
+      admin_update_experiment: {
+        Args: { p_actor_id: string; p_slug: string; p_title: string; p_config_key: string | null; p_hypothesis: string; p_metric: string; p_baseline_text: string | null; p_baseline_value: number | null; p_started_at: string | null; p_review_at: string | null }
+        Returns: undefined
+      }
+      admin_record_experiment_verdict: {
+        Args: { p_actor_id: string; p_slug: string; p_status: string; p_result_text: string | null; p_result_value: number | null; p_verdict_note: string | null }
+        Returns: undefined
       }
       admin_update_setting: {
         Args: { p_target_type: string; p_target_key: string; p_expected: Json; p_value: Json; p_actor_id: string }
