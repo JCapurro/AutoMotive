@@ -12,7 +12,7 @@ describe("admin menu structure", () => {
     expect(ADMIN_AREAS.map((a) => a.id)).toEqual(["hoy", "crecimiento", "calidad", "ingresos", "operacion", "herramientas"]);
     const hrefs = ADMIN_AREAS.flatMap((a) => a.pages.map((p) => p.href));
     expect(new Set(hrefs).size).toBe(hrefs.length);
-    expect(hrefs).toHaveLength(18);
+    expect(hrefs).toHaveLength(19);
   });
 });
 
@@ -21,6 +21,7 @@ describe("resolveAdminNav", () => {
     expect(at("/admin")).toBe("hoy:/admin");
     expect(at("/admin/users")).toBe("crecimiento:/admin/users");
     expect(at("/admin/matches")).toBe("calidad:/admin/matches");
+    expect(at("/admin/demand")).toBe("calidad:/admin/demand");
     expect(at("/admin/billing")).toBe("ingresos:/admin/billing");
     expect(at("/admin/config")).toBe("herramientas:/admin/config");
   });
