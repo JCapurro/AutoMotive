@@ -13,6 +13,7 @@ import { FrequencySelect, PauseButton } from "@/components/app/search-actions";
 import { SearchCriteriaSummary } from "@/components/app/search-criteria-summary";
 import { SearchPreparation } from "@/components/app/search-preparation";
 import { SortSelect } from "@/components/app/sort-select";
+import { TrialHiddenCard, TrialHiddenOffer } from "@/components/app/trial-hidden-offer";
 import { ZoneNoticePanel } from "@/components/app/zone-notice";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,7 @@ import { storedSellerTypes } from "@/lib/search-form";
 import { effectiveSort, type Sort, sortsFor } from "@/lib/sorts";
 import { wantsColor } from "@/lib/listing-color";
 import { createClient } from "@/lib/supabase/server";
+import { trialOffer } from "@/lib/trial-offer";
 import type { Filters, Preferences } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { SEARCH_TITLE_ID, sameZone, zoneOf } from "@/lib/zone-notice";
@@ -76,12 +78,6 @@ const EMPTY: Record<Filter, string> = {
   ...FOLLOW_EMPTY,
 };
 const PAGE_SIZE = 50;
-/** Prueba gratis: an empty list whose matches the trial hides (my_search_hidden_results). */
-function hiddenText(n: number): string {
-  return n === 1
-    ? "Hay 1 publicación que coincide y tu prueba no muestra."
-    : `Hay ${n} publicaciones que coinciden y tu prueba no muestra.`;
-}
 
 export default async function SearchResultsPage({ params, searchParams }: PageProps<"/app/searches/[id]">) {
   const user = await requireUser();
@@ -148,6 +144,10 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
     (!profile.bootstrapped_at || Date.parse(profile.bootstrapped_at) <= Date.parse(diagnosis.created_at));
   const quota = freeResultQuota(access);
   const checkoutConfig = quota?.reached ? await webConfig() : null;
+  // Oferta cuando la prueba oculta autos (docs/OFERTA_PRUEBA.md): what the list shows of what
+  // matches, and the passes one tap from the checkout. Counts only (my_search_hidden_results).
+  const offer = trialOffer(count.all_count ?? 0, hidden);
+  const offerCheckout = offer ? await webConfig().then((cfg) => ({ offer: cfg.proOffer, automatic: cfg.automaticPayments })) : null;
   // §33: the free plan's visible results. Not enforced (the pilot): all of
   // them, and the database records plan_limit_hit. Enforced: capped.
   const limit = visibleResults(count.all_count ?? 0, (planLimits ?? null) as PlanLimits | null);
@@ -246,6 +246,11 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
         />
       ) : null}
 
+      {/* Once the search is ready (the counts move while it prepares) and short of the 50: there, FreeResultLimit asks. */}
+      {offer && offerCheckout && !needsPreparation && !quota?.reached ? (
+        <TrialHiddenOffer profileId={profileId} offer={offer} autoOpen={filter === "all"} checkout={offerCheckout} />
+      ) : null}
+
       {!needsPreparation || shown.length > 0 ? (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <nav aria-label="Filtros" data-testid="result-filters" className="-mx-4 flex gap-1 overflow-x-auto px-4 sm:mx-0 sm:px-0">
@@ -284,22 +289,16 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
             />
           ))}
         </div>
-      ) : needsPreparation ? null : filter === "all" && hidden > 0 ? (
-        <p data-testid="trial-hidden" className="rounded-lg bg-muted p-8 text-center text-sm text-muted-foreground">
-          {hiddenText(hidden)}{" "}
-          <Link href="/app/pro?plan=pass_30" className="font-medium underline underline-offset-3">Con Particular ves todas</Link>.
-        </p>
+      ) : needsPreparation ? null : filter === "all" && offer && offerCheckout ? (
+        <TrialHiddenCard profileId={profileId} offer={offer} checkout={offerCheckout} />
       ) : (
         <p className="rounded-lg bg-muted p-8 text-center text-sm text-muted-foreground">
           {filter === "all" && quota?.reached ? `Todavía no hay publicaciones que coincidan. Tu prueba ya usó sus ${quota.limit} resultados: con Particular te avisamos de las nuevas.` : EMPTY[filter]}
         </p>
       )}
 
-      {shown.length > 0 && filter === "all" && hidden > 0 && !more ? (
-        <p data-testid="trial-hidden" className="text-center text-sm text-muted-foreground">
-          {hidden === 1 ? "Y 1 más que coincide y tu prueba no muestra." : `Y ${hidden} más que coinciden y tu prueba no muestra.`}{" "}
-          <Link href="/app/pro?plan=pass_30" className="font-medium underline underline-offset-3">Con Particular ves todas</Link>.
-        </p>
+      {shown.length > 0 && filter === "all" && offer && offerCheckout && !more ? (
+        <TrialHiddenCard profileId={profileId} offer={offer} checkout={offerCheckout} />
       ) : null}
 
       {limit.over ? (

@@ -47,8 +47,9 @@ Los textos están en `docs/MAILS_DE_PLAN.md`.
 
 ### 4. Página de la búsqueda
 
-- Si la lista está vacía y la prueba oculta coincidencias: «Hay N publicaciones que coinciden y tu prueba no muestra. Con Particular ves todas.»
-- Con resultados: al final, «Y N más que coinciden y tu prueba no muestra.»
+- Si la prueba oculta coincidencias, desde el 14/11 lo dice la oferta de `docs/OFERTA_PRUEBA.md`: una franja arriba de la lista, un cartel que se abre solo una vez y una tarjeta con los pases. La tarjeta reemplaza los dos renglones grises de antes:
+  - con la lista vacía, «Hay N publicaciones que coinciden y tu prueba no muestra. Con Particular ves todas.»;
+  - con resultados, al final, «Y N más que coinciden y tu prueba no muestra.».
 - Con la prueba llena y nada oculto: «Tu prueba ya usó sus 50 resultados: con Particular te avisamos de las nuevas.»
 - Con coincidencias ocultas no aparece la tarjeta del bot de pocos resultados: el problema no es la zona ni los filtros.
 - El cartel de preparación ya no promete «cada auto nuevo» en la prueba. Dice que los mejores llegan en el momento y otros en el resumen diario, o que la prueba ya no avisa.

@@ -25,6 +25,7 @@ vi.mock("@/lib/auth", () => ({ requireUser: async () => ({ id: "user", email: "p
 vi.mock("@/lib/config", () => ({ webConfig: async () => ({ zoneNotice: state.zoneSwitch }) }));
 vi.mock("@/components/app/auto-refresh", () => ({ AutoRefresh: ({ every }: { every?: number }) => createElement("i", { "data-refresh": every }) }));
 vi.mock("@/components/app/free-result-limit", () => ({ FreeResultLimit: () => null }));
+vi.mock("@/components/app/trial-hidden-offer", () => ({ TrialHiddenOffer: () => null, TrialHiddenCard: () => null }));
 vi.mock("@/components/app/search-actions", () => ({ FrequencySelect: () => null, PauseButton: () => null }));
 vi.mock("@/components/app/sort-select", () => ({ SortSelect: () => null }));
 vi.mock("@/components/app/search-criteria-summary", () => ({ SearchCriteriaSummary: () => null }));
