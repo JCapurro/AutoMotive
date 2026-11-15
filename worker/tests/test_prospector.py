@@ -491,3 +491,18 @@ def test_rules_greeting_and_one_car_stock_fact():
     assert any("saludo" in p for p in rules.check(ok.replace("¿cómo andan?", "Favale Motors."), facts))
     weak = "Hola, ¿cómo andan? Soy Juan, armé Ese Auto.\n\nVi que tienen un Gol Trend. ¿Les paso uno?"
     assert any("un solo auto" in p for p in rules.check(weak, facts))
+
+
+def test_merged_profiles_over_the_cap_are_left_out():
+    from prospector import sellers as S
+    shared = [dict(id=1000 + k, source="facebook", seller_name=None, make="Ford", model="Ranger", year=2015,
+                   price=20_000_000 + k, description="") for k in range(3)]
+    rows = []
+    for name, base in (("Perfil Uno", 0), ("Perfil Dos", 100)):
+        for k in range(3):
+            rows.append({**shared[k], "id": base + k, "seller_name": name})
+        for k in range(32):
+            rows.append(dict(id=base + 10 + k, source="facebook", seller_name=name, make="Fiat", model=f"M{base}{k}",
+                             year=2010, price=5_000_000 + base * 1000 + k, description=""))
+    out, dropped = S.build_prospects(rows, contacted=S.Contacted(frozenset(), frozenset(), frozenset()))
+    assert out == [] and dropped["más de 60 avisos al juntar perfiles"] == 1

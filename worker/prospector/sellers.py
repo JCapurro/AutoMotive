@@ -267,6 +267,8 @@ def build_prospects(rows: Iterable[Mapping[str, Any]], *, contacted: Contacted,
     for group in merge_duplicates(sellers, phone_of=seller_phone):
         p = Prospect(sellers=group)
         reason = exclusion_reason(p)
+        if not reason and len(p.listings) > MAX_LISTINGS:
+            reason = "más de 60 avisos al juntar perfiles"      # Juan's range is the business's, not a profile's
         if reason:
             dropped[reason] += 1
             continue
