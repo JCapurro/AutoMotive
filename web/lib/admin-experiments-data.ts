@@ -189,3 +189,24 @@ export function parseNumber(text: string): number | null {
   const n = Number(t);
   return Number.isFinite(n) ? n : null;
 }
+
+// ---------------------------------------------------------------------------
+// «Hoy»: experiments that reached their re-measure day
+
+export type DueExperimentRow = Pick<ExperimentRow, "slug" | "title" | "metric" | "review_at" | "status">;
+export type DueExperimentItem = { title: string; detail: string; href: string; action: string };
+
+/** One pending item per running experiment whose re-measure day has come, the most overdue first. */
+export function dueExperimentItems(rows: DueExperimentRow[], now: Date): DueExperimentItem[] {
+  return rows
+    .filter((r) => r.status === "running")
+    .map((r) => ({ r, days: daysLeft(r.review_at, now) }))
+    .filter((x): x is { r: DueExperimentRow; days: number } => x.days !== null && x.days <= 0)
+    .sort((a, b) => a.days - b.days || a.r.title.localeCompare(b.r.title, "es"))
+    .map(({ r, days }) => ({
+      title: `Experimento listo para medir: ${r.title}`,
+      detail: `${days === 0 ? "Se puede medir desde hoy" : `Se puede medir desde hace ${plural(-days, "día", "días")}`}. Qué medir: ${r.metric}`,
+      href: `/admin/experiments#${r.slug}`,
+      action: "Medir y decidir",
+    }));
+}

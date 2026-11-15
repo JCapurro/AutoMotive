@@ -131,4 +131,20 @@ describe("cost estimator review", () => {
     mocks.from.mockImplementation(() => { throw new Error("down"); });
     expect((await loadAdminDashboard("7", new Date("2026-10-27T12:00:00Z"))).costReview).toBeNull();
   });
+  it("reads the running experiments that are due and survives a failed read", async () => {
+    mocks.from.mockImplementation((table: string) => {
+      const rows = table === "admin_experiments"
+        ? [{ slug: "a", title: "A", metric: "m", review_at: "2026-10-20", status: "running" }, { slug: "b", title: "B", metric: "m", review_at: "2026-11-30", status: "running" }]
+        : [];
+      const query = { select: () => query, order: () => query, gte: () => query, lt: () => query, eq: () => query,
+        range: async () => ({ data: [], error: null }), maybeSingle: async () => ({ data: null, error: null }),
+        then: (resolve: (v: unknown) => unknown) => resolve({ data: rows, error: null }) };
+      return query;
+    });
+    const data = await loadAdminDashboard("7", new Date("2026-10-27T12:00:00Z"));
+    expect(data.dueExperiments).toEqual([{ title: "Experimento listo para medir: A",
+      detail: "Se puede medir desde hace 7 días. Qué medir: m", href: "/admin/experiments#a", action: "Medir y decidir" }]);
+    mocks.from.mockImplementation(() => { throw new Error("down"); });
+    expect((await loadAdminDashboard("7", new Date("2026-10-27T12:00:00Z"))).dueExperiments).toBeNull();
+  });
 });
