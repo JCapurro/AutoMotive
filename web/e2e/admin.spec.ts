@@ -89,7 +89,7 @@ test("F6: el admin responde «¿por qué se envió esta alerta?» en un clic", a
 
   await query(`update public.profiles set role = 'admin' where email = $1`, [email]);
 
-  await test.step("Resumen: los 6 criterios del §53", async () => {
+  await test.step("Hoy: los 6 criterios del §53", async () => {
     await page.goto("/admin");
     await expect(page.getByRole("heading", { name: "Criterios de validación (§53)" })).toBeVisible();
     const criteria = page.getByTestId("validation-criteria").getByRole("listitem");

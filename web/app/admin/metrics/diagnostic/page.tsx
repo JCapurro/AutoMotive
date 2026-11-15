@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { DashboardNav, DashboardUnavailable } from "@/components/admin/dashboard-ui";
+import { DashboardUnavailable } from "@/components/admin/dashboard-ui";
 import { EmptyRow, PageHeader, Section as BaseSection, Stat, Table, Td, Th } from "@/components/admin/ui";
 import { requireAdmin } from "@/lib/admin";
 import { count, percent, when } from "@/lib/admin-format";
@@ -59,7 +59,6 @@ export default async function DiagnosticPage() {
   return (
     <>
       <PageHeader title="Diagnóstico" description="Detalle histórico de la sección 11 (§35–38). Cada bloque conserva sus ventanas y límites originales; no sigue el filtro del nuevo panel." />
-      <DashboardNav days={30} active="diagnostic" />
 
       <Section error={northStar.error?.message} title="North Star (§35)" description="Últimas 12 semanas. Publicaciones relevantes abiertas desde una alerta, por usuario activo y semana. Relevante: no descartada como «no era lo que busco» (caja, versión, zona).">
         <Table>

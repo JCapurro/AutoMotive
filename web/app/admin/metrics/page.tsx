@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { DashboardActivation, DashboardHeader, DashboardNav, DashboardOperation, DashboardRevenue, DashboardUnavailable, type DashboardView } from "@/components/admin/dashboard-ui";
+import { DashboardActivation, DashboardHeader,DashboardOperation, DashboardRevenue, DashboardUnavailable, type DashboardView } from "@/components/admin/dashboard-ui";
 import { requireAdmin } from "@/lib/admin";
 import { loadAdminDashboard } from "@/lib/admin-dashboard-data";
 
@@ -15,7 +15,6 @@ export default async function MetricsPage({ searchParams }: PageProps<"/admin/me
   return (
     <>
       <DashboardHeader title="Métricas" description="De la primera búsqueda a los cobros y al funcionamiento del servicio." period={data.period} view={view} />
-      <DashboardNav days={data.period.days} active={view} />
       {view === "operation" ? <DashboardOperation data={data} /> : data.metrics.data ? view === "revenue"
         ? <DashboardRevenue snapshot={data.metrics.data} />
         : <DashboardActivation snapshot={data.metrics.data} />
