@@ -28,6 +28,7 @@ export const ADMIN_AREAS: AdminArea[] = [
     { href: "/admin/matches/audit", label: "Auditoría" },
     { href: "/admin/searches", label: "Búsquedas" },
     { href: "/admin/catalog-misses", label: "Modelos pedidos" },
+    { href: "/admin/demand", label: "Demanda" },
   ] },
   { id: "ingresos", label: "Ingresos", pages: [
     { href: "/admin/billing", label: "Cobros" },

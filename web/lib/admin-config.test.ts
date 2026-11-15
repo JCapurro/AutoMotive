@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { AdminLifecycleInput, AdminOfferInput, AdminPlanLimitsInput, configDifferences, configFieldLabel, CONFIRM_SOURCES_MESSAGE, DEALER_MARGIN_MESSAGE, LEVEL_THRESHOLDS_ORDER_MESSAGE, LIFECYCLE_KINDS, MAX_OFFER_ARS, RESCORE_EVERY_HOURS_MESSAGE, RESCORE_HOUR_MESSAGE, sameConfig, SCORE_GUARDS_ORDER_MESSAGE, SCORE_MODEL_F3_BOUNDS, SCORE_MODEL_F3_DEFAULTS, SCORE_MODEL_F3_LABELS, SCORE_MODEL_F3_MODES, SCORE_WEIGHTS_ZERO_MESSAGE, ScoreModelF3Input, scoreModelF3Problem, SourceUpdateInput, TRIAL_RESERVE_CONFIG_MESSAGE, validateConfigChange, visibleConfigRows, ZONE_NOTICE_CONFIG_MESSAGE, LANDING_HERO_CONFIG_MESSAGE } from "@/lib/admin-config";
+import { AdminLifecycleInput, AdminOfferInput, AdminPlanLimitsInput, configDifferences, configFieldLabel, CONFIRM_SOURCES_MESSAGE, DEALER_MARGIN_MESSAGE, LEVEL_THRESHOLDS_ORDER_MESSAGE, LIFECYCLE_KINDS, MAX_OFFER_ARS, RESCORE_EVERY_HOURS_MESSAGE, RESCORE_HOUR_MESSAGE, sameConfig, SCORE_GUARDS_ORDER_MESSAGE, SCORE_MODEL_F3_BOUNDS, SCORE_MODEL_F3_DEFAULTS, SCORE_MODEL_F3_LABELS, SCORE_MODEL_F3_MODES, SCORE_WEIGHTS_ZERO_MESSAGE, ScoreModelF3Input, scoreModelF3Problem, SourceUpdateInput, TRIAL_RESERVE_CONFIG_MESSAGE, validateConfigChange, visibleConfigRows, ZONE_NOTICE_CONFIG_MESSAGE, LANDING_HERO_CONFIG_MESSAGE, UNMET_DEMAND_CONFIG_MESSAGE } from "@/lib/admin-config";
 import { DEFAULT_PRO_OFFER } from "@/lib/pro";
 
 describe("guided config validators", () => {
@@ -112,6 +112,14 @@ describe("guided config validators", () => {
       expect(validateConfigChange("zone_notice", value, { enabled: true })).toBe(ZONE_NOTICE_CONFIG_MESSAGE);
     }
     expect(configFieldLabel("zone_notice", "enabled")).toBe("Aviso de zona visible (resultados y modo asistido)");
+  });
+  it("keeps unmet_demand a switch with bounded options and names it (demanda insatisfecha)", () => {
+    const current = { enabled: false, max_results: 3, min_age_hours: 24, batch_size: 100, pause_seconds: 2, hour: "04:30" };
+    expect(validateConfigChange("unmet_demand", { ...current, enabled: true, hour: "23:59" }, current)).toBeNull();
+    for (const value of [{ ...current, enabled: "true" }, { ...current, hour: "24:00" }, { ...current, hour: "4:30" }, { ...current, batch_size: 0 }, { ...current, pause_seconds: 61 }, { ...current, max_results: -1 }, { max_results: 3 }]) {
+      expect(validateConfigChange("unmet_demand", value, current)).toBe(UNMET_DEMAND_CONFIG_MESSAGE);
+    }
+    expect(configFieldLabel("unmet_demand", "hour")).toBe("Hora del cálculo (hora argentina)");
   });
   it("keeps landing_hero a switch with a share from 0 to 100 and names it (portada nueva)", () => {
     const current = { enabled: false, share: 50, events_per_minute: 300 };

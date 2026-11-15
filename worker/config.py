@@ -158,6 +158,8 @@ TRIAL_REMINDER_TICK_SECONDS = int(os.getenv("TRIAL_REMINDER_TICK_SECONDS", "900"
 LOW_RESULTS_TICK_SECONDS = int(os.getenv("LOW_RESULTS_TICK_SECONDS", "3600"))
 # Aviso de auto cerca de la zona (pipeline/near_zone.py); app_config.near_zone rules the rest.
 NEAR_ZONE_TICK_SECONDS = int(os.getenv("NEAR_ZONE_TICK_SECONDS", "900"))
+# Demanda insatisfecha (pipeline/unmet_demand.py): looks every tick, works once a day; app_config.unmet_demand rules the rest.
+UNMET_DEMAND_TICK_SECONDS = int(os.getenv("UNMET_DEMAND_TICK_SECONDS", "900"))
 # The color pass (pipeline/color_vision.py): new matches without a color, within app_config.color_vision.
 COLOR_VISION_TICK_SECONDS = int(os.getenv("COLOR_VISION_TICK_SECONDS", "900"))
 
