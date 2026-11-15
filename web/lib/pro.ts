@@ -6,6 +6,22 @@ export type Placement = (typeof PLACEMENTS)[number];
 export function isWaitlistPlan(value: unknown): value is WaitlistPlan {
   return typeof value === "string" && (WAITLIST_PLANS as readonly string[]).includes(value);
 }
+/**
+ * Camino al pago (docs/PAGO_CON_CODIGO.md): the offer a `next` is headed to pay,
+ * `/app/pro?plan=<offer>` and nothing else that sets the price. The founder
+ * link (`fundador=`) keeps its own button and amount, so it isn't one.
+ */
+export function payPlan(next: string): WaitlistPlan | null {
+  let url: URL;
+  try {
+    url = new URL(next, "https://next.invalid");
+  } catch {
+    return null;
+  }
+  if (url.pathname !== "/app/pro" || url.searchParams.has("fundador")) return null;
+  const plan = url.searchParams.get("plan");
+  return isWaitlistPlan(plan) ? plan : null;
+}
 /** The Particular passes: 30 days, and the 7-day entry pass (Juan, 05/11/2026). */
 export const PASS_OFFERS = ["pass_30", "pass_7"] as const;
 export type PassOffer = (typeof PASS_OFFERS)[number];

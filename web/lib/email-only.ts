@@ -33,12 +33,16 @@ export async function accountForEmail(email: string): Promise<ExistingAccount | 
  * 05/11): a confirmed full account that signed up with email and password.
  * Email-only accounts, unconfirmed signups and Google-only accounts enter with
  * the code. GoTrue doesn't say whether a password is set; the `email`
- * identity is what a password signup leaves (Google gives a `google` one).
+ * identity is what a password signup leaves (Google gives a `google` one), and
+ * `app_metadata.passwordless` marks an account completed with the code alone.
  */
 export async function hasPassword(account: ExistingAccount): Promise<boolean> {
   if (account.email_only || !account.confirmed) return false;
   const { data, error } = await createAdminClient().auth.admin.getUserById(account.user_id);
   if (error || !data.user) throw new Error(`getUserById: ${error?.message ?? "no user"}`);
+  // Completed with the code on the way to paying (docs/PAGO_CON_CODIGO.md): the
+  // `email` identity is there, but the only password is GoTrue's random hash.
+  if (data.user.app_metadata?.passwordless === true) return false;
   return (data.user.identities ?? []).some((identity) => identity.provider === "email");
 }
 

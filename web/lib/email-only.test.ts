@@ -41,6 +41,13 @@ describe("whether /login asks for a password", () => {
     expect(m.getUserById).toHaveBeenCalledOnce();
   });
 
+  it("sends the code to an account completed with the code alone (passwordless)", async () => {
+    m.getUserById.mockResolvedValue({ data: { user: { identities: [{ provider: "email" }], app_metadata: { provider: "email", passwordless: true } } }, error: null });
+    expect(await hasPassword({ user_id: "coded", email_only: false, confirmed: true })).toBe(false);
+    m.getUserById.mockResolvedValue({ data: { user: { identities: [{ provider: "email" }], app_metadata: { provider: "email", passwordless: false } } }, error: null });
+    expect(await hasPassword({ user_id: "chose-later", email_only: false, confirmed: true })).toBe(true);
+  });
+
   it("fails loudly when Auth can't say", async () => {
     m.getUserById.mockResolvedValue({ data: { user: null }, error: { message: "down" } });
     await expect(hasPassword({ user_id: "full", email_only: false, confirmed: true })).rejects.toThrow("down");
