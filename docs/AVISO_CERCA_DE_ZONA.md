@@ -23,6 +23,7 @@ Entre las publicaciones activas de esa marca y modelo:
 - vista por primera vez después de crear la búsqueda, y publicada hace `max_age_days` días o menos (3);
 - con precio completo y coordenadas;
 - que solo falla el filtro de zona (`intelligence/matching.evaluate`), con datos confirmados: año siempre conocido y ningún filtro de la búsqueda pasado como «desconocido» (en un resultado común, un dato que falta pasa; acá no);
+- si la búsqueda nombra versiones, de una de ellas, aunque no sea estricta con la versión (el 15/11 una búsqueda de Corolla Cross XEI o SEG recibió un XLI);
 - cuyo título no nombra un repuesto, un auto a escala ni un «busco» (`normalization/not_vehicle.py`);
 - a `max_extra_km` km o menos del borde de la zona (100).
 
