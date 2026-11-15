@@ -178,9 +178,14 @@ export const REPLIES: Reply[] = [
 ];
 
 /** The facts' first hook, for the «pasámelo» reply. */
-export function hookOf(facts: Record<string, unknown> | null | undefined): { car: string | null; url: string | null } {
-  const hooks = Array.isArray(facts?.ganchos) ? (facts!.ganchos as Record<string, unknown>[]) : [];
-  const h = hooks[0];
+const spaces = (s: string) => s.replace(/\s+/g, " ");
+
+/** The hook car the message actually offers: the one whose price is in its final text
+ *  (Juan may have edited it or picked the other variant). None when it offers no car. */
+export function hookOf(m: Pick<MessageRow, "facts" | "final_text"> | null | undefined): { car: string | null; url: string | null } {
+  const hooks = Array.isArray(m?.facts?.ganchos) ? (m!.facts.ganchos as Record<string, unknown>[]) : [];
+  const text = spaces(m?.final_text ?? "");
+  const h = hooks.find((g) => typeof g.precio_publicado === "string" && text.includes(spaces(g.precio_publicado)));
   return { car: typeof h?.auto === "string" ? h.auto : null, url: typeof h?.url === "string" ? h.url : null };
 }
 

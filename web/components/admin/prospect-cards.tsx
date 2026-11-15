@@ -8,7 +8,7 @@ import { Pill } from "@/components/admin/ui";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  greetingName, HOOK_LABEL, hookOf, type MessageRow, phoneLabel, type ProspectRow, REGION_LABEL, REPLIES,
+  greetingName, HOOK_LABEL, type MessageRow, phoneLabel, type ProspectRow, REGION_LABEL, REPLIES,
   SOURCE_LABEL, STATUS_LABEL, STEP_LABEL, waLink,
 } from "@/lib/admin-prospecting";
 
@@ -185,10 +185,9 @@ export function WaitingRow({ p }: { p: ProspectRow }) {
 }
 
 /** Someone who answered: the ready-made replies, each straight into their WhatsApp. */
-export function RepliedRow({ p, hookFacts }: { p: ProspectRow; hookFacts: Record<string, unknown> | null }) {
+export function RepliedRow({ p, hook }: { p: ProspectRow; hook: { car: string | null; url: string | null } | null }) {
   const { pending, error, act } = useAct();
-  const hook = hookOf(hookFacts);
-  const ctx = { name: greetingName(p), hookUrl: hook.url, hookCar: hook.car, zone: p.locality };
+  const ctx = { name: greetingName(p), hookUrl: hook?.url ?? null, hookCar: hook?.car ?? null, zone: p.locality };
   return (
     <li className="space-y-2 rounded-xl bg-card p-3 ring-1 ring-foreground/10">
       <Header p={p} extra={<Pill tone="ok">Respondió</Pill>} />

@@ -9,6 +9,7 @@ a doubt. Batches of 5 to 10 prospects per call to spare the subscription.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from typing import Any, Callable, Iterable
 
@@ -104,6 +105,17 @@ FALLBACK_EXAMPLE = {
 }
 
 
+def _spaces(text: str) -> str:
+    return re.sub(r"\s+", " ", text or "")
+
+
+def hook_used(text: str | None, hooks: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """The hook car a message offers: the one whose published price is in the text.
+    The writer may use any of the hooks, not only the first. None when it offers no car."""
+    body = _spaces(text or "")
+    return next((h for h in hooks if h.get("precio_publicado") and _spaces(h["precio_publicado"]) in body), None)
+
+
 @dataclass
 class Job:
     """One prospect's message being written today."""
@@ -122,6 +134,10 @@ class Job:
     @property
     def hook_type(self) -> str | None:
         return self.variants[self.chosen]["tipo_gancho"] if self.chosen is not None else None
+
+    @property
+    def hook(self) -> dict[str, Any] | None:
+        return hook_used(self.text, self.facts.get("ganchos") or [])
 
 
 def _facts_for_model(facts: dict[str, Any]) -> dict[str, Any]:

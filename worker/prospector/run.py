@@ -270,8 +270,7 @@ def _run(args) -> int:
     for i, c in enumerate(ready):
         fact = F.build(c.prospect, pool=pool, zone_map=zone_map, lookups=looks, now=now,
                        first_name=sellers.first_name(c.prospect), exclude_hooks=taken)
-        if fact["ganchos"]:
-            taken.add(fact["ganchos"][0]["listing_id"])
+        taken.update(h["listing_id"] for h in fact["ganchos"])   # the writer may use either
         pid = f"p{i + 1}"
         jobs.append(writer.Job(pid, fact))
         meta[pid] = {"candidate": c, "step": "first"}
@@ -342,7 +341,7 @@ def _store(conn, jobs, meta, missing, keep, day) -> None:
             pid = db.upsert_prospect(conn, _prospect_row(c, "queued"))
         else:
             pid = c.db_id
-        hook = next((h for h in j.facts.get("ganchos", []) if passed and j.hook_type == "oportunidad"), None)
+        hook = j.hook if passed else None
         db.insert_message(conn, {
             "prospect_id": pid, "step": m["step"], "batch_date": day,
             "status": "ready" if passed else "rejected", "facts": j.facts,
@@ -387,11 +386,12 @@ def _markdown(report: dict[str, Any]) -> str:
         lines += [f"Revisión: {r.get('decision')} · {r.get('por_que') or ''} {'; '.join(r.get('problemas') or [])}"]
         if m["descartado"]:
             lines += [f"Descartado: {m['descartado']}"]
-        g = m["hechos"].get("ganchos") or []
+        g = writer.hook_used(m["variantes"][m["elegida"]]["texto"] if m["elegida"] is not None else None,
+                             m["hechos"].get("ganchos") or [])
         if g:
-            lines += [f"Gancho: {g[0]['auto']} en {g[0]['lugar']} a {g[0]['precio_publicado']}, "
-                      f"{g[0]['porcentaje_abajo_de_comparables']} % abajo de {g[0]['cantidad_de_comparables']} "
-                      f"({g[0]['url']})"]
+            lines += [f"Gancho: {g['auto']} en {g['lugar']} a {g['precio_publicado']}, "
+                      f"{g['porcentaje_abajo_de_comparables']} % abajo de {g['cantidad_de_comparables']} "
+                      f"({g['url']})"]
         lines += ["", "<details><summary>Hechos</summary>", "", "```json",
                   json.dumps(m["hechos"], ensure_ascii=False, indent=1, default=str), "```", "</details>", ""]
     lines += [f"Sin contacto: {len(report['sin_contacto'])}"]

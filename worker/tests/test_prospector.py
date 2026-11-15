@@ -394,3 +394,14 @@ def test_find_phones_uses_the_cache(monkeypatch):
     cache = {c.prospect.key: {"phone": "5491155551234", "source": "web", "evidence": "u", "checked": "2026-11-14"}}
     ready, _ = run.find_phones([c], 1, cache=cache, call=None, dry=True)
     assert ready[0].prospect.phone == "5491155551234"
+
+
+def test_hook_used_is_the_car_the_text_offers():
+    from prospector import writer
+    hooks = [{"listing_id": 1, "auto": "Ford Focus 2009", "precio_publicado": "$7.500.000"},
+             {"listing_id": 2, "auto": "Toyota Hilux DX 2013", "precio_publicado": "US$ 16.800"}]
+    text = "Anteayer salió una Toyota Hilux DX 2013 a US$ 16.800, 16 % abajo de 18 parecidas.\n\n¿Les paso el aviso?"
+    assert writer.hook_used(text, hooks)["listing_id"] == 2
+    assert writer.hook_used("Hay 7 búsquedas de Gol Trend cerca. ¿Te cuento?", hooks) is None
+    job = writer.Job("p1", {"ganchos": hooks}, variants=[{"tipo_gancho": "oportunidad", "texto": text}], chosen=0)
+    assert job.hook["auto"] == "Toyota Hilux DX 2013"

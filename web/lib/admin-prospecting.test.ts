@@ -37,8 +37,11 @@ describe("replies", () => {
     expect(byKey.pasamelo).toContain("https://x/1");
     for (const text of Object.values(byKey)) expect(text).not.toMatch(/6 meses|vendid/);
   });
-  it("reads the first hook of the facts", () => {
-    expect(hookOf({ ganchos: [{ auto: "Etios", url: "u" }] })).toEqual({ car: "Etios", url: "u" });
+  it("reads the hook the final text offers, not the first one", () => {
+    const facts = { ganchos: [{ auto: "Focus 2009", precio_publicado: "$7.500.000", url: "u1" },
+      { auto: "Hilux 2013", precio_publicado: "US$ 16.800", url: "u2" }] };
+    expect(hookOf({ facts, final_text: "Salió una Hilux a US$ 16.800. ¿Te la paso?" })).toEqual({ car: "Hilux 2013", url: "u2" });
+    expect(hookOf({ facts, final_text: "Hay 7 búsquedas de Gol Trend. ¿Te cuento?" })).toEqual({ car: null, url: null });
     expect(hookOf(null)).toEqual({ car: null, url: null });
   });
 });

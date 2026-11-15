@@ -4,7 +4,7 @@ import { MessageCard, RepliedRow, RepliesList, WaitingRow } from "@/components/a
 import { PageHeader, Pill, Section } from "@/components/admin/ui";
 import { requireAdmin } from "@/lib/admin";
 import {
-  buildBoard, DAILY_CAP, type EventRow, type MessageRow, type ProspectRow, type RateRow, replyRates,
+  buildBoard, DAILY_CAP, type EventRow, hookOf, type MessageRow, type ProspectRow, type RateRow, replyRates,
 } from "@/lib/admin-prospecting";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -48,8 +48,12 @@ export default async function ProspectingPage() {
   const M = (messages.data ?? []) as unknown as MessageRow[];
   const board = buildBoard(P, M, (events.data ?? []) as EventRow[], now);
   const week = replyRates(P, M, new Date(now.getTime() - 7 * DAY_MS), now);
-  const lastFacts = new Map<number, Record<string, unknown>>();
-  for (const m of M) if (m.status === "sent") lastFacts.set(m.prospect_id, m.facts);
+  // The last sent message that offered a car: «Sí, pasámelo» sends that car's link.
+  const lastHook = new Map<number, ReturnType<typeof hookOf>>();
+  for (const m of [...M].sort((a, b) => (a.sent_at ?? "").localeCompare(b.sent_at ?? ""))) {
+    const hook = m.status === "sent" ? hookOf(m) : null;
+    if (hook?.url) lastHook.set(m.prospect_id, hook);
+  }
   const over = board.sentToday >= DAILY_CAP;
 
   return (
@@ -93,7 +97,7 @@ export default async function ProspectingPage() {
       <Section title={`Respondieron (${board.replied.length})`} description="Las respuestas armadas abren su WhatsApp con el texto listo.">
         {board.replied.length ? (
           <ul className="grid gap-3 lg:grid-cols-2">
-            {board.replied.map((p) => <RepliedRow key={p.id} p={p} hookFacts={lastFacts.get(p.id) ?? null} />)}
+            {board.replied.map((p) => <RepliedRow key={p.id} p={p} hook={lastHook.get(p.id) ?? null} />)}
           </ul>
         ) : <p className="text-sm text-muted-foreground">Todavía nadie.</p>}
       </Section>
