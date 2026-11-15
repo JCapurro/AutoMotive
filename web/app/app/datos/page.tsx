@@ -19,6 +19,8 @@ export default async function MyDataPage() {
   const { data: profile } = await supabase.from("profiles").select("email, phone, email_only").eq("id", user.id).maybeSingle();
   const email = profile?.email ?? user.email ?? "";
   const emailOnly = profile?.email_only === true;
+  // Completed with the code on the way to paying (docs/PAGO_CON_CODIGO.md): no password chosen yet.
+  const passwordless = !emailOnly && (await supabase.auth.getUser()).data.user?.app_metadata?.passwordless === true;
   const back = encodeURIComponent("/app/datos");
 
   return (
@@ -46,12 +48,13 @@ export default async function MyDataPage() {
           <CardDescription>
             {emailOnly
               ? "Todavía no tenés. Entrás con un código que te llega al email; la contraseña hace falta para contratar un plan."
-              : "Podés entrar con tu contraseña o con un código por email."}
+              : passwordless ? "Todavía no elegiste una. Entrás con un código que te llega al email; si querés, elegí una contraseña."
+                : "Podés entrar con tu contraseña o con un código por email."}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Button asChild variant="outline">
-            <Link href={emailOnly ? `/app/cuenta?next=${back}` : `/auth/reset-password?next=${back}`}>{emailOnly ? "Elegir contraseña" : "Cambiar contraseña"}</Link>
+            <Link href={emailOnly ? `/app/cuenta?next=${back}` : `/auth/reset-password?next=${back}`}>{emailOnly || passwordless ? "Elegir contraseña" : "Cambiar contraseña"}</Link>
           </Button>
         </CardContent>
       </Card>

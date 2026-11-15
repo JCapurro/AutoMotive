@@ -3,11 +3,12 @@ import { NextRequest } from "next/server";
 const mocks = vi.hoisted(() => ({ auth: {
   signUp: vi.fn(), signInWithPassword: vi.fn(), resetPasswordForEmail: vi.fn(), resend: vi.fn(),
   signOut: vi.fn(), getUser: vi.fn(), updateUser: vi.fn(), verifyOtp: vi.fn(), exchangeCodeForSession: vi.fn(),
-}, afterSignIn: vi.fn(), profile: null as { email_only: boolean } | null, accountForEmail: vi.fn(), sendEntryLink: vi.fn(), afterRecoveryLink: vi.fn() }));
+}, afterSignIn: vi.fn(), profile: null as { email_only: boolean } | null, accountForEmail: vi.fn(), sendEntryLink: vi.fn(), afterRecoveryLink: vi.fn(), updateUserById: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({
   auth: mocks.auth,
   from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: mocks.profile }) }) }) }),
 }) }));
+vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({ auth: { admin: { updateUserById: mocks.updateUserById } } }) }));
 vi.mock("@/lib/signup", () => ({ afterSignIn: mocks.afterSignIn }));
 vi.mock("@/lib/email-only", () => ({
   accountForEmail: mocks.accountForEmail, sendEntryLink: mocks.sendEntryLink,
@@ -31,6 +32,7 @@ beforeEach(() => {
   mocks.profile = { email_only: false };
   mocks.accountForEmail.mockResolvedValue(null);
   mocks.sendEntryLink.mockResolvedValue("sent");
+  mocks.updateUserById.mockResolvedValue({ error: null });
   // A full account: the password form, with the inner destination.
   mocks.afterRecoveryLink.mockImplementation(async (_client: unknown, next: string) => {
     const { afterRecovery } = await import("@/lib/navigation");
@@ -51,6 +53,22 @@ describe("password updates", () => {
     await expect(updatePassword("/app/pro?plan=pass_30", {}, form(credentials))).rejects.toThrow("redirect:/login?password=updated&next=%2Fapp%2Fpro%3Fplan%3Dpass_30");
     expect(mocks.auth.updateUser).toHaveBeenCalledWith({ password: credentials.password });
     expect(mocks.auth.signOut).toHaveBeenCalled();
+  });
+  it("leaves app_metadata alone for an account that already had a password", async () => {
+    await expect(updatePassword("/app", {}, form(credentials))).rejects.toThrow("redirect:/login?password=updated");
+    expect(mocks.updateUserById).not.toHaveBeenCalled();
+  });
+  it("clears the passwordless mark of an account completed with the code, after the password is set", async () => {
+    mocks.auth.getUser.mockResolvedValue({ data: { user: { id: "user", app_metadata: { passwordless: true } } }, error: null });
+    await expect(updatePassword("/app", {}, form(credentials))).rejects.toThrow("redirect:/login?password=updated");
+    expect(mocks.updateUserById).toHaveBeenCalledWith("user", { app_metadata: { passwordless: false } });
+    expect(mocks.auth.updateUser.mock.invocationCallOrder[0]).toBeLessThan(mocks.updateUserById.mock.invocationCallOrder[0]);
+  });
+  it("keeps the passwordless mark when the password could not be set", async () => {
+    mocks.auth.getUser.mockResolvedValue({ data: { user: { id: "user", app_metadata: { passwordless: true } } }, error: null });
+    mocks.auth.updateUser.mockResolvedValue({ error: { code: "weak_password" } });
+    expect((await updatePassword("/app", {}, form(credentials))).error).toBeTruthy();
+    expect(mocks.updateUserById).not.toHaveBeenCalled();
   });
   it("keeps provider rejection visible without claiming success", async () => {
     mocks.auth.updateUser.mockResolvedValue({ error: { code: "same_password" } });
