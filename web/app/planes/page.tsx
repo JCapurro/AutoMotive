@@ -5,14 +5,18 @@ import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { currentUser } from "@/lib/auth";
 import { webConfig } from "@/lib/config";
+import { isPassOffer } from "@/lib/pro";
 
 export const metadata: Metadata = {
   title: "Planes",
   description: "Compará la prueba gratis, Particular, Pro y Custom con precio a convenir. Elegí cómo buscar con Ese Auto.",
 };
 
-export default async function PlanesPage() {
-  const [user, cfg] = await Promise.all([currentUser(), webConfig()]);
+export default async function PlanesPage({ searchParams }: PageProps<"/planes">) {
+  const [user, cfg, params] = await Promise.all([currentUser(), webConfig(), searchParams]);
+  // /planes?plan=pass_7 opens Particular on the 7-day pass; anything else keeps 30 days.
+  const plan = Array.isArray(params.plan) ? params.plan[0] : params.plan;
+  const pass = isPassOffer(plan) ? plan : undefined;
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -23,7 +27,7 @@ export default async function PlanesPage() {
         <p className="mt-5 mb-10 max-w-2xl text-lg text-muted-foreground">Empezá con una prueba gratis. Después, elegí un plan para tu próximo auto, para buscar habitualmente o una propuesta Custom a convenir.</p>
         <section aria-labelledby="plans-list">
           <h2 id="plans-list" className="sr-only">Compará los planes</h2>
-          <PublicPlans cfg={cfg} signedIn={Boolean(user)} />
+          <PublicPlans cfg={cfg} signedIn={Boolean(user)} pass={pass} />
         </section>
       </main>
       <SiteFooter />

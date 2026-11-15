@@ -177,3 +177,14 @@ it("shows the founder price only to whoever opens the private link", async () =>
   expect(plain).not.toContain("founder-offer");
   expect(plain).not.toContain("precio fundador");
 });
+
+it("opens Particular on 30 days, or on the pass a link asks for (/planes?plan=pass_7)", () => {
+  const cfg = { proOffer: DEFAULT_PRO_OFFER, planLimits: DEFAULT_PLAN_LIMITS, automaticPayments: true, commercialPilot: true };
+  const visiblePrice = (html: string) => [...html.matchAll(/<div( hidden="")?><p class="mt-4 text-3xl font-bold"><span data-plan-price="true">([^<]+)<\/span>/g)].find((m) => !m[1])?.[2];
+  const byDefault = renderToStaticMarkup(createElement(PublicPlans, { cfg, signedIn: false }));
+  const week = renderToStaticMarkup(createElement(PublicPlans, { cfg, signedIn: false, pass: "pass_7" }));
+  expect(visiblePrice(byDefault)).toBe(planPrice(DEFAULT_PRO_OFFER.pass_30.amount));
+  expect(visiblePrice(week)).toBe(planPrice(DEFAULT_PRO_OFFER.pass_7.amount));
+  expect(week).toMatch(/aria-pressed="true"[^>]*>7 días</);
+  expect(byDefault).toMatch(/aria-pressed="true"[^>]*>30 días</);
+});
