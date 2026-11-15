@@ -12,7 +12,7 @@ describe("admin menu structure", () => {
     expect(ADMIN_AREAS.map((a) => a.id)).toEqual(["hoy", "crecimiento", "calidad", "ingresos", "operacion", "herramientas"]);
     const hrefs = ADMIN_AREAS.flatMap((a) => a.pages.map((p) => p.href));
     expect(new Set(hrefs).size).toBe(hrefs.length);
-    expect(hrefs).toHaveLength(16);
+    expect(hrefs).toHaveLength(18);
   });
 });
 
@@ -29,6 +29,14 @@ describe("resolveAdminNav", () => {
     expect(at("/admin/users/abc-123")).toBe("crecimiento:/admin/users");
     expect(at("/admin/matches/42")).toBe("calidad:/admin/matches");
     expect(at("/admin/searches/7/")).toBe("calidad:/admin/searches");
+  });
+
+  it("places experiments and the match audit, keeping Matches for its detail pages", () => {
+    expect(at("/admin/experiments")).toBe("crecimiento:/admin/experiments");
+    expect(at("/admin/matches/audit")).toBe("calidad:/admin/matches/audit");
+    expect(at("/admin/matches/audit/2026-11-09")).toBe("calidad:/admin/matches/audit");
+    expect(at("/admin/matches/42")).toBe("calidad:/admin/matches");
+    expect(at("/admin/matches")).toBe("calidad:/admin/matches");
   });
 
   it("does not treat every /admin/* page as Hoy", () => {

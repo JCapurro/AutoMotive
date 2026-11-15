@@ -20,10 +20,12 @@ export const ADMIN_AREAS: AdminArea[] = [
   ] },
   { id: "crecimiento", label: "Crecimiento", pages: [
     { href: "/admin/users", label: "Usuarios" },
+    { href: "/admin/experiments", label: "Experimentos" },
     { href: "/admin/metrics?view=activation", label: "Activación" },
   ] },
   { id: "calidad", label: "Calidad", pages: [
     { href: "/admin/matches", label: "Matches" },
+    { href: "/admin/matches/audit", label: "Auditoría" },
     { href: "/admin/searches", label: "Búsquedas" },
     { href: "/admin/catalog-misses", label: "Modelos pedidos" },
   ] },
