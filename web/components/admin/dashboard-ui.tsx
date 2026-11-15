@@ -1,5 +1,3 @@
-import Link from "next/link";
-
 import { EmptyRow, PageHeader, Section, Table, Td, TextLink, Th } from "@/components/admin/ui";
 import { count, percent, when } from "@/lib/admin-format";
 import {
@@ -9,20 +7,12 @@ import {
   metricRate,
   type DashboardDaily,
   type DashboardData,
-  type DashboardDays,
   type DashboardPeriod,
   type DashboardSnapshot,
 } from "@/lib/admin-dashboard";
 import { money, TIME_ZONE } from "@/lib/format";
 
-export type DashboardView = "activation" | "revenue" | "operation" | "diagnostic";
-
-const VIEWS: { id: DashboardView; label: string }[] = [
-  { id: "activation", label: "Activación" },
-  { id: "revenue", label: "Ingresos" },
-  { id: "operation", label: "Operación" },
-  { id: "diagnostic", label: "Diagnóstico" },
-];
+export type DashboardView = "activation" | "revenue" | "operation";
 
 const fullDate = new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: TIME_ZONE });
 const dateTime = new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: TIME_ZONE });
@@ -57,20 +47,6 @@ export function DashboardHeader({ title, description, period, view }: {
         <p>Consulta: <time dateTime={period.asOf}>{dateTime.format(new Date(period.asOf))}</time> ART<br />El día de hoy queda fuera del período.</p>
       </div>
     </div>
-  );
-}
-
-export function DashboardNav({ days, active }: { days: DashboardDays; active: DashboardView }) {
-  return (
-    <nav aria-label="Vistas de métricas" className="flex flex-wrap gap-1 border-b pb-2">
-      {VIEWS.map(({ id, label }) => (
-        <Link key={id} href={id === "diagnostic" ? "/admin/metrics/diagnostic" : `/admin/metrics?view=${id}&days=${days}`}
-          aria-current={id === active ? "page" : undefined}
-          className={`rounded-md px-3 py-2 text-sm font-medium ${id === active ? "bg-foreground text-background" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}>
-          {label}
-        </Link>
-      ))}
-    </nav>
   );
 }
 
