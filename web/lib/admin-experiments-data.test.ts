@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  type AuditRow, type ConfigRow, buildExperimentsBoard, daysLeft, describeChange, type ExperimentRow, fromArtInput, historyOf,
+  type AuditRow, type ConfigRow, buildExperimentsBoard, daysLeft, describeChange, dueExperimentItems, type ExperimentRow, fromArtInput, historyOf,
   parseNumber, reviewState, switchState, toArtInput,
 } from "./admin-experiments-data";
 
@@ -136,5 +136,29 @@ describe("numbers typed by hand", () => {
     expect(parseNumber(" 12 ")).toBe(12);
     expect(parseNumber("")).toBeNull();
     expect(parseNumber("mucho")).toBeNull();
+  });
+});
+
+describe("due experiments for the home page", () => {
+  it("lists running experiments from their re-measure day on, the most overdue first", () => {
+    const items = dueExperimentItems([
+      row("today", { title: "Hoy", metric: "tasa", review_at: "2026-11-14" }),
+      row("late", { title: "Atrasado", review_at: "2026-11-11" }),
+      row("one", { title: "Ayer", review_at: "2026-11-13" }),
+    ], now);
+    expect(items.map((i) => i.title)).toEqual([
+      "Experimento listo para medir: Atrasado", "Experimento listo para medir: Ayer", "Experimento listo para medir: Hoy"]);
+    expect(items[0].detail).toBe("Se puede medir desde hace 3 días. Qué medir: m");
+    expect(items[1].detail).toContain("desde hace 1 día.");
+    expect(items[2]).toEqual({ title: "Experimento listo para medir: Hoy", detail: "Se puede medir desde hoy. Qué medir: tasa",
+      href: "/admin/experiments#today", action: "Medir y decidir" });
+  });
+  it("leaves out the ones still to come, without a date, paused or decided", () => {
+    expect(dueExperimentItems([
+      row("soon", { review_at: "2026-11-21" }),
+      row("none"),
+      row("paused", { status: "paused", review_at: "2026-11-01" }),
+      row("won", { status: "won", review_at: "2026-11-01" }),
+    ], now)).toEqual([]);
   });
 });

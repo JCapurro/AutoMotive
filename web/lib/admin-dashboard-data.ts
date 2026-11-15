@@ -5,6 +5,7 @@ import { z } from "zod";
 import { requireAdmin } from "@/lib/admin";
 import { costReviewState, type CostReviewState, dashboardLlmSchema, dashboardSnapshotSchema, dashboardSourcesSchema,
   getDashboardPeriod, type DashboardData, type DashboardSection } from "@/lib/admin-dashboard";
+import { dueExperimentItems, type DueExperimentItem, type DueExperimentRow } from "@/lib/admin-experiments-data";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type PageResult<T> = { data: T[] | null; error: unknown; count?: number | null };
@@ -75,7 +76,8 @@ export async function loadAdminDashboard(raw?: string | string[], now = new Date
       .gte("day", `${period.start.slice(0, 10)}T00:00:00Z`).lt("day", `${period.end.slice(0, 10)}T00:00:00Z`)
       .order("day", { ascending: false }).order("provider").order("kind").range(from, to)), dashboardLlmSchema, "los trabajos de IA"),
   ]);
-  return { period, metrics, sources, llm, costReview: await costReview(admin, now) };
+  const [cost, due] = await Promise.all([costReview(admin, now), dueExperiments(admin, now)]);
+  return { period, metrics, sources, llm, costReview: cost, dueExperiments: due };
 }
 
 /** PAR-01: the cost estimator's review state; null when it cannot be read (the rest of the dashboard still loads). */
@@ -84,6 +86,17 @@ async function costReview(admin: ReturnType<typeof createAdminClient>, now: Date
     const { data, error } = await admin.from("app_config").select("value").eq("key", "cost_estimator").maybeSingle();
     if (error) return null;
     return costReviewState(data?.value ?? null, now);
+  } catch {
+    return null;
+  }
+}
+
+/** Running experiments that reached their re-measure day; null when they cannot be read (the rest of the dashboard still loads). */
+async function dueExperiments(admin: ReturnType<typeof createAdminClient>, now: Date): Promise<DueExperimentItem[] | null> {
+  try {
+    const { data, error } = await admin.from("admin_experiments").select("slug,title,metric,review_at,status").eq("status", "running");
+    if (error || !Array.isArray(data)) return null;
+    return dueExperimentItems(data as DueExperimentRow[], now);
   } catch {
     return null;
   }

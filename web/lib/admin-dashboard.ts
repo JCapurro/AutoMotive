@@ -64,7 +64,9 @@ export type DashboardSection<T> = { data: T | null; error: string | null };
 export type DashboardData = { period: DashboardPeriod; metrics: DashboardSection<DashboardSnapshot>;
   sources: DashboardSection<DashboardSourceHealth[]>; llm: DashboardSection<DashboardLlmHealth[]>;
   /** PAR-01: whether app_config.cost_estimator needs a review (null: not read). */
-  costReview?: CostReviewState | null };
+  costReview?: CostReviewState | null;
+  /** Running experiments whose re-measure day has come (null: not read). */
+  dueExperiments?: { title: string; detail: string; href: string; action: string }[] | null };
 
 // ---------------------------------------------------------------------------
 // PAR-01: the cost estimator's review notice (/admin and /admin/config)

@@ -161,6 +161,7 @@ export function DashboardAttention({ data }: { data: DashboardData }) {
   if (state?.checkoutSyncErrors) pending.push({ title: `${count(state.checkoutSyncErrors)} ${state.checkoutSyncErrors === 1 ? "pago con error" : "pagos con error"} de sincronización`, detail: "Verificá el estado del proveedor antes de intervenir.", href: "/admin/billing", action: "Revisar cobros" });
   const cost = costReviewItem(data.costReview);
   if (cost) pending.push(cost);
+  if (data.dueExperiments) pending.push(...data.dueExperiments);
   return (
     <Section title="Qué necesita atención" description="Estado actual al consultar. Estos pendientes no son una comparación histórica del período.">
       {data.metrics.error || !data.metrics.data ? <DashboardUnavailable title="Pendientes de búsquedas, alertas y cobros sin verificar" error={data.metrics.error} /> : null}
