@@ -30,6 +30,7 @@ class UnmetDemandTests(PostgresTestCase):
             "VALUES ('00000000-0000-0000-0000-000000000000',gen_random_uuid(),"
             "'authenticated','authenticated',%s,now(),now()) RETURNING id::text AS id",
             f"{uuid4()}@automotive.test"))[0]['id']
+        await self.rows("DELETE FROM admin_unmet_demand_run")                     # not truncated between tests
         await self.config({"enabled": True, "pause_seconds": 0})
 
     async def config(self, value):
