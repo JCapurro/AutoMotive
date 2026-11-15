@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, expect, it, vi } from "vitest";
 import type { PlanLimits } from "./pro";
 
-const state = vi.hoisted(() => ({ used: 50, count: 50, plan: "free" as PlanLimits["plan"], hidden: 0, diagnosis: null as object | null }));
+const state = vi.hoisted(() => ({ used: 50, count: 50, plan: "free" as PlanLimits["plan"], hidden: 0, diagnosis: null as object | null, ready: true }));
 // PAR-01: the cards' total cost line has its own tests (lib/cost-estimate.test.ts).
 vi.mock("@/lib/cost-estimate-data", () => ({ costLinesFor: async () => new Map() }));
 vi.mock("@/lib/margin-data", () => ({ marginAccess: async () => null, marginLinesFor: async () => new Map(), marginTeasersFor: async () => new Set() }));
@@ -26,13 +26,20 @@ vi.mock("@/components/app/pro-cta", () => ({ ProBanner: () => null, VisibleResul
 vi.mock("@/components/app/free-result-limit", () => ({
   FreeResultLimit: ({ limit }: { limit: number }) => createElement("aside", { "data-quota-popup": limit }),
 }));
+// Oferta cuando la prueba oculta autos: the components have their own test (lib/trial-hidden-offer.test.ts).
+vi.mock("@/components/app/trial-hidden-offer", () => ({
+  TrialHiddenOffer: ({ offer, autoOpen }: { offer: { shown: number; hidden: number }; autoOpen: boolean }) =>
+    createElement("aside", { "data-trial-offer": `${offer.shown}/${offer.hidden}`, "data-auto-open": String(autoOpen) }),
+  TrialHiddenCard: ({ offer }: { offer: { shown: number; hidden: number } }) =>
+    createElement("section", { "data-testid": "trial-hidden", "data-trial-card": `${offer.shown}/${offer.hidden}` }),
+}));
 vi.mock("@/components/app/listing-card", () => ({
   LISTING_ROWS: "rows", ListingCard: () => createElement("article", { "data-result": true }),
 }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({
   from: (table: string) => ({ select: () => table === "sources" ? { order: async () => ({ data: [] }) } : {
     eq: () => ({ maybeSingle: async () => ({ data: table === "search_diagnoses" ? state.diagnosis : {
-      id: 1, name: "Fiesta", filters: {}, preferences: {}, enabled: true, bootstrapped_at: "2026-10-01",
+      id: 1, name: "Fiesta", filters: {}, preferences: {}, enabled: true, bootstrapped_at: state.ready ? "2026-10-01" : null,
     } }) }),
   } }),
   rpc: async (name: string) => ({ data: name === "my_plan_limits" ? {
@@ -46,9 +53,9 @@ vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({
 
 import SearchResultsPage from "@/app/app/searches/[id]/page";
 
-beforeEach(() => Object.assign(state, { used: 50, count: 50, plan: "free", hidden: 0, diagnosis: null }));
-async function render() {
-  return renderToStaticMarkup(await SearchResultsPage({ params: Promise.resolve({ id: "1" }), searchParams: Promise.resolve({}) }));
+beforeEach(() => Object.assign(state, { used: 50, count: 50, plan: "free", hidden: 0, diagnosis: null, ready: true }));
+async function render(query: Record<string, string> = {}) {
+  return renderToStaticMarkup(await SearchResultsPage({ params: Promise.resolve({ id: "1" }), searchParams: Promise.resolve(query) }));
 }
 it("renders the offer at exactly 50 and never offers a page beyond the cap", async () => {
   const html = await render();
@@ -60,20 +67,53 @@ it("uses account consumption even when a recreated search has no results", async
   state.count = 0;
   expect(await render()).toContain('data-quota-popup="50"');
 });
-it("says how many matches the trial hides instead of «no results» (docs/PRUEBA_HONESTA.md)", async () => {
+it("offers the pass where the trial hides matches, instead of «no results» (docs/OFERTA_PRUEBA.md)", async () => {
   state.count = 0;
   state.hidden = 12;
   const empty = await render();
-  expect(empty).toContain("Hay 12 publicaciones que coinciden y tu prueba no muestra.");
-  expect(empty).toContain('href="/app/pro?plan=pass_30"');
+  expect(empty).toContain('data-trial-card="0/12"');
   expect(empty).not.toContain("Todavía no hay publicaciones");
-  state.hidden = 1;
-  expect(await render()).toContain("Hay 1 publicación que coincide y tu prueba no muestra.");
   state.count = 3;
   state.hidden = 7;
   const some = await render();
   expect(some.match(/data-result="true"/g)).toHaveLength(3);
-  expect(some).toContain("Y 7 más que coinciden y tu prueba no muestra.");
+  expect(some.match(/data-trial-card="3\/7"/g)).toHaveLength(1);
+  // The card comes after the list, where the grey line used to be.
+  expect(some.lastIndexOf('data-result="true"')).toBeLessThan(some.indexOf("data-trial-card"));
+});
+it("says it from the first screen, short of the 50: the strip and the sheet that opens once", async () => {
+  Object.assign(state, { used: 30, count: 30, hidden: 48 });
+  const html = await render();
+  expect(html).toContain('data-trial-offer="30/48"');
+  expect(html).toContain('data-auto-open="true"');
+  expect(html).toContain('data-trial-card="30/48"');
+  expect(html).not.toContain("data-quota-popup");
+  // Above the list: the strip is the first thing after the header.
+  expect(html.indexOf("data-trial-offer")).toBeLessThan(html.indexOf('data-result="true"'));
+});
+it("leaves the 50th result to its own pop-up: no strip, no second sheet, the card stays", async () => {
+  state.hidden = 20;
+  const html = await render();
+  expect(html).toContain('data-quota-popup="50"');
+  expect(html).not.toContain("data-trial-offer");
+  expect(html).toContain('data-trial-card="50/20"');
+});
+it("never opens the sheet over another filter, and keeps the card to «Todos»", async () => {
+  Object.assign(state, { used: 30, count: 30, hidden: 48 });
+  const html = await render({ f: "saved" });
+  expect(html).toContain('data-auto-open="false"');
+  expect(html).not.toContain("data-trial-card");
+});
+it("waits for the search to be ready: the counts move while it prepares", async () => {
+  Object.assign(state, { used: 12, count: 12, hidden: 30, ready: false });
+  const html = await render();
+  expect(html).not.toContain("data-trial-offer");
+});
+it("offers nothing when the trial hides nothing, or on a paid plan", async () => {
+  Object.assign(state, { used: 30, count: 30, hidden: 0 });
+  expect(await render()).not.toMatch(/data-trial-(offer|card)/);
+  Object.assign(state, { plan: "pass", hidden: 0 });
+  expect(await render()).not.toMatch(/data-trial-(offer|card)/);
 });
 it("drops the low-results bot's card while the trial hides matches: it's not the zone or the filters", async () => {
   Object.assign(state, { used: 10, count: 2, diagnosis: {

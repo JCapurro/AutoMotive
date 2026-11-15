@@ -15,6 +15,7 @@ vi.mock("@/components/app/auto-refresh", () => ({ AutoRefresh: ({ every = 3000 }
 vi.mock("@/lib/auth", () => ({ requireUser: vi.fn().mockResolvedValue({ id: "user" }) }));
 vi.mock("@/lib/config", () => ({ webConfig: async () => ({ zoneNotice: { enabled: true } }) }));
 vi.mock("@/components/app/free-result-limit", () => ({ FreeResultLimit: () => null }));
+vi.mock("@/components/app/trial-hidden-offer", () => ({ TrialHiddenOffer: () => null, TrialHiddenCard: () => null }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }), notFound: () => { throw Error("not-found"); } }));
 // The low-results bot imports the searches' server actions, which are server-only.
 vi.mock("@/components/app/low-results-notice", () => ({ LowResultsNotice: () => null }));

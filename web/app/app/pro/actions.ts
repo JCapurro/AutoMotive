@@ -6,6 +6,7 @@ import { requireUser } from "@/lib/auth";
 import { track } from "@/lib/events";
 import { isPlacement, isWaitlistPlan, type Placement, type WaitlistPlan } from "@/lib/pro";
 import { createClient } from "@/lib/supabase/server";
+import { TRIAL_OFFER_SURFACES, type TrialOfferSurface } from "@/lib/trial-offer";
 
 /** §52: the CTA was shown (pro_cta_viewed) or clicked (pro_cta_clicked), and where. */
 export async function trackProCta(action: "viewed" | "clicked", placement: Placement): Promise<void> {
@@ -41,6 +42,43 @@ export async function trackQuotaPopup(
     });
   } catch (error) {
     console.error("quota popup event not recorded:", error);
+  }
+}
+
+const TRIAL_OFFER_EVENTS = {
+  viewed: "trial_offer_viewed",
+  dismissed: "trial_offer_dismissed",
+  plan_selected: "trial_offer_plan_selected",
+} as const;
+
+/**
+ * Oferta cuando la prueba oculta autos (docs/OFERTA_PRUEBA.md): a surface was
+ * seen, the sheet was closed without choosing, or a pass was picked. With the
+ * counts the person saw, to read conversion by how much the trial hid. Never
+ * throws: a failed event must not get in the way of the checkout.
+ */
+export async function trackTrialOffer(
+  action: keyof typeof TRIAL_OFFER_EVENTS,
+  profileId: number,
+  surface: TrialOfferSurface,
+  counts: { shown: number; hidden: number },
+  plan?: WaitlistPlan,
+): Promise<void> {
+  const count = (n: unknown) => typeof n === "number" && Number.isInteger(n) && n >= 0 && n <= 100_000;
+  if (!(action in TRIAL_OFFER_EVENTS) || !Number.isInteger(profileId) || !TRIAL_OFFER_SURFACES.includes(surface)
+    || !counts || !count(counts.shown) || !count(counts.hidden)) return;
+  try {
+    const user = await requireUser();
+    const supabase = await createClient();
+    await track(supabase, user.id, TRIAL_OFFER_EVENTS[action], {
+      search_profile_id: profileId,
+      surface,
+      shown: counts.shown,
+      hidden: counts.hidden,
+      ...(plan && isWaitlistPlan(plan) ? { plan } : {}),
+    });
+  } catch (error) {
+    console.error("trial offer event not recorded:", error);
   }
 }
 
