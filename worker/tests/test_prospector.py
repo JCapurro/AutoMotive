@@ -506,3 +506,14 @@ def test_merged_profiles_over_the_cap_are_left_out():
                              year=2010, price=5_000_000 + base * 1000 + k, description=""))
     out, dropped = S.build_prospects(rows, contacted=S.Contacted(frozenset(), frozenset(), frozenset()))
     assert out == [] and dropped["más de 60 avisos al juntar perfiles"] == 1
+
+
+def test_hooks_prefer_a_model_the_seller_has_several_of():
+    rows = [row(i, name="Autos del Parque Demo", model="Etios", year=2010 + i) for i in range(3)] + \
+           [row(10, name="Autos del Parque Demo", model="Corolla", year=2016)]
+    p = Prospect([Seller("rosariogarage", "Autos del Parque Demo", rows)], kind="agencia")
+    zone = F.zone_of(p.listings, None)
+    pool = [hook_row(200, model="Corolla", diff=20), hook_row(201, model="Etios", diff=14)]
+    got = F.hook_candidates(pool, p, zone, None)
+    assert [c["row"]["id"] for c in got] == [201, 200]
+    assert F.hook_fact(got[0], NOW, "oportunidad_1")["avisos_suyos_de_ese_modelo"] == 3

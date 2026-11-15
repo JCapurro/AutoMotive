@@ -175,7 +175,7 @@ def hook_candidates(pool: Iterable[Mapping[str, Any]], prospect: Prospect, zone:
                     zone_map: Mapping[str, Any] | None, *, exclude: Iterable[int] = ()) -> list[dict[str, Any]]:
     """Fresh private listings of the prospect's models in its zone, ≥10 % below
     the worker's comparables, best first."""
-    mine = {(r["make"], r["model"]) for r in prospect.listings if r.get("make") and r.get("model")}
+    mine = Counter((r["make"], r["model"]) for r in prospect.listings if r.get("make") and r.get("model"))
     own_ids = {r["id"] for r in prospect.listings}
     skip = set(exclude) | own_ids
     out = []
@@ -203,8 +203,10 @@ def hook_candidates(pool: Iterable[Mapping[str, Any]], prospect: Prospect, zone:
                 continue
         else:
             continue
-        rank = tier * 100 + min(diff, 30) + min(n, 40) / 4
-        out.append({"row": row, "tier": tier, "rank": rank})
+        own = mine[(row["make"], row["model"])]
+        # Closer first; then a model they have several of, so the message's stock fact and hook match.
+        rank = tier * 100 + min(own, 5) * 4 + min(diff, 30) + min(n, 40) / 4
+        out.append({"row": row, "tier": tier, "rank": rank, "own": own})
     return sorted(out, key=lambda c: -c["rank"])
 
 
@@ -293,6 +295,7 @@ def hook_fact(candidate: Mapping[str, Any], now: datetime, slot: str) -> dict[st
         "km": row.get("mileage_km"),
         "url": row.get("url"),
         "cercania": {3: "mismo partido o ciudad", 2: "misma provincia", 1: "misma región"}[candidate["tier"]],
+        "avisos_suyos_de_ese_modelo": candidate.get("own"),
         **({"verificado": candidate["verified"]} if candidate.get("verified") else {}),
     }
 
