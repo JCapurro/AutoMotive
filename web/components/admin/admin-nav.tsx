@@ -15,6 +15,7 @@ export const ADMIN_SECTIONS = [
   { href: "/admin/searches", label: "Búsquedas" },
   { href: "/admin/catalog-misses", label: "Modelos pedidos" },
   { href: "/admin/guides", label: "Guías" },
+  { href: "/admin/experiments", label: "Experimentos" },
   { href: "/admin/listings", label: "Listings" },
   { href: "/admin/sources", label: "Fuentes" },
   { href: "/admin/errors", label: "Errores" },
