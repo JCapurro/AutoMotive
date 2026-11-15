@@ -37,6 +37,25 @@ export type Database = {
         Update: never
         Relationships: []
       }
+      // Prospección (20261225120000_prospecting): service role only; written by worker/prospector and admin_prospect_action.
+      prospects: {
+        Row: { id: number; prospect_key: string; seller_keys: string[]; kind: string; display_name: string; first_name: string | null; sources: string[]; province_id: string | null; region: string | null; locality: string | null; phone: string | null; phone_source: string | null; phone_evidence: string | null; phone_checked_at: string | null; status: string; step_sent: number; next_due_on: string | null; listing_count: number | null; first_sent_at: string | null; last_sent_at: string | null; replied_at: string | null; closed_at: string | null; notes: string | null; created_at: string; updated_at: string }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
+      prospect_messages: {
+        Row: { id: number; prospect_id: number; step: string; batch_date: string; status: string; facts: Json; variants: Json; chosen_index: number | null; final_text: string | null; edited: boolean; hook_type: string | null; hook_listing_id: number | null; hook_url: string | null; review: Json; model: string | null; sent_at: string | null; created_at: string; updated_at: string }
+        Insert: never
+        Update: never
+        Relationships: [{ foreignKeyName: "prospect_messages_prospect_id_fkey"; columns: ["prospect_id"]; isOneToOne: false; referencedRelation: "prospects"; referencedColumns: ["id"] }]
+      }
+      prospect_events: {
+        Row: { id: number; prospect_id: number; message_id: number | null; kind: string; note: string | null; actor_id: string | null; created_at: string }
+        Insert: never
+        Update: never
+        Relationships: [{ foreignKeyName: "prospect_events_prospect_id_fkey"; columns: ["prospect_id"]; isOneToOne: false; referencedRelation: "prospects"; referencedColumns: ["id"] }]
+      }
       admin_experiments: {
         Row: { slug: string; title: string; config_key: string | null; hypothesis: string; metric: string; baseline_text: string | null; baseline_value: number | null; started_at: string | null; review_at: string | null; status: string; result_text: string | null; result_value: number | null; verdict_note: string | null; decided_at: string | null; created_at: string; updated_at: string }
         Insert: never
@@ -1207,6 +1226,10 @@ isOneToOne: false
       admin_sell_intent_metrics: {
         Args: { p_since?: string | null }
         Returns: Json
+      }
+      admin_prospect_action: {
+        Args: { p_actor_id: string; p_prospect_id: number; p_message_id: number | null; p_action: string; p_text: string | null }
+        Returns: string
       }
       admin_create_experiment: {
         Args: { p_actor_id: string; p_slug: string; p_title: string; p_config_key: string | null; p_hypothesis: string; p_metric: string; p_baseline_text: string | null; p_baseline_value: number | null; p_started_at: string | null; p_review_at: string | null }
