@@ -169,7 +169,7 @@ test("F6: «Ver planes» → Particular → lista de espera", async ({ page }, t
   await test.step("elige Particular y se suma a la lista", async () => {
     await expect(page.getByRole("heading", { name: "Elegí cuánto querés buscar" })).toBeVisible();
     await expectNoHorizontalScroll(page);
-    await page.getByRole("radio", { name: /Particular/ }).check();
+    await page.getByRole("radio", { name: /^Particular\s+\$/ }).check();
     await page.getByRole("button", { name: "Sumarme a la lista de espera" }).click();
     await expect(page.getByTestId("waitlist-joined")).toContainText("Particular");
     const [row] = await query<{ plan: string; placement: string }>(`select plan, placement from public.pro_waitlist where user_id = $1`, [
