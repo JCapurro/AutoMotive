@@ -62,6 +62,13 @@ def money(value: float | None, currency: str | None) -> str | None:
     return f"US$ {n}" if (currency or "").upper() == "USD" else f"${n}"
 
 
+def km_text(value: float | None) -> str | None:
+    """«104.000 km»: how a person writes it, so the text copies it as is."""
+    if value is None:
+        return None
+    return f"{int(round(float(value))):,} km".replace(",", ".")
+
+
 def car_name(row: Mapping[str, Any], *, trim: bool = True) -> str:
     parts = [row.get("make"), row.get("model")]
     if trim and row.get("trim"):
@@ -310,6 +317,7 @@ def hook_fact(candidate: Mapping[str, Any], now: datetime, slot: str) -> dict[st
         "vendedor": "particular",
         "fuente": SOURCE_LABEL.get(row["source"], row["source"]),
         "km": row.get("mileage_km"),
+        "km_texto": km_text(row.get("mileage_km")),
         "url": row.get("url"),
         "cercania": "mismo partido o ciudad" if candidate["tier"] == 3 else f"a {candidate.get('km')} km",
         **({"distancia_km": candidate["km"]} if candidate.get("km") is not None else {}),

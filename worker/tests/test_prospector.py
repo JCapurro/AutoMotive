@@ -618,3 +618,17 @@ def test_hooks_outside_the_partido_must_be_within_60_km():
     got = {c["row"]["id"]: c for c in F.hook_candidates([far, near, same], p, zone, None)}
     assert set(got) == {902, 903}
     assert 35 <= got[902]["km"] <= 45 and got[903]["km"] is None
+
+
+@pytest.mark.parametrize("value, text", [
+    (104000, "104.000 km"), (33395, "33.395 km"), (950, "950 km"), (1_250_000, "1.250.000 km"), (89999.6, "90.000 km"), (None, None),
+])
+def test_km_text_is_es_ar(value, text):
+    assert F.km_text(value) == text
+
+
+def test_hook_fact_carries_km_texto():
+    p = prospect_rosario()
+    c = F.hook_candidates([hook_row(950, mileage_km=104000)], p, F.zone_for(p, None), None)[0]
+    fact = F.hook_fact(c, NOW, "g1")
+    assert fact["km"] == 104000 and fact["km_texto"] == "104.000 km"
