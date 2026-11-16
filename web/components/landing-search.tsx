@@ -151,7 +151,11 @@ export function LandingSearch({ signedIn: serverSignedIn, initialText = "", onSt
       setOpen(false);
       setPromptError(next.error);
     }
-    if (next.status === "existing_account") setStep("password");
+    if (next.status === "existing_account") {
+      // Another spelling of the same inbox comes back as the account's own email.
+      setEmail(next.email);
+      setStep("password");
+    }
     else if (next.status === "existing_email_only") {
       setCode("");
       setSent(next.error ? null : { email: next.email, unconfirmed: next.unconfirmed });

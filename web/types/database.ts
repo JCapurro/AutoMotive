@@ -1241,6 +1241,8 @@ isOneToOne: false
             claim_auth_throttle: { Args: { p_kind: string; p_key: string; p_limit: number; p_window_seconds: number }; Returns: boolean },
             auth_account_for_email: { Args: { p_email: string }; Returns: { user_id: string; email_only: boolean; confirmed: boolean }[] },
             mark_email_only_account: { Args: { p_user: string }; Returns: boolean },
+            auth_account_for_canonical_email: { Args: { p_email: string }; Returns: { user_id: string; email: string; email_only: boolean; confirmed: boolean }[] },
+            record_trial_signals: { Args: { p_user: string; p_email: string; p_ip_key: string | null; p_device_key: string | null }; Returns: undefined },
             save_email_only_resume: { Args: { p_user: string; p_code_hash: string }; Returns: undefined },
             claim_email_only_resume: { Args: { p_user: string; p_code_hash: string; p_window_seconds: number }; Returns: boolean },
             complete_email_only_account: { Args: { p_user: string; p_session: string; p_method: string }; Returns: boolean },

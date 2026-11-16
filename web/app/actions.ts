@@ -14,6 +14,8 @@ import { searchStartHref } from "@/lib/search-intent";
 import { afterSignIn } from "@/lib/signup";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { emailProblem, emailProblemMessage } from "@/lib/email-check";
+import { accountForCanonicalEmail, recordTrialSignals } from "@/lib/trial-signals";
 
 /** `resume`: the browser's random signup code (20261101130000_email_only_resume). */
 export type FreeSearchInput = { prompt: string; email: string; company?: string; resume?: string };
@@ -89,9 +91,14 @@ export async function startFreeSearch(input: FreeSearchInput): Promise<FreeSearc
     }
     // The health dashboard trusts this address: it never becomes an unproven account.
     if (email === HEALTH_OWNER_EMAIL) return { status: "existing_account", email };
+    // Another spelling of an inbox that already has an account (juan.perez+2@gmail.com): that account, not a new trial.
+    const twin = await accountForCanonicalEmail(email);
+    if (twin) return await existingAccount(twin, twin.email, href);
+    const problem = await emailProblem(email);
+    if (problem) return { status: "error", field: "email", error: emailProblemMessage(problem) };
     if (!(await claimThrottle("free_search_signup_ip", ip, cfg.perIpHour, HOUR))) return { status: "unavailable", error: THROTTLED };
     if (!(await claimThrottle("free_search_signup_day", "global", cfg.perDay, DAY))) return { status: "unavailable", error: UNAVAILABLE };
-    return await createEmailOnlyAccount(email, href, input.resume);
+    return await createEmailOnlyAccount(email, href, input.resume, ip);
   } catch (error) {
     console.error("free search failed:", error instanceof Error ? error.message : error);
     return { status: "error", error: FAILED };
@@ -192,7 +199,7 @@ async function resumeSignup(userId: string, email: string, href: string, code: u
  * fails before the session, the fresh account is deleted so a retry starts clean.
  * The browser's code (if any) is kept so a reload can pick the session up.
  */
-async function createEmailOnlyAccount(email: string, href: string, code?: unknown): Promise<FreeSearchResult> {
+async function createEmailOnlyAccount(email: string, href: string, code: unknown, ipKey: string): Promise<FreeSearchResult> {
   const admin = createAdminClient();
   const created = await createEmailOnlyUser(email);
   // Someone created it in between: from here on it's an existing email.
@@ -206,5 +213,6 @@ async function createEmailOnlyAccount(email: string, href: string, code?: unknow
   }
   const failed = await startSession(email, userId);
   if (failed) return discard(failed);
+  await recordTrialSignals(userId, email, ipKey);
   return { status: "created", href, signedUp: true };
 }

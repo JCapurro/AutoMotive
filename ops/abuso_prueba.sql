@@ -1,5 +1,5 @@
 -- ¿Se repite la prueba gratis de 72 h con otro mail? Solo lectura. Correr en el
--- editor SQL de Supabase (necesita leer auth.users). Tres consultas independientes.
+-- editor SQL de Supabase (necesita leer auth.users). Consultas independientes.
 --
 -- Señales disponibles hoy: el mail y la búsqueda. La IP no sirve para mirar hacia
 -- atrás: auth_throttle guarda un hash sin user_id y lo borra a los 2 días.
@@ -57,3 +57,17 @@ select case when gap < interval '72 hours' then '1 durante la prueba anterior (3
             else '3 más de 7 días tras vencer' end franja,
        count(*) pares, count(distinct b) cuentas_sospechosas
   from pares group by 1 order by 1;
+
+-- 4. Desde la migración 20261224120000_trial_signals: cuentas nuevas que
+--    comparten dispositivo o IP con una prueba anterior ya vencida.
+with t as (
+  select ts.user_id, ts.ip_key, ts.device_key, p.free_trial_started_at started
+    from public.trial_signals ts join public.profiles p on p.id = ts.user_id
+   where p.free_trial_started_at is not null
+)
+select count(distinct b.user_id) filter (where a.device_key = b.device_key) mismo_dispositivo,
+       count(distinct b.user_id) filter (where a.ip_key = b.ip_key) misma_ip,
+       count(distinct b.user_id) filter (where a.device_key = b.device_key and a.ip_key = b.ip_key) ambos,
+       (select count(*) from t) pruebas_con_senales
+  from t a join t b on a.user_id <> b.user_id and b.started > a.started + interval '72 hours'
+   and (a.device_key = b.device_key or a.ip_key = b.ip_key);
