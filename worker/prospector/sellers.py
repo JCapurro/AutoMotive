@@ -37,6 +37,29 @@ _EXCLUDED_NAME = re.compile(
     r"fiat plan|plan nacional|"
     # Official dealer groups, chains in all but name.
     r"taraborelli|dietrich|fortecar|espasa|derka y vargas)\b")
+# The same names squeezed: «Carcash3», «CARCASH», «Tienda oficial Car Cash», «Kavak2», ML nicks.
+_EXCLUDED_COMPACT = ("kavak", "carone", "autocity", "randazzo", "carcash", "sanjorge", "autoahorro", "planrombo",
+                     "planovalo", "chevroletplan", "fiatplan", "taraborelli", "dietrich", "fortecar", "espasa",
+                     "derkayvargas")
+_COMPACT_SUFFIX = r"(ar|arg|argentina|oficial|usados|sa|srl|autos|cars|automotores)?"
+_COMPACT_PREFIX = re.compile(r"^(tiendaoficial|concesionariooficial|concesionariaoficial|grupo|autos?)")
+
+
+def compact_name(name: str) -> str:
+    """Letters only, lowercase, no accents: how a nick or a profile name spells a brand."""
+    return re.sub(r"[^a-z]", "", fold(name or ""))
+
+
+def excluded_name(name: str) -> bool:
+    if _EXCLUDED_NAME.search(fold(name or "")):
+        return True
+    c = _COMPACT_PREFIX.sub("", compact_name(name))
+    # The long brands anywhere; the short ones whole, with at most a plain suffix
+    # («Kavak2», «carone_ar»), so «Caronello» or «Pecarone» stay in.
+    return any(t in c if len(t) >= 7 else re.fullmatch(t + _COMPACT_SUFFIX, c) is not None
+               for t in _EXCLUDED_COMPACT)
+
+
 _PLAN_TEXT = re.compile(r"\b(plan(es)? de ahorro|adjudicad[oa]|suscripcion|cuota ?1 ?\$|plan ovalo|plan rombo|"
                         r"autoahorro|circulo cerrado|licitacion)\b")
 _BUSINESS_NAME = re.compile(
@@ -162,7 +185,7 @@ def merge_duplicates(sellers: list[Seller], *, min_shared: int = 2,
 
 def exclusion_reason(prospect: Prospect) -> str | None:
     for s in prospect.sellers:
-        if _EXCLUDED_NAME.search(fold(s.name)):
+        if excluded_name(s.name):
             return "cadena u oficial"
     rows = prospect.listings
     plan = sum(1 for r in rows if _PLAN_TEXT.search(fold((r.get("title") or "") + " " + (r.get("description") or ""))))
