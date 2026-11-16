@@ -17,6 +17,7 @@ from typing import Any, Callable, Iterable, Mapping
 from intelligence.red_flags import title_damage
 from intelligence.seller import agency_voice
 from normalization.price_check import keyword_partial
+from normalization.geo import haversine_km
 from normalization.zone import DEFAULT_ZONE_MAP, _GBA_PARTIDOS, derive_zone, resolve_region
 from prospector.rules import fold
 from prospector.sellers import SOURCE_LABEL, Prospect
@@ -43,6 +44,7 @@ HOOK_DEEP_MIN_PHOTOS = 4
 HOOK_MIN_PHOTOS = 2
 HOOK_CHECKS_PER_PROSPECT = 5    # listing pages read to find 2 hooks still published
 DEMAND_RADIUS_KM = 60
+HOOK_RADIUS_KM = DEMAND_RADIUS_KM   # a hook outside their partido must be this close, like a search's radius
 DEMAND_MIN = 3            # below this a count could point at a person
 POSITION_MIN_N = 5
 PRODUCT = {
@@ -171,6 +173,15 @@ def stock_facts(prospect: Prospect, now: datetime) -> dict[str, Any]:
     }
 
 
+def centre(prospect: Prospect, zone: "Zone") -> tuple[float, float] | None:
+    """Where the seller is: the median point of their located listings in their zone."""
+    located = [r for r in prospect.listings if r.get("lat") is not None and r.get("lon") is not None]
+    local = [r for r in located if in_zone(r, zone)] or located
+    if not local:
+        return None
+    return median(r["lat"] for r in local), median(r["lon"] for r in local)
+
+
 def hook_candidates(pool: Iterable[Mapping[str, Any]], prospect: Prospect, zone: Zone,
                     zone_map: Mapping[str, Any] | None, *, exclude: Iterable[int] = ()) -> list[dict[str, Any]]:
     """Fresh private listings of the prospect's models in its zone, ≥10 % below
@@ -178,6 +189,7 @@ def hook_candidates(pool: Iterable[Mapping[str, Any]], prospect: Prospect, zone:
     mine = Counter((r["make"], r["model"]) for r in prospect.listings if r.get("make") and r.get("model"))
     own_ids = {r["id"] for r in prospect.listings}
     skip = set(exclude) | own_ids
+    here = centre(prospect, zone)
     out = []
     for row in pool:
         if row["id"] in skip or (row.get("make"), row.get("model")) not in mine:
@@ -203,10 +215,15 @@ def hook_candidates(pool: Iterable[Mapping[str, Any]], prospect: Prospect, zone:
                 continue
         else:
             continue
+        km = (haversine_km(here[0], here[1], row["lat"], row["lon"])
+              if here and row.get("lat") is not None and row.get("lon") is not None else None)
+        if tier < 3 and (km is None or km > HOOK_RADIUS_KM):
+            continue          # Tandil is not San Isidro: outside their partido, only within the radius
         own = mine[(row["make"], row["model"])]
         # Closer first; then a model they have several of, so the message's stock fact and hook match.
         rank = tier * 100 + min(own, 5) * 4 + min(diff, 30) + min(n, 40) / 4
-        out.append({"row": row, "tier": tier, "rank": rank, "own": own})
+        out.append({"row": row, "tier": tier, "rank": rank, "own": own,
+                    "km": None if km is None else round(km)})
     return sorted(out, key=lambda c: -c["rank"])
 
 
@@ -294,7 +311,8 @@ def hook_fact(candidate: Mapping[str, Any], now: datetime, slot: str) -> dict[st
         "fuente": SOURCE_LABEL.get(row["source"], row["source"]),
         "km": row.get("mileage_km"),
         "url": row.get("url"),
-        "cercania": {3: "mismo partido o ciudad", 2: "misma provincia", 1: "misma región"}[candidate["tier"]],
+        "cercania": "mismo partido o ciudad" if candidate["tier"] == 3 else f"a {candidate.get('km')} km",
+        **({"distancia_km": candidate["km"]} if candidate.get("km") is not None else {}),
         "avisos_suyos_de_ese_modelo": candidate.get("own"),
         **({"verificado": candidate["verified"]} if candidate.get("verified") else {}),
     }

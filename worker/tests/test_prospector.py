@@ -588,3 +588,33 @@ def test_find_phones_rereads_ml_after_a_recent_miss(monkeypatch):
     ready, missing = run.find_phones([other], 1, cache=cache, call=None, dry=True,
                                      ml_check=lambda p: pytest.fail("no es de ML"))
     assert ready == [] and missing == [other]
+
+
+@pytest.mark.parametrize("name, out", [
+    ("Carcash3", True), ("CARCASH", True), ("Tienda oficial Car Cash", True), ("Kavak2", True),
+    ("KAVAK_AR", True), ("Car One", True), ("carone3", True), ("Autos San Jorge", True), ("Randazzo Usados", True),
+    ("Caronello Autos", False), ("Pecarone Automotores", False), ("Autos del Parque", False), ("Romera Hnos Usados", False),
+])
+def test_excluded_names_catch_nicks_and_variants(name, out):
+    assert sellers.excluded_name(name) is out
+
+
+def _far_zone_prospect():
+    # A Tandil agency: its listings sit in Tandil.
+    rows = [row(i, name="Romera Demo", make="Ford", model="Ranger", province_id="06", department="Tandil",
+                lat=-37.32, lon=-59.13) for i in range(4)]
+    return Prospect([Seller("mercadolibre", "Romera Demo", rows)], kind="agencia")
+
+
+def test_hooks_outside_the_partido_must_be_within_60_km():
+    p = _far_zone_prospect()
+    zone = F.Zone("06", "Tandil", "pampeana")
+    far = hook_row(901, make="Ford", model="Ranger", prov="06", dept="San Isidro")
+    far.update(lat=-34.47, lon=-58.51)
+    near = hook_row(902, make="Ford", model="Ranger", prov="06", dept="Rauch")
+    near.update(lat=-36.97, lon=-59.13)       # about 39 km
+    same = hook_row(903, make="Ford", model="Ranger", prov="06", dept="Tandil")
+    same.update(lat=None, lon=None)
+    got = {c["row"]["id"]: c for c in F.hook_candidates([far, near, same], p, zone, None)}
+    assert set(got) == {902, 903}
+    assert 35 <= got[902]["km"] <= 45 and got[903]["km"] is None

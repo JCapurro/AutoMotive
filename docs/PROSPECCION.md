@@ -21,7 +21,8 @@ Criteria (Juan, 15/11/2026):
 1. **Base.** Active `listings`, grouped by (source, seller_name), 3 to 60 listings each.
    - Sellers that share 2 or more identical listings (make, model, year, price), or the same
      phone, become one prospect.
-   - Left out: chains and official dealers, savings plans, paying clients (by phone), anyone
+   - Left out: chains and official dealers (also by the squeezed name, so «Carcash3»,
+     «Tienda oficial Car Cash» or «Kavak2» count), savings plans, paying clients (by phone), anyone
      already in the `prospects` table, and the people in the local manual list
      `%LOCALAPPDATA%\EseAuto\prospeccion\ya-contactados.json`. That list holds personal data
      and is never committed.
@@ -45,7 +46,10 @@ Criteria (Juan, 15/11/2026):
    - their stock (listings, models, ages, prices);
    - their price position against comparables (`comparable_pool`, same zone);
    - hooks: a private listing at most 72 h old in their zone, of a model they sell, at 10–35 %
-     below comparables (`public.comparables`), with no placeholder prices;
+     below comparables (`public.comparables`), with no placeholder prices. «Their zone» is
+     their own partido or city, or at most 60 km from the median point of their listings (the
+     radius of a search); with no hook that close, the message uses another kind of hook. The
+     reviewer also rejects a hook whose `distancia_km` is over 60;
    - their listings that stopped being published;
    - aggregate search demand near them.
    A hook must also look like a real total price:
