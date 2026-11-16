@@ -2,11 +2,12 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from prospector import claude, facts as F, phones, rules, run, sellers, writer
+from prospector import claude, facts as F, lookup, phones, rules, run, sellers, writer
 from prospector.sellers import Prospect, Seller
 
 NOW = datetime(2026, 11, 15, 13, 0, tzinfo=timezone.utc)
@@ -517,3 +518,73 @@ def test_hooks_prefer_a_model_the_seller_has_several_of():
     got = F.hook_candidates(pool, p, zone, None)
     assert [c["row"]["id"] for c in got] == [201, 200]
     assert F.hook_fact(got[0], NOW, "oportunidad_1")["avisos_suyos_de_ese_modelo"] == 3
+
+
+# --- ML WhatsApp button ---------------------------------------------------------------------
+
+ML_URL = "https://auto.mercadolibre.com.ar/MLA-1234567890-demo-_JM"
+_ML_HTML = (Path(__file__).parent / "fixtures" / "html" / "mercadolibre_detail.html").read_text(encoding="utf-8")
+_BUTTON = '<script>{"whatsapp_available":true,"action_type":"WHATSAPP"}</script>'
+
+
+def test_ml_button_page_needs_both_marks_on_a_live_page():
+    assert lookup.ml_button_page(_ML_HTML + _BUTTON, ML_URL, 200)
+    assert not lookup.ml_button_page(_ML_HTML, ML_URL, 200)
+    assert not lookup.ml_button_page(_ML_HTML + '<script>{"whatsapp_available":false,"action_type":"WHATSAPP"}</script>', ML_URL, 200)
+    assert not lookup.ml_button_page(_BUTTON, ML_URL, 404)
+
+
+class _Resp:
+    def __init__(self, text, status=200, url=ML_URL):
+        self.text, self.status_code, self.url = text, status, url
+
+
+def _ml_prospect(n=3):
+    rows = [row(i, source="mercadolibre", url=f"https://auto.mercadolibre.com.ar/MLA-{i}-_JM",
+                last_seen_at=NOW - timedelta(hours=i)) for i in range(n)]
+    return Prospect([Seller("mercadolibre", "Autos ML Demo", rows)], kind="persona")
+
+
+def test_ml_button_reads_the_freshest_two_and_returns_the_url():
+    p = _ml_prospect()
+    asked = []
+
+    def get(url):
+        asked.append(url)
+        return _Resp(_ML_HTML + (_BUTTON if url.endswith("MLA-1-_JM") else ""))
+    assert lookup.ml_button(p, get=get, sleep=lambda s: None) == "https://auto.mercadolibre.com.ar/MLA-1-_JM"
+    assert asked == ["https://auto.mercadolibre.com.ar/MLA-0-_JM", "https://auto.mercadolibre.com.ar/MLA-1-_JM"]
+
+    asked.clear()
+    assert lookup.ml_button(p, get=lambda u: (asked.append(u), _Resp(_ML_HTML))[1], sleep=lambda s: None) is None
+    assert len(asked) == 2
+
+
+def test_find_phones_takes_the_ml_button_for_a_person(monkeypatch):
+    monkeypatch.setattr(run.time, "sleep", lambda s: None)
+    monkeypatch.setattr(run.lookup, "web", lambda *a, **k: pytest.fail("no debería buscar"))
+    person = cand("amba", 3, kind="persona")
+    ready, missing = run.find_phones([person], 1, cache={}, call=None, dry=True, ml_check=lambda p: ML_URL)
+    assert ready == [person] and missing == []
+    assert (person.prospect.phone, person.prospect.phone_source, person.prospect.phone_evidence) == (None, "boton_ml", ML_URL)
+
+
+def test_find_phones_without_the_ml_button_path(monkeypatch):
+    monkeypatch.setattr(run.time, "sleep", lambda s: None)
+    person = cand("amba", 3, kind="persona")
+    ready, missing = run.find_phones([person], 1, cache={}, call=None, dry=True, ml_button=False,
+                                     ml_check=lambda p: pytest.fail("no debería leer ML"))
+    assert ready == [] and missing == [person]
+
+
+def test_find_phones_rereads_ml_after_a_recent_miss(monkeypatch):
+    monkeypatch.setattr(run.time, "sleep", lambda s: None)
+    c = cand("amba", 3, kind="persona")
+    cache = {c.prospect.key: {"phone": None, "checked": run.today_art()}}
+    ready, _ = run.find_phones([c], 1, cache=cache, call=None, dry=True, ml_check=lambda p: ML_URL)
+    assert ready == [c]
+    other = cand("cuyo", 2, kind="persona", sources=("facebook",))
+    cache = {other.prospect.key: {"phone": None, "checked": run.today_art()}}
+    ready, missing = run.find_phones([other], 1, cache=cache, call=None, dry=True,
+                                     ml_check=lambda p: pytest.fail("no es de ML"))
+    assert ready == [] and missing == [other]

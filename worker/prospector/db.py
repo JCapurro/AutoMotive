@@ -158,6 +158,14 @@ def tables_exist(conn: psycopg.Connection) -> bool:
     return bool(row and row["ok"])
 
 
+def accepts_ml_button(conn: psycopg.Connection) -> bool:
+    """Whether prospects.phone_source takes 'boton_ml' (migration 20261226120000)."""
+    row = conn.execute(
+        """select coalesce(bool_or(pg_get_constraintdef(c.oid) like '%%boton_ml%%'), false) as ok
+             from pg_constraint c where c.conrelid = 'public.prospects'::regclass and c.contype = 'c'""").fetchone()
+    return bool(row and row["ok"])
+
+
 def known_prospects(conn: psycopg.Connection) -> list[dict[str, Any]]:
     return conn.execute(
         "select id, seller_keys, status, phone, phone_checked_at, step_sent, next_due_on, kind, display_name "

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  artDay, buildBoard, FOUNDER_LINK, hookOf, hoursSince, type MessageRow, phoneLabel, type ProspectRow, REPLIES, replyRates, waLink,
+  artDay, buildBoard, FOUNDER_LINK, hookOf, hoursSince, type MessageRow, phoneLabel, type ProspectRow, REPLIES, replyRates, waLink, waNumber,
 } from "@/lib/admin-prospecting";
 
 const prospect = (over: Partial<ProspectRow> = {}): ProspectRow => ({
@@ -83,5 +83,21 @@ describe("board and rates", () => {
     expect(r.hook.find((x) => x.key === "oportunidad")).toMatchObject({ sent: 1, replied: 1 });
     expect(r.kind.find((x) => x.key === "persona")).toMatchObject({ sent: 1, replied: 0 });
     expect(r.region.map((x) => x.label).sort()).toEqual(["AMBA", "Litoral"]);
+  });
+});
+
+describe("waNumber", () => {
+  it("takes the usual ways a number shows up and gives 549 plus 10 digits", () => {
+    expect(waNumber("341 512-3456")).toBe("5493415123456");
+    expect(waNumber("0341 5123456")).toBe("5493415123456");
+    expect(waNumber("+54 341 512 3456")).toBe("5493415123456");
+    expect(waNumber("+54 9 341 512-3456")).toBe("5493415123456");
+    expect(waNumber("11 6636-1737")).toBe("5491166361737");
+  });
+  it("refuses what is not an Argentine mobile", () => {
+    expect(waNumber("")).toBeNull();
+    expect(waNumber("512-3456")).toBeNull();
+    expect(waNumber("+1 415 555 0100")).toBeNull();
+    expect(waNumber("5493415123456789")).toBeNull();
   });
 });

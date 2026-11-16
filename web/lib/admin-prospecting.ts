@@ -85,6 +85,15 @@ export function waLink(phone: string | null, text: string): string | null {
   return `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
 }
 
+/** What Juan typed after the ML button showed the number, as 549XXXXXXXXXX; null when it isn't an Argentine mobile. */
+export function waNumber(value: string): string | null {
+  let d = value.replace(/\D/g, "").replace(/^00/, "");
+  if (d.length === 11 && d.startsWith("0")) d = d.slice(1);
+  if (d.length === 10) d = `549${d}`;
+  else if (d.length === 12 && d.startsWith("54")) d = `549${d.slice(2)}`;
+  return /^549[1-3]\d{9}$/.test(d) ? d : null;
+}
+
 /** "+54 9 341 312-3456"-ish for reading, not for dialing. */
 export function phoneLabel(phone: string | null): string {
   if (!phone) return "—";

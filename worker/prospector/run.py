@@ -64,8 +64,8 @@ def score(p: Prospect, hooks: list[dict[str, Any]], now: datetime) -> float:
         s += 100 + 15 * (hooks[0]["tier"] - 1)
     if p.phone:
         s += 40
-    elif p.kind == "persona" and "rosariogarage" not in p.sources:
-        s -= 200        # a person without a number in their listing: nothing to do
+    elif p.kind == "persona" and not {"rosariogarage", "mercadolibre"} & set(p.sources):
+        s -= 200        # a person without a number in their listing or a page that shows it: nothing to do
     n = len(p.listings)
     s += 10 if 5 <= n <= 30 else 0
     old = sum(1 for r in p.listings if (d := F._days(r, now)) is not None and d > F.OLD_DAYS)
@@ -119,9 +119,18 @@ def diversify(ranked: list[Candidate], need: int, share: float = 0.4) -> list[Ca
     return first + rest
 
 
+def reachable(p: Prospect) -> bool:
+    """A number to open wa.me with, or the WhatsApp button of their own ML listing."""
+    return bool(p.phone) or p.phone_source == "boton_ml"
+
+
 def find_phones(ranked: list[Candidate], need: int, *, cache: dict[str, Any], call, dry: bool,
-                max_lookups: int = MAX_WEB_LOOKUPS) -> tuple[list[Candidate], list[Candidate]]:
-    """Walks the ranking until `need` candidates have a WhatsApp. Returns (with phone, without)."""
+                max_lookups: int = MAX_WEB_LOOKUPS, ml_button: bool = True,
+                ml_check=None) -> tuple[list[Candidate], list[Candidate]]:
+    """Walks the ranking until `need` candidates can be reached on WhatsApp. Returns (reachable, not).
+    ml_button: whether a seller reachable only through their ML listing's button counts
+    (the table takes phone_source 'boton_ml' only after 20261226120000)."""
+    ml_check = ml_check or lookup.ml_button
     ready: list[Candidate] = []
     missing: list[Candidate] = []
     queue: list[Candidate] = []
@@ -161,8 +170,10 @@ def find_phones(ranked: list[Candidate], need: int, *, cache: dict[str, Any], ca
         if p.phone:
             ready.append(c)
             continue
-        if cached and cached.get("checked") and (datetime.fromisoformat(cached["checked"]).date()
-                                                 > (datetime.now(ART) - timedelta(days=NO_CONTACT_RETRY_DAYS)).date()):
+        recent_miss = cached and cached.get("checked") and (
+            datetime.fromisoformat(cached["checked"]).date()
+            > (datetime.now(ART) - timedelta(days=NO_CONTACT_RETRY_DAYS)).date())
+        if recent_miss and not (ml_button and "mercadolibre" in p.sources):
             missing.append(c)
             continue
         if "rosariogarage" in p.sources:
@@ -173,6 +184,14 @@ def find_phones(ranked: list[Candidate], need: int, *, cache: dict[str, Any], ca
                 p.phone_source = "pagina_aviso"
                 cache[p.key] = {"phone": p.phone, "source": p.phone_source, "evidence": p.phone_evidence,
                                 "checked": today_art()}
+                ready.append(c)
+                continue
+        if ml_button and "mercadolibre" in p.sources:
+            # Read every run: the listing must be live today for Juan to open it.
+            url = ml_check(p)
+            time.sleep(1.0)
+            if url:
+                p.phone_source, p.phone_evidence = "boton_ml", url
                 ready.append(c)
                 continue
         if p.kind == "agencia" and lookups + len(queue) < max_lookups:
@@ -209,6 +228,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--env-file", type=Path, default=ROOT / ".env")
     ap.add_argument("--no-followups", action="store_true")
     ap.add_argument("--max-lookups", type=int, default=MAX_WEB_LOOKUPS)
+    ap.add_argument("--solo-boton-ml", action="store_true",
+                    help="prueba: solo vendedores de ML sin número en sus avisos (los del botón de WhatsApp)")
     args = ap.parse_args(argv)
 
     db.load_env(args.env_file)
@@ -258,7 +279,13 @@ def _run(args) -> int:
     cache = _load_json(cache_path, {})
     call = claude.run
     need = int(round(target * BUFFER))
-    ready, missing = find_phones(ranked, need, cache=cache, call=call, dry=args.dry_run, max_lookups=args.max_lookups)
+    ml_ok = args.dry_run or db.accepts_ml_button(conn)
+    if not ml_ok:
+        log("la migración 20261226120000 no está aplicada: los vendedores del botón de WhatsApp de ML quedan para otro día")
+    if args.solo_boton_ml:
+        ranked = [c for c in ranked if not c.prospect.phone and "mercadolibre" in c.prospect.sources]
+    ready, missing = find_phones(ranked, need, cache=cache, call=call, dry=args.dry_run, max_lookups=args.max_lookups,
+                                 ml_button=ml_ok)
     cache_path.write_text(json.dumps(cache, ensure_ascii=False, indent=1), encoding="utf-8")
     log(f"{len(ready)} con WhatsApp, {len(missing)} sin contacto")
 
@@ -294,6 +321,7 @@ def _run(args) -> int:
             pid = f"s{len(jobs) + 1}"
             jobs.append(writer.Job(pid, fact))
             p.phone = row["phone"]
+            p.phone_source, p.phone_evidence = row.get("phone_source"), row.get("phone_evidence")
             meta[pid] = {"candidate": Candidate(p, F.zone_of(p.listings, zone_map), [], 0, row["id"], row),
                          "step": step}
 

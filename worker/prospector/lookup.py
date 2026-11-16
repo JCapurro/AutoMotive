@@ -12,6 +12,8 @@ page is not read.
 from __future__ import annotations
 
 import json
+import re
+import time
 from typing import Any, Callable
 
 import httpx
@@ -40,6 +42,44 @@ def rosariogarage(prospect: Prospect, *, get=None) -> tuple[str, str] | None:
             number = phones.from_rosariogarage_page(resp.text)
             if number:
                 return number, url
+    return None
+
+
+# Mercado Libre's item page says whether the seller turned on its WhatsApp button
+# («"action_type":"WHATSAPP"» in the page state). The number only comes out when a person
+# taps it (a call guarded by reCAPTCHA), so the bot never asks for it: Juan opens the
+# listing on his phone, taps WhatsApp and pastes the message. The button is the seller's
+# own channel, so it counts for a person too.
+_ML_WHATSAPP = re.compile(r'"action_type"\s*:\s*"WHATSAPP"')
+_ML_AVAILABLE = re.compile(r'"whatsapp_available"\s*:\s*true')
+
+
+def ml_button_page(html: str, url: str, status: int) -> bool:
+    """Whether this ML item page is live and shows the seller's WhatsApp button."""
+    from collectors.mercadolibre import parse_detail
+    try:
+        if parse_detail(html, url, status).gone:
+            return False
+    except Exception:
+        return False
+    return bool(_ML_WHATSAPP.search(html) and _ML_AVAILABLE.search(html))
+
+
+def ml_button(prospect: Prospect, *, get=None, sleep=time.sleep, pause_s: float = 3.0) -> str | None:
+    """The URL of one of the seller's live Mercado Libre listings with the WhatsApp button,
+    the freshest first; at most 2 pages read."""
+    get = get or (lambda url: httpx.get(url, headers=_HEADERS, timeout=30, follow_redirects=True))
+    rows = sorted((r for r in prospect.listings if r["source"] == "mercadolibre" and r.get("url")),
+                  key=lambda r: r.get("last_seen_at") or r.get("first_seen_at") or 0, reverse=True)
+    for i, r in enumerate(rows[:2]):
+        if i:
+            sleep(pause_s)
+        try:
+            resp = get(r["url"])
+        except httpx.HTTPError:
+            continue
+        if ml_button_page(resp.text, str(getattr(resp, "url", r["url"])), resp.status_code):
+            return r["url"]
     return None
 
 

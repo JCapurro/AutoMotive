@@ -28,6 +28,13 @@ Criteria (Juan, 15/11/2026):
 2. **Phone** (`prospector/phones.py`, `lookup.py`).
    - First, a number the seller wrote in their own listing.
    - Then, the wa.me link on the RosarioGarage listing page.
+   - Then, the WhatsApp button on their Mercado Libre listing (`lookup.ml_button`). The page
+     state says whether the button is on (`"action_type":"WHATSAPP"`); the number only appears
+     when a person taps it, behind reCAPTCHA, so the bot never asks for it. Up to 2 of their
+     live listings are read, freshest first, on every run. The prospect stays without a phone,
+     with `phone_source = 'boton_ml'` and the listing URL in `phone_evidence`. It counts for a
+     person too, since the button is their own channel. Needs migration 20261226120000: before
+     it, a live run skips this path and says so in the log.
    - For agencies only, a public WhatsApp found by web search, accepted only when certain and
      with the source URL.
    - **A person's phone is only the one they wrote in their own listing.** It is never
@@ -85,6 +92,10 @@ Criteria (Juan, 15/11/2026):
 - The follow-ups due today come first, then today's batch.
 - Each card has the editable text, the other variant, the facts and the listing link.
 - «Abrir en WhatsApp» opens `wa.me` with the text ready to send.
+- For a seller reached through the ML button the card says «Abrí su aviso y tocá WhatsApp»:
+  «Copiar mensaje», then «Abrir su aviso en ML» (the ML app on the phone), tap WhatsApp, paste.
+  Below it, «Guardar número» stores the number WhatsApp showed (`phone_set`), so the follow-ups
+  go by `wa.me`.
 - Each card also has the states: Enviado, No le interesa, Número equivocado, Descartar.
 - «Respondieron» lists who replied, with the ready-made replies.
 - The weekly summary shows the reply rate by hook, source, agency or person, and region.
@@ -94,6 +105,7 @@ Criteria (Juan, 15/11/2026):
 ```
 cd worker
 python -m prospector --dry-run --new 5     # writes nothing to the database; leaves a report
+python -m prospector --dry-run --new 5 --solo-boton-ml   # only ML sellers without a number
 python -m prospector                       # the daily run
 ```
 

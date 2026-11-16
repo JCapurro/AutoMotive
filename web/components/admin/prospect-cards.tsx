@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
   greetingName, type Hook, HOOK_LABEL, HOOK_RECHECK_HOURS, hookOf, hoursSince, type MessageRow, phoneLabel, type ProspectRow, REGION_LABEL, REPLIES,
-  SOURCE_LABEL, STATUS_LABEL, STEP_LABEL, waLink,
+  SOURCE_LABEL, STATUS_LABEL, STEP_LABEL, waLink, waNumber,
 } from "@/lib/admin-prospecting";
 
 type Action = { prospectId: number; messageId: number | null; action: string; text: string | null };
@@ -45,11 +45,13 @@ function Header({ p, extra }: { p: ProspectRow; extra?: React.ReactNode }) {
           {p.kind === "agencia" ? "Agencia" : "Persona"} · {p.listing_count ?? "?"} avisos · {p.sources.map((s) => SOURCE_LABEL[s] ?? s).join(", ")}
           {where(p) ? ` · ${where(p)}` : ""}
         </p>
-        <p className="text-xs text-muted-foreground">
+        {mlButton(p) ? (
+          <p className="text-xs text-muted-foreground">WhatsApp por el botón de su aviso de Mercado Libre</p>
+        ) : <p className="text-xs text-muted-foreground">
           WhatsApp {phoneLabel(p.phone)}
           {p.phone_source ? ` (${p.phone_source === "aviso" ? "de su aviso" : p.phone_source === "pagina_aviso" ? "de la página del aviso" : p.phone_source === "web" ? "canal público del negocio" : p.phone_source})` : ""}
           {p.phone_evidence?.startsWith("http") ? <> · <a href={p.phone_evidence} target="_blank" rel="noreferrer" className="underline">dónde está</a></> : null}
-        </p>
+        </p>}
       </div>
       <div className="flex flex-wrap gap-1">{extra}</div>
     </div>
@@ -97,7 +99,60 @@ function FactsView({ facts }: { facts: Fact }) {
   );
 }
 
-/** A message ready to send: editable, the other variant, the facts behind it, WhatsApp and the states. */
+/** No number yet: the seller is reached through the WhatsApp button of their own ML listing. */
+function mlButton(p: ProspectRow): boolean {
+  return !p.phone && p.phone_source === "boton_ml" && !!p.phone_evidence?.startsWith("http");
+}
+
+/** Copy the text, open the listing (the ML app on the phone), tap WhatsApp, paste. */
+function MlButtonSteps({ url, text, onCopy }: { url: string; text: string; onCopy: () => void }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      toast.success("Mensaje copiado");
+      onCopy();
+    } catch {
+      toast.error("No se pudo copiar: seleccioná el texto y copialo a mano");
+    }
+  };
+  return (
+    <div className="w-full space-y-2 rounded-lg bg-muted/40 p-3">
+      <p className="text-sm font-medium">Abrí su aviso y tocá WhatsApp</p>
+      <ol className="list-decimal space-y-0.5 pl-5 text-xs text-muted-foreground">
+        <li>Copiá el mensaje.</li>
+        <li>Abrí el aviso (en el celular se abre en la app de Mercado Libre) y tocá «WhatsApp».</li>
+        <li>Pegá el mensaje, mandalo y volvé a marcar «Enviado».</li>
+      </ol>
+      <div className="flex flex-wrap gap-2">
+        <Button onClick={copy}>{copied ? "Copiado ✓" : "Copiar mensaje"}</Button>
+        <Button asChild variant="outline">
+          <a href={url} target="_blank" rel="noreferrer">Abrir su aviso en ML</a>
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** The number WhatsApp showed after the ML button: the follow-ups then go by wa.me. */
+function PhoneForm({ prospectId }: { prospectId: number }) {
+  const [value, setValue] = useState("");
+  const { pending, error, act } = useAct();
+  const number = waNumber(value);
+  return (
+    <form className="flex flex-wrap items-center gap-2" onSubmit={(e) => {
+      e.preventDefault();
+      if (number) act({ prospectId, messageId: null, action: "phone_set", text: number }, "Número guardado");
+    }}>
+      <input value={value} onChange={(e) => setValue(e.target.value)} inputMode="tel" placeholder="Su número (ej. 341 512 3456)"
+        aria-label="Número de WhatsApp que te apareció" className="h-8 min-w-0 flex-1 rounded-lg border bg-background px-2 text-sm" />
+      <Button type="submit" size="sm" variant="secondary" disabled={pending || !number}>Guardar número</Button>
+      {error ? <p role="alert" className="w-full text-xs text-destructive">{error}</p> : null}
+    </form>
+  );
+}
+
 /** The car the text offers, and how fresh the proof is that it is still published. */
 function HookLine({ hook }: { hook: Hook }) {
   if (!hook.url) return null;
@@ -116,6 +171,7 @@ function HookLine({ hook }: { hook: Hook }) {
   );
 }
 
+/** A message ready to send: editable, the other variant, the facts behind it, WhatsApp and the states. */
 export function MessageCard({ message, prospect }: { message: MessageRow; prospect: ProspectRow }) {
   const saved = message.final_text ?? "";
   const [text, setText] = useState(saved);
@@ -146,6 +202,9 @@ export function MessageCard({ message, prospect }: { message: MessageRow; prospe
               Abrir en WhatsApp
             </a>
           </Button>
+        ) : mlButton(prospect) ? (
+          <MlButtonSteps url={prospect.phone_evidence!} text={text}
+            onCopy={() => { if (dirty) act({ ...base, action: "edited", text }); }} />
         ) : <Pill tone="bad">Sin número válido</Pill>}
         <Button variant="secondary" disabled={pending} onClick={() => act({ ...base, action: dirty ? "edited" : "sent", text: dirty ? text : null }, dirty ? "Guardado" : "Marcado como enviado")}>
           {dirty ? "Guardar cambios" : "Marcar enviado"}
@@ -159,6 +218,7 @@ export function MessageCard({ message, prospect }: { message: MessageRow; prospe
         )}
       </div>
       {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
+      {mlButton(prospect) ? <PhoneForm prospectId={prospect.id} /> : null}
 
       {other ? (
         <details className="rounded-lg bg-muted/40 p-3">
@@ -199,6 +259,7 @@ export function WaitingRow({ p }: { p: ProspectRow }) {
         <Button size="sm" variant="ghost" disabled={pending} onClick={() => act({ ...base, action: "closed", text: null }, "Cerrado")}>Cerrar</Button>
       </div>
       {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
+      {mlButton(p) ? <PhoneForm prospectId={p.id} /> : null}
     </li>
   );
 }
