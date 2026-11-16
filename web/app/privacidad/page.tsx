@@ -68,6 +68,12 @@ export default async function PrivacyPage() {
           como crear muchas búsquedas o pedir muchos códigos desde la misma conexión. Lo borramos a los 2 días como
           máximo y no guardamos la IP en sí.
         </li>
+        <li>
+          <strong>Para que la prueba gratis sea una por persona</strong>: cuando creás tu cuenta guardamos, junto a ella,
+          tu email en su forma única (sin puntos ni lo que va después de «+», en los proveedores que los ignoran), el
+          identificador cifrado de tu IP y un identificador cifrado de tu navegador (ver Cookies). Los usamos solo para
+          detectar pruebas repetidas, y se borran cuando borrás tu cuenta.
+        </li>
       </ul>
       <p>
         Las publicaciones de autos que mostramos son públicas y vienen de otros sitios; no forman parte de tus datos.
@@ -122,7 +128,8 @@ export default async function PrivacyPage() {
 
       <h2 id="cookies">Cookies</h2>
       <p>
-        Usamos cookies propias para mantener tu sesión iniciada. Además usamos cookies de medición, en una sola
+        Usamos cookies propias para mantener tu sesión iniciada y, cuando creás tu cuenta, una que identifica a tu
+        navegador para que la prueba gratis sea una por persona (dura 2 años y solo la lee nuestro servidor). Además usamos cookies de medición, en una sola
         categoría que se acepta o se rechaza junta en el aviso de cookies. Salvo que las rechaces, usamos
         Google Analytics 4 para medir visitas y acciones de uso, y el Pixel de Meta (Facebook e Instagram) para medir si nuestros anuncios
         funcionan: registra las páginas que visitás acá y acciones como dejar tu email para crear una búsqueda,

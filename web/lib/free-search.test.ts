@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const m = vi.hoisted(() => ({
   currentUser: vi.fn(), verifyEntryCode: vi.fn(), accountForEmail: vi.fn(), claimThrottle: vi.fn(), sendEntryLink: vi.fn(), afterSignIn: vi.fn(),
   createUser: vi.fn(), generateLink: vi.fn(), deleteUser: vi.fn(), rpc: vi.fn(), verifyOtp: vi.fn(), signOut: vi.fn(), signInWithPassword: vi.fn(),
+  accountForCanonicalEmail: vi.fn(), recordTrialSignals: vi.fn(), emailProblem: vi.fn(),
   config: { enabled: true, perIpHour: 10, perDay: 100, linksPerUserHour: 3, linksPerIpHour: 20, lookupsPerIpHour: 30 },
 }));
 vi.mock("@/lib/auth", () => ({ currentUser: m.currentUser }));
@@ -26,6 +27,8 @@ vi.mock("@/lib/email-only", () => ({
     return { userId, discard };
   },
 }));
+vi.mock("@/lib/trial-signals", () => ({ accountForCanonicalEmail: m.accountForCanonicalEmail, recordTrialSignals: m.recordTrialSignals }));
+vi.mock("@/lib/email-check", () => ({ emailProblem: m.emailProblem, emailProblemMessage: () => "Usá tu email de siempre." }));
 vi.mock("@/lib/entry-code", () => ({ verifyEntryCode: m.verifyEntryCode }));
 vi.mock("@/lib/signup", () => ({ afterSignIn: m.afterSignIn }));
 vi.mock("@/lib/supabase/admin", () => ({
@@ -50,6 +53,36 @@ beforeEach(() => {
   m.rpc.mockResolvedValue({ data: true, error: null });
   m.generateLink.mockResolvedValue({ data: { properties: { hashed_token: "hash" }, user: { id: "new-user" } }, error: null });
   m.verifyOtp.mockResolvedValue({ data: { user: { id: "new-user" } }, error: null });
+  m.accountForCanonicalEmail.mockResolvedValue(null);
+  m.emailProblem.mockResolvedValue(null);
+});
+
+describe("one trial per inbox (20261224120000_trial_signals)", () => {
+  it("records the new account's IP key and device after its session starts", async () => {
+    expect(await startFreeSearch(input)).toEqual({ status: "created", href, signedUp: true });
+    expect(m.recordTrialSignals).toHaveBeenCalledWith("new-user", "persona@example.com", "ip-key");
+  });
+
+  it("sends another spelling of an existing inbox to that account, with no new trial", async () => {
+    m.accountForCanonicalEmail.mockResolvedValue({ user_id: "lite", email: "juanperez@gmail.com", email_only: true, confirmed: true });
+    expect(await startFreeSearch({ prompt, email: "Juan.Perez+2@gmail.com" })).toEqual({ status: "existing_email_only", email: "juanperez@gmail.com" });
+    expect(m.sendEntryLink).toHaveBeenCalledWith("juanperez@gmail.com", href, expect.objectContaining({ user_id: "lite" }));
+    expect(m.createUser).not.toHaveBeenCalled();
+    expect(m.recordTrialSignals).not.toHaveBeenCalled();
+  });
+
+  it("asks for the password of that account when it has one", async () => {
+    m.accountForCanonicalEmail.mockResolvedValue({ user_id: "full", email: "juanperez@gmail.com", email_only: false, confirmed: true });
+    expect(await startFreeSearch({ prompt, email: "juan.perez@gmail.com" })).toEqual({ status: "existing_account", email: "juanperez@gmail.com" });
+    expect(m.createUser).not.toHaveBeenCalled();
+  });
+
+  it("stops an email that isn't one before any brake or account", async () => {
+    m.emailProblem.mockResolvedValue({ reason: "disposable" });
+    expect(await startFreeSearch(input)).toEqual({ status: "error", field: "email", error: "Usá tu email de siempre." });
+    expect(m.createUser).not.toHaveBeenCalled();
+    expect(m.claimThrottle).not.toHaveBeenCalledWith("free_search_signup_ip", expect.anything(), expect.anything(), expect.anything());
+  });
 });
 
 describe("a new email", () => {

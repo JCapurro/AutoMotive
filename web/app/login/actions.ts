@@ -11,6 +11,8 @@ import { safeNext } from "@/lib/navigation";
 import { supabaseAnonKey, supabaseUrl } from "@/lib/env";
 import { afterSignIn } from "@/lib/signup";
 import { createClient } from "@/lib/supabase/server";
+import { emailProblem, emailProblemMessage } from "@/lib/email-check";
+import { accountForCanonicalEmail, recordTrialSignals } from "@/lib/trial-signals";
 
 /**
  * One screen to enter (docs/AUTENTICACION.md), email first (option A, Juan
@@ -57,6 +59,14 @@ async function continueWith(email: string, next: string): Promise<LoginState> {
       return { step: "email", email, next, error: "Probaste varios emails seguidos. Esperá un rato y volvé a intentar." };
     }
     account = await accountForEmail(email);
+    if (!account) {
+      // Another spelling of an inbox that has an account: go on as that account.
+      const twin = await accountForCanonicalEmail(email);
+      if (twin) {
+        if (await hasPassword(twin)) return { step: "password", email: twin.email, next };
+        return requestCode(twin.email, next, twin);
+      }
+    }
     if (account && await hasPassword(account)) return { step: "password", email, next };
   } catch (error) {
     console.error("login lookup failed:", error instanceof Error ? error.message : error);
@@ -72,12 +82,23 @@ async function continueWith(email: string, next: string): Promise<LoginState> {
  * same as for an existing email, so the screen never says which emails exist.
  */
 async function requestCode(email: string, next: string, known?: ExistingAccount | null): Promise<LoginState> {
-  const state: LoginState = { step: "code", email, next };
+  let state: LoginState = { step: "code", email, next };
   let account: ExistingAccount | null;
   let signedUp = false;
   try {
     account = known === undefined ? await accountForEmail(email) : known;
     if (!account) {
+      // Another spelling of an inbox that has an account: the code goes to that account (the same inbox).
+      const twin = await accountForCanonicalEmail(email);
+      if (twin) {
+        email = twin.email;
+        state = { ...state, email };
+        account = twin;
+      }
+    }
+    if (!account) {
+      const problem = await emailProblem(email);
+      if (problem) return { step: "email", email, next, error: emailProblemMessage(problem) };
       const created = await newAccount(email);
       if (created) {
         account = created;
@@ -105,6 +126,7 @@ async function newAccount(email: string): Promise<ExistingAccount | null> {
   if (!(await claimThrottle("free_search_signup_day", "global", cfg.perDay, DAY))) return null;
   const created = await createEmailOnlyUser(email);
   if ("existing" in created) return created.existing;
+  await recordTrialSignals(created.userId, email, ip);
   return { user_id: created.userId, email_only: true, confirmed: true };
 }
 

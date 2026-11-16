@@ -9,6 +9,9 @@ const mocks = vi.hoisted(() => ({
   claimThrottle: vi.fn(),
   createEmailOnlyUser: vi.fn(),
   verifyEntryCode: vi.fn(),
+  accountForCanonicalEmail: vi.fn(),
+  recordTrialSignals: vi.fn(),
+  emailProblem: vi.fn(),
   config: { emailOnlySignup: { enabled: true, perIpHour: 5, perDay: 100, lookupsPerIpHour: 30 } },
 }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ auth: mocks.auth }) }));
@@ -21,6 +24,8 @@ vi.mock("@/lib/email-only", () => ({
   createEmailOnlyUser: mocks.createEmailOnlyUser, clientIpKey: async () => "ip", HOUR: 3600, DAY: 86400,
   linkError: (result: string) => result === "busy" ? "Esperá un minuto." : "No se pudo.",
 }));
+vi.mock("@/lib/trial-signals", () => ({ accountForCanonicalEmail: mocks.accountForCanonicalEmail, recordTrialSignals: mocks.recordTrialSignals }));
+vi.mock("@/lib/email-check", () => ({ emailProblem: mocks.emailProblem, emailProblemMessage: () => "Ese email no puede recibir mensajes." }));
 vi.mock("next/headers", () => ({ headers: async () => new Headers({ origin: "https://eseauto.com.ar" }) }));
 vi.mock("next/navigation", () => ({ redirect: (path: string) => { throw new Error(`redirect:${path}`); } }));
 
@@ -39,6 +44,8 @@ beforeEach(() => {
   mocks.accountForEmail.mockResolvedValue(null);
   mocks.hasPassword.mockResolvedValue(false);
   mocks.auth.signInWithPassword.mockResolvedValue({ error: null });
+  mocks.accountForCanonicalEmail.mockResolvedValue(null);
+  mocks.emailProblem.mockResolvedValue(null);
 });
 
 describe("«Continuar» (email first)", () => {
@@ -120,6 +127,37 @@ describe("asking for the code", () => {
     expect((await login(start, form({ intent: "send-code", email: "nope" }))).error).toBeTruthy();
     expect((await login(start, form({ intent: "other", email: "person@example.com" }))).error).toBe("Acción inválida.");
     expect(mocks.sendEntryLink).not.toHaveBeenCalled();
+  });
+});
+
+describe("one trial per inbox (20261224120000_trial_signals)", () => {
+  it("sends the code for another spelling of an inbox to its account, creating nothing", async () => {
+    mocks.accountForCanonicalEmail.mockResolvedValue({ ...lite, email: "juanperez@gmail.com" });
+    const state = await login(start, form({ intent: "continue", email: "Juan.Perez+2@gmail.com", next: "/app" }));
+    expect(state).toEqual({ step: "code", email: "juanperez@gmail.com", next: "/app", signedUp: false });
+    expect(mocks.sendEntryLink).toHaveBeenCalledWith("juanperez@gmail.com", "/app", expect.objectContaining({ user_id: "lite" }));
+    expect(mocks.createEmailOnlyUser).not.toHaveBeenCalled();
+  });
+
+  it("asks that account for its password when it has one", async () => {
+    mocks.accountForCanonicalEmail.mockResolvedValue({ ...full, email: "juanperez@gmail.com" });
+    mocks.hasPassword.mockResolvedValue(true);
+    expect(await login(start, form({ intent: "continue", email: "juan.perez@gmail.com", next: "/app" })))
+      .toEqual({ step: "password", email: "juanperez@gmail.com", next: "/app" });
+  });
+
+  it("refuses to create an account for an email that can't receive mail", async () => {
+    mocks.emailProblem.mockResolvedValue({ reason: "no_mail" });
+    const state = await login(start, form({ intent: "send-code", email: "a@q.invalid", next: "/app" }));
+    expect(state).toEqual({ step: "email", email: "a@q.invalid", next: "/app", error: "Ese email no puede recibir mensajes." });
+    expect(mocks.createEmailOnlyUser).not.toHaveBeenCalled();
+    expect(mocks.sendEntryLink).not.toHaveBeenCalled();
+  });
+
+  it("records the new account's signals with the connection's key", async () => {
+    mocks.createEmailOnlyUser.mockResolvedValue({ userId: "new", discard: vi.fn() });
+    await login(start, form({ intent: "send-code", email: "new@example.com", next: "/app" }));
+    expect(mocks.recordTrialSignals).toHaveBeenCalledWith("new", "new@example.com", "ip");
   });
 });
 

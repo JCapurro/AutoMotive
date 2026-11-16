@@ -84,6 +84,15 @@ Otros detalles:
 - Eventos: `signup_completed { method: 'email_only' }` en el alta, `account_completed { method: 'password' | 'google' | 'code' }` al pasar a cuenta completa (en `/app/cuenta` o con Google; `code` es el camino al pago). Desde el 15/10/2026 los «registrados» de `v_activation` incluyen las cuentas solo-email.
 - Fuera de v1: cambiar el email de una cuenta solo-email, email de bienvenida y manejo de rebotes.
 
+## Una prueba por persona
+
+Juan, 16/11/2026: con solo un mail para entrar, había que poder reconocer a quien repite la prueba con otro. La medición del mismo día (`ops/abuso_prueba.sql`, 569 pruebas) no encontró abuso medible. Por eso hoy solo se frena lo que no es un mail y se guardan señales para medir de nuevo. Migración `20261224120000_trial_signals`.
+
+- **Otra forma del mismo mail es la misma cuenta.** `email_canonical()` saca los puntos y lo que va después de `+` en Gmail, y lo que va después de `+` en Outlook/Hotmail/Live, iCloud, Proton y Fastmail. En la landing y en `/login`, un mail nuevo cuya forma canónica ya tiene cuenta sigue como esa cuenta (link, código o contraseña, al mail guardado: es la misma casilla). No abre otra prueba.
+- **Lo que no es un mail no crea cuenta** (`lib/email-check.ts`). Errores de tipeo de los dominios comunes (los mismos que la landing sugiere), mails descartables y dominios sin servidores de correo (MX) reciben un error en el campo del mail. Si el DNS no contesta en 2,5 s, el mail pasa. Solo se mira en cuentas nuevas.
+- **Señales por cuenta nueva** (`trial_signals`, solo service role): mail canónico, hash de la IP (el mismo de `auth_throttle`) y hash de un ID de dispositivo. El ID vive en la cookie httpOnly `am_dev` (2 años), creada en el alta. Hoy no frenan nada: sirven para medir antes de decidir un freno.
+- Nada de esto rompe un alta: si la base todavía no tiene la migración, la búsqueda de otra forma del mail da «ninguna» y las señales no se guardan (queda en el log).
+
 ## Enlaces de correo e identidad
 
 **Regla de seguridad.** Alertas, promociones y remarketing no autentican al destinatario. Una firma protege el contenido o una capacidad limitada; no identifica a la persona que abre un correo reenviado. El inicio de sesión requiere un flujo explícito desde el login.
