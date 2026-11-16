@@ -21,6 +21,7 @@ export const ADMIN_AREAS: AdminArea[] = [
   { id: "crecimiento", label: "Crecimiento", pages: [
     { href: "/admin/users", label: "Usuarios" },
     { href: "/admin/experiments", label: "Experimentos" },
+    { href: "/admin/prospeccion", label: "Prospección" },
     { href: "/admin/metrics?view=activation", label: "Activación" },
   ] },
   { id: "calidad", label: "Calidad", pages: [
