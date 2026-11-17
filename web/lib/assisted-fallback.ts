@@ -58,8 +58,13 @@ export function roughDraft(text: string, catalog: Catalog): RoughDraft {
     draft.year_min = Math.min(...years);
     draft.year_max = Math.max(...years);
   } else if (years.length === 1) {
-    draft.year_min = years[0];
-    if (!/en adelante|o mas nuevo|desde/.test(t)) draft.year_max = years[0];
+    // A lone year is a tolerance, not an exact filter: ±1. "desde / en adelante"
+    // keeps only the lower bound.
+    if (/en adelante|o mas nuevo|desde/.test(t)) draft.year_min = years[0];
+    else {
+      draft.year_min = years[0] - 1;
+      draft.year_max = years[0] + 1;
+    }
   }
 
   const km = t.match(new RegExp(`${NUMBER}\\s*(mil)?\\s*(?:km|kms|kilometros)[^a-z]`));

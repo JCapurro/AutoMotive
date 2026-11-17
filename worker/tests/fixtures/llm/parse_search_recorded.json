@@ -104,7 +104,7 @@
       "type": "result",
       "subtype": "success",
       "is_error": false,
-      "result": "{\"vehicles\":[{\"make\":\"Volkswagen\",\"model\":\"Gol Trend\",\"trim\":\"Highline\",\"trims\":[\"Highline\"],\"trim_strict\":false,\"body_types\":[],\"year_min\":2015,\"year_max\":2015,\"price_max\":null,\"price_target\":null,\"currency\":null,\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":\"private\",\"location\":\"zona norte\",\"radius_km\":null,\"timing\":null}]}",
+      "result": "{\"vehicles\":[{\"make\":\"Volkswagen\",\"model\":\"Gol Trend\",\"trim\":\"Highline\",\"trims\":[\"Highline\"],\"trim_strict\":false,\"body_types\":[],\"year_min\":2014,\"year_max\":2016,\"price_max\":null,\"price_target\":null,\"currency\":null,\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":\"private\",\"location\":\"zona norte\",\"radius_km\":null,\"timing\":null}]}",
       "structured_output": {
         "vehicles": [
           {
@@ -116,8 +116,8 @@
             ],
             "trim_strict": false,
             "body_types": [],
-            "year_min": 2015,
-            "year_max": 2015,
+            "year_min": 2014,
+            "year_max": 2016,
             "price_max": null,
             "price_target": null,
             "currency": null,
@@ -378,7 +378,7 @@
       "type": "result",
       "subtype": "success",
       "is_error": false,
-      "result": "{\"vehicles\":[{\"make\":\"Toyota\",\"model\":\"Etios\",\"trim\":\"XLS\",\"trims\":[\"XLS\"],\"trim_strict\":false,\"body_types\":[],\"year_min\":2016,\"year_max\":2016,\"price_max\":8000,\"price_target\":7000,\"currency\":\"USD\",\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null,\"timing\":null}]}",
+      "result": "{\"vehicles\":[{\"make\":\"Toyota\",\"model\":\"Etios\",\"trim\":\"XLS\",\"trims\":[\"XLS\"],\"trim_strict\":false,\"body_types\":[],\"year_min\":2015,\"year_max\":2017,\"price_max\":8000,\"price_target\":7000,\"currency\":\"USD\",\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null,\"timing\":null}]}",
       "structured_output": {
         "vehicles": [
           {
@@ -390,8 +390,8 @@
             ],
             "trim_strict": false,
             "body_types": [],
-            "year_min": 2016,
-            "year_max": 2016,
+            "year_min": 2015,
+            "year_max": 2017,
             "price_max": 8000,
             "price_target": 7000,
             "currency": "USD",
@@ -526,7 +526,7 @@
       "type": "result",
       "subtype": "success",
       "is_error": false,
-      "result": "{\"vehicles\":[{\"make\":\"Tesla\",\"model\":\"Model 3\",\"trim\":null,\"trims\":[],\"trim_strict\":false,\"body_types\":[],\"year_min\":2021,\"year_max\":2021,\"price_max\":null,\"price_target\":null,\"currency\":null,\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null,\"timing\":null}]}",
+      "result": "{\"vehicles\":[{\"make\":\"Tesla\",\"model\":\"Model 3\",\"trim\":null,\"trims\":[],\"trim_strict\":false,\"body_types\":[],\"year_min\":2020,\"year_max\":2022,\"price_max\":null,\"price_target\":null,\"currency\":null,\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null,\"timing\":null}]}",
       "structured_output": {
         "vehicles": [
           {
@@ -536,8 +536,8 @@
             "trims": [],
             "trim_strict": false,
             "body_types": [],
-            "year_min": 2021,
-            "year_max": 2021,
+            "year_min": 2020,
+            "year_max": 2022,
             "price_max": null,
             "price_target": null,
             "currency": null,
@@ -665,7 +665,7 @@
       "type": "result",
       "subtype": "success",
       "is_error": false,
-      "result": "{\"vehicles\":[{\"make\":\"Jeep\",\"model\":\"Renegade\",\"trim\":\"Longitude\",\"trims\":[\"Longitude\"],\"trim_strict\":false,\"body_types\":[],\"year_min\":2019,\"year_max\":2019,\"price_max\":18000,\"price_target\":null,\"currency\":\"USD\",\"km_max\":90000,\"km_target\":60000,\"transmission\":\"automatic\",\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null,\"timing\":null}]}",
+      "result": "{\"vehicles\":[{\"make\":\"Jeep\",\"model\":\"Renegade\",\"trim\":\"Longitude\",\"trims\":[\"Longitude\"],\"trim_strict\":false,\"body_types\":[],\"year_min\":2018,\"year_max\":2020,\"price_max\":18000,\"price_target\":null,\"currency\":\"USD\",\"km_max\":90000,\"km_target\":60000,\"transmission\":\"automatic\",\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null,\"timing\":null}]}",
       "structured_output": {
         "vehicles": [
           {
@@ -677,8 +677,8 @@
             ],
             "trim_strict": false,
             "body_types": [],
-            "year_min": 2019,
-            "year_max": 2019,
+            "year_min": 2018,
+            "year_max": 2020,
             "price_max": 18000,
             "price_target": null,
             "currency": "USD",
@@ -702,7 +702,7 @@
       "type": "result",
       "subtype": "success",
       "is_error": false,
-      "result": "{\"vehicles\":[{\"make\":\"Volkswagen\",\"model\":\"Gol Trend\",\"trim\":\"Pack II\",\"trims\":[\"Pack II\"],\"trim_strict\":false,\"body_types\":[],\"year_min\":2012,\"year_max\":2012,\"price_max\":6000,\"price_target\":null,\"currency\":\"USD\",\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null,\"timing\":null},{\"make\":\"Volkswagen\",\"model\":\"Fox\",\"trim\":\"Highline\",\"trims\":[\"Highline\"],\"trim_strict\":false,\"body_types\":[],\"year_min\":2012,\"year_max\":2012,\"price_max\":6000,\"price_target\":null,\"currency\":\"USD\",\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null,\"timing\":null},{\"make\":\"Volkswagen\",\"model\":\"Suran\",\"trim\":\"Trendline\",\"trims\":[\"Trendline\"],\"trim_strict\":false,\"body_types\":[],\"year_min\":2012,\"year_max\":2012,\"price_max\":6000,\"price_target\":null,\"currency\":\"USD\",\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null,\"timing\":null}]}",
+      "result": "{\"vehicles\":[{\"make\":\"Volkswagen\",\"model\":\"Gol Trend\",\"trim\":\"Pack II\",\"trims\":[\"Pack II\"],\"trim_strict\":false,\"body_types\":[],\"year_min\":2011,\"year_max\":2013,\"price_max\":6000,\"price_target\":null,\"currency\":\"USD\",\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null,\"timing\":null},{\"make\":\"Volkswagen\",\"model\":\"Fox\",\"trim\":\"Highline\",\"trims\":[\"Highline\"],\"trim_strict\":false,\"body_types\":[],\"year_min\":2011,\"year_max\":2013,\"price_max\":6000,\"price_target\":null,\"currency\":\"USD\",\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null,\"timing\":null},{\"make\":\"Volkswagen\",\"model\":\"Suran\",\"trim\":\"Trendline\",\"trims\":[\"Trendline\"],\"trim_strict\":false,\"body_types\":[],\"year_min\":2011,\"year_max\":2013,\"price_max\":6000,\"price_target\":null,\"currency\":\"USD\",\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null,\"timing\":null}]}",
       "structured_output": {
         "vehicles": [
           {
@@ -714,8 +714,8 @@
             ],
             "trim_strict": false,
             "body_types": [],
-            "year_min": 2012,
-            "year_max": 2012,
+            "year_min": 2011,
+            "year_max": 2013,
             "price_max": 6000,
             "price_target": null,
             "currency": "USD",
@@ -737,8 +737,8 @@
             ],
             "trim_strict": false,
             "body_types": [],
-            "year_min": 2012,
-            "year_max": 2012,
+            "year_min": 2011,
+            "year_max": 2013,
             "price_max": 6000,
             "price_target": null,
             "currency": "USD",
@@ -760,8 +760,8 @@
             ],
             "trim_strict": false,
             "body_types": [],
-            "year_min": 2012,
-            "year_max": 2012,
+            "year_min": 2011,
+            "year_max": 2013,
             "price_max": 6000,
             "price_target": null,
             "currency": "USD",
@@ -785,7 +785,7 @@
       "type": "result",
       "subtype": "success",
       "is_error": false,
-      "result": "{\"vehicles\":[{\"make\":\"Ford\",\"model\":\"Ka\",\"trim\":\"SE\",\"trims\":[\"SE\"],\"trim_strict\":false,\"body_types\":[],\"year_min\":2018,\"year_max\":2018,\"price_max\":null,\"price_target\":null,\"currency\":null,\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null,\"timing\":null}]}",
+      "result": "{\"vehicles\":[{\"make\":\"Ford\",\"model\":\"Ka\",\"trim\":\"SE\",\"trims\":[\"SE\"],\"trim_strict\":false,\"body_types\":[],\"year_min\":2017,\"year_max\":2019,\"price_max\":null,\"price_target\":null,\"currency\":null,\"km_max\":null,\"km_target\":null,\"transmission\":null,\"fuel\":null,\"seller_type\":null,\"location\":null,\"radius_km\":null,\"timing\":null}]}",
       "structured_output": {
         "vehicles": [
           {
@@ -797,8 +797,8 @@
             ],
             "trim_strict": false,
             "body_types": [],
-            "year_min": 2018,
-            "year_max": 2018,
+            "year_min": 2017,
+            "year_max": 2019,
             "price_max": null,
             "price_target": null,
             "currency": null,
