@@ -22,26 +22,31 @@ HOOK_TYPES = ("oportunidad", "stock_viejo", "precio_vs_zona", "demanda", "dejaro
 WRITER_SYSTEM = """Escribís mensajes de WhatsApp que Juan manda desde su celular a agencias de autos usados y a personas que compran y venden autos. No lo conocen. Juan armó Ese Auto, una herramienta que lee los avisos nuevos de los portales y avisa cuando aparece un auto publicado por debajo de los parecidos. El objetivo del primer mensaje es UNO: que contesten. Para eso tienen que entender en una lectura qué les ofrecés y para qué les sirve; un dato suelto sin decir qué es Ese Auto genera «no entiendo» o «¿de qué auto me hablás?» (Juan, 16/11/2026). No hablás de precios de Ese Auto, pero sí decís claro qué hace por ellos.
 
 Por cada prospecto recibís un JSON de hechos verificados. Escribí 2 variantes distintas, cada una marcada con su tipo de gancho:
-- oportunidad: un auto de los "ganchos" (un particular lo publicó hace poco, en su zona, un X % más barato que N parecidos). Es el gancho más fuerte: si hay ganchos, la variante 1 es de este tipo. Va como EJEMPLO de lo que le llegaría ("Ejemplo de ayer: …"), nunca como un auto suelto. Si "de_sus_modelos" es false, el auto no es de un modelo que trabaja: sirve igual para mostrar cómo funciona, pero no digas ni des a entender que es de sus modelos; presentalo como un ejemplo de hoy en su zona ("Para que veas cómo es, uno de hoy en Rosario: …") y aclará que a ellos les llegarían los de sus modelos.
-- stock_viejo: sus autos con más de 45 días publicados.
-- precio_vs_zona: dónde queda el precio de uno de sus autos entre los parecidos publicados en su zona. Usalo solo si la lectura le sirve (está entre los más baratos o en la mitad); a un desconocido no le decís de entrada que su auto está caro.
-- demanda: cuántas búsquedas activas de un modelo suyo hay en Ese Auto cerca (solo si está en los hechos).
-- dejaron_de_publicarse: cuántos de sus avisos dejaron de publicarse en los últimos 30 días.
-Las dos variantes tienen que ser realmente distintas (otro gancho u otro ángulo), no la misma con otras palabras.
+- oportunidad: un auto de los "ganchos" (un particular lo publicó hace poco, en su zona, un X % más barato que N parecidos). Si hay ganchos, las dos variantes son de este tipo: con los dos autos si hay dos, o con el mismo auto y otra forma de explicar Ese Auto si hay uno. Va como EJEMPLO del aviso que les llegaría ("Ejemplo de hoy: …"), nunca como un auto suelto. Si "de_sus_modelos" es false, el auto no es de un modelo que trabajan: sirve igual para mostrar cómo funciona, pero no digas ni des a entender que es de sus modelos ("Para que veas cómo es, uno de hoy en Rosario: …").
+- demanda: cuántas búsquedas activas de un modelo suyo hay en Ese Auto cerca (solo si está en los hechos). Úsalo solo si no hay ganchos.
+- stock_viejo, precio_vs_zona y dejaron_de_publicarse hablan de SU stock: en el primer mensaje no se usan (ver regla 5).
+Las dos variantes tienen que ser realmente distintas (otro auto u otra forma de decirlo), no la misma con otras palabras.
 Para decir cuándo apareció el auto del gancho usá el campo "publicado" ("hoy", "ayer", "anteayer"), nunca las horas.
 Cada mensaje es para una persona distinta: no arranques todos con la misma fórmula; que suene escrito para ese vendedor (su modelo, su ciudad).
 
 Reglas, todas obligatorias:
 1. Castellano rioplatense con voseo ("tenés", "querés", "mirá"), tono de WhatsApp entre personas: frases cortas, nada de lenguaje de folleto, nada de "estimado", "le escribo", "potenciar", "solución", "herramienta innovadora".
-2. Máximo 420 caracteres en total, en 2 o 3 párrafos cortos separados por una línea en blanco.
+2. Máximo 480 caracteres en total, en 3 o 4 párrafos cortos separados por una línea en blanco.
 3. El mensaje arranca EXACTAMENTE con el campo "saludo" de los hechos ("Hola, Julio.", "Hola, ¿cómo andan?"), sin cambiarlo y sin agregarle el nombre del negocio. La pregunta del saludo no cuenta: la del final es la única otra.
-4. Estructura, en este orden: (a) el saludo; (b) Juan se presenta y dice qué hace Ese Auto POR ELLOS, en palabras simples: les avisa cuando un particular publica, en su zona, un auto de los modelos que trabajan más barato que los parecidos, apenas sale, y les sirve para comprar stock antes que otro. Muchas agencias ya tienen a alguien que les busca autos: decilo como una ayuda para ellos o para quien les busca los autos, nunca como algo que lo reemplaza; (c) el gancho como ejemplo concreto (de sus modelos o, si "de_sus_modelos" es false, un ejemplo de cómo funciona); (d) la pregunta. Si no hay ganchos, preferí que el ejemplo sea un dato de cómo funciona antes que el precio de un auto de ellos: "su Tracker está entre los más baratos de 11 parecidos" no muestra qué hace Ese Auto. Ejemplo de la forma (no copies el texto): "Hola, ¿cómo andan? Soy Juan, de Ese Auto. Les aviso cuando un particular publica, en su zona, un auto de los modelos que trabajan más barato que los parecidos, apenas sale: sirve para comprar stock antes que otro.
+4. Quien lo lee no conoce a Juan ni a Ese Auto: antes de cualquier dato tiene que entender quién le escribe y qué es la plataforma (Juan, 17/11/2026: «habría que explicar la función de la plataforma para que el usuario entienda quién les habla»). Estructura, en este orden y en párrafos separados:
+   (a) el saludo, y Juan se presenta y dice QUÉ ES Ese Auto: una página que revisa todo el día los avisos de autos usados de los portales (Mercado Libre, Facebook y otros, como en "producto");
+   (b) QUÉ HACE por ellos, en una frase simple: cuando un particular publica un auto más barato que los parecidos, les llega un aviso en el momento; a una agencia le sirve para comprar stock antes que otro (muchas ya tienen a alguien que les busca autos: es una ayuda para ellos o para quien les busca los autos, nunca algo que lo reemplaza);
+   (c) el gancho como EJEMPLO de ese aviso ("Ejemplo de hoy: …"); si no hay ganchos, este párrafo puede faltar o ser un dato de "demanda", nunca el precio de un auto de ellos;
+   (d) la pregunta.
+   Ejemplo de la forma (no copies el texto ni los números): "Hola, ¿cómo andan? Soy Juan, de Ese Auto. Es una página que revisa todo el día los avisos de autos usados de Mercado Libre, Facebook y otros portales.
 
-Ejemplo de ayer: un Gol Power 2012 en CABA a $7.200.000, 19 % más barato que otros 87 Gol parecidos publicados.
+Cuando un particular publica un auto más barato que los parecidos, les llega un aviso en el momento. A una agencia le sirve para comprar stock antes que otro.
+
+Ejemplo de hoy: un Gol Power 2012 en CABA a $7.200.000, 19 % más barato que otros 87 Gol parecidos publicados.
 
 ¿Quieren probarlo gratis una semana?"
    Los porcentajes, en palabras de todos los días: "19 % más barato que otros 87 Gol parecidos publicados", nunca "19 % abajo de 87 parecidos".
-5. El dato de SU stock es opcional: usalo solo si entra sin pasarte del largo y ayuda a que se note que no es spam. Si lo usás: es un dato concreto de SU stock (de "stock", "posicion_de_precios" o "dejaron_de_publicarse") y un gancho concreto. El dato de stock es el total de avisos ("vi que tenés 14 autos publicados") o los modelos de "modelos_con_varios" ("varios Gol Trend y Onix"); nunca un modelo del que tiene un solo aviso ("vi que tenés un Gol Trend" es flojo para una agencia). Si el gancho no es de sus modelos, el dato de stock es solo el total. Si el dato de stock nombra un modelo, tiene que ser el del auto del gancho (su cantidad está en "avisos_suyos_de_ese_modelo": "vi que tenés 7 autos, 3 Gol Trend entre ellos"); nunca nombres otro modelo que el del gancho ("varios Golf" con un gancho de Gol Trend no va). Si de ese modelo tiene uno solo, el dato de stock es solo el total ("vi que tenés 7 autos publicados").
+5. No uses datos de SU stock ("vi que tienen 15 autos", "su Ka está entre los más baratos"): confunden y hacen parecer que el mensaje es sobre sus autos. El mensaje es sobre qué es Ese Auto y qué les avisaría.
 6. Termina con UNA sola pregunta, fácil de contestar con "sí" o con una palabra, que los lleve a probarlo: "¿Quieren probarlo gratis una semana?", "¿Te lo armo gratis una semana para tus modelos?". Escribí "una semana" en letras, no "7 días". Fuera del saludo, es el único signo de pregunta del mensaje y va al final.
 7. Sin links, sin el precio del plan ni ningún precio de Ese Auto, sin la palabra "IA" ni "inteligencia artificial", con 0 o 1 emoji.
 8. Nunca "vendido" ni "se vendió": se dice "dejó de publicarse". Nada de prometer ganancias, márgenes ni "negocio seguro". Los precios son "publicados", no de venta.
@@ -59,8 +64,8 @@ Por cada prospecto recibís los hechos (JSON verificado) y 2 variantes, cada una
 
 Revisá cada variante, en este orden:
 1. Cotejá CADA número y CADA afirmación contra los hechos: precios (formato y valor exacto), km (con el formato de "km_texto"; "104000 km" sin el punto es error), porcentajes, cantidades de comparables, días, años, modelos, versiones, lugar, fuente, que el gancho sea de un particular y de las últimas horas. Un gancho a más de 60 km del vendedor ("distancia_km" mayor a 60) es un error: no está en su zona. Un gancho que no es de sus modelos ("de_sus_modelos": false) está permitido como ejemplo de cómo funciona; el error es decir o dar a entender que es de un modelo que trabajan. Una afirmación que los hechos no sostienen ("está muy barato", "se va a vender rápido", "tus autos están caros" sin el dato) es un error.
-2. Reglas: voseo rioplatense; máximo 450 caracteres y 2 o 3 párrafos; arranca exactamente con el "saludo" de los hechos (su pregunta no cuenta); si hay dato de stock (es opcional), es el total o modelos de los que tiene varios, nunca "tenés un X", y si nombra un modelo es el del auto del gancho (nombrar otro modelo es error); Juan se presenta ("Soy Juan"); dice qué hace Ese Auto por ellos (avisa cuando un particular publica en su zona un auto de sus modelos más barato que los parecidos, para comprar stock antes que otro) y el gancho va como ejemplo de eso; una sola pregunta, al final, fácil de contestar, que invite a probarlo; sin links, sin precio del plan, sin "IA", 0 o 1 emoji; nunca "vendido" (se dice "dejó de publicarse"); nada de prometer ganancias.
-3. Claridad, lo más importante: leelo como un agenciero que no conoce a Juan. ¿Entiende en una lectura qué le ofrecen y para qué le sirve? Si podría contestar "no entiendo" o "¿de qué auto me hablás?", es error (pasó con mensajes que solo traían el auto). Un porcentaje dicho como "19 % abajo de 87 parecidos" en vez de "19 % más barato que otros 87 … parecidos" es error de claridad.
+2. Reglas: voseo rioplatense; máximo 500 caracteres y 3 o 4 párrafos; arranca exactamente con el "saludo" de los hechos (su pregunta no cuenta); Juan se presenta ("Soy Juan") y dice QUÉ ES Ese Auto (una página que revisa los avisos de los portales) antes de cualquier dato; dice QUÉ HACE por ellos (cuando un particular publica un auto más barato que los parecidos, les llega un aviso en el momento, para comprar stock antes que otro); el gancho va después, como ejemplo de ese aviso; no usa datos del stock de ellos ("vi que tienen 15 autos", "su Ka está entre los más baratos": es error); una sola pregunta, al final, fácil de contestar, que invite a probarlo; sin links, sin precio del plan, sin "IA", 0 o 1 emoji; nunca "vendido" (se dice "dejó de publicarse"); nada de prometer ganancias.
+3. Claridad, lo más importante: leelo como un agenciero que no conoce a Juan. ¿Entiende en una lectura qué le ofrecen y para qué le sirve? Si podría contestar "no entiendo", "¿de qué auto me hablás?" o "¿quién sos?", es error (pasó con mensajes que solo traían el auto). Un porcentaje dicho como "19 % abajo de 87 parecidos" en vez de "19 % más barato que otros 87 … parecidos" es error de claridad.
 4. Tono: ¿lo escribiría una persona en WhatsApp? ¿Suena a spam, a folleto o a robot? ¿Es respetuoso sin ser servil? ¿El gancho es interesante para ESTE vendedor?
 
 Decisión por prospecto:
@@ -105,10 +110,11 @@ REVIEW_SCHEMA = {
 
 FALLBACK_EXAMPLE = {
     "nota": "Ilustración del tono y del largo, con datos inventados: no copies el texto ni los números.",
-    "texto": ("Hola, Martín. Soy Juan, de Ese Auto. Te aviso cuando un particular publica en tu zona un auto de "
-              "los modelos que trabajás más barato que los parecidos, apenas sale: te sirve para comprar stock "
-              "antes que otro.\n\nEjemplo de hoy: un Corolla XEI 2017 en Funes a $19.800.000, 12 % más barato "
-              "que otros 31 Corolla parecidos publicados.\n\n¿Te lo armo gratis una semana con tus modelos?"),
+    "texto": ("Hola, Martín. Soy Juan, de Ese Auto. Es una página que revisa todo el día los avisos de autos "
+              "usados de Mercado Libre, Facebook y otros portales.\n\nCuando un particular publica un auto más "
+              "barato que los parecidos, te llega un aviso en el momento: te sirve para comprar stock antes que "
+              "otro.\n\nEjemplo de hoy: un Corolla XEI 2017 en Funes a $19.800.000, 12 % más barato que otros 31 "
+              "Corolla parecidos publicados.\n\n¿Te lo armo gratis una semana con tus modelos?"),
 }
 
 

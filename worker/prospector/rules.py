@@ -10,8 +10,8 @@ import re
 import unicodedata
 from typing import Any, Iterable
 
-MAX_CHARS = 450
-MAX_PARAGRAPHS = 3
+MAX_CHARS = 500
+MAX_PARAGRAPHS = 4
 MAX_EMOJIS = 1
 
 _LINK = re.compile(r"(https?://|www\.|\b[\w-]+\.(com|ar|net|org|io|app)\b)", re.IGNORECASE)
