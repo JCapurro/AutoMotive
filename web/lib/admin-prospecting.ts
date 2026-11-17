@@ -137,6 +137,21 @@ export const REPLIES: Reply[] = [
       "Genial, gracias. ¿Qué modelos están buscando hoy, en qué años y en qué zona?\n\n" +
       "Te armo la búsqueda con un umbral, por ejemplo que te avise cuando un auto esté 10 % abajo de los comparables. En 7 días te cuento qué apareció y vemos si te sirve.",
   },
+  {
+    key: "no_entiendo",
+    label: "«No entiendo» / «¿Qué auto?»",
+    text: (c) =>
+      "Perdón, fui muy corto. Ese Auto revisa todos los días los avisos nuevos de Mercado Libre, Marketplace y otros portales, y te avisa cuando un particular publica un auto de los modelos que trabajás, en tu zona, más barato que los parecidos. Sirve para comprar stock antes que otro.\n\n" +
+      `${c.hookCar ? `El ${c.hookCar} que te mencioné es un ejemplo de los que te llegarían` : "Lo que te mencioné es un ejemplo de los que te llegarían"}${c.hookUrl ? `: ${c.hookUrl}` : "."}\n\n` +
+      "¿Querés que te lo arme gratis una semana con tus modelos?",
+  },
+  {
+    key: "ya_buscamos",
+    label: "«Ya tenemos quien busca»",
+    text: () =>
+      "¡Gracias por responder! Justamente sirve para eso: a la persona que les busca autos le llegan apenas salen los que publican particulares más baratos que los parecidos, en su zona y de los modelos que trabajan, sin revisar portal por portal.\n\n" +
+      "Si quieren, se lo dejo andando gratis una semana y ven si le suma.",
+  },
   { key: "mail", label: "Pedirle el mail", text: () => "Para armarte la cuenta necesito un mail: ahí te llegan los avisos. ¿Cuál uso?" },
   {
     key: "precio",

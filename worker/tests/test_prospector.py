@@ -209,7 +209,7 @@ def prospect_rosario():
     ({"n": 5}, False),               # too few comparables
     ({"price": 11_111_111}, False),  # placeholder price
     ({"description": "Financiamos y tomamos usados"}, False),   # writes like an agency
-    ({"model": "Corolla"}, False),   # not one of their models
+    ({"model": "Corolla"}, False),   # not one of their models (HOOK_ANY_MODEL is off)
     ({"prov": "14", "dept": "Capital"}, False),                 # another region
 ])
 def test_hook_candidates(change, ok):
@@ -226,6 +226,19 @@ def test_hooks_closer_first_and_exclusions():
     got = F.hook_candidates(pool, p, zone, None)
     assert [c["row"]["id"] for c in got] == [101, 100]
     assert [c["row"]["id"] for c in F.hook_candidates(pool, p, zone, None, exclude=[101])] == [100]
+
+
+def test_hooks_of_their_models_come_before_any_other_model(monkeypatch):
+    monkeypatch.setattr(F, "HOOK_ANY_MODEL", True)
+    p = prospect_rosario()
+    zone = F.zone_of(p.listings, None)
+    other = hook_row(100, model="Corolla", dept="Rosario", diff=20)       # same city, deeper, not theirs
+    theirs = hook_row(101, dept="Santa Fe", diff=11)                       # theirs, a bit farther
+    got = F.hook_candidates([other, theirs], p, zone, None)
+    assert [c["row"]["id"] for c in got] == [101, 100]
+    facts = [F.hook_fact(c, NOW, f"oportunidad_{i + 1}") for i, c in enumerate(got)]
+    assert [f["de_sus_modelos"] for f in facts] == [True, False]
+    assert facts[1]["avisos_suyos_de_ese_modelo"] == 0
 
 
 def test_when_published():
@@ -632,3 +645,11 @@ def test_hook_fact_carries_km_texto():
     c = F.hook_candidates([hook_row(950, mileage_km=104000)], p, F.zone_for(p, None), None)[0]
     fact = F.hook_fact(c, NOW, "g1")
     assert fact["km"] == 104000 and fact["km_texto"] == "104.000 km"
+
+
+def test_voseo_with_accents_is_not_tuteo():
+    facts = {"saludo": "Hola, Pablo."}
+    vos = "Hola, Pablo. Soy Juan, de Ese Auto. Te aviso así comprás stock antes que otro y buscás menos.\n\n¿Te lo armo?"
+    assert not any("tuteo" in p for p in rules.check(vos, facts))
+    tu = "Hola, Pablo. Soy Juan, de Ese Auto. Te aviso así compras stock antes que otro.\n\n¿Te lo armo?"
+    assert any("tuteo" in p for p in rules.check(tu, facts))

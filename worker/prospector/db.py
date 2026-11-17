@@ -178,13 +178,19 @@ def used_hooks(conn: psycopg.Connection, prospect_id: int) -> list[int]:
     return [r["hook_listing_id"] for r in rows]
 
 
+# Messages before this day only carried the car, and many answers were «no entiendo»:
+# they are not examples of what works (Juan, 16/11/2026).
+EXAMPLES_SINCE = "2026-11-17"
+
+
 def replied_examples(conn: psycopg.Connection, limit: int = 6) -> list[dict[str, Any]]:
     """The last messages that got an answer, as examples for the writer."""
     return conn.execute(
         """select m.final_text as text, m.hook_type, p.kind
              from public.prospect_messages m join public.prospects p on p.id = m.prospect_id
             where m.status = 'sent' and p.replied_at is not null and m.sent_at <= p.replied_at
-            order by p.replied_at desc limit %s""", (limit,)).fetchall()
+              and m.sent_at >= %s::date
+            order by p.replied_at desc limit %s""", (EXAMPLES_SINCE, limit)).fetchall()
 
 
 def expire_stale(conn: psycopg.Connection, keep_days: int) -> int:

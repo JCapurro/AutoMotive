@@ -10,8 +10,8 @@ import re
 import unicodedata
 from typing import Any, Iterable
 
-MAX_CHARS = 450
-MAX_PARAGRAPHS = 3
+MAX_CHARS = 500
+MAX_PARAGRAPHS = 4
 MAX_EMOJIS = 1
 
 _LINK = re.compile(r"(https?://|www\.|\b[\w-]+\.(com|ar|net|org|io|app)\b)", re.IGNORECASE)
@@ -119,7 +119,7 @@ def check(text: str, facts: Any, *, extra_numbers: Iterable[str] = ()) -> list[s
     for pattern, problem in _BANNED:
         if pattern.search(folded):
             problems.append(problem)
-    if _TUTEO.search(folded):
+    if _TUTEO.search(body.lower()):     # accents kept: «comprás» is voseo, «compras» is not
         problems.append("usa tuteo en vez de voseo")
     if len(_EMOJI.findall(body)) > MAX_EMOJIS:
         problems.append("tiene más de un emoji")

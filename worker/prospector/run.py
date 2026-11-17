@@ -61,7 +61,7 @@ def _load_json(path: Path, default):
 def score(p: Prospect, hooks: list[dict[str, Any]], now: datetime) -> float:
     s = 0.0
     if hooks:
-        s += 100 + 15 * (hooks[0]["tier"] - 1)
+        s += 100 + 15 * (hooks[0]["tier"] - 1) + (20 if hooks[0].get("own") else 0)
     if p.phone:
         s += 40
     elif p.kind == "persona" and not {"rosariogarage", "mercadolibre"} & set(p.sources):
@@ -264,7 +264,8 @@ def _run(args) -> int:
     prospects, dropped = sellers.build_prospects(rows, contacted=contacted, banned_phones=banned)
     log(f"{len(prospects)} prospectos en la base; fuera: {dict(dropped)}")
 
-    known = known_index(db.known_prospects(conn)) if live else {}
+    # Read in a dry run too, so a test batch never shows someone already contacted.
+    known = known_index(db.known_prospects(conn)) if db.tables_exist(conn) else {}
     target = args.new
     if live:
         expired = db.expire_stale(conn, STALE_KEEP_DAYS)

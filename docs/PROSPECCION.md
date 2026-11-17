@@ -45,8 +45,9 @@ Criteria (Juan, 15/11/2026):
 3. **Facts** (`facts.py`). A JSON built from SQL only:
    - their stock (listings, models, ages, prices);
    - their price position against comparables (`comparable_pool`, same zone);
-   - hooks: a private listing at most 72 h old in their zone, of a model they sell, at 10–35 %
-     below comparables (`public.comparables`), with no placeholder prices. «Their zone» is
+   - hooks: a private listing at most 72 h old in their zone at 10–35 % below comparables
+     (`public.comparables`), with no placeholder prices. Only a model they sell (`HOOK_ANY_MODEL`
+     is off since 17/11/2026: a car they do not work reads as «not for me»). «Their zone» is
      their own partido or city, or at most 60 km from the median point of their listings (the
      radius of a search); with no hook that close, the message uses another kind of hook. The
      reviewer also rejects a hook whose `distancia_km` is over 60;
