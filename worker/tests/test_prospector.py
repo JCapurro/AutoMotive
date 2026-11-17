@@ -209,7 +209,7 @@ def prospect_rosario():
     ({"n": 5}, False),               # too few comparables
     ({"price": 11_111_111}, False),  # placeholder price
     ({"description": "Financiamos y tomamos usados"}, False),   # writes like an agency
-    ({"model": "Corolla"}, True),    # not one of their models: still an example of what Ese Auto does
+    ({"model": "Corolla"}, False),   # not one of their models (HOOK_ANY_MODEL is off)
     ({"prov": "14", "dept": "Capital"}, False),                 # another region
 ])
 def test_hook_candidates(change, ok):
@@ -228,7 +228,8 @@ def test_hooks_closer_first_and_exclusions():
     assert [c["row"]["id"] for c in F.hook_candidates(pool, p, zone, None, exclude=[101])] == [100]
 
 
-def test_hooks_of_their_models_come_before_any_other_model():
+def test_hooks_of_their_models_come_before_any_other_model(monkeypatch):
+    monkeypatch.setattr(F, "HOOK_ANY_MODEL", True)
     p = prospect_rosario()
     zone = F.zone_of(p.listings, None)
     other = hook_row(100, model="Corolla", dept="Rosario", diff=20)       # same city, deeper, not theirs

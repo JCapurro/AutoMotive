@@ -44,6 +44,9 @@ HOOK_DEEP_MIN_PHOTOS = 4
 HOOK_MIN_PHOTOS = 2
 HOOK_CHECKS_PER_PROSPECT = 5    # listing pages read to find 2 hooks still published
 DEMAND_RADIUS_KM = 60
+# Any model as the example when none of theirs is near: off since the review council of
+# 17/11/2026 (a car they do not work reads as «esto no es para mí»).
+HOOK_ANY_MODEL = False
 HOOK_RADIUS_KM = DEMAND_RADIUS_KM   # a hook outside their partido must be this close, like a search's radius
 DEMAND_MIN = 3            # below this a count could point at a person
 POSITION_MIN_N = 5
@@ -200,7 +203,7 @@ def hook_candidates(pool: Iterable[Mapping[str, Any]], prospect: Prospect, zone:
     here = centre(prospect, zone)
     out = []
     for row in pool:
-        if row["id"] in skip:
+        if row["id"] in skip or (not HOOK_ANY_MODEL and (row.get("make"), row.get("model")) not in mine):
             continue
         ref = row.get("ref") or {}
         n, diff = ref.get("n") or 0, ref.get("diff_pct")
