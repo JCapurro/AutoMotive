@@ -271,6 +271,18 @@ class SearchContractTests(DeRuedasCase):
         self.assertEqual(site.urls[-2:], [SEARCH + '&anio_1=2024', SEARCH])
         self.assertEqual(site.searched(), [('/bus.asp', 0, 'Chevrolet:Onix', 1)] * 2)
         self.assertEqual((list(result), result.complete), ([], True))
+        # The real site also unchecks the brand when the years leave nothing (Smart Fortwo, 2019+).
+        emptied = bus_page('Chevrolet', 'Onix', total=0).replace(' checked/>', '/>')
+        self.assertNotIn('checked', emptied)
+        deruedas._catalogs.clear()
+        with patch('collectors.deruedas.date') as clock:
+            clock.today.return_value = date(2026, 10, 13)
+            _, result = await self.onix({1: [emptied, unfiltered]}, anio_min=2024)
+        self.assertEqual((list(result), result.complete), ([], True))
+        # Without the years an unchecked brand is still a filter that was not applied.
+        deruedas._catalogs.clear()
+        with self.assertRaisesRegex(RuntimeError, 'model filter not applied'):
+            await self.onix({1: emptied})
         # Without stock at all it is the catalog's zero.
         deruedas._catalogs.clear()
         with self.assertRaisesRegex(RuntimeError, 'catalog lists model but search found 0'):

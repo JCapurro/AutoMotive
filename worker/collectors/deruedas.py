@@ -299,7 +299,11 @@ class DeRuedasScraper(PublicCatalogScraper):
         chips = [(c.get("marcaval"), (c.get("modeloval") or "").casefold())
                  for c in doc.select("div.toggleModeloLink.cerrarItem_4")]
         listed = [i.get("value") for i in doc.select("#divModelosFancy input.fancyCheck")]
-        if checked != [brand] or chips != ([(brand, wanted.casefold())] if model else []):
+        # Years that leave nothing also empty the brand and model lists, so no
+        # brand is checked then; the chip still names the model searched.
+        nothing_left = not total and bool(years)
+        if (checked != [brand] and not (nothing_left and not checked)) \
+                or chips != ([(brand, wanted.casefold())] if model else []):
             raise RuntimeError("deruedas: model filter not applied")
         # The model list shrinks to the one searched, or to nothing without results.
         if model and listed != [wanted] and (listed or total):
