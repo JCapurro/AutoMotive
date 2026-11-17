@@ -22,6 +22,18 @@ describe("roughDraft", () => {
     });
   });
 
+  it("turns a lone year into ±1, not an exact year", () => {
+    expect(roughDraft("peugeot 307 2016 manual", catalog)).toMatchObject({ year_min: 2015, year_max: 2017 });
+  });
+
+  it("keeps explicit ranges, 'desde' and no year as they were", () => {
+    expect(roughDraft("focus 2016 a 2018", catalog)).toMatchObject({ year_min: 2016, year_max: 2018 });
+    expect(roughDraft("focus desde 2018", catalog)).toMatchObject({ year_min: 2018 });
+    expect(roughDraft("focus desde 2018", catalog)).not.toHaveProperty("year_max");
+    expect(roughDraft("focus manual", catalog)).not.toHaveProperty("year_min");
+    expect(roughDraft("focus manual", catalog)).not.toHaveProperty("year_max");
+  });
+
   it("reads pesos in millions and an automatic gearbox", () => {
     expect(roughDraft("Hilux automática hasta 35 millones en zona norte", catalog)).toEqual({
       make: "Toyota", model: "Hilux", price_max: 35_000_000, currency: "ARS", transmission: "automatic",

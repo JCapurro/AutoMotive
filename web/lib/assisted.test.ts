@@ -80,7 +80,7 @@ describe("draft → structured form", () => {
   it("an unresolved vehicle arrives blank, with the worker's note", () => {
     const { values, notes } = draftToValues(tesla, BASE);
     expect([values.make, values.model]).toEqual(["", ""]);
-    expect(values.year_min).toBe(2021);
+    expect(values.year_min).toBe(2020);
     expect(notes[0]).toContain("Tesla Model 3");
   });
 
