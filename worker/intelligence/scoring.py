@@ -132,8 +132,13 @@ def trim_component(listing: Mapping[str, Any], profile: Mapping[str, Any],
 
 
 def age_hours(listing: Mapping[str, Any], now: datetime) -> tuple[float | None, bool]:
-    """Effective age, with first detection as fallback; bool identifies publication."""
+    """Effective age, with first detection as fallback; bool identifies publication.
+    Unknown for an undated listing a stock read stored first (attributes._not_news
+    'stock', pipeline/crawl.py stock_reads): it was read then, not published."""
     published = listing.get("published_at")
+    mark = (listing.get("attributes") or {}).get("_not_news")
+    if published is None and isinstance(mark, Mapping) and mark.get("reason") == "stock":
+        return None, False
     since = published or listing.get("first_seen_at")
     if since is None:
         return None, False

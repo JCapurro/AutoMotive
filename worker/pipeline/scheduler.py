@@ -292,7 +292,8 @@ async def _wanted(target: dict, alerts: list[dict], keys: dict[int, _VehicleKey]
 
 async def process_batch(notifier: Notifier, target: dict, listing_ids: list[int], *,
                         first_run: bool, events: list = (), backfill_ids: Iterable[int] = (),
-                        body_type_filled: Iterable[int] = (), held_first_run: bool = False) -> None:
+                        body_type_filled: Iterable[int] = (), held_first_run: bool = False,
+                        stock: bool = False) -> None:
     """Steps 4–6 for one batch of a target's listings: match and score them
     against the target's profiles, then notify, and count for the searches
     with ended access. tools/simulate_alert.py runs it for a single listing.
@@ -308,8 +309,16 @@ async def process_batch(notifier: Notifier, target: dict, listing_ids: list[int]
     `body_type_filled`, listings stored before whose body type this batch
     filled in or corrected, are old news for the searches without a model:
     their batches couldn't match them, and a body-type backfill
-    (tools.backfill_body_type) or a better reading is not a new listing."""
+    (tools.backfill_body_type) or a better reading is not a new listing.
+    `stock`: a stock read's batch (crawl.stock_reads), old stock for every
+    search: all of it backfill, matched for every search of the model
+    (bootstrapped or not) and never notified, nor counted in 2.5, nor sent
+    to the photos for a color before the batch (the color pass gets to the
+    matched ones, as for any backfill). Its price drops and ended listings
+    still reach who had them, as any run's."""
     backfill_ids, body_type_filled = frozenset(backfill_ids), frozenset(body_type_filled)
+    if stock:
+        backfill_ids |= frozenset(listing_ids)
     body_target = target.get("body_type") is not None
     scorer = await Scorer.create()
     # The rows first, then the comparables (a query each) only for what some
@@ -326,7 +335,7 @@ async def process_batch(notifier: Notifier, target: dict, listing_ids: list[int]
     band = news.band_ids(target, rows, max_age_days=max_age_days)
     backfill_ids |= await news.old_band(target, [r for r in rows if r["id"] in band])
     members = frozenset((target.get("query") or {}).get("profile_ids") or ())
-    if not first_run:
+    if not first_run and not stock:
         # A first run is backfill, never notified: the color pass fills it in later.
         await resolve_colors(alerts, keys, scorer)
     staged: list[_Staged] = []
@@ -367,7 +376,7 @@ def batch_handler(notifier: Notifier) -> crawl.BatchHandler:
             await process_batch(notifier, run.target, listing_ids, first_run=run.first_run,
                                 events=run.result.events, backfill_ids=run.backfill_ids,
                                 body_type_filled=run.result.body_type_filled,
-                                held_first_run=run.first_run and run.empty_runs > 0)
+                                held_first_run=run.first_run and run.empty_runs > 0, stock=run.stock)
         elif run.result.events:
             # Events without a listing to match: a batch of only sold cards
             # (ingest_rows card_gone) still tells who saved or followed them.

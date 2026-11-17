@@ -57,6 +57,13 @@ def own_zone(profile: Mapping[str, Any]) -> tuple[float, float, float] | None:
     return zones[0]
 
 
+def _stock(listing: Mapping[str, Any]) -> bool:
+    """Stored first by a stock read (pipeline/crawl.py stock_reads): its
+    first_seen_at is when it was read, not when it was published."""
+    mark = (listing.get("attributes") or {}).get("_not_news")
+    return isinstance(mark, Mapping) and mark.get("reason") == "stock"
+
+
 def eligible(profile: Mapping[str, Any]) -> bool:
     f = profile.get("filters") or {}
     return bool(f.get("make") and f.get("model")) and own_zone(profile) is not None
@@ -87,7 +94,8 @@ def pick(listings: Iterable[Mapping[str, Any]], profile: Mapping[str, Any], *, c
          seen: Iterable[int] = ()) -> tuple[Mapping[str, Any], float] | None:
     """The listing to tell this search about and its distance in km, or None.
 
-    New for the search (first seen since it was created) and still recent,
+    New for the search (first seen since it was created, and not a stock
+    read's old stock, attributes._not_news 'stock') and still recent,
     with a full price and coordinates, failing only the zone on known data
     (`confirmed`), at most max_extra_km past its edge. `seen` are the
     listings already told."""
@@ -99,7 +107,7 @@ def pick(listings: Iterable[Mapping[str, Any]], profile: Mapping[str, Any], *, c
     best: tuple[Mapping[str, Any], float] | None = None
     for listing in listings:
         first = listing.get("first_seen_at")
-        if (listing.get("id") in told or first is None or first < created_at
+        if (listing.get("id") in told or first is None or first < created_at or _stock(listing)
                 or (listing.get("published_at") or first) < oldest
                 or listing.get("price") is None or listing.get("price_partial")
                 or listing.get("lat") is None or listing.get("lon") is None):

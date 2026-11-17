@@ -30,7 +30,9 @@ classify stores the step, the envelope and the reappearance as backfill for
 every search (seen on the web, never notified) and marks them in
 listings.attributes._not_news {reason, run_id, target_id, prev_id}:
 scheduler.match_alert keeps them backfill on a retry or for another target,
-and count_after_expiry (2.5) never counts them. A first run's new listings
+and count_after_expiry (2.5) never counts them. A stock read (pipeline/crawl.py
+stock_reads, on any source) marks what it stores first 'stock' the same
+way (mark_stock). A first run's new listings
 are marked 'first_run', and the band's first read 'band', both only for the
 target that stored them: its searches never get them as news, 2.5 doesn't
 count them for it, and another target that wants them (a body type, a
@@ -63,8 +65,11 @@ from pipeline.ingest import IngestConfig, IngestResult, price_drop_pct
 log = logging.getLogger("news")
 
 FIRST_RUN, STEP, REAPPEARANCE, ENVELOPE, BAND = "first_run", "step", "reappearance", "envelope", "band"
+# Stored first by a stock read (pipeline/crawl.py stock_reads, any source):
+# the target's stock as it was, published who knows when.
+STOCK = "stock"
 # Old stock: backfill for every search on every run, never counted in 2.5.
-MUTED = frozenset({STEP, REAPPEARANCE, ENVELOPE})
+MUTED = frozenset({STEP, REAPPEARANCE, ENVELOPE, STOCK})
 # Old stock only for the target that stored it (uncounted).
 OWN = frozenset({FIRST_RUN, BAND})
 
@@ -301,6 +306,25 @@ def uncounted(row: dict[str, Any] | None, target_id: int | None) -> bool:
     business (a body type next to a model on Kavak)."""
     mark = _mark(row)
     return mark.get("reason") in MUTED or (mark.get("reason") in OWN and mark.get("target_id") == target_id)
+
+
+def stock(row: dict[str, Any] | None) -> bool:
+    """A listing a stock read stored first: old stock, whatever its first_seen_at says."""
+    return _mark(row).get("reason") == STOCK
+
+
+async def mark_stock(target: dict[str, Any], result: IngestResult) -> frozenset[int]:
+    """The listings a stock read (pipeline/crawl.py stock_reads) stored for
+    the first time, marked old stock ('stock'): seen on the web, backfill
+    for every search on every run (muted), never counted in 2.5 nor taken
+    for a new car (near_zone, market_stats). One stored before keeps its
+    marks and dates: ingest merged the read into it. Returns their ids."""
+    new = list(dict.fromkeys(e.listing_id for e in result.events if e.kind == "listing_new"))
+    if new:
+        mark = {"_not_news": {"reason": STOCK, "run_id": None, "target_id": target["id"], "prev_id": None}}
+        async with connection() as cx:
+            await listings.mark_not_news(cx, [(lid, mark, None) for lid in new])
+    return frozenset(new)
 
 
 def republished(row: dict[str, Any] | None) -> bool:

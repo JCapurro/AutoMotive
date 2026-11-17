@@ -12,7 +12,9 @@ code's VEHICLE_BODY_TYPE values, and labels the cards with the code only
 when the page shows the filter applied.
 
 A target's whole stock is also read every couple of days (full_read,
-comparables fase 2), only for the ids of what is still listed.
+comparables fase 2) for the ids of what is still listed, and stock_read is
+the same walk keeping the cards, which pipeline/crawl.py stores as old stock
+(docs/PLAN_PRIMERA_LECTURA_COMPLETA.md): one walk gives both.
 """
 from __future__ import annotations
 import asyncio
@@ -472,11 +474,13 @@ OPEN_YEARS = 15
 @dataclass
 class FullRead:
     """MercadoLibreScraper.full_read: the ids it saw, and whether they are
-    every ad the search lists."""
+    every ad the search lists. `cards`: the ads themselves, once each, those
+    the filters let through (stock_read)."""
     ids: set[str] = field(default_factory=set)
     complete: bool = True
     reason: str | None = None
     pages: int = 0
+    cards: list[Listing] = field(default_factory=list)
 
 
 def _year_buckets(filters: dict) -> list[dict]:
@@ -708,11 +712,24 @@ class MercadoLibreScraper(BaseScraper):
                  code, ",".join(ids), pages, len(results), results.complete, results.reason)
         return results
 
-    async def full_read(self, filters: dict) -> FullRead:
+    async def stock_read(self, filters: dict) -> SearchResults:
+        """The cards of every ad the target's search lists, with no
+        publication window (docs/PLAN_PRIMERA_LECTURA_COMPLETA.md): the walk
+        of full_read, keeping them. A card carries no date: published_at only
+        when this process dated the ad before. `listed` holds every id the
+        walk saw (what full_read returns, for targets.record_full_read) and
+        `pages` how many pages it read, so one walk serves both."""
+        read = await self.full_read(filters, cards=True)
+        out = SearchResults(read.cards, complete=read.complete, reason=read.reason)
+        out.listed, out.pages = read.ids, read.pages
+        return out
+
+    async def full_read(self, filters: dict, *, cards: bool = False) -> FullRead:
         """The ids of every ad the target's search lists (comparables fase 2:
         a sold car stops counting once a read like this no longer sees it).
         Mercado Libre serves 42 pages at most: a search with more is read a
-        year at a time (_year_buckets). Nothing is dated, kept or stored here.
+        year at a time (_year_buckets). Nothing is dated or stored here;
+        `cards` keeps the ads too (stock_read).
 
         Complete only when every page of every search was read: a page count
         on the first page, every page but the last one full, no page repeated.
@@ -722,9 +739,9 @@ class MercadoLibreScraper(BaseScraper):
         base = {k: filters[k] for k in ("marca", "modelo", "anio_min", "anio_max", "km_max")
                 if filters.get(k) is not None}
         try:
-            if not await self._read_whole(base, out):
+            if not await self._read_whole(base, out, keep=cards):
                 for bucket in _year_buckets(base):
-                    if not await self._read_whole(bucket, out):
+                    if not await self._read_whole(bucket, out, keep=cards):
                         out.complete = False
                         out.reason = (f"mercadolibre: {bucket['anio_min']}-{bucket['anio_max']} has more "
                                       f"results than its {MAX_PAGE_COUNT} pages show")
@@ -733,13 +750,30 @@ class MercadoLibreScraper(BaseScraper):
             raise
         except Exception as exc:
             out.complete, out.reason = False, f"mercadolibre: {type(exc).__name__}: {exc}"
-        log.info("mercadolibre full read: pages=%d ids=%d complete=%s reason=%s",
-                 out.pages, len(out.ids), out.complete, out.reason)
+        log.info("mercadolibre full read: pages=%d ids=%d cards=%s complete=%s reason=%s",
+                 out.pages, len(out.ids), len(out.cards) if cards else "-", out.complete, out.reason)
         return out
 
-    async def _read_whole(self, filters: dict, out: FullRead) -> bool:
-        """Every page of one search, its ids into `out`. False, after its
-        first page, when Mercado Libre doesn't serve them all."""
+    def _keep_cards(self, cards: list[Listing], filters: dict, out: FullRead) -> None:
+        """The cards of a page not kept yet, as search() keeps them: once
+        each, partial prices flagged, what the filters let through."""
+        kept = {c.listing_id for c in out.cards}
+        for listing in cards:
+            if listing.listing_id in kept:
+                continue
+            kept.add(listing.listing_id)
+            self.annotate_partial_price(listing)
+            if not self.matches_filters(listing, filters):
+                continue
+            if listing.published_at is None:
+                listing.published_at = _dates.get(listing.listing_id)
+            out.cards.append(listing)
+
+    async def _read_whole(self, filters: dict, out: FullRead, *, keep: bool = False) -> bool:
+        """Every page of one search, its ids into `out` (and its cards, with
+        `keep`). False, after its first page, when Mercado Libre doesn't
+        serve them all: the cards of that first page are kept, the year
+        buckets read them again."""
         ids: set[str] = set()
         page, last = 1, None
         while True:
@@ -752,6 +786,8 @@ class MercadoLibreScraper(BaseScraper):
                 last = search_state(html).page_count
                 if last is not None and last >= MAX_PAGE_COUNT:
                     out.ids |= {c.listing_id for c in cards}
+                    if keep:
+                        self._keep_cards(cards, filters, out)
                     return False
                 if last is None and len(cards) >= PAGE_SIZE:
                     out.complete, out.reason = False, "mercadolibre: a full first page without a page count"
@@ -761,6 +797,8 @@ class MercadoLibreScraper(BaseScraper):
                 break
             ids |= fresh
             out.ids |= fresh
+            if keep:
+                self._keep_cards(cards, filters, out)
             if len(cards) < PAGE_SIZE or last is None or page >= last:
                 break
             page += 1

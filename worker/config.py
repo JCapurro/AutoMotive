@@ -112,6 +112,13 @@ NEWS_LINK_REPOST = _switch("NEWS_LINK_REPOST", "0")
 FULL_READ = _switch("FULL_READ", "1")
 FULL_READ_HOURS = max(1.0, float(os.getenv("FULL_READ_HOURS", "48")))
 FULL_READ_SPACING_SECONDS = max(0, int(os.getenv("FULL_READ_SPACING_SECONDS", "1800")))
+# Primera lectura completa (docs/PLAN_PRIMERA_LECTURA_COMPLETA.md): a target
+# by model also stores the stock it reads whole (crawl.stock_reads), as old
+# stock (seen on the web, never notified): on its first run, when a search
+# widens it, and on Mercado Libre's FULL_READ_HOURS cycle. STOCK_READ_TARGETS:
+# how many targets per source do it, the most searched first; 0 = all of them.
+STOCK_READ = _switch("STOCK_READ", "0")
+STOCK_READ_TARGETS = max(0, int(os.getenv("STOCK_READ_TARGETS", "10")))
 
 # Geocoding is used to turn listing location text into coordinates and then
 # enforce a user-origin radius in kilometers.

@@ -2,7 +2,11 @@
 
 A profile that was never bootstrapped, or whose filters changed
 (`rematch_requested_at`), is matched against the active listings of the
-last 30 days already stored. Those matches are backfill: the user sees them
+last 30 days already stored. With config.STOCK_READ that is every active
+listing of the model a run or a read of its whole stock saw in those days,
+whenever it was published, but the ones such a read no longer saw
+(recent_active `confirmed`): the stock pipeline/crawl.py stock_reads stores
+is refreshed by those reads, never by "Publicados hoy". Those matches are backfill: the user sees them
 in the web right away ("first value", §36), and they are never notified.
 An edited profile's earlier matches the backfill didn't score again are
 re-checked like the nightly re-score does: the ones that no longer fit (a
@@ -23,6 +27,7 @@ import logging
 import traceback
 from typing import Iterable
 
+import config
 import db
 from db.repos import matches as matches_repo
 from db.repos.listings import recent_active, recent_active_by_body
@@ -54,7 +59,7 @@ async def _candidates(filters: dict, scorer: Scorer) -> list[dict]:
     """The stored listings a profile's backfill scores."""
     if not model_less(filters):
         return await recent_active(filters.get("make"), filters.get("model"), days=BACKFILL_DAYS,
-                                   sources=filters.get("sources"))
+                                   sources=filters.get("sources"), confirmed=config.STOCK_READ)
     body_types = wanted_body_types(filters)
     if not body_types:
         return []       # without a vehicle and a body type, it matches nothing

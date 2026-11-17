@@ -55,10 +55,14 @@ REACTIVATION_IDLE_SECONDS = 86_400
 _IDLE = ("(NOT crawl_targets.active "
          " AND crawl_targets.updated_at < now() - make_interval(secs => %(idle)s))")
 # What a target's last complete read covered (finish_target): query._read of
-# a target by model, query._covers of one reading a whole stock.
-_LAST_READ_KEYS = "ARRAY['_read', '_covers']"
+# a target by model, query._covers of one reading a whole stock, and
+# query._stock what its last complete stock read stored, with _stock_tried
+# when one last ended partial (set_stock, pipeline/crawl.py stock_reads).
+_LAST_READ_KEYS = "ARRAY['_read', '_covers', '_stock', '_stock_tried']"
 _LAST_READ = ("jsonb_strip_nulls(jsonb_build_object('_read', crawl_targets.query->'_read', "
-              "                                     '_covers', crawl_targets.query->'_covers'))")
+              "                                     '_covers', crawl_targets.query->'_covers', "
+              "                                     '_stock', crawl_targets.query->'_stock', "
+              "                                     '_stock_tried', crawl_targets.query->'_stock_tried'))")
 
 
 async def sync_targets(specs: Iterable[Any], *, undated: Iterable[str] = (),
@@ -78,8 +82,9 @@ async def sync_targets(specs: Iterable[Any], *, undated: Iterable[str] = (),
         moment, a tick without the counted searches) changes nothing;
       - any other edit (a wider or narrower query, query.year_band) keeps both.
     query._read and query._covers, what the target's last complete read
-    covered (finish_target), stay but for that reactivation; a target whose
-    spec only lacks them isn't rewritten. A count-only target that gets an
+    covered (finish_target), and query._stock/_stock_tried (set_stock) stay
+    but for that reactivation; a target whose spec only lacks them isn't
+    rewritten. A count-only target that gets an
     active search is due at once.
     `keep_count_only`: the counted searches couldn't be read (scheduler.tick),
     so the count-only targets missing from `specs` stay active.
@@ -359,3 +364,56 @@ async def finish_target(target_id: int, *, ok: bool, retry_seconds: int,
                 "  claimed_by = NULL, claimed_until = NULL, "
                 "  prefilter_rejected = coalesce(%s::text[], prefilter_rejected) "
                 " WHERE id = %s", (retry_seconds, remembered, target_id))
+
+
+# A target that stores its stock (pipeline/crawl.py stock_reads): by model,
+# neither count-only nor an inventory.
+_BY_MODEL = ("t.body_type IS NULL AND t.make IS NOT NULL AND t.query->>'count_only' IS DISTINCT FROM 'true' "
+             "AND t.query->>'inventory' IS DISTINCT FROM 'true'")
+
+
+async def stock_rank(target: dict[str, Any]) -> int:
+    """How many active targets by model of the target's source go before it
+    in the stock read's rollout (config.STOCK_READ_TARGETS): more searches
+    (query.profile_ids), then the lower id. 0 is the most searched."""
+    async with connection() as cx:
+        row = await (await cx.execute(
+            "WITH ranked AS (SELECT t.id, coalesce(jsonb_array_length(t.query->'profile_ids'), 0) AS n "
+            f"   FROM crawl_targets t WHERE t.source = %s AND t.active AND {_BY_MODEL}) "
+            "SELECT count(*) AS ahead FROM ranked r, (SELECT coalesce(jsonb_array_length(%s::jsonb), 0) AS n) me "
+            " WHERE r.id <> %s AND (r.n > me.n OR (r.n = me.n AND r.id < %s))",
+            (target["source"], Jsonb((target.get("query") or {}).get("profile_ids") or []),
+             target["id"], target["id"]))).fetchone()
+    return int(row["ahead"])
+
+
+async def set_stock(target_id: int, *, covered: dict[str, Any] | None = None,
+                    tried_at: int | None = None) -> None:
+    """What the target's stock reads left (pipeline/crawl.py stock_reads):
+    `covered`, the year and km a complete set of them stored, in
+    query._stock (and _stock_tried cleared); `tried_at`, when one ended
+    partial, in query._stock_tried, its coverage unchanged."""
+    async with connection() as cx:
+        if covered is not None:
+            await cx.execute("UPDATE crawl_targets SET query = (query - '_stock_tried') || "
+                             "  jsonb_build_object('_stock', %s::jsonb) WHERE id = %s", (Jsonb(covered), target_id))
+        elif tried_at is not None:
+            await cx.execute("UPDATE crawl_targets SET query = query || jsonb_build_object('_stock_tried', %s::int) "
+                             " WHERE id = %s", (tried_at, target_id))
+
+
+async def news_watermarks(source: str) -> dict[int, int]:
+    """Per ID series, the highest number among the source's listings first
+    seen in the last 3 days by a read that was not a stock read: the newest
+    ad the reads by publication date know. A stock read leaves the cards
+    above it to those reads (pipeline/crawl.py _fresh): published after the
+    last of them, they are news, not stock. A series with none in those days
+    is not there (an old one: its cards are stock)."""
+    async with connection() as cx:
+        rows = await (await cx.execute(
+            "SELECT num / 1000000000 AS series, max(num) AS top "
+            "  FROM (SELECT substring(external_id FROM '[0-9]{7,}')::bigint AS num FROM listings "
+            "         WHERE source = %s AND first_seen_at >= now() - interval '3 days' "
+            "           AND attributes->'_not_news'->>'reason' IS DISTINCT FROM 'stock') l "
+            " WHERE num IS NOT NULL GROUP BY 1", (source,))).fetchall()
+    return {int(r["series"]): int(r["top"]) for r in rows}
