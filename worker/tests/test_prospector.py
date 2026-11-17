@@ -632,3 +632,11 @@ def test_hook_fact_carries_km_texto():
     c = F.hook_candidates([hook_row(950, mileage_km=104000)], p, F.zone_for(p, None), None)[0]
     fact = F.hook_fact(c, NOW, "g1")
     assert fact["km"] == 104000 and fact["km_texto"] == "104.000 km"
+
+
+def test_voseo_with_accents_is_not_tuteo():
+    facts = {"saludo": "Hola, Pablo."}
+    vos = "Hola, Pablo. Soy Juan, de Ese Auto. Te aviso así comprás stock antes que otro y buscás menos.\n\n¿Te lo armo?"
+    assert not any("tuteo" in p for p in rules.check(vos, facts))
+    tu = "Hola, Pablo. Soy Juan, de Ese Auto. Te aviso así compras stock antes que otro.\n\n¿Te lo armo?"
+    assert any("tuteo" in p for p in rules.check(tu, facts))

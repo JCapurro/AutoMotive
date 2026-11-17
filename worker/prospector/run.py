@@ -264,7 +264,8 @@ def _run(args) -> int:
     prospects, dropped = sellers.build_prospects(rows, contacted=contacted, banned_phones=banned)
     log(f"{len(prospects)} prospectos en la base; fuera: {dict(dropped)}")
 
-    known = known_index(db.known_prospects(conn)) if live else {}
+    # Read in a dry run too, so a test batch never shows someone already contacted.
+    known = known_index(db.known_prospects(conn)) if db.tables_exist(conn) else {}
     target = args.new
     if live:
         expired = db.expire_stale(conn, STALE_KEEP_DAYS)

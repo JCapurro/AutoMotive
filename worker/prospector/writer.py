@@ -105,9 +105,10 @@ REVIEW_SCHEMA = {
 
 FALLBACK_EXAMPLE = {
     "nota": "Ilustración del tono y del largo, con datos inventados: no copies el texto ni los números.",
-    "texto": ("Hola, Martín. Soy Juan, armé Ese Auto: leo los avisos de usados y aviso cuando sale uno por "
-              "debajo de los parecidos.\n\nVi que tenés 3 Corolla publicados en Rosario. Hoy apareció un Corolla "
-              "XEI 2017 de un particular en Funes a $19.800.000, 12 % abajo de 31 parecidos.\n\n¿Te lo paso?"),
+    "texto": ("Hola, Martín. Soy Juan, de Ese Auto. Te aviso cuando un particular publica en tu zona un auto de "
+              "los modelos que trabajás más barato que los parecidos, apenas sale: te sirve para comprar stock "
+              "antes que otro.\n\nEjemplo de hoy: un Corolla XEI 2017 en Funes a $19.800.000, 12 % más barato "
+              "que otros 31 Corolla parecidos publicados.\n\n¿Te lo armo gratis una semana con tus modelos?"),
 }
 
 
