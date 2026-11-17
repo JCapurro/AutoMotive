@@ -47,6 +47,14 @@ a complete read of a target by model keeps the year and km it read in
 query._read, for its next run to tell what a widened search brings, and one
 of a target reading a whole stock in query._covers, for the others to tell
 what is new to the source.
+
+With config.STOCK_READ a target by model also stores its stock, whatever its
+age (stock_reads, docs/PLAN_PRIMERA_LECTURA_COMPLETA.md): the collector's
+stock_read, as old stock (pipeline/news.py mark_stock), on its first run,
+when a search widens it past query._stock (only the missing years), and on
+Mercado Libre's FULL_READ_HOURS cycle, which then reads the cards and the ids
+in one walk. STOCK_READ_TARGETS targets per source do it, the most searched
+first.
 """
 from __future__ import annotations
 
@@ -55,17 +63,19 @@ import json
 import logging
 import math
 import random
+import re
 import time
 import traceback
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Awaitable, Callable
 
 from collectors import REGISTRY, Listing
-from collectors.base import PARTIAL_PREFIX, CollectorBlocked, FeedUnconfirmed
+from collectors.base import PARTIAL_PREFIX, CollectorBlocked, FeedUnconfirmed, SearchResults
 from collectors.facebook import DATE_FETCH_LIMIT as FB_DATE_FETCH_LIMIT
 from collectors._isolated import call as isolated_call, isolated
 from collectors._loop import run_collector
+from collectors import _recency
 import config
 from config import COLLECTOR_TIMEOUT_SECONDS
 from collectors._recency import (POLICY_VERSION, SOURCES as RECENT_SOURCES, PublicationWindow,
@@ -137,6 +147,9 @@ class TargetRun:
     result: IngestResult
     first_run: bool
     complete: bool = True
+    # A stock read's batch (stock_reads): every listing in it is backfill
+    # for every search (scheduler.process_batch), whatever the run.
+    stock: bool = False
     covered_until: datetime | None = None
     # A first run of a source without dates (news.UNDATED_SOURCES): how many
     # ok runs in a row before it read nothing and held the bootstrap.
@@ -538,7 +551,7 @@ async def _run_one(target: dict[str, Any], on_batch: BatchHandler | None,
     # news.EMPTY_FIRST_RUNS empty reads in a row at most.
     bootstrap = not (config.NEWS_GUARD_EMPTY_FIRST and run.first_run and run.result.found == 0
                      and target.get("source") in news.UNDATED_SOURCES and run.empty_runs < news.EMPTY_FIRST_RUNS)
-    blocked = await full_read(target)
+    blocked = await stock_reads(target, run, on_batch) if stock_switched_on(target) else await full_read(target)
     retry = 0 if run.complete else retry_seconds(target, reason=getattr(run.items, "reason", None), partial=True)
     await targets_repo.finish_target(target["id"], ok=run.complete, retry_seconds=retry,
                                     covered_until=run.covered_until, bootstrap=bootstrap, read=run.read_envelope,
@@ -606,6 +619,216 @@ async def full_read(target: dict[str, Any]) -> bool:
              _label(target), len(read.ids), seen, read.pages, read.complete,
              f" reason={read.reason}" if read.reason else "")
     return False
+
+
+# A stock read that ended partial is tried again this long after, at the
+# earliest (query._stock_tried): what it read is stored, and a model too big
+# for Mercado Libre's 42 pages ends partial every time.
+STOCK_RETRY_HOURS = 6
+
+
+def stock_switched_on(target: dict[str, Any]) -> bool:
+    """Whether this target may store its stock at all (config.STOCK_READ),
+    before the rollout cap: a target by model, neither count-only nor an
+    inventory (V6 reads its whole site on every run), of a collector with
+    stock_read. With the switch off everything is as before (full_read)."""
+    q = target.get("query") or {}
+    return (config.STOCK_READ and not target.get("body_type") and bool(target.get("make"))
+            and q.get("count_only") is not True and q.get("inventory") is not True
+            and hasattr(REGISTRY.get(target.get("source")), "stock_read"))
+
+
+async def stock_allowed(target: dict[str, Any]) -> bool:
+    """stock_switched_on, and within config.STOCK_READ_TARGETS of its source,
+    ordered by searches (targets.stock_rank); 0 is every target."""
+    if not stock_switched_on(target):
+        return False
+    return not config.STOCK_READ_TARGETS or await targets_repo.stock_rank(target) < config.STOCK_READ_TARGETS
+
+
+def _low(v: Any) -> float:
+    return -math.inf if v is None else float(v)
+
+
+def _high(v: Any) -> float:
+    return math.inf if v is None else float(v)
+
+
+def stock_filters(target: dict[str, Any]) -> dict[str, Any]:
+    """What a stock read of the whole target searches (the collectors'
+    stock_read contract): full_read_filters, plus the city Facebook searches
+    around (origin_lat/origin_lon). No publication window."""
+    q = target.get("query") or {}
+    f = full_read_filters(target)
+    f.update({k: q[k] for k in ("origin_lat", "origin_lon") if q.get(k) is not None})
+    return f
+
+
+def stock_missing(target: dict[str, Any], *, now: float | None = None) -> list[dict[str, Any]]:
+    """The stock reads this target is due (stock_reads): what stock_filters
+    covers and query._stock, its last complete stock read, doesn't.
+      - none kept: the whole range (a new target, or the first since the switch);
+      - a wider km (or none now): the whole range again;
+      - wider years: only the years missing at each side, one read each.
+    Nothing while a partial one is less than STOCK_RETRY_HOURS old
+    (query._stock_tried)."""
+    q = target.get("query") or {}
+    full = stock_filters(target)
+    cov = q.get("_stock")
+    missing: list[dict[str, Any]] = []
+    if not isinstance(cov, dict) or _high(full.get("km_max")) > _high(cov.get("km_max")):
+        missing = [full]
+    else:
+        lo, hi = _low(full.get("anio_min")), _high(full.get("anio_max"))
+        c_lo, c_hi = _low(cov.get("year_min")), _high(cov.get("year_max"))
+        if lo < c_lo:
+            piece = {k: v for k, v in full.items() if k != "anio_min"}
+            missing.append({**piece, **({"anio_min": int(lo)} if lo > -math.inf else {}), "anio_max": int(c_lo) - 1})
+        if hi > c_hi:
+            piece = {k: v for k, v in full.items() if k != "anio_max"}
+            missing.append({**piece, "anio_min": int(c_hi) + 1, **({"anio_max": int(hi)} if hi < math.inf else {})})
+    tried = q.get("_stock_tried")
+    now = time.time() if now is None else now
+    if missing and isinstance(tried, (int, float)) and now - tried < STOCK_RETRY_HOURS * 3600:
+        return []
+    return missing
+
+
+def stock_coverage(target: dict[str, Any], read: list[dict[str, Any]], *, now: float | None = None
+                   ) -> dict[str, Any]:
+    """query._stock after these stock reads all ended complete: the whole
+    range when one of them read it (stock_filters), else what the last
+    one covered plus the missing years these read (stock_missing)."""
+    full = stock_filters(target)
+    cov = (target.get("query") or {}).get("_stock")
+    if full in read or not isinstance(cov, dict):
+        out = {"year_min": full.get("anio_min"), "year_max": full.get("anio_max"), "km_max": full.get("km_max")}
+    else:
+        lo = min([_low(cov.get("year_min"))] + [_low(f.get("anio_min")) for f in read])
+        hi = max([_high(cov.get("year_max"))] + [_high(f.get("anio_max")) for f in read])
+        out = {"year_min": None if lo == -math.inf else int(lo), "year_max": None if hi == math.inf else int(hi),
+               "km_max": cov.get("km_max")}
+    return {**{k: v for k, v in out.items() if v is not None}, "at": int(time.time() if now is None else now)}
+
+
+def _spaced(source: str) -> bool:
+    """No other long read of the source started in the last FULL_READ_SPACING_SECONDS."""
+    started = _full_reads.get(source)
+    return started is None or time.monotonic() - started >= config.FULL_READ_SPACING_SECONDS
+
+
+_ID_NUMBER = re.compile(r"[0-9]{7,}")
+
+
+def _fresh(item: Listing, watermarks: dict[int, int], since: datetime) -> bool:
+    """A card a stock read leaves to the reads by publication date: dated
+    after `since` (what their last day covers), or numbered above the newest
+    ad of its series they know (targets.news_watermarks). Published after the
+    read that just ran, it is news: stored here as stock it would never be
+    notified. It still counts as seen (record_full_read)."""
+    if item.published_at is not None:
+        return item.published_at >= since.timestamp()
+    m = _ID_NUMBER.search(item.listing_id or "")
+    if m is None:
+        return False
+    number = int(m.group())
+    top = watermarks.get(number // 1_000_000_000)
+    return top is not None and number > top
+
+
+async def stock_reads(target: dict[str, Any], run: TargetRun, on_batch: BatchHandler | None) -> bool:
+    """The target's stock reads, if due (stock_missing, or on Mercado Libre
+    full_read_due), one long read per source every FULL_READ_SPACING_SECONDS:
+    the collector's stock_read of each missing range (by isolated_call when
+    the collector is ISOLATED), ingested as old stock (news.mark_stock) and
+    handed to `on_batch` as a stock batch, so that every search of the model,
+    bootstrapped or not, gets it as backfill. On Mercado Libre the walk also
+    gives full_read's ids (stock_read's `listed`): the 48-hour read of a
+    target in the rollout reads its cards in the same walk; one outside it
+    (stock_allowed) keeps full_read. A complete set keeps what it covered in
+    query._stock, a partial one _stock_tried. Never fails the run. Returns
+    True if the source blocked it (and is paused)."""
+    source = target["source"]
+    full_due = full_read_due(target)
+    pieces = [stock_filters(target)] if full_due else stock_missing(target)
+    if not pieces or not (full_due or _spaced(source)):
+        return False
+    # Only now the rollout's rank (a query): most runs have nothing due.
+    try:
+        allowed = await stock_allowed(target)
+    except Exception:
+        await runs.log_error("stock_read", f"target:{target['id']}", traceback.format_exc())
+        allowed = False
+    if not allowed:
+        return await full_read(target)
+    _full_reads[source] = time.monotonic()
+    started = datetime.now(timezone.utc)
+    deadline = time.monotonic() + FULL_READ_TIMEOUT_SECONDS
+    scraper = REGISTRY[source]()
+    complete, stored = True, 0
+    try:
+        watermarks = await targets_repo.news_watermarks(source) if source in ID_FLOOR_SOURCES else {}
+        since = started - timedelta(seconds=_recency.TODAY_SPAN)
+        for piece in pieces:
+            timeout = max(1.0, deadline - time.monotonic())
+            if isolated(scraper):
+                items = await run_collector(isolated_call(scraper, "stock_read", piece, timeout=timeout))
+            else:
+                items = await run_collector(scraper.stock_read(piece), timeout=timeout)
+            ok = bool(getattr(items, "complete", True))
+            listed = getattr(items, "listed", None)
+            if listed is not None:
+                # Mercado Libre: the evidence of comparables(), as full_read leaves it.
+                seen = await targets_repo.record_full_read(target, started, listed, complete=ok and full_due)
+                log.info("target=%s %s %s full read: listed=%d stored=%d pages=%s complete=%s%s", target["id"],
+                         source, _label(target), len(listed), seen, getattr(items, "pages", "?"), ok,
+                         f" reason={items.reason}" if getattr(items, "reason", None) else "")
+            complete = complete and ok
+            stored += await _store_stock(target, run, items, watermarks, since, on_batch)
+    except CollectorBlocked as exc:
+        log.warning("target=%s %s %s stock read blocked: %s", target["id"], source, _label(target), exc)
+        breaker.pause(source, str(exc))
+        await _stock_done(target, pieces, complete=False)
+        return True
+    except Exception:
+        await runs.log_error("stock_read", f"target:{target['id']}", traceback.format_exc())
+        await _stock_done(target, pieces, complete=False)
+        return False
+    await _stock_done(target, pieces, complete=complete)
+    log.info("target=%s %s %s stock read: ranges=%d new=%d complete=%s", target["id"], source, _label(target),
+             len(pieces), stored, complete)
+    return False
+
+
+async def _store_stock(target: dict[str, Any], run: TargetRun, items: list[Listing], watermarks: dict[int, int],
+                       since: datetime, on_batch: BatchHandler | None) -> int:
+    """Ingest one stock read's cards (but the _fresh ones), mark the new ones
+    old stock and hand them to `on_batch` as a stock batch. Returns how many
+    it stored for the first time."""
+    kept = SearchResults([i for i in items if not _fresh(i, watermarks, since)],
+                         complete=getattr(items, "complete", True), reason=getattr(items, "reason", None))
+    if not kept:
+        return 0
+    result = await ingest(kept, target=Target(target.get("make"), target.get("model"), None))
+    new = await news.mark_stock(target, result)
+    if on_batch is not None:
+        try:
+            await on_batch(TargetRun(target, kept, result, first_run=run.first_run, complete=kept.complete,
+                                     backfill_ids=frozenset(result.ids.values()), stock=True))
+        except Exception:
+            await runs.log_error("notify", f"target:{target['id']}", traceback.format_exc())
+    return len(new)
+
+
+async def _stock_done(target: dict[str, Any], pieces: list[dict[str, Any]], *, complete: bool) -> None:
+    """Keep what the stock reads covered (query._stock) or that they ended partial (_stock_tried)."""
+    try:
+        if complete:
+            await targets_repo.set_stock(target["id"], covered=stock_coverage(target, pieces))
+        else:
+            await targets_repo.set_stock(target["id"], tried_at=int(time.time()))
+    except Exception:
+        await runs.log_error("stock_read", f"target:{target['id']}", traceback.format_exc())
 
 
 async def _run_source(targets: list[dict[str, Any]], on_batch: BatchHandler | None,

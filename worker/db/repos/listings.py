@@ -376,13 +376,47 @@ async def rows_for_scoring(cx: AsyncConnection, ids: Iterable[int]) -> dict[int,
     return {r["id"]: _pythonic(r) for r in rows}
 
 
+# A stored listing a later complete read of its whole stock no longer saw, on
+# a source of comparables.confirm_sources (public.listing_unconfirmed, as
+# comparable_listings asks it): it left the source.
+_UNCONFIRMED = (
+    "(c.confirm_sources ? l.source AND EXISTS (SELECT 1 FROM public.listing_unconfirmed("
+    "   l.source, l.make, l.model, l.year, l.mileage_km, greatest(l.last_seen_at, l.last_full_seen_at), "
+    "   c.confirm_sources, c.grace)))")
+_CONFIRM_CONFIG = (
+    "(SELECT coalesce(v.value->'confirm_sources', '[]'::jsonb) AS confirm_sources, "
+    "        coalesce((v.value->>'confirm_grace_hours')::numeric, 36) * interval '1 hour' AS grace "
+    "   FROM (SELECT 1) one LEFT JOIN app_config v ON v.key = 'comparables') c")
+
+
 async def recent_active(make: str | None, model: str | None, *, days: int,
-                        sources: list[str] | None = None) -> list[dict]:
-    """Active listings of a make/model seen in the last `days` (rematch, sección 5.7)."""
+                        sources: list[str] | None = None, confirmed: bool = False) -> list[dict]:
+    """Active listings of a make/model seen in the last `days` (rematch, sección 5.7).
+
+    `confirmed` (the rematch with config.STOCK_READ): seen by a run or by a
+    read of the whole stock (last_full_seen_at, which Mercado Libre's
+    48-hour read moves on what "Publicados hoy" never reads again), and not
+    one such a read no longer saw (_UNCONFIRMED): the stock the model has
+    now, whenever it was published, without the ads that left the source."""
+    if confirmed:
+        sql = (f"SELECT l.* FROM listings l CROSS JOIN {_CONFIRM_CONFIG} WHERE l.status = 'active' "
+               "   AND greatest(l.last_seen_at, l.last_full_seen_at) >= now() - make_interval(days => %s) "
+               "   AND lower(l.make) IS NOT DISTINCT FROM lower(%s)")
+        params: list[Any] = [days, make]
+        if model:
+            sql += " AND lower(l.model) = lower(%s)"
+            params.append(model)
+        if sources:
+            sql += " AND l.source = ANY(%s)"
+            params.append(sources)
+        sql += f" AND NOT {_UNCONFIRMED}"
+        async with connection() as cx:
+            rows = await (await cx.execute(sql + " ORDER BY l.first_seen_at DESC", params)).fetchall()
+        return [_pythonic(r) for r in rows]
     sql = ("SELECT * FROM listings WHERE status = 'active' "
            "   AND last_seen_at >= now() - make_interval(days => %s) "
            "   AND lower(make) IS NOT DISTINCT FROM lower(%s)")
-    params: list[Any] = [days, make]
+    params = [days, make]
     if model:
         sql += " AND lower(model) = lower(%s)"
         params.append(model)
@@ -452,7 +486,10 @@ async def enrichment_queue(*, per_source: int, max_age_days: int) -> list[dict]:
     then listings without a match whose published price looks partial (an
     anticipo or a cuota): only their description can give the total that
     would let them match, and the reference band's (_BAND_ROW) without a
-    transmission, which comparables() needs at its finer levels. `band` is
+    transmission, which comparables() needs at its finer levels. Those last
+    two never take a listing a stock read stored (attributes._not_news
+    'stock', pipeline/crawl.py stock_reads): old stock costs a detail page
+    only once a search matches it, as any other listing. `band` is
     true for those last ones when nothing else queued them: pipeline/enrich.py
     reads them without the LLM, since only the version and the transmission
     are wanted, and they never take its daily budget."""
@@ -469,8 +506,9 @@ async def enrichment_queue(*, per_source: int, max_age_days: int) -> list[dict]:
             "     AND l.last_seen_at >= now() - make_interval(days => %s) "
             f"    AND (l.detail_checked_at IS NULL OR l.detail_checked_at < now() - interval '{_DETAIL_RETRY}') "
             "   GROUP BY l.id "
-            "  HAVING count(m.listing_id) > 0 OR l.price_partial "
-            f"     OR (l.transmission IS NULL AND l.year IS NOT NULL AND {_BAND_ROW})) q "
+            "  HAVING count(m.listing_id) > 0 "
+            "     OR (l.attributes->'_not_news'->>'reason' IS DISTINCT FROM 'stock' AND (l.price_partial "
+            f"     OR (l.transmission IS NULL AND l.year IS NOT NULL AND {_BAND_ROW})))) q "
             "WHERE n <= %s ORDER BY source, n",
             (max_age_days, per_source))).fetchall()
 
