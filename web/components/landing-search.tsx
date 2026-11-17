@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore, useTransition } from "react";
+import { useActionState, useCallback, useEffect, useId, useRef, useState, useSyncExternalStore, useTransition } from "react";
 
+import { signInWithGoogle } from "@/app/login/actions";
+import { isInAppBrowser } from "@/lib/in-app-browser";
 import { codeForFreeSearch, enterForFreeSearch, type FreeSearchResult, linkForFreeSearch, startFreeSearch } from "@/app/actions";
 import { LandingBuilder } from "@/components/landing-builder";
 import { type LandingHow, logLandingEvent } from "@/components/landing-events";
@@ -116,6 +118,9 @@ export function LandingSearch({ signedIn: serverSignedIn, initialText = "", onSt
   // An error keeps the pop-up on the step where it happened.
   const [step, setStep] = useState<"email" | "password" | "code">("email");
   const [pending, start] = useTransition();
+  const [google, googleSubmit, googlePending] = useActionState(signInWithGoogle, { next: "/app/searches/new" });
+  // Instagram/Facebook browsers: Google refuses to sign in there.
+  const inApp = useSyncExternalStore(noop, () => isInAppBrowser(navigator.userAgent), () => true);
   // Before hydration a tap would submit the bare form and reload the page, losing the text: the button waits for it.
   const hydrated = useSyncExternalStore(noop, () => true, () => false);
   const router = useRouter();
@@ -247,6 +252,19 @@ export function LandingSearch({ signedIn: serverSignedIn, initialText = "", onSt
               <DialogTitle>¿A qué email te avisamos?</DialogTitle>
               <DialogDescription>Ahí te mandamos las alertas. Con este email creamos tu cuenta, sin contraseña y sin confirmar nada. Después revisás los datos del auto y activás la búsqueda.</DialogDescription>
             </DialogHeader>
+            {inApp ? null : <>
+              <Button type="button" variant="outline" className="h-11 w-full text-[15px]" disabled={pending || googlePending}
+                onClick={() => start(() => {
+                  const data = new FormData();
+                  data.set("next", searchStartHref(true, prompt));
+                  googleSubmit(data);
+                })}>
+                <svg aria-hidden="true" viewBox="0 0 24 24" className="size-4"><path fill="#4285F4" d="M21.6 12.23c0-.71-.06-1.39-.18-2.05H12v3.88h5.38a4.6 4.6 0 0 1-2 3.02v2.51h3.24c1.9-1.75 2.98-4.33 2.98-7.36Z" /><path fill="#34A853" d="M12 22c2.7 0 4.96-.9 6.62-2.41l-3.24-2.51c-.9.6-2.05.96-3.38.96-2.6 0-4.8-1.76-5.59-4.12H3.07v2.59A10 10 0 0 0 12 22Z" /><path fill="#FBBC05" d="M6.41 13.92a6 6 0 0 1 0-3.84V7.49H3.07a10 10 0 0 0 0 9.02l3.34-2.59Z" /><path fill="#EA4335" d="M12 5.96c1.47 0 2.79.51 3.82 1.51l2.86-2.87A9.6 9.6 0 0 0 12 2a10 10 0 0 0-8.93 5.49l3.34 2.59A6 6 0 0 1 12 5.96Z" /></svg>
+                {googlePending ? "Conectando con Google…" : "Continuar con Google"}
+              </Button>
+              {google.error ? <p role="alert" className="text-sm text-destructive">{google.error}</p> : null}
+              <div className="flex items-center gap-3 text-xs text-muted-foreground"><span className="h-px flex-1 bg-border" />o con tu email<span className="h-px flex-1 bg-border" /></div>
+            </>}
             <div className="space-y-1.5">
               <Label htmlFor={emailId}>Tu email</Label>
               <Input
