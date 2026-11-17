@@ -37,6 +37,16 @@ describe("replies", () => {
     expect(byKey.pasamelo).toContain("https://x/1");
     for (const text of Object.values(byKey)) expect(text).not.toMatch(/6 meses|vendid/);
   });
+  it("explains the offer to a «no entiendo», with the car of the message as the example", () => {
+    const ctx = { name: "", hookUrl: "https://x/1", hookCar: "Golf Highline 2017", zone: "CABA" };
+    const byKey = Object.fromEntries(REPLIES.map((r) => [r.key, r.text(ctx)]));
+    expect(byKey.no_entiendo).toContain("El Golf Highline 2017 que te mencioné es un ejemplo");
+    expect(byKey.no_entiendo).toContain("https://x/1");
+    expect(byKey.no_entiendo).toContain("una semana");
+    expect(byKey.ya_buscamos).toContain("a la persona que les busca autos");
+    const bare = REPLIES.find((r) => r.key === "no_entiendo")!.text({ name: "", hookUrl: null, hookCar: null, zone: null });
+    expect(bare).toContain("Lo que te mencioné es un ejemplo de los que te llegarían.");
+  });
   it("reads the hook the final text offers, not the first one", () => {
     const facts = { ganchos: [{ auto: "Focus 2009", precio_publicado: "$7.500.000", url: "u1" },
       { auto: "Hilux 2013", precio_publicado: "US$ 16.800", url: "u2" }] };
