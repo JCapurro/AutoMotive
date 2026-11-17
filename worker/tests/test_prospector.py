@@ -209,7 +209,7 @@ def prospect_rosario():
     ({"n": 5}, False),               # too few comparables
     ({"price": 11_111_111}, False),  # placeholder price
     ({"description": "Financiamos y tomamos usados"}, False),   # writes like an agency
-    ({"model": "Corolla"}, False),   # not one of their models
+    ({"model": "Corolla"}, True),    # not one of their models: still an example of what Ese Auto does
     ({"prov": "14", "dept": "Capital"}, False),                 # another region
 ])
 def test_hook_candidates(change, ok):
@@ -226,6 +226,18 @@ def test_hooks_closer_first_and_exclusions():
     got = F.hook_candidates(pool, p, zone, None)
     assert [c["row"]["id"] for c in got] == [101, 100]
     assert [c["row"]["id"] for c in F.hook_candidates(pool, p, zone, None, exclude=[101])] == [100]
+
+
+def test_hooks_of_their_models_come_before_any_other_model():
+    p = prospect_rosario()
+    zone = F.zone_of(p.listings, None)
+    other = hook_row(100, model="Corolla", dept="Rosario", diff=20)       # same city, deeper, not theirs
+    theirs = hook_row(101, dept="Santa Fe", diff=11)                       # theirs, a bit farther
+    got = F.hook_candidates([other, theirs], p, zone, None)
+    assert [c["row"]["id"] for c in got] == [101, 100]
+    facts = [F.hook_fact(c, NOW, f"oportunidad_{i + 1}") for i, c in enumerate(got)]
+    assert [f["de_sus_modelos"] for f in facts] == [True, False]
+    assert facts[1]["avisos_suyos_de_ese_modelo"] == 0
 
 
 def test_when_published():

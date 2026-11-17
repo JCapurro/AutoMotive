@@ -191,15 +191,16 @@ def centre(prospect: Prospect, zone: "Zone") -> tuple[float, float] | None:
 
 def hook_candidates(pool: Iterable[Mapping[str, Any]], prospect: Prospect, zone: Zone,
                     zone_map: Mapping[str, Any] | None, *, exclude: Iterable[int] = ()) -> list[dict[str, Any]]:
-    """Fresh private listings of the prospect's models in its zone, ≥10 % below
-    the worker's comparables, best first."""
+    """Fresh private listings in the prospect's zone, ≥10 % below the worker's
+    comparables, best first: their own models first, then any other model of the
+    pool, because the hook only shows what Ese Auto does (Juan, 17/11/2026)."""
     mine = Counter((r["make"], r["model"]) for r in prospect.listings if r.get("make") and r.get("model"))
     own_ids = {r["id"] for r in prospect.listings}
     skip = set(exclude) | own_ids
     here = centre(prospect, zone)
     out = []
     for row in pool:
-        if row["id"] in skip or (row.get("make"), row.get("model")) not in mine:
+        if row["id"] in skip:
             continue
         ref = row.get("ref") or {}
         n, diff = ref.get("n") or 0, ref.get("diff_pct")
@@ -226,9 +227,10 @@ def hook_candidates(pool: Iterable[Mapping[str, Any]], prospect: Prospect, zone:
               if here and row.get("lat") is not None and row.get("lon") is not None else None)
         if tier < 3 and (km is None or km > HOOK_RADIUS_KM):
             continue          # Tandil is not San Isidro: outside their partido, only within the radius
-        own = mine[(row["make"], row["model"])]
-        # Closer first; then a model they have several of, so the message's stock fact and hook match.
-        rank = tier * 100 + min(own, 5) * 4 + min(diff, 30) + min(n, 40) / 4
+        own = mine.get((row["make"], row["model"]), 0)
+        # A model they work first; then closer; then a model they have several of, so the
+        # message's stock fact and hook match.
+        rank = (1000 if own else 0) + tier * 100 + min(own, 5) * 4 + min(diff, 30) + min(n, 40) / 4
         out.append({"row": row, "tier": tier, "rank": rank, "own": own,
                     "km": None if km is None else round(km)})
     return sorted(out, key=lambda c: -c["rank"])
@@ -321,6 +323,7 @@ def hook_fact(candidate: Mapping[str, Any], now: datetime, slot: str) -> dict[st
         "url": row.get("url"),
         "cercania": "mismo partido o ciudad" if candidate["tier"] == 3 else f"a {candidate.get('km')} km",
         **({"distancia_km": candidate["km"]} if candidate.get("km") is not None else {}),
+        "de_sus_modelos": bool(candidate.get("own")),
         "avisos_suyos_de_ese_modelo": candidate.get("own"),
         **({"verificado": candidate["verified"]} if candidate.get("verified") else {}),
     }

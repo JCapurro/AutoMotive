@@ -61,7 +61,7 @@ def _load_json(path: Path, default):
 def score(p: Prospect, hooks: list[dict[str, Any]], now: datetime) -> float:
     s = 0.0
     if hooks:
-        s += 100 + 15 * (hooks[0]["tier"] - 1)
+        s += 100 + 15 * (hooks[0]["tier"] - 1) + (20 if hooks[0].get("own") else 0)
     if p.phone:
         s += 40
     elif p.kind == "persona" and not {"rosariogarage", "mercadolibre"} & set(p.sources):
