@@ -19,6 +19,7 @@ import asyncio
 from collections import Counter
 import json
 import logging
+import os
 import re
 import time
 import unicodedata
@@ -56,6 +57,24 @@ log = logging.getLogger("collectors.facebook")
 # 2026-10-21, ran for over an hour each until a restart threw the scan away).
 # No in-memory cache: each search runs in its own child process (ISOLATED).
 DATE_FETCH_LIMIT = "facebook: date fetch limit reached"
+# A stock read (stock_read) scrolls at most STOCK_FB_MAX_SCROLLS times, by
+# default as many as a publication scan (RECENT_FB_MAX_SCROLLS); past it the
+# read ends incomplete and pipeline/crawl.py reads it again later. Read here,
+# not in config.py, so this file is the only one the setting touches.
+STOCK_SCROLL_LIMIT = "facebook: stock read scroll limit reached"
+# What a stock read leaves out of its filters: the publication window
+# (_build_url's daysSinceListed) and the date memory, which it doesn't use.
+_WINDOW_KEYS = frozenset({"publication_days", "publication_until", "published_since", "published_today_only",
+                          "count_only", "date_skips", "known_publication_dates"})
+
+
+def stock_max_scrolls() -> int:
+    try:
+        return max(1, int(os.getenv("STOCK_FB_MAX_SCROLLS") or config.RECENT_FB_MAX_SCROLLS))
+    except ValueError:
+        return config.RECENT_FB_MAX_SCROLLS
+
+
 # A card telling it was just published (they show no other age).
 _JUST_LISTED = ("just listed", "publicado recientemente")
 # The cards on the page, read in one call inside it: [href, innerText,
@@ -937,19 +956,8 @@ class FacebookMarketplaceScraper(BaseScraper):
                                    "Run: python -m collectors.facebook   to log in once.")
 
         if window := PublicationWindow.from_filters(filters):
-            try:
-                return await self._search_recent(filters, window)
-            except SearchRestricted as exc:
-                if not config.FB_NO_SESSION_FALLBACK:
-                    raise
-                why = str(exc)
-                log.warning("%s; reading %s without the session", why, self._build_url(filters))
-            try:
-                return await self._search_recent(filters, window, session=False)
-            except FeedUnconfirmed as exc:
-                raise FeedUnconfirmed(f"{why}; {exc}") from exc
-            except Exception as exc:
-                raise RuntimeError(f"{why}; {NO_SESSION}: {type(exc).__name__}: {exc}") from exc
+            return await self._without_session_if_restricted(
+                filters, lambda session: self._search_recent(filters, window, session=session))
 
         url = self._build_url(filters)
         out: list[Listing] = []
@@ -986,6 +994,174 @@ class FacebookMarketplaceScraper(BaseScraper):
                 await _keep_session(ctx, loaded)
         return out
 
+    async def _without_session_if_restricted(self, filters: dict, read) -> SearchResults:
+        """`read(True)` (with the session), and when Facebook restricts the
+        account's search (SearchRestricted), `read(False)`: the same search
+        logged out (config.FB_NO_SESSION_FALLBACK). A publication scan and a
+        stock read fail the same way, so the source's breaker treats both
+        alike."""
+        try:
+            return await read(True)
+        except SearchRestricted as exc:
+            if not config.FB_NO_SESSION_FALLBACK:
+                raise
+            why = str(exc)
+            log.warning("%s; reading %s without the session", why, self._build_url(filters))
+        try:
+            return await read(False)
+        except FeedUnconfirmed as exc:
+            raise FeedUnconfirmed(f"{why}; {exc}") from exc
+        except Exception as exc:
+            raise RuntimeError(f"{why}; {NO_SESSION}: {type(exc).__name__}: {exc}") from exc
+
+    async def stock_read(self, filters: dict) -> SearchResults:
+        """Every active ad of the target, of any age (pipeline/crawl.py's stock
+        read, docs/PLAN_PRIMERA_LECTURA_COMPLETA.md): the publication scan's
+        search without daysSinceListed, so the feed lists ads older than 30
+        days too, newest first.
+
+        Dates come only from the card or the search page's own data
+        (FB_FEED_DATES): no item page is opened, so a card the feed doesn't
+        date is kept with published_at None, as stock. No date memory and no
+        stored dates either: the read is a target's first run or a widened
+        search, not a cycle. It scrolls until the feed stops growing, at most
+        STOCK_FB_MAX_SCROLLS times; past that it ends incomplete with what it
+        read. Walls, a restricted search and an unconfirmed empty feed raise
+        what search() raises."""
+        if not Path(FB_STORAGE_STATE).exists():
+            raise CollectorBlocked(f"facebook: no session at {FB_STORAGE_STATE}. "
+                                   "Run: python -m collectors.facebook   to log in once.")
+        stock = {k: v for k, v in filters.items() if k not in _WINDOW_KEYS}
+        return await self._without_session_if_restricted(
+            stock, lambda session: self._stock_read(stock, session=session))
+
+    async def _stock_read(self, filters: dict, *, session: bool = True) -> SearchResults:
+        results = SearchResults()
+
+        async def keep(ctx, probe: _FeedProbe, listing: Listing) -> bool:
+            ident = listing.listing_id
+            if listing.extra.get("card_status") == "sold":
+                results.append(listing)         # ingest ends a stored one, stores no new one
+                return False
+            origin = "card"
+            if listing.published_at is None and config.FB_FEED_DATES:
+                listing.published_at, origin = await probe.feed_date(ident), "feed"
+            probe.dated(ident, listing.published_at, origin)
+            if listing.published_at is None:
+                results.unknown_dates += 1
+            results.append(listing)
+            return False
+
+        probe, _, scrolls = await self._scan_feed(filters, results, keep, session=session,
+                                                  max_scrolls=stock_max_scrolls(), scroll_reason=STOCK_SCROLL_LIMIT)
+        results.probe = probe.report({})
+        if not session:
+            results.probe = {**(results.probe or {}), "no_session": 1}
+        log.info("facebook stock read: scrolls=%d kept=%d feed_dates=%d unknown_dates=%d complete=%s reason=%s",
+                 scrolls, len(results), probe.origins["feed"], results.unknown_dates, results.complete,
+                 results.reason)
+        return results
+
+    async def _scan_feed(self, filters: dict, results: SearchResults, keep, *, session: bool,
+                         max_scrolls: int, scroll_reason: str) -> tuple[_FeedProbe, set[str], int]:
+        """Load the search for `filters` and scroll its feed until it stops
+        growing (three reads without a new card) or `max_scrolls`, which ends
+        `results` incomplete with `scroll_reason`. Each new card that passes
+        the card hygiene (the query's words, parse_card, annotate_partial_price,
+        matches_filters) goes to `await keep(ctx, probe, listing)`, which
+        decides what `results` keeps; when it returns True the scan stops
+        after that batch of cards.
+
+        `session` False reads it logged out (SearchRestricted's fallback): no
+        cookies loaded or written back, and a login wall is FeedUnconfirmed,
+        never "session expired". Returns (probe, card ids seen, scrolls)."""
+        seen: set[str] = set()
+        stalls = scrolls = 0
+        self._probe = probe = _FeedProbe()
+        self._session = session
+        # Without the session nothing is written back (_keep_session needs loaded).
+        loaded = _state_mtime() if session else None
+        async with browser_context(storage_state=FB_STORAGE_STATE if session else None, native=True) as ctx:
+            page = await ctx.new_page()
+            probe.listen(page)
+            try:
+                response = await page.goto(self._build_url(filters), timeout=45_000, wait_until="domcontentloaded")
+                await probe.document(response)
+                if response and response.status >= 400:
+                    raise RuntimeError(f"facebook search HTTP {response.status}")
+                if session:
+                    await _require_session(ctx)
+                await page.wait_for_timeout(3_500)
+                reloaded = False
+                while True:
+                    if "/login" in page.url or "checkpoint" in page.url:
+                        if not session:
+                            # Not the account's session: nothing to renew.
+                            raise FeedUnconfirmed(f"{NO_SESSION}: login wall")
+                        raise CollectorBlocked("facebook: session expired")
+                    before = len(seen)
+                    halt = False
+                    # Read each batch before scrolling; older cards may leave the DOM.
+                    for href, text, label, img in await _cards(page):
+                        match = re.search(r"/marketplace/item/(\d+)", href)
+                        if not match or match[1] in seen:
+                            continue
+                        seen.add(match[1])
+                        if not _matches_query_text(f"{label}\n{text}", filters):
+                            continue
+                        listing = parse_card(href, text, label, img)
+                        if listing is None:
+                            continue
+                        self.annotate_partial_price(listing)
+                        if not self.matches_filters(listing, filters):
+                            continue
+                        probe.card(listing.listing_id, f"{label}\n{text}")
+                        halt = await keep(ctx, probe, listing) or halt
+                    if halt:
+                        break
+                    stalls = stalls + 1 if len(seen) == before else 0
+                    if stalls >= 3:
+                        body = _plain(await page.locator("body").inner_text())
+                        if not seen and not any(s in body for s in _NO_RESULTS):
+                            if session and search_restricted(await _html(page)):
+                                # No reload: it answers the same, and is one more search for the account.
+                                raise SearchRestricted(RESTRICTED)
+                            if session and config.FB_NO_SESSION_FALLBACK:
+                                # Also restricted, silently (SearchRestricted): reading it logged out
+                                # replaces the reload, and confirms an empty search with its own text.
+                                raise SearchRestricted(EMPTY_FOR_ACCOUNT)
+                            if not reloaded:
+                                # Often a feed that didn't render: one more load before failing.
+                                reloaded, stalls = True, 0
+                                try:
+                                    response = await page.reload(timeout=45_000, wait_until="domcontentloaded")
+                                except Exception as exc:
+                                    raise FeedUnconfirmed(f"facebook: empty feed, then the reload failed: "
+                                                          f"{type(exc).__name__}") from exc
+                                await probe.document(response)     # the first batch's feed dates
+                                if response and response.status >= 400:
+                                    raise FeedUnconfirmed(f"facebook: empty feed, then reload HTTP {response.status}")
+                                await page.wait_for_timeout(3_500)
+                                continue
+                            raise FeedUnconfirmed("facebook: empty feed without a confirmed no-results message")
+                        break
+                    if scrolls >= max_scrolls:
+                        results.complete, results.reason = False, scroll_reason
+                        break
+                    await page.mouse.wheel(0, 4_000)
+                    scrolls += 1
+                    await page.wait_for_timeout(1_500)
+            except Exception as exc:
+                if not seen:
+                    raise
+                results.complete, results.reason = False, f"facebook: {type(exc).__name__}: {exc}"
+            finally:
+                self._probe, self._session = None, True
+                await probe.close(page)
+                await page.close()
+                await _keep_session(ctx, loaded)
+        return probe, seen, scrolls
+
     async def _publication_date(self, ctx, listing: Listing) -> int | None:
         # Without the session (_search_recent's `session`) a login wall only
         # fails this page's date: the scan goes on, partial.
@@ -1014,7 +1190,7 @@ class FacebookMarketplaceScraper(BaseScraper):
                              session: bool = True) -> SearchResults:
         """The cards of the window, each dated by the card, a stored listing,
         the search page's own data (FB_FEED_DATES) or its item page, up to
-        RECENT_FB_MAX_DATE_FETCHES pages a scan.
+        RECENT_FB_MAX_DATE_FETCHES pages a scan (the feed itself: _scan_feed).
 
         `session` False reads it logged out (search's fallback for
         SearchRestricted): no cookies loaded or written back, and a login wall
@@ -1026,141 +1202,67 @@ class FacebookMarketplaceScraper(BaseScraper):
         saw, a partial one keeps the rest too. A read that raised is never
         remembered: the next scan reads it again."""
         results = SearchResults()
-        seen: set[str] = set()
         known = filters.get("known_publication_dates") or {}
         remembering = "date_skips" in filters
         memory = {i: s for i, s in parse_date_skips(filters.get("date_skips")).items()
                   if s.epoch is None or config.FB_DATE_MEMORY_UNKNOWN}
         # undated: pages read without a date (unknown_dates also counts the cards past the cap).
-        stalls = scrolls = fetched = skipped = out_of_window = undated = 0
-        self._probe = probe = _FeedProbe()
-        self._session = session
-        # Without the session nothing is written back (_keep_session needs loaded).
-        loaded = _state_mtime() if session else None
-        async with browser_context(storage_state=FB_STORAGE_STATE if session else None, native=True) as ctx:
-            page = await ctx.new_page()
-            probe.listen(page)
-            try:
-                response = await page.goto(self._build_url(filters), timeout=45_000, wait_until="domcontentloaded")
-                await probe.document(response)
-                if response and response.status >= 400:
-                    raise RuntimeError(f"facebook search HTTP {response.status}")
-                if session:
-                    await _require_session(ctx)
-                await page.wait_for_timeout(3_500)
-                reloaded = False
-                while True:
-                    if "/login" in page.url or "checkpoint" in page.url:
-                        if not session:
-                            # Not the account's session: nothing to renew.
-                            raise FeedUnconfirmed(f"{NO_SESSION}: login wall")
-                        raise CollectorBlocked("facebook: session expired")
-                    before = len(seen)
-                    # Read each batch before scrolling; older cards may leave the DOM.
-                    for href, text, label, img in await _cards(page):
-                        match = re.search(r"/marketplace/item/(\d+)", href)
-                        if not match or match[1] in seen:
-                            continue
-                        seen.add(match[1])
-                        if not _matches_query_text(f"{label}\n{text}", filters):
-                            continue
-                        listing = parse_card(href, text, label, img)
-                        if listing is None:
-                            continue
-                        self.annotate_partial_price(listing)
-                        if not self.matches_filters(listing, filters):
-                            continue
-                        ident = listing.listing_id
-                        probe.card(ident, f"{label}\n{text}")
-                        if listing.extra.get("card_status") == "sold":
-                            # A sold card needs no date nor window: ingest ends a
-                            # stored listing (dated or not, recent or not) and
-                            # stores no new one. No page read, no date memory.
-                            results.append(listing)
-                            continue
-                        remembered = memory.get(ident)
-                        if listing.published_at is not None:
-                            origin = "card"
-                        elif (stored := known.get(ident)) is not None:
-                            listing.published_at, origin = stored, "known"
-                        elif config.FB_FEED_DATES and (fed := await probe.feed_date(ident)) is not None:
-                            listing.published_at, origin = fed, "feed"
-                        else:
-                            origin = "page"
-                        if listing.published_at is None and remembered and remembered.skips(window.until):
-                            skipped += 1
-                            continue
-                        read = False
-                        if listing.published_at is None and fetched >= config.RECENT_FB_MAX_DATE_FETCHES:
-                            results.complete, results.reason = False, DATE_FETCH_LIMIT
-                        elif listing.published_at is None:
-                            fetched += 1
-                            await asyncio.sleep(config.RECENT_FB_DETAIL_SECONDS)
-                            try:
-                                listing.published_at = await self._publication_date(ctx, listing)
-                                read = True
-                            except CollectorBlocked:
-                                raise
-                            except Exception as exc:
-                                results.complete, results.reason = False, f"facebook date fetch failed: {type(exc).__name__}"
-                                log.warning("Could not read publication date for %s: %s", ident, exc)
-                        probe.dated(ident, listing.published_at, origin)
-                        if listing.published_at is None:
-                            results.unknown_dates += 1
-                            undated += read
-                            if read and config.FB_DATE_MEMORY_UNKNOWN:
-                                memory[ident] = DateSkip.undated(remembered, window.until)
-                            continue
-                        if window.admits(listing, remembered):
-                            memory.pop(ident, None)
-                            results.append(listing)
-                        elif listing.published_at < window.since and (read or remembered):
-                            memory[ident] = DateSkip()
-                            if read:
-                                out_of_window += 1
-                    if results.reason == DATE_FETCH_LIMIT:
-                        break
-                    stalls = stalls + 1 if len(seen) == before else 0
-                    if stalls >= 3:
-                        body = _plain(await page.locator("body").inner_text())
-                        if not seen and not any(s in body for s in _NO_RESULTS):
-                            if session and search_restricted(await _html(page)):
-                                # No reload: it answers the same, and is one more search for the account.
-                                raise SearchRestricted(RESTRICTED)
-                            if session and config.FB_NO_SESSION_FALLBACK:
-                                # Also restricted, silently (SearchRestricted): reading it logged out
-                                # replaces the reload, and confirms an empty search with its own text.
-                                raise SearchRestricted(EMPTY_FOR_ACCOUNT)
-                            if not reloaded:
-                                # Often a feed that didn't render: one more load before failing.
-                                reloaded, stalls = True, 0
-                                try:
-                                    response = await page.reload(timeout=45_000, wait_until="domcontentloaded")
-                                except Exception as exc:
-                                    raise FeedUnconfirmed(f"facebook: empty feed, then the reload failed: "
-                                                          f"{type(exc).__name__}") from exc
-                                await probe.document(response)     # the first batch's feed dates
-                                if response and response.status >= 400:
-                                    raise FeedUnconfirmed(f"facebook: empty feed, then reload HTTP {response.status}")
-                                await page.wait_for_timeout(3_500)
-                                continue
-                            raise FeedUnconfirmed("facebook: empty feed without a confirmed no-results message")
-                        break
-                    if scrolls >= config.RECENT_FB_MAX_SCROLLS:
-                        results.complete, results.reason = False, "facebook: publication scan scroll limit reached"
-                        break
-                    await page.mouse.wheel(0, 4_000)
-                    scrolls += 1
-                    await page.wait_for_timeout(1_500)
-            except Exception as exc:
-                if not seen:
+        fetched = skipped = out_of_window = undated = 0
+
+        async def keep(ctx, probe: _FeedProbe, listing: Listing) -> bool:
+            """Whether the scan stops after this batch: the item pages' cap."""
+            nonlocal fetched, skipped, out_of_window, undated
+            ident = listing.listing_id
+            if listing.extra.get("card_status") == "sold":
+                # A sold card needs no date nor window: ingest ends a
+                # stored listing (dated or not, recent or not) and
+                # stores no new one. No page read, no date memory.
+                results.append(listing)
+                return False
+            remembered = memory.get(ident)
+            if listing.published_at is not None:
+                origin = "card"
+            elif (stored := known.get(ident)) is not None:
+                listing.published_at, origin = stored, "known"
+            elif config.FB_FEED_DATES and (fed := await probe.feed_date(ident)) is not None:
+                listing.published_at, origin = fed, "feed"
+            else:
+                origin = "page"
+            if listing.published_at is None and remembered and remembered.skips(window.until):
+                skipped += 1
+                return False
+            read = False
+            if listing.published_at is None and fetched >= config.RECENT_FB_MAX_DATE_FETCHES:
+                results.complete, results.reason = False, DATE_FETCH_LIMIT
+            elif listing.published_at is None:
+                fetched += 1
+                await asyncio.sleep(config.RECENT_FB_DETAIL_SECONDS)
+                try:
+                    listing.published_at = await self._publication_date(ctx, listing)
+                    read = True
+                except CollectorBlocked:
                     raise
-                results.complete, results.reason = False, f"facebook: {type(exc).__name__}: {exc}"
-            finally:
-                self._probe, self._session = None, True
-                await probe.close(page)
-                await page.close()
-                await _keep_session(ctx, loaded)
+                except Exception as exc:
+                    results.complete, results.reason = False, f"facebook date fetch failed: {type(exc).__name__}"
+                    log.warning("Could not read publication date for %s: %s", ident, exc)
+            probe.dated(ident, listing.published_at, origin)
+            if listing.published_at is None:
+                results.unknown_dates += 1
+                undated += read
+                if read and config.FB_DATE_MEMORY_UNKNOWN:
+                    memory[ident] = DateSkip.undated(remembered, window.until)
+            elif window.admits(listing, remembered):
+                memory.pop(ident, None)
+                results.append(listing)
+            elif listing.published_at < window.since and (read or remembered):
+                memory[ident] = DateSkip()
+                if read:
+                    out_of_window += 1
+            return results.reason == DATE_FETCH_LIMIT
+
+        probe, seen, scrolls = await self._scan_feed(
+            filters, results, keep, session=session, max_scrolls=config.RECENT_FB_MAX_SCROLLS,
+            scroll_reason="facebook: publication scan scroll limit reached")
         if remembering:
             if results.complete:
                 memory = {i: s for i, s in memory.items() if i in seen}
