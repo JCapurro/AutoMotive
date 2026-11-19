@@ -1,8 +1,11 @@
 import Link from "next/link";
 
 import { DealerSignupForm } from "@/components/agencia/dealer-signup-form";
+import { PendingSales } from "@/components/agencia/sale-question";
 import { Button } from "@/components/ui/button";
 import { webConfig } from "@/lib/config";
+import { reachSentence, salesSentence } from "@/lib/dealer-funnel";
+import { dealerReach } from "@/lib/dealer-funnel-server";
 import { channelOn } from "@/lib/dealer-program";
 import { myDealer } from "@/lib/dealer-server";
 import { number } from "@/lib/format";
@@ -13,10 +16,21 @@ export default async function DealerHome() {
   if (!dealer) return <DealerSignupForm />;
   const { counts } = dealer;
   const channel = channelOn(dealerProgram);
+  // The value of the channel: this month's reach (people rounded to «pocas» in SQL) and the sales to answer.
+  const reach = channel && dealer.approved ? await dealerReach() : null;
+  const sales = reach ? salesSentence(reach.sales_via_ese_auto) : null;
 
   return (
     <div className="space-y-6">
       <h1 className="type-heading text-[1.9rem] leading-tight">{dealer.name}</h1>
+
+      {reach ? (
+        <p data-testid="dealer-reach" className="border-l-4 border-foreground pl-4 text-[17px] leading-snug">
+          <b className="font-semibold">{reachSentence(reach)}</b>
+          {sales ? <span className="block text-[15px] text-muted-foreground">{sales}</span> : null}
+        </p>
+      ) : null}
+      {reach ? <PendingSales sales={reach.pending_sales} /> : null}
 
       {!dealer.approved ? (
         <p role="status" data-testid="dealer-not-approved" className="rounded-lg bg-muted p-4 text-[15px]">

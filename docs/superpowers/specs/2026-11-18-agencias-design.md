@@ -861,3 +861,31 @@ Nadie hace commit, push, deploy ni aplica migraciones fuera de la base de test c
 - **Privacidad:** el párrafo de `/privacidad` lo aprueba Juan antes de prender `channel_enabled`.
 - **Producción:** aplicar con el worker parado (FK a `listings`), reiniciarlo, y regenerar `web/types/database.ts`
   contra la base real cuando se pueda.
+
+## 12. Embudo del canal (fase 2, migración `20261230120000_dealer_funnel.sql`)
+
+Qué se registra además de lo de §3:
+
+- `dealer_match_log`: la primera coincidencia de cada auto de agencia con cada búsqueda. Lo llena un trigger de
+  sentencia sobre los `insert` en `matches` (solo filas cuyo aviso tiene `dealer_id`). Hace falta porque los
+  `matches` de un auto oculto se borran (§2) y el rescore nocturno también borra. Sin FK a `listings` ni a
+  `search_profiles`: la historia sobrevive a ambos.
+- `dealer_leads.furthest_status`: el paso más lejano de la consulta (nueva < contactada < reservó < compró). Una
+  consulta contactada que después «no avanzó» sigue contando como contactada.
+- `dealer_sales`: la venta declarada. Al marcar una consulta «Compró» o un auto vendido, el panel pregunta con un
+  clic «¿La venta vino por Ese Auto?» (`dealer_declare_sale`). Si se cierra sin responder, el inicio de `/agencia`
+  vuelve a preguntar. Una respuesta por auto (o por consulta si ya no tiene auto); se puede cambiar.
+
+Lecturas:
+
+| Función | Para | Permiso |
+|---|---|---|
+| `dealer_funnel(p_start, p_end, p_dealer)` | crudo, una agencia o todas | service role |
+| `admin_dealer_funnel(p_start, p_end)` | `/admin/agencias/embudo`: por agencia y total, 7/30/90 días completos de Argentina | service role (la página la lee con el cliente admin después de `requireAdmin`) |
+| `my_dealer_reach()` | inicio de `/agencia`: «este mes tus autos llegaron a N personas y recibiste M consultas» | miembro de la agencia; personas en «pocas» bajo `demand_min_count` (nunca menos de 3), en SQL |
+
+Definiciones: alerta de un auto de agencia = fila de `notifications` entregada (enviada, o dentro de un resumen
+enviado) o auto listado en los `items` de un resumen enviado, posterior al alta del ítem; una por persona y auto.
+Personas alcanzadas = usuarios distintos detrás de esas alertas. Se excluyen las cuentas admin y los miembros de la
+propia agencia. Stock y visibles son una foto de hoy; lo demás, del período. Una venta declarada cuenta mientras su
+auto (o su consulta) siga vendido.

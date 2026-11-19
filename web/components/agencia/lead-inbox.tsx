@@ -6,6 +6,7 @@ import { useTransition } from "react";
 import { toast } from "sonner";
 
 import { setLeadStatus } from "@/app/agencia/actions";
+import { askSaleSource } from "@/components/agencia/sale-question";
 import { NativeSelect } from "@/components/ui/native-select";
 import { whatsappUrl } from "@/lib/dealer-contact";
 import { LEAD_ORIGIN, LEAD_STATUS } from "@/lib/dealer-insights";
@@ -61,6 +62,7 @@ export function LeadInbox({ leads }: { leads: InboxLead[] }) {
                 run(async () => {
                   const result = await setLeadStatus(l.id, status).catch(() => ({ error: "No pudimos guardar. Probá de nuevo." }));
                   if (result.error) toast.error(result.error);
+                  else if (status === "sold") askSaleSource({ leadId: l.id, vehicle: l.vehicle }, () => router.refresh());
                   router.refresh();
                 });
               }}

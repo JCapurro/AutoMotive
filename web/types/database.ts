@@ -183,13 +183,31 @@ export type Database = {
       }
       // authenticated reads every column but buyer_user_id, consent_text and notification_id (column grants).
       dealer_leads: {
-        Row: { id: number; dealer_id: number; item_id: number | null; listing_id: number | null; buyer_user_id: string; buyer_name: string; buyer_phone: string; message: string | null; consent_text: string; consent_at: string; notification_id: number | null; origin: string; status: string; status_changed_at: string | null; dealer_notified_at: string | null; created_at: string; updated_at: string }
+        Row: { id: number; dealer_id: number; item_id: number | null; listing_id: number | null; buyer_user_id: string; buyer_name: string; buyer_phone: string; message: string | null; consent_text: string; consent_at: string; notification_id: number | null; origin: string; status: string; status_changed_at: string | null; dealer_notified_at: string | null; created_at: string; updated_at: string; furthest_status: string }
         Insert: never
         Update: never
         Relationships: [
           { foreignKeyName: "dealer_leads_dealer_id_fkey"; columns: ["dealer_id"]; isOneToOne: false; referencedRelation: "dealers"; referencedColumns: ["id"] },
           { foreignKeyName: "dealer_leads_listing_id_fkey"; columns: ["listing_id"]; isOneToOne: false; referencedRelation: "listings"; referencedColumns: ["id"] },
           { foreignKeyName: "dealer_leads_item_id_fkey"; columns: ["item_id"]; isOneToOne: false; referencedRelation: "dealer_stock_items"; referencedColumns: ["id"] },
+        ]
+      }
+      dealer_match_log: {
+        Row: { listing_id: number; search_profile_id: number; dealer_id: number; user_id: string; first_matched_at: string }
+        Insert: never
+        Update: never
+        Relationships: [
+          { foreignKeyName: "dealer_match_log_dealer_id_fkey"; columns: ["dealer_id"]; isOneToOne: false; referencedRelation: "dealers"; referencedColumns: ["id"] },
+        ]
+      }
+      dealer_sales: {
+        Row: { id: number; dealer_id: number; item_id: number | null; lead_id: number | null; via_ese_auto: boolean; declared_by: string | null; declared_at: string }
+        Insert: never
+        Update: never
+        Relationships: [
+          { foreignKeyName: "dealer_sales_dealer_id_fkey"; columns: ["dealer_id"]; isOneToOne: false; referencedRelation: "dealers"; referencedColumns: ["id"] },
+          { foreignKeyName: "dealer_sales_item_id_fkey"; columns: ["item_id"]; isOneToOne: false; referencedRelation: "dealer_stock_items"; referencedColumns: ["id"] },
+          { foreignKeyName: "dealer_sales_lead_id_fkey"; columns: ["lead_id"]; isOneToOne: false; referencedRelation: "dealer_leads"; referencedColumns: ["id"] },
         ]
       }
       platform_health_checks: {
@@ -1342,6 +1360,10 @@ isOneToOne: false
       dealer_request_stock_read: { Args: { p_data: string; p_media_type: string; p_filename?: string | null }; Returns: number }
       dealer_alert_scan: { Args: { p_dealer_id: number; p_cheaper_pct?: number; p_radius_km?: number }; Returns: { item_id: number; listing_id: number | null; make: string | null; model: string | null; trim: string | null; year: number | null; mileage_km: number | null; price: number | null; currency: string | null; price_usd: number | null; market: Json; model_days: Json; days_in_stock: number | null; demand: Json | null; cheaper: Json | null; state: Json | null }[] }
       dealer_set_lead_status: { Args: { p_lead_id: number; p_status: string }; Returns: undefined }
+      dealer_declare_sale: { Args: { p_item_id?: number | null; p_lead_id?: number | null; p_via_ese_auto: boolean }; Returns: undefined }
+      my_dealer_reach: { Args: Record<string, never>; Returns: Json }
+      dealer_funnel: { Args: { p_start: string; p_end: string; p_dealer?: number | null }; Returns: Json }
+      admin_dealer_funnel: { Args: { p_start: string; p_end: string }; Returns: Json }
       request_dealer_contact: { Args: { p_listing_id: number; p_name: string; p_phone: string; p_message: string | null; p_consent: boolean; p_consent_text: string; p_notification_id?: number | null }; Returns: Json }
       listing_dealer_card: { Args: { p_listing_id: number }; Returns: Json }
       dealer_badges: { Args: { p_listing_ids: number[] }; Returns: { listing_id: number; dealer_name: string; confirmed_at: string | null }[] }
