@@ -128,8 +128,8 @@ select has_column('public', 'match_cards', 'color', 'match_cards.color exists');
 select has_column('public', 'match_cards', 'color_method', 'match_cards.color_method exists');
 select is(array(select attname::text from pg_attribute
                   where attrelid = 'public.match_cards'::regclass and attnum > 0 and not attisdropped
-                  order by attnum desc limit 3), array['color_method', 'color', 'seller_unknown'],
-          'match_cards: color and color_method appended after seller_unknown');
+                  order by attnum desc limit 6), array['dealer_confirmed_at', 'dealer_name', 'dealer_id', 'color_method', 'color', 'seller_unknown'],
+          'match_cards: color and color_method appended after seller_unknown (then the dealer columns, 20261228120000)');
 -- With plan limits enforced, guard_match_access would drop a free account's match.
 update public.app_config set value = jsonb_set(value, '{enforced}', 'false') where key = 'plan_limits';
 insert into public.matches (search_profile_id, listing_id, score, level, score_breakdown, match_reasons, scoring_version)
