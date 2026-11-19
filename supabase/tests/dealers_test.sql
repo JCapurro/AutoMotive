@@ -796,6 +796,98 @@ select is(public.dealer_listing_hidden('directo', current_setting('dt.dealer_a')
           '... and channel_enabled alone does not open the channel');
 reset role;
 
+-- ================================================================ 16. dealer_market_listings («Ver el mercado»)
+-- The fixtures of 11: Pgdealer Mref, 9871-9873 in range, 9880 too once nothing is excluded.
+update public.app_config set value = value || '{"enabled": true, "channel_enabled": true}' where key = 'dealer_program';
+set local role authenticated;
+set local request.jwt.claims = '{"sub": "d1000000-0000-0000-0000-00000000000a", "role": "authenticated"}';
+select lives_ok($$select public.dealer_upsert_item(null, '{"make": "Pgdealer", "model": "Mref", "year": 2017,
+                                                         "price": 15000, "currency": "USD"}')$$, 'an item of the Mref model');
+reset role;
+select set_config('dt.item_mref', (select id::text from public.dealer_stock_items where model = 'Mref'), true);
+
+set local role authenticated;
+set local request.jwt.claims = '{"sub": "d1000000-0000-0000-0000-00000000000a", "role": "authenticated"}';
+select is((select array_agg(listing_id) from public.dealer_market_listings(current_setting('dt.item_mref')::bigint)),
+          array[9871, 9872, 9873, 9880]::bigint[],
+          'dealer_market_listings: the pool of dealer_market_ref, cheapest first; not +2, 31 days old, gone, partial, directo or not a vehicle');
+select is((select count(*)::int from public.dealer_market_listings(current_setting('dt.item_mref')::bigint)),
+          ((select market from public.dealer_stock_insights() where item_id = current_setting('dt.item_mref')::bigint)->>'n')::int,
+          '... as many rows as the n of the item''s market reference');
+select is((select array[source, url, price_usd::text, year::text] from public.dealer_market_listings(current_setting('dt.item_mref')::bigint)
+            where listing_id = 9872),
+          array['kavak', 'https://example.test/dt-9872', '12000', '2017'], '... with the source, link, price and year of each listing');
+select throws_ok($$select * from public.dealer_market_listings(999999999)$$, 'P0001', 'not_found',
+                 '... an item that does not exist: not_found');
+reset role;
+
+set local role authenticated;
+set local request.jwt.claims = '{"sub": "d1000000-0000-0000-0000-00000000000b", "role": "authenticated"}';
+select throws_ok($$select * from public.dealer_market_listings(current_setting('dt.item_mref')::bigint)$$, 'P0001', 'not_found',
+                 '... another dealer''s item: not_found');
+reset role;
+
+set local role authenticated;
+set local request.jwt.claims = '{"sub": "d1000000-0000-0000-0000-000000000001", "role": "authenticated"}';
+select throws_ok($$select * from public.dealer_market_listings(current_setting('dt.item_mref')::bigint)$$, 'P0001', 'not_member',
+                 '... someone without a dealer: not_member');
+reset role;
+select is(has_function_privilege('anon', 'public.dealer_market_listings(bigint)', 'execute'), false, '... not for anon');
+
+-- ================================================================ 17. photos: the dealer-photos bucket
+select is((select array[public::text, file_size_limit::text, array_to_string(allowed_mime_types, ',')] from storage.buckets where id = 'dealer-photos'),
+          array['true', '5242880', 'image/jpeg,image/png,image/webp'], 'bucket dealer-photos: public to read, 5 MB, images only');
+select is((select array_agg(cmd::text order by cmd) from pg_policies
+            where schemaname = 'storage' and tablename = 'objects' and policyname like 'dealer photos:%'),
+          array['DELETE', 'INSERT'], '... policies for insert and delete only (no update)');
+
+set local role authenticated;
+set local request.jwt.claims = '{"sub": "d1000000-0000-0000-0000-00000000000a", "role": "authenticated"}';
+select is(public.dealer_photo_path_mine(current_setting('dt.dealer_a') || '/a.jpg'), true, 'dealer_photo_path_mine: my dealer''s folder');
+select is(public.dealer_photo_path_mine(current_setting('dt.dealer_b') || '/a.jpg'), false, '... another dealer''s folder: no');
+select is(public.dealer_photo_path_mine('a.jpg') or public.dealer_photo_path_mine('/' || current_setting('dt.dealer_a') || '/a.jpg')
+          or public.dealer_photo_path_mine(''), false, '... no folder, a leading slash or an empty name: no');
+select lives_ok($$insert into storage.objects (bucket_id, name) values ('dealer-photos', current_setting('dt.dealer_a') || '/mine.jpg')$$,
+                'a member uploads under its dealer''s folder');
+select throws_ok($$insert into storage.objects (bucket_id, name) values ('dealer-photos', current_setting('dt.dealer_b') || '/x.jpg')$$,
+                 '42501', null, '... not under another dealer''s folder');
+reset role;
+
+set local role authenticated;
+set local request.jwt.claims = '{"sub": "d1000000-0000-0000-0000-00000000000b", "role": "authenticated"}';
+select throws_ok($$insert into storage.objects (bucket_id, name) values ('dealer-photos', current_setting('dt.dealer_a') || '/b.jpg')$$,
+                 '42501', null, 'another dealer cannot upload into A''s folder');
+reset role;
+
+set local role authenticated;
+set local request.jwt.claims = '{"sub": "d1000000-0000-0000-0000-000000000001", "role": "authenticated"}';
+select throws_ok($$insert into storage.objects (bucket_id, name) values ('dealer-photos', current_setting('dt.dealer_a') || '/u.jpg')$$,
+                 '42501', null, 'a buyer cannot upload');
+reset role;
+
+set local role anon;
+select throws_ok($$insert into storage.objects (bucket_id, name) values ('dealer-photos', current_setting('dt.dealer_a') || '/anon.jpg')$$,
+                 '42501', null, 'anon cannot upload');
+reset role;
+
+update public.app_config set value = value || '{"enabled": false}' where key = 'dealer_program';
+set local role authenticated;
+set local request.jwt.claims = '{"sub": "d1000000-0000-0000-0000-00000000000a", "role": "authenticated"}';
+select throws_ok($$insert into storage.objects (bucket_id, name) values ('dealer-photos', current_setting('dt.dealer_a') || '/off.jpg')$$,
+                 '42501', null, 'with the program off nobody uploads');
+select throws_ok($$select * from public.dealer_market_listings(current_setting('dt.item_mref')::bigint)$$, 'P0001', 'dealer_program_off',
+                 '... and dealer_market_listings is off too');
+reset role;
+
+-- The validator of the item's photo links: https, or http only for the local stack's own storage.
+select is(public.dealer_item_problem('{"make": "A", "model": "B", "year": 2017, "price": 1, "currency": "USD",
+                                       "images": ["https://example.test/a.jpg", "http://127.0.0.1:54321/storage/v1/object/public/dealer-photos/1/a.jpg"]}'),
+          null, 'dealer_item_problem: https and the local stack''s http pass');
+select is(public.dealer_item_problem('{"make": "A", "model": "B", "year": 2017, "price": 1, "currency": "USD",
+                                       "images": ["http://example.test/a.jpg"]}'), 'images', '... plain http to another host does not');
+select is(public.dealer_item_problem('{"make": "A", "model": "B", "year": 2017, "price": 1, "currency": "USD",
+                                       "images": ["http://127.0.0.1.evil.test/a.jpg"]}'), 'images', '... nor a host that only starts like the local one');
+
 -- ================================================================ admin candidates
 update public.listings set seller_key = 'ttautos', seller_name = 'TT AUTOS' where id in (9806, 9807);
 select is((select array[seller_key, seller_name, active::text] from public.admin_dealer_seller_candidates('mercadolibre', 'tt')),
