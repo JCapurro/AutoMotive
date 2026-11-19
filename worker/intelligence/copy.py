@@ -70,6 +70,8 @@ REASON = {
     "seller_other": "vendedor {kind}, se prefiere {wanted}",
     # PRO-01: the strict seller filter (Pro).
     "seller_only_other": "vendedor {kind}, se busca solo {wanted}",
+    # Agencias (C4): a dealer's car and a search of private sellers only.
+    "seller_dealer_stock": "auto de agencia, se busca solo {wanted}",
     # F-02: why a seller is a «posible agencia» (intelligence/seller.py).
     "seller_inferred": "publica {n} autos",
     # The color filter (docs/PLAN_FILTRO_COLOR.md, sección 8).
@@ -95,6 +97,8 @@ SELLER_ONLY = {"private": "particulares", "dealer": "agencias"}
 # PRO-01, option C (Juan, 02/11): the strict seller filter let a listing whose
 # seller is unknown through. The card, the listing page and the opportunity email.
 SELLER_UNKNOWN = "vendedor sin dato"
+# Agencias: the label of a dealer's car in alerts, results and the listing page.
+DEALER_LABEL = "Agencia"
 UNKNOWN_BADGE = "❔ no informado"
 
 # ---------------------------------------------------------------------------

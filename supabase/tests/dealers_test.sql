@@ -61,7 +61,7 @@ select is(public.dealer_program(),
 insert into public.app_config (key, value)
 values ('dealer_program', '{"enabled": false, "channel_enabled": false, "manual_confirm_days": 7, "demand_min_count": 3}');
 select is(has_function_privilege('anon', 'public.dealer_program()', 'execute'), true, 'dealer_program(): anon can read it');
-select is(has_function_privilege('authenticated', 'public.dealer_demand(text,text,integer,numeric,text,integer,double precision,double precision,uuid[])', 'execute')
+select is(has_function_privilege('authenticated', 'public.dealer_demand(text,text,integer,numeric,text,integer,double precision,double precision,uuid[],text)', 'execute')
           or has_function_privilege('authenticated', 'public.dealer_market_ref(text,text,integer,numeric,bigint)', 'execute')
           or has_function_privilege('authenticated', 'public.dealer_sweep()', 'execute')
           or has_function_privilege('authenticated', 'public.dealer_hide_listing(bigint)', 'execute')
@@ -489,6 +489,13 @@ set local request.jwt.claims = '{"sub": "d1000000-0000-0000-0000-000000000002", 
 select is((select count(*)::int from public.dealer_leads), 0, 'another buyer sees none of those leads');
 select is((public.listing_dealer_card(9802)->>'can_request')::boolean, true, '... and can still ask');
 select is(public.listing_dealer_card(9802)->'whatsapp', 'null'::jsonb, '... without the WhatsApp before asking');
+select is(array[public.listing_dealer_card(9804)->'dealer_id', public.listing_dealer_card(9804)->'hidden_reason',
+                public.listing_dealer_card(9804)->'confirmed_at', public.listing_dealer_card(9804)->'badge'],
+          array['null', 'null', 'null', 'false']::jsonb[],
+          'listing_dealer_card of a hidden car to a non-member: not whose it is nor why it is hidden');
+select is((select array_agg(id order by id) from public.listings where id between 9801 and 9808),
+          array[9801, 9802, 9806, 9807, 9808]::bigint[],
+          'RLS: a non-member does not read hidden directo listings (reserved, unconfirmed, unapproved); portal ones stay');
 reset role;
 
 set local role authenticated;
@@ -503,6 +510,9 @@ select throws_ok($$select buyer_user_id from public.dealer_leads$$, '42501', nul
 select throws_ok($$select consent_text from public.dealer_leads$$, '42501', null, '... nor consent_text');
 select is((public.listing_dealer_card(9804)->>'viewer_is_member')::boolean, true, 'listing_dealer_card: a member sees their own hidden car');
 select is(public.listing_dealer_card(9804)->>'hidden_reason', 'unconfirmed', '... with the reason');
+select is((select count(*)::int from public.listings where id in (9802, 9803, 9804, 9808)), 4,
+          'RLS: a member reads its own hidden directo listings');
+select is((select count(*)::int from public.listings where id = 9805), 0, '... but not another dealer''s');
 select is((public.my_dealer()->'counts'->>'leads_new')::int, 5, 'my_dealer() counts the new leads');
 select lives_ok($$select public.dealer_set_lead_status((select min(id) from public.dealer_leads), 'contacted')$$,
                 'dealer_set_lead_status on its own lead');
@@ -693,11 +703,11 @@ overriding system value values
 set local session_replication_role = origin;
 
 select is(public.dealer_demand('Pgdealer', 'Demand', 2017, 20000000, 'ARS', 90000, -34.72, -58.25,
-                               array['d1000000-0000-0000-0000-00000000000a']::uuid[]),
+                               array['d1000000-0000-0000-0000-00000000000a']::uuid[], 'directo'),
           '{"model": {"searches": 5, "people": 3}, "fits": {"searches": 3, "people": 2},
             "zone": {"searches": 2, "people": 1}, "active_zone": {"searches": 1, "people": 1}}'::jsonb,
           'dealer_demand: nested levels; out of year and private-only out of fits; no zone counts in zone; admins, members, old and other makes out');
-select is(public.dealer_demand('Pgdealer', 'Demand', 2017, 20000000, 'ARS', 90000, null, null, '{}')->'zone', 'null'::jsonb,
+select is(public.dealer_demand('Pgdealer', 'Demand', 2017, 20000000, 'ARS', 90000, null, null, '{}', 'directo')->'zone', 'null'::jsonb,
           '... no dealer location: zone is null');
 select is(public.dealer_demand_level('{"searches": 4, "people": 2}', 3), '"few"'::jsonb, 'dealer_demand_level: 2 people, 4 searches -> few');
 select is(public.dealer_demand_level('{"searches": 5, "people": 3}', 3), '5'::jsonb, '... 3 people -> the number of searches');
@@ -740,6 +750,40 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub": "d1000000-0000-0000-0000-000000000001", "role": "authenticated"}';
 select throws_ok($$select * from public.dealer_stock_insights()$$, 'P0001', 'not_member',
                  'dealer_stock_insights for someone without a dealer: not_member');
+reset role;
+
+set local session_replication_role = replica;
+insert into public.search_profiles (id, user_id, name, filters, enabled, created_at) overriding system value values
+  -- V only wants Mercado Libre; W wrote an invalid seller type (no filter, as matching reads it).
+  (9900, 'd1000000-0000-0000-0000-000000000002', 'd10', '{"make": "Pgdealer", "model": "Demand", "sources": ["mercadolibre"]}', true, now()),
+  (9901, 'd1000000-0000-0000-0000-000000000003', 'd11', '{"model": "Demand", "seller_types": ["foo"]}', true, now());
+set local session_replication_role = origin;
+select is((public.dealer_demand('Pgdealer', 'Demand', 2017, 20000000, 'ARS', 90000, null, null,
+                               array['d1000000-0000-0000-0000-00000000000a']::uuid[], 'directo')
+             -> 'fits' ->> 'searches')::int, 4,
+          'dealer_demand: a search limited to other sources does not fit a directo car; an invalid seller type is no filter');
+select is((public.dealer_demand('Pgdealer', 'Demand', 2017, 20000000, 'ARS', 90000, null, null,
+                               array['d1000000-0000-0000-0000-00000000000a']::uuid[], 'mercadolibre')
+             -> 'fits' ->> 'searches')::int, 5,
+          '... and it fits a car of that source');
+
+set local role authenticated;
+set local request.jwt.claims = '{"sub": "d1000000-0000-0000-0000-00000000000a", "role": "authenticated"}';
+select lives_ok($$select public.update_my_dealer('TT Autos', 'Quilmes', -34.72, -58.25, '1199998888', '5491122334455',
+                                                 'tt@ejemplo.test')$$, 'update_my_dealer: a new phone');
+select is((public.my_dealer()->>'approved')::boolean, true, '... keeps the approval');
+select lives_ok($$select public.update_my_dealer('TT Autos', 'Quilmes', -34.60, -58.38, '1199998888', '5491122334455',
+                                                 'tt@ejemplo.test')$$, 'update_my_dealer: a new place');
+select is((public.my_dealer()->>'approved')::boolean, false, '... goes back to review');
+select is((select demand from public.dealer_stock_insights() where model = 'Demand'), '{"approved": false}'::jsonb,
+          '... and its demand by zone is hidden until Juan approves it again');
+reset role;
+update public.dealers set approved_at = now() where id = current_setting('dt.dealer_a')::bigint;
+set local role authenticated;
+set local request.jwt.claims = '{"sub": "d1000000-0000-0000-0000-00000000000a", "role": "authenticated"}';
+select lives_ok($$select public.update_my_dealer('TT Motors', 'Quilmes', -34.60, -58.38, '1199998888', '5491122334455',
+                                                 'tt@ejemplo.test')$$, 'update_my_dealer: a new name');
+select is((public.my_dealer()->>'approved')::boolean, false, '... goes back to review too');
 reset role;
 
 update public.app_config set value = '{"enabled": false, "channel_enabled": true, "manual_confirm_days": 7, "demand_min_count": 3}'

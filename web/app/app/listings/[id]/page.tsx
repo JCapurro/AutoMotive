@@ -4,6 +4,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { CostEstimate } from "@/components/app/cost-estimate";
+import { DealerBadge } from "@/components/app/dealer-badge";
+import { DealerContact } from "@/components/app/dealer-contact";
 import { MarginEstimate, MarginTeaser } from "@/components/app/margin-estimate";
 import { ListingActions } from "@/components/app/listing-actions";
 import { ListingGallery } from "@/components/app/listing-gallery";
@@ -19,6 +21,10 @@ import { ViewTracker } from "@/components/app/view-tracker";
 import { requireUser } from "@/lib/auth";
 import { type WebConfig, webConfig } from "@/lib/config";
 import { costEstimateFor } from "@/lib/cost-estimate-data";
+import { confirmedAgoText } from "@/lib/dealer-contact";
+import { hiddenReasonText } from "@/lib/dealer-insights";
+import { dealerCard } from "@/lib/dealer-server";
+import { formatArPhone } from "@/lib/phone";
 import { fetchMatchMargins, marginAccess, marginTeasersFor } from "@/lib/margin-data";
 import {
   BASE_SELLER_QUESTIONS,
@@ -118,6 +124,15 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
   ]);
   if (!listing) notFound();
 
+  // Agencias: only a dealer's car or a 'directo' one reads its card (a common listing makes no new call).
+  const isDirecto = listing.source === "directo";
+  const dealer = listing.dealer_id != null || isDirecto ? await dealerCard(listingId) : null;
+  // A 'directo' car that doesn't reach buyers (unconfirmed, reserved, channel off…) has no page, except for its agency.
+  if (isDirecto && !dealer?.viewerIsMember && (!dealer || dealer.hiddenReason !== null || !dealer.badge)) notFound();
+  const dealerPhone = dealer?.canRequest
+    ? await supabase.from("profiles").select("phone").eq("id", user.id).maybeSingle().then(({ data }) => data?.phone ?? null)
+    : null;
+
   const best = matches?.[0] ?? null;
   const gone = listing.status === "gone";
   const others = (matches ?? []).slice(1);
@@ -128,6 +143,7 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
   const status = (interaction?.status ?? "new") as InteractionStatus;
   const fromAlert = notification?.id ?? null;
   const outboundHref = fromAlert ? `/r/${fromAlert}?to=listing` : `/app/listings/${listingId}/out`;
+  const dealerConfirmed = dealer?.badge && dealer.isDirecto ? confirmedAgoText(dealer.confirmedAt) : null;
   const images = imageUrls(listing.images);
   const name = vehicle(listing);
   const sourceName = listing.sources?.name ?? listing.source;
@@ -194,6 +210,12 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
         <ArrowLeft className="size-4" aria-hidden /> {best?.search_profiles?.name ?? "Inicio"}
       </Link>
 
+      {dealer?.viewerIsMember ? (
+        <p role="status" data-testid="dealer-preview" className="mt-4 rounded-lg bg-muted p-4 text-[15px]">
+          <b className="font-semibold">Así lo ven los compradores.</b> {hiddenReasonText(dealer.hiddenReason, cfg.dealerProgram.manualConfirmDays)}
+        </p>
+      ) : null}
+
       {gone ? (
         <p role="status" className="mt-4 flex items-start gap-2.5 rounded-lg bg-muted p-4 text-[15px]">
           <Ban className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden />
@@ -206,9 +228,13 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
         <header className="min-w-0 lg:col-start-1 lg:row-start-1">
           <h1 className="type-heading text-[1.9rem] leading-[1.05] md:text-[2.6rem]">{name}</h1>
           <p className="mt-2.5 flex flex-wrap gap-x-4.5 gap-y-1 text-sm text-muted-foreground">
-            <span>
-              En <b className="font-semibold text-foreground">{sourceName}</b>
-            </span>
+            {dealer?.badge ? <DealerBadge name={dealer.dealerName} withName className="self-center" /> : null}
+            {isDirecto ? null : (
+              <span>
+                En <b className="font-semibold text-foreground">{sourceName}</b>
+              </span>
+            )}
+            {dealerConfirmed ? <span data-testid="dealer-confirmed">{dealerConfirmed}</span> : null}
             {isBodyType(listing.body_type) ? <span data-testid="body-type">{BODY_TYPE[listing.body_type]}</span> : null}
             {color ? <span data-testid="listing-color">{color}</span> : null}
             {listing.location_text ? <span>{listing.location_text}</span> : null}
@@ -289,8 +315,24 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
 
           {/* In a laptop's short window the panel scrolls: the actions stay pinned to its foot (its height leaves them in view on load too). */}
           <div className="lg:sticky lg:bottom-0 lg:z-10 lg:-mx-5 lg:mt-4 lg:border-t lg:bg-background lg:px-5 lg:pt-4 lg:pb-5">
-            <ListingActions listingId={listingId} status={status} saved={interaction?.saved ?? false} outboundHref={outboundHref} />
+            <ListingActions listingId={listingId} status={status} saved={interaction?.saved ?? false} outboundHref={isDirecto ? null : outboundHref} />
           </div>
+
+          {dealer?.badge && dealer.dealerName && !gone && (dealer.canRequest || dealer.myLead) ? (
+            <div className="mt-3 border-t pt-3">
+              <DealerContact
+                listingId={listingId}
+                dealerId={dealer.dealerId}
+                dealerName={dealer.dealerName}
+                vehicle={[listing.make, listing.model, listing.year].filter(Boolean).join(" ") || name}
+                phone={dealerPhone ? formatArPhone(dealerPhone) : null}
+                canRequest={dealer.canRequest}
+                existing={dealer.myLead ? { createdAt: dealer.myLead.createdAt } : null}
+                whatsapp={dealer.whatsapp}
+                notificationId={fromAlert}
+              />
+            </div>
+          ) : null}
 
           <div className="mt-3 border-t pt-3 lg:mt-0 lg:border-t-0 lg:pt-0">
             <ListingTracking listingId={listingId} status={status} profileId={best?.search_profile_id ?? null} />

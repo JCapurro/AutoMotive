@@ -281,6 +281,8 @@ create policy "dealer_leads: buyer or dealer read" on public.dealer_leads
 -- ---------------------------------------------------------------------------
 -- 4. Helpers
 -- ---------------------------------------------------------------------------
+-- (The restrictive policy on listings for hidden 'directo' rows is at the end
+-- of section 8, once dealer_listing_hidden exists.)
 
 -- A JSON number (or a numeric string) as numeric; anything else is null. Never fails.
 create function public.dealer_json_number(p jsonb) returns numeric
@@ -499,7 +501,7 @@ begin
       return 'images';
     end if;
     if exists (select 1 from jsonb_array_elements_text(v) i
-                where i !~ '^https://[^\s]+$' or char_length(i) > 1000) then
+                where i !~ '^(https://|http://(127\.0\.0\.1|localhost)[:/])[^\s]+$' or char_length(i) > 1000) then
       return 'images';
     end if;
   end if;
@@ -662,9 +664,16 @@ begin
   if v_problem is not null then
     raise exception 'invalid_dealer:%', v_problem using errcode = 'P0001';
   end if;
+  -- A new name or place after approval goes back to Juan: buyers consent to
+  -- the name he checked, and a dealer that moves at will could locate a
+  -- buyer's search by re-reading its demand by zone (agencias C2).
   update public.dealers d
      set name = v_name, locality_label = v_locality, lat = p_lat, lon = p_lon, phone = v_phone,
-         whatsapp = v_whatsapp, contact_email = v_email, address_text = v_address, profile_links = v_links
+         whatsapp = v_whatsapp, contact_email = v_email, address_text = v_address, profile_links = v_links,
+         approved_at = case when d.name is distinct from v_name or d.lat is distinct from p_lat
+                                 or d.lon is distinct from p_lon then null else d.approved_at end,
+         approved_by = case when d.name is distinct from v_name or d.lat is distinct from p_lat
+                                 or d.lon is distinct from p_lon then null else d.approved_by end
    where d.id = v_dealer;
 end $$;
 
@@ -1033,7 +1042,7 @@ $$;
 -- rounded, through dealer_stock_insights.
 create function public.dealer_demand(p_make text, p_model text, p_year integer, p_price numeric, p_currency text,
                                      p_mileage_km integer, p_lat double precision, p_lon double precision,
-                                     p_exclude_users uuid[])
+                                     p_exclude_users uuid[], p_source text)
 returns jsonb
 language sql stable security definer set search_path = '' as $$
   with blue as (
@@ -1064,8 +1073,15 @@ language sql stable security definer set search_path = '' as $$
            public.dealer_json_number(b.f -> 'km_max') as km_max,
            case when jsonb_typeof(b.f -> 'currency') = 'string' and upper(b.f ->> 'currency') in ('ARS', 'USD')
                 then upper(b.f ->> 'currency') end as currency,
+           -- matching._source: a non-empty filters.sources without the car's
+           -- source never receives it ('directo' is never in the form).
+           case when jsonb_typeof(b.f -> 'sources') = 'array' and jsonb_array_length(b.f -> 'sources') > 0
+                then not (b.f -> 'sources' ? coalesce(p_source, 'directo'))
+                else false end as other_sources,
+           -- Twin of intelligence.dealer.private_only: only the valid types
+           -- ('private', 'dealer') count, so ['foo'] is no filter at all.
            case when jsonb_typeof(b.f -> 'seller_types') = 'array'
-                then jsonb_array_length(b.f -> 'seller_types') > 0 and not (b.f -> 'seller_types' ? 'dealer')
+                then (b.f -> 'seller_types' ? 'private') and not (b.f -> 'seller_types' ? 'dealer')
                 else false end as private_only
       from base b
   ), bounds as (
@@ -1096,7 +1112,8 @@ language sql stable security definer set search_path = '' as $$
             and (p_mileage_km is null
                  or ((p.km_min is null or p_mileage_km >= p.km_min)
                      and (p.km_max is null or p_mileage_km <= p.km_max)))
-            and not p.private_only) as fits,
+            and not p.private_only
+            and not p.other_sources) as fits,
            case when p_lat is null or p_lon is null then null
                 else z.zones = 0 or z.hits > 0 end as in_zone
       from priced p
@@ -1178,9 +1195,12 @@ begin
            case when l.id is not null then l.price else i.price end as b_price,
            case when l.id is not null then l.currency else i.currency end as b_currency,
            case when i.origin = 'sync' then l.dealer_confirmed_at else i.confirmed_at end as b_confirmed_at,
-           case when l.id is null then 'pending_sync'
+           -- No listing yet, or its listing ended (the worker makes it again):
+           -- not sent, whatever the gate would say of the ended row.
+           case when l.id is null or l.status <> 'active' then 'pending_sync'
                 else public.dealer_listing_hidden(l.source, l.dealer_id, l.dealer_status, l.dealer_confirmed_at)
            end as b_hidden,
+           coalesce(l.source, 'directo') as b_source,
            coalesce(i.in_stock_since,
                     (l.published_at at time zone 'America/Argentina/Buenos_Aires')::date,
                     (i.created_at at time zone 'America/Argentina/Buenos_Aires')::date) as b_since
@@ -1214,10 +1234,53 @@ begin
                                          'zone', public.dealer_demand_level(r.raw -> 'zone', v_min),
                                          'active_zone', public.dealer_demand_level(r.raw -> 'active_zone', v_min)))
                       from (select public.dealer_demand(p.b_make, p.b_model, p.b_year, p.b_price, p.b_currency,
-                                                        p.b_km, v_d.lat, v_d.lon, v_members) as raw) r)
+                                                        p.b_km, v_d.lat, v_d.lon, v_members, p.b_source) as raw) r)
          end
     from priced p
    order by p.b_created_at, p.b_item_id;
+end $$;
+
+-- The market page of one car («Ver el mercado»): the very listings behind
+-- dealer_market_ref for that item (same model, year ±1, active, seen in the
+-- last 30 days, priced, never 'directo'), cheapest first. Twin of
+-- dealer_market_ref's pool: change both together. Public listings only, and
+-- only for a member of the item's dealer.
+create function public.dealer_market_listings(p_item_id bigint)
+returns table (listing_id bigint, source text, url text, title text, "trim" text, year integer,
+               mileage_km integer, price numeric, currency text, price_usd numeric,
+               location_text text, seller_type text, first_seen_at timestamptz)
+language plpgsql stable security definer set search_path = '' as $$
+#variable_conflict use_column
+declare
+  v_dealer bigint := public.dealer_require_member();
+  v_make text; v_model text; v_year integer; v_listing bigint;
+begin
+  select case when l.id is not null then l.make else i.make end,
+         case when l.id is not null then l.model else i.model end,
+         case when l.id is not null then l.year else i.year end,
+         l.id
+    into v_make, v_model, v_year, v_listing
+    from public.dealer_stock_items i
+    left join public.listings l on l.id = i.listing_id
+   where i.id = p_item_id and i.dealer_id = v_dealer;
+  if not found then
+    raise exception 'not_found' using errcode = 'P0001';
+  end if;
+
+  return query
+  select o.id, o.source, o.url, o.title, o.trim, o.year, o.mileage_km, o.price, o.currency, o.price_usd,
+         o.location_text, o.seller_type, o.first_seen_at
+    from public.listings o
+   where lower(o.make) = lower(v_make) and lower(o.model) = lower(v_model)
+     and o.year between v_year - 1 and v_year + 1
+     and o.status = 'active'
+     and o.last_seen_at >= now() - interval '30 days'
+     and o.price_usd > 0 and not o.price_partial
+     and o.source <> 'directo'
+     and o.id is distinct from v_listing
+     and not (o.attributes ? '_not_vehicle')
+   order by o.price_usd, o.id
+   limit 500;
 end $$;
 
 -- ---------------------------------------------------------------------------
@@ -1337,13 +1400,15 @@ language sql stable security definer set search_path = '' as $$
       from x
   )
   select jsonb_build_object(
-           'dealer_id', y.dealer_id,
+           -- Nothing of an unlabeled listing to a non-member: not whose it is
+           -- nor its internal state (agencias C2).
+           'dealer_id', case when y.badge or y.member then y.dealer_id end,
            'dealer_name', case when y.badge then y.pub
                                when y.member then (select d.name from public.dealers d where d.id = y.dealer_id) end,
            'badge', y.badge,
            'is_directo', y.source = 'directo',
-           'hidden_reason', y.hidden,
-           'confirmed_at', y.dealer_confirmed_at,
+           'hidden_reason', case when y.member then y.hidden end,
+           'confirmed_at', case when y.badge or y.member then y.dealer_confirmed_at end,
            'viewer_is_member', y.member,
            'can_request', y.badge and y.uid is not null and not y.member and y.my_lead is null,
            'my_lead', y.my_lead,
@@ -1422,6 +1487,20 @@ language sql stable security definer set search_path = '' as $$
    order by 3 desc, 1
    limit 30
 $$;
+
+-- listings: a 'directo' listing the gate hides (unconfirmed, reserved, sold,
+-- dealer unapproved, channel off) is the dealer's business until it is sent:
+-- only its members read it. Restrictive, so it narrows the existing
+-- "listings: authenticated read" (using true). Every other listing passes on
+-- the first, cheap term. The service role (worker, admin) bypasses RLS.
+-- Known and accepted: listings.dealer_id / dealer_status / dealer_confirmed_at
+-- of synced portal listings stay readable like every other column of a
+-- portal listing (no buyer data in them).
+create policy "listings: hidden dealer stock" on public.listings
+  as restrictive for select to authenticated
+  using (source <> 'directo'
+         or public.dealer_listing_hidden(source, dealer_id, dealer_status, dealer_confirmed_at) is null
+         or public.is_dealer_member(dealer_id));
 
 -- ---------------------------------------------------------------------------
 -- 9. Existing objects: current bodies plus the gate
@@ -1602,8 +1681,10 @@ as $$
                 then array(select jsonb_array_elements_text(p_filters->'seller_types')) end as seller_types,
            -- Dealer stock: a seller filter without 'dealer' leaves out every
            -- listing with dealer_id, whatever the plan (agencias C4).
+           -- Twin of intelligence.dealer.private_only: only the valid types
+           -- ('private', 'dealer') count, so ['foo'] is no filter at all.
            case when jsonb_typeof(p_filters->'seller_types') = 'array'
-                then jsonb_array_length(p_filters->'seller_types') > 0
+                then (p_filters->'seller_types' ? 'private')
                      and not (p_filters->'seller_types' ? 'dealer')
                 else false end                     as private_only
   ),
@@ -1698,14 +1779,18 @@ as $$
   ),
   sample as (
     select h.id, h.title, h.make, h.model, h.trim, h.year, h.price, h.currency, h.mileage_km,
-           h.location_text, h.source, h.first_seen_at, h.body_type, h.color
+           h.location_text, h.source, h.first_seen_at, h.body_type, h.color,
+           case when h.dealer_id is not null then public.dealer_public_name(h.dealer_id) end as dealer_name
       from hits h
      order by h.first_seen_at desc
      limit 3
   )
+  -- dealer_name only when there is one: an ordinary sample row stays as today.
   select jsonb_build_object(
            'count',  (select count(*) from hits),
-           'sample', coalesce((select jsonb_agg(to_jsonb(s) order by s.first_seen_at desc) from sample s),
+           'sample', coalesce((select jsonb_agg(case when s.dealer_name is null then to_jsonb(s) - 'dealer_name'
+                                                     else to_jsonb(s) end
+                                                order by s.first_seen_at desc) from sample s),
                               '[]'::jsonb))
 $$;
 
@@ -1987,9 +2072,10 @@ revoke all on function
   public.dealer_set_lead_status(bigint, text),
   public.dealer_market_ref(text, text, integer, numeric, bigint),
   public.dealer_model_days_to_sell(text, text, integer),
-  public.dealer_demand(text, text, integer, numeric, text, integer, double precision, double precision, uuid[]),
+  public.dealer_demand(text, text, integer, numeric, text, integer, double precision, double precision, uuid[], text),
   public.dealer_demand_level(jsonb, integer),
   public.dealer_stock_insights(),
+  public.dealer_market_listings(bigint),
   public.request_dealer_contact(bigint, text, text, text, boolean, text, bigint),
   public.listing_dealer_card(bigint),
   public.dealer_badges(bigint[]),
@@ -2019,6 +2105,7 @@ grant execute on function
   public.dealer_set_item_private(bigint, numeric, text, text),
   public.dealer_set_lead_status(bigint, text),
   public.dealer_stock_insights(),
+  public.dealer_market_listings(bigint),
   public.request_dealer_contact(bigint, text, text, text, boolean, text, bigint),
   public.listing_dealer_card(bigint),
   public.dealer_badges(bigint[])
@@ -2036,7 +2123,7 @@ grant execute on function
   public.dealer_hide_listing(bigint),
   public.dealer_market_ref(text, text, integer, numeric, bigint),
   public.dealer_model_days_to_sell(text, text, integer),
-  public.dealer_demand(text, text, integer, numeric, text, integer, double precision, double precision, uuid[]),
+  public.dealer_demand(text, text, integer, numeric, text, integer, double precision, double precision, uuid[], text),
   public.dealer_demand_level(jsonb, integer),
   public.dealer_sweep(),
   public.admin_dealer_seller_candidates(text, text)
@@ -2048,11 +2135,38 @@ comment on function public.dealer_program() is
 comment on function public.dealer_listing_hidden(text, bigint, text, timestamptz) is
   'The send gate (agencias §2): no_dealer, channel_off, not_approved, not_available, unconfirmed, or null when the '
   'listing may reach buyers. Null at once for a listing without dealer_id that is not ''directo''.';
-comment on function public.dealer_demand(text, text, integer, numeric, text, integer, double precision, double precision, uuid[]) is
+comment on function public.dealer_demand(text, text, integer, numeric, text, integer, double precision, double precision, uuid[], text) is
   'Raw demand for a car (searches and distinct people per nested level). Service role only: clients get it rounded '
   'by dealer_stock_insights (dealer_demand_level).';
 comment on function public.dealer_sweep() is
   'Worker, every DEALER_TICK_SECONDS: matches, expired_search_matches and queued/digest notifications of every '
   'dealer or ''directo'' listing the gate hides. Returns what it removed.';
+
+-- ---------------------------------------------------------------------------
+-- Photos of the agency's own stock (Storage)
+-- ---------------------------------------------------------------------------
+-- Bucket dealer-photos, public to read (the photos go out in listings.images to
+-- buyers, like any portal's), written only by a member under <dealer_id>/…
+-- The web shrinks each photo before uploading; 5 MB is the hard ceiling.
+-- dealer_stock_items.images keeps the public URLs (https; http only for the
+-- local stack), so the worker and the buyer's pages read them as before.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('dealer-photos', 'dealer-photos', true, 5242880, array['image/jpeg', 'image/png', 'image/webp'])
+on conflict (id) do nothing;
+
+create function public.dealer_photo_path_mine(p_name text) returns boolean
+language sql stable security definer set search_path = '' as $$
+  select (public.dealer_program() ->> 'enabled')::boolean
+     and exists (select 1 from public.dealer_members m
+                  where m.user_id = (select auth.uid())
+                    and m.dealer_id::text = split_part(p_name, '/', 1))
+$$;
+revoke all on function public.dealer_photo_path_mine(text) from public, anon;
+grant execute on function public.dealer_photo_path_mine(text) to authenticated, service_role;
+
+create policy "dealer photos: member uploads" on storage.objects for insert to authenticated
+  with check (bucket_id = 'dealer-photos' and public.dealer_photo_path_mine(name));
+create policy "dealer photos: member deletes" on storage.objects for delete to authenticated
+  using (bucket_id = 'dealer-photos' and public.dealer_photo_path_mine(name));
 
 notify pgrst, 'reload schema';

@@ -3,14 +3,23 @@ import { Logo } from "@/components/logo";
 import { canViewHealth } from "@/lib/health-auth";
 import { isAdmin } from "@/lib/admin";
 import { requireUser } from "@/lib/auth";
+import { webConfig } from "@/lib/config";
+import { myDealer } from "@/lib/dealer-server";
 import { canAcquirePlan, type PlanLimits } from "@/lib/pro";
 import { createClient } from "@/lib/supabase/server";
+
+/** Agencias: «Mi agencia» only with the panel on and an agency of one's own (no call while the panel is off). */
+async function hasDealer(): Promise<boolean> {
+  const { dealerProgram } = await webConfig();
+  if (!dealerProgram?.enabled) return false;
+  return (await myDealer()) !== null;
+}
 
 export default async function AppLayout({ children }: LayoutProps<"/app">) {
   const user = await requireUser();
   const supabase = await createClient();
-  const [admin, healthOwner, { data: rawAccess, error: accessError }] = await Promise.all([
-    isAdmin(), canViewHealth(), supabase.rpc("my_plan_snapshot"),
+  const [admin, healthOwner, { data: rawAccess, error: accessError }, dealer] = await Promise.all([
+    isAdmin(), canViewHealth(), supabase.rpc("my_plan_snapshot"), hasDealer(),
   ]);
   const showAcquirePlan = !accessError && canAcquirePlan(rawAccess as PlanLimits | null);
 
@@ -20,13 +29,13 @@ export default async function AppLayout({ children }: LayoutProps<"/app">) {
         <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur-sm">
           <div className="mx-auto flex h-15 w-full max-w-6xl items-center gap-3 px-4 sm:px-6 md:gap-7 lg:px-10">
             <Logo href="/app" className="shrink-0 whitespace-nowrap" />
-            <TopNav admin={admin} healthOwner={healthOwner} canAcquirePlan={showAcquirePlan} />
-            <div className="hidden h-full items-center md:flex"><AccountMenu email={user.email} /></div>
+            <TopNav admin={admin} healthOwner={healthOwner} dealer={dealer} canAcquirePlan={showAcquirePlan} />
+            <div className="hidden h-full items-center md:flex"><AccountMenu email={user.email} dealer={dealer} /></div>
             {/* Below 360 px «Planes» gives way, so the icons never push the page sideways. */}
             <div className="ml-auto flex h-full items-center gap-1.5 md:hidden">
               <AcquirePlanButton canAcquirePlan={showAcquirePlan} className="h-8 px-2.5 text-[13px] max-[359px]:hidden" />
               <MobileNav healthOwner={healthOwner} />
-              <AccountMenu email={user.email} />
+              <AccountMenu email={user.email} dealer={dealer} />
             </div>
           </div>
         </header>

@@ -18,11 +18,18 @@ from db.repos.profiles import LIVE_SEARCHES
 
 Group = tuple[str, str]
 
+# Agencias (spec §2, point 6): a dealer's 'directo' listing never enters a
+# group (nor gets photo hashes), so it forms no pair in listing_duplicates
+# and never shows as a red flag on someone else's listing. Its own duplicate
+# is pipeline/dealers.py's business. Pairs it had go with the next run of
+# its group (they no longer come out of detect).
+DEALER_SOURCE = "directo"
+
 # A group is worth comparing with 2+ sources or any photo hash in it.
 _GROUPS = """
 SELECT lower(make) AS make, lower(model) AS model
   FROM listings
- WHERE status = 'active' AND make IS NOT NULL AND model IS NOT NULL {only}
+ WHERE status = 'active' AND make IS NOT NULL AND model IS NOT NULL AND source <> 'directo' {only}
  GROUP BY 1, 2
 HAVING count(*) >= 2 AND (count(DISTINCT source) >= 2 OR bool_or(attributes ? '_photo_hashes'))
  ORDER BY 1, 2
@@ -58,7 +65,7 @@ async def group_rows(cx: AsyncConnection, group: Group) -> list[dict[str, Any]]:
         "         'province_id', z.province_id, 'department', z.department, 'precision', z.precision, "
         "         'lat', z.lat, 'lon', z.lon) END AS zone "
         "  FROM listings l LEFT JOIN listing_zones z ON z.listing_id = l.id "
-        " WHERE l.status = 'active' AND lower(l.make) = %s AND lower(l.model) = %s",
+        " WHERE l.status = 'active' AND l.source <> 'directo' AND lower(l.make) = %s AND lower(l.model) = %s",
         group)).fetchall()
     for r in rows:
         r["hashes"] = [h for h in (r["hashes"] or []) if isinstance(h, str)] if isinstance(r["hashes"], list) else []
@@ -151,7 +158,9 @@ async def photo_hash_queue(*, limit: int, skip_sources: list[str], max_age_days:
     (same make, model and year, km and price in tolerance), then up to
     PHOTO_CANDIDATES other listings of their model each: without the other side
     hashed there is no pair. Newest first within each tier.
-    pipeline/photo_hash.needs_hash has the final word."""
+    pipeline/photo_hash.needs_hash has the final word. 'directo' is always
+    skipped (a dealer's stock never forms duplicate pairs)."""
+    skip_sources = list({*skip_sources, DEALER_SOURCE})
     async with connection() as cx:
         return await (await cx.execute(
             LIVE_SEARCHES + """,

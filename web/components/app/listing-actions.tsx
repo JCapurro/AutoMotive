@@ -15,7 +15,8 @@ type Props = {
   listingId: number;
   status: InteractionStatus;
   saved: boolean;
-  outboundHref: string;
+  /** null: a car an agency loaded here (source 'directo') has no other publication to open. */
+  outboundHref: string | null;
 };
 
 /**
@@ -37,9 +38,11 @@ export function ListingActions({ listingId, status, saved, outboundHref }: Props
   });
   return (
     <div className="fixed inset-x-0 bottom-0 z-30 flex items-center gap-2 border-t bg-background/95 px-4 pt-2.5 pb-[calc(0.625rem+env(safe-area-inset-bottom))] backdrop-blur-sm sm:px-6 lg:static lg:grid lg:grid-cols-2 lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
-      <Button asChild size="lg" className="h-11 flex-1 text-[15px] max-lg:order-last lg:col-span-2">
-        <a href={outboundHref} target="_blank" rel="noopener noreferrer">Ver publicación <ExternalLink aria-hidden /></a>
-      </Button>
+      {outboundHref ? (
+        <Button asChild size="lg" className="h-11 flex-1 text-[15px] max-lg:order-last lg:col-span-2">
+          <a href={outboundHref} target="_blank" rel="noopener noreferrer">Ver publicación <ExternalLink aria-hidden /></a>
+        </Button>
+      ) : null}
       <Button
         variant={interested ? "secondary" : "outline"}
         size="lg"

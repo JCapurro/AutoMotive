@@ -11,6 +11,7 @@ from psycopg import AsyncConnection
 from psycopg.types.json import Jsonb
 
 from db.pool import connection
+from db.repos import dealers as dealers_repo
 from db.repos.profiles import LIVE_SEARCHES
 from normalization.seller import seller_key
 
@@ -327,7 +328,11 @@ async def mark_detail_checked(listing_ids: Iterable[int]) -> None:
 # still active, best first (closest photos, then closest price), for the
 # duplicate red flags (intelligence/red_flags.duplicate_flags).
 MAX_DUPLICATES = 10
-_DUPLICATES = f"""
+# Agencias (spec §2, point 6): with the dealer schema, a pair whose other
+# listing is a hidden dealer's car is left out (a synced listing reserved or
+# sold stops showing in other listings' flags). Without dealer rows, the same
+# pairs as before.
+_DUPLICATES_TEMPLATE = """
   LEFT JOIN LATERAL (
     SELECT jsonb_agg(jsonb_build_object('other_id', p.other_id, 'kind', p.kind, 'source', p.source,
                                         'source_name', p.source_name, 'url', p.url, 'distance', p.photo_distance,
@@ -337,11 +342,13 @@ _DUPLICATES = f"""
                    row_number() OVER (ORDER BY d.photo_distance NULLS LAST,
                                                abs(o.price_usd - l.price_usd) NULLS LAST, d.other_id) AS rank
               FROM listing_duplicates d
-              JOIN listings o ON o.id = d.other_id AND o.status = 'active'
+              JOIN listings o ON o.id = d.other_id AND o.status = 'active'{dealer}
               LEFT JOIN sources s ON s.id = o.source
              WHERE d.listing_id = l.id AND d.shown
-             ORDER BY rank LIMIT {MAX_DUPLICATES}) p) dup ON true
+             ORDER BY rank LIMIT {limit}) p) dup ON true
 """
+_DUPLICATES = _DUPLICATES_TEMPLATE.format(dealer="", limit=MAX_DUPLICATES)
+_DUPLICATES_DEALERS = _DUPLICATES_TEMPLATE.format(dealer=f" AND {dealers_repo.visible('o')}", limit=MAX_DUPLICATES)
 # Whether listing_duplicates exists (migration 20261203120000), asked once per
 # process: a worker deployed before the migration scores without duplicates.
 _has_duplicates: bool | None = None
@@ -360,18 +367,24 @@ async def rows_for_scoring(cx: AsyncConnection, ids: Iterable[int]) -> dict[int,
     """Listings by id as intelligence/ reads them, with the catalog's
     timing_belt for their model (red flag no_timing_belt, sección 6.5), its
     spelling of the model (catalog_model, PRO-01's ready-to-send message) and
-    (PAR-02 resto) risk_duplicates: the shown duplicate pairs, best first."""
+    (PAR-02 resto) risk_duplicates: the shown duplicate pairs, best first.
+    Agencias (spec §4.3): the dealer's name, whether it is approved and
+    active, which intelligence/dealer.py reads for the send gate and the label."""
     ids = list(dict.fromkeys(ids))
     if not ids:
         return {}
     dup = await duplicates_table(cx)
+    dealers = await dealers_repo.schema_ready(cx)
     rows = await (await cx.execute(
         "SELECT l.*, vc.timing_belt, vc.model AS catalog_model"
         + (", coalesce(dup.pairs, '[]'::jsonb) AS risk_duplicates" if dup else ", '[]'::jsonb AS risk_duplicates")
+        + (", dd.name AS dealer_name, dd.approved_at IS NOT NULL AS dealer_approved, "
+           "  coalesce(dd.status = 'active', false) AS dealer_active" if dealers else "")
         + " FROM listings l "
         "  LEFT JOIN vehicle_catalog vc ON lower(vc.make) = lower(l.make) "
         "        AND lower(vc.model) = lower(l.model) AND vc.trim IS NULL "
-        + (_DUPLICATES if dup else "")
+        + (" LEFT JOIN dealers dd ON dd.id = l.dealer_id " if dealers else "")
+        + ((_DUPLICATES_DEALERS if dealers else _DUPLICATES) if dup else "")
         + " WHERE l.id = ANY(%s)", (ids,))).fetchall()
     return {r["id"]: _pythonic(r) for r in rows}
 
@@ -398,6 +411,8 @@ async def recent_active(make: str | None, model: str | None, *, days: int,
     48-hour read moves on what "Publicados hoy" never reads again), and not
     one such a read no longer saw (_UNCONFIRMED): the stock the model has
     now, whenever it was published, without the ads that left the source."""
+    # Agencias (spec §2, point 4): a hidden dealer's car is never rematched.
+    hidden = f" AND {dealers_repo.visible('l')}" if await dealers_repo.ready() else ""
     if confirmed:
         sql = (f"SELECT l.* FROM listings l CROSS JOIN {_CONFIRM_CONFIG} WHERE l.status = 'active' "
                "   AND greatest(l.last_seen_at, l.last_full_seen_at) >= now() - make_interval(days => %s) "
@@ -409,22 +424,23 @@ async def recent_active(make: str | None, model: str | None, *, days: int,
         if sources:
             sql += " AND l.source = ANY(%s)"
             params.append(sources)
-        sql += f" AND NOT {_UNCONFIRMED}"
+        sql += f" AND NOT {_UNCONFIRMED}" + hidden
         async with connection() as cx:
             rows = await (await cx.execute(sql + " ORDER BY l.first_seen_at DESC", params)).fetchall()
         return [_pythonic(r) for r in rows]
-    sql = ("SELECT * FROM listings WHERE status = 'active' "
-           "   AND last_seen_at >= now() - make_interval(days => %s) "
-           "   AND lower(make) IS NOT DISTINCT FROM lower(%s)")
+    sql = ("SELECT l.* FROM listings l WHERE l.status = 'active' "
+           "   AND l.last_seen_at >= now() - make_interval(days => %s) "
+           "   AND lower(l.make) IS NOT DISTINCT FROM lower(%s)")
     params = [days, make]
     if model:
-        sql += " AND lower(model) = lower(%s)"
+        sql += " AND lower(l.model) = lower(%s)"
         params.append(model)
     if sources:
-        sql += " AND source = ANY(%s)"
+        sql += " AND l.source = ANY(%s)"
         params.append(sources)
+    sql += hidden
     async with connection() as cx:
-        rows = await (await cx.execute(sql + " ORDER BY first_seen_at DESC", params)).fetchall()
+        rows = await (await cx.execute(sql + " ORDER BY l.first_seen_at DESC", params)).fetchall()
     return [_pythonic(r) for r in rows]
 
 
@@ -442,6 +458,7 @@ async def recent_active_by_body(body_types: list[str], *, days: int, sources: li
     preview_search: scoring excludes those from every match (a batch never
     matches them either, intelligence/scoring.py). Unknown values pass."""
     async with connection() as cx:
+        hidden = f" AND {dealers_repo.visible('l')}" if await dealers_repo.schema_ready(cx) else ""
         rows = await (await cx.execute(
             "SELECT l.* FROM listings l CROSS JOIN LATERAL (SELECT CASE "
             "    WHEN l.price IS NULL OR l.price <= 0 THEN NULL "
@@ -456,7 +473,7 @@ async def recent_active_by_body(body_types: list[str], *, days: int, sources: li
             "   AND (%(year_max)s::int IS NULL OR l.year IS NULL OR l.year <= %(year_max)s) "
             "   AND (%(km_max)s::int IS NULL OR l.mileage_km IS NULL OR l.mileage_km <= %(km_max)s) "
             "   AND (%(price_max)s::numeric IS NULL OR p.value IS NULL OR p.value <= %(price_max)s) "
-            " ORDER BY l.first_seen_at DESC",
+            + hidden + " ORDER BY l.first_seen_at DESC",
             {"body_types": list(body_types), "days": days, "sources": list(sources) if sources else None,
              "year_min": year_min, "year_max": year_max, "km_max": km_max, "price_max": price_max,
              "currency": currency.upper(), "fx": fx_rate})).fetchall()

@@ -71,11 +71,20 @@ class PostgresTestCase(unittest.IsolatedAsyncioTestCase):
             # above, so stale rows would swallow new ones by ON CONFLICT.
             await cx.execute("DO $$ BEGIN IF to_regclass('public.match_decisions') IS NOT NULL THEN "
                              "TRUNCATE public.match_decisions; END IF; END $$")
+            # Agencias (migration 20261228120000), when applied: listings' CASCADE
+            # already empties the stock items and leads; the dealers go too.
+            await cx.execute("DO $$ BEGIN IF to_regclass('public.dealers') IS NOT NULL THEN "
+                             "TRUNCATE public.dealers, public.dealer_members, public.dealer_sources, "
+                             "public.dealer_imports, public.dealer_stock_items, public.dealer_item_private, "
+                             "public.dealer_leads RESTART IDENTITY CASCADE; END IF; END $$")
             await cx.execute("DELETE FROM auth.users WHERE raw_app_meta_data->>'provider' = 'telegram' "
                              "   OR email LIKE '%automotive.test'")
             await cx.execute("UPDATE sources SET last_ok_at = NULL, consecutive_failures = 0")
         app_config.clear_config_cache()
         catalog.clear_catalog_cache()
+        from db.repos import dealers
+
+        dealers.reset_schema_cache()
 
     async def asyncTearDown(self) -> None:
         import db

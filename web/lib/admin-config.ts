@@ -139,6 +139,14 @@ export const UnmetDemandConfigInput = z.object({
 /** Prueba gratis: app_config.trial_reserve, room in the trial for new listings (lib/trial-reserve.ts). */
 export const TRIAL_RESERVE_CONFIG_MESSAGE = "trial_reserve necesita enabled (true/false) y backfill_max (entero de 0 a 1000).";
 export const TrialReserveConfigInput = z.object({ enabled: z.boolean(), backfill_max: z.number().int().min(0).max(1000) }).passthrough();
+/** Agencias: app_config.dealer_program, the panel and the sales channel (lib/dealer-program.ts, public.dealer_program(), worker intelligence/config.py). Same ranges as the three readers. */
+export const DEALER_PROGRAM_CONFIG_MESSAGE = "dealer_program necesita enabled y channel_enabled (true/false), manual_confirm_days (entero de 1 a 60) y demand_min_count (entero de 3 a 50).";
+export const DealerProgramConfigInput = z.object({
+  enabled: z.boolean(),
+  channel_enabled: z.boolean(),
+  manual_confirm_days: z.number().int().min(1).max(60),
+  demand_min_count: z.number().int().min(3).max(50),
+}).passthrough();
 
 /**
  * f3 «precio × encaje» (docs/superpowers/specs/2026-11-08-recalibracion-score-design.md §8):
@@ -416,6 +424,7 @@ export function validateConfigChange(key: string, value: unknown, current: unkno
   if (key === "unmet_demand" && !UnmetDemandConfigInput.safeParse(value).success) return UNMET_DEMAND_CONFIG_MESSAGE;
   if (key === "trial_reserve" && !TrialReserveConfigInput.safeParse(value).success) return TRIAL_RESERVE_CONFIG_MESSAGE;
   if (key === "landing_hero" && !LandingHeroConfigInput.safeParse(value).success) return LANDING_HERO_CONFIG_MESSAGE;
+  if (key === "dealer_program" && !DealerProgramConfigInput.safeParse(value).success) return DEALER_PROGRAM_CONFIG_MESSAGE;
   // PAR-01: every block with source and as_of, valid ranges and scales (lib/cost-estimator.ts, the parser's own rules).
   if (key === "cost_estimator") return costEstimatorProblem(value);
   // f3 «precio × encaje» (shadow): the worker's bounds and cross-key rules (worker/intelligence/config.py score_model_f3).
@@ -516,6 +525,9 @@ export function configFieldLabel(key: string, path: string): string {
   }
   if (key === "unmet_demand") {
     return ({ enabled: "Cálculo nocturno de demanda insatisfecha", max_results: "Resultados o menos para contar la búsqueda", min_age_hours: "Antigüedad mínima de la búsqueda (horas)", batch_size: "Búsquedas por tanda", pause_seconds: "Pausa entre tandas (segundos)", hour: "Hora del cálculo (hora argentina)" } as Record<string, string>)[path] ?? path;
+  }
+  if (key === "dealer_program") {
+    return ({ enabled: "Panel de agencias (/agencia)", channel_enabled: "Canal de venta: autos de agencia a compradores (Privacidad con OK de Juan)", manual_confirm_days: "Días para confirmar el stock cargado a mano", demand_min_count: "Mínimo de personas para mostrar un número de búsquedas" } as Record<string, string>)[path] ?? path;
   }
   if (key === "trial_reserve") {
     return ({ enabled: "Reserva de la prueba para autos nuevos", backfill_max: "Máximo de resultados ya publicados" } as Record<string, string>)[path] ?? path;

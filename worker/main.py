@@ -7,7 +7,7 @@ import socket
 from telegram import Bot
 from telegram.ext import Application
 
-from config import (CRAWL_LOOP_STALE_SECONDS, EMAIL_FROM, ENRICH_TICK_SECONDS, HEARTBEAT_SECONDS, LOG_FILE, LOG_KEEP_DAYS,
+from config import (CRAWL_LOOP_STALE_SECONDS, DEALER_TICK_SECONDS, EMAIL_FROM, ENRICH_TICK_SECONDS, HEARTBEAT_SECONDS, LOG_FILE, LOG_KEEP_DAYS,
                     LOW_RESULTS_TICK_SECONDS, NEAR_ZONE_TICK_SECONDS, UNMET_DEMAND_TICK_SECONDS,
                     NOTIFY_TICK_SECONDS, RESEND_API_KEY, TELEGRAM_ADMIN_CHAT_ID, TELEGRAM_ENABLED, TELEGRAM_TOKEN,
                     TRIAL_REMINDER_TICK_SECONDS, WATCHLIST_TICK_SECONDS, WEB_BASE_URL, ALERT_LINK_SECRET,
@@ -27,6 +27,7 @@ from notifications.product_feedback import run_product_feedback
 from db.repos import targets as targets_repo
 from db.repos.runs import dead_workers, fail_orphan_runs
 from pipeline import heartbeat
+from pipeline.dealers import run_dealers
 from pipeline.enrich import enrich_pass
 from pipeline.llm_jobs import llm_jobs_loop
 from pipeline.low_results import run_low_results
@@ -202,6 +203,9 @@ async def amain() -> None:
                                    lambda _stop: run_near_zone(notifier.channels.get("email"), links), stop)),
         asyncio.create_task(_every("unmet_demand", UNMET_DEMAND_TICK_SECONDS,
                                    lambda _stop: run_unmet_demand(), stop)),
+        # Agencias: only the sweep (a no-op without dealer rows) while dealer_program.enabled is false.
+        asyncio.create_task(_every("dealers", DEALER_TICK_SECONDS,
+                                   lambda _stop: run_dealers(notifier, links), stop)),
     ]
 
     try:

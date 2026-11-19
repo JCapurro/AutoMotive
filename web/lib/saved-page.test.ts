@@ -13,6 +13,7 @@ const state = vi.hoisted(() => ({
 vi.mock("@/lib/cost-estimate-data", () => ({ costLinesFor: async () => new Map() }));
 vi.mock("@/lib/margin-data", () => ({ marginAccess: async () => null, marginLinesFor: async () => new Map(), marginTeasersFor: async () => new Set() }));
 vi.mock("@/lib/auth", () => ({ requireUser: async () => ({ id: "account" }) }));
+vi.mock("@/lib/dealer-server", () => ({ dealerBadges: vi.fn(async () => new Map()) }));
 vi.mock("@/lib/config", () => ({ webConfig: async () => ({ watchlistStaleDays: 30 }) }));
 vi.mock("@/app/app/listings/actions", () => ({ setStatus: vi.fn(), setSaved: vi.fn(), recordPurchase: vi.fn() }));
 vi.mock("@/lib/supabase/server", () => ({

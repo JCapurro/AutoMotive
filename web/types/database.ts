@@ -122,6 +122,57 @@ export type Database = {
         Update: { answer?: "yes" | "no"; source?: "email" | "ficha"; wants_notice?: boolean; agencies_contact_ok?: boolean }
         Relationships: []
       }
+      // Agencias (20261228120000_dealer_program): RLS lets a member read their dealer's rows; every write goes through the RPCs.
+      dealers: {
+        Row: { id: number; name: string; contact_email: string | null; phone: string | null; whatsapp: string | null; address_text: string | null; locality_label: string; lat: number; lon: number; profile_links: Json; status: string; approved_at: string | null; approved_by: string | null; created_by: string | null; created_at: string; updated_at: string }
+        Insert: never
+        Update: { status?: string; approved_at?: string | null; approved_by?: string | null }
+        Relationships: []
+      }
+      dealer_members: {
+        Row: { dealer_id: number; user_id: string; role: string; created_at: string }
+        Insert: never
+        Update: never
+        Relationships: [{ foreignKeyName: "dealer_members_dealer_id_fkey"; columns: ["dealer_id"]; isOneToOne: false; referencedRelation: "dealers"; referencedColumns: ["id"] }]
+      }
+      dealer_sources: {
+        Row: { id: number; dealer_id: number; source: string; profile_url: string | null; seller_name_hint: string | null; seller_key: string | null; status: string; approved_at: string | null; created_at: string }
+        Insert: never
+        Update: { seller_key?: string | null; status?: string; approved_at?: string | null }
+        Relationships: [{ foreignKeyName: "dealer_sources_dealer_id_fkey"; columns: ["dealer_id"]; isOneToOne: false; referencedRelation: "dealers"; referencedColumns: ["id"] }]
+      }
+      dealer_imports: {
+        Row: { id: number; dealer_id: number; filename: string | null; kind: string; rows_total: number; rows_imported: number; created_by: string | null; created_at: string }
+        Insert: never
+        Update: never
+        Relationships: [{ foreignKeyName: "dealer_imports_dealer_id_fkey"; columns: ["dealer_id"]; isOneToOne: false; referencedRelation: "dealers"; referencedColumns: ["id"] }]
+      }
+      dealer_stock_items: {
+        Row: { id: number; dealer_id: number; origin: string; import_id: number | null; listing_id: number | null; duplicate_listing_id: number | null; make: string | null; model: string | null; trim: string | null; year: number | null; mileage_km: number | null; price: number | null; currency: string | null; transmission: string | null; fuel: string | null; color: string | null; body_type: string | null; title: string | null; description: string | null; images: Json; status: string; confirmed_at: string | null; in_stock_since: string | null; sync_state: string; sync_error: string | null; synced_at: string | null; matched_at: string | null; created_by: string | null; created_at: string; updated_at: string }
+        Insert: never
+        Update: never
+        Relationships: [
+          { foreignKeyName: "dealer_stock_items_dealer_id_fkey"; columns: ["dealer_id"]; isOneToOne: false; referencedRelation: "dealers"; referencedColumns: ["id"] },
+          { foreignKeyName: "dealer_stock_items_listing_id_fkey"; columns: ["listing_id"]; isOneToOne: true; referencedRelation: "listings"; referencedColumns: ["id"] },
+        ]
+      }
+      dealer_item_private: {
+        Row: { item_id: number; purchase_price: number | null; purchase_currency: string | null; notes: string | null; updated_at: string }
+        Insert: never
+        Update: never
+        Relationships: [{ foreignKeyName: "dealer_item_private_item_id_fkey"; columns: ["item_id"]; isOneToOne: true; referencedRelation: "dealer_stock_items"; referencedColumns: ["id"] }]
+      }
+      // authenticated reads every column but buyer_user_id, consent_text and notification_id (column grants).
+      dealer_leads: {
+        Row: { id: number; dealer_id: number; item_id: number | null; listing_id: number | null; buyer_user_id: string; buyer_name: string; buyer_phone: string; message: string | null; consent_text: string; consent_at: string; notification_id: number | null; origin: string; status: string; status_changed_at: string | null; dealer_notified_at: string | null; created_at: string; updated_at: string }
+        Insert: never
+        Update: never
+        Relationships: [
+          { foreignKeyName: "dealer_leads_dealer_id_fkey"; columns: ["dealer_id"]; isOneToOne: false; referencedRelation: "dealers"; referencedColumns: ["id"] },
+          { foreignKeyName: "dealer_leads_listing_id_fkey"; columns: ["listing_id"]; isOneToOne: false; referencedRelation: "listings"; referencedColumns: ["id"] },
+          { foreignKeyName: "dealer_leads_item_id_fkey"; columns: ["item_id"]; isOneToOne: false; referencedRelation: "dealer_stock_items"; referencedColumns: ["id"] },
+        ]
+      }
       platform_health_checks: {
         Row: { id: number; checked_at: string; checks: Json; email_pending: boolean; last_email_at: string | null }
         Insert: { id: number; checked_at: string; checks: Json; email_pending?: boolean; last_email_at?: string | null }
@@ -362,13 +413,13 @@ isOneToOne: false
                   ]
                 },"listings": {
                   Row: {
-                    "attributes": NonNullable<Json>,"body_type": string | null,"color": string | null,"currency": string | null,"dealer_inferred": boolean,"description": string | null,"description_facts": Json | null,"detail_checked_at": string | null,"enriched_at": string | null,"external_id": string,"fingerprint": string | null,"first_seen_at": string,"fuel": string | null,"id": number,"images": NonNullable<Json>,"last_full_seen_at": string | null,"last_seen_at": string,"lat": number | null,"location_text": string | null,"lon": number | null,"make": string | null,"mileage_km": number | null,"model": string | null,"normalization_confidence": number | null,"price": number | null,"price_partial": boolean,"price_partial_reason": string | null,"price_published": number | null,"price_published_currency": string | null,"price_source": string,"price_usd": number | null,"probable_repost_of": number | null,"published_at": string | null,"seller_key": string | null,"seller_listing_count": number | null,"seller_name": string | null,"seller_type": string | null,"source": string,"status": Database["public"]['Enums']["listing_status"],"title": string,"transmission": string | null,"trim": string | null,"url": string,"year": number | null
+                    "attributes": NonNullable<Json>,"body_type": string | null,"color": string | null,"currency": string | null,"dealer_confirmed_at": string | null,"dealer_id": number | null,"dealer_status": string | null,"dealer_inferred": boolean,"description": string | null,"description_facts": Json | null,"detail_checked_at": string | null,"enriched_at": string | null,"external_id": string,"fingerprint": string | null,"first_seen_at": string,"fuel": string | null,"id": number,"images": NonNullable<Json>,"last_full_seen_at": string | null,"last_seen_at": string,"lat": number | null,"location_text": string | null,"lon": number | null,"make": string | null,"mileage_km": number | null,"model": string | null,"normalization_confidence": number | null,"price": number | null,"price_partial": boolean,"price_partial_reason": string | null,"price_published": number | null,"price_published_currency": string | null,"price_source": string,"price_usd": number | null,"probable_repost_of": number | null,"published_at": string | null,"seller_key": string | null,"seller_listing_count": number | null,"seller_name": string | null,"seller_type": string | null,"source": string,"status": Database["public"]['Enums']["listing_status"],"title": string,"transmission": string | null,"trim": string | null,"url": string,"year": number | null
                   }
                   Insert: {
-                    "attributes"?: NonNullable<Json>,"body_type"?: string | null,"color"?: string | null,"currency"?: string | null,"dealer_inferred"?: boolean,"description"?: string | null,"description_facts"?: Json | null,"detail_checked_at"?: string | null,"enriched_at"?: string | null,"external_id": string,"fingerprint"?: string | null,"first_seen_at"?: string,"fuel"?: string | null,"id"?: never,"images"?: NonNullable<Json>,"last_full_seen_at"?: string | null,"last_seen_at"?: string,"lat"?: number | null,"location_text"?: string | null,"lon"?: number | null,"make"?: string | null,"mileage_km"?: number | null,"model"?: string | null,"normalization_confidence"?: number | null,"price"?: number | null,"price_partial"?: boolean,"price_partial_reason"?: string | null,"price_published"?: number | null,"price_published_currency"?: string | null,"price_source"?: string,"price_usd"?: number | null,"probable_repost_of"?: number | null,"published_at"?: string | null,"seller_key"?: string | null,"seller_listing_count"?: number | null,"seller_name"?: string | null,"seller_type"?: string | null,"source": string,"status"?: Database["public"]['Enums']["listing_status"],"title": string,"transmission"?: string | null,"trim"?: string | null,"url": string,"year"?: number | null
+                    "attributes"?: NonNullable<Json>,"body_type"?: string | null,"color"?: string | null,"currency"?: string | null,"dealer_confirmed_at"?: string | null,"dealer_id"?: number | null,"dealer_status"?: string | null,"dealer_inferred"?: boolean,"description"?: string | null,"description_facts"?: Json | null,"detail_checked_at"?: string | null,"enriched_at"?: string | null,"external_id": string,"fingerprint"?: string | null,"first_seen_at"?: string,"fuel"?: string | null,"id"?: never,"images"?: NonNullable<Json>,"last_full_seen_at"?: string | null,"last_seen_at"?: string,"lat"?: number | null,"location_text"?: string | null,"lon"?: number | null,"make"?: string | null,"mileage_km"?: number | null,"model"?: string | null,"normalization_confidence"?: number | null,"price"?: number | null,"price_partial"?: boolean,"price_partial_reason"?: string | null,"price_published"?: number | null,"price_published_currency"?: string | null,"price_source"?: string,"price_usd"?: number | null,"probable_repost_of"?: number | null,"published_at"?: string | null,"seller_key"?: string | null,"seller_listing_count"?: number | null,"seller_name"?: string | null,"seller_type"?: string | null,"source": string,"status"?: Database["public"]['Enums']["listing_status"],"title": string,"transmission"?: string | null,"trim"?: string | null,"url": string,"year"?: number | null
                   }
                   Update: {
-                    "attributes"?: NonNullable<Json>,"body_type"?: string | null,"color"?: string | null,"currency"?: string | null,"dealer_inferred"?: boolean,"description"?: string | null,"description_facts"?: Json | null,"detail_checked_at"?: string | null,"enriched_at"?: string | null,"external_id"?: string,"fingerprint"?: string | null,"first_seen_at"?: string,"fuel"?: string | null,"id"?: never,"images"?: NonNullable<Json>,"last_full_seen_at"?: string | null,"last_seen_at"?: string,"lat"?: number | null,"location_text"?: string | null,"lon"?: number | null,"make"?: string | null,"mileage_km"?: number | null,"model"?: string | null,"normalization_confidence"?: number | null,"price"?: number | null,"price_partial"?: boolean,"price_partial_reason"?: string | null,"price_published"?: number | null,"price_published_currency"?: string | null,"price_source"?: string,"price_usd"?: number | null,"probable_repost_of"?: number | null,"published_at"?: string | null,"seller_key"?: string | null,"seller_listing_count"?: number | null,"seller_name"?: string | null,"seller_type"?: string | null,"source"?: string,"status"?: Database["public"]['Enums']["listing_status"],"title"?: string,"transmission"?: string | null,"trim"?: string | null,"url"?: string,"year"?: number | null
+                    "attributes"?: NonNullable<Json>,"body_type"?: string | null,"color"?: string | null,"currency"?: string | null,"dealer_confirmed_at"?: string | null,"dealer_id"?: number | null,"dealer_status"?: string | null,"dealer_inferred"?: boolean,"description"?: string | null,"description_facts"?: Json | null,"detail_checked_at"?: string | null,"enriched_at"?: string | null,"external_id"?: string,"fingerprint"?: string | null,"first_seen_at"?: string,"fuel"?: string | null,"id"?: never,"images"?: NonNullable<Json>,"last_full_seen_at"?: string | null,"last_seen_at"?: string,"lat"?: number | null,"location_text"?: string | null,"lon"?: number | null,"make"?: string | null,"mileage_km"?: number | null,"model"?: string | null,"normalization_confidence"?: number | null,"price"?: number | null,"price_partial"?: boolean,"price_partial_reason"?: string | null,"price_published"?: number | null,"price_published_currency"?: string | null,"price_source"?: string,"price_usd"?: number | null,"probable_repost_of"?: number | null,"published_at"?: string | null,"seller_key"?: string | null,"seller_listing_count"?: number | null,"seller_name"?: string | null,"seller_type"?: string | null,"source"?: string,"status"?: Database["public"]['Enums']["listing_status"],"title"?: string,"transmission"?: string | null,"trim"?: string | null,"url"?: string,"year"?: number | null
                   }
                   Relationships: [
                     {
@@ -908,7 +959,7 @@ isOneToOne: false
                   ]
                 },"match_cards": {
                   Row: {
-                    "body_type": string | null,"color": string | null,"color_method": string | null,"currency": string | null,"financing_offered": boolean | null,"first_seen_at": string | null,"fuel": string | null,"generated_at": string | null,"images": Json | null,"is_backfill": boolean | null,"level": Database["public"]['Enums']["match_level"] | null,"listing_id": number | null,"listing_status": Database["public"]['Enums']["listing_status"] | null,"location_text": string | null,"make": string | null,"match_id": number | null,"mileage_km": number | null,"model": string | null,"note": string | null,"price": number | null,"price_kind": string | null,"price_published": number | null,"price_published_currency": string | null,"price_ref": Json | null,"price_source": string | null,"price_usd": number | null,"probable_repost_of": number | null,"profile_name": string | null,"published_at": string | null,"red_flags": Json | null,"rejection_reason": Database["public"]['Enums']["rejection_reason"] | null,"saved": boolean | null,"seller_unknown": boolean | null,"score": number | null,"search_profile_id": number | null,"source": string | null,"status": Database["public"]['Enums']["interaction_status"] | null,"title": string | null,"transmission": string | null,"trim": string | null,"user_id": string | null,"year": number | null
+                    "body_type": string | null,"color": string | null,"color_method": string | null,"currency": string | null,"dealer_confirmed_at": string | null,"dealer_id": number | null,"dealer_name": string | null,"financing_offered": boolean | null,"first_seen_at": string | null,"fuel": string | null,"generated_at": string | null,"images": Json | null,"is_backfill": boolean | null,"level": Database["public"]['Enums']["match_level"] | null,"listing_id": number | null,"listing_status": Database["public"]['Enums']["listing_status"] | null,"location_text": string | null,"make": string | null,"match_id": number | null,"mileage_km": number | null,"model": string | null,"note": string | null,"price": number | null,"price_kind": string | null,"price_published": number | null,"price_published_currency": string | null,"price_ref": Json | null,"price_source": string | null,"price_usd": number | null,"probable_repost_of": number | null,"profile_name": string | null,"published_at": string | null,"red_flags": Json | null,"rejection_reason": Database["public"]['Enums']["rejection_reason"] | null,"saved": boolean | null,"seller_unknown": boolean | null,"score": number | null,"search_profile_id": number | null,"source": string | null,"status": Database["public"]['Enums']["interaction_status"] | null,"title": string | null,"transmission": string | null,"trim": string | null,"user_id": string | null,"year": number | null
                   }
                   Relationships: [
                     {
@@ -1247,6 +1298,32 @@ isOneToOne: false
         Args: { p_target_type: string; p_target_key: string; p_expected: Json; p_value: Json; p_actor_id: string }
         Returns: number
       }
+      // Agencias (20261228120000_dealer_program). Panel and buyer RPCs: authenticated; admin_*, dealer_sweep, dealer_market_ref, dealer_demand, dealer_blue_rate: service role.
+      dealer_program: { Args: Record<string, never>; Returns: Json }
+      is_dealer_member: { Args: { p_dealer_id: number }; Returns: boolean }
+      dealer_listing_hidden: { Args: { p_source: string; p_dealer_id: number | null; p_dealer_status: string | null; p_confirmed_at: string | null }; Returns: string | null }
+      dealer_public_name: { Args: { p_dealer_id: number }; Returns: string | null }
+      dealer_market_ref: { Args: { p_make: string; p_model: string; p_year: number; p_price_usd: number | null; p_exclude_listing: number | null }; Returns: Json }
+      dealer_demand: { Args: { p_make: string; p_model: string; p_year: number; p_price: number | null; p_currency: string | null; p_mileage_km: number | null; p_lat: number; p_lon: number; p_exclude_users: string[]; p_source: string | null }; Returns: Json }
+      dealer_blue_rate: { Args: Record<string, never>; Returns: number | null }
+      my_dealer: { Args: Record<string, never>; Returns: Json }
+      create_dealer: { Args: { p_name: string; p_locality_label: string; p_lat: number; p_lon: number; p_phone?: string | null; p_whatsapp?: string | null; p_contact_email?: string | null; p_address_text?: string | null; p_profile_links?: Json }; Returns: number }
+      update_my_dealer: { Args: { p_name: string; p_locality_label: string; p_lat: number; p_lon: number; p_phone?: string | null; p_whatsapp?: string | null; p_contact_email?: string | null; p_address_text?: string | null; p_profile_links?: Json }; Returns: undefined }
+      dealer_add_source: { Args: { p_source: string; p_profile_url: string | null; p_seller_name_hint: string | null }; Returns: number }
+      dealer_upsert_item: { Args: { p_item_id: number | null; p_values: Json }; Returns: number }
+      dealer_import_items: { Args: { p_rows: Json; p_filename: string | null; p_kind: string }; Returns: Json }
+      dealer_set_item_status: { Args: { p_item_id: number; p_status: string }; Returns: undefined }
+      dealer_confirm_items: { Args: { p_item_ids?: number[] | null }; Returns: number }
+      dealer_resolve_duplicate: { Args: { p_item_id: number; p_mine: boolean }; Returns: undefined }
+      dealer_set_item_private: { Args: { p_item_id: number; p_purchase_price: number | null; p_purchase_currency: string | null; p_notes: string | null }; Returns: undefined }
+      dealer_stock_insights: { Args: Record<string, never>; Returns: { item_id: number; listing_id: number | null; origin: string; status: string; sync_state: string; make: string | null; model: string | null; trim: string | null; year: number | null; mileage_km: number | null; price: number | null; currency: string | null; price_usd: number | null; confirmed_at: string | null; confirm_due_at: string | null; hidden_reason: string | null; market: Json; days_in_stock: number | null; model_days_to_sell: Json; demand: Json }[] }
+      dealer_market_listings: { Args: { p_item_id: number }; Returns: { listing_id: number; source: string; url: string; title: string; trim: string | null; year: number | null; mileage_km: number | null; price: number | null; currency: string | null; price_usd: number; location_text: string | null; seller_type: string | null; first_seen_at: string }[] }
+      dealer_set_lead_status: { Args: { p_lead_id: number; p_status: string }; Returns: undefined }
+      request_dealer_contact: { Args: { p_listing_id: number; p_name: string; p_phone: string; p_message: string | null; p_consent: boolean; p_consent_text: string; p_notification_id?: number | null }; Returns: Json }
+      listing_dealer_card: { Args: { p_listing_id: number }; Returns: Json }
+      dealer_badges: { Args: { p_listing_ids: number[] }; Returns: { listing_id: number; dealer_name: string; confirmed_at: string | null }[] }
+      dealer_sweep: { Args: Record<string, never>; Returns: { matches_deleted: number; notifications_skipped: number; expired_deleted: number }[] }
+      admin_dealer_seller_candidates: { Args: { p_source: string; p_hint: string }; Returns: { seller_key: string; seller_name: string | null; active: number }[] }
             // PAR-04: model guides (service role, except log_guide_event: anon and authenticated).
             admin_save_model_guide: { Args: { p_id: number | null; p_values: Json; p_expected_updated_at: string | null; p_actor_id: string }; Returns: Json },
             admin_set_model_guide_status: { Args: { p_id: number; p_status: string; p_actor_id: string; p_expected_updated_at?: string | null }; Returns: Json },
@@ -1379,6 +1456,9 @@ isOneToOne: false
 "color": string | null,
 "color_method": string | null,
 "currency": string | null,
+"dealer_confirmed_at": string | null,
+"dealer_id": number | null,
+"dealer_name": string | null,
 "financing_offered": boolean | null,
 "first_seen_at": string | null,
 "fuel": string | null,
@@ -1454,6 +1534,9 @@ isOneToOne: false
 "color": string | null,
 "color_method": string | null,
 "currency": string | null,
+"dealer_confirmed_at": string | null,
+"dealer_id": number | null,
+"dealer_name": string | null,
 "financing_offered": boolean | null,
 "first_seen_at": string | null,
 "fuel": string | null,

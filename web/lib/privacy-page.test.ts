@@ -6,6 +6,7 @@ vi.mock("@/lib/config", () => ({ webConfig: mocks.config }));
 
 import PrivacyPage from "@/app/privacidad/page";
 import { SELL_INTENT_PRIVACY_LINE } from "@/lib/sell-intent";
+import { DEALER_CONTACT_PRIVACY_LINE } from "@/lib/dealer-contact";
 
 beforeEach(() => {
   mocks.config.mockResolvedValue({ sellIntent: { ask: true, agenciesContact: false } });
@@ -36,4 +37,14 @@ it("lists the optional mobile and where to change it", async () => {
   const html = renderToStaticMarkup(await PrivacyPage());
   expect(html).toContain("Tu celular, si nos lo dejás");
   expect(html).toContain("Mis datos");
+});
+
+it("agencias: the «Quiero que me contacten» line shows only with the sales channel on", async () => {
+  for (const dealerProgram of [undefined, { enabled: false, channelEnabled: true }, { enabled: true, channelEnabled: false }]) {
+    mocks.config.mockResolvedValue({ sellIntent: { ask: true, agenciesContact: false }, dealerProgram });
+    expect(renderToStaticMarkup(await PrivacyPage())).not.toContain("Quiero que me contacten");
+  }
+  mocks.config.mockResolvedValue({ sellIntent: { ask: true, agenciesContact: false }, dealerProgram: { enabled: true, channelEnabled: true, manualConfirmDays: 7, demandMinCount: 3 } });
+  const on = renderToStaticMarkup(await PrivacyPage());
+  expect(on).toContain(DEALER_CONTACT_PRIVACY_LINE.replace(/«/g, "«"));
 });

@@ -12,7 +12,14 @@ describe("admin menu structure", () => {
     expect(ADMIN_AREAS.map((a) => a.id)).toEqual(["hoy", "crecimiento", "calidad", "ingresos", "operacion", "herramientas"]);
     const hrefs = ADMIN_AREAS.flatMap((a) => a.pages.map((p) => p.href));
     expect(new Set(hrefs).size).toBe(hrefs.length);
-    expect(hrefs).toHaveLength(19);
+    expect(hrefs).toHaveLength(21);
+  });
+});
+
+describe("agencias", () => {
+  it("lives in Crecimiento, with its detail pages", () => {
+    expect(at("/admin/agencias")).toBe("crecimiento:/admin/agencias");
+    expect(at("/admin/agencias/3")).toBe("crecimiento:/admin/agencias");
   });
 });
 
