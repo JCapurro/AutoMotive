@@ -8,7 +8,7 @@ import { toast } from "sonner";
 
 import { confirmStock, setItemStatus } from "@/app/agencia/actions";
 import { Button } from "@/components/ui/button";
-import type { StockFacts } from "@/lib/dealer-insights";
+import { type StockFacts, SUGGESTED_PRICE_NOTE } from "@/lib/dealer-insights";
 import { cn } from "@/lib/utils";
 
 /** One car of the stock screen (the page builds it from dealer_stock_insights). */
@@ -29,6 +29,11 @@ export type StockRow = {
   sends: boolean;
   review: boolean;
   facts: StockFacts;
+  /** «Sugerido USD 18.500»: from published prices (the car's page says why). */
+  suggested?: string | null;
+  /** Private: only the owning agency's page passes it. */
+  margin?: string | null;
+  marginNegative?: boolean;
 };
 
 const STATUSES = [
@@ -217,14 +222,20 @@ export function StockTable({ rows, unconfirmed }: { rows: StockRow[]; unconfirme
                             </div>
                           </div>
                         </td>
-                        <td className="type-figure px-3 py-2.5 text-right whitespace-nowrap">{r.price}</td>
+                        <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                          <span className="type-figure">{r.price}</span>
+                          {r.margin ? (
+                            <p className={cn("text-xs", r.marginNegative ? "text-warn" : "text-muted-foreground")} data-testid="stock-margin">{r.margin}</p>
+                          ) : null}
+                        </td>
                         <td className="px-3 py-2.5" data-testid="stock-market">
                           <span className={cn("inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-semibold whitespace-nowrap", TONE[r.facts.tone])}>
                             {r.facts.tone === "check" ? <AlertTriangle className="size-3.5" aria-hidden /> : null}
                             {r.facts.priceLabel}
                           </span>
                           <p className="mt-0.5 text-xs whitespace-nowrap text-muted-foreground">
-                            {r.facts.enough ? <>Mediana {usd(r.facts.medianUsd)} · </> : null}
+                            {r.suggested ? <span data-testid="stock-suggested" title={SUGGESTED_PRICE_NOTE}>{r.suggested} · </span>
+                              : r.facts.enough ? <>Mediana {usd(r.facts.medianUsd)} · </> : null}
                             {r.facts.n > 0 ? (
                               <Link href={`/agencia/stock/${r.itemId}/mercado`} className="font-medium text-foreground underline underline-offset-2">Ver el mercado</Link>
                             ) : null}

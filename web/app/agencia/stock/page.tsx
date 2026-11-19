@@ -27,16 +27,19 @@ export default async function StockPage({ searchParams }: PageProps<"/agencia/st
   const q = await searchParams;
   const filter = FILTERS.find((f) => f.id === q.estado)?.id ?? "available";
   const supabase = await createClient();
-  const [insights, { dealerProgram }, { data: photoRows }] = await Promise.all([
+  const [insights, { dealerProgram }, { data: photoRows }, { data: costRows }] = await Promise.all([
     stockInsights(),
     webConfig(),
     // The cover: the car's own photos, or its portal listing's for a synced one.
     supabase.from("dealer_stock_items").select("id, images, listings!dealer_stock_items_listing_id_fkey(images)").eq("dealer_id", dealer.id),
+    // The margin: the purchase price is private (RLS: only this agency's members read it).
+    supabase.from("dealer_item_private").select("item_id, purchase_price, purchase_currency"),
   ]);
+  const costs = new Map((costRows ?? []).map((r) => [r.item_id, r]));
   const photos = new Map((photoRows ?? []).map((r) => [r.id, firstImage(r.images) ?? firstImage(r.listings?.images)]));
   const rows = insights
     .filter((r) => filter === "all" || r.status === filter)
-    .map((r) => stockRowView(r, dealerProgram.manualConfirmDays, photos.get(r.item_id) ?? null));
+    .map((r) => stockRowView(r, dealerProgram.manualConfirmDays, photos.get(r.item_id) ?? null, costs.get(r.item_id) ?? null));
 
   return (
     <div className="space-y-5">

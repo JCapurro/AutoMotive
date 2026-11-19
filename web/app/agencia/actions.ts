@@ -26,6 +26,7 @@ import {
   type SheetTable,
   toRows,
 } from "@/lib/dealer-sheet";
+import { stockReadState } from "@/lib/dealer-stock-photo";
 import { normalizeArPhone } from "@/lib/phone";
 import { createClient } from "@/lib/supabase/server";
 import type { Json } from "@/types/database";
@@ -195,7 +196,11 @@ export type SheetPreview = {
   ok?: boolean;
   error?: string;
   filename?: string;
-  kind?: SheetKind;
+  kind?: SheetKind | "photo" | "pdf";
+  /** A photo or PDF still being read by the worker: ask again in a few seconds. */
+  pending?: boolean;
+  /** The list had more cars than one read takes (llm STOCK_SHEET_MAX_ROWS). */
+  truncated?: boolean;
   headers?: string[];
   sample?: string[][];
   map?: ColumnMap;
@@ -208,7 +213,35 @@ type Overrides = Record<string, { make?: string; model?: string }>;
 const MapInput = z.record(z.enum(SHEET_FIELDS as [SheetField, ...SheetField[]]), z.number().int().min(0).max(200));
 const OverridesInput = z.record(z.string().regex(/^\d+$/), z.object({ make: z.string().max(60).optional(), model: z.string().max(60).optional() })).optional();
 
-async function readUpload(form: FormData): Promise<{ table: SheetTable; filename: string; kind: SheetKind } | { error: string }> {
+type Upload = { table: SheetTable; filename: string; kind: SheetKind | "photo" | "pdf"; truncated?: boolean };
+
+/**
+ * A photo or a PDF already read by the worker (fase 1): the llm_jobs row the
+ * browser queued with dealer_request_stock_read(). RLS lets the person read
+ * only their own jobs; the job must be a stock read of their agency. The
+ * table comes from the worker, never from the browser.
+ */
+async function readStockJob(raw: string): Promise<Upload | { error: string } | { pending: true }> {
+  if (!/^\d{1,15}$/.test(raw)) return { error: "No encontramos esa lectura. Subí el archivo de nuevo." };
+  const supabase = await createClient();
+  const [{ data: job }, { data: dealer }] = await Promise.all([
+    supabase.from("llm_jobs").select("kind, status, input, output").eq("id", Number(raw)).maybeSingle(),
+    supabase.rpc("my_dealer"),
+  ]);
+  const dealerId = (dealer as { id?: number } | null)?.id;
+  const input = (job?.input ?? {}) as { dealer_id?: unknown };
+  if (!job || job.kind !== "dealer_stock_read" || dealerId == null || input.dealer_id !== dealerId) {
+    return { error: "No encontramos esa lectura. Subí el archivo de nuevo." };
+  }
+  const read = stockReadState(job);
+  if (read.state === "pending") return { pending: true };
+  if (read.state === "error") return { error: read.message };
+  return { table: read.table, filename: read.kind === "pdf" ? "PDF de la lista" : "Foto de la lista", kind: read.kind, truncated: read.truncated };
+}
+
+async function readUpload(form: FormData): Promise<Upload | { error: string } | { pending: true }> {
+  const job = form.get("job");
+  if (typeof job === "string" && job) return readStockJob(job);
   const file = form.get("file");
   if (!(file instanceof File) || file.size === 0) return { error: "Elegí una planilla CSV o XLSX." };
   if (file.size > SHEET_MAX_BYTES) return { error: SHEET_ERROR_TEXT.too_big };
@@ -263,6 +296,7 @@ function applyOverrides(rows: SheetRow[], fixes: Overrides, catalog: Awaited<Ret
 export async function previewSheet(form: FormData): Promise<SheetPreview> {
   await requireUser();
   const read = await readUpload(form);
+  if ("pending" in read) return { pending: true };
   if ("error" in read) return { error: read.error };
   const map = columnMap(form, read.table);
   if (!map) return { error: "Revisá las columnas elegidas." };
@@ -278,6 +312,7 @@ export async function previewSheet(form: FormData): Promise<SheetPreview> {
     map,
     priceGuessed: priceColumnGuessed(read.table.headers, map),
     rows,
+    truncated: read.truncated ?? false,
   };
 }
 
@@ -289,6 +324,7 @@ export async function previewSheet(form: FormData): Promise<SheetPreview> {
 export async function importSheet(form: FormData): Promise<ActionResult> {
   await requireUser();
   const read = await readUpload(form);
+  if ("pending" in read) return { error: "Todavía estamos leyendo el archivo." };
   if ("error" in read) return { error: read.error };
   const map = columnMap(form, read.table);
   if (!map) return { error: "Revisá las columnas elegidas." };
@@ -318,6 +354,17 @@ export async function importSheet(form: FormData): Promise<ActionResult> {
   const imported = (data as { imported?: number } | null)?.imported ?? accepted.length;
   done();
   return { ok: true, count: imported };
+}
+
+/** Fase 1: the agency's alert emails on or off (dealer_set_alerts; the program's switch still decides if any go). */
+export async function setDealerAlerts(on: boolean): Promise<ActionResult> {
+  await requireUser();
+  if (typeof on !== "boolean") return { error: dealerErrorText("invalid_dealer:alerts_email") };
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("dealer_set_alerts", { p_on: on });
+  if (error) return fail(error.message, "dealer_set_alerts");
+  done();
+  return { ok: true };
 }
 
 // --- Status, confirmation, review, private data, leads ---

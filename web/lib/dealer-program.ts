@@ -10,9 +10,18 @@ export type DealerProgram = {
   manualConfirmDays: number;
   /** Never below 3: a count of 1 or 2 searches is never shown. */
   demandMinCount: number;
+  /** Fase 1: alerts to the agency by email, at most one summary every alertsEveryHours (6 to 168). */
+  alertsEnabled: boolean;
+  alertsEveryHours: number;
+  /** Fase 1: stock from a photo or a PDF of the list (an LLM call, costs per use), photoImportDailyLimit per agency and day. */
+  photoImportEnabled: boolean;
+  photoImportDailyLimit: number;
 };
 
-export const DEFAULT_DEALER_PROGRAM: DealerProgram = { enabled: false, channelEnabled: false, manualConfirmDays: 7, demandMinCount: 3 };
+export const DEFAULT_DEALER_PROGRAM: DealerProgram = {
+  enabled: false, channelEnabled: false, manualConfirmDays: 7, demandMinCount: 3,
+  alertsEnabled: false, alertsEveryHours: 24, photoImportEnabled: false, photoImportDailyLimit: 5,
+};
 
 function wholeIn(value: unknown, min: number, max: number, fallback: number): number {
   return typeof value === "number" && Number.isInteger(value) && value >= min && value <= max ? value : fallback;
@@ -25,6 +34,10 @@ export function parseDealerProgram(raw: unknown): DealerProgram {
     channelEnabled: v.channel_enabled === true,
     manualConfirmDays: wholeIn(v.manual_confirm_days, 1, 60, 7),
     demandMinCount: wholeIn(v.demand_min_count, 3, 50, 3),
+    alertsEnabled: v.alerts_enabled === true,
+    alertsEveryHours: wholeIn(v.alerts_every_hours, 6, 168, 24),
+    photoImportEnabled: v.photo_import_enabled === true,
+    photoImportDailyLimit: wholeIn(v.photo_import_daily_limit, 1, 50, 5),
   };
 }
 
@@ -64,6 +77,7 @@ const FIELD: Record<string, string> = {
   purchase_price: "lo que pagaste",
   purchase_currency: "la moneda de lo que pagaste",
   notes: "las notas",
+  alerts_email: "los avisos",
 };
 
 /** The code an RPC raised (P0001 with the code as message), from a PostgREST error message. */
@@ -83,6 +97,12 @@ export function dealerErrorText(message: string | null | undefined): string {
   if (code === "lead_not_found") return "No encontramos esa consulta.";
   if (code === "invalid_status") return "Ese estado no se puede elegir.";
   if (code === "invalid_source") return "Elegí una fuente de la lista.";
+  if (code === "photo_import_off") return "La carga por foto todavía no está disponible.";
+  if (code === "photo_import_limit") return "Llegaste al máximo de fotos o PDF por hoy. Probá mañana o subí la planilla.";
+  if (code === "file_too_big") return "El archivo es muy grande: hasta 4 MB.";
+  if (code === "invalid_file:type") return "Subí una foto (JPG, PNG o WebP) o un PDF.";
+  if (code.startsWith("invalid_file")) return "No pudimos leer el archivo. Probá con otro.";
+  if (code === "llm_rate_limited") return "Pediste muchas lecturas en la última hora. Probá en un rato.";
   const field = /^invalid_(?:dealer|item):(?:(\d+):)?([a-z_]+)$/.exec(code);
   if (field) {
     const what = FIELD[field[2]] ?? "los datos";

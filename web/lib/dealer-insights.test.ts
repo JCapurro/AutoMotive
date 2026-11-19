@@ -12,7 +12,7 @@ describe("dealer_program", () => {
     expect(parseDealerProgram({ enabled: "true", channel_enabled: 1 })).toEqual(DEFAULT_DEALER_PROGRAM);
     expect(parseDealerProgram({ enabled: true, manual_confirm_days: 0, demand_min_count: 2 })).toEqual({ ...DEFAULT_DEALER_PROGRAM, enabled: true });
     expect(parseDealerProgram({ enabled: true, channel_enabled: true, manual_confirm_days: 14, demand_min_count: 5 }))
-      .toEqual({ enabled: true, channelEnabled: true, manualConfirmDays: 14, demandMinCount: 5 });
+      .toEqual({ ...DEFAULT_DEALER_PROGRAM, enabled: true, channelEnabled: true, manualConfirmDays: 14, demandMinCount: 5 });
     expect(channelOn({ ...DEFAULT_DEALER_PROGRAM, channelEnabled: true })).toBe(false);
   });
 

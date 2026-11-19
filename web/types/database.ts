@@ -124,7 +124,7 @@ export type Database = {
       }
       // Agencias (20261228120000_dealer_program): RLS lets a member read their dealer's rows; every write goes through the RPCs.
       dealers: {
-        Row: { id: number; name: string; contact_email: string | null; phone: string | null; whatsapp: string | null; address_text: string | null; locality_label: string; lat: number; lon: number; profile_links: Json; status: string; approved_at: string | null; approved_by: string | null; created_by: string | null; created_at: string; updated_at: string }
+        Row: { id: number; name: string; contact_email: string | null; phone: string | null; whatsapp: string | null; address_text: string | null; locality_label: string; lat: number; lon: number; profile_links: Json; status: string; approved_at: string | null; approved_by: string | null; created_by: string | null; created_at: string; updated_at: string; alerts_email: boolean; alerts_checked_at: string | null }
         Insert: never
         Update: { status?: string; approved_at?: string | null; approved_by?: string | null }
         Relationships: []
@@ -155,6 +155,25 @@ export type Database = {
           { foreignKeyName: "dealer_stock_items_dealer_id_fkey"; columns: ["dealer_id"]; isOneToOne: false; referencedRelation: "dealers"; referencedColumns: ["id"] },
           { foreignKeyName: "dealer_stock_items_listing_id_fkey"; columns: ["listing_id"]; isOneToOne: true; referencedRelation: "listings"; referencedColumns: ["id"] },
         ]
+      }
+      // Fase 1 (20261229120000): service role only (RLS on, no policies); the worker's alert state and queue, and the stock photos/PDFs waiting to be read.
+      dealer_alert_state: {
+        Row: { item_id: number; market_median_usd: number | null; market_n: number | null; market_at: string | null; demand_searches: number | null; demand_people: number | null; demand_at: string | null; cheaper_since: string | null; updated_at: string }
+        Insert: never
+        Update: never
+        Relationships: [{ foreignKeyName: "dealer_alert_state_item_id_fkey"; columns: ["item_id"]; isOneToOne: true; referencedRelation: "dealer_stock_items"; referencedColumns: ["id"] }]
+      }
+      dealer_alerts: {
+        Row: { id: number; dealer_id: number; item_id: number | null; kind: string; dedup_key: string; payload: Json; created_at: string; sent_at: string | null }
+        Insert: never
+        Update: never
+        Relationships: [{ foreignKeyName: "dealer_alerts_dealer_id_fkey"; columns: ["dealer_id"]; isOneToOne: false; referencedRelation: "dealers"; referencedColumns: ["id"] }]
+      }
+      dealer_stock_reads: {
+        Row: { id: number; dealer_id: number; job_id: number | null; media_type: string; filename: string | null; bytes: number; data: string | null; created_by: string | null; created_at: string; read_at: string | null }
+        Insert: never
+        Update: never
+        Relationships: [{ foreignKeyName: "dealer_stock_reads_dealer_id_fkey"; columns: ["dealer_id"]; isOneToOne: false; referencedRelation: "dealers"; referencedColumns: ["id"] }]
       }
       dealer_item_private: {
         Row: { item_id: number; purchase_price: number | null; purchase_currency: string | null; notes: string | null; updated_at: string }
@@ -1318,6 +1337,10 @@ isOneToOne: false
       dealer_set_item_private: { Args: { p_item_id: number; p_purchase_price: number | null; p_purchase_currency: string | null; p_notes: string | null }; Returns: undefined }
       dealer_stock_insights: { Args: Record<string, never>; Returns: { item_id: number; listing_id: number | null; origin: string; status: string; sync_state: string; make: string | null; model: string | null; trim: string | null; year: number | null; mileage_km: number | null; price: number | null; currency: string | null; price_usd: number | null; confirmed_at: string | null; confirm_due_at: string | null; hidden_reason: string | null; market: Json; days_in_stock: number | null; model_days_to_sell: Json; demand: Json }[] }
       dealer_market_listings: { Args: { p_item_id: number }; Returns: { listing_id: number; source: string; url: string; title: string; trim: string | null; year: number | null; mileage_km: number | null; price: number | null; currency: string | null; price_usd: number; location_text: string | null; seller_type: string | null; first_seen_at: string }[] }
+      dealer_set_alerts: { Args: { p_on: boolean }; Returns: undefined }
+      /** Returns the llm_jobs id of the read (kind dealer_stock_read). */
+      dealer_request_stock_read: { Args: { p_data: string; p_media_type: string; p_filename?: string | null }; Returns: number }
+      dealer_alert_scan: { Args: { p_dealer_id: number; p_cheaper_pct?: number; p_radius_km?: number }; Returns: { item_id: number; listing_id: number | null; make: string | null; model: string | null; trim: string | null; year: number | null; mileage_km: number | null; price: number | null; currency: string | null; price_usd: number | null; market: Json; model_days: Json; days_in_stock: number | null; demand: Json | null; cheaper: Json | null; state: Json | null }[] }
       dealer_set_lead_status: { Args: { p_lead_id: number; p_status: string }; Returns: undefined }
       request_dealer_contact: { Args: { p_listing_id: number; p_name: string; p_phone: string; p_message: string | null; p_consent: boolean; p_consent_text: string; p_notification_id?: number | null }; Returns: Json }
       listing_dealer_card: { Args: { p_listing_id: number }; Returns: Json }
