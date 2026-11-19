@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 import { DealerActions, SourceDecision } from "@/components/admin/dealer-admin";
-import { EmptyRow, PageHeader, Pill, Section, Table, Td, Th } from "@/components/admin/ui";
+import { EmptyRow, PageHeader, Pill, Section, Table, Td, TextLink, Th } from "@/components/admin/ui";
 import { requireAdmin } from "@/lib/admin";
 import { when } from "@/lib/admin-format";
 import { webConfig } from "@/lib/config";
@@ -57,7 +57,9 @@ export default async function DealersAdminPage() {
       <PageHeader
         title="Agencias"
         description={`Panel ${dealerProgram.enabled ? "prendido" : "apagado"} · canal de venta ${channelOn(dealerProgram) ? "prendido" : "apagado"} (app_config.dealer_program). Aprobar prende la demanda y, con el canal, el envío a compradores.`}
-      />
+      >
+        <TextLink href="/admin/agencias/embudo">Ver el embudo del canal</TextLink>
+      </PageHeader>
       <Section title="Agencias" description="Ítems y consultas por estado: solo conteos.">
         <Table>
           <thead>

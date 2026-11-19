@@ -7,6 +7,7 @@ import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { confirmStock, setItemStatus } from "@/app/agencia/actions";
+import { askSaleSource } from "@/components/agencia/sale-question";
 import { Button } from "@/components/ui/button";
 import type { StockFacts } from "@/lib/dealer-insights";
 import { cn } from "@/lib/utils";
@@ -149,6 +150,7 @@ export function StockTable({ rows, unconfirmed }: { rows: StockRow[]; unconfirme
     run(async () => {
       const result = await setItemStatus(itemId, status).catch(() => ({ error: "No pudimos guardar. Probá de nuevo." }));
       if (result.error) toast.error(result.error);
+      else if (status === "sold") askSaleSource({ itemId }, () => router.refresh());
       else toast.success(status === "available" ? "Listo: vuelve a estar disponible" : "Listo: ya no se envía a compradores");
       setBusy(null);
       router.refresh();
