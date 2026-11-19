@@ -22,10 +22,11 @@ insert into auth.users (instance_id, id, aud, role, email, created_at, updated_a
 update public.profiles set role = 'admin' where id = 'd1000000-0000-0000-0000-00000000000f';
 
 -- ================================================================ 1. switch defaults and sanitizing
-select is((select value from public.app_config where key = 'dealer_program'),
+select is((select value - array['alerts_enabled', 'alerts_every_hours', 'photo_import_enabled', 'photo_import_daily_limit'] from public.app_config where key = 'dealer_program'),
           '{"enabled": false, "channel_enabled": false, "manual_confirm_days": 7, "demand_min_count": 3}'::jsonb,
           'app_config.dealer_program: both switches off, 7 days, 3 people');
-select is(public.dealer_program(),
+-- Phase 1 keys (20261229120000) are tested in dealers_phase1_test.sql.
+select is(public.dealer_program() - array['alerts_enabled', 'alerts_every_hours', 'photo_import_enabled', 'photo_import_daily_limit'],
           '{"enabled": false, "channel_enabled": false, "manual_confirm_days": 7, "demand_min_count": 3}'::jsonb,
           'dealer_program() with the defaults');
 select is((select array[enabled::text, name] from public.sources where id = 'directo'), array['false', 'Agencias'],
@@ -45,17 +46,20 @@ select is(public.dealer_program()->'manual_confirm_days', '7'::jsonb, 'manual_co
 update public.app_config set value = '{"manual_confirm_days": 61}' where key = 'dealer_program';
 select is(public.dealer_program()->'manual_confirm_days', '7'::jsonb, 'manual_confirm_days 61 -> 7');
 update public.app_config set value = '{"manual_confirm_days": 7.5, "demand_min_count": "5"}' where key = 'dealer_program';
-select is(public.dealer_program(),
+-- Phase 1 keys (20261229120000) are tested in dealers_phase1_test.sql.
+select is(public.dealer_program() - array['alerts_enabled', 'alerts_every_hours', 'photo_import_enabled', 'photo_import_daily_limit'],
           '{"enabled": false, "channel_enabled": false, "manual_confirm_days": 7, "demand_min_count": 3}'::jsonb,
           'a fraction or a string number -> defaults');
 update public.app_config set value = '{"enabled": "true", "channel_enabled": 1}' where key = 'dealer_program';
-select is(public.dealer_program(),
+-- Phase 1 keys (20261229120000) are tested in dealers_phase1_test.sql.
+select is(public.dealer_program() - array['alerts_enabled', 'alerts_every_hours', 'photo_import_enabled', 'photo_import_daily_limit'],
           '{"enabled": false, "channel_enabled": false, "manual_confirm_days": 7, "demand_min_count": 3}'::jsonb,
           'switches that are not booleans -> off');
 update public.app_config set value = '[]' where key = 'dealer_program';
 select is(public.dealer_program()->'enabled', 'false'::jsonb, 'a value that is not an object -> defaults');
 delete from public.app_config where key = 'dealer_program';
-select is(public.dealer_program(),
+-- Phase 1 keys (20261229120000) are tested in dealers_phase1_test.sql.
+select is(public.dealer_program() - array['alerts_enabled', 'alerts_every_hours', 'photo_import_enabled', 'photo_import_daily_limit'],
           '{"enabled": false, "channel_enabled": false, "manual_confirm_days": 7, "demand_min_count": 3}'::jsonb,
           'no row -> defaults');
 insert into public.app_config (key, value)
