@@ -3,6 +3,7 @@ import "server-only";
 import { cache } from "react";
 
 import { type CostConfig, parseCostEstimator } from "@/lib/cost-estimator";
+import { type DealerSellersConfig, parseDealerSellers } from "@/lib/dealer-buying";
 import { type DealerProgram, parseDealerProgram } from "@/lib/dealer-program";
 import { type LandingHeroConfig, landingHeroConfig } from "@/lib/landing-hero";
 import { type PlanLimitsConfig, planLimits, type ProOffer, proOffer } from "@/lib/pro";
@@ -43,6 +44,8 @@ export type WebConfig = {
   landingHero: LandingHeroConfig | null;
   /** app_config.dealer_program (docs/superpowers/specs/2026-11-18-agencias-design.md §1): the agencies' panel and channel, both off without the row or when app_config couldn't be read. */
   dealerProgram: DealerProgram;
+  /** app_config.dealer_program, fase 3: «Vendedores» (sellers_enabled, off without it) and the dealers' daily cap of requests. */
+  dealerSellers: DealerSellersConfig;
 };
 
 export type EmailOnlySignup = {
@@ -101,5 +104,6 @@ export const webConfig = cache(async (): Promise<WebConfig> => {
     trialReserve: error ? null : trialReserveConfig(values.trial_reserve),
     landingHero: error ? null : landingHeroConfig(values.landing_hero),
     dealerProgram: parseDealerProgram(error ? null : values.dealer_program),
+    dealerSellers: parseDealerSellers(error ? null : values.dealer_program),
   };
 });

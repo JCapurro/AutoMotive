@@ -22,6 +22,12 @@ describe("guided config validators", () => {
     expect(configFieldLabel("dealer_program", "photo_import_enabled")).toBe("Carga de stock por foto o PDF (usa IA: cuesta por uso)");
     expect(configFieldLabel("dealer_program", "enabled")).toBe("Panel de agencias (/agencia)");
     expect(configFieldLabel("dealer_program", "demand_min_count")).toBe("Mínimo de personas para mostrar un número de búsquedas");
+    // Fase 3: the sellers keys are optional, with the ranges of dealer_sellers_config().
+    expect(validateConfigChange("dealer_program", { ...seeded, sellers_enabled: true, seller_requests_per_day: 50 }, seeded)).toBeNull();
+    for (const bad of [{ ...seeded, sellers_enabled: "true" }, { ...seeded, seller_requests_per_day: 0 }, { ...seeded, seller_requests_per_day: 51 }]) {
+      expect(validateConfigChange("dealer_program", bad, seeded)).toBe(DEALER_PROGRAM_CONFIG_MESSAGE);
+    }
+    expect(configFieldLabel("dealer_program", "seller_requests_per_day")).toBe("Pedidos de contacto a vendedores por agencia y día");
   });
   it("keeps trial_reserve a switch with a whole backfill_max and names both (prueba gratis)", () => {
     const seeded = { enabled: false, backfill_max: 30 };
