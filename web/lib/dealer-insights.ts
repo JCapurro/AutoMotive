@@ -184,6 +184,85 @@ export function daysInStockText(days: number | null, modelDays: ModelDaysToSell 
   return `${own} · el modelo se vende en unos ${nf.format(modelDays.median)}`;
 }
 
+/** Shown with every suggested price: it comes from published prices, it is not an appraisal (§19: never the word). */
+export const SUGGESTED_PRICE_NOTE = "Es una referencia según precios publicados de autos parecidos, no una valuación del auto.";
+
+export type SuggestedPrice = {
+  /** In the car's currency (USD when the car has none or we have no blue rate for ARS). */
+  amount: number;
+  currency: "USD" | "ARS";
+  usd: number;
+  /** One sentence: where the number comes from. */
+  why: string;
+  label: string;
+};
+
+const roundTo = (v: number, step: number) => Math.round(v / step) * step;
+
+/**
+ * A price to sell in about 30 days, from the market reference (USD) and how long
+ * the model takes to sell. Only with enough comparables. The model selling in
+ * 30 days or less (or unknown): the median of published prices; slower: halfway
+ * between p25 and the median, to sell sooner than the model does. ARS (with the
+ * blue rate) rounded to 100.000, USD to 100.
+ */
+export function suggestedPrice(
+  market: MarketRef | null,
+  modelDays: ModelDaysToSell | null,
+  currency: string | null,
+): SuggestedPrice | null {
+  if (!market?.enough || market.median == null || market.median <= 0) return null;
+  const known = modelDays && modelDays.median != null && modelDays.n >= 5 ? modelDays.median : null;
+  const slowModel = known != null && known > 30 && market.p25 != null && market.p25 > 0 && market.p25 < market.median;
+  const usd = slowModel ? (market.p25! + market.median) / 2 : market.median;
+  const blue = market.blue != null && market.blue > 0 ? market.blue : null;
+  const inArs = currency === "ARS" && blue != null;
+  const amount = inArs ? roundTo(usd * blue, 100_000) : roundTo(usd, 100);
+  const cur = inArs ? "ARS" : "USD";
+  const n = comparables(market.n);
+  const why = slowModel
+    ? `Entre el precio más bajo habitual y la mediana de ${n}: el modelo tarda unos ${nf.format(known!)} días en venderse y así se vende antes.`
+    : `La mediana de ${n} publicados${known != null ? `; el modelo se vende en unos ${nf.format(known)} días` : ""}.`;
+  return { amount, currency: cur, usd: roundTo(usd, 100), why, label: money(amount, cur) };
+}
+
+export type Margin = {
+  /** Sale price minus cost, in the car's currency. */
+  amount: number;
+  currency: string;
+  /** Over the cost (what the agency put in), rounded to one decimal. */
+  pct: number | null;
+  label: string;
+};
+
+/**
+ * The agency's margin: sale price minus what it paid, in the car's currency, and
+ * as a percent of the cost. Different currencies convert with the blue rate;
+ * without it (or without both numbers) there is no margin. Private: only the
+ * page of the owning agency computes it (dealer_item_private's RLS).
+ */
+export function margin(
+  price: number | null, currency: string | null,
+  cost: number | null, costCurrency: string | null,
+  blue: number | null | undefined,
+): Margin | null {
+  if (price == null || cost == null || price <= 0 || cost <= 0 || !currency) return null;
+  let costIn = cost;
+  const from = costCurrency ?? currency;
+  if (from !== currency) {
+    if (!blue || blue <= 0) return null;
+    if (from === "USD" && currency === "ARS") costIn = cost * blue;
+    else if (from === "ARS" && currency === "USD") costIn = cost / blue;
+    else return null;
+  }
+  const amount = Math.round(price - costIn);
+  const raw = ((price - costIn) / costIn) * 100;
+  const pct = Math.sign(raw) * (Math.round(Math.abs(raw) * 10) / 10);   // half away from zero, both signs alike
+  const sign = amount < 0 ? "-" : "";
+  const shown = nf.format(Math.abs(pct));
+  return { amount, currency, pct, label: `${sign}${money(Math.abs(amount), currency)} (${sign}${shown} % sobre el costo)` };
+}
+
 /** What the panel needs of a dealer_stock_insights() row. */
 export type InsightRow = {
   item_id: number;
@@ -206,8 +285,13 @@ export type InsightRow = {
 };
 
 /** A row of /agencia/stock in words (StockTable's StockRow). */
-export function stockRowView(row: InsightRow, manualConfirmDays: number, photo: string | null = null) {
+export function stockRowView(
+  row: InsightRow, manualConfirmDays: number, photo: string | null = null,
+  cost: { purchase_price: number | null; purchase_currency: string | null } | null = null,
+) {
   const market = parseMarket(row.market);
+  const suggested = suggestedPrice(market, parseModelDays(row.model_days_to_sell), row.currency);
+  const own = cost ? margin(row.price, row.currency, cost.purchase_price, cost.purchase_currency, market?.blue) : null;
   const sending = itemSending(row, manualConfirmDays);
   const name = vehicle({ make: row.make, model: row.model, year: row.year }) || "Auto";
   return {
@@ -227,6 +311,9 @@ export function stockRowView(row: InsightRow, manualConfirmDays: number, photo: 
     sends: sending.sends,
     review: row.sync_state === "review",
     facts: stockFacts(row),
+    suggested: suggested ? `Sugerido ${suggested.label}` : null,
+    margin: own ? `Margen ${own.label}` : null,
+    marginNegative: own ? own.amount < 0 : false,
   };
 }
 

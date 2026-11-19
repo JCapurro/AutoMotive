@@ -244,6 +244,35 @@ class ListingColorAnswer(_Strict):
     colors: list[ColorGuess]
 
 
+# Agencias, fase 1: the cars of a dealer's stock list read from a photo or a
+# PDF. Only what the panel's spreadsheet takes (web/lib/dealer-sheet.ts); the
+# web normalizes against the catalog and shows the same editable preview, so
+# nothing the model says is loaded without the dealer seeing it.
+STOCK_SHEET_MAX_ROWS = 200
+STOCK_SHEET_MAX_BYTES = 4 * 1024 * 1024
+STOCK_SHEET_MEDIA_TYPES = ("image/jpeg", "image/png", "image/webp", "application/pdf")
+# A long list is a long answer: more than the assisted mode's budget, still under
+# the running job's expiry (LLM_TIMEOUT_SECONDS + 60 s, pipeline/llm_jobs.py).
+STOCK_SHEET_TIMEOUT_SECONDS = 100.0
+
+
+class StockSheetRow(_Strict):
+    make: str | None
+    model: str | None
+    trim: str | None
+    year: int | None
+    mileage_km: int | None
+    price: float | None
+    currency: Currency | None
+    color: str | None
+
+
+class StockSheetRead(_Strict):
+    # False when it is not a list of cars (a selfie, a blank page): the web says so.
+    readable: bool
+    rows: list[StockSheetRow]
+
+
 def json_schema(model: type[BaseModel]) -> dict[str, Any]:
     """The model's JSON Schema, self-contained: `$defs` inlined and titles dropped.
 

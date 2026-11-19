@@ -9,7 +9,11 @@ nobody will read anymore expire (db/repos/llm_jobs.expire).
 
 'parse_search' (the assisted mode) and, since PAR-04, 'model_guide' (a
 guide draft the admin asked for, docs/superpowers/specs/2026-11-03-par04-guias-design.md)
-are consumed; the other optional kinds of sección 8.1 wait for a consumer.
+are consumed, and 'dealer_stock_read' (agencias, fase 1: a photo or a PDF of
+a dealer's stock list, queued only by public.dealer_request_stock_read with
+its daily cap; the switch dealer_program.photo_import_enabled is read again
+when the job is taken, and the file's bytes leave the database as soon as the
+worker reads them); the other optional kinds of sección 8.1 wait for a consumer.
 Guides have a consumer of their own (one, no concurrency), so a two-minute
 guide never delays an assisted search, their own expiry
 (llm_limits.model_guide.queued_ttl_minutes: nobody waits on a screen) and
@@ -20,6 +24,7 @@ fails without calling the provider.
 from __future__ import annotations
 
 import asyncio
+import datetime as dt
 import logging
 import time
 from typing import Any
@@ -28,16 +33,19 @@ import config
 import db
 from db.repos import catalog as catalog_repo
 from db.repos import catalog_misses as misses_repo
+from db.repos import dealers as dealers_repo
 from db.repos import guides as guides_repo
 from db.repos import llm_jobs as jobs_repo
 from intelligence import guides
+from intelligence.config import dealer_program
+from intelligence.dealer_stock_read import to_table
 from llm.prompts import MODEL_GUIDE_PROMPT_VERSION
 from llm.provider import LLMError, LLMProvider
 from normalization.drafts import catalog_misses, normalize_drafts
 
 log = logging.getLogger(__name__)
 
-KINDS = ["parse_search"]
+KINDS = ["parse_search", "dealer_stock_read"]
 GUIDE_KINDS = ["model_guide"]
 
 # llm_limits.model_guide without the key (the migration adds them all).
@@ -146,7 +154,30 @@ async def _model_guide(provider: LLMProvider, job: dict[str, Any]) -> dict[str, 
     return output
 
 
-_HANDLERS = {"parse_search": _parse_search, "model_guide": _model_guide}
+async def _dealer_stock_read(provider: LLMProvider, job: dict[str, Any]) -> dict[str, Any]:
+    """Agencias, fase 1: the cars of a stock list (photo or PDF) as the panel's
+    spreadsheet table (intelligence/dealer_stock_read.py). The web shows the
+    same editable preview before anything is loaded."""
+    data = job["input"] or {}
+    read_id = data.get("read_id")
+    if not isinstance(read_id, int) or isinstance(read_id, bool):
+        raise NotCalled("falta la lectura")
+    async with db.connection() as cx:
+        row = await (await cx.execute(
+            "SELECT value FROM app_config WHERE key = 'dealer_program'")).fetchone()
+    program = dealer_program(row["value"] if row else None)   # now, not get_config's cache
+    if not (program["enabled"] and program["photo_import_enabled"]):
+        await dealers_repo.take_stock_read(read_id, job["id"])  # the bytes go anyway
+        raise NotCalled("la carga por foto está apagada (dealer_program.photo_import_enabled)")
+    read = await dealers_repo.take_stock_read(read_id, job["id"])
+    if read is None:
+        raise NotCalled("el archivo de la lista ya no está")
+    answer = await provider.stock_sheet(bytes(read["data"]), read["media_type"])
+    table = to_table(answer, max_year=dt.date.today().year + 1)
+    return {"read_id": read_id, "media_type": read["media_type"], **table}
+
+
+_HANDLERS = {"parse_search": _parse_search, "model_guide": _model_guide, "dealer_stock_read": _dealer_stock_read}
 
 
 async def process_next(provider: LLMProvider, kinds: list[str] | None = None) -> bool:

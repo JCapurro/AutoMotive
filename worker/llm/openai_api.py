@@ -18,9 +18,9 @@ from pydantic import BaseModel, ValidationError
 
 from llm import prompts
 from llm.provider import LLMError, LLMTimeout, color_result
-from llm.schemas import (LISTING_COLOR_MAX_IMAGES, LISTING_COLOR_SCHEMA, ListingColorAnswer, ListingFacts,
-                         LowResultsExplanation, ModelGuideDraft, PolishedQuestions, SearchDraft, SearchDrafts,
-                         json_schema)
+from llm.schemas import (LISTING_COLOR_MAX_IMAGES, LISTING_COLOR_SCHEMA, STOCK_SHEET_MEDIA_TYPES,
+                         STOCK_SHEET_TIMEOUT_SECONDS, ListingColorAnswer, ListingFacts, LowResultsExplanation,
+                         ModelGuideDraft, PolishedQuestions, SearchDraft, SearchDrafts, StockSheetRead, json_schema)
 from normalization.vehicle import CatalogModel
 
 log = logging.getLogger(__name__)
@@ -31,6 +31,8 @@ _MAX_OUTPUT_TOKENS = 4096
 _GUIDE_MAX_OUTPUT_TOKENS = 8192
 # The color answer is a handful of codes (docs/COLOR.md measured it with 200).
 _COLOR_MAX_OUTPUT_TOKENS = 200
+# Agencias, fase 1: a stock list, up to STOCK_SHEET_MAX_ROWS short rows.
+_STOCK_MAX_OUTPUT_TOKENS = 16000
 
 
 class OpenAIApiProvider:
@@ -195,3 +197,18 @@ class OpenAIApiProvider:
             max_output_tokens=_COLOR_MAX_OUTPUT_TOKENS, schema=LISTING_COLOR_SCHEMA, schema_name="ListingColor")
         return color_result(answer, usage.get("input_tokens"), usage.get("output_tokens"), self.model)
 
+
+    async def stock_sheet(self, data: bytes, media_type: str) -> StockSheetRead:
+        """A photo as an input_image at detail high (small handwriting), a PDF
+        as an input_file; the text first, as in the color pass."""
+        if not data or media_type not in STOCK_SHEET_MEDIA_TYPES:
+            raise LLMError("falta el archivo de la lista o su tipo no se lee")
+        url = f"data:{media_type};base64," + base64.b64encode(data).decode("ascii")
+        part: dict[str, Any] = ({"type": "input_file", "filename": "lista.pdf", "file_data": url}
+                                if media_type == "application/pdf"
+                                else {"type": "input_image", "detail": "high", "image_url": url})
+        content: list[dict[str, Any]] = [{"type": "input_text", "text": prompts.STOCK_SHEET_USER_TEXT}, part]
+        answer, _ = await self._structured_usage(prompts.load("stock_sheet"), content, StockSheetRead,
+                                                 max_output_tokens=_STOCK_MAX_OUTPUT_TOKENS,
+                                                 timeout=max(self.timeout, STOCK_SHEET_TIMEOUT_SECONDS))
+        return answer

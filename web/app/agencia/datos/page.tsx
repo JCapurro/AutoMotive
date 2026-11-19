@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
+import { DealerAlertsToggle } from "@/components/agencia/dealer-alerts-toggle";
 import { DealerProfileForm, type DealerFormValues } from "@/components/agencia/dealer-profile-form";
 import { DealerSourceForm } from "@/components/agencia/dealer-source-form";
+import { webConfig } from "@/lib/config";
 import { myDealer } from "@/lib/dealer-server";
 import { createClient } from "@/lib/supabase/server";
 
@@ -15,7 +17,11 @@ export default async function DealerDataPage() {
   const dealer = await myDealer();
   if (!dealer) redirect("/agencia");
   const supabase = await createClient();
-  const { data: sources } = await supabase.from("sources").select("id, name").eq("enabled", true).neq("id", "directo").order("name");
+  const [{ data: sources }, { data: prefs }, { dealerProgram }] = await Promise.all([
+    supabase.from("sources").select("id, name").eq("enabled", true).neq("id", "directo").order("name"),
+    supabase.from("dealers").select("alerts_email").eq("id", dealer.id).maybeSingle(),
+    webConfig(),
+  ]);
   const names = new Map((sources ?? []).map((s) => [s.id, s.name]));
   const digits = dealer.whatsapp ?? "";
   const initial: DealerFormValues = {
@@ -35,6 +41,12 @@ export default async function DealerDataPage() {
         <h1 className="type-heading text-[1.9rem] leading-tight">Datos de la agencia</h1>
         <DealerProfileForm mode="update" initial={initial} />
       </section>
+      {dealerProgram.alertsEnabled ? (
+        <section className="space-y-3" id="avisos">
+          <h2 className="type-heading text-[21px] leading-tight">Avisos de tu stock</h2>
+          <DealerAlertsToggle initial={prefs?.alerts_email ?? true} every={dealerProgram.alertsEveryHours} />
+        </section>
+      ) : null}
       <section className="space-y-4">
         <div>
           <h2 className="type-heading text-[21px] leading-tight">¿Ya publicás en otro sitio?</h2>

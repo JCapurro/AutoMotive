@@ -25,7 +25,9 @@ def car(**kw) -> dict:
 class DealerProgramTests(unittest.TestCase):
     def test_defaults_are_off(self):
         self.assertEqual(DEFAULT_DEALER_PROGRAM, {"enabled": False, "channel_enabled": False,
-                                                  "manual_confirm_days": 7, "demand_min_count": 3})
+                                                  "manual_confirm_days": 7, "demand_min_count": 3,
+                                                  "alerts_enabled": False, "alerts_every_hours": 24,
+                                                  "photo_import_enabled": False, "photo_import_daily_limit": 5})
         for raw in (None, {}, [], "x", 3):
             with self.subTest(raw=raw):
                 self.assertEqual(dealer_program(raw), {**DEFAULT_DEALER_PROGRAM, "channel": False})

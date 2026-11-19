@@ -13,9 +13,13 @@ describe("guided config validators", () => {
     expect(validateConfigChange("dealer_program", { ...seeded, enabled: true, manual_confirm_days: 60, demand_min_count: 50 }, seeded)).toBeNull();
     for (const bad of [{ enabled: true }, { ...seeded, channel_enabled: "yes" }, { ...seeded, manual_confirm_days: 0 },
       { ...seeded, manual_confirm_days: 61 }, { ...seeded, manual_confirm_days: 1.5 }, { ...seeded, demand_min_count: 2 },
-      { ...seeded, demand_min_count: 1 }, { ...seeded, demand_min_count: 51 }]) {
+      { ...seeded, demand_min_count: 1 }, { ...seeded, demand_min_count: 51 }, { ...seeded, alerts_every_hours: 5 },
+      { ...seeded, alerts_enabled: "yes" }, { ...seeded, photo_import_daily_limit: 0 }, { ...seeded, photo_import_daily_limit: 51 }]) {
       expect(validateConfigChange("dealer_program", bad, seeded)).toBe(DEALER_PROGRAM_CONFIG_MESSAGE);
     }
+    const phase1 = { ...seeded, alerts_enabled: true, alerts_every_hours: 168, photo_import_enabled: false, photo_import_daily_limit: 50 };
+    expect(validateConfigChange("dealer_program", phase1, seeded)).toBeNull();
+    expect(configFieldLabel("dealer_program", "photo_import_enabled")).toBe("Carga de stock por foto o PDF (usa IA: cuesta por uso)");
     expect(configFieldLabel("dealer_program", "enabled")).toBe("Panel de agencias (/agencia)");
     expect(configFieldLabel("dealer_program", "demand_min_count")).toBe("Mínimo de personas para mostrar un número de búsquedas");
   });

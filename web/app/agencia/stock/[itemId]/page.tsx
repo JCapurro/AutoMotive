@@ -12,12 +12,15 @@ import {
   demandCount,
   ITEM_STATUS,
   itemSending,
+  margin,
   parseDemand,
   parseMarket,
   parseModelDays,
   PRICE_CHECK_TEXT,
   priceCheck,
   priceVsMarketText,
+  SUGGESTED_PRICE_NOTE,
+  suggestedPrice,
 } from "@/lib/dealer-insights";
 import { myDealer, stockInsights } from "@/lib/dealer-server";
 import { money, number, vehicle } from "@/lib/format";
@@ -49,6 +52,9 @@ export default async function ItemPage({ params }: PageProps<"/agencia/stock/[it
   const market = parseMarket(insight?.market);
   const demand = parseDemand(insight?.demand);
   const check = priceCheck(market);
+  const suggested = item.status === "sold" || item.status === "archived" ? null
+    : suggestedPrice(market, parseModelDays(insight?.model_days_to_sell), item.currency);
+  const own = margin(item.price, item.currency, priv?.purchase_price ?? null, priv?.purchase_currency ?? null, market?.blue);
   // No insight row for an archived car: its stock status, not «Lo estamos cargando».
   const sending = itemSending({ status: item.status, sync_state: item.sync_state, hidden_reason: insight ? insight.hidden_reason : undefined }, dealerProgram.manualConfirmDays);
   const name = vehicle({ make: insight?.make ?? item.make, model: insight?.model ?? item.model, trim: insight?.trim ?? item.trim, year: insight?.year ?? item.year });
@@ -105,6 +111,15 @@ export default async function ItemPage({ params }: PageProps<"/agencia/stock/[it
         <p className="text-sm text-muted-foreground">{daysInStockText(insight?.days_in_stock ?? null, parseModelDays(insight?.model_days_to_sell))}</p>
       </section>
 
+      {suggested ? (
+        <section className="space-y-2" data-testid="item-suggested">
+          <h2 className="type-heading text-[21px] leading-tight">Precio para venderlo en unos 30 días</h2>
+          <p className="text-[15px]"><b className="type-figure font-semibold">{suggested.label}</b>{suggested.currency === "ARS" ? <span className="text-muted-foreground"> ({money(suggested.usd, "USD")})</span> : null}</p>
+          <p className="text-sm">{suggested.why}</p>
+          <p className="text-sm text-muted-foreground">{SUGGESTED_PRICE_NOTE}</p>
+        </section>
+      ) : null}
+
       <section className="space-y-3">
         <h2 className="type-heading text-[21px] leading-tight">Cuánta gente lo busca</h2>
         {demand.approved ? (
@@ -135,6 +150,14 @@ export default async function ItemPage({ params }: PageProps<"/agencia/stock/[it
 
       <section className="space-y-3">
         <h2 className="type-heading text-[21px] leading-tight">Solo para vos</h2>
+        {own ? (
+          <p className={own.amount < 0 ? "text-[15px] text-warn" : "text-[15px]"} data-testid="item-margin">
+            Margen: <b className="font-semibold">{own.label}</b>
+            {(priv?.purchase_currency ?? item.currency) !== item.currency ? <span className="text-sm text-muted-foreground"> · costo pasado al blue del día</span> : null}
+          </p>
+        ) : priv?.purchase_price != null ? (
+          <p className="text-sm text-muted-foreground">Cargá el precio de venta para ver el margen.</p>
+        ) : null}
         <ItemPrivateForm
           itemId={itemId}
           initial={{

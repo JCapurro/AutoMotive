@@ -190,3 +190,8 @@ class ClaudeCliProvider:
         """`claude -p` takes the prompt on stdin, not images: the color pass
         needs the openai or anthropic provider (the replay inherits this)."""
         raise LLMError("claude_cli no manda fotos: el color necesita LLM_PROVIDER=openai o anthropic")
+
+    async def stock_sheet(self, data: bytes, media_type: str):
+        """Same as the color pass: `claude -p` takes no files. The stock read
+        from a photo or a PDF needs the openai or anthropic provider."""
+        raise LLMError("claude_cli no manda archivos: la lista por foto necesita LLM_PROVIDER=openai o anthropic")
