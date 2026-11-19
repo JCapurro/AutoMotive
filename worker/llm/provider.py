@@ -17,7 +17,8 @@ from collections.abc import Sequence
 from typing import Any, Protocol, runtime_checkable
 
 import config
-from llm.schemas import ListingColorAnswer, ListingFacts, LowResultsExplanation, ModelGuideDraft, SearchDraft
+from llm.schemas import (ListingColorAnswer, ListingFacts, LowResultsExplanation, ModelGuideDraft, SearchDraft,
+                         StockSheetRead)
 from normalization.vehicle import CatalogModel
 
 
@@ -67,6 +68,13 @@ class LLMProvider(Protocol):
         docs/COLOR.md). Returns {"visible": bool, "colors": [{"color", "prob"}],
         "tokens_in", "tokens_out", "model"}, the most probable color first.
         Providers that can't send images raise LLMError."""
+        ...
+
+    async def stock_sheet(self, data: bytes, media_type: str) -> StockSheetRead:
+        """Agencias, fase 1: the cars of a dealer's stock list from one photo
+        (image/jpeg, png, webp) or a PDF (llm/prompts/stock_sheet.md). Only a
+        proposal: the web checks it against the catalog and the dealer
+        confirms. Providers that can't send files raise LLMError."""
         ...
 
 

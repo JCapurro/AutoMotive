@@ -21,6 +21,11 @@ Every DEALER_TICK_SECONDS (main.py), each step in its own try, never raising:
    same matching, score, daily cap and thresholds (C1).
 7. New leads → an email to the dealer (channel on only), without the
    buyer's data (notifications/dealer_leads.py).
+8. Fase 1, alerts to the agency (dealer_program.alerts_enabled, channel or
+   not): for each dealer that wants them and was not checked in
+   alerts_every_hours, dealer_alert_scan() → intelligence/dealer_alerts.decide
+   → one summary email of what is new (notifications/dealer_alerts.py), each
+   alert once. Plus: the bytes of stock-read files nobody read are deleted.
 
 Errors are logged with ids only (no person's data).
 """
@@ -30,7 +35,7 @@ import logging
 import traceback
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 import db
@@ -40,7 +45,9 @@ from db.repos import dealers as repo
 from db.repos import listings as listings_repo
 from db.repos.runs import log_error
 from intelligence.config import dealer_program
+from intelligence import dealer_alerts as alerts_logic
 from intelligence.dealer import DEALER_SOURCE
+from notifications import dealer_alerts as alerts_mail
 from notifications.dealer_leads import notify_new_leads
 from notifications.links import Links
 from notifications.service import Notifier
@@ -70,6 +77,8 @@ class DealerTick:
     review: int = 0
     matched: int = 0
     lead_notices: int = 0
+    alerts_added: int = 0
+    alert_emails: int = 0
 
 
 def listing_for(item: dict[str, Any], *, base_url: str = WEB_BASE_URL) -> Listing:
@@ -220,6 +229,57 @@ async def match_visible(notifier: Notifier, tick: DealerTick, events: list) -> N
         tick.matched += len(group)
 
 
+ALERT_DEALERS_PER_TICK = 20
+ALERT_RETRY_HOURS = 1.0
+
+
+async def scan_dealer_alerts(dealer_id: int, program: dict[str, Any], now: datetime) -> int:
+    """Decide and queue one dealer's alerts; returns how many are new."""
+    rows = await repo.alert_scan(dealer_id, cheaper_pct=alerts_logic.CHEAPER_PCT,
+                                 radius_km=alerts_logic.CHEAPER_RADIUS_KM)
+    states, found = [], []
+    for row in rows:
+        new_alerts, state = alerts_logic.decide(row, min_count=program["demand_min_count"], now=now)
+        states.append((row["item_id"], state))
+        found += new_alerts
+    return await repo.save_alerts(dealer_id, states, found)
+
+
+async def send_alerts(channel, links: Links | None, program: dict[str, Any], tick: DealerTick,
+                      *, now: datetime | None = None) -> None:
+    """Step 8: the dealers due get their scan and, if anything is new, one email."""
+    now = now or datetime.now(timezone.utc)
+    every = program["alerts_every_hours"]
+    for d in await repo.dealers_due_for_alerts(every, ALERT_DEALERS_PER_TICK):
+        dealer_id = d["dealer_id"]
+        try:
+            tick.alerts_added += await scan_dealer_alerts(dealer_id, program, now)
+            pending = await repo.pending_alerts(dealer_id)
+            if not pending:
+                await repo.mark_alerts_sent(dealer_id, [])
+                await repo.set_alerts_checked(dealer_id)
+                continue
+            if channel is None or not d.get("email"):
+                # Nowhere to send it: the alerts wait (a dealer without an email can add one in Datos).
+                log.info("dealer %s: %d alerts, no email channel or address", dealer_id, len(pending))
+                await repo.set_alerts_checked(dealer_id)
+                continue
+            ids = [a["id"] for a in pending]
+            key = f"dealer-alerts-{dealer_id}-{min(ids)}-{max(ids)}"
+            result = await channel.send_message(d["email"], alerts_mail.message(pending, links),
+                                                idempotency_key=key, unsubscribe_token=None)
+            if result.ok:
+                await repo.mark_alerts_sent(dealer_id, ids)
+                await repo.set_alerts_checked(dealer_id)
+                tick.alert_emails += 1
+                log.info("dealer %s: alerts %s sent", dealer_id, ids)
+            else:
+                await repo.set_alerts_checked(dealer_id, retry_in_hours=ALERT_RETRY_HOURS, every_hours=every)
+                log.warning("dealer %s: alerts email failed (%s), alerts %s", dealer_id, result.error, ids)
+        except Exception:
+            await log_error("dealers", f"alerts:dealer:{dealer_id}", traceback.format_exc())
+
+
 async def run_dealers(notifier: Notifier, links: Links, *, now: datetime | None = None) -> DealerTick:
     tick = DealerTick()
     try:
@@ -234,6 +294,10 @@ async def run_dealers(notifier: Notifier, links: Links, *, now: datetime | None 
     if swept:
         tick.swept_matches, tick.skipped_notifications, tick.swept_expired = (
             swept["matches_deleted"], swept["notifications_skipped"], swept["expired_deleted"])
+    phase1 = await _step("phase1", "schema", repo.phase1_ready())
+    if phase1:
+        # Stock-read files nobody read: their bytes go, whatever the switches say.
+        await _step("reads", "purge", repo.purge_stock_reads())
     program = dealer_program(await db.get_config("dealer_program"))
     if not program["enabled"]:
         return tick
@@ -245,6 +309,8 @@ async def run_dealers(notifier: Notifier, links: Links, *, now: datetime | None 
         await _step("match", "all", match_visible(notifier, tick, events))
         tick.lead_notices = await _step("leads", "all",
                                         notify_new_leads(notifier.channels.get("email"), links)) or 0
+    if phase1 and program["alerts_enabled"]:
+        await _step("alerts", "all", send_alerts(notifier.channels.get("email"), links, program, tick, now=now))
     if any(vars(tick).values()):
         log.info("dealers: %s", {k: v for k, v in vars(tick).items() if v})
     return tick

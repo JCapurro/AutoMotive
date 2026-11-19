@@ -32,6 +32,9 @@ LISTING_COLOR_PROMPT_VERSION = "listing_color-v1"
 LISTING_COLOR_PROMPT_SHA256 = "05bb7667683ab3574801648c0a8a4a37216f33ebd21701ab57eb57d4c607ce73"
 # The text that goes with the photos, as measured.
 LISTING_COLOR_USER_TEXT = "Fotos de la publicación."
+# Agencias, fase 1: the text that goes with a photo or a PDF of a stock list.
+STOCK_SHEET_PROMPT_VERSION = "stock_sheet-v1"
+STOCK_SHEET_USER_TEXT = "La lista de stock de la agencia."
 
 
 @cache

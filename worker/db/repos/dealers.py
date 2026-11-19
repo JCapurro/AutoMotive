@@ -18,6 +18,7 @@ from datetime import datetime
 from typing import Any, Iterable
 
 from psycopg import AsyncConnection
+from psycopg.types.json import Jsonb
 
 from db.pool import connection
 
@@ -48,8 +49,27 @@ async def ready() -> bool:
 
 def reset_schema_cache() -> None:
     """Tests that switch databases ask again."""
-    global _ready
+    global _ready, _phase1
     _ready = None
+    _phase1 = None
+
+
+# Fase 1 (20261229120000_dealer_phase1_extras.sql): alerts and stock reads.
+_phase1: bool | None = None
+
+
+async def phase1_ready() -> bool:
+    """Whether the phase 1 tables exist (a worker can run before that migration)."""
+    global _phase1
+    if _phase1 is None:
+        async with connection() as cx:
+            row = await (await cx.execute(
+                "SELECT to_regclass('public.dealer_alerts') IS NOT NULL "
+                "   AND to_regclass('public.dealer_stock_reads') IS NOT NULL "
+                "   AND to_regprocedure('public.dealer_alert_scan(bigint, numeric, numeric)') IS NOT NULL AS ok")
+            ).fetchone()
+            _phase1 = bool(row["ok"])
+    return _phase1
 
 
 def visible(alias: str) -> str:
@@ -432,3 +452,117 @@ async def mark_lead_notified(ids: Iterable[int]) -> None:
         return
     async with connection() as cx:
         await cx.execute("UPDATE dealer_leads SET dealer_notified_at = now() WHERE id = ANY(%s)", (ids,))
+
+
+# ---------------------------------------------------------------------------
+# Fase 1: alerts to the agency (pipeline/dealers.py step 8)
+# ---------------------------------------------------------------------------
+
+_EMAIL = ("coalesce(d.contact_email, (SELECT p.email FROM dealer_members m JOIN profiles p ON p.id = m.user_id "
+          "                           WHERE m.dealer_id = d.id AND p.email IS NOT NULL "
+          "                           ORDER BY m.created_at LIMIT 1))")
+
+
+async def dealers_due_for_alerts(every_hours: int, limit: int = 50) -> list[dict[str, Any]]:
+    """Active dealers that want the alerts and were not checked in `every_hours`."""
+    async with connection() as cx:
+        return await (await cx.execute(
+            f"SELECT d.id AS dealer_id, {_EMAIL} AS email FROM dealers d "
+            " WHERE d.status = 'active' AND d.alerts_email "
+            "   AND (d.alerts_checked_at IS NULL OR d.alerts_checked_at < now() - make_interval(hours => %s)) "
+            " ORDER BY d.alerts_checked_at NULLS FIRST, d.id LIMIT %s", (every_hours, limit))).fetchall()
+
+
+async def alert_scan(dealer_id: int, *, cheaper_pct: float, radius_km: float) -> list[dict[str, Any]]:
+    async with connection() as cx:
+        return await (await cx.execute(
+            "SELECT * FROM public.dealer_alert_scan(%s::bigint, %s::numeric, %s::numeric)", (dealer_id, cheaper_pct, radius_km))).fetchall()
+
+
+_STATE_COLS = ("market_median_usd", "market_n", "market_at", "demand_searches", "demand_people", "demand_at",
+               "cheaper_since")
+
+
+async def save_alerts(dealer_id: int, states: list[tuple[int, dict[str, Any]]], alerts: list[Any]) -> int:
+    """The new references and the new alerts, in one transaction. An alert
+    whose dedup_key the dealer already got is dropped. Returns how many were added."""
+    added = 0
+    cols = ", ".join(_STATE_COLS)
+    vals = ", ".join(["%s"] * len(_STATE_COLS))
+    sets = ", ".join(f"{c} = excluded.{c}" for c in _STATE_COLS)
+    async with connection() as cx:
+        async with cx.transaction():
+            for item_id, st in states:
+                await cx.execute(
+                    f"INSERT INTO dealer_alert_state (item_id, {cols}) VALUES (%s, {vals}) "
+                    f"ON CONFLICT (item_id) DO UPDATE SET {sets}",
+                    (item_id, *(st.get(c) for c in _STATE_COLS)))
+            for a in alerts:
+                cur = await cx.execute(
+                    "INSERT INTO dealer_alerts (dealer_id, item_id, kind, dedup_key, payload) "
+                    "VALUES (%s, %s, %s, %s, %s) ON CONFLICT (dealer_id, dedup_key) DO NOTHING",
+                    (dealer_id, a.item_id, a.kind, a.dedup_key, Jsonb(a.payload)))
+                added += cur.rowcount
+    return added
+
+
+async def pending_alerts(dealer_id: int, limit: int = 100) -> list[dict[str, Any]]:
+    """Alerts not sent yet, of cars still on sale (a car sold meanwhile drops out)."""
+    async with connection() as cx:
+        return await (await cx.execute(
+            "SELECT a.id, a.kind, a.item_id, a.payload FROM dealer_alerts a "
+            "  LEFT JOIN dealer_stock_items i ON i.id = a.item_id "
+            " WHERE a.dealer_id = %s AND a.sent_at IS NULL "
+            "   AND (a.item_id IS NULL OR i.status = 'available') "
+            " ORDER BY a.id LIMIT %s", (dealer_id, limit))).fetchall()
+
+
+async def mark_alerts_sent(dealer_id: int, ids: Iterable[int]) -> None:
+    """These were told; the ones of cars no longer on sale are closed too (never sent later)."""
+    ids = list(ids)
+    async with connection() as cx:
+        await cx.execute(
+            "UPDATE dealer_alerts a SET sent_at = now() "
+            " WHERE a.dealer_id = %s AND a.sent_at IS NULL "
+            "   AND (a.id = ANY(%s::bigint[]) OR NOT EXISTS (SELECT 1 FROM dealer_stock_items i "
+            "                                      WHERE i.id = a.item_id AND i.status = 'available'))",
+            (dealer_id, ids))
+
+
+async def set_alerts_checked(dealer_id: int, *, retry_in_hours: float | None = None, every_hours: int = 24) -> None:
+    """Checked now; with `retry_in_hours` (the email failed) it comes due again that soon."""
+    async with connection() as cx:
+        if retry_in_hours is None:
+            await cx.execute("UPDATE dealers SET alerts_checked_at = now() WHERE id = %s", (dealer_id,))
+        else:
+            await cx.execute(
+                "UPDATE dealers SET alerts_checked_at = now() - make_interval(hours => %s) "
+                "                                     + make_interval(secs => %s) WHERE id = %s",
+                (every_hours, retry_in_hours * 3600, dealer_id))
+
+
+# ---------------------------------------------------------------------------
+# Fase 1: stock read from a photo or a PDF (pipeline/llm_jobs.py)
+# ---------------------------------------------------------------------------
+
+async def take_stock_read(read_id: int, job_id: int) -> dict[str, Any] | None:
+    """The file of a read (of this job), and its bytes leave the database at
+    once: the list may show plates or names, and we only keep the cars the
+    model reads. None when it is not there (or was already read)."""
+    async with connection() as cx:
+        async with cx.transaction():
+            return await (await cx.execute(
+                "UPDATE dealer_stock_reads r SET data = NULL, read_at = now() "
+                "  FROM (SELECT id, data FROM dealer_stock_reads "
+                "         WHERE id = %s AND job_id = %s AND data IS NOT NULL FOR UPDATE) old "
+                " WHERE r.id = old.id "
+                "RETURNING r.id, r.dealer_id, r.media_type, r.filename, old.data", (read_id, job_id))).fetchone()
+
+
+async def purge_stock_reads(older_than_minutes: int = 60) -> int:
+    """Files nobody read (the job expired in the queue): their bytes go."""
+    async with connection() as cx:
+        cur = await cx.execute(
+            "UPDATE dealer_stock_reads SET data = NULL "
+            " WHERE data IS NOT NULL AND created_at < now() - make_interval(mins => %s)", (older_than_minutes,))
+        return cur.rowcount
