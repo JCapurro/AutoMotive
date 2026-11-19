@@ -9,8 +9,15 @@ export const DEALER_PAGES = [
   { href: "/agencia/stock", label: "Stock" },
   { href: "/agencia/stock/planilla", label: "Cargar" },
   { href: "/agencia/consultas", label: "Consultas" },
+  { href: "/agencia/comprar", label: "Qué comprar" },
+  { href: "/agencia/vendedores", label: "Vendedores" },
   { href: "/agencia/datos", label: "Datos" },
 ] as const;
+
+/** The panel's pages for this agency: «Vendedores» only with dealer_program.sellers_enabled. */
+export function dealerPages(sellers: boolean) {
+  return DEALER_PAGES.filter((p) => sellers || p.href !== "/agencia/vendedores");
+}
 
 /** The page of the panel a path belongs to (the longest match: /agencia/stock/planilla is «Cargar», /agencia/stock/12 is «Stock»). */
 export function dealerPageFor(pathname: string): string | null {
@@ -23,13 +30,13 @@ export function dealerPageFor(pathname: string): string | null {
   return best;
 }
 
-/** Stock · Cargar · Consultas · Datos; scrolls sideways on a phone. */
-export function DealerNav({ newLeads = 0 }: { newLeads?: number }) {
+/** Stock · Cargar · Consultas · Qué comprar · (Vendedores) · Datos; scrolls sideways on a phone. */
+export function DealerNav({ newLeads = 0, sellers = false }: { newLeads?: number; sellers?: boolean }) {
   const current = dealerPageFor(usePathname());
   return (
     <nav aria-label="Panel de la agencia" className="-mx-4 overflow-x-auto px-4">
       <ul className="flex gap-1">
-        {DEALER_PAGES.map((p) => {
+        {dealerPages(sellers).map((p) => {
           const active = p.href === current;
           return (
             <li key={p.href}>

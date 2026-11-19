@@ -122,6 +122,13 @@ export type Database = {
         Update: { answer?: "yes" | "no"; source?: "email" | "ficha"; wants_notice?: boolean; agencies_contact_ok?: boolean }
         Relationships: []
       }
+      // Agencias, fase 3 (20261231120000_dealer_phase3): the seller reads their own car; writes through save_my_sell_vehicle.
+      sell_intent_vehicles: {
+        Row: { user_id: string; make: string; model: string; year: number | null; mileage_km: number | null; updated_at: string }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
       // Agencias (20261228120000_dealer_program): RLS lets a member read their dealer's rows; every write goes through the RPCs.
       dealers: {
         Row: { id: number; name: string; contact_email: string | null; phone: string | null; whatsapp: string | null; address_text: string | null; locality_label: string; lat: number; lon: number; profile_links: Json; status: string; approved_at: string | null; approved_by: string | null; created_by: string | null; created_at: string; updated_at: string }
@@ -1322,6 +1329,15 @@ isOneToOne: false
       request_dealer_contact: { Args: { p_listing_id: number; p_name: string; p_phone: string; p_message: string | null; p_consent: boolean; p_consent_text: string; p_notification_id?: number | null }; Returns: Json }
       listing_dealer_card: { Args: { p_listing_id: number }; Returns: Json }
       dealer_badges: { Args: { p_listing_ids: number[] }; Returns: { listing_id: number; dealer_name: string; confirmed_at: string | null }[] }
+      // Agencias, fase 3 (20261231120000_dealer_phase3). dealer_seller_requests has no client access: only these RPCs.
+      dealer_sellers_config: { Args: Record<string, never>; Returns: Json }
+      dealer_buy_opportunities: { Args: Record<string, never>; Returns: { make: string | null; model: string; searches: number; active_searches: Json; year_from: number | null; year_to: number | null; budget: number | null; budget_currency: string | null; supply_total: number; supply_near: number }[] }
+      dealer_buy_market_listings: { Args: { p_make: string | null; p_model: string; p_year_from: number | null; p_year_to: number | null }; Returns: { listing_id: number; source: string; url: string; title: string; trim: string | null; year: number | null; mileage_km: number | null; price: number | null; currency: string | null; price_usd: number | null; location_text: string | null; seller_type: string | null; first_seen_at: string; near: boolean }[] }
+      save_my_sell_vehicle: { Args: { p_make: string; p_model: string; p_year: number | null; p_mileage_km: number | null }; Returns: undefined }
+      dealer_sellers: { Args: Record<string, never>; Returns: { ref: string; make: string | null; model: string | null; year: number | null; mileage_km_rounded: number | null; distance_band: string; recent: boolean; request_id: number | null; request_status: string | null; requested_on: string | null; shared_name: string | null; shared_phone: string | null; shared_email: string | null; can_request: boolean }[] }
+      dealer_request_seller: { Args: { p_ref: string; p_message?: string | null }; Returns: Json }
+      my_dealer_seller_requests: { Args: Record<string, never>; Returns: { id: number; dealer_name: string; dealer_locality: string; message: string | null; status: string; created_at: string; answered_at: string | null }[] }
+      answer_dealer_seller_request: { Args: { p_request_id: number; p_accept: boolean; p_name?: string | null; p_phone?: string | null; p_share_email?: boolean; p_consent_text?: string | null }; Returns: undefined }
       dealer_sweep: { Args: Record<string, never>; Returns: { matches_deleted: number; notifications_skipped: number; expired_deleted: number }[] }
       admin_dealer_seller_candidates: { Args: { p_source: string; p_hint: string }; Returns: { seller_key: string; seller_name: string | null; active: number }[] }
             // PAR-04: model guides (service role, except log_guide_event: anon and authenticated).

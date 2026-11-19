@@ -140,12 +140,15 @@ export const UnmetDemandConfigInput = z.object({
 export const TRIAL_RESERVE_CONFIG_MESSAGE = "trial_reserve necesita enabled (true/false) y backfill_max (entero de 0 a 1000).";
 export const TrialReserveConfigInput = z.object({ enabled: z.boolean(), backfill_max: z.number().int().min(0).max(1000) }).passthrough();
 /** Agencias: app_config.dealer_program, the panel and the sales channel (lib/dealer-program.ts, public.dealer_program(), worker intelligence/config.py). Same ranges as the three readers. */
-export const DEALER_PROGRAM_CONFIG_MESSAGE = "dealer_program necesita enabled y channel_enabled (true/false), manual_confirm_days (entero de 1 a 60) y demand_min_count (entero de 3 a 50).";
+export const DEALER_PROGRAM_CONFIG_MESSAGE = "dealer_program necesita enabled y channel_enabled (true/false), manual_confirm_days (entero de 1 a 60) y demand_min_count (entero de 3 a 50); sellers_enabled (true/false) y seller_requests_per_day (entero de 1 a 50) son opcionales.";
 export const DealerProgramConfigInput = z.object({
   enabled: z.boolean(),
   channel_enabled: z.boolean(),
   manual_confirm_days: z.number().int().min(1).max(60),
   demand_min_count: z.number().int().min(3).max(50),
+  // Fase 3 (20261231120000_dealer_phase3): optional, off / 5 without them.
+  sellers_enabled: z.boolean().optional(),
+  seller_requests_per_day: z.number().int().min(1).max(50).optional(),
 }).passthrough();
 
 /**
@@ -527,7 +530,7 @@ export function configFieldLabel(key: string, path: string): string {
     return ({ enabled: "Cálculo nocturno de demanda insatisfecha", max_results: "Resultados o menos para contar la búsqueda", min_age_hours: "Antigüedad mínima de la búsqueda (horas)", batch_size: "Búsquedas por tanda", pause_seconds: "Pausa entre tandas (segundos)", hour: "Hora del cálculo (hora argentina)" } as Record<string, string>)[path] ?? path;
   }
   if (key === "dealer_program") {
-    return ({ enabled: "Panel de agencias (/agencia)", channel_enabled: "Canal de venta: autos de agencia a compradores (Privacidad con OK de Juan)", manual_confirm_days: "Días para confirmar el stock cargado a mano", demand_min_count: "Mínimo de personas para mostrar un número de búsquedas" } as Record<string, string>)[path] ?? path;
+    return ({ enabled: "Panel de agencias (/agencia)", channel_enabled: "Canal de venta: autos de agencia a compradores (Privacidad con OK de Juan)", manual_confirm_days: "Días para confirmar el stock cargado a mano", demand_min_count: "Mínimo de personas para mostrar un número de búsquedas", sellers_enabled: "Vendedores: agencias piden contactar a quien vende su auto (antes: aviso al vendedor y textos con OK de Juan)", seller_requests_per_day: "Pedidos de contacto a vendedores por agencia y día" } as Record<string, string>)[path] ?? path;
   }
   if (key === "trial_reserve") {
     return ({ enabled: "Reserva de la prueba para autos nuevos", backfill_max: "Máximo de resultados ya publicados" } as Record<string, string>)[path] ?? path;

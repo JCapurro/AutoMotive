@@ -19,7 +19,7 @@ export const dynamic = "force-dynamic";
  * itself; only then does it ask for a session.
  */
 export default async function DealerLayout({ children }: LayoutProps<"/agencia">) {
-  const { dealerProgram } = await webConfig();
+  const { dealerProgram, dealerSellers } = await webConfig();
   if (!dealerProgram.enabled) notFound();
   if (!(await currentUser())) redirect(`/login?next=${encodeURIComponent("/agencia")}`);
   const dealer = await myDealer();
@@ -37,7 +37,7 @@ export default async function DealerLayout({ children }: LayoutProps<"/agencia">
               Ir a mis búsquedas
             </Link>
           </div>
-          {dealer ? <DealerNav newLeads={dealer.counts.leads_new} /> : null}
+          {dealer ? <DealerNav newLeads={dealer.counts.leads_new} sellers={dealerSellers.sellersEnabled} /> : null}
         </div>
       </header>
       <main className="mx-auto w-full max-w-6xl min-w-0 flex-1 px-4 pt-6 pb-16 sm:px-6 lg:px-10">{children}</main>
