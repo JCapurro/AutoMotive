@@ -44,9 +44,9 @@ test("bajas de precio: tarjeta, ficha y price_history_expanded", async ({ page }
   const email = `tracks-${run}@${E2E_EMAIL_DOMAIN}`;
   await signIn(page, email);
   const seeded = await seedPriceTracks(email, run);
-  // Valor justo §6.3: from the results list the link carries the search, the order and the place.
+  // Valor justo §6.3: from the results list the link carries the search, the order, the tab and the place.
   const card = (id: number) =>
-    page.getByTestId("listing-card").filter({ has: page.locator(`a[href^="/app/listings/${id}?src=${seeded.profileId}&ord=score&pos="]`) });
+    page.getByTestId("listing-card").filter({ has: page.locator(`a[href^="/app/listings/${id}?src=${seeded.profileId}&ord=score&flt=all&pos="]`) });
 
   await test.step("la tarjeta dice las bajas solo con baja neta", async () => {
     await page.goto(`/app/searches/${seeded.profileId}?f=all`);
@@ -85,10 +85,10 @@ test("bajas de precio: tarjeta, ficha y price_history_expanded", async ({ page }
     expect(shown.props).toEqual({ profile_id: seeded.profileId, sort: "score", filter: "all", page: 1, listing_ids: ids });
     const position = ids.indexOf(seeded.drops) + 1;
     await card(seeded.drops).locator("h3 a").click();
-    await expect(page).toHaveURL(new RegExp(`/app/listings/${seeded.drops}\\?src=${seeded.profileId}&ord=score&pos=${position}$`));
+    await expect(page).toHaveURL(new RegExp(`/app/listings/${seeded.drops}\\?src=${seeded.profileId}&ord=score&flt=all&pos=${position}$`));
     await expect.poll(async () => (await namedEvents(email, "listing_detail_viewed")).length).toBe(1);
     const [opened] = await namedEvents(email, "listing_detail_viewed");
-    expect(opened.props).toEqual({ listing_id: seeded.drops, via: "web", profile_id: seeded.profileId, sort: "score", position });
+    expect(opened.props).toEqual({ listing_id: seeded.drops, via: "web", profile_id: seeded.profileId, sort: "score", filter: "all", position });
   });
 
   await test.step("la ficha resume las bajas y el histórico queda cerrado", async () => {

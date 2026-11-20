@@ -28,7 +28,7 @@ async function currentStatus(supabase: Supabase, listingId: number) {
 }
 
 /**
- * Valor justo §6.3: the search, order and place a car was opened from, or
+ * Valor justo §6.3: the search, order, tab and place a car was opened from, or
  * nothing. A part that isn't valid is dropped (cleanListOrigin), and so is a
  * search that isn't one of the user's own holding this listing.
  */
@@ -46,7 +46,12 @@ async function listOriginProps(supabase: Supabase, userId: string, listingId: nu
       .maybeSingle();
     if (!data) profileId = null;
   }
-  return { profile_id: profileId ?? undefined, sort: origin.sort ?? undefined, position: origin.position ?? undefined };
+  return {
+    profile_id: profileId ?? undefined,
+    sort: origin.sort ?? undefined,
+    filter: origin.filter ?? undefined,
+    position: origin.position ?? undefined,
+  };
 }
 
 /** Opening the detail: "Nuevo" → "Visto" (§26) and listing_detail_viewed. */

@@ -70,7 +70,7 @@ export function ListingCard({
   marginTeaser?: boolean;
   /** The card's search filters by color (filters.colors): a listing without one says «Color sin confirmar». */
   colorWanted?: boolean;
-  /** Valor justo §6.3: the search, order and place, only from a search's results list (src, ord, pos on the link). */
+  /** Valor justo §6.3: the search, order, tab and place, only from a search's results list (src, ord, flt, pos on the link). */
   listOrigin?: ListOrigin | null;
 }) {
   const image = firstImage(card.images);

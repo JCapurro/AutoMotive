@@ -94,7 +94,7 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
   const listingId = Number(id);
   const query = await searchParams;
   const n = typeof query.n === "string" && /^\d+$/.test(query.n) ? Number(query.n) : null;
-  // Valor justo §6.3: src, ord and pos from a results list's card; markSeen checks them again.
+  // Valor justo §6.3: src, ord, flt and pos from a results list's card; markSeen checks them again.
   const listOrigin = parseListOrigin(query);
 
   const supabase = await createClient();

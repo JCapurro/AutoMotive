@@ -276,7 +276,7 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
             <ListingCard
               key={card.listing_id}
               card={card}
-              listOrigin={{ profileId, sort, position: index + 1 }}
+              listOrigin={{ profileId, sort, filter, position: index + 1 }}
               track={card.listing_id != null ? tracks.get(card.listing_id) : null}
               costLine={card.listing_id != null ? costLines.get(card.listing_id) : null}
               marginLine={card.listing_id != null ? marginLines.get(card.listing_id) : null}
