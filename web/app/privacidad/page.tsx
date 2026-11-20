@@ -55,7 +55,7 @@ export default async function PrivacyPage() {
         </li>
         <li>
           <strong>Tu celular, si nos lo dejás</strong>: es opcional. Lo usamos solo para contactarte, si hace falta, sobre
-          tus búsquedas o tu cuenta. No se lo damos a vendedores ni a nadie. Lo cambiás o lo borrás cuando quieras desde
+          tus búsquedas o tu cuenta. No se lo pasamos a nadie sin tu permiso: solo llega a una agencia si vos pedís que te contacte por un auto. Lo cambiás o lo borrás cuando quieras desde
           Mis datos.
         </li>
         {dealerChannel ? (

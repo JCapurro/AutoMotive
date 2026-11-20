@@ -10,6 +10,8 @@ const state = vi.hoisted(() => ({
   profile: { seller_filter_access: false } as Record<string, unknown>,
 }));
 // PAR-01: the cards' total cost line has its own tests (lib/cost-estimate.test.ts).
+// An async server component (it reads the profile): these pages render synchronously here.
+vi.mock("@/components/app/phone-ask", () => ({ PhoneAsk: () => null }));
 vi.mock("@/lib/cost-estimate-data", () => ({ costLinesFor: async () => new Map() }));
 vi.mock("@/lib/margin-data", () => ({ marginAccess: async () => null, marginLinesFor: async () => new Map(), marginTeasersFor: async () => new Set() }));
 vi.mock("@/lib/auth", () => ({ requireUser: async () => ({ id: "account" }) }));

@@ -9,7 +9,9 @@ import { currentUser } from "@/lib/auth";
 import { webConfig } from "@/lib/config";
 import { accountForEmail, claimThrottle, clientIpKey, createEmailOnlyUser, DAY, type ExistingAccount, HOUR, linkError, sendEntryLink } from "@/lib/email-only";
 import { verifyEntryCode } from "@/lib/entry-code";
+import { track } from "@/lib/events";
 import { HEALTH_OWNER_EMAIL } from "@/lib/health-access";
+import { normalizeArPhone, PHONE_ERROR } from "@/lib/phone";
 import { searchStartHref } from "@/lib/search-intent";
 import { afterSignIn } from "@/lib/signup";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -18,7 +20,8 @@ import { emailProblem, emailProblemMessage } from "@/lib/email-check";
 import { accountForCanonicalEmail, recordTrialSignals } from "@/lib/trial-signals";
 
 /** `resume`: the browser's random signup code (20261101130000_email_only_resume). */
-export type FreeSearchInput = { prompt: string; email: string; company?: string; resume?: string };
+/** `phone`: optional, asked with the email when the account is created (Juan, 20/11); saved only on a NEW account. */
+export type FreeSearchInput = { prompt: string; email: string; company?: string; resume?: string; phone?: string };
 /**
  * `signedUp`: a new account (the client counts it as a signup).
  * `existing_email_only` also covers a password signup that was never
@@ -31,7 +34,7 @@ export type FreeSearchResult =
   | { status: "unavailable"; error: string }
   | { status: "existing_email_only"; email: string; unconfirmed?: boolean; error?: string }
   | { status: "existing_account"; email: string }
-  | { status: "error"; error: string; field?: "prompt" | "email" | "password" | "code" };
+  | { status: "error"; error: string; field?: "prompt" | "email" | "password" | "code" | "phone" };
 
 const Email = z.email().max(254);
 const FAILED = "No pudimos crear tu búsqueda. Probá de nuevo en unos minutos.";
@@ -70,6 +73,10 @@ export async function startFreeSearch(input: FreeSearchInput): Promise<FreeSearc
   const valid = validate(input);
   if (!valid.ok) return valid.result;
   const { email, href } = valid;
+  // Optional. A number that isn't one is said now, not dropped: the person meant to leave it.
+  const rawPhone = String(input?.phone ?? "").trim();
+  const phone = rawPhone ? normalizeArPhone(rawPhone) : null;
+  if (rawPhone && !phone) return { status: "error", field: "phone", error: PHONE_ERROR };
   const user = await currentUser();
   // A tab left open before signing in elsewhere: never drop the email typed here without saying so.
   if (user && user.email && user.email !== email) {
@@ -98,7 +105,7 @@ export async function startFreeSearch(input: FreeSearchInput): Promise<FreeSearc
     if (problem) return { status: "error", field: "email", error: emailProblemMessage(problem) };
     if (!(await claimThrottle("free_search_signup_ip", ip, cfg.perIpHour, HOUR))) return { status: "unavailable", error: THROTTLED };
     if (!(await claimThrottle("free_search_signup_day", "global", cfg.perDay, DAY))) return { status: "unavailable", error: UNAVAILABLE };
-    return await createEmailOnlyAccount(email, href, input.resume, ip);
+    return await createEmailOnlyAccount(email, href, input.resume, ip, phone);
   } catch (error) {
     console.error("free search failed:", error instanceof Error ? error.message : error);
     return { status: "error", error: FAILED };
@@ -199,7 +206,7 @@ async function resumeSignup(userId: string, email: string, href: string, code: u
  * fails before the session, the fresh account is deleted so a retry starts clean.
  * The browser's code (if any) is kept so a reload can pick the session up.
  */
-async function createEmailOnlyAccount(email: string, href: string, code: unknown, ipKey: string): Promise<FreeSearchResult> {
+async function createEmailOnlyAccount(email: string, href: string, code: unknown, ipKey: string, phone: string | null = null): Promise<FreeSearchResult> {
   const admin = createAdminClient();
   const created = await createEmailOnlyUser(email);
   // Someone created it in between: from here on it's an existing email.
@@ -214,5 +221,16 @@ async function createEmailOnlyAccount(email: string, href: string, code: unknown
   const failed = await startSession(email, userId);
   if (failed) return discard(failed);
   await recordTrialSignals(userId, email, ipKey);
+  // Only here, on the account this request just created: an existing account's phone is never written
+  // by someone who only typed its email. A failure costs the number, not the signup.
+  if (phone) {
+    try {
+      const { error: phoneError } = await admin.from("profiles").update({ phone }).eq("id", userId);
+      if (phoneError) console.error("signup phone not saved:", phoneError.message);
+      else await track(admin, userId, "phone_added", { source: "signup" });
+    } catch (error) {
+      console.error("signup phone not saved:", error instanceof Error ? error.message : error);
+    }
+  }
   return { status: "created", href, signedUp: true };
 }

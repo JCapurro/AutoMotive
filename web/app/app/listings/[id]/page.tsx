@@ -18,6 +18,7 @@ import { RiskChecklist } from "@/components/app/risk-checklist";
 import { SellerQuestions } from "@/components/app/seller-questions";
 import { SellIntentLine } from "@/components/app/sell-intent-line";
 import { ViewTracker } from "@/components/app/view-tracker";
+import { PhoneAsk } from "@/components/app/phone-ask";
 import { requireUser } from "@/lib/auth";
 import { type WebConfig, webConfig } from "@/lib/config";
 import { costEstimateFor } from "@/lib/cost-estimate-data";
@@ -469,6 +470,7 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
           ) : null}
         </div>
       </div>
+      <PhoneAsk place="listing" className="mt-10" />
     </div>
   );
 }

@@ -4,6 +4,7 @@ import Link from "next/link";
 
 import { LISTING_ROWS, ListingCard } from "@/components/app/listing-card";
 import { ListingStatusSelect } from "@/components/app/listing-status-select";
+import { PhoneAsk } from "@/components/app/phone-ask";
 import { requireUser } from "@/lib/auth";
 import { webConfig } from "@/lib/config";
 import { costLinesFor } from "@/lib/cost-estimate-data";
@@ -150,6 +151,7 @@ export default async function SavedPage({ searchParams }: PageProps<"/app/saved"
   return (
     <div className="space-y-4">
       {header}
+      <PhoneAsk place="saved" />
       <div className={LISTING_ROWS}>
         {(interactions ?? []).map((i) => {
           const l = byId.get(i.listing_id);

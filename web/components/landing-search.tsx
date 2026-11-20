@@ -109,6 +109,7 @@ export function LandingSearch({ signedIn: serverSignedIn, initialText = "", onSt
   const [promptError, setPromptError] = useState("");
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
   /** The email the code went to, kept while a wrong code is retried. */
@@ -141,7 +142,7 @@ export function LandingSearch({ signedIn: serverSignedIn, initialText = "", onSt
     const id = window.setTimeout(() => field?.current?.focus(), 0);
     return () => window.clearTimeout(id);
   }, [open, pending, step, result]);
-  const message = result?.status === "unavailable" || (result?.status === "error" && result.field !== "email" && result.field !== "password" && result.field !== "code") ? result.error : null;
+  const message = result?.status === "unavailable" || (result?.status === "error" && result.field !== "email" && result.field !== "password" && result.field !== "code" && result.field !== "phone") ? result.error : null;
 
   /** Runs an action from the pop-up; a dropped connection keeps everything typed. */
   const run = (action: () => Promise<FreeSearchResult>) => start(async () => {
@@ -246,7 +247,7 @@ export function LandingSearch({ signedIn: serverSignedIn, initialText = "", onSt
         <DialogContent className="sm:max-w-md">
           {step === "email" ? <form className="space-y-4" noValidate onSubmit={(event) => {
             event.preventDefault();
-            if (!pending) run(() => startFreeSearch({ prompt, email, company, resume: signupCode() }));
+            if (!pending) run(() => startFreeSearch({ prompt, email, company, resume: signupCode(), phone }));
           }}>
             <DialogHeader>
               <DialogTitle>¿A qué email te avisamos?</DialogTitle>
@@ -299,6 +300,30 @@ export function LandingSearch({ signedIn: serverSignedIn, initialText = "", onSt
               <div aria-hidden="true" className="absolute -left-[9999px] size-px overflow-hidden">
                 <label>Dejar vacío<input tabIndex={-1} autoComplete="off" name="ea_hp_field" value={company} onChange={(event) => setCompany(event.target.value)} /></label>
               </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor={`${emailId}-phone`}>Tu celular <span className="font-normal text-muted-foreground">(opcional)</span></Label>
+              <Input
+                id={`${emailId}-phone`}
+                name="phone"
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel-national"
+                enterKeyHint="go"
+                placeholder="11 2345-6789"
+                value={phone}
+                disabled={pending}
+                aria-invalid={fieldError === "phone" || undefined}
+                aria-describedby={`${emailId}-phone-help`}
+                onChange={(event) => { setPhone(event.target.value); setResult(null); }}
+                className="h-11 bg-background text-base"
+                data-testid="signup-phone"
+              />
+              {fieldError === "phone" && result?.status === "error"
+                ? <p id={`${emailId}-phone-help`} role="alert" className="text-sm text-destructive">{result.error}</p>
+                : <p id={`${emailId}-phone-help`} className="text-xs text-muted-foreground">
+                  Por si hace falta contactarte por tu búsqueda. No se lo pasamos a nadie sin tu permiso.
+                </p>}
             </div>
             {message ? <p role="alert" className="text-sm text-destructive">{message}</p> : null}
             <Button type="submit" className="h-11 w-full text-[15px]" disabled={pending}>{pending ? "Un momento…" : "Seguir"}</Button>
