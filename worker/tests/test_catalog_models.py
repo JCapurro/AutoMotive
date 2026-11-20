@@ -39,7 +39,7 @@ def test_no_model_twice():
     assert len(keys) == len(set(keys))
 
 
-# Ford F-100 (migration 20270105120000): its spellings resolve to it, never to
+# Ford F-100 (migration 20270106120000): its spellings resolve to it, never to
 # the F-150, with the version the title names.
 @pytest.mark.parametrize("title, trim", [
     ("Ford F-100 1985", None),

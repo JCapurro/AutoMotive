@@ -11,7 +11,7 @@ MIGRATIONS = [SEED.parent / "migrations" / name for name in
               ("20261030120100_catalog_body_types.sql", "20261102120000_catalog_all_models.sql",
                "20261107120000_catalog_arrizo_and_misses.sql", "20261108120000_catalog_more_makes.sql",
                "20261116120000_catalog_peugeot_classics.sql", "20261216120000_catalog_misses_cars.sql",
-               "20270105120000_catalog_ford_f100.sql")]
+               "20270106120000_catalog_ford_f100.sql")]
 
 
 def _by_model() -> dict[tuple[str, str], tuple[str, ...]]:
