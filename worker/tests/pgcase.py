@@ -71,6 +71,9 @@ class PostgresTestCase(unittest.IsolatedAsyncioTestCase):
             # above, so stale rows would swallow new ones by ON CONFLICT.
             await cx.execute("DO $$ BEGIN IF to_regclass('public.match_decisions') IS NOT NULL THEN "
                              "TRUNCATE public.match_decisions; END IF; END $$")
+            # «Valor justo» (migration 20270107120000), when applied.
+            await cx.execute("DO $$ BEGIN IF to_regclass('public.model_price_curves') IS NOT NULL THEN "
+                             "TRUNCATE public.model_price_curves, public.fair_value_runs RESTART IDENTITY; END IF; END $$")
             # Agencias (migration 20261228120000), when applied: listings' CASCADE
             # already empties the stock items and leads; the dealers go too.
             await cx.execute("DO $$ BEGIN IF to_regclass('public.dealers') IS NOT NULL THEN "

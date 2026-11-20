@@ -96,11 +96,11 @@ describe("PRO-01 copy", () => {
 describe("score_breakdown components", () => {
   // The listing page (ScoreInWords) and the admin inspector show only these keys of
   // matches.score_breakdown. The rest of the object is not a component: scoring_version,
-  // guard and, in the f3 shadow, shadow_f3 (worker/intelligence/engine.py Evaluation.row),
-  // which the web never shows while f2 decides.
+  // guard and, in the f3 and «valor justo» shadows, shadow_f3 and shadow_fair_value
+  // (worker/intelligence/engine.py Evaluation.row), which the web never shows while f2 decides.
   it("are the six f2 components, never the breakdown's other keys", () => {
     expect(COMPONENTS).toEqual(["price", "match", "km", "trim", "recency", "completeness"]);
-    for (const key of ["shadow_f3", "scoring_version", "guard"]) {
+    for (const key of ["shadow_f3", "shadow_fair_value", "scoring_version", "guard"]) {
       expect(COMPONENTS).not.toContain(key);
       expect(COMPONENT).not.toHaveProperty(key);
     }

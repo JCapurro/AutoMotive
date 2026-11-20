@@ -56,6 +56,9 @@ def explain(listing: dict, profile: dict, scorer: Scorer) -> dict[str, Any]:
     result, score, ev = assess(listing, profile, price_ref=scorer.refs.get(listing["id"]),
                                cfg=scorer.cfg, now=scorer.now, fx_rate=scorer.fx_rate,
                                timing_belt=listing.get("timing_belt"))
+    # «Valor justo» in shadow, as Scorer.evaluate adds it (here also for a listing that does not match).
+    if getattr(scorer, "curves", None):
+        ev.shadow_fair_value = scorer.fair_value_shadow(listing, profile, ev, listing["id"])
     return {
         "listing": {k: listing.get(k) for k in ("id", "source", "external_id", "title", "url", "make",
                                                 "model", "trim", "year", "price", "currency",
@@ -120,6 +123,10 @@ def render(data: dict[str, Any], stored: dict | None) -> str:
     if isinstance(shadow, dict):
         lines.append("")
         lines += shadow_lines(shadow)
+    fair = b.get("shadow_fair_value") if isinstance(b, dict) else None
+    if isinstance(fair, dict):
+        lines.append("")
+        lines += fair_value_lines(fair)
 
     lines.append("")
     lines.append("Red flags" if data["red_flags"] else "Red flags: ninguna")
@@ -197,6 +204,36 @@ def shadow_lines(s: dict[str, Any]) -> list[str]:
     if alts:
         out.append("  alternativas: " + ", ".join(
             f"{k} → {_F3_LEVEL.get(a.get('level'), a.get('level'))} {a.get('score')}" for k, a in alts.items()))
+    return out
+
+
+def fair_value_lines(s: dict[str, Any]) -> list[str]:
+    """The «Sombra valor justo» block (score_breakdown.shadow_fair_value): what the listing is worth by its
+    model's curve, and what f2 and f3 would say with it under the hybrid rule. f2 decides everything
+    (docs/superpowers/specs/2026-11-20-valor-justo-design.md)."""
+    known = s.get("known") or {}
+    ref = s.get("ref") or {}
+    used = ", ".join(k for k in ("trim", "transmission", "km") if known.get(k)) or "solo el año"
+    out = [f"Sombra valor justo ({s.get('v')} · params {s.get('params')} · curva del {s.get('fitted_at')}): "
+           "no decide, f2 sigue decidiendo"]
+    out.append(f"  vale USD {copy.number(s.get('value'))} (p25 {copy.number(s.get('p25'))} · "
+               f"p75 {copy.number(s.get('p75'))} · {s.get('level')} · n={s.get('n')} del año · usa {used}) · "
+               f"d {_pct(s.get('d'))}")
+    today = (f"hoy {ref.get('level_used')} n={ref.get('n')} d {_pct(ref.get('d'))}" if ref.get("fetched")
+             else "hoy sin referencia buscada")
+    out.append(f"  {today} · regla híbrida: {'usaría el valor justo' if s.get('rule_h') else 'se queda la de hoy'}")
+    if s.get("rule_h"):
+        f2, f3_ = s.get("f2") or {}, s.get("f3") or {}
+        line = f"  con el valor justo: f2 {f2.get('score')} {copy.LEVEL_LABEL.get(f2.get('level'), f2.get('level'))}"
+        if f2.get("guard"):
+            line += f" (guarda {f2['guard']}{', excluido' if f2.get('excluded') else ''})"
+        if f3_:
+            line += f" · f3 {f3_.get('score')} {_F3_LEVEL.get(f3_.get('level'), f3_.get('level'))}"
+        out.append(line)
+    budget = s.get("budget")
+    if isinstance(budget, dict):
+        out.append(f"  presupuesto USD {copy.number(budget.get('usd'))}: vale {_f(budget.get('value_ratio'))} del tope · "
+                   f"cuesta {_f(budget.get('price_ratio'))}")
     return out
 
 

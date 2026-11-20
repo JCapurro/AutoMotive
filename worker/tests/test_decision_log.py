@@ -424,6 +424,31 @@ class CardRowTests(unittest.IsolatedAsyncioTestCase):
         repo.prepare(row)                                            # still a valid row
 
 
+class FairValueInDecisionsTests(unittest.IsolatedAsyncioTestCase):
+    """«Valor justo» (spec 2026-11-20 §5): shadow_fair_value travels inside f2_breakdown, no new columns."""
+
+    BLOCK = {"v": "fv1", "params": "abc123def456", "value": 11000.0, "d": 6.36, "rule_h": True,
+             "f2": {"score": 80, "level": "good", "guard": None, "excluded": False}}
+
+    def test_f2_fields_keep_it(self):
+        row = fiesta_row()
+        row["score_breakdown"]["shadow_fair_value"] = self.BLOCK
+        fields = decision_log.f2_fields(row)
+        self.assertEqual(fields["f2_breakdown"]["shadow_fair_value"], self.BLOCK)
+        self.assertNotIn("shadow_f3", fields["f2_breakdown"])
+
+    async def test_a_card_row_carries_it(self):
+        row = fiesta_row()
+        row["score_breakdown"]["shadow_fair_value"] = self.BLOCK
+        store = FakeStore()
+        with logging_to(store):
+            await notify([cand(1, 1, row)], {1: listing_row(1)},
+                         audiences={1: {**AUDIENCE, "profile_id": 1}})
+        [r] = store.phase("card").values()
+        self.assertEqual(r["f2_breakdown"]["shadow_fair_value"], self.BLOCK)
+        self.assertNotIn("shadow_f3", r["f2_breakdown"])
+
+
 class F3PlanTests(unittest.TestCase):
     def shadow(self, level, score, d_eff=8.0):
         return {"level": level, "score": score, "deal": {"d_eff": d_eff}}
@@ -774,6 +799,19 @@ class ExplainMatchTests(unittest.TestCase):
         # The rest of the output is the same.
         start, end = shadow.index("Sombra f3"), shadow.index("Red flags")
         self.assertEqual(shadow[:start] + shadow[end:], off)
+
+    def test_the_fair_value_block(self):
+        from pipeline.scoring import Scorer
+        from test_fair_value_shadow_engine import MODEL_REF, SHADOW as FV_SHADOW, curve_for
+        listing = {**fiesta_listing(), "external_id": "x", "url": "https://example.test/1"}
+        scorer = Scorer(FV_SHADOW, FX, NOW, refs={1: MODEL_REF}, curves={("ford", "fiesta"): curve_for()})
+        data = explain_match.explain(listing, fiesta_profile(), scorer)
+        self.assertTrue(data["score_breakdown"]["shadow_fair_value"]["rule_h"])
+        text = explain_match.render(data, None)
+        self.assertIn("Sombra valor justo (fv1", text)
+        self.assertIn("regla híbrida: usaría el valor justo", text)
+        self.assertIn("con el valor justo: f2 ", text)
+        self.assertIn("presupuesto USD 11.500", text)
 
     def test_seller_and_alternatives(self):
         listing = {**FB_DETAIL, "id": 1, "external_id": "x", "url": "u"}

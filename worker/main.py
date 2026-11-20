@@ -33,6 +33,7 @@ from pipeline.llm_jobs import llm_jobs_loop
 from pipeline.low_results import run_low_results
 from pipeline.near_zone import run_near_zone
 from pipeline.unmet_demand import run_unmet_demand
+from pipeline.fair_value import fair_value_loop
 from pipeline.market_stats import market_stats_loop
 from pipeline.rescore import nightly_loop
 from pipeline.scheduler import loop_stale, run_loop
@@ -196,6 +197,7 @@ async def amain() -> None:
                                    stop)),
         asyncio.create_task(nightly_loop(stop)),
         asyncio.create_task(market_stats_loop(stop)),
+        asyncio.create_task(fair_value_loop(stop)),
         asyncio.create_task(llm_jobs_loop(provider, stop)),
         asyncio.create_task(_every("low_results", LOW_RESULTS_TICK_SECONDS,
                                    lambda _stop: run_low_results(provider, notifier.channels, links), stop)),

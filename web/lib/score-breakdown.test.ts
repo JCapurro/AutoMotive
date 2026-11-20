@@ -10,7 +10,8 @@ import type { Inspection } from "@/lib/admin-inspect";
 
 // f3 «precio × encaje» in shadow (docs/superpowers/specs/2026-11-08-recalibracion-score-design.md §4.4):
 // the worker adds score_breakdown.shadow_f3 next to f2's components (worker/intelligence/engine.py
-// Evaluation.row) while f2 keeps deciding. Nothing in the web may show it or change because of it.
+// Evaluation.row) while f2 keeps deciding. «Valor justo» in shadow (2026-11-20-valor-justo-design.md §5)
+// adds score_breakdown.shadow_fair_value the same way. Nothing in the web may show either or change because of them.
 
 const ROOT = path.resolve(__dirname, "..");
 
@@ -39,6 +40,16 @@ const SHADOW_F3 = {
   alternatives: { agency_voice_off: { level: "good", score: 74 } },
 };
 
+/** The shadow_fair_value contract (worker/intelligence/fair_value.py shadow), with an f2 alternative unlike f2's. */
+const SHADOW_FAIR_VALUE = {
+  v: "fv1", params: "9c1e5a7b2d40", fitted_at: "2026-11-21T06:31:02Z",
+  value: 10345.0, p25: 9620.0, p75: 11010.0, n: 121, level: "curve_noversion",
+  known: { trim: false, transmission: true, km: true }, d: 12.3,
+  ref: { fetched: true, d: 9.8, level_used: "model", n: 350 }, rule_h: true,
+  f2: { score: 64, level: "match", guard: null, excluded: false }, f3: { score: 74, level: "good" },
+  budget: { usd: 8000, value_ratio: 1.12, price_ratio: 0.93 },
+};
+
 function inspection(breakdown: Record<string, unknown>): Inspection {
   const match = {
     id: 7, search_profile_id: 3, listing_id: 11, score: 88, level: "high", is_backfill: false, scoring_version: "f2-v5-seller-margin",
@@ -53,12 +64,13 @@ function inspection(breakdown: Record<string, unknown>): Inspection {
 describe("score_breakdown.shadow_f3 in the web", () => {
   it("leaves the admin inspector exactly as without it", () => {
     const f2Only = renderToStaticMarkup(createElement(Inspector, { data: inspection(F2_BREAKDOWN) }));
-    const withShadow = renderToStaticMarkup(createElement(Inspector, { data: inspection({ ...F2_BREAKDOWN, shadow_f3: SHADOW_F3 }) }));
+    const withShadow = renderToStaticMarkup(createElement(Inspector, { data: inspection({ ...F2_BREAKDOWN, shadow_f3: SHADOW_F3, shadow_fair_value: SHADOW_FAIR_VALUE }) }));
     expect(withShadow).toBe(f2Only);
     // f2's six components and its guard are what it shows; nothing of the shadow.
     expect(f2Only).toContain("Kilometraje");
     expect(f2Only).toContain("guarda: suspicious");
-    for (const text of ["shadow_f3", "f3-precio-encaje", "3f2a9c1d07be", "financiamos", "seller_unknown"]) expect(withShadow).not.toContain(text);
+    for (const text of ["shadow_f3", "f3-precio-encaje", "3f2a9c1d07be", "financiamos", "seller_unknown",
+      "shadow_fair_value", "fv1", "9c1e5a7b2d40", "curve_noversion", "10345", "10.345"]) expect(withShadow).not.toContain(text);
   });
 
   it("is read by no web source, and no reader of score_breakdown walks all its keys", () => {
@@ -75,7 +87,9 @@ describe("score_breakdown.shadow_f3 in the web", () => {
       .replace(/\/\/[^\n]*/g, " ");
     const files = ["app", "components", "lib"].flatMap((dir) => sources(path.join(ROOT, dir)));
     // While f2 decides, the shadow is for the decision log and the report (worker/tools/shadow_report.py) only.
-    expect(files.filter((file) => code(readFileSync(file, "utf-8")).includes("shadow_f3")).map((file) => path.relative(ROOT, file))).toEqual([]);
+    for (const key of ["shadow_f3", "shadow_fair_value"]) {
+      expect(files.filter((file) => code(readFileSync(file, "utf-8")).includes(key)).map((file) => path.relative(ROOT, file)), key).toEqual([]);
+    }
     const readers = files.filter((file) => readFileSync(file, "utf-8").includes("score_breakdown"));
     // The listing page (ScoreInWords) and the inspector read it, by COMPONENTS and named keys (guard) only; the
     // /admin/config hint and lib/types.ts only name it. A new file here needs the same check by hand.

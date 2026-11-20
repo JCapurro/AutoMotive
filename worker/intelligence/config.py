@@ -193,6 +193,9 @@ class IntelligenceConfig:
     # f3 «precio × encaje» in shadow (intelligence/f3.py): app_config.score_model_f3
     # as score_model_f3() normalizes it. Only f3 reads it; mode 'off' by default.
     f3: dict[str, Any] = field(default_factory=lambda: score_model_f3(None))
+    # «Valor justo» in shadow (intelligence/fair_value.py): app_config.fair_value as
+    # fair_value_config() normalizes it. Mode 'off' by default.
+    fair_value: dict[str, Any] = field(default_factory=lambda: fair_value_config(None))
 
     @property
     def flag_order(self) -> tuple[str, ...]:
@@ -224,13 +227,14 @@ class IntelligenceConfig:
             red_flags=_merge(DEFAULT_RED_FLAGS, values.get("red_flags")),
             risk=risk(values.get("risk")),
             f3=f3,
+            fair_value=fair_value_config(values.get("fair_value")),
         )
 
     @classmethod
     async def load(cls) -> "IntelligenceConfig":
         import db
         keys = ("score_weights", "level_thresholds", "comparables", "score_curves", "red_flags", "risk",
-                "score_model_f3")
+                "score_model_f3", "fair_value")
         return cls.from_app_config({k: await db.get_config(k) for k in keys})
 
 
@@ -476,4 +480,63 @@ def score_model_f3(raw: Any, *, suspicious_pct: Any = None, min_n: Any = None) -
             if isinstance(rules_in.get(key), bool):
                 out["rules"][key] = rules_in[key]
     out["params"] = f3_params_hash(out)
+    return out
+
+
+# «Valor justo» (docs/superpowers/specs/2026-11-20-valor-justo-design.md §3, §9): app_config.fair_value,
+# read by the daily fit (pipeline/fair_value.py) and the scorer's shadow block (intelligence/fair_value.py,
+# which gets it normalized: it never reads config). mode: 'off' fits and computes nothing (the default
+# here, so an un-migrated database and the tests behave as before); 'shadow' fits every day and stores
+# the shadow block next to f2 (matches.score_breakdown.shadow_fair_value) while f2 keeps deciding; 'live'
+# is accepted and, until the live PR, behaves as 'shadow'. The bounds are /admin/config's
+# (web/lib/admin-config.ts, fairValueProblem); a missing or bad value falls back to its default, key by key.
+FAIR_VALUE_MODES = ("off", "shadow", "live")
+DEFAULT_FAIR_VALUE: dict[str, Any] = {
+    "mode": "off", "min_listings": 150, "min_year_n": 8, "min_trim_n": 15,
+    "price_trim": {"low": 0.45, "high": 2.2}, "km_range": {"min": 5000, "max": 400000},
+    "km_slope_min": -0.35, "max_passes": 4, "cohort_sample": 300,
+    "disable_margin": 1.05, "schedule": {"hour": "03:30"},
+}
+FAIR_VALUE_BOUNDS: dict[str, Bound] = {
+    "min_listings": Bound(50, 5000, integer=True), "min_year_n": Bound(5, 200, integer=True),
+    "min_trim_n": Bound(5, 200, integer=True), "km_slope_min": Bound(-1, 0),
+    "max_passes": Bound(1, 10, integer=True), "cohort_sample": Bound(50, 2000, integer=True),
+    "disable_margin": Bound(1, 1.5),
+}
+FAIR_VALUE_GROUP_BOUNDS: dict[str, dict[str, Bound | re.Pattern[str]]] = {
+    "price_trim": {"low": Bound(0.2, 0.9), "high": Bound(1.2, 5)},
+    "km_range": {"min": Bound(0, 50_000, integer=True), "max": Bound(100_000, 1_000_000, integer=True)},
+    "schedule": {"hour": _CLOCK},
+}
+
+
+def fair_value_params_hash(params: Mapping[str, Any]) -> str:
+    """The first 12 hex of sha1 over app_config.fair_value without mode, numbers as floats: the shadow
+    block and the curves carry it, so a moved parameter restarts the measurement (spec §5)."""
+    def norm(v: Any) -> Any:
+        if isinstance(v, Mapping):
+            return {str(k): norm(x) for k, x in v.items()}
+        if isinstance(v, bool) or not isinstance(v, (int, float)):
+            return v
+        return float(v)
+    body = json.dumps({k: norm(params[k]) for k in DEFAULT_FAIR_VALUE if k != "mode"},
+                      sort_keys=True)
+    return hashlib.sha1(body.encode()).hexdigest()[:12]
+
+
+def fair_value_config(raw: Any) -> dict[str, Any]:
+    """app_config.fair_value as the worker uses it. Never raises: a number outside its bound (or a bool, or a
+    string) keeps its default, key by key; mode outside FAIR_VALUE_MODES is 'off'. Adds "params"."""
+    out: dict[str, Any] = {k: (dict(v) if isinstance(v, dict) else v) for k, v in DEFAULT_FAIR_VALUE.items()}
+    src = raw if isinstance(raw, Mapping) else {}
+    mode = src.get("mode")
+    out["mode"] = mode if isinstance(mode, str) and mode in FAIR_VALUE_MODES else DEFAULT_FAIR_VALUE["mode"]
+    for key, bound in FAIR_VALUE_BOUNDS.items():
+        value = src.get(key)
+        if bound.accepts(value):
+            out[key] = int(value) if bound.integer else float(value) if isinstance(value, float) else value
+    for group, bounds in FAIR_VALUE_GROUP_BOUNDS.items():
+        out[group] = _merge(DEFAULT_FAIR_VALUE[group], src.get(group), bounds)
+        out[group] = {k: out[group][k] for k in DEFAULT_FAIR_VALUE[group]}
+    out["params"] = fair_value_params_hash(out)
     return out
