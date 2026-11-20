@@ -242,6 +242,65 @@ function f3IssueMessage(issue: z.ZodError["issues"][number]): string {
 }
 
 /**
+ * «Valor justo» (docs/superpowers/specs/2026-11-20-valor-justo-design.md §9): app_config.fair_value,
+ * read by the worker's daily fit and the scorer's shadow block. The same bounds as
+ * worker/intelligence/config.py fair_value_config (FAIR_VALUE_BOUNDS, FAIR_VALUE_GROUP_BOUNDS); the
+ * worker drops a bad value to its default without a word, so it is refused here. Every key is
+ * optional (a missing mode is 'off'); an unknown key is refused. 'live' is accepted and, until the
+ * live PR, behaves as 'shadow' (f2 keeps deciding).
+ */
+export const FAIR_VALUE_MODES = ["off", "shadow", "live"] as const;
+export const FAIR_VALUE_DEFAULTS = {
+  mode: "off", min_listings: 150, min_year_n: 8, min_trim_n: 15,
+  price_trim: { low: 0.45, high: 2.2 }, km_range: { min: 5000, max: 400000 },
+  km_slope_min: -0.35, max_passes: 4, cohort_sample: 300, disable_margin: 1.05, schedule: { hour: "03:30" },
+} as const;
+const FV_CLOCK = /^(?:[01][0-9]|2[0-3]):[0-5][0-9]$/;
+export const FairValueInput = z.object({
+  mode: z.enum(FAIR_VALUE_MODES).optional(),
+  min_listings: z.number().int().min(50).max(5000).optional(),
+  min_year_n: z.number().int().min(5).max(200).optional(),
+  min_trim_n: z.number().int().min(5).max(200).optional(),
+  price_trim: z.object({ low: z.number().min(0.2).max(0.9).optional(), high: z.number().min(1.2).max(5).optional() }).strict().optional(),
+  km_range: z.object({ min: z.number().int().min(0).max(50000).optional(), max: z.number().int().min(100000).max(1000000).optional() }).strict().optional(),
+  km_slope_min: z.number().min(-1).max(0).optional(),
+  max_passes: z.number().int().min(1).max(10).optional(),
+  cohort_sample: z.number().int().min(50).max(2000).optional(),
+  disable_margin: z.number().min(1).max(1.5).optional(),
+  schedule: z.object({ hour: z.string().regex(FV_CLOCK).optional() }).strict().optional(),
+}).strict();
+const FAIR_VALUE_MESSAGES: Record<string, string> = {
+  mode: "mode tiene que ser off, shadow o live.",
+  min_listings: "min_listings tiene que ser un entero entre 50 y 5.000.",
+  min_year_n: "min_year_n tiene que ser un entero entre 5 y 200.",
+  min_trim_n: "min_trim_n tiene que ser un entero entre 5 y 200.",
+  "price_trim.low": "price_trim.low tiene que ser un número entre 0,2 y 0,9.",
+  "price_trim.high": "price_trim.high tiene que ser un número entre 1,2 y 5.",
+  "km_range.min": "km_range.min tiene que ser un entero entre 0 y 50.000.",
+  "km_range.max": "km_range.max tiene que ser un entero entre 100.000 y 1.000.000.",
+  km_slope_min: "km_slope_min tiene que ser un número entre −1 y 0.",
+  max_passes: "max_passes tiene que ser un entero entre 1 y 10.",
+  cohort_sample: "cohort_sample tiene que ser un entero entre 50 y 2.000.",
+  disable_margin: "disable_margin tiene que ser un número entre 1 y 1,5.",
+  "schedule.hour": "schedule.hour tiene que ser una hora HH:MM (hora argentina), por ejemplo 03:30.",
+};
+
+/** Why /admin/config refuses this fair_value, in Spanish and naming the key, or null. */
+export function fairValueProblem(value: unknown): string | null {
+  const parsed = FairValueInput.safeParse(value);
+  if (parsed.success) return null;
+  const issue = parsed.error.issues[0];
+  const path = issue.path.map(String).join(".");
+  if (issue.code === "unrecognized_keys") {
+    const where = path || "fair_value";
+    return `${where} no tiene ${issue.keys.length > 1 ? "las claves" : "la clave"} ${spanishList(issue.keys.map((k) => `«${k}»`))}: revisá cómo está escrita.`;
+  }
+  if (FAIR_VALUE_MESSAGES[path]) return FAIR_VALUE_MESSAGES[path];
+  if (path === "price_trim" || path === "km_range" || path === "schedule") return `${path} tiene que ser un objeto con sus claves.`;
+  return "Revisá fair_value: sus claves son números (sin comillas), salvo mode y schedule.hour.";
+}
+
+/**
  * Why /admin/config refuses this score_model_f3, in Spanish and naming the key, or null.
  * Bounds and types first; then the cross-key rules on the value over the defaults, as the
  * worker checks them (a missing key counts with its default).
@@ -437,6 +496,8 @@ export function validateConfigChange(key: string, value: unknown, current: unkno
   if (key === "cost_estimator") return costEstimatorProblem(value);
   // f3 «precio × encaje» (shadow): the worker's bounds and cross-key rules (worker/intelligence/config.py score_model_f3).
   if (key === "score_model_f3") return scoreModelF3Problem(value);
+  // «Valor justo» (shadow): the worker's bounds (worker/intelligence/config.py fair_value_config).
+  if (key === "fair_value") return fairValueProblem(value);
   if (key === "risk") {
     // PAR-02: the «Antes de señar» switch and its official links (https only).
     const parsed = RiskConfigInput.safeParse(value);
@@ -503,7 +564,24 @@ export const SCORE_MODEL_F3_LABELS: Record<string, string> = {
   "rules.placeholder": "Precio de relleno (11.111, 1.111.111): como sin precio",
   "rules.pro_deal_d": "Umbral Pro con el % ajustado de Kavak (pro_deal_d)",
 };
+/** fair_value in the change preview (spec 2026-11-20 §9). */
+export const FAIR_VALUE_LABELS: Record<string, string> = {
+  mode: "Modo del valor justo (off, shadow o live)",
+  min_listings: "Avisos mínimos del modelo para habilitar su curva (min_listings)",
+  min_year_n: "Avisos mínimos de un año para su nivel de precio (min_year_n)",
+  min_trim_n: "Avisos mínimos de una versión o caja para su prima (min_trim_n)",
+  "price_trim.low": "Recorte: precio mínimo, veces la mediana del año (price_trim.low)",
+  "price_trim.high": "Recorte: precio máximo, veces la mediana del año (price_trim.high)",
+  "km_range.min": "Km mínimos que entran en la pendiente de km (km_range.min)",
+  "km_range.max": "Km máximos que entran en la pendiente de km (km_range.max)",
+  km_slope_min: "Pendiente de km más negativa aceptada (km_slope_min)",
+  max_passes: "Pasadas máximas del ajuste (max_passes)",
+  cohort_sample: "Avisos por modelo para medir el error (cohort_sample)",
+  disable_margin: "Margen para deshabilitar una curva habilitada (disable_margin)",
+  "schedule.hour": "Hora del ajuste diario (hora argentina)",
+};
 export function configFieldLabel(key: string, path: string): string {
+  if (key === "fair_value") return FAIR_VALUE_LABELS[path] ?? path;
   if (key === "pro_offer") return ({ version: "Versión de la oferta", "pass_30.amount": "Particular: importe (ARS)", "pass_7.amount": "Particular 7 días: importe (ARS)", "pro_monthly.amount": "Pro: importe (ARS)" } as Record<string, string>)[path] ?? path;
   if (key === "plan_limits") {
     const [tier, field] = path.split(".");

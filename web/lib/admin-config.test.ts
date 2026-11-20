@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { FAIR_VALUE_DEFAULTS, FAIR_VALUE_LABELS, FAIR_VALUE_MODES, FairValueInput, fairValueProblem } from "@/lib/admin-config";
 import { AdminLifecycleInput, AdminOfferInput, AdminPlanLimitsInput, configDifferences, configFieldLabel, CONFIRM_SOURCES_MESSAGE, DEALER_MARGIN_MESSAGE, LEVEL_THRESHOLDS_ORDER_MESSAGE, LIFECYCLE_KINDS, MAX_OFFER_ARS, RESCORE_EVERY_HOURS_MESSAGE, RESCORE_HOUR_MESSAGE, sameConfig, SCORE_GUARDS_ORDER_MESSAGE, SCORE_MODEL_F3_BOUNDS, SCORE_MODEL_F3_DEFAULTS, SCORE_MODEL_F3_LABELS, SCORE_MODEL_F3_MODES, SCORE_WEIGHTS_ZERO_MESSAGE, ScoreModelF3Input, scoreModelF3Problem, SourceUpdateInput, TRIAL_RESERVE_CONFIG_MESSAGE, validateConfigChange, visibleConfigRows, ZONE_NOTICE_CONFIG_MESSAGE, LANDING_HERO_CONFIG_MESSAGE, UNMET_DEMAND_CONFIG_MESSAGE, DEALER_PROGRAM_CONFIG_MESSAGE } from "@/lib/admin-config";
 import { DEFAULT_PRO_OFFER } from "@/lib/pro";
 
@@ -466,5 +467,58 @@ describe("score_model_f3 (f3 «precio × encaje», shadow)", () => {
     expect(configDifferences(CURRENT, after).map((d) => configFieldLabel("score_model_f3", d.path))).toEqual([
       "Modo de f3 (off, shadow o live)", SCORE_MODEL_F3_LABELS["levels.c_high"],
     ]);
+  });
+});
+
+// «Valor justo» in shadow (docs/superpowers/specs/2026-11-20-valor-justo-design.md §9).
+const FV_MIGRATION = "supabase/migrations/20270107120000_fair_value_shadow.sql";
+function fairValueMigration(): Record<string, unknown> {
+  const sql = readFileSync(path.join(REPO, FV_MIGRATION), "utf-8");
+  const literal = /values \('fair_value', '(\{[\s\S]*?\})'::jsonb\)/.exec(sql)?.[1];
+  if (!literal) throw new Error(`${FV_MIGRATION}: no fair_value json literal`);
+  return JSON.parse(literal) as Record<string, unknown>;
+}
+const FV_CURRENT = fairValueMigration();
+const fv = (value: unknown) => validateConfigChange("fair_value", value, FV_CURRENT);
+
+describe("fair_value («valor justo», shadow)", () => {
+  it("mirrors the worker's defaults and modes", () => {
+    expect(pythonDict("DEFAULT_FAIR_VALUE")).toEqual(FAIR_VALUE_DEFAULTS);
+    expect(FAIR_VALUE_DEFAULTS.mode).toBe("off");
+    expect(/^FAIR_VALUE_MODES = \(([^)]*)\)/m.exec(WORKER_CONFIG)?.[1].split(",").map((m) => m.trim().replace(/"/g, ""))).toEqual([...FAIR_VALUE_MODES]);
+  });
+
+  it("accepts the migration's row (the defaults with mode shadow), the modes and partial values", () => {
+    expect(FV_CURRENT).toEqual({ ...FAIR_VALUE_DEFAULTS, mode: "shadow" });
+    expect(fv(FV_CURRENT)).toBeNull();
+    expect(FairValueInput.parse(FV_CURRENT)).toEqual(FV_CURRENT);
+    for (const mode of FAIR_VALUE_MODES) expect(fv({ ...FV_CURRENT, mode })).toBeNull();
+    for (const value of [{}, { mode: "off" }, { min_listings: 50 }, { price_trim: { low: 0.2 } }, { km_range: { max: 1000000 } },
+      { km_slope_min: -1 }, { disable_margin: 1 }, { schedule: { hour: "23:59" } }]) {
+      expect(fv(value), JSON.stringify(value)).toBeNull();
+    }
+  });
+
+  it("refuses what the worker would drop, naming the key", () => {
+    expect(fv({ mode: "on" })).toBe("mode tiene que ser off, shadow o live.");
+    expect(fv({ min_listings: 49 })).toBe("min_listings tiene que ser un entero entre 50 y 5.000.");
+    expect(fv({ min_year_n: 8.5 })).toBe("min_year_n tiene que ser un entero entre 5 y 200.");
+    expect(fv({ price_trim: { high: 6 } })).toBe("price_trim.high tiene que ser un número entre 1,2 y 5.");
+    expect(fv({ km_range: { min: 60000 } })).toBe("km_range.min tiene que ser un entero entre 0 y 50.000.");
+    expect(fv({ km_slope_min: 0.1 })).toBe("km_slope_min tiene que ser un número entre −1 y 0.");
+    expect(fv({ cohort_sample: "300" })).toBe("cohort_sample tiene que ser un entero entre 50 y 2.000.");
+    expect(fv({ disable_margin: 1.6 })).toBe("disable_margin tiene que ser un número entre 1 y 1,5.");
+    expect(fv({ schedule: { hour: "24:00" } })).toMatch(/^schedule\.hour tiene que ser una hora HH:MM/);
+    expect(fv({ min_listing: 150 })).toMatch(/^fair_value no tiene la clave «min_listing»/);
+    expect(fv({ price_trim: { lo: 0.5 } })).toMatch(/^price_trim no tiene la clave «lo»/);
+    expect(fairValueProblem({ max_passes: 11 })).toBe("max_passes tiene que ser un entero entre 1 y 10.");
+  });
+
+  it("labels every key in the change preview", () => {
+    for (const path of ["mode", "min_listings", "min_year_n", "min_trim_n", "price_trim.low", "price_trim.high", "km_range.min",
+      "km_range.max", "km_slope_min", "max_passes", "cohort_sample", "disable_margin", "schedule.hour"]) {
+      expect(FAIR_VALUE_LABELS[path], path).toBeTruthy();
+      expect(configFieldLabel("fair_value", path)).toBe(FAIR_VALUE_LABELS[path]);
+    }
   });
 });

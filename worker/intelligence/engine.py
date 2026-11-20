@@ -10,6 +10,10 @@ f3 in shadow (intelligence/f3.py): for a match, and only while
 app_config.score_model_f3.mode is 'shadow' (or 'live'), f3 is computed after
 f2 is complete and stored as score_breakdown.shadow_f3. Nothing of f2 reads
 it, and an f3 failure leaves the evaluation exactly as without it.
+
+«Valor justo» in shadow (intelligence/fair_value.py): pipeline/scoring.Scorer, which holds the
+model curves, fills Evaluation.shadow_fair_value after this; row() stores it as
+score_breakdown.shadow_fair_value. Nothing of f2 reads it.
 """
 from __future__ import annotations
 
@@ -43,6 +47,8 @@ class Evaluation:
     question_origins: list[dict[str, Any]] = field(default_factory=list)
     # f3 in shadow: f3.shadow()'s JSON, or None (mode off, no match, or f3 failed).
     shadow_f3: dict[str, Any] | None = None
+    # «Valor justo» in shadow: fair_value.shadow()'s JSON, or None (mode off, no curve or value, or a failure).
+    shadow_fair_value: dict[str, Any] | None = None
 
     @property
     def level(self) -> str:
@@ -53,6 +59,8 @@ class Evaluation:
         breakdown = self.score.breakdown()
         if self.shadow_f3 is not None:
             breakdown["shadow_f3"] = self.shadow_f3
+        if self.shadow_fair_value is not None:
+            breakdown["shadow_fair_value"] = self.shadow_fair_value
         return {
             "score": self.score.score,
             "level": self.score.level,
