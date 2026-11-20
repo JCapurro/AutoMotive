@@ -31,12 +31,22 @@ async function expandedEvents(email: string) {
   );
 }
 
+async function namedEvents(email: string, name: string) {
+  return query<{ props: Record<string, unknown> }>(
+    `select e.props from public.events e join public.profiles p on p.id = e.user_id
+      where p.email = $1 and e.name = $2 order by e.id`,
+    [email, name],
+  );
+}
+
 test("bajas de precio: tarjeta, ficha y price_history_expanded", async ({ page }, testInfo) => {
   const run = `${testInfo.project.name}-${Date.now()}`;
   const email = `tracks-${run}@${E2E_EMAIL_DOMAIN}`;
   await signIn(page, email);
   const seeded = await seedPriceTracks(email, run);
-  const card = (id: number) => page.getByTestId("listing-card").filter({ has: page.locator(`a[href="/app/listings/${id}"]`) });
+  // Valor justo §6.3: from the results list the link carries the search, the order and the place.
+  const card = (id: number) =>
+    page.getByTestId("listing-card").filter({ has: page.locator(`a[href^="/app/listings/${id}?src=${seeded.profileId}&ord=score&pos="]`) });
 
   await test.step("la tarjeta dice las bajas solo con baja neta", async () => {
     await page.goto(`/app/searches/${seeded.profileId}?f=all`);
@@ -66,8 +76,26 @@ test("bajas de precio: tarjeta, ficha y price_history_expanded", async ({ page }
     await expectNoHorizontalScroll(page);
   });
 
+  await test.step("la lista registra lo que mostró y la ficha el puesto (valor justo §6.3)", async () => {
+    await expect.poll(async () => (await namedEvents(email, "search_results_viewed")).length).toBe(1);
+    const [shown] = await namedEvents(email, "search_results_viewed");
+    const ids = await page.getByTestId("listing-card").locator("h3 a").evaluateAll((links) =>
+      links.map((a) => Number(new URL((a as HTMLAnchorElement).href).pathname.split("/").pop())),
+    );
+    expect(shown.props).toEqual({ profile_id: seeded.profileId, sort: "score", filter: "all", page: 1, listing_ids: ids });
+    const position = ids.indexOf(seeded.drops) + 1;
+    await card(seeded.drops).locator("h3 a").click();
+    await expect(page).toHaveURL(new RegExp(`/app/listings/${seeded.drops}\\?src=${seeded.profileId}&ord=score&pos=${position}$`));
+    await expect.poll(async () => (await namedEvents(email, "listing_detail_viewed")).length).toBe(1);
+    const [opened] = await namedEvents(email, "listing_detail_viewed");
+    expect(opened.props).toEqual({ listing_id: seeded.drops, via: "web", profile_id: seeded.profileId, sort: "score", position });
+  });
+
   await test.step("la ficha resume las bajas y el histórico queda cerrado", async () => {
     await page.goto(`/app/listings/${seeded.drops}`);
+    // Without src, ord and pos (as from /app, /app/saved or an alert), the event is what it always was.
+    await expect.poll(async () => (await namedEvents(email, "listing_detail_viewed")).length).toBe(2);
+    expect((await namedEvents(email, "listing_detail_viewed"))[1].props).toEqual({ listing_id: seeded.drops, via: "web" });
     await expect(page.getByRole("heading", { name: "Histórico de precios" })).toBeVisible();
     await expect(page.getByTestId("price-track-summary")).toContainText("2 bajas · -USD 1.000 (-9,1%) desde el ");
     await expect(page.getByTestId("price-track-note")).toContainText("Seguimos este aviso desde el ");

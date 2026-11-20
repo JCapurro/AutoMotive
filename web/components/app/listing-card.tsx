@@ -4,6 +4,7 @@ import Link from "next/link";
 import { BODY_TYPE, MARGIN_TEASER, SELLER_UNKNOWN, isBodyType } from "@/lib/copy";
 import { ageLine, firstImage, km, money, vehicle } from "@/lib/format";
 import { colorLine } from "@/lib/listing-color";
+import { type ListOrigin, listingHref } from "@/lib/list-position";
 import { cardTrackLine, type PriceTrack } from "@/lib/price-track";
 import type { MatchCard } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -29,6 +30,7 @@ export function ListingCard({
   marginTeaser = false,
   colorWanted = false,
   dealerName,
+  listOrigin,
 }: {
   card: Pick<
     MatchCard,
@@ -68,6 +70,8 @@ export function ListingCard({
   marginTeaser?: boolean;
   /** The card's search filters by color (filters.colors): a listing without one says «Color sin confirmar». */
   colorWanted?: boolean;
+  /** Valor justo §6.3: the search, order and place, only from a search's results list (src, ord, pos on the link). */
+  listOrigin?: ListOrigin | null;
 }) {
   const image = firstImage(card.images);
   const name = vehicle(card);
@@ -92,7 +96,7 @@ export function ListingCard({
       </div>
 
       <h3 className="min-w-0 text-base leading-snug font-bold">
-        <Link href={`/app/listings/${card.listing_id}`} className="after:absolute after:inset-0 group-hover:underline">
+        <Link href={listingHref(card.listing_id, listOrigin)} className="after:absolute after:inset-0 group-hover:underline">
           {name}
         </Link>
       </h3>

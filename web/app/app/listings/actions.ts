@@ -6,6 +6,7 @@ import { z } from "zod";
 import { requireUser } from "@/lib/auth";
 import { type InteractionStatus, type RejectionReason } from "@/lib/copy";
 import { track } from "@/lib/events";
+import { cleanListOrigin, type ListOriginParams } from "@/lib/list-position";
 import { canChangeStatus } from "@/lib/listing-tracking";
 import { DUPLICATE_KINDS, type DuplicateKind } from "@/lib/red-flags";
 import { createClient } from "@/lib/supabase/server";
@@ -26,8 +27,30 @@ async function currentStatus(supabase: Supabase, listingId: number) {
   return data;
 }
 
+/**
+ * Valor justo §6.3: the search, order and place a car was opened from, or
+ * nothing. A part that isn't valid is dropped (cleanListOrigin), and so is a
+ * search that isn't one of the user's own holding this listing.
+ */
+async function listOriginProps(supabase: Supabase, userId: string, listingId: number, raw: unknown) {
+  const origin = cleanListOrigin(raw);
+  let profileId = origin.profileId;
+  if (profileId != null) {
+    const { data } = await supabase
+      .from("matches")
+      .select("id, search_profiles!inner(user_id)")
+      .eq("search_profile_id", profileId)
+      .eq("listing_id", listingId)
+      .eq("search_profiles.user_id", userId)
+      .limit(1)
+      .maybeSingle();
+    if (!data) profileId = null;
+  }
+  return { profile_id: profileId ?? undefined, sort: origin.sort ?? undefined, position: origin.position ?? undefined };
+}
+
 /** Opening the detail: "Nuevo" → "Visto" (§26) and listing_detail_viewed. */
-export async function markSeen(listingId: number, notificationId: number | null): Promise<void> {
+export async function markSeen(listingId: number, notificationId: number | null, origin?: ListOriginParams | null): Promise<void> {
   const user = await requireUser();
   const supabase = await createClient();
   await supabase
@@ -38,6 +61,8 @@ export async function markSeen(listingId: number, notificationId: number | null)
     listing_id: listingId,
     via: notificationId ? "alert" : "web",
     notification_id: notificationId ?? undefined,
+    // Only from a results list's link: an alert, /app or /app/saved add nothing.
+    ...(origin ? await listOriginProps(supabase, user.id, listingId, origin) : {}),
   });
 }
 

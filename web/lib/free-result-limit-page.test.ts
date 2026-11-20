@@ -23,6 +23,8 @@ vi.mock("@/components/app/sort-select", () => ({
 }));
 vi.mock("@/components/app/search-criteria-summary", () => ({ SearchCriteriaSummary: () => null }));
 vi.mock("@/components/app/pro-cta", () => ({ ProBanner: () => null, VisibleResultsReport: () => null }));
+// Valor justo §6.3: it imports the searches' server actions, which are server-only.
+vi.mock("@/components/app/results-viewed-report", () => ({ ResultsViewedReport: () => null }));
 vi.mock("@/components/app/free-result-limit", () => ({
   FreeResultLimit: ({ limit }: { limit: number }) => createElement("aside", { "data-quota-popup": limit }),
 }));

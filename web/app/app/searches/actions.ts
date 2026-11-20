@@ -9,6 +9,7 @@ import { webConfig } from "@/lib/config";
 import type { Frequency } from "@/lib/copy";
 import { track } from "@/lib/events";
 import { thousands } from "@/lib/format";
+import { cleanResultsViewed } from "@/lib/list-position";
 import { marginAccess } from "@/lib/margin-data";
 import { queuePixel } from "@/lib/meta-pixel-server";
 import { type PlanLimits, freeResultQuota, locationCap, locationCapText } from "@/lib/pro";
@@ -27,6 +28,8 @@ import {
 } from "@/lib/search-form";
 import { loadSearchCollection } from "@/lib/search-collection-server";
 import { type RelaxSuggestion, applyRelax, bestSuggestions, relaxVariants } from "@/lib/search-relax";
+import type { Filter } from "@/lib/result-filters";
+import type { Sort } from "@/lib/sorts";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { Filters } from "@/lib/types";
@@ -643,4 +646,31 @@ export async function relaxSuggestions(raw: SearchInput): Promise<RelaxSuggestio
     return { ...variant, count: Number.isFinite(count) ? count : 0 };
   }));
   return bestSuggestions(counted);
+}
+
+/**
+ * Valor justo §6.3: what a results page showed (search_results_viewed), the
+ * page's own listing ids in order. Only to the events table, never to Pixel or
+ * GA; not user activity (v_validation_criteria, admin_users, /admin's days).
+ */
+export async function trackResultsViewed(
+  profileId: number,
+  sort: Sort,
+  filter: Filter,
+  page: number,
+  listingIds: number[],
+): Promise<void> {
+  const clean = cleanResultsViewed(profileId, sort, filter, page, listingIds);
+  if (!clean) return;
+  const user = await requireUser();
+  const supabase = await createClient();
+  const { data: own } = await supabase.from("search_profiles").select("id").eq("id", clean.profileId).eq("user_id", user.id).maybeSingle();
+  if (!own) return;
+  await track(supabase, user.id, "search_results_viewed", {
+    profile_id: clean.profileId,
+    sort: clean.sort,
+    filter: clean.filter,
+    page: clean.page,
+    listing_ids: clean.listingIds,
+  });
 }

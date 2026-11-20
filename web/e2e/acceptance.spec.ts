@@ -164,8 +164,9 @@ test("F4: búsqueda gratis con el email, backfill, alerta, guardar y guardados",
     const [target] = await query<{ id: number }>(`select id from public.listings where external_id = $1`, [
       `${E2E_LISTING_PREFIX}target`,
     ]);
-    await page.locator(`[data-testid="listing-card"] a[href="/app/listings/${target.id}"]`).click();
-    await expect(page).toHaveURL(/\/app\/listings\/\d+/);
+    // Valor justo §6.3: the card's link carries the search, the order in use and the place.
+    await page.locator(`[data-testid="listing-card"] a[href^="/app/listings/${target.id}?src="]`).click();
+    await expect(page).toHaveURL(new RegExp(`/app/listings/${target.id}\\?src=\\d+&ord=price&pos=\\d+$`));
     await expect(page.getByRole("heading", { name: "¿Por qué apareció?" })).toBeVisible();
     await expect(page.getByTestId("match-reasons")).toContainText("Dentro del presupuesto");
     await expect(page.getByTestId("match-reasons")).toContainText("Caja manual");

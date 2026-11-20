@@ -28,6 +28,8 @@ vi.mock("@/components/app/zone-notice", () => ({ ZoneNoticePanel: () => null }))
 vi.mock("@/components/app/search-actions", () => ({ FrequencySelect: () => null, PauseButton: () => null }));
 vi.mock("@/components/app/sort-select", () => ({ SortSelect: () => null }));
 vi.mock("@/components/app/pro-cta", () => ({ ProBanner: () => null, VisibleResultsReport: () => null }));
+// Valor justo §6.3: it imports the searches' server actions, which are server-only.
+vi.mock("@/components/app/results-viewed-report", () => ({ ResultsViewedReport: () => null }));
 // The expiry panel starts a payment: server actions; its own test is lib/expired-missed.test.ts.
 vi.mock("@/components/app/expired-missed", () => ({ ExpiredMissed: () => null }));
 vi.mock("@/components/app/listing-card", () => ({
