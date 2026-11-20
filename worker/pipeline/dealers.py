@@ -9,6 +9,11 @@ Every DEALER_TICK_SECONDS (main.py), each step in its own try, never raising:
    queued notifications (an expired confirmation, a paused dealer, the
    channel turned off). A no-op without dealer rows.
 2. With dealer_program.enabled false, stop there.
+2b. Profiles: a Mercado Libre source with the seller's profile link is read
+   whole (collectors/mercadolibre.py seller_profile) when it arrives and every
+   DEALER_PROFILE_HOURS once approved; its cars are stored as ordinary
+   Mercado Libre listings with the seller's key, and the ones a complete read
+   no longer finds are ended.
 3. Approved sources: the portal listings of an approved (source, seller_key)
    get the dealer's id and a 'sync' item; they are confirmed by every read
    of them (C3). Ended ones are archived; unapproved ones unmarked.
@@ -41,14 +46,17 @@ from datetime import datetime, timezone
 from typing import Any
 
 import db
+from collectors import mercadolibre as ml
+from collectors._loop import run_collector
 from collectors.base import Listing
-from config import WEB_BASE_URL
+from config import DEALER_PROFILE_HOURS, WEB_BASE_URL
 from db.repos import dealers as repo
 from db.repos import listings as listings_repo
 from db.repos.runs import log_error
 from intelligence.config import dealer_program
 from intelligence import dealer_alerts as alerts_logic
 from intelligence.dealer import DEALER_SOURCE
+from normalization.seller import seller_key
 from notifications import dealer_alerts as alerts_mail
 from notifications.dealer_leads import notify_new_leads
 from notifications.links import Links
@@ -78,6 +86,7 @@ class DealerTick:
     gone: int = 0
     review: int = 0
     matched: int = 0
+    profile_cars: int = 0
     lead_notices: int = 0
     alerts_added: int = 0
     alert_emails: int = 0
@@ -109,6 +118,51 @@ async def _step(name: str, ref: str, coro) -> Any:
     except Exception:
         await log_error("dealers", f"{name}:{ref}", traceback.format_exc())
         return None
+
+
+PROFILE_SOURCES_PER_TICK = 1
+PROFILE_TIMEOUT_SECONDS = 240.0
+
+
+async def read_profiles(tick: DealerTick, events: list) -> None:
+    """Step 2b: the Mercado Libre profile an agency gave us, read whole. Its
+    cars become ordinary Mercado Libre listings with the seller's key, so step 3
+    links them to the agency once the source is approved (and suggests the
+    seller to approve while it is pending). One profile per tick."""
+    if DEALER_PROFILE_HOURS <= 0 or not await repo.profiles_ready():
+        return
+    for s in await repo.profile_sources_due(DEALER_PROFILE_HOURS, PROFILE_SOURCES_PER_TICK):
+        await _step("profile", f"source:{s['id']}", read_profile(s, tick, events))
+
+
+async def read_profile(s: dict[str, Any], tick: DealerTick, events: list) -> None:
+    cust = ml.seller_cust_id(s["profile_url"])
+    if cust is None:
+        await repo.save_profile_read(s["id"], name=None, key=None, count=None, error="not_a_profile_link")
+        return
+    started = datetime.now(timezone.utc)
+    try:
+        read = await run_collector(ml.MercadoLibreScraper().seller_profile(cust), timeout=PROFILE_TIMEOUT_SECONDS)
+    except Exception as e:
+        # Marked as read so a profile that fails is retried with the others' rhythm, not every tick.
+        await repo.save_profile_read(s["id"], name=None, key=None, count=None, error=f"read_failed:{type(e).__name__}")
+        raise
+    key = seller_key(read.name)
+    if read.cards:
+        result = await ingest_mod.ingest(read.cards, seen=True)
+        events += result.events
+        tick.profile_cars += len(read.cards)
+    error = None if read.complete else (read.reason or "incomplete")
+    if s["status"] == "approved" and key != s["seller_key"]:
+        # The profile is another seller's than the one approved: its cars are stored, never linked.
+        error = "seller_mismatch"
+    elif s["status"] == "approved" and read.complete and read.cards:
+        async with db.connection() as cx:
+            for lid in await repo.profile_listings_missing(s["dealer_id"], s["seller_key"], started):
+                if await listings_repo.mark_gone(cx, lid):
+                    tick.gone += 1
+                    events.append(ingest_mod.ListingEvent("listing_gone", lid, "mercadolibre", ""))
+    await repo.save_profile_read(s["id"], name=read.name, key=key, count=len(read.cards), error=error)
 
 
 async def sync_linked(tick: DealerTick) -> None:
@@ -309,6 +363,7 @@ async def run_dealers(notifier: Notifier, links: Links, *, now: datetime | None 
     if not program["enabled"]:
         return tick
     events: list = []
+    await _step("profiles", "all", read_profiles(tick, events))
     await _step("sync_linked", "all", sync_linked(tick))
     await _step("sync_manual", "all", sync_manual(tick, events))
     await _step("touch", "directo", repo.touch_directo())

@@ -54,6 +54,10 @@ export function DealerSourceForm({ sources }: { sources: { id: string; name: str
         <Input id="source-hint" maxLength={80} value={hint} onChange={(e) => setHint(e.target.value)} />
       </div>
       {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
+      <p className="text-xs text-muted-foreground">
+        De Mercado Libre, pegá el link de «Ver más publicaciones del vendedor» de cualquiera de tus avisos (termina en _CustId_ y un número):
+        con ese link cargamos todos tus autos publicados, no solo algunos.
+      </p>
       {saved ? <p role="status" className="text-sm">Listo. Lo revisamos. Cuando lo aprobemos, tus avisos aparecen solos en tu stock.</p> : null}
       <Button type="submit" variant="outline" className="h-10" disabled={pending || !source}>{pending ? "Guardando…" : "Sumar"}</Button>
     </form>

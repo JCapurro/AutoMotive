@@ -143,7 +143,7 @@ export type Database = {
         Relationships: [{ foreignKeyName: "dealer_members_dealer_id_fkey"; columns: ["dealer_id"]; isOneToOne: false; referencedRelation: "dealers"; referencedColumns: ["id"] }]
       }
       dealer_sources: {
-        Row: { id: number; dealer_id: number; source: string; profile_url: string | null; seller_name_hint: string | null; seller_key: string | null; status: string; approved_at: string | null; created_at: string }
+        Row: { id: number; dealer_id: number; source: string; profile_url: string | null; seller_name_hint: string | null; seller_key: string | null; status: string; approved_at: string | null; created_at: string; profile_read_at: string | null; profile_count: number | null; profile_error: string | null }
         Insert: never
         Update: { seller_key?: string | null; status?: string; approved_at?: string | null }
         Relationships: [{ foreignKeyName: "dealer_sources_dealer_id_fkey"; columns: ["dealer_id"]; isOneToOne: false; referencedRelation: "dealers"; referencedColumns: ["id"] }]

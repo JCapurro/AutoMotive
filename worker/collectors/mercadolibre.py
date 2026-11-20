@@ -471,6 +471,47 @@ MAX_PAGE_COUNT = 42
 OPEN_YEARS = 15
 
 
+# ---------- a seller's profile (agencias) ----------
+
+PROFILE_BASE = "https://vehiculos.mercadolibre.com.ar"
+PROFILE_MAX_PAGES = 12          # 576 cars: more than any agency of the pilot publishes
+_CUST_ID_RE = re.compile(r"^https://(?:[a-z0-9-]+\.)*mercadolibre\.com\.ar/[^?#\s]*?_CustId_(\d{3,15})(?![0-9])")
+_PROFILE_TITLE_RE = re.compile(r"^\s*publicaciones de\s+(.+?)\s*$", re.IGNORECASE)
+
+
+def seller_cust_id(url: str | None) -> str | None:
+    """The seller id of a profile link (…mercadolibre.com.ar/_CustId_145347970,
+    with or without filters around it); None for anything else."""
+    m = _CUST_ID_RE.match((url or "").strip())
+    return m.group(1) if m else None
+
+
+def profile_url(cust_id: str, page: int = 1) -> str:
+    """The order Mercado Libre's own pagination uses (20/11/2026): the offset
+    first; the other order answers with a redirect to this one."""
+    offset = f"_Desde_{(page - 1) * PAGE_SIZE + 1}" if page > 1 else ""
+    return f"{PROFILE_BASE}/{offset}_CustId_{cust_id}"
+
+
+def _profile_name(html: str) -> str | None:
+    """«Publicaciones de BUSTELO AUTOMOTORES» → the seller's name as written."""
+    for h in soup(html).select("h1, h2"):
+        if m := _PROFILE_TITLE_RE.match(h.get_text(" ", strip=True)):
+            return m.group(1)[:120] or None
+    return None
+
+
+@dataclass
+class SellerProfile:
+    """A seller's published cars. `complete` False when Mercado Libre did not
+    serve them all (then nothing is ended for being missing)."""
+    name: str | None = None
+    cards: list[Listing] = field(default_factory=list)
+    complete: bool = True
+    reason: str | None = None
+    pages: int = 0
+
+
 @dataclass
 class FullRead:
     """MercadoLibreScraper.full_read: the ids it saw, and whether they are
@@ -806,6 +847,42 @@ class MercadoLibreScraper(BaseScraper):
             out.complete = False
             out.reason = f"mercadolibre: {len(ids)} ads in {last} pages"
         return True
+
+    async def seller_profile(self, cust_id: str) -> SellerProfile:
+        """Every car a seller has published (agencias: the profile an agency
+        gave us). The public page of the seller, vehiculos.mercadolibre.com.ar/
+        _CustId_<id>, lists them all, PAGE_SIZE a page; the cards are the same
+        as a search's, and each gets the seller's name from the page's title,
+        so they are stored with its seller_key."""
+        if not re.fullmatch(r"\d{3,15}", str(cust_id)):
+            raise ValueError("mercadolibre: not a seller id")
+        out = SellerProfile()
+        ids: set[str] = set()
+        page, last = 1, None
+        while True:
+            if out.pages:
+                await _page_pause()
+            html = (await _get(profile_url(cust_id, page), "seller profile")).html
+            out.pages += 1
+            cards = _results(html)
+            if page == 1:
+                out.name = _profile_name(html)
+                last = search_state(html).page_count
+            fresh = [c for c in cards if c.listing_id not in ids]
+            if cards and not fresh:
+                out.complete, out.reason = False, "mercadolibre: pagination repeated a page"
+                break
+            for card in fresh:
+                ids.add(card.listing_id)
+                card.vendedor_nombre = out.name
+                out.cards.append(card)
+            if len(cards) < PAGE_SIZE or (last is not None and page >= last):
+                break
+            if page >= PROFILE_MAX_PAGES:
+                out.complete, out.reason = False, f"mercadolibre: more than {PROFILE_MAX_PAGES} pages"
+                break
+            page += 1
+        return out
 
     parse_detail = staticmethod(parse_detail)
 
