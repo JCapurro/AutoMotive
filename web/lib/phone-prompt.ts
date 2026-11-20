@@ -27,22 +27,12 @@ export function isPhonePromptPlace(value: unknown): value is PhonePromptPlace {
   return (PHONE_PROMPT_PLACES as readonly unknown[]).includes(value);
 }
 
-/** Why leave it, said for where the person is. */
+/** Juan, 20/11: «menos texto es mejor al momento de insistir». One line, the same everywhere. */
+const SHORT = "Es opcional. No se lo pasamos a nadie sin tu permiso.";
+
 export const PHONE_PROMPT_TEXT: Record<PhonePromptPlace, { title: string; body: string }> = {
-  results: {
-    title: "Dejanos tu celular",
-    body: "Es opcional. Lo usamos solo por si necesitamos contactarte sobre tu búsqueda o tu cuenta. No se lo pasamos a nadie sin tu permiso: solo llega a una agencia si vos pedís que te contacte por un auto.",
-  },
-  home: {
-    title: "Todavía no nos dejaste tu celular",
-    body: "Es opcional. Sirve por si necesitamos contactarte por una búsqueda, y para tenerlo listo si le pedís a una agencia que te llame por un auto. No se lo pasamos a nadie sin tu permiso.",
-  },
-  saved: {
-    title: "¿Te avisamos al celular por estos autos?",
-    body: "Es opcional. Dejalo por si necesitamos contactarte por alguno de tus guardados. No se lo pasamos a nadie sin tu permiso.",
-  },
-  listing: {
-    title: "Dejá tu celular para no perder este auto",
-    body: "Es opcional. Sirve por si necesitamos contactarte por tu búsqueda, y queda listo si pedís que una agencia te llame. No se lo pasamos a nadie sin tu permiso.",
-  },
+  results: { title: "Dejanos tu celular", body: SHORT },
+  home: { title: "¿Nos dejás tu celular?", body: SHORT },
+  saved: { title: "¿Nos dejás tu celular?", body: SHORT },
+  listing: { title: "¿Nos dejás tu celular?", body: SHORT },
 };
