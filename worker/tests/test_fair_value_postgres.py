@@ -190,6 +190,27 @@ class FairValuePostgresTests(PostgresTestCase):
         self.assertEqual([(c["make"], c["model"]) for c in curves], [("pgfv", "modelo")])
         self.assertEqual([(e["stage"], e["ref"]) for e in errors], [("fair_value", "pgfv otro")])
 
+    async def test_a_failing_model_keeps_its_curve_and_a_missing_one_loses_it(self):
+        await self.listings()
+        await self.listings(200, model="Otro", seed=2, start=5000)
+        await self.listings(200, model="Ido", seed=3, start=9000)
+        self.assertEqual((await job.fit_all(trigger="cli"))["status"], "ok")
+        async with db.connection() as cx:
+            self.assertEqual({k[1] for k in await repo.load_enabled(cx)}, {"modelo", "otro", "ido"})
+            await cx.execute("UPDATE listings SET last_seen_at = now() - interval '400 days' WHERE model = 'Ido'")
+        real = job.fit_model
+
+        def fit(rows, params, *, model, **kw):
+            if model == "otro":
+                raise RuntimeError("transient")
+            return real(rows, params, model=model, **kw)
+
+        with patch.object(job, "fit_model", side_effect=fit):
+            self.assertEqual((await job.fit_all(trigger="schedule"))["status"], "ok")
+        async with db.connection() as cx:
+            enabled = {k[1] for k in await repo.load_enabled(cx)}
+        self.assertEqual(enabled, {"modelo", "otro"})     # «otro» failed: yesterday's curve; «ido» is gone
+
     async def test_no_pool_connection_is_held_while_fitting(self):
         await self.listings()
         seen = []

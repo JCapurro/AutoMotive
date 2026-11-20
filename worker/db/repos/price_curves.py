@@ -61,11 +61,16 @@ async def save_curve(cx: AsyncConnection, curve: Curve, *, run_id: int | None) -
          _real(curve.cohort_err), curve.enabled, curve.params, curve.fitted_at, run_id))
 
 
-async def disable_unseen(cx: AsyncConnection, *, run_id: int) -> int:
-    """A finished run disables the curves it did not fit (the model fell under min_listings): a stale
-    curve must not keep valuing listings."""
+async def disable_unseen(cx: AsyncConnection, *, run_id: int,
+                         keep: Iterable[tuple[str, str]] = ()) -> int:
+    """A finished run disables the curves it did not fit (the model fell under min_listings, or it was read
+    but gave no curve): a stale curve must not keep valuing listings. `keep` are the models that failed in
+    this run (a transient error): they keep yesterday's curve."""
+    keep = sorted({(str(m).lower(), str(n).lower()) for m, n in keep})
     cur = await cx.execute(
-        "UPDATE model_price_curves SET enabled = false WHERE enabled AND run_id IS DISTINCT FROM %s", (run_id,))
+        "UPDATE model_price_curves SET enabled = false WHERE enabled AND run_id IS DISTINCT FROM %s "
+        "   AND (make, model) NOT IN (SELECT k.make, k.model FROM unnest(%s::text[], %s::text[]) AS k(make, model))",
+        (run_id, [k[0] for k in keep], [k[1] for k in keep]))
     return cur.rowcount or 0
 
 

@@ -11,7 +11,8 @@ Spec docs/superpowers/specs/2026-11-20-valor-justo-design.md §4.3, §4.4. The m
   on the loop it would stall the heartbeat), take one again to write. A failure is logged
   (log_error("fair_value", …)) and closes the run with status 'failed'; the previous curves stay. A failure
   of one model is caught there: it goes to that model's stats entry and to log_error("fair_value",
-  "<make> <model>", …), the others go on, and the run closes 'ok' unless every model failed.
+  "<make> <model>", …), the others go on, the failed model keeps yesterday's curve, and the run closes
+  'ok' unless every model failed.
 * `fair_value_loop(stop)`: its own daily loop, modelled on market_stats_loop, at
   fair_value.schedule.hour (ART, 03:30 by default, before the 04:00 re-score). It catches up: at start
   and on every turn, when the last 'ok' run is older than 26 h it runs (trigger 'catchup'), so a restart
@@ -130,6 +131,7 @@ async def fit_all(*, trigger: str, dry_run: bool = False, only: tuple[str, str] 
                                                   max_age_days=int(comparables["max_age_days"]))
             before = await repo.enabled_before(cx)
         fitted = enabled = failed = 0
+        failed_keys: list[tuple[str, str]] = []
         for m in models:
             make, model = m["make"], m["model"]
             try:
@@ -144,6 +146,7 @@ async def fit_all(*, trigger: str, dry_run: bool = False, only: tuple[str, str] 
             except Exception:
                 # One model must not sink the run: record it in its stats entry and go on.
                 failed += 1
+                failed_keys.append((make, model))
                 error = traceback.format_exc()
                 result["models"].append({"make": make, "model": model, "fitted": False, "enabled": False,
                                          "error": error[-2000:]})
@@ -163,7 +166,7 @@ async def fit_all(*, trigger: str, dry_run: bool = False, only: tuple[str, str] 
         if not dry_run and run_id is not None:
             async with db.connection() as cx:
                 if only is None and not all_failed:
-                    await repo.disable_unseen(cx, run_id=run_id)
+                    await repo.disable_unseen(cx, run_id=run_id, keep=failed_keys)
                 await repo.finish_run(cx, run_id, status="failed" if all_failed else "ok",
                                       error=result["error"], models_seen=len(models), models_fitted=fitted,
                                       models_enabled=enabled, stats={"models": result["models"], "failed": failed})
