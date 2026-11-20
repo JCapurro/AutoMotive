@@ -20,7 +20,8 @@ from db.repos import listings as listings_repo
 from db.repos.fx import latest_stored, quote_for_today
 from intelligence import comparables, cost_estimator, margin
 from intelligence.comparables import PriceRef
-from intelligence.config import IntelligenceConfig
+from intelligence.config import IntelligenceConfig, dealer_program
+from intelligence.dealer import hidden_reason
 from intelligence.engine import Evaluation, evaluate
 from intelligence.guides import DEFAULT_MAX_QUESTIONS_IN_LISTING, MAX_QUESTIONS_IN_LISTING, GuideIndex, pick
 from intelligence.matching import vehicle_fails
@@ -44,6 +45,10 @@ class Scorer:
     # and how many a listing gets (llm_limits.model_guide.max_questions_in_listing).
     guides: GuideIndex = field(default_factory=dict)
     guide_limit: int = DEFAULT_MAX_QUESTIONS_IN_LISTING
+    # Agencias (spec §2): app_config.dealer_program, sanitized. A hidden
+    # dealer's listing is never evaluated, so no path (crawl, rematch,
+    # re-score, color, near_zone, count_after_expiry) stores a match for it.
+    program: dict[str, Any] = field(default_factory=lambda: dealer_program(None))
 
     @classmethod
     async def create(cls, now: datetime | None = None) -> "Scorer":
@@ -51,13 +56,14 @@ class Scorer:
         margin_cfg = margin.parse_config(await db.get_config("dealer_margin"))
         cost_cfg = cost_estimator.parse_config(await db.get_config("cost_estimator"))
         guide_limit = guide_questions_limit(await db.get_config("llm_limits"))
+        program = dealer_program(await db.get_config("dealer_program"))
         async with db.connection() as cx:
             quote = await quote_for_today(cx)
             fx_latest = await latest_stored(cx)
             guides = await guides_repo.published_index(cx)
         return cls(cfg, quote.rate, now or datetime.now(timezone.utc),
                    margin_cfg=margin_cfg, cost_cfg=cost_cfg, fx_latest=fx_latest,
-                   guides=guides, guide_limit=guide_limit)
+                   guides=guides, guide_limit=guide_limit, program=program)
 
     async def prepare(self, listing_ids: Iterable[int], *,
                       refs_limit: int | None = None) -> dict[int, dict[str, Any]]:
@@ -80,6 +86,9 @@ class Scorer:
     def evaluate(self, listing_id: int, profile: dict[str, Any]) -> Evaluation | None:
         row = self.rows.get(listing_id)
         if row is None:
+            return None
+        # The send gate only excludes: a visible dealer's car is scored like any listing (C1).
+        if hidden_reason(row, self.program, now=self.now) is not None:
             return None
         # Another make or model never matches: skip the scoring (0.7 ms a
         # call), which a batch with every model of a source (an inventory

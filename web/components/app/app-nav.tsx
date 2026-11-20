@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, Bookmark, Car, ChevronDown, Home, LogOut, Plus, Settings, UserRound } from "lucide-react";
+import { Activity, Bookmark, Car, ChevronDown, Home, LogOut, Plus, Settings, Store, UserRound } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useRef } from "react";
@@ -20,7 +20,7 @@ function active(pathname: string, href: string, exact?: boolean) {
 }
 
 /** Desktop: links in the header. */
-export function TopNav({ admin = false, healthOwner = false, canAcquirePlan }: { admin?: boolean; healthOwner?: boolean; canAcquirePlan: boolean }) {
+export function TopNav({ admin = false, healthOwner = false, dealer = false, canAcquirePlan }: { admin?: boolean; healthOwner?: boolean; dealer?: boolean; canAcquirePlan: boolean }) {
   const pathname = usePathname();
   return (
     <nav aria-label="Principal" className="hidden h-full flex-1 items-stretch gap-1 md:flex">
@@ -38,6 +38,12 @@ export function TopNav({ admin = false, healthOwner = false, canAcquirePlan }: {
         </Link>
       ))}
       {healthOwner ? <Link href="/app/health" aria-current={pathname === "/app/health" ? "page" : undefined} className="inline-flex items-center px-2.5 text-[15px] text-muted-foreground hover:text-foreground">Health</Link> : null}
+      {/* Agencias: only with the panel on and an agency of one's own. */}
+      {dealer ? (
+        <Link href="/agencia" className="inline-flex items-center px-2.5 text-[15px] text-muted-foreground hover:text-foreground">
+          Mi agencia
+        </Link>
+      ) : null}
       {admin ? (
         <Link href="/admin" className="inline-flex items-center px-2.5 text-[15px] text-muted-foreground hover:text-foreground">
           Admin
@@ -114,7 +120,7 @@ export function MobileNav({ healthOwner = false }: { healthOwner?: boolean }) {
  * Ajustes and signing out live here, so the header keeps only the places
  * people go to work.
  */
-export function AccountMenu({ email }: { email: string | null }) {
+export function AccountMenu({ email, dealer = false }: { email: string | null; dealer?: boolean }) {
   const pathname = usePathname();
   const signOut = useRef<HTMLFormElement>(null);
   const current = pathname.startsWith("/app/datos") || pathname.startsWith("/app/settings") || pathname.startsWith("/app/cuenta");
@@ -146,6 +152,11 @@ export function AccountMenu({ email }: { email: string | null }) {
           <DropdownMenuItem asChild className="py-2">
             <Link href="/app/settings"><Settings aria-hidden /> Ajustes</Link>
           </DropdownMenuItem>
+          {dealer ? (
+            <DropdownMenuItem asChild className="py-2">
+              <Link href="/agencia"><Store aria-hidden /> Mi agencia</Link>
+            </DropdownMenuItem>
+          ) : null}
           <DropdownMenuSeparator />
           {/* The form sits outside the menu: closing the menu would unmount it mid-submit. */}
           <DropdownMenuItem className="py-2" onSelect={() => signOut.current?.requestSubmit()}>

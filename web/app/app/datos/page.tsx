@@ -30,7 +30,7 @@ export default async function MyDataPage() {
       <Card>
         <CardHeader>
           <CardTitle>Contacto</CardTitle>
-          <CardDescription>Te avisamos por email. El celular es opcional: no se lo damos a vendedores ni a nadie.</CardDescription>
+          <CardDescription>Te avisamos por email. El celular es opcional: no se lo pasamos a nadie sin tu permiso.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
           <div className="space-y-1">

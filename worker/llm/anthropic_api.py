@@ -27,8 +27,9 @@ from pydantic import BaseModel, ValidationError
 
 from llm import prompts
 from llm.provider import LLMError, LLMTimeout, color_result
-from llm.schemas import (LISTING_COLOR_MAX_IMAGES, ListingColorAnswer, ListingFacts, LowResultsExplanation,
-                         ModelGuideDraft, PolishedQuestions, SearchDraft, SearchDrafts)
+from llm.schemas import (LISTING_COLOR_MAX_IMAGES, STOCK_SHEET_MEDIA_TYPES, STOCK_SHEET_TEXT_TYPE, STOCK_SHEET_TIMEOUT_SECONDS,
+                         ListingColorAnswer, ListingFacts, LowResultsExplanation, ModelGuideDraft, PolishedQuestions,
+                         SearchDraft, SearchDrafts, StockSheetRead)
 from normalization.vehicle import CatalogModel
 
 log = logging.getLogger(__name__)
@@ -41,6 +42,8 @@ _MAX_TOKENS = 4096
 _GUIDE_MAX_TOKENS = 8192
 # The color answer: a handful of codes.
 _COLOR_MAX_TOKENS = 200
+# A stock list: up to STOCK_SHEET_MAX_ROWS short rows.
+_STOCK_MAX_TOKENS = 16000
 
 
 class AnthropicApiProvider:
@@ -138,3 +141,23 @@ class AnthropicApiProvider:
         answer, (tokens_in, tokens_out) = await self._structured_usage(
             prompts.listing_color_system(), content, ListingColorAnswer, max_tokens=_COLOR_MAX_TOKENS)
         return color_result(answer, tokens_in, tokens_out, self.model)
+
+    async def stock_sheet(self, data: bytes, media_type: str) -> StockSheetRead:
+        """A photo goes as an image block, a PDF as a document block, before
+        the text; same structured output as every call here."""
+        if not data or media_type not in STOCK_SHEET_MEDIA_TYPES:
+            raise LLMError("falta el archivo de la lista o su tipo no se lee")
+        content: list[dict[str, Any]]
+        if media_type == STOCK_SHEET_TEXT_TYPE:      # a spreadsheet, already as text
+            content = [{"type": "text", "text": prompts.stock_sheet_text_user(data)}]
+        else:
+            encoded = base64.b64encode(data).decode("ascii")
+            kind = "document" if media_type == "application/pdf" else "image"
+            content = [
+                {"type": kind, "source": {"type": "base64", "media_type": media_type, "data": encoded}},
+                {"type": "text", "text": prompts.STOCK_SHEET_USER_TEXT},
+            ]
+        answer, _ = await self._structured_usage(prompts.load("stock_sheet"), content, StockSheetRead,
+                                                 max_tokens=_STOCK_MAX_TOKENS,
+                                                 timeout=max(self.timeout, STOCK_SHEET_TIMEOUT_SECONDS))
+        return answer

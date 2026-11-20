@@ -13,6 +13,7 @@ from psycopg import AsyncConnection
 from psycopg.types.json import Jsonb
 
 from db.pool import connection
+from db.repos import dealers as dealers_repo
 
 
 _CONTACT = "p.telegram_chat_id, p.email, p.email_unsubscribe_token::text AS unsubscribe_token "
@@ -325,6 +326,8 @@ async def top_matches(user_id: str, channel: str, since: datetime, limit: int) -
     in the web and here, sección 7.1), skipping listings already alerted on
     the channel and the ones the user discarded. One row per listing."""
     async with connection() as cx:
+        # Agencias (spec §2, point 4): never a hidden dealer's car, even between two sweeps.
+        hidden = f" AND {dealers_repo.visible('l')} " if await dealers_repo.schema_ready(cx) else " "
         return await (await cx.execute(
             "SELECT * FROM ( "
             "  SELECT DISTINCT ON (m.listing_id) m.id AS match_id, m.listing_id, m.score, "
@@ -334,6 +337,7 @@ async def top_matches(user_id: str, channel: str, since: datetime, limit: int) -
             "    JOIN listings l ON l.id = m.listing_id "
             "   WHERE sp.user_id = %(user)s AND public.search_access_active(sp.id) AND %(channel)s = ANY(sp.channels) "
             "     AND NOT m.is_backfill AND m.generated_at >= %(since)s AND l.status = 'active' "
+            + hidden +
             "     AND NOT EXISTS (SELECT 1 FROM notifications n WHERE n.user_id = sp.user_id "
             "                        AND n.channel::text = %(channel)s AND n.listing_id = m.listing_id "
             "                        AND n.kind IN ('new_match', 'opportunity')) "

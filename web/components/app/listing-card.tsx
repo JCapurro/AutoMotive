@@ -9,6 +9,7 @@ import type { MatchCard } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 import { LevelBadge, StatusBadge } from "./badges";
+import { DealerBadge } from "./dealer-badge";
 import { ProBadge } from "./pro-locked";
 
 /** The ruled list the rows below sit in: one column, two from `lg`. */
@@ -27,6 +28,7 @@ export function ListingCard({
   marginLine,
   marginTeaser = false,
   colorWanted = false,
+  dealerName,
 }: {
   card: Pick<
     MatchCard,
@@ -51,7 +53,9 @@ export function ListingCard({
     | "listing_status"
     | "probable_repost_of"
   > &
-    Partial<Pick<MatchCard, "price_kind" | "financing_offered" | "price_usd" | "body_type" | "price_source" | "seller_unknown" | "color" | "color_method">>;
+    Partial<Pick<MatchCard, "price_kind" | "financing_offered" | "price_usd" | "body_type" | "price_source" | "seller_unknown" | "color" | "color_method" | "dealer_name">>;
+  /** Agencias: the «Agencia» chip's name when the card's row doesn't carry match_cards.dealer_name (/app/saved reads dealer_badges). */
+  dealerName?: string | null;
   showProfile?: boolean;
   footer?: React.ReactNode;
   /** PAR-03: the listing's drops since we first saw it (listing_price_tracks); a line only with a net drop of the price shown. */
@@ -71,6 +75,7 @@ export function ListingCard({
   const mileage = km(card.mileage_km);
   const drops = cardTrackLine(track, card);
   const color = colorLine(card.color, card.color_method, colorWanted);
+  const dealer = dealerName ?? card.dealer_name ?? null;
 
   return (
     <article
@@ -103,6 +108,7 @@ export function ListingCard({
             ≈ {money(card.price_usd, "USD")}
           </span>
         ) : null}
+        {dealer ? <DealerBadge name={dealer} className="relative -top-0.5 [font-stretch:100%]" /> : null}
         {card.financing_offered ? (
           <span className="relative -top-0.5 rounded bg-muted px-1.5 py-0.5 text-[11px] font-semibold whitespace-nowrap [font-stretch:100%] text-muted-foreground">
             Financiable

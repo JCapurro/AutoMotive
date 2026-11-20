@@ -249,10 +249,27 @@ class Content:
     previous_price: str | None = None
 
 
+def dealer_line(listing: Mapping[str, Any]) -> str | None:
+    """Agencias: «Promocionado · TT Autos» for a visible dealer's car
+    (payload listing.dealer, notifications/service.listing_payload); None otherwise."""
+    tag = listing.get("dealer") if isinstance(listing, Mapping) else None
+    name = tag.get("name") if isinstance(tag, Mapping) else None
+    return dealer_name_line(name)
+
+
+def dealer_name_line(name: Any) -> str | None:
+    """The same line from a bare dealer name (welcome_cars, missed_car)."""
+    if not isinstance(name, str) or not name.strip():
+        return None
+    return f"{copy.DEALER_LABEL} · {name.strip()}"
+
+
 def _notes(p: Mapping[str, Any], listing: Mapping[str, Any]) -> list[str]:
+    # A dealer's own listing ('directo') has no portal to name: the «Agencia» line says who sells it.
+    source = listing.get("source") if listing.get("source") != "directo" else None
     where = [x for x in (f"🔎 {p['profile_name']}" if p.get("profile_name") else None,
                          f"📍 {listing['location_text']}" if listing.get("location_text") else None,
-                         f"🏷 {listing['source']}" if listing.get("source") else None) if x]
+                         f"🏷 {source}" if source else None) if x]
     notes = [" · ".join(where)] if where else []
     notes += [f"⚠️ {t}" for t in (p.get("red_flags") or [])[:MAX_FLAGS]]
     return notes
@@ -315,6 +332,10 @@ def content(n: Notification, links: Links, now: datetime, *, owner: str | None =
             c.notes.insert(0, f"Opportunity Score {match['score']}/100")
     elif n.kind == "listing_gone":
         c.lines.append("La publicación que seguías se pausó, se vendió o se dio de baja.")
+    if tag := dealer_line(listing):
+        # After the km and the price of a match; last otherwise.
+        at = len([x for x in (km(listing), price(listing)) if x]) if n.kind in ("new_match", "opportunity")             else len(c.lines)
+        c.lines.insert(at, tag)
     return c
 
 
@@ -323,6 +344,13 @@ def _digest(n: Notification, links: Links, now: datetime, owner: str | None = No
     items = p.get("items") or []
 
     def item(it: Mapping[str, Any]) -> DigestItem:
+        out = _digest_item(it)
+        if tag := dealer_line(it.get("listing") or {}):
+            out.details.insert(0, tag)
+            out.suffix += f" · {tag}"
+        return out
+
+    def _digest_item(it: Mapping[str, Any]) -> DigestItem:
         listing = it.get("listing") or {}
         url = links.listing(n.id, listing.get("url") or "", it.get("listing_id"))
         visual = {"images": image_urls(listing.get("images")),
@@ -706,6 +734,8 @@ def _missed(car: Any, found: int, below: int, link: Link) -> tuple[Content, str]
                        if x)
     if where:
         lines.append(where)
+    if tag := dealer_name_line(car.get("dealer_name")):
+        lines.append(tag)
     if gone:
         days = _count(car.get("days_listed"))
         lines.append(_plural(MISSED_GONE, days) if days else MISSED_GONE_ANY)
@@ -734,6 +764,8 @@ def _welcome_cars(cars: Any, url: str) -> list[DigestItem]:
         diff = round(diff) if isinstance(diff, (int, float)) and not isinstance(diff, bool) and math.isfinite(diff) else 0
         details = [str(x) for x in (km(listing), car.get("location") if isinstance(car.get("location"), str) else None)
                    if x]
+        if tag := dealer_name_line(car.get("dealer_name")):
+            details.append(tag)
         out.append(DigestItem(vehicle(listing), url, details=details, price=price(listing),
                               badge=WELCOME_CAR_BELOW.format(d=diff) if diff > 0 else None, highlighted=diff > 0,
                               images=image_urls([car.get("image")]), detail_url=url))

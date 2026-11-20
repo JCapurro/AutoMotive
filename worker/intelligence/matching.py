@@ -20,7 +20,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Literal, Mapping
 
-from intelligence import copy
+from intelligence import copy, dealer
 from intelligence.seller import effective_seller, seller_kind
 from normalization import color as paint
 from normalization.geo import haversine_km
@@ -354,6 +354,13 @@ def strict_seller(profile: Mapping[str, Any]) -> bool:
 
 
 def _seller(listing, profile) -> Reason | None:
+    # Agencias (C4): a dealer's car never reaches a search that keeps only
+    # private sellers, whatever its plan. Nothing changes for a listing
+    # without dealer_id (no SCORING_VERSION bump).
+    f = profile.get("filters") or {}
+    if listing.get("dealer_id") is not None and dealer.private_only(f):
+        names = " o ".join(copy.SELLER_ONLY.get(t, t) for t in seller_types(f))
+        return Reason(FAIL, copy.REASON["seller_dealer_stock"].format(wanted=names))
     if not strict_seller(profile):
         return None
     wanted = seller_types(profile.get("filters") or {})

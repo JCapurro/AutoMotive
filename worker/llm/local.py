@@ -45,3 +45,6 @@ class LocalProvider:
 
     async def listing_color(self, images: list[bytes]) -> dict:
         raise self._unavailable()
+
+    async def stock_sheet(self, data: bytes, media_type: str):
+        raise self._unavailable()

@@ -8,6 +8,7 @@ import { LISTING_ROWS, ListingCard } from "@/components/app/listing-card";
 import { ProBanner } from "@/components/app/pro-cta";
 import { SearchLoadingButton } from "@/components/app/search-preparation";
 import { Button } from "@/components/ui/button";
+import { PhoneAsk } from "@/components/app/phone-ask";
 import { requireUser } from "@/lib/auth";
 import { webConfig } from "@/lib/config";
 import type { ProCtaState } from "@/lib/pro";
@@ -68,6 +69,7 @@ export default async function Dashboard() {
   return (
     <div className="space-y-12">
       {showMissed ? <ExpiredMissed missed={missed} offer={cfg.proOffer} automatic={cfg.automaticPayments} /> : null}
+      <PhoneAsk place="home" />
       <section>
         <div className="flex items-end justify-between gap-3">
           <h1 className="type-heading text-[30px] leading-tight">Mis búsquedas</h1>

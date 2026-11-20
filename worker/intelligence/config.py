@@ -256,6 +256,47 @@ def seller_classification(raw: Any) -> dict[str, Any]:
     return out
 
 
+# Agencias (docs/superpowers/specs/2026-11-18-agencias-design.md §1): the
+# switch of the dealer program, the twin of public.dealer_program() and
+# web/lib/dealer-program.ts. A missing or bad key takes its default;
+# demand_min_count is never under 3 (a count of 1 or 2 people is never shown).
+# Fase 1 (20261229120000_dealer_phase1_extras.sql): alerts to the agency
+# (alerts_enabled, at most one summary every alerts_every_hours) and the stock
+# read from a photo or a PDF (photo_import_enabled, photo_import_daily_limit
+# reads per dealer and day). All off by default.
+DEFAULT_DEALER_PROGRAM = {"enabled": False, "channel_enabled": False, "manual_confirm_days": 7,
+                          "demand_min_count": 3, "alerts_enabled": False, "alerts_every_hours": 24,
+                          "photo_import_enabled": False, "photo_import_daily_limit": 5}
+_DEALER_SWITCHES = ("enabled", "channel_enabled", "alerts_enabled", "photo_import_enabled")
+_DEALER_BOUNDS = {"manual_confirm_days": (1, 60), "demand_min_count": (3, 50), "alerts_every_hours": (6, 168),
+                  "photo_import_daily_limit": (1, 50)}
+
+
+def _whole(value: Any) -> int | None:
+    """A JSON number with no fraction (7 or 7.0, as dealer_json_int reads it); else None."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    if isinstance(value, float) and (not math.isfinite(value) or not value.is_integer()):
+        return None
+    return int(value)
+
+
+def dealer_program(raw: Any) -> dict[str, Any]:
+    """app_config.dealer_program as the worker uses it, plus "channel":
+    enabled and channel_enabled (the sales channel is on only with both)."""
+    out: dict[str, Any] = dict(DEFAULT_DEALER_PROGRAM)
+    if isinstance(raw, Mapping):
+        for key in _DEALER_SWITCHES:
+            if isinstance(raw.get(key), bool):
+                out[key] = raw[key]
+        for key, (lo, hi) in _DEALER_BOUNDS.items():
+            value = _whole(raw.get(key))
+            if value is not None and lo <= value <= hi:
+                out[key] = value
+    out["channel"] = bool(out["enabled"] and out["channel_enabled"])
+    return out
+
+
 def flag_order(raw: Any) -> tuple[str, ...]:
     """app_config.red_flags.order as the worker uses it: the ids as listed,
     without repeats; anything but a list of strings is the default. Unknown ids

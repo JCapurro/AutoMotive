@@ -28,7 +28,7 @@ export function SiteHeader({ signedIn, page }: { signedIn: boolean; page: "home"
           ))}
         </nav>
         <Link href={signedIn ? "/app" : "/login"} className="col-start-2 row-start-1 justify-self-end px-1 py-2 text-[15px] font-medium underline-offset-4 hover:underline sm:col-start-3">
-          {signedIn ? "Mis búsquedas" : "Ingresar"}
+          {signedIn ? "Ir a la app" : "Ingresar"}
         </Link>
       </div>
     </header>

@@ -4,9 +4,12 @@ import Link from "next/link";
 
 import { LISTING_ROWS, ListingCard } from "@/components/app/listing-card";
 import { ListingStatusSelect } from "@/components/app/listing-status-select";
+import { PhoneAsk } from "@/components/app/phone-ask";
 import { requireUser } from "@/lib/auth";
 import { webConfig } from "@/lib/config";
 import { costLinesFor } from "@/lib/cost-estimate-data";
+import { channelOn } from "@/lib/dealer-program";
+import { dealerBadges } from "@/lib/dealer-server";
 import { marginAccess, marginLinesFor, marginTeasersFor } from "@/lib/margin-data";
 import { FOLLOW_EMPTY, FOLLOW_FILTERS, FOLLOW_LABEL, type FollowFilter, type InteractionStatus, type Level } from "@/lib/copy";
 import { daysSince, dayMonth, money, pct } from "@/lib/format";
@@ -132,7 +135,7 @@ export default async function SavedPage({ searchParams }: PageProps<"/app/saved"
   // PAR-01: the best match's search, or the account's default place for a listing without one.
   // PRO-02: the best match's margin, only for Pro; the other plans, where it would be (Juan, 02/11).
   const marginCards = ids.map((id) => ({ listing_id: id, match_id: bestMatch.get(id)?.id ?? null }));
-  const [costLines, [marginLines, marginTeasers]] = await Promise.all([
+  const [costLines, [marginLines, marginTeasers], dealerNames] = await Promise.all([
     costLinesFor(
       supabase,
       user.id,
@@ -141,11 +144,14 @@ export default async function SavedPage({ searchParams }: PageProps<"/app/saved"
     marginAccess(supabase).then((access) =>
       Promise.all([marginLinesFor(supabase, access, marginCards), marginTeasersFor(user.id, access, marginCards)]),
     ),
+    // Agencias: the «Agencia» chip (no call while the sales channel is off).
+    cfg.dealerProgram && channelOn(cfg.dealerProgram) ? dealerBadges(ids) : Promise.resolve(new Map<number, string>()),
   ]);
 
   return (
     <div className="space-y-4">
       {header}
+      <PhoneAsk place="saved" />
       <div className={LISTING_ROWS}>
         {(interactions ?? []).map((i) => {
           const l = byId.get(i.listing_id);
@@ -169,6 +175,7 @@ export default async function SavedPage({ searchParams }: PageProps<"/app/saved"
               costLine={costLines.get(l.id)}
               marginLine={marginLines.get(l.id)}
               marginTeaser={marginTeasers.has(l.id)}
+              dealerName={dealerNames.get(l.id) ?? null}
               footer={
                 <>
                   {/* Above the card's stretched link, so picking a status doesn't open the detail. */}

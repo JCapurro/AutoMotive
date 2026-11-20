@@ -326,6 +326,7 @@ SELECT l.id, l.source, l.make, l.model, l.body_type, l.year, l.status::text AS s
   LEFT JOIN listing_zones z ON z.listing_id = l.id
  WHERE l.year IS NOT NULL
    AND NOT l.attributes ? '_not_vehicle'
+   AND l.source <> 'directo'   -- Agencias: an asking price of a dealer is no market (spec 0.9)
    AND l.first_seen_at < %(end)s
    AND greatest(l.last_seen_at, l.last_full_seen_at) >= %(since)s
  ORDER BY l.id

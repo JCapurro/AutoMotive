@@ -3,10 +3,32 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { AdminLifecycleInput, AdminOfferInput, AdminPlanLimitsInput, configDifferences, configFieldLabel, CONFIRM_SOURCES_MESSAGE, DEALER_MARGIN_MESSAGE, LEVEL_THRESHOLDS_ORDER_MESSAGE, LIFECYCLE_KINDS, MAX_OFFER_ARS, RESCORE_EVERY_HOURS_MESSAGE, RESCORE_HOUR_MESSAGE, sameConfig, SCORE_GUARDS_ORDER_MESSAGE, SCORE_MODEL_F3_BOUNDS, SCORE_MODEL_F3_DEFAULTS, SCORE_MODEL_F3_LABELS, SCORE_MODEL_F3_MODES, SCORE_WEIGHTS_ZERO_MESSAGE, ScoreModelF3Input, scoreModelF3Problem, SourceUpdateInput, TRIAL_RESERVE_CONFIG_MESSAGE, validateConfigChange, visibleConfigRows, ZONE_NOTICE_CONFIG_MESSAGE, LANDING_HERO_CONFIG_MESSAGE, UNMET_DEMAND_CONFIG_MESSAGE } from "@/lib/admin-config";
+import { AdminLifecycleInput, AdminOfferInput, AdminPlanLimitsInput, configDifferences, configFieldLabel, CONFIRM_SOURCES_MESSAGE, DEALER_MARGIN_MESSAGE, LEVEL_THRESHOLDS_ORDER_MESSAGE, LIFECYCLE_KINDS, MAX_OFFER_ARS, RESCORE_EVERY_HOURS_MESSAGE, RESCORE_HOUR_MESSAGE, sameConfig, SCORE_GUARDS_ORDER_MESSAGE, SCORE_MODEL_F3_BOUNDS, SCORE_MODEL_F3_DEFAULTS, SCORE_MODEL_F3_LABELS, SCORE_MODEL_F3_MODES, SCORE_WEIGHTS_ZERO_MESSAGE, ScoreModelF3Input, scoreModelF3Problem, SourceUpdateInput, TRIAL_RESERVE_CONFIG_MESSAGE, validateConfigChange, visibleConfigRows, ZONE_NOTICE_CONFIG_MESSAGE, LANDING_HERO_CONFIG_MESSAGE, UNMET_DEMAND_CONFIG_MESSAGE, DEALER_PROGRAM_CONFIG_MESSAGE } from "@/lib/admin-config";
 import { DEFAULT_PRO_OFFER } from "@/lib/pro";
 
 describe("guided config validators", () => {
+  it("keeps dealer_program in the same ranges as its readers (agencias)", () => {
+    const seeded = { enabled: false, channel_enabled: false, manual_confirm_days: 7, demand_min_count: 3 };
+    expect(validateConfigChange("dealer_program", seeded, seeded)).toBeNull();
+    expect(validateConfigChange("dealer_program", { ...seeded, enabled: true, manual_confirm_days: 60, demand_min_count: 50 }, seeded)).toBeNull();
+    for (const bad of [{ enabled: true }, { ...seeded, channel_enabled: "yes" }, { ...seeded, manual_confirm_days: 0 },
+      { ...seeded, manual_confirm_days: 61 }, { ...seeded, manual_confirm_days: 1.5 }, { ...seeded, demand_min_count: 2 },
+      { ...seeded, demand_min_count: 1 }, { ...seeded, demand_min_count: 51 }, { ...seeded, alerts_every_hours: 5 },
+      { ...seeded, alerts_enabled: "yes" }, { ...seeded, photo_import_daily_limit: 0 }, { ...seeded, photo_import_daily_limit: 51 }]) {
+      expect(validateConfigChange("dealer_program", bad, seeded)).toBe(DEALER_PROGRAM_CONFIG_MESSAGE);
+    }
+    const phase1 = { ...seeded, alerts_enabled: true, alerts_every_hours: 168, photo_import_enabled: false, photo_import_daily_limit: 50 };
+    expect(validateConfigChange("dealer_program", phase1, seeded)).toBeNull();
+    expect(configFieldLabel("dealer_program", "photo_import_enabled")).toBe("Lectura del stock con IA: planillas, fotos y PDF (cuesta por uso)");
+    expect(configFieldLabel("dealer_program", "enabled")).toBe("Panel de agencias (/agencia)");
+    expect(configFieldLabel("dealer_program", "demand_min_count")).toBe("Mínimo de personas para mostrar un número de búsquedas");
+    // Fase 3: the sellers keys are optional, with the ranges of dealer_sellers_config().
+    expect(validateConfigChange("dealer_program", { ...seeded, sellers_enabled: true, seller_requests_per_day: 50 }, seeded)).toBeNull();
+    for (const bad of [{ ...seeded, sellers_enabled: "true" }, { ...seeded, seller_requests_per_day: 0 }, { ...seeded, seller_requests_per_day: 51 }]) {
+      expect(validateConfigChange("dealer_program", bad, seeded)).toBe(DEALER_PROGRAM_CONFIG_MESSAGE);
+    }
+    expect(configFieldLabel("dealer_program", "seller_requests_per_day")).toBe("Pedidos de contacto a vendedores por agencia y día");
+  });
   it("keeps trial_reserve a switch with a whole backfill_max and names both (prueba gratis)", () => {
     const seeded = { enabled: false, backfill_max: 30 };
     expect(validateConfigChange("trial_reserve", { enabled: true, backfill_max: 30 }, seeded)).toBeNull();

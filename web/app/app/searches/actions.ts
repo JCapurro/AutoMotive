@@ -81,6 +81,8 @@ export type PreviewListing = {
   mileage_km: number | null;
   location_text: string | null;
   body_type: string | null;
+  /** Agencias: only on a visible agency car, for the «Agencia» chip (absent otherwise). */
+  dealer_name?: string;
 };
 
 async function enabledSources(supabase: Awaited<ReturnType<typeof createClient>>): Promise<string[]> {

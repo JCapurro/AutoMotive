@@ -5,9 +5,11 @@ import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth";
 import { track } from "@/lib/events";
 import { normalizeArPhone, PHONE_ERROR } from "@/lib/phone";
+import { isPhonePromptPlace, type PhonePromptPlace } from "@/lib/phone-prompt";
 import { createClient } from "@/lib/supabase/server";
 
-export type PhoneSource = "datos" | "results";
+/** «Mis datos», or the place whose prompt asked for it (lib/phone-prompt.ts). */
+export type PhoneSource = "datos" | PhonePromptPlace;
 export type PhoneState = { error?: string; phone?: string | null; saved?: boolean };
 
 /**
@@ -16,6 +18,7 @@ export type PhoneState = { error?: string; phone?: string | null; saved?: boolea
  */
 export async function savePhone(source: PhoneSource, _prev: PhoneState, form: FormData): Promise<PhoneState> {
   const user = await requireUser();
+  if (source !== "datos" && !isPhonePromptPlace(source)) return { error: "No pudimos guardar tu celular. Probá de nuevo." };
   const raw = String(form.get("phone") ?? "").trim();
   const phone = raw ? normalizeArPhone(raw) : null;
   if (raw && !phone) return { error: PHONE_ERROR };
@@ -35,8 +38,11 @@ export async function savePhone(source: PhoneSource, _prev: PhoneState, form: Fo
 }
 
 /** The results' prompt: shown once per browser, or closed without a number. */
-export async function phonePromptEvent(kind: "viewed" | "dismissed", profileId: number): Promise<void> {
+export async function phonePromptEvent(kind: "viewed" | "dismissed", profileId: number | null, place: PhonePromptPlace = "results"): Promise<void> {
   if (kind !== "viewed" && kind !== "dismissed") return;
   const user = await requireUser();
-  await track(await createClient(), user.id, `phone_prompt_${kind}`, { profile_id: Number(profileId) || null });
+  await track(await createClient(), user.id, `phone_prompt_${kind}`, {
+    profile_id: Number(profileId) || null,
+    place: isPhonePromptPlace(place) ? place : "results",
+  });
 }

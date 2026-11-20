@@ -23,6 +23,7 @@ from db.repos import notifications as repo
 from intelligence import cost_estimator, margin
 from intelligence import config
 from intelligence import contact_message
+from intelligence import dealer as dealer_rules
 from intelligence.matching import strict_seller_unknown
 from intelligence.guides import GuideIndex, pick as pick_guide
 from intelligence.seller_questions import question_texts
@@ -84,7 +85,11 @@ def _iso(value: Any) -> Any:
     return value.isoformat() if isinstance(value, datetime) else value
 
 
-def listing_payload(row: Mapping[str, Any]) -> dict[str, Any]:
+def listing_payload(row: Mapping[str, Any], program: Mapping[str, Any] | None = None, *,
+                    now: datetime | None = None) -> dict[str, Any]:
+    """`program` (app_config.dealer_program, sanitized): with it, a visible
+    dealer's car carries listing.dealer = {"label": "Promocionado", "name": …}
+    (intelligence/dealer.label). Without a dealer, the same payload as before."""
     keys = ("title", "make", "model", "trim", "year", "mileage_km", "price", "currency", "url",
             "source", "location_text", "published_at", "first_seen_at")
     out = {k: _iso(row.get(k)) for k in keys}
@@ -102,6 +107,8 @@ def listing_payload(row: Mapping[str, Any]) -> dict[str, Any]:
     if row.get("price_source") == "description":
         # The price above isn't the published one: no PAR-03 drop line (digest).
         out["price_source"] = "description"
+    if program is not None and (tag := dealer_rules.label(row, program, now=now or datetime.now(timezone.utc))):
+        out["dealer"] = tag
     return out
 
 
@@ -166,8 +173,10 @@ def shows_published_price(row: Mapping[str, Any] | None) -> bool:
 
 
 def payload(listing: Mapping[str, Any], match: Mapping[str, Any] | None, *, min_n: int,
-            profile_name: str | None = None, order: Sequence[str] | None = None, **extra: Any) -> dict[str, Any]:
-    out: dict[str, Any] = {"listing": listing_payload(listing), "profile_name": profile_name}
+            profile_name: str | None = None, order: Sequence[str] | None = None,
+            program: Mapping[str, Any] | None = None, now: datetime | None = None,
+            **extra: Any) -> dict[str, Any]:
+    out: dict[str, Any] = {"listing": listing_payload(listing, program, now=now), "profile_name": profile_name}
     if match and match.get("level"):
         out["match"] = match_payload(match, min_n)
         out["red_flags"] = flag_texts(match.get("red_flags"), order)
@@ -237,6 +246,22 @@ async def _guides() -> tuple[GuideIndex, int]:
         return {}, 0
 
 
+async def dealer_program(rows: Iterable[Mapping[str, Any] | None] | None = None) -> dict[str, Any] | None:
+    """Agencias: app_config.dealer_program, sanitized, read once per batch.
+    Given the batch's rows, None when none is a dealer's car: an ordinary
+    batch reads no new config and its payloads stay as they were."""
+    if rows is not None and not any(r is not None and dealer_rules.is_dealer_listing(r) for r in rows):
+        return None
+    return config.dealer_program(await db.get_config("dealer_program"))
+
+
+def visible(row: Mapping[str, Any], program: Mapping[str, Any] | None, now: datetime) -> bool:
+    """The send gate (intelligence/dealer.hidden_reason): a hidden dealer's
+    car never becomes a notification (spec §2, point 5). Without a program
+    (no dealer's car in the batch) every row passes."""
+    return program is None or dealer_rules.hidden_reason(row, program, now=now) is None
+
+
 async def _min_n() -> int:
     return int(config.comparables_config(await db.get_config("comparables"))["min_n"])
 
@@ -265,6 +290,12 @@ class Notifier:
     async def on_matches(self, candidates: list[MatchCandidate], rows: Mapping[int, Mapping[str, Any]], *,
                          now: datetime | None = None) -> list[int]:
         """New matches → notifications. `rows` are the listings by id."""
+        if not candidates:
+            return []
+        program = await dealer_program([rows.get(c.listing_id) for c in candidates])
+        when = now or datetime.now(timezone.utc)
+        candidates = [c for c in candidates
+                      if c.listing_id not in rows or visible(rows[c.listing_id], program, when)]
         if not candidates:
             return []
         audiences = await repo.profile_audiences(c.profile_id for c in candidates)
@@ -319,7 +350,7 @@ class Notifier:
                 match_id=c.match_id, repost=c.repost, saved=bool(state.get("saved")),
                 status=state.get("status"),
                 payload=payload(listing, ev, min_n=min_n, profile_name=a["profile_name"], order=order,
-                                questions=questions or None, price_track=track, total_cost=cost,
+                                program=program, now=when, questions=questions or None, price_track=track, total_cost=cost,
                                 margin=dealer, contact_message=contact, seller_unknown=seller_unknown,
                                 margin_teaser=locked_margin, contact_teaser=locked_contact))
             events.append(event)
@@ -353,10 +384,12 @@ class Notifier:
             by_listing.setdefault(a["listing_id"], []).append(a)
         min_n = await _min_n()
         order = await flag_order()
+        program = await dealer_program(rows.values())
+        when = now or datetime.now(timezone.utc)
         events = []
         for e in wanted:
             listing = rows.get(e.listing_id)
-            if listing is None:
+            if listing is None or not visible(listing, program, when):
                 continue
             for a in by_listing.get(e.listing_id, []):
                 drop = None
@@ -369,7 +402,7 @@ class Notifier:
                     match_id=a.get("match_id"), saved=bool(a.get("saved")), status=a.get("status"),
                     snapshot_id=e.snapshot_id, drop_pct=e.drop_pct,
                     payload=payload(listing, a, min_n=min_n, profile_name=a.get("profile_name"), order=order,
-                                    price_drop=drop,
+                                    program=program, now=when, price_drop=drop,
                                     margin=margin_payload(a.get("margin_ref"), a) if e.kind == PRICE_DROP else None,
                                     margin_teaser=margin_teaser(a.get("margin_ref"), a)
                                     if e.kind == PRICE_DROP else None)))

@@ -4,6 +4,8 @@ import Link from "next/link";
 import { Contact, LegalPage } from "@/components/legal-page";
 import { ConsentSettings } from "@/components/meta-pixel";
 import { webConfig } from "@/lib/config";
+import { DEALER_CONTACT_PRIVACY_LINE } from "@/lib/dealer-contact";
+import { channelOn } from "@/lib/dealer-program";
 import { contactEmail } from "@/lib/env";
 import { SELL_INTENT_PRIVACY_LINE } from "@/lib/sell-intent";
 
@@ -15,7 +17,9 @@ export const dynamic = "force-dynamic";
 // before a public launch.
 export default async function PrivacyPage() {
   // The agencies line (approved by Juan, 03/11) shows only with the same flag as the checkbox.
-  const { sellIntent } = await webConfig();
+  const { sellIntent, dealerProgram } = await webConfig();
+  // Agencias: the «Quiero que me contacten» line, only with the sales channel on (Juan approves it before turning it on).
+  const dealerChannel = dealerProgram ? channelOn(dealerProgram) : false;
   return (
     // The agencies line was approved by Juan on 03/11: the date moves with it.
     <LegalPage title="Política de privacidad" updated="4 de noviembre de 2026">
@@ -51,9 +55,14 @@ export default async function PrivacyPage() {
         </li>
         <li>
           <strong>Tu celular, si nos lo dejás</strong>: es opcional. Lo usamos solo para contactarte, si hace falta, sobre
-          tus búsquedas o tu cuenta. No se lo damos a vendedores ni a nadie. Lo cambiás o lo borrás cuando quieras desde
+          tus búsquedas o tu cuenta. No se lo pasamos a nadie sin tu permiso: solo llega a una agencia si vos pedís que te contacte por un auto. Lo cambiás o lo borrás cuando quieras desde
           Mis datos.
         </li>
+        {dealerChannel ? (
+          <li data-testid="privacy-dealer-contact">
+            <strong>Si le pedís a una agencia que te contacte</strong>. {DEALER_CONTACT_PRIVACY_LINE}
+          </li>
+        ) : null}
         {sellIntent.agenciesContact ? (
           <li data-testid="privacy-sell-intent">
             <strong>Si tenés que vender tu auto</strong>. {SELL_INTENT_PRIVACY_LINE}

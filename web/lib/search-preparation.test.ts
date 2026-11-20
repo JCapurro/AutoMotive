@@ -5,6 +5,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({ profile: {} as Record<string, unknown>, results: [] as Record<string, unknown>[],
   collectionState: "done" as "done" | "loading" | "waiting" | "failed" | "unknown" }));
 // PAR-01: the cards' total cost line has its own tests (lib/cost-estimate.test.ts).
+// An async server component (it reads the profile): these pages render synchronously here.
+vi.mock("@/components/app/phone-ask", () => ({ PhoneAsk: () => null }));
 vi.mock("@/lib/cost-estimate-data", () => ({ costLinesFor: async () => new Map() }));
 vi.mock("@/lib/margin-data", () => ({ marginAccess: async () => null, marginLinesFor: async () => new Map(), marginTeasersFor: async () => new Set() }));
 vi.mock("@/lib/search-collection-server", () => ({ loadSearchCollection: async (profile: { enabled: boolean }, _userId: string,

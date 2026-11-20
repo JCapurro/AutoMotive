@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const m = vi.hoisted(() => ({
   currentUser: vi.fn(), verifyEntryCode: vi.fn(), accountForEmail: vi.fn(), claimThrottle: vi.fn(), sendEntryLink: vi.fn(), afterSignIn: vi.fn(),
   createUser: vi.fn(), generateLink: vi.fn(), deleteUser: vi.fn(), rpc: vi.fn(), verifyOtp: vi.fn(), signOut: vi.fn(), signInWithPassword: vi.fn(),
-  accountForCanonicalEmail: vi.fn(), recordTrialSignals: vi.fn(), emailProblem: vi.fn(),
+  accountForCanonicalEmail: vi.fn(), recordTrialSignals: vi.fn(), emailProblem: vi.fn(), profileUpdate: vi.fn(), track: vi.fn(),
   config: { enabled: true, perIpHour: 10, perDay: 100, linksPerUserHour: 3, linksPerIpHour: 20, lookupsPerIpHour: 30 },
 }));
 vi.mock("@/lib/auth", () => ({ currentUser: m.currentUser }));
@@ -32,8 +32,10 @@ vi.mock("@/lib/email-check", () => ({ emailProblem: m.emailProblem, emailProblem
 vi.mock("@/lib/entry-code", () => ({ verifyEntryCode: m.verifyEntryCode }));
 vi.mock("@/lib/signup", () => ({ afterSignIn: m.afterSignIn }));
 vi.mock("@/lib/supabase/admin", () => ({
-  createAdminClient: () => ({ auth: { admin: { createUser: m.createUser, generateLink: m.generateLink, deleteUser: m.deleteUser } }, rpc: m.rpc }),
+  createAdminClient: () => ({ auth: { admin: { createUser: m.createUser, generateLink: m.generateLink, deleteUser: m.deleteUser } }, rpc: m.rpc,
+    from: (table: string) => ({ update: (values: unknown) => ({ eq: (_col: string, id: string) => m.profileUpdate(table, values, id) }) }) }),
 }));
+vi.mock("@/lib/events", () => ({ track: m.track }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ auth: { verifyOtp: m.verifyOtp, signOut: m.signOut, signInWithPassword: m.signInWithPassword } }) }));
 
 import { codeForFreeSearch, enterForFreeSearch, linkForFreeSearch, startFreeSearch } from "@/app/actions";
@@ -55,6 +57,38 @@ beforeEach(() => {
   m.verifyOtp.mockResolvedValue({ data: { user: { id: "new-user" } }, error: null });
   m.accountForCanonicalEmail.mockResolvedValue(null);
   m.emailProblem.mockResolvedValue(null);
+  m.profileUpdate.mockResolvedValue({ error: null });
+});
+
+describe("the optional mobile asked with the email (Juan, 20/11)", () => {
+  it("is saved, normalized, on the account this request creates", async () => {
+    expect(await startFreeSearch({ ...input, phone: "011 15 2345-6789" })).toEqual({ status: "created", href, signedUp: true });
+    expect(m.profileUpdate).toHaveBeenCalledExactlyOnceWith("profiles", { phone: "+5491123456789" }, "new-user");
+    expect(m.track).toHaveBeenCalledWith(expect.anything(), "new-user", "phone_added", { source: "signup" });
+  });
+
+  it("is optional: without it nothing is written", async () => {
+    expect(await startFreeSearch({ ...input, phone: "  " })).toEqual({ status: "created", href, signedUp: true });
+    expect(await startFreeSearch(input)).toEqual({ status: "created", href, signedUp: true });
+    expect(m.profileUpdate).not.toHaveBeenCalled();
+  });
+
+  it("says so when it is not a mobile, before creating anything", async () => {
+    expect(await startFreeSearch({ ...input, phone: "1234" })).toMatchObject({ status: "error", field: "phone" });
+    expect(m.createUser).not.toHaveBeenCalled();
+  });
+
+  it("never writes the phone of an account that already exists", async () => {
+    m.accountForEmail.mockResolvedValue({ user_id: "old-user", email_only: false, confirmed: true });
+    await startFreeSearch({ ...input, phone: "11 2345-6789" });
+    expect(m.profileUpdate).not.toHaveBeenCalled();
+  });
+
+  it("keeps the signup when the number cannot be saved", async () => {
+    m.profileUpdate.mockResolvedValue({ error: { message: "boom" } });
+    expect(await startFreeSearch({ ...input, phone: "11 2345-6789" })).toEqual({ status: "created", href, signedUp: true });
+    expect(m.track).not.toHaveBeenCalled();
+  });
 });
 
 describe("one trial per inbox (20261224120000_trial_signals)", () => {
