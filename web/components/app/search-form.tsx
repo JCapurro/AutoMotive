@@ -40,6 +40,7 @@ import {
   modelBodyTypes,
   selectedTrims,
   toggleColor,
+  yearOptions,
 } from "@/lib/search-form";
 import { type ProLocked, locationCapText } from "@/lib/pro";
 import { cn } from "@/lib/utils";
@@ -332,11 +333,7 @@ export function SearchForm({
   const models = useMemo(() => catalog.find((m) => m.make === d.make)?.models ?? [], [catalog, d.make]);
   const entry = byBody ? undefined : models.find((m) => m.model === d.model);
   const offered = useMemo(() => modelBodyTypes(entry?.bodyTypes), [entry]);
-  const years = useMemo(() => {
-    const from = Math.max(entry?.yearFrom ?? 1990, 1990);
-    const to = Math.min(entry?.yearTo ?? THIS_YEAR, THIS_YEAR);
-    return Array.from({ length: Math.max(to - from + 1, 0) }, (_, i) => to - i);
-  }, [entry]);
+  const years = useMemo(() => yearOptions(entry, THIS_YEAR), [entry]);
   const fuels = entry?.fuels.length ? entry.fuels : Object.keys(FUEL);
   const pendingVersion = versionText.trim();
   const zonesCapText = locationCapText(maxLocations);
