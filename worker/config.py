@@ -172,6 +172,8 @@ COLOR_VISION_TICK_SECONDS = int(os.getenv("COLOR_VISION_TICK_SECONDS", "900"))
 # Agencias (pipeline/dealers.py): sweep hidden dealer cars, sync stock items into
 # listings, match the visible ones; app_config.dealer_program switches it all.
 DEALER_TICK_SECONDS = int(os.getenv("DEALER_TICK_SECONDS", "120"))
+# An agency's Mercado Libre profile is read whole this often (0 = never); one profile per tick.
+DEALER_PROFILE_HOURS = float(os.getenv("DEALER_PROFILE_HOURS", "6"))
 
 # LLM layer (sección 8): OpenAI Luna for the assisted parser; the Claude
 # providers remain available. `local` is an OpenAI-compatible server stub.

@@ -107,6 +107,60 @@ async def sweep() -> dict[str, int]:
 # Step 3: approved sources (listings we already read)
 # ---------------------------------------------------------------------------
 
+_profiles_ready: bool | None = None
+
+
+async def profiles_ready() -> bool:
+    """20270105120000_dealer_source_profile.sql applied (dealer_sources.profile_read_at)."""
+    global _profiles_ready
+    if _profiles_ready is None:
+        async with connection() as cx:
+            row = await (await cx.execute(
+                "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' "
+                "  AND table_name = 'dealer_sources' AND column_name = 'profile_read_at') AS ok")).fetchone()
+        _profiles_ready = bool(row["ok"])
+    return _profiles_ready
+
+
+async def profile_sources_due(hours: float, limit: int) -> list[dict[str, Any]]:
+    """Mercado Libre sources with a seller profile link to read: a new one right
+    away (pending or approved), an approved one again every `hours`. A rejected
+    source, or one of a paused agency, is not read."""
+    async with connection() as cx:
+        return await (await cx.execute(
+            "SELECT s.id, s.dealer_id, s.profile_url, s.status, s.seller_key FROM dealer_sources s "
+            "  JOIN dealers d ON d.id = s.dealer_id "
+            " WHERE s.source = 'mercadolibre' AND s.profile_url ~ '_CustId_[0-9]{3,15}' "
+            "   AND s.status IN ('pending', 'approved') AND d.status = 'active' "
+            "   AND (s.profile_read_at IS NULL "
+            "        OR (s.status = 'approved' AND s.profile_read_at < now() - make_interval(secs => %s))) "
+            " ORDER BY s.profile_read_at NULLS FIRST, s.id LIMIT %s", (hours * 3600, limit))).fetchall()
+
+
+async def save_profile_read(source_id: int, *, name: str | None, key: str | None, count: int | None,
+                            error: str | None) -> None:
+    """What the read found. On a source still pending, the seller it saw becomes
+    the suggestion Juan approves (seller_key, seller_name_hint); an approved
+    source's key is never touched here."""
+    async with connection() as cx:
+        await cx.execute(
+            "UPDATE dealer_sources s SET profile_read_at = now(), profile_count = %(n)s, profile_error = %(e)s, "
+            "       seller_key = CASE WHEN s.status = 'pending' AND %(k)s::text IS NOT NULL THEN %(k)s ELSE s.seller_key END, "
+            "       seller_name_hint = CASE WHEN s.status = 'pending' AND %(name)s::text IS NOT NULL "
+            "                               THEN left(%(name)s, 80) ELSE s.seller_name_hint END "
+            " WHERE s.id = %(id)s", {"id": source_id, "n": count, "e": (error or None) and error[:200], "k": key, "name": name})
+
+
+async def profile_listings_missing(dealer_id: int, seller_key: str, since: datetime) -> list[int]:
+    """The dealer's active Mercado Libre listings of that seller that a complete
+    read of its profile, started at `since`, did not see: they are over."""
+    async with connection() as cx:
+        rows = await (await cx.execute(
+            "SELECT l.id FROM listings l WHERE l.source = 'mercadolibre' AND l.seller_key = %s AND l.dealer_id = %s "
+            "   AND l.status = 'active' AND l.last_seen_at < %s ORDER BY l.id", (seller_key, dealer_id, since))).fetchall()
+    return [r["id"] for r in rows]
+
+
 async def approved_sources() -> list[dict[str, Any]]:
     async with connection() as cx:
         return await (await cx.execute(
