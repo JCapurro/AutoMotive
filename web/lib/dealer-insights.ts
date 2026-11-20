@@ -177,7 +177,7 @@ function phrase(v: DemandLevel, min: number, unit: [string, string], rest: strin
  * en tu zona» (the active count in words: «pocas» below the minimum).
  */
 export function demandTexts(demand: Demand): string[] {
-  if (!demand.approved) return ["La demanda se ve cuando aprobemos tu agencia"];
+  if (!demand.approved) return ["La demanda se ve con el plan Pro activo"];
   const { levels, min_count: min } = demand;
   return [
     phrase(levels.model, min, ["búsqueda", "búsquedas"], " del modelo"),
@@ -199,7 +199,7 @@ export function hiddenReasonText(reason: string | null, days: number): string {
     case "channel_off":
       return "Todavía no se envía a compradores";
     case "not_approved":
-      return "Falta que aprobemos tu agencia";
+      return "Se envía con el plan Pro activo";
     case "not_available":
       return "Reservado o vendido: no se envía";
     case "unconfirmed":

@@ -6,6 +6,7 @@ Needs a database with migration 20261228120000_dealer_program.sql applied
 """
 from __future__ import annotations
 
+import uuid
 from datetime import date, datetime, timedelta, timezone
 
 import pytest
@@ -57,6 +58,17 @@ class DealersCase(NotificationsCase):
             "INSERT INTO dealers (name, locality_label, lat, lon, approved_at, status, contact_email) "
             "VALUES (%s, 'Quilmes', %s, %s, CASE WHEN %s THEN now() END, %s, 'tt@agencia.test') RETURNING id",
             name, *QUILMES, approved, status)
+        if approved:
+            # 20270104120000: the approval follows the plan, and the tick re-reads it. An approved
+            # agency has an owner with Pro active (never the buyer of these tests).
+            [u] = await self.rows(
+                "INSERT INTO auth.users (instance_id, id, aud, role, email, created_at, updated_at) "
+                "VALUES ('00000000-0000-0000-0000-000000000000', gen_random_uuid(), 'authenticated', 'authenticated', %s, "
+                "        now(), now()) RETURNING id", f"owner-{uuid.uuid4().hex}@agencia.test")
+            await self.rows("UPDATE profiles SET plan = 'pro', plan_expires_at = now() + interval '20 days' "
+                            " WHERE id = %s RETURNING id", u["id"])
+            await self.rows("INSERT INTO dealer_members (dealer_id, user_id) VALUES (%s, %s) RETURNING dealer_id",
+                            r["id"], u["id"])
         return r["id"]
 
     async def item(self, dealer_id: int, **kw) -> int:

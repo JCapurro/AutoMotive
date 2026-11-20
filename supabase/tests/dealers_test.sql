@@ -778,16 +778,17 @@ select lives_ok($$select public.update_my_dealer('TT Autos', 'Quilmes', -34.72, 
 select is((public.my_dealer()->>'approved')::boolean, true, '... keeps the approval');
 select lives_ok($$select public.update_my_dealer('TT Autos', 'Quilmes', -34.60, -58.38, '1199998888', '5491122334455',
                                                  'tt@ejemplo.test')$$, 'update_my_dealer: a new place');
-select is((public.my_dealer()->>'approved')::boolean, false, '... goes back to review');
-select is((select demand from public.dealer_stock_insights() where model = 'Demand'), '{"approved": false}'::jsonb,
-          '... and its demand by zone is hidden until Juan approves it again');
+-- 20270104120000: the approval follows the plan; a new place or name no longer un-approves.
+select is((public.my_dealer()->>'approved')::boolean, true, '... keeps the approval (20270104120000)');
+select is((select demand ->> 'approved' from public.dealer_stock_insights() where model = 'Demand'), 'true',
+          '... and still sees its demand');
 reset role;
 update public.dealers set approved_at = now() where id = current_setting('dt.dealer_a')::bigint;
 set local role authenticated;
 set local request.jwt.claims = '{"sub": "d1000000-0000-0000-0000-00000000000a", "role": "authenticated"}';
 select lives_ok($$select public.update_my_dealer('TT Motors', 'Quilmes', -34.60, -58.38, '1199998888', '5491122334455',
                                                  'tt@ejemplo.test')$$, 'update_my_dealer: a new name');
-select is((public.my_dealer()->>'approved')::boolean, false, '... goes back to review too');
+select is((public.my_dealer()->>'approved')::boolean, true, '... keeps the approval too');
 reset role;
 
 update public.app_config set value = '{"enabled": false, "channel_enabled": true, "manual_confirm_days": 7, "demand_min_count": 3}'

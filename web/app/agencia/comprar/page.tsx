@@ -30,7 +30,7 @@ export default async function BuyPage() {
 
       {error ? (
         <p role="status" data-testid="buy-error" className="rounded-lg bg-muted p-4 text-[15px]">
-          {error === "not_approved" ? "Vas a ver qué comprar cuando aprobemos tu agencia." : sellerErrorText(error)}
+          {error === "not_approved" ? "Vas a ver qué comprar con el plan Pro activo." : sellerErrorText(error)}
         </p>
       ) : rows.length === 0 ? (
         <p data-testid="buy-empty" className="rounded-lg bg-muted p-8 text-center text-sm text-muted-foreground">

@@ -140,7 +140,7 @@ export default async function ItemPage({ params }: PageProps<"/agencia/stock/[it
             </p>
           </>
         ) : (
-          <p className="text-[15px] text-muted-foreground">La demanda se ve cuando aprobemos tu agencia.</p>
+          <p className="text-[15px] text-muted-foreground">La demanda se ve con el plan Pro activo.</p>
         )}
       </section>
 

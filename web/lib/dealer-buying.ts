@@ -222,7 +222,7 @@ export function sellerErrorText(code: string | null | undefined): string {
   switch (String(code ?? "").trim()) {
     case "sellers_off": return "Esto todavía no está disponible.";
     case "dealer_program_off": return "Esto todavía no está disponible.";
-    case "not_approved": return "Falta que aprobemos tu agencia.";
+    case "not_approved": return "Se activa con el plan Pro.";
     case "not_member": return "No tenés acceso a esta agencia.";
     case "not_signed_in": return "Entrá a tu cuenta para seguir.";
     case "seller_not_found": return "Este vendedor ya no está disponible.";

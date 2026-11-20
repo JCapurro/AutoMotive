@@ -324,7 +324,7 @@ export function StockTable({ rows, unconfirmed, dealerId }: { rows: StockRow[]; 
                               <p className="font-semibold">{r.facts.demand.zone} en tu zona</p>
                               <p className="text-xs text-muted-foreground">{r.facts.demand.fits} en todo el país</p>
                             </>
-                          ) : <span className="text-xs text-muted-foreground">Cuando aprobemos tu agencia</span>}
+                          ) : <span className="text-xs text-muted-foreground">Con el plan Pro activo</span>}
                         </td>
                         <td className="px-3 py-2.5"><DaysCell f={r.facts} /></td>
                         <td className="py-2.5 pl-3">

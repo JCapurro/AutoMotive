@@ -57,7 +57,7 @@ describe("demand", () => {
     const d = parseDemand({ approved: true, window_days: 90, min_count: 3, levels: { model: 42, fits: 17, zone: 2, active_zone: "few" } });
     expect(demandText(d)).toBe("42 búsquedas del modelo · 17 entran en año y precio · pocas en tu zona · pocas activas en tu zona");
     expect(demandText(d)).not.toMatch(/(^|\D)[12] /);
-    expect(demandText(parseDemand({ approved: false }))).toBe("La demanda se ve cuando aprobemos tu agencia");
+    expect(demandText(parseDemand({ approved: false }))).toBe("La demanda se ve con el plan Pro activo");
     expect(parseDemand({ approved: true, min_count: 1, levels: {} })).toMatchObject({ min_count: 3 });
   });
 

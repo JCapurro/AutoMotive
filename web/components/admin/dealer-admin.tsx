@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
-import { approveDealer, approveSource, pauseDealer, rejectSource } from "@/app/admin/agencias/actions";
+import { approveSource, pauseDealer, rejectSource } from "@/app/admin/agencias/actions";
 import { Button } from "@/components/ui/button";
 import { NativeSelect } from "@/components/ui/native-select";
 
@@ -17,12 +17,11 @@ function useAction() {
   return [pending, call] as const;
 }
 
-/** Approve, pause or resume an agency. */
-export function DealerActions({ id, approved, paused }: { id: number; approved: boolean; paused: boolean }) {
+/** Pause or resume an agency. There is no «approve»: an agency is on while its plan is (20270104120000). */
+export function DealerActions({ id, paused }: { id: number; paused: boolean }) {
   const [pending, call] = useAction();
   return (
     <div className="flex flex-wrap gap-1.5">
-      {!approved ? <Button size="sm" disabled={pending} onClick={() => call(() => approveDealer(id), "Aprobada")}>Aprobar</Button> : null}
       <Button size="sm" variant="outline" disabled={pending} onClick={() => call(() => pauseDealer(id, !paused), paused ? "Activa otra vez" : "Pausada")}>
         {paused ? "Reactivar" : "Pausar"}
       </Button>

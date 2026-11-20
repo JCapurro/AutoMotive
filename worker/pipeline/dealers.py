@@ -2,6 +2,8 @@
 
 Every DEALER_TICK_SECONDS (main.py), each step in its own try, never raising:
 
+0. Approvals (always): public.dealer_sync_approvals() sets dealers.approved_at
+   from the plans (an agency is approved while a member has Pro active).
 1. Sweep (always): public.dealer_sweep() deletes the matches and the
    expired_search_matches rows of every hidden dealer car, and skips its
    queued notifications (an expired confirmation, a paused dealer, the
@@ -290,6 +292,11 @@ async def run_dealers(notifier: Notifier, links: Links, *, now: datetime | None 
         return tick
     if not ready:
         return tick
+    # Before the sweep: an agency whose plan just ended is hidden by this same tick, one that
+    # just paid is visible in it. A plan that expires has no event, so this is where it is seen.
+    changed = await _step("approvals", "all", repo.sync_approvals())
+    if changed:
+        log.info("dealers: %d approvals changed with their plan", changed)
     swept = await _step("sweep", "all", repo.sweep())
     if swept:
         tick.swept_matches, tick.skipped_notifications, tick.swept_expired = (

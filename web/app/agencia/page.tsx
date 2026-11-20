@@ -34,8 +34,8 @@ export default async function DealerHome() {
 
       {!dealer.approved ? (
         <p role="status" data-testid="dealer-not-approved" className="rounded-lg bg-muted p-4 text-[15px]">
-          <b className="font-semibold">Falta que aprobemos tu agencia.</b> Mientras tanto ves los precios contra el mercado. La demanda y el envío a compradores
-          se prenden cuando la aprobemos.
+          <b className="font-semibold">Tu agencia se activa con el plan Pro.</b> Mientras tanto ves tus precios contra el mercado. Con Pro activo ves
+          cuánta gente busca cada auto y tus autos les llegan a los compradores. <Link href="/planes" className="font-semibold underline underline-offset-2">Ver planes</Link>
         </p>
       ) : null}
       {counts.unconfirmed > 0 ? (
