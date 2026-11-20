@@ -68,7 +68,7 @@ export default async function DealerFunnelPage({ searchParams }: PageProps<"/adm
                   <tr key={d.dealer_id}>
                     <Td>
                       <b className="font-semibold">{d.name}</b>{" "}
-                      {d.status === "paused" ? <Pill tone="warn">Pausada</Pill> : d.approved ? null : <Pill>Sin aprobar</Pill>}
+                      {d.status === "paused" ? <Pill tone="warn">Pausada</Pill> : d.approved ? null : <Pill>Sin plan Pro</Pill>}
                     </Td>
                     <Td numeric>{number(d.stock)}</Td>
                     <Td numeric>{number(d.visible)}</Td>

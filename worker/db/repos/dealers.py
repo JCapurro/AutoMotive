@@ -85,6 +85,18 @@ def visible(alias: str) -> str:
 # Step 1: the sweep
 # ---------------------------------------------------------------------------
 
+async def sync_approvals() -> int:
+    """dealers.approved_at from the plans (20270104120000_dealer_auto_approval.sql): on while a member
+    has Pro active, off when none does. 0 before that migration: the approval is then still by hand."""
+    async with connection() as cx:
+        row = await (await cx.execute(
+            "SELECT to_regprocedure('public.dealer_sync_approvals()') IS NOT NULL AS ok")).fetchone()
+        if not row["ok"]:
+            return 0
+        done = await (await cx.execute("SELECT public.dealer_sync_approvals() AS n")).fetchone()
+    return int(done["n"] or 0)
+
+
 async def sweep() -> dict[str, int]:
     async with connection() as cx:
         row = await (await cx.execute("SELECT * FROM public.dealer_sweep()")).fetchone()

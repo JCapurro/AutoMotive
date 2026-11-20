@@ -14,15 +14,8 @@ function done(): AdminDealerResult {
 
 const validId = (id: unknown): id is number => typeof id === "number" && Number.isInteger(id) && id > 0;
 
-/** Approval turns on the demand counts and, with the channel on, sending to buyers (spec §0.7). */
-export async function approveDealer(id: number): Promise<AdminDealerResult> {
-  const actor = await requireAdmin();
-  if (!validId(id)) return { error: "Agencia inválida." };
-  const { error } = await createAdminClient().from("dealers")
-    .update({ approved_at: new Date().toISOString(), approved_by: actor.id, status: "active" }).eq("id", id);
-  if (error) return { error: "No pudimos aprobarla." };
-  return done();
-}
+// No «approve»: dealers.approved_at follows the plan (public.dealer_sync_approvals, 20270104120000).
+// It turns on the demand counts and, with the channel on, sending to buyers (spec §0.7).
 
 /** Paused: its cars stop reaching buyers on the worker's next sweep (≤ 120 s); resumed: back to active. */
 export async function pauseDealer(id: number, paused: boolean): Promise<AdminDealerResult> {

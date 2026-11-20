@@ -34,7 +34,7 @@ export default async function SellersPage() {
 
       {error ? (
         <p role="status" data-testid="sellers-error" className="rounded-lg bg-muted p-4 text-[15px]">
-          {error === "not_approved" ? "Vas a ver vendedores cuando aprobemos tu agencia." : sellerErrorText(error)}
+          {error === "not_approved" ? "Vas a ver vendedores con el plan Pro activo." : sellerErrorText(error)}
         </p>
       ) : rows.length === 0 ? (
         <p data-testid="sellers-empty" className="rounded-lg bg-muted p-8 text-center text-sm text-muted-foreground">

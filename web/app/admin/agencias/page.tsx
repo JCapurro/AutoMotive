@@ -75,11 +75,11 @@ export default async function DealersAdminPage() {
                 </Td>
                 <Td>{when(d.created_at)}</Td>
                 <Td>
-                  {d.status === "paused" ? <Pill tone="warn">Pausada</Pill> : d.approved_at ? <Pill tone="ok">Aprobada</Pill> : <Pill>Sin aprobar</Pill>}
+                  {d.status === "paused" ? <Pill tone="warn">Pausada</Pill> : d.approved_at ? <Pill tone="ok">Activa (Pro)</Pill> : <Pill>Sin plan Pro</Pill>}
                 </Td>
                 <Td className="text-xs">{line(itemCounts.get(d.id), { available: "disp.", reserved: "res.", sold: "vend.", archived: "fuera" })}</Td>
                 <Td className="text-xs">{line(leadCounts.get(d.id), { new: "nuevas", contacted: "contact.", reserved: "res.", sold: "vend.", lost: "perd." })}</Td>
-                <Td><DealerActions id={d.id} approved={d.approved_at != null} paused={d.status === "paused"} /></Td>
+                <Td><DealerActions id={d.id} paused={d.status === "paused"} /></Td>
               </tr>
             ))}
           </tbody>
