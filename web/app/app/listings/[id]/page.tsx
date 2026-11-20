@@ -46,6 +46,7 @@ import { fetchPriceTracks, summaryLine, trackingNote } from "@/lib/price-track";
 import { financingOffered, financingTerms, isCashPrice, publishedIsPartial, publishedKind } from "@/lib/price";
 import { priceGap, priceGapLine } from "@/lib/price-gap";
 import { colorLine, colorMethodOf, wantsColor } from "@/lib/listing-color";
+import { parseListOrigin } from "@/lib/list-position";
 import { linkedListingIds, sortFlags } from "@/lib/red-flags";
 import { emphasize, RISK_HINT, RISK_TITLE } from "@/lib/risk-checklist";
 import { sellerFact, strictSellerFilterOn } from "@/lib/seller";
@@ -93,6 +94,8 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
   const listingId = Number(id);
   const query = await searchParams;
   const n = typeof query.n === "string" && /^\d+$/.test(query.n) ? Number(query.n) : null;
+  // Valor justo §6.3: src, ord, flt and pos from a results list's card; markSeen checks them again.
+  const listOrigin = parseListOrigin(query);
 
   const supabase = await createClient();
   const [
@@ -206,7 +209,7 @@ export default async function ListingPage({ params, searchParams }: PageProps<"/
 
   return (
     <div className="max-lg:pb-20">
-      <ViewTracker listingId={listingId} notificationId={fromAlert} />
+      <ViewTracker listingId={listingId} notificationId={fromAlert} origin={listOrigin} />
       <Link href={back} className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground hover:underline">
         <ArrowLeft className="size-4" aria-hidden /> {best?.search_profiles?.name ?? "Inicio"}
       </Link>

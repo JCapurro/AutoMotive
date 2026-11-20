@@ -88,3 +88,17 @@ it("starts weeks on Monday", () => {
   expect(weekStart(Date.parse("2026-11-14T12:00:00Z"))).toBe("2026-11-09");
   expect(weekStart(Date.parse("2026-11-09T00:00:00Z"))).toBe("2026-11-09");
 });
+
+it("never counts a results page shown as activity (valor justo §6.3)", () => {
+  const u = user("e", 30);
+  const events = [
+    ev("e", "signup_completed", 30, { method: "email_only" }),
+    ev("e", "search_profile_created", 30),
+    ev("e", "search_results_viewed", 20, { profile_id: 1, sort: "score", filter: "all", page: 1, listing_ids: [1] }),
+    ev("e", "search_results_viewed", 2, { profile_id: 1, sort: "score", filter: "all", page: 1, listing_ids: [1] }),
+  ];
+  const d = buildUsersDashboard({ users: [u], events, notifications: [], payments: [] }, now, null);
+  expect(d.users[0]).toMatchObject({ activeDays: 1, lastActivityAt: daysAgo(30), engaged: false });
+  const week = d.cohorts.find((c) => c.week === weekStart(Date.parse(daysAgo(30))))!;
+  expect(week.retention[0]).toBe(0);
+});

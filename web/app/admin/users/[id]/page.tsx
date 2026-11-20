@@ -6,7 +6,7 @@ import { EmptyRow, Json, PageHeader, Pill, Stat, Table, Td, TextLink, Th } from 
 import { channelOf, CHANNEL_LABEL, landingKind, parseOrigin } from "@/lib/acquisition";
 import { count, filterSummary, when } from "@/lib/admin-format";
 import { requireAdmin } from "@/lib/admin";
-import { SYSTEM_EVENTS } from "@/lib/admin-users-data";
+import { NOT_ACTIVITY, SYSTEM_EVENTS } from "@/lib/admin-users-data";
 import { EVENT_LABEL } from "@/lib/admin-event-labels";
 import { money } from "@/lib/format";
 import { PLAN_NAMES } from "@/lib/pro";
@@ -44,7 +44,7 @@ export default async function AdminUserPage({ params }: PageProps<"/admin/users/
     if (n.clicked_at) s.clicked += 1;
     bySearch.set(n.search_profile_id, s);
   }
-  const own = (events ?? []).filter((e) => !SYSTEM_EVENTS.has(e.name) && e.name !== "alert_sent" && e.name !== "lifecycle_email_sent");
+  const own = (events ?? []).filter((e) => !NOT_ACTIVITY.has(e.name) && e.name !== "lifecycle_email_sent");
   const activeDays = new Set(own.map((e) => e.created_at.slice(0, 10))).size;
 
   return (

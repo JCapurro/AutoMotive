@@ -24,6 +24,7 @@ export const EVENT_LABEL: Record<string, string> = {
   lifecycle_email_sent: "Se le mandó un email",
   lifecycle_email_clicked: "Hizo clic en un email",
   founder_email_sent: "Se le mandó el email de fundador",
+  search_results_viewed: "Vio una página de resultados",
   listing_detail_viewed: "Abrió la ficha de un auto",
   listing_outbound_clicked: "Fue al aviso original",
   listing_saved: "Guardó un auto",

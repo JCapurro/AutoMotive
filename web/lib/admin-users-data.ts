@@ -18,6 +18,13 @@ export const SYSTEM_EVENTS = new Set([
   "assisted_fallback_shown",
 ]);
 
+/**
+ * Events that never make a user active: the system's own, plus a results
+ * page being shown (search_results_viewed, valor justo §6.3), as in
+ * v_validation_criteria and admin_users.last_activity_at.
+ */
+export const NOT_ACTIVITY = new Set([...SYSTEM_EVENTS, "search_results_viewed"]);
+
 /** Signs that a user looked at a car we found for them. */
 const ENGAGED = new Set(["alert_clicked", "listing_detail_viewed", "listing_outbound_clicked", "listing_saved", "listing_discarded"]);
 const SEARCH_EVENTS = new Set(["search_created", "search_profile_created"]);
@@ -124,7 +131,7 @@ export function buildUsersDashboard(
     const signup = events.find((e) => e.name === "signup_completed");
     const props = (signup?.props ?? {}) as Record<string, unknown>;
     const origin = parseOrigin(props.origin);
-    const own = events.filter((e) => !SYSTEM_EVENTS.has(e.name));
+    const own = events.filter((e) => !NOT_ACTIVITY.has(e.name));
     const count = (name: string) => own.filter((e) => e.name === name).length;
     const n = notes.get(u.id) ?? [];
     const p = pays.get(u.id) ?? [];
@@ -196,7 +203,7 @@ export function buildUsersDashboard(
           const start = Date.parse(u.created_at) + k * 7 * DAY;
           return (byUser.get(u.id) ?? []).some((e) => {
             const t = Date.parse(e.created_at);
-            return !SYSTEM_EVENTS.has(e.name) && t >= start && t < start + 7 * DAY;
+            return !NOT_ACTIVITY.has(e.name) && t >= start && t < start + 7 * DAY;
           });
         }).length;
         return pct(back, members.length);

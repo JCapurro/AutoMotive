@@ -30,7 +30,8 @@ export async function loadUsersInput() {
     ),
     readAll<EventRow>((a, b) =>
       db.from("events").select("user_id,name,props,created_at")
-        .not("name", "in", "(alert_sent,lifecycle_email_sent,founder_email_sent)")
+        // search_results_viewed: one per results page, never activity (NOT_ACTIVITY); left out of the read.
+        .not("name", "in", "(alert_sent,lifecycle_email_sent,founder_email_sent,search_results_viewed)")
         .order("id").range(a, b),
     ),
     readAll<NotificationRow>((a, b) =>

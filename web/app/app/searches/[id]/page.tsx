@@ -9,6 +9,7 @@ import { AutoRefresh } from "@/components/app/auto-refresh";
 import { FreeResultLimit } from "@/components/app/free-result-limit";
 import { LowResultsNotice } from "@/components/app/low-results-notice";
 import { ProBanner, VisibleResultsReport } from "@/components/app/pro-cta";
+import { ResultsViewedReport } from "@/components/app/results-viewed-report";
 import { FrequencySelect, PauseButton } from "@/components/app/search-actions";
 import { SearchCriteriaSummary } from "@/components/app/search-criteria-summary";
 import { SearchPreparation } from "@/components/app/search-preparation";
@@ -20,7 +21,7 @@ import { Button } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth";
 import { webConfig } from "@/lib/config";
 import { costLinesFor } from "@/lib/cost-estimate-data";
-import { FOLLOW_EMPTY, FOLLOW_LABEL } from "@/lib/copy";
+import { FOLLOW_EMPTY } from "@/lib/copy";
 import { marginAccess, marginLinesFor, marginTeasersFor } from "@/lib/margin-data";
 import { fetchPriceTracks } from "@/lib/price-track";
 import { accessDate, freeResultQuota, includesImmediateAlerts, type PlanLimits, visibleResults, withoutPro } from "@/lib/pro";
@@ -30,6 +31,8 @@ import { loadSearchCollection } from "@/lib/search-collection-server";
 import { storedSellerTypes } from "@/lib/search-form";
 import { effectiveSort, type Sort, sortsFor } from "@/lib/sorts";
 import { wantsColor } from "@/lib/listing-color";
+import { pageListingIds } from "@/lib/list-position";
+import { FILTERS, type Filter, isResultFilter } from "@/lib/result-filters";
 import { createClient } from "@/lib/supabase/server";
 import { trialOffer } from "@/lib/trial-offer";
 import type { Filters, Preferences } from "@/lib/types";
@@ -49,16 +52,6 @@ function followCounts(data: unknown): Record<string, number> {
   return { contacted_count: n("contacted_count"), visit_scheduled_count: n("visit_scheduled_count"), purchased_count: n("purchased_count") };
 }
 
-// §29, plus X-01's follow-up states (search_follow_counts), always shown.
-const FILTERS = {
-  new: "Nuevos",
-  opportunities: "Oportunidades",
-  all: "Todos",
-  saved: "Favoritos",
-  discarded: "Descartados",
-  ...FOLLOW_LABEL,
-} as const;
-type Filter = keyof typeof FILTERS;
 const COUNT_KEY: Record<Filter, string> = {
   new: "new_count",
   opportunities: "opportunities_count",
@@ -84,7 +77,7 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
   const { id } = await params;
   if (!/^\d+$/.test(id)) notFound();
   const query = await searchParams;
-  const filter: Filter = typeof query.f === "string" && Object.hasOwn(FILTERS, query.f) ? (query.f as Filter) : "all";
+  const filter: Filter = isResultFilter(query.f) ? query.f : "all";
   const page = Math.max(Number(query.p) || 1, 1);
 
   const supabase = await createClient();
@@ -277,10 +270,13 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
 
       {shown.length ? (
         <div className={LISTING_ROWS} data-testid="results">
-          {shown.map((card) => (
+          {/* Valor justo §6.3: what this page showed, and each card's place in the list. */}
+          <ResultsViewedReport profileId={profileId} sort={sort} filter={filter} page={page} listingIds={pageListingIds(shown, page, PAGE_SIZE)} />
+          {shown.map((card, index) => (
             <ListingCard
               key={card.listing_id}
               card={card}
+              listOrigin={{ profileId, sort, filter, position: index + 1 }}
               track={card.listing_id != null ? tracks.get(card.listing_id) : null}
               costLine={card.listing_id != null ? costLines.get(card.listing_id) : null}
               marginLine={card.listing_id != null ? marginLines.get(card.listing_id) : null}
