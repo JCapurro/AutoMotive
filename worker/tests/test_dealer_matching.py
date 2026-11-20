@@ -68,7 +68,7 @@ class PrivateOnlyTests(unittest.TestCase):
                 self.assertIsNone(seller)          # Free: a soft preference, not the hard check
 
     def test_copy(self):
-        self.assertEqual(copy.DEALER_LABEL, "Agencia")
+        self.assertEqual(copy.DEALER_LABEL, "Promocionado")
         self.assertIn("{wanted}", copy.REASON["seller_dealer_stock"])
 
 

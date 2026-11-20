@@ -250,7 +250,7 @@ class Content:
 
 
 def dealer_line(listing: Mapping[str, Any]) -> str | None:
-    """Agencias: «Agencia · TT Autos» for a visible dealer's car
+    """Agencias: «Promocionado · TT Autos» for a visible dealer's car
     (payload listing.dealer, notifications/service.listing_payload); None otherwise."""
     tag = listing.get("dealer") if isinstance(listing, Mapping) else None
     name = tag.get("name") if isinstance(tag, Mapping) else None

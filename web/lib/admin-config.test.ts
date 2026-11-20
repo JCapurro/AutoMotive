@@ -19,7 +19,7 @@ describe("guided config validators", () => {
     }
     const phase1 = { ...seeded, alerts_enabled: true, alerts_every_hours: 168, photo_import_enabled: false, photo_import_daily_limit: 50 };
     expect(validateConfigChange("dealer_program", phase1, seeded)).toBeNull();
-    expect(configFieldLabel("dealer_program", "photo_import_enabled")).toBe("Carga de stock por foto o PDF (usa IA: cuesta por uso)");
+    expect(configFieldLabel("dealer_program", "photo_import_enabled")).toBe("Lectura del stock con IA: planillas, fotos y PDF (cuesta por uso)");
     expect(configFieldLabel("dealer_program", "enabled")).toBe("Panel de agencias (/agencia)");
     expect(configFieldLabel("dealer_program", "demand_min_count")).toBe("Mínimo de personas para mostrar un número de búsquedas");
     // Fase 3: the sellers keys are optional, with the ranges of dealer_sellers_config().

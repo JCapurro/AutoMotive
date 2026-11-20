@@ -31,8 +31,8 @@ from pydantic import BaseModel, ValidationError
 from collectors._loop import run_collector
 from llm import prompts
 from llm.provider import LLMError, LLMTimeout
-from llm.schemas import (ListingFacts, LowResultsExplanation, ModelGuideDraft, PolishedQuestions, SearchDraft,
-                         SearchDrafts, json_schema)
+from llm.schemas import (STOCK_SHEET_TEXT_TYPE, STOCK_SHEET_TIMEOUT_SECONDS, ListingFacts, LowResultsExplanation,
+                         ModelGuideDraft, PolishedQuestions, SearchDraft, SearchDrafts, StockSheetRead, json_schema)
 from normalization.vehicle import CatalogModel
 
 log = logging.getLogger(__name__)
@@ -192,6 +192,10 @@ class ClaudeCliProvider:
         raise LLMError("claude_cli no manda fotos: el color necesita LLM_PROVIDER=openai o anthropic")
 
     async def stock_sheet(self, data: bytes, media_type: str):
-        """Same as the color pass: `claude -p` takes no files. The stock read
-        from a photo or a PDF needs the openai or anthropic provider."""
+        """A spreadsheet arrives as text and `claude -p` reads it; a photo or a
+        PDF is a file, which it does not take: those need the openai or
+        anthropic provider."""
+        if media_type == STOCK_SHEET_TEXT_TYPE and data:
+            return await self._structured(prompts.load("stock_sheet"), prompts.stock_sheet_text_user(data),
+                                          StockSheetRead, timeout=STOCK_SHEET_TIMEOUT_SECONDS)
         raise LLMError("claude_cli no manda archivos: la lista por foto necesita LLM_PROVIDER=openai o anthropic")

@@ -250,7 +250,11 @@ class ListingColorAnswer(_Strict):
 # nothing the model says is loaded without the dealer seeing it.
 STOCK_SHEET_MAX_ROWS = 200
 STOCK_SHEET_MAX_BYTES = 4 * 1024 * 1024
-STOCK_SHEET_MEDIA_TYPES = ("image/jpeg", "image/png", "image/webp", "application/pdf")
+# A spreadsheet arrives as text: the web reads the CSV/XLSX to a table (plate columns
+# dropped) and sends it as 'text/csv' (20270103120000_dealer_stock_read_text.sql).
+STOCK_SHEET_TEXT_TYPE = "text/csv"
+STOCK_SHEET_TEXT_MAX_CHARS = 120_000
+STOCK_SHEET_MEDIA_TYPES = ("image/jpeg", "image/png", "image/webp", "application/pdf", STOCK_SHEET_TEXT_TYPE)
 # A long list is a long answer: more than the assisted mode's budget, still under
 # the running job's expiry (LLM_TIMEOUT_SECONDS + 60 s, pipeline/llm_jobs.py).
 STOCK_SHEET_TIMEOUT_SECONDS = 100.0

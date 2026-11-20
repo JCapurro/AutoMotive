@@ -102,8 +102,8 @@ class HiddenReasonTests(unittest.TestCase):
 
 class LabelTests(unittest.TestCase):
     def test_visible_dealer_car_has_the_label(self):
-        self.assertEqual(label(car(), ON, now=NOW), {"label": "Agencia", "name": "TT Autos"})
-        self.assertEqual(label(car(source="mercadolibre"), ON, now=NOW), {"label": "Agencia", "name": "TT Autos"})
+        self.assertEqual(label(car(), ON, now=NOW), {"label": "Promocionado", "name": "TT Autos"})
+        self.assertEqual(label(car(source="mercadolibre"), ON, now=NOW), {"label": "Promocionado", "name": "TT Autos"})
 
     def test_no_label(self):
         cases = {

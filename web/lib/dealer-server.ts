@@ -4,6 +4,8 @@ import { cache } from "react";
 
 import { webConfig } from "@/lib/config";
 import { type DealerCard, parseDealerCard } from "@/lib/dealer-contact";
+import { parseMarket } from "@/lib/dealer-insights";
+import { parsePriceContext, type PriceContext, priceReasons, type PriceWhy } from "@/lib/dealer-price-reasons";
 import { channelOn } from "@/lib/dealer-program";
 import { createClient } from "@/lib/supabase/server";
 import type { Json } from "@/types/database";
@@ -93,6 +95,31 @@ export async function stockInsights(): Promise<StockInsight[]> {
     return [];
   }
   return (data ?? []) as StockInsight[];
+}
+
+/**
+ * dealer_price_context(): per car on sale, the narrower cuts of its market pool
+ * (lib/dealer-price-reasons.ts). Empty on any error: the panel then shows the
+ * price against the market without a «por qué».
+ */
+export async function priceContexts(): Promise<Map<number, PriceContext>> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("dealer_price_context");
+  if (error) {
+    console.error("dealer_price_context:", error.code);
+    return new Map();
+  }
+  const out = new Map<number, PriceContext>();
+  for (const row of data ?? []) {
+    const ctx = parsePriceContext(row.context);
+    if (ctx) out.set(row.item_id, ctx);
+  }
+  return out;
+}
+
+/** The «por qué» of one insight row, or null (price in line, no reference, no context). */
+export function whyOf(row: StockInsight, contexts: Map<number, PriceContext>): PriceWhy | null {
+  return priceReasons({ priceUsd: row.price_usd, year: row.year, trim: row.trim }, parseMarket(row.market), contexts.get(row.item_id) ?? null);
 }
 
 export type DealerLead = {

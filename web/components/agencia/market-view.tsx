@@ -11,6 +11,8 @@ export type MarketListing = {
   title: string;
   year: number | null;
   km: number | null;
+  /** Part of the reference the car's price is compared against (dealer_market_listings.in_ref). */
+  inRef: boolean;
   priceUsd: number;
   priceShown: string;
   source: string;
@@ -51,13 +53,15 @@ function Chips<T extends string>({ label, value, options, onChange }: { label: s
 }
 
 /** The market of one car: where its price sits, the spread, and every comparable listing with the car placed among them. */
-export function MarketView({ listings, own }: { listings: MarketListing[]; own: OwnCar }) {
+export function MarketView({ listings, own, refLabel = null }: { listings: MarketListing[]; own: OwnCar; refLabel?: string | null }) {
+  // With a reference by km the page opens on it: those are the cars the price is compared against.
+  const [group, setGroup] = useState<"ref" | "all">(refLabel ? "ref" : "all");
   const [years, setYears] = useState<"all" | "same">("all");
   const [seller, setSeller] = useState<"all" | "private" | "dealer">("all");
 
   const rows = useMemo(
-    () => listings.filter((l) => (years === "all" || l.year === own.year) && (seller === "all" || l.seller === seller)),
-    [listings, years, seller, own.year],
+    () => listings.filter((l) => (group === "all" || l.inRef) && (years === "all" || l.year === own.year) && (seller === "all" || l.seller === seller)),
+    [listings, group, years, seller, own.year],
   );
   const prices = useMemo(() => rows.map((r) => r.priceUsd), [rows]);
   const enough = prices.length >= 5;
@@ -82,6 +86,9 @@ export function MarketView({ listings, own }: { listings: MarketListing[]; own: 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-2">
+        {refLabel ? (
+          <Chips label="Comparables" value={group} onChange={setGroup} options={[{ id: "ref", label: refLabel }, { id: "all", label: "Todo el modelo" }]} />
+        ) : null}
         <Chips label="Años" value={years} onChange={setYears} options={[{ id: "all", label: "Año ±1" }, { id: "same", label: own.year ? `Solo ${own.year}` : "Mismo año" }]} />
         <Chips label="Vendedor" value={seller} onChange={setSeller} options={[{ id: "all", label: "Todos" }, { id: "private", label: "Particulares" }, { id: "dealer", label: "Agencias" }]} />
         <span className="text-sm text-muted-foreground">{nf.format(rows.length)} {rows.length === 1 ? "aviso" : "avisos"}</span>

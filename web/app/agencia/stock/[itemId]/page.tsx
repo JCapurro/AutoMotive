@@ -13,6 +13,7 @@ import {
   ITEM_STATUS,
   itemSending,
   margin,
+  marketBasisText,
   parseDemand,
   parseMarket,
   parseModelDays,
@@ -22,7 +23,8 @@ import {
   SUGGESTED_PRICE_NOTE,
   suggestedPrice,
 } from "@/lib/dealer-insights";
-import { myDealer, stockInsights } from "@/lib/dealer-server";
+import { PriceWhyBlock } from "@/components/agencia/price-why";
+import { myDealer, priceContexts, stockInsights, whyOf } from "@/lib/dealer-server";
 import { money, number, vehicle } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 
@@ -50,6 +52,7 @@ export default async function ItemPage({ params }: PageProps<"/agencia/stock/[it
     : null;
 
   const market = parseMarket(insight?.market);
+  const why = insight && (item.status === "available" || item.status === "reserved") ? whyOf(insight, await priceContexts()) : null;
   const demand = parseDemand(insight?.demand);
   const check = priceCheck(market);
   const suggested = item.status === "sold" || item.status === "archived" ? null
@@ -103,13 +106,15 @@ export default async function ItemPage({ params }: PageProps<"/agencia/stock/[it
         ) : null}
         <p className="text-sm text-muted-foreground">
           {insight?.price_usd ? `Tu precio: ${money(insight.price_usd, "USD")}. ` : ""}
-          Mismo modelo, año ±1, vistos en los últimos 30 días, todas las fuentes; pesos al blue{market?.blue ? ` (${money(market.blue, "ARS")})` : ""}. Sin separar versión ni km.
+          {marketBasisText(market) ?? "Mismo modelo, año ±1."} Vistos en los últimos 30 días, todas las fuentes; pesos al blue{market?.blue ? ` (${money(market.blue, "ARS")})` : ""}.
         </p>
         {market && market.n > 0 ? (
           <p><Link href={`/agencia/stock/${itemId}/mercado`} className="text-sm font-semibold underline underline-offset-2">Ver el mercado: los {number(market.n)} avisos contra los que se compara</Link></p>
         ) : null}
         <p className="text-sm text-muted-foreground">{daysInStockText(insight?.days_in_stock ?? null, parseModelDays(insight?.model_days_to_sell))}</p>
       </section>
+
+      <PriceWhyBlock why={why} />
 
       {suggested ? (
         <section className="space-y-2" data-testid="item-suggested">

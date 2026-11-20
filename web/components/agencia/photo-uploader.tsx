@@ -9,7 +9,7 @@ import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
 export const MAX_PHOTOS = 10;
-const BUCKET = "dealer-photos";
+export const BUCKET = "dealer-photos";
 const MAX_SIDE = 1600;
 
 /** Shrinks a photo in the browser (longest side 1600 px, JPEG) so a phone picture weighs ~300 KB instead of 5 MB. */

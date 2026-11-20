@@ -66,7 +66,7 @@ insert into public.app_config (key, value)
 values ('dealer_program', '{"enabled": false, "channel_enabled": false, "manual_confirm_days": 7, "demand_min_count": 3}');
 select is(has_function_privilege('anon', 'public.dealer_program()', 'execute'), true, 'dealer_program(): anon can read it');
 select is(has_function_privilege('authenticated', 'public.dealer_demand(text,text,integer,numeric,text,integer,double precision,double precision,uuid[],text)', 'execute')
-          or has_function_privilege('authenticated', 'public.dealer_market_ref(text,text,integer,numeric,bigint)', 'execute')
+          or has_function_privilege('authenticated', 'public.dealer_market_ref(text,text,integer,numeric,bigint,integer,text)', 'execute')
           or has_function_privilege('authenticated', 'public.dealer_sweep()', 'execute')
           or has_function_privilege('authenticated', 'public.dealer_hide_listing(bigint)', 'execute')
           or has_function_privilege('authenticated', 'public.admin_dealer_seller_candidates(text,text)', 'execute'),
@@ -674,7 +674,7 @@ overriding system value values
    current_setting('dt.dealer_a')::bigint, 'available', now()),
   (9879, 'mercadolibre', 'DT-9879', 'https://example.test/dt-9879', 'Mref', 'Pgdealer', 'Mref', 2017, 99000, 'USD', 99000, 'active', false, now(), '{"_not_vehicle": true}', null, null, null),
   (9880, 'mercadolibre', 'DT-9880', 'https://example.test/dt-9880', 'Mref', 'Pgdealer', 'Mref', 2017, 99000, 'USD', 99000, 'active', false, now(), '{}', null, null, null);
-select is(public.dealer_market_ref('pgdealer', 'MREF', 2017, 15000, 9880) - 'blue',
+select is(public.dealer_market_ref('pgdealer', 'MREF', 2017, 15000, 9880) - array['blue', 'basis', 'km', 'km_tol', 'wide'],
           '{"n": 3, "median": 12000, "p25": 11000, "p75": 13000, "vs_market_pct": 25.0, "enough": false,
             "year_tol": 1, "days": 30}'::jsonb,
           'dealer_market_ref: years -1/0/+1 of any portal source; not +2, 31 days old, gone, partial, directo, not a vehicle or the excluded one');

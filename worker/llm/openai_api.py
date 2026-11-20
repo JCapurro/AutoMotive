@@ -18,7 +18,7 @@ from pydantic import BaseModel, ValidationError
 
 from llm import prompts
 from llm.provider import LLMError, LLMTimeout, color_result
-from llm.schemas import (LISTING_COLOR_MAX_IMAGES, LISTING_COLOR_SCHEMA, STOCK_SHEET_MEDIA_TYPES,
+from llm.schemas import (LISTING_COLOR_MAX_IMAGES, LISTING_COLOR_SCHEMA, STOCK_SHEET_MEDIA_TYPES, STOCK_SHEET_TEXT_TYPE,
                          STOCK_SHEET_TIMEOUT_SECONDS, ListingColorAnswer, ListingFacts, LowResultsExplanation,
                          ModelGuideDraft, PolishedQuestions, SearchDraft, SearchDrafts, StockSheetRead, json_schema)
 from normalization.vehicle import CatalogModel
@@ -203,11 +203,15 @@ class OpenAIApiProvider:
         as an input_file; the text first, as in the color pass."""
         if not data or media_type not in STOCK_SHEET_MEDIA_TYPES:
             raise LLMError("falta el archivo de la lista o su tipo no se lee")
-        url = f"data:{media_type};base64," + base64.b64encode(data).decode("ascii")
-        part: dict[str, Any] = ({"type": "input_file", "filename": "lista.pdf", "file_data": url}
-                                if media_type == "application/pdf"
-                                else {"type": "input_image", "detail": "high", "image_url": url})
-        content: list[dict[str, Any]] = [{"type": "input_text", "text": prompts.STOCK_SHEET_USER_TEXT}, part]
+        content: list[dict[str, Any]]
+        if media_type == STOCK_SHEET_TEXT_TYPE:      # a spreadsheet, already as text
+            content = [{"type": "input_text", "text": prompts.stock_sheet_text_user(data)}]
+        else:
+            url = f"data:{media_type};base64," + base64.b64encode(data).decode("ascii")
+            part: dict[str, Any] = ({"type": "input_file", "filename": "lista.pdf", "file_data": url}
+                                    if media_type == "application/pdf"
+                                    else {"type": "input_image", "detail": "high", "image_url": url})
+            content = [{"type": "input_text", "text": prompts.STOCK_SHEET_USER_TEXT}, part]
         answer, _ = await self._structured_usage(prompts.load("stock_sheet"), content, StockSheetRead,
                                                  max_output_tokens=_STOCK_MAX_OUTPUT_TOKENS,
                                                  timeout=max(self.timeout, STOCK_SHEET_TIMEOUT_SECONDS))

@@ -329,7 +329,7 @@ class ChannelTests(DealersCase):
         self.assertNotIn(private, matched)                                   # C4
         notes = await self.rows("SELECT payload FROM notifications WHERE listing_id = %s", lid)
         self.assertTrue(notes)
-        self.assertEqual(notes[0]["payload"]["listing"]["dealer"], {"label": "Agencia", "name": "TT Autos"})
+        self.assertEqual(notes[0]["payload"]["listing"]["dealer"], {"label": "Promocionado", "name": "TT Autos"})
 
     async def test_reserved_or_unconfirmed_leaves_no_matches(self):
         await self.program(ON)

@@ -27,7 +27,7 @@ from pydantic import BaseModel, ValidationError
 
 from llm import prompts
 from llm.provider import LLMError, LLMTimeout, color_result
-from llm.schemas import (LISTING_COLOR_MAX_IMAGES, STOCK_SHEET_MEDIA_TYPES, STOCK_SHEET_TIMEOUT_SECONDS,
+from llm.schemas import (LISTING_COLOR_MAX_IMAGES, STOCK_SHEET_MEDIA_TYPES, STOCK_SHEET_TEXT_TYPE, STOCK_SHEET_TIMEOUT_SECONDS,
                          ListingColorAnswer, ListingFacts, LowResultsExplanation, ModelGuideDraft, PolishedQuestions,
                          SearchDraft, SearchDrafts, StockSheetRead)
 from normalization.vehicle import CatalogModel
@@ -147,12 +147,16 @@ class AnthropicApiProvider:
         the text; same structured output as every call here."""
         if not data or media_type not in STOCK_SHEET_MEDIA_TYPES:
             raise LLMError("falta el archivo de la lista o su tipo no se lee")
-        encoded = base64.b64encode(data).decode("ascii")
-        kind = "document" if media_type == "application/pdf" else "image"
-        content: list[dict[str, Any]] = [
-            {"type": kind, "source": {"type": "base64", "media_type": media_type, "data": encoded}},
-            {"type": "text", "text": prompts.STOCK_SHEET_USER_TEXT},
-        ]
+        content: list[dict[str, Any]]
+        if media_type == STOCK_SHEET_TEXT_TYPE:      # a spreadsheet, already as text
+            content = [{"type": "text", "text": prompts.stock_sheet_text_user(data)}]
+        else:
+            encoded = base64.b64encode(data).decode("ascii")
+            kind = "document" if media_type == "application/pdf" else "image"
+            content = [
+                {"type": kind, "source": {"type": "base64", "media_type": media_type, "data": encoded}},
+                {"type": "text", "text": prompts.STOCK_SHEET_USER_TEXT},
+            ]
         answer, _ = await self._structured_usage(prompts.load("stock_sheet"), content, StockSheetRead,
                                                  max_tokens=_STOCK_MAX_TOKENS,
                                                  timeout=max(self.timeout, STOCK_SHEET_TIMEOUT_SECONDS))

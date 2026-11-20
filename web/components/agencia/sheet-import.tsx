@@ -3,7 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 
-import { importSheet, previewSheet, type SheetPreview } from "@/app/agencia/actions";
+import { importSheet, previewSheet, requestSheetRead, type SheetPreview } from "@/app/agencia/actions";
+import { DataNeeded, MissingDataNotice } from "@/components/agencia/data-notice";
 import { shrink } from "@/components/agencia/photo-uploader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,12 +30,16 @@ const CATALOG_ISSUES = new Set(["no_make", "no_model", "not_in_catalog"]);
  * PDF of the list goes to dealer_request_stock_read() straight from the
  * browser (no 1 MB server-action limit), the worker reads it with the LLM and
  * the same preview runs on its table (the server reads the job, not the browser).
+ * A CSV/XLSX goes through the same reader, as text (requestSheetRead); if the
+ * reader can't take it, it is read by columns as before and the page says so.
  */
 export function SheetImport({ catalog, photo = false }: { catalog: Catalog; photo?: boolean }) {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [job, setJob] = useState<number | null>(null);
   const [reading, setReading] = useState(false);
+  /** How the list on screen was read: by the reader (LLM) or by columns. */
+  const [readBy, setReadBy] = useState<"ai" | "columns" | null>(null);
   const [preview, setPreview] = useState<SheetPreview | null>(null);
   const [map, setMap] = useState<ColumnMap | null>(null);
   const [skip, setSkip] = useState<Set<number>>(new Set());
@@ -91,6 +96,54 @@ export function SheetImport({ catalog, photo = false }: { catalog: Catalog; phot
     });
   }
 
+  /** Ask for the preview of a queued read until the worker has it; false when it failed or took too long. */
+  async function waitForRead(id: number): Promise<boolean> {
+    const until = Date.now() + STOCK_READ_WAIT_MS;
+    while (Date.now() < until) {
+      await new Promise((r) => setTimeout(r, 3000));
+      const ask = new FormData();
+      ask.set("job", String(id));
+      const result = await previewSheet(ask).catch(() => ({ pending: true }) as SheetPreview);
+      if (result.pending) continue;
+      if (result.error) {
+        setError(result.error);
+        return false;
+      }
+      setPreview(result);
+      setMap(result.map ?? {});
+      setSkip(new Set());
+      setFixes({});
+      setPriceOk(!result.priceGuessed);
+      setReadBy("ai");
+      return true;
+    }
+    setError("La lectura está tardando más de lo normal. Probá de nuevo en unos minutos.");
+    return false;
+  }
+
+  /** A CSV/XLSX: through the reader; by columns when the reader can't take it or fails. */
+  async function readSheetFile(next: File) {
+    setError(null);
+    setLoaded(null);
+    setReading(true);
+    try {
+      const data = new FormData();
+      data.set("file", next);
+      const asked = await requestSheetRead(data).catch(() => ({ fallback: true }) as { job?: number; fallback?: true; error?: string });
+      if (asked.error) return void setError(asked.error);
+      if (asked.job !== undefined) {
+        setJob(asked.job);
+        if (await waitForRead(asked.job)) return;
+        setJob(null);
+        setError(null);
+      }
+      setReadBy("columns");
+      load(next, true, null);
+    } finally {
+      setReading(false);
+    }
+  }
+
   /** A photo or a PDF: send it, then ask for the preview until the worker has read it. */
   async function readPhoto(next: File, media: string) {
     setError(null);
@@ -104,26 +157,7 @@ export function SheetImport({ catalog, photo = false }: { catalog: Catalog; phot
       const { data: id, error: rpcError } = await createClient().rpc("dealer_request_stock_read", { p_data: data, p_media_type: sent, p_filename: next.name.slice(0, 200) });
       if (rpcError || typeof id !== "number") throw new Error(rpcError?.message ?? "invalid_file:data");
       setJob(id);
-      const until = Date.now() + STOCK_READ_WAIT_MS;
-      while (Date.now() < until) {
-        await new Promise((r) => setTimeout(r, 3000));
-        const ask = new FormData();
-        ask.set("job", String(id));
-        const result = await previewSheet(ask).catch(() => ({ pending: true }) as SheetPreview);
-        if (result.pending) continue;
-        if (result.error) {
-          setError(result.error);
-          setJob(null);
-          return;
-        }
-        setPreview(result);
-        setMap(result.map ?? {});
-        setSkip(new Set());
-        setFixes({});
-        setPriceOk(!result.priceGuessed);
-        return;
-      }
-      setError("La lectura está tardando más de lo normal. Probá de nuevo en unos minutos o subí la planilla.");
+      if (!(await waitForRead(id))) setJob(null);
     } catch (e) {
       setError(dealerErrorText(e instanceof Error ? e.message : null));
       setJob(null);
@@ -169,16 +203,22 @@ export function SheetImport({ catalog, photo = false }: { catalog: Catalog; phot
             setFile(next);
             setPreview(null);
             setJob(null);
+            setReadBy(null);
             const media = next && photo ? stockMedia(next.name, next.type) : null;
             if (next && media) void readPhoto(next, media);
-            else load(next, true, null);
+            else if (next && photo) void readSheetFile(next);
+            else {
+              if (next) setReadBy("columns");
+              load(next, true, null);
+            }
           }}
         />
         <p className="text-xs text-muted-foreground">CSV o XLSX, hasta 1 MB y 500 autos. Las columnas de patente o dominio no se leen ni se guardan.</p>
+        <DataNeeded />
         {photo ? (
           <p className="text-xs text-muted-foreground" data-testid="sheet-photo-help">
-            ¿No tenés planilla? Subí una foto o un PDF de tu lista (hasta 4 MB): la leemos y te mostramos lo que entendimos antes de cargar.
-            Revisá cada fila: la lectura puede equivocarse.
+            También podés subir una foto o un PDF de tu lista (hasta 4 MB). Sea planilla, foto o PDF, interpretamos la lista y te mostramos lo
+            que entendimos antes de cargar nada. Revisá cada fila: la lectura puede equivocarse.
           </p>
         ) : null}
       </div>
@@ -186,7 +226,18 @@ export function SheetImport({ catalog, photo = false }: { catalog: Catalog; phot
       {loaded !== null ? <p role="status" className="rounded-lg bg-muted p-4 text-[15px] font-semibold">Listo: cargamos {loaded} {loaded === 1 ? "auto" : "autos"}. En unos minutos aparecen con sus precios contra el mercado.</p> : null}
       {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
       {pending && !preview ? <p className="text-sm text-muted-foreground">Leyendo la planilla…</p> : null}
-      {reading ? <p role="status" className="text-sm text-muted-foreground">Leyendo tu lista… puede tardar un minuto.</p> : null}
+      {reading ? <p role="status" className="text-sm text-muted-foreground">Leyendo e interpretando tu lista… puede tardar un minuto.</p> : null}
+      {preview && readBy === "ai" ? (
+        <p className="rounded-lg bg-muted p-3 text-sm" data-testid="sheet-read-by">
+          <b className="font-semibold">Interpretamos tu lista automáticamente.</b> Puede equivocarse: revisá cada fila antes de cargar.
+        </p>
+      ) : null}
+      {preview && readBy === "columns" && photo ? (
+        <p className="rounded-lg bg-warn-soft p-3 text-sm" data-testid="sheet-read-by">
+          <b className="font-semibold">Esta vez la leímos por columnas, sin interpretarla.</b> Revisá que cada columna sea la correcta y cada fila antes de cargar.
+        </p>
+      ) : null}
+      {preview ? <MissingDataNotice cars={rows.filter((r) => !skip.has(r.line) && !r.issues.some((i) => BLOCKING.has(i))).map((r) => ({ km: r.values.mileage_km ?? null, trim: r.values.trim ?? null }))} where="sheet" /> : null}
       {preview?.truncated ? <p className="text-sm font-semibold text-warn">La lista tenía más autos de los que leemos de una vez: cargá estos y subí el resto en otra foto.</p> : null}
 
       {preview && map ? (
@@ -278,6 +329,11 @@ function SheetRowView({ row, catalog, skipped, fix, onSkip, onFix }: {
         <p className="font-semibold">{[v.make, v.model, v.trim, v.year].filter(Boolean).join(" ") || "Sin datos"}</p>
         <p className="text-[13px]">{v.price != null ? `${v.currency ?? ""} ${v.price.toLocaleString("es-AR")}` : "Sin precio"}{v.mileage_km != null ? ` · ${v.mileage_km.toLocaleString("es-AR")} km` : ""}</p>
         {row.issues.length ? <p className="text-[13px] font-semibold text-warn">{row.issues.map((i) => ISSUE_TEXT[i]).join(" · ")}</p> : null}
+        {!blocked && (v.mileage_km == null || !v.trim) ? (
+          <p className="text-[13px] font-semibold text-warn" data-testid="sheet-row-missing">
+            {[v.mileage_km == null ? "Faltan los kilómetros" : null, !v.trim ? "Falta la versión" : null].filter(Boolean).join(" · ")}
+          </p>
+        ) : null}
         {needsCatalog ? (
           <div className="mt-1.5 flex flex-wrap gap-2">
             <NativeSelect size="sm" aria-label={`Marca de la fila ${row.line}`} value={fix?.make ?? ""} onChange={(e) => onFix({ make: e.target.value, model: "" })}>

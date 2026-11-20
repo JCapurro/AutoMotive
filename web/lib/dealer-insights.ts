@@ -17,7 +17,19 @@ export type MarketRef = {
   year_tol?: number;
   days?: number;
   blue?: number | null;
+  /**
+   * What the numbers above compare against (dealer_market_ref, 20270102120000): the same trim with similar km, any
+   * trim with similar km, or the whole model (no km loaded, or too few listings near). Absent = the whole model.
+   */
+  basis?: MarketBasis;
+  /** The car's km and the band (km ± kmTol) that counts as similar. */
+  km?: number | null;
+  kmTol?: number | null;
+  /** The whole model, year ±1, whatever the km: what the reference was before. */
+  wide?: { n: number; median: number | null; vs_market_pct: number | null } | null;
 };
+
+export type MarketBasis = "version_km" | "km" | "model";
 
 export type DemandLevel = number | "few" | null;
 export type Demand =
@@ -50,7 +62,52 @@ export function parseMarket(raw: unknown): MarketRef | null {
     year_tol: num(r.year_tol) ?? undefined,
     days: num(r.days) ?? undefined,
     blue: num(r.blue),
+    basis: r.basis === "version_km" || r.basis === "km" ? r.basis : "model",
+    km: num(r.km),
+    kmTol: num(r.km_tol),
+    wide: wide(r.wide),
   };
+}
+
+function wide(raw: unknown): MarketRef["wide"] {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const r = raw as Record<string, unknown>;
+  return { n: num(r.n) ?? 0, median: num(r.median), vs_market_pct: num(r.vs_market_pct) };
+}
+
+/** «80.000 a 120.000 km»: the band of km that counts as similar to the car's. */
+export function kmBandText(market: MarketRef | null): string | null {
+  if (!market || market.km == null || market.kmTol == null) return null;
+  return `${nf.format(Math.max(0, market.km - market.kmTol))} a ${nf.format(market.km + market.kmTol)} km`;
+}
+
+/**
+ * Against what the price is compared, in one sentence. The km is central to a
+ * car's value (Juan, 20/11): without it the panel says the comparison is loose
+ * and asks for it.
+ */
+export function marketBasisText(market: MarketRef | null): string | null {
+  if (!market || market.n === 0) return null;
+  const band = kmBandText(market);
+  const n = `${nf.format(market.n)} ${market.n === 1 ? "aviso" : "avisos"}`;
+  if (market.basis === "version_km") return `Comparado con ${n} de la misma versión, año ±1 y kilómetros parecidos (${band}).`;
+  if (market.basis === "km") return `Comparado con ${n} del modelo, año ±1 y kilómetros parecidos (${band}).`;
+  return market.km == null
+    ? `Comparado con ${n} del modelo, año ±1, sin mirar kilómetros. Cargá los km del auto: es lo que más mueve el precio.`
+    : `Hay pocos avisos con kilómetros parecidos (${band}): comparado con ${n} del modelo, año ±1, de cualquier kilometraje.`;
+}
+
+/** The short version for the stock table; null when the reference already takes the km. */
+export function marketBasisNote(market: MarketRef | null): string | null {
+  if (!market || market.n === 0 || market.basis === "version_km" || market.basis === "km") return null;
+  return market.km == null ? "Sin km: comparación floja" : "Pocos con km parecidos";
+}
+
+/** The chip of «Ver el mercado» for the reference group; null when the reference is the whole model. */
+export function marketBasisChip(market: MarketRef | null): string | null {
+  if (market?.basis === "version_km") return "Misma versión y km parecidos";
+  if (market?.basis === "km") return "Km parecidos";
+  return null;
 }
 
 function level(v: unknown): DemandLevel {
@@ -311,6 +368,7 @@ export function stockRowView(
     sends: sending.sends,
     review: row.sync_state === "review",
     facts: stockFacts(row),
+    basisNote: marketBasisNote(market),
     suggested: suggested ? `Sugerido ${suggested.label}` : null,
     margin: own ? `Margen ${own.label}` : null,
     marginNegative: own ? own.amount < 0 : false,

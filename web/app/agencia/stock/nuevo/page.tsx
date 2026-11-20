@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { DataNeeded } from "@/components/agencia/data-notice";
 import { redirect } from "next/navigation";
 
 import { StockItemForm } from "@/components/agencia/stock-item-form";
@@ -21,6 +22,7 @@ export default async function NewItemPage() {
           ¿Tenés muchos? <Link href="/agencia/stock/planilla" className="underline underline-offset-2">Subí tu planilla</Link>.
         </p>
       </div>
+      <DataNeeded />
       <StockItemForm catalog={catalog} dealerId={dealer.id} />
     </div>
   );

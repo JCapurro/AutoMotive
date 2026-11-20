@@ -28,8 +28,27 @@ export function stockMedia(filename: string, type: string | null | undefined): S
   return null;
 }
 
-export function sheetKindOf(media: string): "photo" | "pdf" {
-  return media === "application/pdf" ? "pdf" : "photo";
+export function sheetKindOf(media: string): "photo" | "pdf" | "csv" {
+  return media === "application/pdf" ? "pdf" : media === SHEET_TEXT_TYPE ? "csv" : "photo";
+}
+
+/** A spreadsheet goes to the reader as text (20270103120000_dealer_stock_read_text.sql). */
+export const SHEET_TEXT_TYPE = "text/csv";
+/** The reader takes this many cars in one read (worker llm/schemas.py STOCK_SHEET_MAX_ROWS). */
+export const STOCK_READ_MAX_ROWS = 200;
+
+/**
+ * A spreadsheet's table as the text the reader gets: one row per line, cells
+ * joined by « ; ». The table comes from readSheet(), so plate columns are
+ * already gone. Null when it has more rows than one read takes (the panel then
+ * reads it by columns, as before) or nothing to read.
+ */
+export function tableToText(table: SheetTable): string | null {
+  if (table.rows.length === 0 || table.rows.length > STOCK_READ_MAX_ROWS) return null;
+  const cell = (v: string) => v.replace(/[\r\n;]+/g, " ").replace(/\s+/g, " ").trim();
+  const line = (r: string[]) => r.map(cell).join(" ; ");
+  const lines = [line(table.headers), ...table.rows.map(line)].filter((l) => l.replace(/[ ;]/g, "") !== "");
+  return lines.join("\n");
 }
 
 /** Bytes as base64 (what the RPC decodes), in chunks so a 4 MB file doesn't blow the stack. */
@@ -42,7 +61,7 @@ export function toBase64(bytes: Uint8Array): string {
 export type StockReadState =
   | { state: "pending" }
   | { state: "error"; message: string }
-  | { state: "ok"; table: SheetTable; kind: "photo" | "pdf"; truncated: boolean };
+  | { state: "ok"; table: SheetTable; kind: "photo" | "pdf" | "csv"; truncated: boolean };
 
 const isStrings = (v: unknown): v is string[] => Array.isArray(v) && v.every((x) => typeof x === "string");
 

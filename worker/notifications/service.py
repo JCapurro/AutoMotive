@@ -88,7 +88,7 @@ def _iso(value: Any) -> Any:
 def listing_payload(row: Mapping[str, Any], program: Mapping[str, Any] | None = None, *,
                     now: datetime | None = None) -> dict[str, Any]:
     """`program` (app_config.dealer_program, sanitized): with it, a visible
-    dealer's car carries listing.dealer = {"label": "Agencia", "name": …}
+    dealer's car carries listing.dealer = {"label": "Promocionado", "name": …}
     (intelligence/dealer.label). Without a dealer, the same payload as before."""
     keys = ("title", "make", "model", "trim", "year", "mileage_km", "price", "currency", "url",
             "source", "location_text", "published_at", "first_seen_at")

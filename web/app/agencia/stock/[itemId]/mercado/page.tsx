@@ -4,7 +4,9 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { MarketView, type MarketListing } from "@/components/agencia/market-view";
-import { myDealer, stockInsights } from "@/lib/dealer-server";
+import { PriceWhyBlock } from "@/components/agencia/price-why";
+import { marketBasisChip, marketBasisText, parseMarket } from "@/lib/dealer-insights";
+import { myDealer, priceContexts, stockInsights, whyOf } from "@/lib/dealer-server";
 import { daysSince, money, vehicle } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 
@@ -23,8 +25,9 @@ export default async function ItemMarketPage({ params }: PageProps<"/agencia/sto
   if (!/^\d+$/.test(raw)) notFound();
   const itemId = Number(raw);
   const supabase = await createClient();
-  const [insights, { data, error }, { data: sources }] = await Promise.all([
+  const [insights, contexts, { data, error }, { data: sources }] = await Promise.all([
     stockInsights(),
+    priceContexts(),
     supabase.rpc("dealer_market_listings", { p_item_id: itemId }),
     supabase.from("sources").select("id, name"),
   ]);
@@ -38,6 +41,7 @@ export default async function ItemMarketPage({ params }: PageProps<"/agencia/sto
     title: [vehicle({ make: insight.make, model: insight.model }), l.trim].filter(Boolean).join(" ") || l.title,
     year: l.year,
     km: l.mileage_km,
+    inRef: l.in_ref !== false,
     priceUsd: Number(l.price_usd),
     priceShown: l.currency === "ARS" ? `${money(l.price, "ARS")} ≈ ${money(l.price_usd, "USD")}` : money(l.price_usd, "USD"),
     source: sourceName.get(l.source) ?? l.source,
@@ -46,6 +50,7 @@ export default async function ItemMarketPage({ params }: PageProps<"/agencia/sto
     days: daysSince(l.first_seen_at),
     url: l.url?.startsWith("https://") ? l.url : null,
   }));
+  const market = parseMarket(insight.market);
   const model = vehicle({ make: insight.make, model: insight.model }) || "Auto";
   const years = insight.year ? `${insight.year - 1} a ${insight.year + 1}` : "";
 
@@ -57,12 +62,14 @@ export default async function ItemMarketPage({ params }: PageProps<"/agencia/sto
       <header className="space-y-1">
         <h1 className="type-heading text-[1.9rem] leading-tight">El mercado del {model}{years ? ` ${years}` : ""}</h1>
         <p className="text-sm text-muted-foreground">
-          Los avisos contra los que comparamos tu {vehicle({ make: insight.make, model: insight.model, trim: insight.trim, year: insight.year })}: mismo modelo, año ±1, vistos en los
-          últimos 30 días, en todas las fuentes. Pesos al dólar blue del día. Son precios publicados, no de venta.{" "}
+          Los avisos del modelo de tu {vehicle({ make: insight.make, model: insight.model, trim: insight.trim, year: insight.year })}, año ±1, vistos en los
+          últimos 30 días en todas las fuentes. {marketBasisText(market)} Pesos al dólar blue del día. Son precios publicados, no de venta.{" "}
           <Link href={`/agencia/stock/${itemId}`} className="underline underline-offset-2">Editar el auto</Link>
         </p>
       </header>
+      <PriceWhyBlock why={whyOf(insight, contexts)} />
       <MarketView
+        refLabel={marketBasisChip(market)}
         listings={listings}
         own={{
           name: [insight.trim, insight.year].filter(Boolean).join(" ") || model,

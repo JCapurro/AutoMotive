@@ -26,7 +26,7 @@ import {
   type SheetTable,
   toRows,
 } from "@/lib/dealer-sheet";
-import { stockReadState } from "@/lib/dealer-stock-photo";
+import { SHEET_TEXT_TYPE, stockReadState, tableToText } from "@/lib/dealer-stock-photo";
 import { normalizeArPhone } from "@/lib/phone";
 import { createClient } from "@/lib/supabase/server";
 import type { Json } from "@/types/database";
@@ -190,6 +190,28 @@ export async function saveItem(itemId: number | null, input: unknown): Promise<A
   return { ok: true, id: data };
 }
 
+/**
+ * Photos added from the stock table (the «Subir foto» button of a car without any): the URLs the browser just
+ * uploaded to the agency's folder, appended to the car's. dealer_upsert_item() takes a partial update, validates
+ * the links and checks the car is this agency's.
+ */
+export async function addItemPhotos(itemId: number, urls: string[]): Promise<ActionResult> {
+  await requireUser();
+  if (!Number.isInteger(itemId) || itemId <= 0 || !Array.isArray(urls) || urls.length === 0 || urls.length > 10
+    || !urls.every((u) => typeof u === "string" && u.length <= 500)) {
+    return { error: dealerErrorText("invalid_item:images") };
+  }
+  const supabase = await createClient();
+  const { data: item } = await supabase.from("dealer_stock_items").select("images").eq("id", itemId).maybeSingle();
+  if (!item) return { error: dealerErrorText("not_found") };
+  const current = Array.isArray(item.images) ? item.images.filter((u): u is string => typeof u === "string") : [];
+  const images = [...current, ...urls].slice(0, 10);
+  const { error } = await supabase.rpc("dealer_upsert_item", { p_item_id: itemId, p_values: { images } as unknown as Json });
+  if (error) return fail(error.message, "dealer_upsert_item");
+  done();
+  return { ok: true };
+}
+
 // --- The spreadsheet ---
 
 export type SheetPreview = {
@@ -236,7 +258,36 @@ async function readStockJob(raw: string): Promise<Upload | { error: string } | {
   const read = stockReadState(job);
   if (read.state === "pending") return { pending: true };
   if (read.state === "error") return { error: read.message };
-  return { table: read.table, filename: read.kind === "pdf" ? "PDF de la lista" : "Foto de la lista", kind: read.kind, truncated: read.truncated };
+  const filename = read.kind === "pdf" ? "PDF de la lista" : read.kind === "csv" ? "Planilla" : "Foto de la lista";
+  return { table: read.table, filename, kind: read.kind, truncated: read.truncated };
+}
+
+/**
+ * A spreadsheet through the reader (Juan, 20/11: every stock list is interpreted
+ * by the LLM, whatever its format). The server reads the CSV/XLSX to a table as
+ * always (plate columns dropped) and queues that table as text with
+ * dealer_request_stock_read(): same switch, same daily cap, same job the browser
+ * waits on. `fallback` = read it by columns as before: the reader is off, the
+ * cap is reached, the sheet is longer than one read, or the queue refused it.
+ */
+export async function requestSheetRead(form: FormData): Promise<{ job?: number; fallback?: true; error?: string }> {
+  await requireUser();
+  const read = await readUpload(form);
+  if ("pending" in read) return { fallback: true };
+  if ("error" in read) return { error: read.error };
+  const text = tableToText(read.table);
+  if (text === null) return { fallback: true };
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("dealer_request_stock_read", {
+    p_data: Buffer.from(text, "utf8").toString("base64"),
+    p_media_type: SHEET_TEXT_TYPE,
+    p_filename: read.filename,
+  });
+  if (error || typeof data !== "number") {
+    if (error) console.error("dealer_request_stock_read:", error.code);
+    return { fallback: true };
+  }
+  return { job: data };
 }
 
 async function readUpload(form: FormData): Promise<Upload | { error: string } | { pending: true }> {

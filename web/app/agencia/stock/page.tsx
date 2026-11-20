@@ -2,11 +2,12 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { MissingDataNotice } from "@/components/agencia/data-notice";
 import { StockTable } from "@/components/agencia/stock-table";
 import { Button } from "@/components/ui/button";
 import { webConfig } from "@/lib/config";
 import { stockRowView } from "@/lib/dealer-insights";
-import { myDealer, stockInsights } from "@/lib/dealer-server";
+import { myDealer, priceContexts, stockInsights, whyOf } from "@/lib/dealer-server";
 import { firstImage } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
@@ -27,8 +28,9 @@ export default async function StockPage({ searchParams }: PageProps<"/agencia/st
   const q = await searchParams;
   const filter = FILTERS.find((f) => f.id === q.estado)?.id ?? "available";
   const supabase = await createClient();
-  const [insights, { dealerProgram }, { data: photoRows }, { data: costRows }] = await Promise.all([
+  const [insights, contexts, { dealerProgram }, { data: photoRows }, { data: costRows }] = await Promise.all([
     stockInsights(),
+    priceContexts(),
     webConfig(),
     // The cover: the car's own photos, or its portal listing's for a synced one.
     supabase.from("dealer_stock_items").select("id, images, listings!dealer_stock_items_listing_id_fkey(images)").eq("dealer_id", dealer.id),
@@ -37,9 +39,15 @@ export default async function StockPage({ searchParams }: PageProps<"/agencia/st
   ]);
   const costs = new Map((costRows ?? []).map((r) => [r.item_id, r]));
   const photos = new Map((photoRows ?? []).map((r) => [r.id, firstImage(r.images) ?? firstImage(r.listings?.images)]));
+  // Complete data first: a car on sale without km or trim is compared loosely (the banner counts them).
+  const onSale = insights.filter((r) => r.status === "available" || r.status === "reserved");
+  const firstIncomplete = onSale.find((r) => r.mileage_km == null || !r.trim) ?? null;
   const rows = insights
     .filter((r) => filter === "all" || r.status === filter)
-    .map((r) => stockRowView(r, dealerProgram.manualConfirmDays, photos.get(r.item_id) ?? null, costs.get(r.item_id) ?? null));
+    .map((r) => ({
+      ...stockRowView(r, dealerProgram.manualConfirmDays, photos.get(r.item_id) ?? null, costs.get(r.item_id) ?? null),
+      why: whyOf(r, contexts)?.short ?? null,
+    }));
 
   return (
     <div className="space-y-5">
@@ -47,7 +55,8 @@ export default async function StockPage({ searchParams }: PageProps<"/agencia/st
         <div>
           <h1 className="type-heading text-[1.9rem] leading-tight">Tu stock</h1>
           <p className="text-sm text-muted-foreground">
-            Precio contra autos del mismo modelo, año ±1, vistos en los últimos 30 días, en todas las fuentes. Pesos al dólar blue del día.
+            Precio contra autos del mismo modelo, año ±1 y kilómetros parecidos (y de la misma versión cuando hay suficientes), vistos en
+            los últimos 30 días en todas las fuentes. Pesos al dólar blue del día.
           </p>
         </div>
         <div className="flex gap-2">
@@ -70,7 +79,12 @@ export default async function StockPage({ searchParams }: PageProps<"/agencia/st
           ))}
         </ul>
       </nav>
-      <StockTable rows={rows} unconfirmed={dealer.counts.unconfirmed} />
+      <MissingDataNotice
+        where="stock"
+        cars={onSale.map((r) => ({ km: r.mileage_km, trim: r.trim }))}
+        firstHref={firstIncomplete ? `/agencia/stock/${firstIncomplete.item_id}` : null}
+      />
+      <StockTable rows={rows} unconfirmed={dealer.counts.unconfirmed} dealerId={dealer.id} />
     </div>
   );
 }

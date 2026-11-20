@@ -98,7 +98,7 @@ SELLER_ONLY = {"private": "particulares", "dealer": "agencias"}
 # seller is unknown through. The card, the listing page and the opportunity email.
 SELLER_UNKNOWN = "vendedor sin dato"
 # Agencias: the label of a dealer's car in alerts, results and the listing page.
-DEALER_LABEL = "Agencia"
+DEALER_LABEL = "Promocionado"
 UNKNOWN_BADGE = "❔ no informado"
 
 # ---------------------------------------------------------------------------

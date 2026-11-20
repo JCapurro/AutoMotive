@@ -1,4 +1,4 @@
-"""Agencias (spec §4.3, §4.6; C1 label, C2 privacy, C3 gate): the «Agencia»
+"""Agencias (spec §4.3, §4.6; C1 label, C2 privacy, C3 gate): the «Promocionado»
 line in alerts, the gate in the Notifier and the lead email to the dealer."""
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from pipeline.ingest import ListingEvent
 from test_lifecycle_templates import MISSED, WELCOME_CARS, email as lifecycle_email
 
 ON = dealer_program({"enabled": True, "channel_enabled": True})
-TAG = {"label": "Agencia", "name": "TT Autos"}
+TAG = {"label": "Promocionado", "name": "TT Autos"}
 
 
 def row(**kw) -> dict:
@@ -69,16 +69,16 @@ class TemplateTests(unittest.TestCase):
                 tg = templates.telegram(tagged, LINKS, NOW).text
                 mail = templates.email(tagged, LINKS, NOW)
                 for text in (tg, mail.text, mail.html):
-                    self.assertIn("Agencia · TT Autos", text)
+                    self.assertIn("Promocionado · TT Autos", text)
                 c = templates.content(tagged, LINKS, NOW)
-                self.assertEqual(c.lines[2], "Agencia · TT Autos")
-                self.assertEqual(templates.web(tagged, LINKS, NOW)["lines"][2], "Agencia · TT Autos")
+                self.assertEqual(c.lines[2], "Promocionado · TT Autos")
+                self.assertEqual(templates.web(tagged, LINKS, NOW)["lines"][2], "Promocionado · TT Autos")
 
     def test_price_drop_and_gone_have_it_last(self):
         c = templates.content(with_dealer(PRICE_DROP), LINKS, NOW)
-        self.assertEqual(c.lines[-1], "Agencia · TT Autos")
+        self.assertEqual(c.lines[-1], "Promocionado · TT Autos")
         gone = notification("listing_gone", {"listing": {**FIESTA, "dealer": TAG}})
-        self.assertEqual(templates.content(gone, LINKS, NOW).lines[-1], "Agencia · TT Autos")
+        self.assertEqual(templates.content(gone, LINKS, NOW).lines[-1], "Promocionado · TT Autos")
 
     def test_directo_has_no_source_tag(self):
         c = templates.content(with_dealer(NEW_MATCH, source="directo"), LINKS, NOW)
@@ -87,10 +87,10 @@ class TemplateTests(unittest.TestCase):
     def test_without_dealer_the_output_is_the_same(self):
         for n in (NEW_MATCH, OPPORTUNITY, PRICE_DROP, DIGEST):
             with self.subTest(n.kind):
-                self.assertNotIn("Agencia ·", templates.telegram(n, LINKS, NOW).text)
-                self.assertNotIn("Agencia ·", templates.email(n, LINKS, NOW).text)
+                self.assertNotIn("Promocionado ·", templates.telegram(n, LINKS, NOW).text)
+                self.assertNotIn("Promocionado ·", templates.email(n, LINKS, NOW).text)
         bad = with_dealer(NEW_MATCH)
-        bad.payload["listing"]["dealer"] = {"label": "Agencia", "name": " "}
+        bad.payload["listing"]["dealer"] = {"label": "Promocionado", "name": " "}
         self.assertEqual(templates.content(bad, LINKS, NOW).lines, templates.content(NEW_MATCH, LINKS, NOW).lines)
 
     def test_digest_item(self):
@@ -99,21 +99,21 @@ class TemplateTests(unittest.TestCase):
         n = notification("digest", {**DIGEST.payload, "items": items}, id=43, listing_id=None)
         tg = templates.telegram(n, LINKS, NOW).text
         mail = templates.email(n, LINKS, NOW)
-        self.assertEqual(tg.count("Agencia · TT Autos"), 1)
-        self.assertIn("Agencia · TT Autos", mail.text)
-        self.assertIn("Agencia · TT Autos", mail.html)
+        self.assertEqual(tg.count("Promocionado · TT Autos"), 1)
+        self.assertIn("Promocionado · TT Autos", mail.text)
+        self.assertIn("Promocionado · TT Autos", mail.html)
 
     def test_welcome_cars_and_missed_car(self):
         cars = [dict(c) for c in WELCOME_CARS]
         cars[0]["dealer_name"] = "TT Autos"
         msg = lifecycle_email("search_activated", {"model": "Ford Focus", "found": 14, "below": 2, "cars": cars})
-        self.assertEqual(msg.html.count("Agencia · TT Autos"), 1)
+        self.assertEqual(msg.html.count("Promocionado · TT Autos"), 1)
         plain = lifecycle_email("search_activated", {"model": "Ford Focus", "found": 14, "below": 2,
                                                      "cars": WELCOME_CARS})
-        self.assertNotIn("Agencia", plain.html)
+        self.assertNotIn("Promocionado", plain.html)
         missed = {**MISSED, "car": {**MISSED["car"], "dealer_name": "TT Autos"}}
-        self.assertIn("Agencia · TT Autos", lifecycle_email("count_after_expiry", missed).text)
-        self.assertNotIn("Agencia ·", lifecycle_email("count_after_expiry", MISSED).text)
+        self.assertIn("Promocionado · TT Autos", lifecycle_email("count_after_expiry", missed).text)
+        self.assertNotIn("Promocionado ·", lifecycle_email("count_after_expiry", MISSED).text)
 
 
 @asynccontextmanager

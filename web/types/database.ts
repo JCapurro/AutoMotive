@@ -1361,7 +1361,8 @@ isOneToOne: false
       dealer_resolve_duplicate: { Args: { p_item_id: number; p_mine: boolean }; Returns: undefined }
       dealer_set_item_private: { Args: { p_item_id: number; p_purchase_price: number | null; p_purchase_currency: string | null; p_notes: string | null }; Returns: undefined }
       dealer_stock_insights: { Args: Record<string, never>; Returns: { item_id: number; listing_id: number | null; origin: string; status: string; sync_state: string; make: string | null; model: string | null; trim: string | null; year: number | null; mileage_km: number | null; price: number | null; currency: string | null; price_usd: number | null; confirmed_at: string | null; confirm_due_at: string | null; hidden_reason: string | null; market: Json; days_in_stock: number | null; model_days_to_sell: Json; demand: Json }[] }
-      dealer_market_listings: { Args: { p_item_id: number }; Returns: { listing_id: number; source: string; url: string; title: string; trim: string | null; year: number | null; mileage_km: number | null; price: number | null; currency: string | null; price_usd: number; location_text: string | null; seller_type: string | null; first_seen_at: string }[] }
+      dealer_market_listings: { Args: { p_item_id: number }; Returns: { listing_id: number; source: string; url: string; title: string; trim: string | null; year: number | null; mileage_km: number | null; price: number | null; currency: string | null; price_usd: number; location_text: string | null; seller_type: string | null; first_seen_at: string; in_ref: boolean }[] }
+      dealer_price_context: { Args: Record<string, never>; Returns: { item_id: number; context: Json }[] }
       dealer_set_alerts: { Args: { p_on: boolean }; Returns: undefined }
       /** Returns the llm_jobs id of the read (kind dealer_stock_read). */
       dealer_request_stock_read: { Args: { p_data: string; p_media_type: string; p_filename?: string | null }; Returns: number }

@@ -74,7 +74,7 @@ def hidden_reason(listing: Mapping[str, Any], program: Mapping[str, Any], *, now
 
 
 def label(listing: Mapping[str, Any], program: Mapping[str, Any], *, now: datetime) -> dict[str, str] | None:
-    """The «Agencia» label buyers see on an alert: {"label": "Agencia", "name": …}
+    """The «Promocionado» label buyers see on an alert: {"label": "Promocionado", "name": …}
     with the channel on, the dealer approved and active, its name known and the
     listing not hidden; otherwise None (an ordinary listing never has one)."""
     if listing.get("dealer_id") is None:

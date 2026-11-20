@@ -1,15 +1,17 @@
 "use client";
 
-import { AlertTriangle, Check, ImageOff } from "lucide-react";
+import { AlertTriangle, Camera, Check, ImageOff, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 
-import { confirmStock, setItemStatus } from "@/app/agencia/actions";
+import { addItemPhotos, confirmStock, setItemStatus } from "@/app/agencia/actions";
+import { BUCKET, shrink } from "@/components/agencia/photo-uploader";
 import { askSaleSource } from "@/components/agencia/sale-question";
 import { Button } from "@/components/ui/button";
 import { type StockFacts, SUGGESTED_PRICE_NOTE } from "@/lib/dealer-insights";
+import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
 /** One car of the stock screen (the page builds it from dealer_stock_insights). */
@@ -35,6 +37,10 @@ export type StockRow = {
   /** Private: only the owning agency's page passes it. */
   margin?: string | null;
   marginNegative?: boolean;
+  /** «Más km que los parecidos»: the first possible explanation of a price off the market (the car's page has them all). */
+  why?: string | null;
+  /** «Sin km: comparación floja»: the reference could not take the km (dealer-insights.ts marketBasisNote). */
+  basisNote?: string | null;
 };
 
 const STATUSES = [
@@ -78,6 +84,61 @@ export function StockPhoto({ url, className }: { url: string | null; className?:
     <div className={cn("flex shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground", className)} title="Sin fotos">
       <ImageOff className="size-4" aria-hidden />
     </div>
+  );
+}
+
+/**
+ * A car without photos: instead of an empty picture, a button that opens the
+ * phone's camera roll or the file picker, uploads to the agency's folder and
+ * saves the photos on the car. Same shrink and bucket as the car's form.
+ */
+function AddPhoto({ itemId, dealerId, name, className, onDone }: { itemId: number; dealerId: number; name: string; className?: string; onDone: () => void }) {
+  const input = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function upload(files: FileList | null) {
+    const picked = Array.from(files ?? []).filter((f) => f.type.startsWith("image/")).slice(0, 10);
+    if (!picked.length) return;
+    setBusy(true);
+    const supabase = createClient();
+    const urls: string[] = [];
+    for (const file of picked) {
+      try {
+        const path = `${dealerId}/${crypto.randomUUID()}.jpg`;
+        const { error } = await supabase.storage.from(BUCKET).upload(path, await shrink(file), { contentType: "image/jpeg", cacheControl: "31536000" });
+        if (error) throw error;
+        urls.push(supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl);
+      } catch {
+        // counted below
+      }
+    }
+    const saved = urls.length ? await addItemPhotos(itemId, urls) : { error: "No pudimos subir la foto. Probá de nuevo con JPG o PNG." };
+    setBusy(false);
+    if (input.current) input.current.value = "";
+    if (saved.error) return void toast.error(saved.error);
+    toast.success(urls.length === 1 ? "Foto cargada" : `${urls.length} fotos cargadas`);
+    onDone();
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => input.current?.click()}
+        aria-label={`Subir fotos del ${name}`}
+        title="Subir fotos"
+        data-testid="stock-add-photo"
+        className={cn(
+          "flex shrink-0 flex-col items-center justify-center gap-0.5 rounded-md border border-dashed border-foreground/40 text-[10px] leading-none font-semibold text-foreground hover:bg-muted disabled:opacity-60",
+          className,
+        )}
+      >
+        {busy ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Camera className="size-4" aria-hidden />}
+        {busy ? "Subiendo" : "Subir foto"}
+      </button>
+      <input ref={input} type="file" accept="image/*" multiple hidden onChange={(e) => upload(e.target.files)} />
+    </>
   );
 }
 
@@ -145,7 +206,7 @@ function Summary({ rows }: { rows: StockRow[] }) {
   );
 }
 
-export function StockTable({ rows, unconfirmed }: { rows: StockRow[]; unconfirmed: number }) {
+export function StockTable({ rows, unconfirmed, dealerId }: { rows: StockRow[]; unconfirmed: number; dealerId: number }) {
   const router = useRouter();
   const [pending, run] = useTransition();
   const [busy, setBusy] = useState<number | "all" | null>(null);
@@ -213,7 +274,9 @@ export function StockTable({ rows, unconfirmed }: { rows: StockRow[]; unconfirme
                       <tr key={r.itemId} className="border-t align-middle" data-testid="stock-row">
                         <td className="py-2.5 pr-3">
                           <div className="flex items-center gap-2.5">
-                            <StockPhoto url={r.photo} className="h-9 w-12" />
+                            {/* A synced car takes its photos from its portal listing: nothing to upload here. */}
+                            {r.photo || r.origin === "sync" ? <StockPhoto url={r.photo} className="h-9 w-12" />
+                              : <AddPhoto itemId={r.itemId} dealerId={dealerId} name={r.name} className="h-11 w-14" onDone={() => router.refresh()} />}
                             <div className="min-w-0">
                               <Link href={`/agencia/stock/${r.itemId}`} className="font-semibold hover:underline">{r.name}</Link>
                               <p className="max-w-44 truncate text-xs text-muted-foreground">
@@ -242,6 +305,18 @@ export function StockTable({ rows, unconfirmed }: { rows: StockRow[]; unconfirme
                               <Link href={`/agencia/stock/${r.itemId}/mercado`} className="font-medium text-foreground underline underline-offset-2">Ver el mercado</Link>
                             ) : null}
                           </p>
+                          {r.basisNote ? (
+                            <p className="mt-0.5 text-xs whitespace-nowrap" data-testid="stock-basis">
+                              <Link href={`/agencia/stock/${r.itemId}`} className="font-medium text-warn hover:underline">{r.basisNote}</Link>
+                            </p>
+                          ) : null}
+                          {r.why ? (
+                            <p className="mt-0.5 text-xs whitespace-nowrap" data-testid="stock-why">
+                              <Link href={`/agencia/stock/${r.itemId}#por-que`} className="hover:underline" title="Ver por qué">
+                                <span className="text-muted-foreground">Por qué: </span>{r.why}
+                              </Link>
+                            </p>
+                          ) : null}
                         </td>
                         <td className="px-3 py-2.5 whitespace-nowrap" data-testid="stock-demand">
                           {r.facts.demandApproved ? (
