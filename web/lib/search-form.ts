@@ -15,8 +15,27 @@ import type { Filters, Preferences, SearchProfile, SellerType } from "@/lib/type
 /** Hard ceiling on places added to a search, whatever the plan (the plan's own cap is lower or none). */
 export const MAX_EXTRA_LOCATIONS = 9;
 
+/** Oldest year a search can ask for (the schema's floor). */
+export const MIN_YEAR = 1950;
+/** Where the year list starts for a model without catalog years. */
+export const DEFAULT_FIRST_YEAR = 1990;
+
+/**
+ * The form's year list, newest first: the catalog model's years (a classic
+ * such as the F-100 from 1959), never before MIN_YEAR nor after `thisYear`;
+ * a model without a year_from starts at DEFAULT_FIRST_YEAR.
+ */
+export function yearOptions(
+  entry: { yearFrom?: number | null; yearTo?: number | null } | null | undefined,
+  thisYear: number,
+): number[] {
+  const from = Math.max(entry?.yearFrom ?? DEFAULT_FIRST_YEAR, MIN_YEAR);
+  const to = Math.min(entry?.yearTo ?? thisYear, thisYear);
+  return Array.from({ length: Math.max(to - from + 1, 0) }, (_, i) => to - i);
+}
+
 const WHOLE = "Escribí solo números enteros, sin comas ni decimales.";
-const year = z.number("Elegí un año.").int("Elegí un año.").min(1950, "Elegí un año desde 1950.").max(2100, "Elegí un año válido.").nullable().default(null);
+const year = z.number("Elegí un año.").int("Elegí un año.").min(MIN_YEAR, `Elegí un año desde ${MIN_YEAR}.`).max(2100, "Elegí un año válido.").nullable().default(null);
 const positive = z.number(WHOLE).positive("Escribí un monto mayor a 0.").max(1e12, "Ese monto es demasiado grande.").nullable().default(null);
 const kilometers = z.number(WHOLE).int(WHOLE).min(0, "Los kilómetros no pueden ser negativos.").max(2_000_000, "Poné hasta 2.000.000 km.").nullable().default(null);
 
