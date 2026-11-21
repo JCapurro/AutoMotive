@@ -527,12 +527,13 @@ LIFECYCLE_EYEBROW = {"trial_no_matches": "TU PRUEBA GRATIS", "trial_ended": "TU 
                      "pass_expiring": "TU PLAN PARTICULAR", "pass_expires_today": "TU PLAN PARTICULAR",
                      "count_after_expiry": "TU BÚSQUEDA", "search_activated": "TU BÚSQUEDA",
                      "bonus_trial_offer": "7 DÍAS GRATIS", "bonus_trial_ending": "TUS 7 DÍAS GRATIS",
-                     "bonus_trial_ended": "TUS 7 DÍAS GRATIS"}
+                     "bonus_trial_ended": "TUS 7 DÍAS GRATIS", "trial_complete": "TU PRUEBA GRATIS"}
 # The free-trial ones reach email-only accounts too (nobody confirmed the
 # address), so they don't say the reader created the search.
 LIFECYCLE_FOOTER = {
     "trial_no_matches": "Recibís este email porque se activó una búsqueda gratis en Ese Auto con esta dirección.",
     "trial_ended": "Recibís este email porque se activó una búsqueda gratis en Ese Auto con esta dirección.",
+    "trial_complete": "Recibís este email porque se activó una búsqueda gratis en Ese Auto con esta dirección.",
     "pass_expiring": "Recibís este email porque tenés Particular en Ese Auto.",
     "pass_expires_today": "Recibís este email porque tenés Particular en Ese Auto.",
     "count_after_expiry": "Recibís este email porque hubo una búsqueda activa en Ese Auto con esta dirección.",
@@ -562,6 +563,16 @@ WELCOME_TRIAL_LEFT = {1: "Tu prueba muestra hasta {limit} resultados y te queda 
                       "n": "Tu prueba muestra hasta {limit} resultados y te quedan {n}: de los nuevos que coincidan te avisamos por email."}
 WELCOME_TRIAL_FULL = ("Tu prueba ya usó sus {limit} resultados, así que no vamos a avisarte de los nuevos. "
                       "Con Particular los ves todos y seguimos avisándote.")
+# «40 + N» (docs/PRUEBA_COMPLETA.md): with payload.trial_new (the cap on new
+# results), what the trial has left is new cars, and trial_left counts those.
+WELCOME_TRIAL_NEW_LEFT = {1: "Tu prueba te va a mostrar el próximo auto nuevo que coincida.",
+                          "n": "Tu prueba te va a mostrar los próximos {n} autos nuevos que coincidan."}
+WELCOME_TRIAL_NEW_FULL = {1: ("Tu prueba ya te mostró su auto nuevo, así que no vamos a avisarte de otros. "
+                              "Con Particular los ves todos y seguimos avisándote."),
+                          "n": ("Tu prueba ya te mostró sus {n} autos nuevos, así que no vamos a avisarte de otros. "
+                                "Con Particular los ves todos y seguimos avisándote.")}
+WELCOME_TRIAL_NO_NEW = ("Tu prueba no suma autos nuevos, así que no vamos a avisarte de ellos. "
+                        "Con Particular los ves todos y seguimos avisándote.")
 WELCOME_INBOX = ("Para que nuestras alertas no terminen en Spam o Promociones, agregá este remitente a tus "
                  "contactos o mové este email a Principal.")
 WELCOME_CTA = "Ver mis resultados"
@@ -593,6 +604,16 @@ TRIAL_ENDED_OFFER = ("Para seguir recibiendo avisos, Particular sale {price} por
 TRIAL_ENDED_OFFER_FALLBACK = "Para seguir recibiendo avisos, elegí Particular."
 TRIAL_ENDED_KEEP = "Tu historial y tus favoritos quedan guardados."
 TRIAL_ENDED_CTA = "Seguir con Particular"
+
+# trial_complete («40 + N», docs/PRUEBA_COMPLETA.md): once, an hour after the
+# trial admitted its last new car (payload.new, the cap). shown and hidden are
+# the picked search's, as the page counts them.
+TRIAL_COMPLETE_TITLE = {1: "Tu prueba gratis ya te mostró 1 auto nuevo",
+                        "n": "Tu prueba gratis ya te mostró {n} autos nuevos"}
+TRIAL_COMPLETE_FOUND = {1: "Desde que se activó tu búsqueda{model} apareció 1 auto nuevo que coincide, y ya está en tu lista.",
+                        "n": "Desde que se activó tu búsqueda{model} aparecieron {n} autos nuevos que coinciden, y ya están en tu lista."}
+TRIAL_COMPLETE_LIMIT = "Ese es el límite de la prueba gratis: desde ahora no suma autos nuevos."
+TRIAL_COMPLETE_CTA = "Seguir recibiendo autos nuevos"
 
 PASS_SUBJECT = {"pass_expiring": "Te quedan 5 días de Ese Auto",
                 "pass_expires_today": "Hoy vence tu acceso a Ese Auto"}
@@ -791,8 +812,16 @@ def lifecycle_content(kind: str, payload: Mapping[str, Any], url: str, *,
         else:
             lines = [WELCOME_NONE.format(model=f" para tu búsqueda{of_model}")]
         limit = _count(payload.get("trial_limit"))
+        new_cap = payload.get("trial_new")
         if not limit:
             lines.append(WELCOME_NEXT)
+        elif isinstance(new_cap, int) and not isinstance(new_cap, bool) and new_cap >= 0:
+            if left := _count(payload.get("trial_left")):
+                lines.append(_plural(WELCOME_TRIAL_NEW_LEFT, left))
+            elif new_cap:
+                lines.append(_plural(WELCOME_TRIAL_NEW_FULL, new_cap))
+            else:
+                lines.append(WELCOME_TRIAL_NO_NEW)
         elif left := _count(payload.get("trial_left")):
             lines.append(_plural(WELCOME_TRIAL_LEFT, left, limit=limit))
         else:
@@ -819,6 +848,16 @@ def lifecycle_content(kind: str, payload: Mapping[str, Any], url: str, *,
         lines += [particular_offer(offer, limits), TRIAL_ENDED_KEEP]
         subject = TRIAL_ENDED_SUBJECT.format(found=_cars(found)) if found else TRIAL_ENDED_TITLE
         return Content(TRIAL_ENDED_TITLE, subject, lines=lines, link=Link(TRIAL_ENDED_CTA, url)), TRIAL_ENDED_TITLE
+    if kind == "trial_complete":
+        new, hidden = _count(payload.get("new")), _count(payload.get("hidden"))
+        if not new:
+            raise ValueError("trial_complete without new cars")
+        title = _plural(TRIAL_COMPLETE_TITLE, new)
+        lines = [_plural(TRIAL_COMPLETE_FOUND, new, model=f" de {model}" if model else ""), TRIAL_COMPLETE_LIMIT]
+        if hidden:
+            lines.append(_plural(WELCOME_HIDDEN, hidden))
+        lines.append(particular_offer(offer, limits))
+        return Content(title, title, lines=lines, link=Link(TRIAL_COMPLETE_CTA, url)), title
     if kind in PASS_SUBJECT:
         found, below = _count(payload.get("found")), _count(payload.get("below"))
         ended = payload.get("ended") is True

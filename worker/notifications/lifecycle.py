@@ -50,7 +50,9 @@ log = logging.getLogger("lifecycle")
 # gets and it is lost after window_hours. Claimed after trial_ended it starved
 # behind a full cap (14/11/2026: 194 welcomes for 480 accounts).
 # The extra trial's offer goes before 2.5: on day 7 it replaces that day's count.
-KINDS = ("pass_expires_today", "search_activated", "trial_ended", "bonus_trial_ended", "pass_expiring",
+# trial_complete («40 + N», docs/PRUEBA_COMPLETA.md) is the pay notice while the
+# trial still runs: right after the welcome.
+KINDS = ("pass_expires_today", "search_activated", "trial_complete", "trial_ended", "bonus_trial_ended", "pass_expiring",
          "trial_no_matches", "bonus_trial_ending", "bonus_trial_offer", "count_after_expiry",
          "search_abandoned", "search_not_started", "search_feedback")
 DEFAULTS: dict[str, Any] = {"enabled": True, "send_from": "09:00", "send_until": "21:00",
@@ -63,7 +65,9 @@ DEFAULTS: dict[str, Any] = {"enabled": True, "send_from": "09:00", "send_until":
                                       "search_feedback": False,
                                       # The extra 7-day trial: off until someone turns it on.
                                       "bonus_trial_offer": False, "bonus_trial_ending": False,
-                                      "bonus_trial_ended": False}}
+                                      "bonus_trial_ended": False,
+                                      # The trial's completion (docs/PRUEBA_COMPLETA.md): off until Juan turns it on.
+                                      "trial_complete": False}}
 # Why the last tick did nothing without config (logged once, not every tick).
 _skipped_reason: str | None = None
 
