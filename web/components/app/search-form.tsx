@@ -8,6 +8,7 @@ import { type SaveOrigin, saveSearch } from "@/app/app/searches/actions";
 import { OPPORTUNITY_TITLE, OpportunityThreshold } from "@/components/app/opportunity-threshold";
 import { OpportunityThresholdUsd } from "@/components/app/opportunity-threshold-usd";
 import { ProBadge, ProLockedSwitch, ProPlansLink } from "@/components/app/pro-locked";
+import { trialCompleteNoAlerts } from "@/lib/trial-offer";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -268,6 +269,7 @@ export function SearchForm({
   sellerFilter = false,
   lockedPro = {},
   trialFull = null,
+  trialComplete = null,
   onBusyChange,
 }: {
   catalog: Catalog;
@@ -296,6 +298,8 @@ export function SearchForm({
   lockedPro?: Partial<ProLocked>;
   /** The trial's quota, once used up: no new listing is announced (docs/PRUEBA_HONESTA.md). */
   trialFull?: number | null;
+  /** «40 + N»: the new cars a complete trial showed; no new listing is announced, ahead of trialFull (docs/PRUEBA_COMPLETA.md). */
+  trialComplete?: number | null;
   /** Whether the form has unsaved changes or is saving: the zone notice above waits (modo asistido). */
   onBusyChange?: (busy: boolean) => void;
 }) {
@@ -1071,7 +1075,9 @@ export function SearchForm({
         <p className="text-xs text-muted-foreground">
           Al guardar buscamos coincidencias entre las publicaciones de los últimos 30 días. Esas no se notifican: las
           ves acá.{" "}
-          {trialFull != null
+          {trialComplete != null
+            ? trialCompleteNoAlerts(trialComplete)
+            : trialFull != null
             ? `Tu prueba ya usó sus ${trialFull} resultados, así que no vamos a avisarte de las nuevas.`
             : "Desde entonces te avisamos de las nuevas."}
         </p>

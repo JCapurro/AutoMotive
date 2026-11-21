@@ -115,6 +115,11 @@ export function trialCompleteText(newMax: number): string {
   return newMax === 1 ? "Tu prueba ya te mostró su auto nuevo" : `Tu prueba ya te mostró sus ${newMax} autos nuevos`;
 }
 
+/** For the new-search forms: «Tu prueba ya te mostró sus 5 autos nuevos, así que no vamos a avisarte de otros.» */
+export function trialCompleteNoAlerts(newUsed: number): string {
+  return `${trialCompleteText(newUsed)}, así que no vamos a avisarte de otros.`;
+}
+
 /** The sheet's title: «Tu prueba ya te mostró 5 autos nuevos.» */
 export function completeTitle(newMax: number): string {
   return `Tu prueba ya te mostró ${autos(newMax)} ${newMax === 1 ? "nuevo" : "nuevos"}.`;

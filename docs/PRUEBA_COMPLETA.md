@@ -103,6 +103,7 @@ El payload lleva `trial_new` (el tope) y `trial_left` cuenta autos nuevos.
 ### Otros textos de la página
 
 - Cartel de preparación: «Desde ahora: tu prueba ya te mostró sus 5 autos nuevos, así que no vamos a avisarte de otros.»
+- Formularios de búsqueda nueva (estructurado y asistido), con la prueba completa: «Tu prueba ya te mostró sus 5 autos nuevos, así que no vamos a avisarte de otros.» en lugar de «Desde entonces te avisamos de las nuevas.» / «Te avisamos por email cuando aparezca una publicación que coincida.»; tiene prioridad sobre «ya usó sus 50 resultados».
 - Lista vacía: «Todavía no hay publicaciones que coincidan. Tu prueba ya te mostró sus 5 autos nuevos: con Particular te avisamos de las nuevas.»
 - Tarjeta del final con `random_stock`: «Tu prueba muestra 45 de los 68. Con Particular los ves todos, ordenados por mejor oportunidad, y te avisamos de los que aparezcan.» (con 0 mostrados, el texto de siempre)
 

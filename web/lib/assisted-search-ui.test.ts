@@ -81,3 +81,21 @@ it("offers the zone notice on the card of a search just saved, until a tap answe
   expect(quiet).not.toContain("Ampliá tu rango");
   state.phase = "waiting";
 });
+
+it("never promises alerts on the saved card to a trial that is full or complete (docs/PRUEBA_COMPLETA.md)", () => {
+  state.phase = "active";
+  state.notice = null;
+  const values = SearchInput.parse({ make: "Toyota", model: "Corolla" });
+  state.active = { kind: "active", jobId: 42, savedId: 7, draft: { title: "Toyota Corolla", values, notes: [], state: "saved", savedId: 7 } };
+  const render = (extra: { trialFull?: number; trialComplete?: number }) =>
+    renderToStaticMarkup(createElement(AssistedSearch, { catalog: [], sources: [], base: {} as SearchValues, ...extra }));
+  expect(render({})).toContain("Te avisamos por email cuando aparezca una publicación que coincida.");
+  const full = render({ trialFull: 50 });
+  expect(full).toContain("Tu prueba ya usó sus 50 resultados, así que no vamos a avisarte de los autos nuevos.");
+  expect(full).not.toContain("Te avisamos por email");
+  const complete = render({ trialComplete: 5, trialFull: 50 });
+  expect(complete).toContain("Tu prueba ya te mostró sus 5 autos nuevos, así que no vamos a avisarte de otros.");
+  expect(complete).not.toContain("Te avisamos por email");
+  expect(complete).not.toContain("usó sus");
+  state.phase = "waiting";
+});
