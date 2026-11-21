@@ -608,14 +608,13 @@ TRIAL_ENDED_CTA = "Seguir con Particular"
 # trial_complete («40 + N», docs/PRUEBA_COMPLETA.md): once, an hour after the
 # trial admitted its last new car (payload.new, the cap). shown and hidden are
 # the picked search's, as the page counts them.
-TRIAL_COMPLETE_TITLE = {1: "Tu prueba gratis ya te mostró 1 auto nuevo",
-                        "n": "Tu prueba gratis ya te mostró {n} autos nuevos"}
-TRIAL_COMPLETE_FOUND = {1: "Desde que se activó tu búsqueda{model} apareció 1 auto nuevo que coincide, y ya está en tu lista.",
-                        "n": "Desde que se activó tu búsqueda{model} aparecieron {n} autos nuevos que coinciden, y ya están en tu lista."}
-TRIAL_COMPLETE_LIMIT = "Ese es el límite de la prueba gratis: desde ahora no suma autos nuevos."
+TRIAL_COMPLETE_TITLE = {1: "Ya encontramos 1 auto nuevo para tu búsqueda",
+                        "n": "Ya encontramos {n} autos nuevos para tu búsqueda"}
+TRIAL_COMPLETE_FOUND = {1: "Apareció desde que se activó tu búsqueda{model} y ya está en tu lista.",
+                        "n": "Aparecieron desde que se activó tu búsqueda{model} y ya están en tu lista."}
 TRIAL_COMPLETE_CTA = "Seguir recibiendo autos nuevos"
-TRIAL_COMPLETE_OFFER = ("Para seguir recibiendo avisos, Particular sale {price_7} por {days_7} días o {price_30} por {days_30}, "
-                        "con {searches} búsquedas y pago único.")
+TRIAL_COMPLETE_OFFER = ("Para seguir recibiendo los que aparezcan, Particular sale {price_7} por {days_7} días "
+                        "o {price_30} por {days_30}, pago único.")
 
 PASS_SUBJECT = {"pass_expiring": "Te quedan 5 días de Ese Auto",
                 "pass_expires_today": "Hoy vence tu acceso a Ese Auto"}
@@ -751,8 +750,7 @@ def trial_complete_offer(offer: Mapping[str, Any] | None, limits: Mapping[str, A
     """Both passes, the 7-day one first; without both usable, particular_offer's line."""
     week, month = _pass(offer, "pass_7"), _pass(offer, "pass_30")
     if week and month:
-        return TRIAL_COMPLETE_OFFER.format(price_7=week[0], days_7=week[1], price_30=month[0], days_30=month[1],
-                                           searches=_pass_searches(limits))
+        return TRIAL_COMPLETE_OFFER.format(price_7=week[0], days_7=week[1], price_30=month[0], days_30=month[1])
     return particular_offer(offer, limits)
 
 
@@ -875,7 +873,7 @@ def lifecycle_content(kind: str, payload: Mapping[str, Any], url: str, *,
         if not new:
             raise ValueError("trial_complete without new cars")
         title = _plural(TRIAL_COMPLETE_TITLE, new)
-        lines = [_plural(TRIAL_COMPLETE_FOUND, new, model=f" de {model}" if model else ""), TRIAL_COMPLETE_LIMIT]
+        lines = [_plural(TRIAL_COMPLETE_FOUND, new, model=f" de {model}" if model else "")]
         if hidden:
             lines.append(_plural(WELCOME_HIDDEN, hidden))
         lines.append(trial_complete_offer(offer, limits))

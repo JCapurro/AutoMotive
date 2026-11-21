@@ -456,13 +456,12 @@ class TrialCompleteEmailTests(unittest.TestCase):
 
     def test_the_plans_document_copy(self):
         msg = email("trial_complete", {"model": "Ford Focus", "new": 5, "shown": 45, "hidden": 23})
-        self.assertEqual(msg.subject, "Tu prueba gratis ya te mostró 5 autos nuevos")
+        self.assertEqual(msg.subject, "Ya encontramos 5 autos nuevos para tu búsqueda")
         self.assertEqual(self.lines(msg), [
-            "Tu prueba gratis ya te mostró 5 autos nuevos",
-            "Desde que se activó tu búsqueda de Ford Focus aparecieron 5 autos nuevos que coinciden, y ya están en tu lista.",
-            "Ese es el límite de la prueba gratis: desde ahora no suma autos nuevos.",
+            "Ya encontramos 5 autos nuevos para tu búsqueda",
+            "Aparecieron desde que se activó tu búsqueda de Ford Focus y ya están en tu lista.",
             "Hay 23 más que coinciden y tu prueba no muestra.",
-            "Para seguir recibiendo avisos, Particular sale $5.000 por 7 días o $15.000 por 30, con 3 búsquedas y pago único.",
+            "Para seguir recibiendo los que aparezcan, Particular sale $5.000 por 7 días o $15.000 por 30, pago único.",
             "Seguir recibiendo autos nuevos: https://automotive.app/m/41"])
         self.assertIn("TU PRUEBA GRATIS", msg.html)
         self.assertIn(templates.LIFECYCLE_FOOTER["trial_ended"], msg.text)
@@ -470,9 +469,9 @@ class TrialCompleteEmailTests(unittest.TestCase):
 
     def test_one_car_no_model_and_nothing_hidden(self):
         msg = email("trial_complete", {"new": 1, "shown": 31, "hidden": 0})
-        self.assertEqual(msg.subject, "Tu prueba gratis ya te mostró 1 auto nuevo")
+        self.assertEqual(msg.subject, "Ya encontramos 1 auto nuevo para tu búsqueda")
         lines = self.lines(msg)
-        self.assertEqual(lines[1], "Desde que se activó tu búsqueda apareció 1 auto nuevo que coincide, y ya está en tu lista.")
+        self.assertEqual(lines[1], "Apareció desde que se activó tu búsqueda y ya está en tu lista.")
         self.assertFalse(any(line.startswith("Hay ") for line in lines))
 
     def test_one_hidden_in_the_singular(self):
@@ -484,7 +483,7 @@ class TrialCompleteEmailTests(unittest.TestCase):
         offer = {**OFFER, "pass_7": {"amount": 6500, "currency": "ARS", "days": 7},
                  "pass_30": {"amount": 18000, "currency": "ARS", "days": 30}}
         limits = {**LIMITS, "pass": {"max_profiles": 4}}
-        self.assertIn("Para seguir recibiendo avisos, Particular sale $6.500 por 7 días o $18.000 por 30, con 4 búsquedas y pago único.",
+        self.assertIn("Para seguir recibiendo los que aparezcan, Particular sale $6.500 por 7 días o $18.000 por 30, pago único.",
                       self.lines(email("trial_complete", payload, offer=offer, limits=limits)))
         # Without a usable 7-day pass, the trial_ended line.
         today = "Para seguir recibiendo avisos, Particular sale $15.000 por 30 días, con 3 búsquedas y pago único."

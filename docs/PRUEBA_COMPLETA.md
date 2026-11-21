@@ -67,11 +67,10 @@ Con `new_max` 5, 45 mostrados y 23 ocultos.
 | Parte | Texto |
 | --- | --- |
 | Encabezado | TU PRUEBA GRATIS |
-| Asunto y título | Tu prueba gratis ya te mostró 5 autos nuevos (con 1: «Tu prueba gratis ya te mostró 1 auto nuevo») |
-| Primera línea | Desde que se activó tu búsqueda de Ford Focus aparecieron 5 autos nuevos que coinciden, y ya están en tu lista. (sin modelo: «Desde que se activó tu búsqueda aparecieron…»; con 1: «…apareció 1 auto nuevo que coincide, y ya está en tu lista.») |
-| Segunda | Ese es el límite de la prueba gratis: desde ahora no suma autos nuevos. |
+| Asunto y título | Ya encontramos 5 autos nuevos para tu búsqueda (con 1: «Ya encontramos 1 auto nuevo para tu búsqueda») |
+| Primera línea | Aparecieron desde que se activó tu búsqueda de Ford Focus y ya están en tu lista. (sin modelo: «…tu búsqueda y ya están en tu lista.»; con 1: «Apareció desde que se activó tu búsqueda de Ford Focus y ya está en tu lista.») |
 | Con ocultos | Hay 23 más que coinciden y tu prueba no muestra. (con 1: «Hay 1 más que coincide y tu prueba no muestra.»; con 0, no va) |
-| Oferta | Para seguir recibiendo avisos, Particular sale $5.000 por 7 días o $15.000 por 30, con 3 búsquedas y pago único. (precios, días y búsquedas de `pro_offer.pass_7`, `pro_offer.pass_30` y `plan_limits.pass`; sin un pase de 7 días válido, la línea de 2.2: «…Particular sale $15.000 por 30 días, con 3 búsquedas y pago único.») |
+| Oferta | Para seguir recibiendo los que aparezcan, Particular sale $5.000 por 7 días o $15.000 por 30, pago único. (precios y días de `pro_offer.pass_7` y `pro_offer.pass_30`; sin un pase de 7 días válido, la línea de 2.2: «…Particular sale $15.000 por 30 días, con 3 búsquedas y pago único.») |
 | Botón | Seguir recibiendo autos nuevos |
 | Pie | El de `trial_ended`. |
 
@@ -91,21 +90,21 @@ El payload lleva `trial_new` (el tope) y `trial_left` cuenta autos nuevos.
 | Lugar | Texto |
 | --- | --- |
 | Etiqueta | Prueba gratis completa |
-| Título | Tu prueba ya te mostró 5 autos nuevos. (con 1: «…1 auto nuevo.») |
-| Bajada con ocultos | Desde ahora tu prueba no suma autos nuevos. Hay **23** más que coinciden con lo que pediste y siguen publicados. (con 1: «Desde ahora tu prueba no suma autos nuevos. Hay 1 más que coincide con lo que pediste y sigue publicado.») |
-| Bajada sin ocultos | Desde ahora tu prueba no suma autos nuevos. |
+| Título | Ya te encontramos 5 autos nuevos. (con 1: «Ya te encontramos 1 auto nuevo.») |
+| Bajada con ocultos | Seguí recibiendo los que aparezcan y mirá los **23** más que coinciden. (con 1: «Seguí recibiendo los que aparezcan y mirá el otro que coincide.») |
+| Bajada sin ocultos | Seguí recibiendo los que aparezcan. |
 | Botón de pago con ocultos | Ver los 68 · 7 días por $ 5.000 |
 | Botón de pago sin ocultos | Seguir recibiendo · 7 días por $ 5.000 |
 | Salida | Seguir con mis 45 |
 | Feedback | Enviar feedback |
-| Franja | Tu prueba ya te mostró sus **5** autos nuevos. Hay **23** más que coinciden. · botón «Seguir recibiendo» (con 1 nuevo: «Tu prueba ya te mostró su auto nuevo.»; con 1 oculto: «Hay 1 más que coincide.») |
+| Franja | Ya te encontramos **5** autos nuevos. Hay **23** más que coinciden. · botón «Seguir recibiendo» (con 1 nuevo: «Ya te encontramos 1 auto nuevo.»; con 1 oculto: «Hay 1 más que coincide.»; sin ocultos, solo la primera frase) |
 
 ### Otros textos de la página
 
 - Cartel de preparación: «Desde ahora: tu prueba ya te mostró sus 5 autos nuevos, así que no vamos a avisarte de otros.»
 - Formularios de búsqueda nueva (estructurado y asistido), con la prueba completa: «Tu prueba ya te mostró sus 5 autos nuevos, así que no vamos a avisarte de otros.» en lugar de «Desde entonces te avisamos de las nuevas.» / «Te avisamos por email cuando aparezca una publicación que coincida.»; tiene prioridad sobre «ya usó sus 50 resultados».
 - Lista vacía: «Todavía no hay publicaciones que coincidan. Tu prueba ya te mostró sus 5 autos nuevos: con Particular te avisamos de las nuevas.»
-- Tarjeta del final con `random_stock`: «Tu prueba muestra 45 de los 68. Con Particular los ves todos, ordenados por mejor oportunidad, y te avisamos de los que aparezcan.» (con 0 mostrados, el texto de siempre)
+- Tarjeta del final con `random_stock`: «Tu prueba muestra 45 de los 68. Con Particular los ves todos y te avisamos de los nuevos.» (con 0 mostrados, el texto de siempre)
 
 ### Planes y Términos
 

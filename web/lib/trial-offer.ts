@@ -86,7 +86,7 @@ export function cardTitle({ shown, hidden }: TrialOffer): Segment[] {
 export function cardLead({ shown, total }: TrialOffer, randomStock = false): string {
   // A random sample (docs/PRUEBA_COMPLETA.md): «Tu prueba muestra 45 de los 68.»
   if (randomStock && shown > 0) {
-    return `Tu prueba muestra ${shown} de los ${total}. Con Particular los ves todos, ordenados por mejor oportunidad, y te avisamos de los que aparezcan.`;
+    return `Tu prueba muestra ${shown} de los ${total}. Con Particular los ves todos y te avisamos de los nuevos.`;
   }
   const first = shown === 0 ? "Tu prueba no muestra ninguno."
     : shown === 1 ? "Tu prueba muestra el primero que encontramos." : `Tu prueba muestra los primeros ${shown} que encontramos.`;
@@ -120,18 +120,18 @@ export function trialCompleteNoAlerts(newUsed: number): string {
   return `${trialCompleteText(newUsed)}, así que no vamos a avisarte de otros.`;
 }
 
-/** The sheet's title: «Tu prueba ya te mostró 5 autos nuevos.» */
+/** The sheet's title: «Ya te encontramos 5 autos nuevos.» */
 export function completeTitle(newMax: number): string {
-  return `Tu prueba ya te mostró ${autos(newMax)} ${newMax === 1 ? "nuevo" : "nuevos"}.`;
+  return `Ya te encontramos ${autos(newMax)} ${newMax === 1 ? "nuevo" : "nuevos"}.`;
 }
 
-/** «Hay 23 más que coinciden con lo que pediste y siguen publicados.», or that nothing new comes in. */
+/** «Seguí recibiendo los que aparezcan y mirá los 23 más que coinciden.» */
 export function completeLead({ hidden }: TrialOffer): Segment[] {
-  const stopped = "Desde ahora tu prueba no suma autos nuevos.";
-  if (hidden === 0) return [stopped];
+  const keep = "Seguí recibiendo los que aparezcan";
+  if (hidden === 0) return [`${keep}.`];
   return hidden === 1
-    ? [`${stopped} Hay 1 más que coincide con lo que pediste y sigue publicado.`]
-    : [`${stopped} Hay `, { mark: String(hidden) }, " más que coinciden con lo que pediste y siguen publicados."];
+    ? [`${keep} y mirá el otro que coincide.`]
+    : [`${keep} y mirá los `, { mark: String(hidden) }, " más que coinciden."];
 }
 
 /** The pay button: payLabel with matches to see, «Seguir recibiendo · 7 días por $ 5.000» without. */
@@ -139,11 +139,11 @@ export function completePayLabel(offer: TrialOffer, days: number, price: string)
   return offer.hidden > 0 ? payLabel(offer, days, price) : `Seguir recibiendo · ${days} días por ${price}`;
 }
 
-/** The strip: «Tu prueba ya te mostró sus 5 autos nuevos. Hay 23 más que coinciden.» */
+/** The strip: «Ya te encontramos 5 autos nuevos. Hay 23 más que coinciden.» */
 export function completeStripText({ hidden }: TrialOffer, newMax: number): Segment[] {
   const done: Segment[] = newMax === 1
-    ? ["Tu prueba ya te mostró su auto nuevo."]
-    : ["Tu prueba ya te mostró sus ", { mark: String(newMax) }, " autos nuevos."];
+    ? ["Ya te encontramos 1 auto nuevo."]
+    : ["Ya te encontramos ", { mark: String(newMax) }, " autos nuevos."];
   if (hidden === 0) return done;
   return hidden === 1
     ? [...done, " Hay 1 más que coincide."]

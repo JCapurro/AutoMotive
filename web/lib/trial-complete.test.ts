@@ -74,16 +74,16 @@ describe("freeResultQuota in new mode", () => {
 
 describe("the complete variant's copy", () => {
   it("says the cap, in the singular too", () => {
-    expect(completeTitle(5)).toBe("Tu prueba ya te mostró 5 autos nuevos.");
-    expect(completeTitle(1)).toBe("Tu prueba ya te mostró 1 auto nuevo.");
+    expect(completeTitle(5)).toBe("Ya te encontramos 5 autos nuevos.");
+    expect(completeTitle(1)).toBe("Ya te encontramos 1 auto nuevo.");
     expect(trialCompleteText(5)).toBe("Tu prueba ya te mostró sus 5 autos nuevos");
     expect(trialCompleteText(1)).toBe("Tu prueba ya te mostró su auto nuevo");
   });
-  it("leads with what is hidden, or with what stops", () => {
-    expect(text(completeLead(counts(45, 23)))).toBe("Desde ahora tu prueba no suma autos nuevos. Hay 23 más que coinciden con lo que pediste y siguen publicados.");
+  it("leads with keeping on, and with what is hidden", () => {
+    expect(text(completeLead(counts(45, 23)))).toBe("Seguí recibiendo los que aparezcan y mirá los 23 más que coinciden.");
     expect(completeLead(counts(45, 23))).toContainEqual({ mark: "23" });
-    expect(text(completeLead(counts(45, 1)))).toBe("Desde ahora tu prueba no suma autos nuevos. Hay 1 más que coincide con lo que pediste y sigue publicado.");
-    expect(text(completeLead(counts(45, 0)))).toBe("Desde ahora tu prueba no suma autos nuevos.");
+    expect(text(completeLead(counts(45, 1)))).toBe("Seguí recibiendo los que aparezcan y mirá el otro que coincide.");
+    expect(text(completeLead(counts(45, 0)))).toBe("Seguí recibiendo los que aparezcan.");
   });
   it("pays to see them all, or to keep receiving", () => {
     const price = planPrice(5000);
@@ -92,15 +92,17 @@ describe("the complete variant's copy", () => {
     expect(keepLabel(counts(45, 0))).toBe("Seguir con mis 45");
   });
   it("puts the cap and what is hidden on the strip", () => {
-    expect(text(completeStripText(counts(45, 23), 5))).toBe("Tu prueba ya te mostró sus 5 autos nuevos. Hay 23 más que coinciden.");
-    expect(text(completeStripText(counts(45, 1), 5))).toBe("Tu prueba ya te mostró sus 5 autos nuevos. Hay 1 más que coincide.");
-    expect(text(completeStripText(counts(45, 0), 1))).toBe("Tu prueba ya te mostró su auto nuevo.");
+    expect(text(completeStripText(counts(45, 23), 5))).toBe("Ya te encontramos 5 autos nuevos. Hay 23 más que coinciden.");
+    expect(completeStripText(counts(45, 23), 5)).toEqual(expect.arrayContaining([{ mark: "5" }, { mark: "23" }]));
+    expect(text(completeStripText(counts(45, 1), 5))).toBe("Ya te encontramos 5 autos nuevos. Hay 1 más que coincide.");
+    expect(text(completeStripText(counts(45, 0), 5))).toBe("Ya te encontramos 5 autos nuevos.");
+    expect(text(completeStripText(counts(45, 0), 1))).toBe("Ya te encontramos 1 auto nuevo.");
     expect(COMPLETE_STRIP_BUTTON).toBe("Seguir recibiendo");
     expect(COMPLETE_BADGE).toBe("Prueba gratis completa");
   });
   it("doesn't call a random sample «los primeros»", () => {
-    expect(cardLead(counts(45, 23), true)).toBe("Tu prueba muestra 45 de los 68. Con Particular los ves todos, ordenados por mejor oportunidad, y te avisamos de los que aparezcan.");
-    expect(cardLead(counts(1, 3), true)).toBe("Tu prueba muestra 1 de los 4. Con Particular los ves todos, ordenados por mejor oportunidad, y te avisamos de los que aparezcan.");
+    expect(cardLead(counts(45, 23), true)).toBe("Tu prueba muestra 45 de los 68. Con Particular los ves todos y te avisamos de los nuevos.");
+    expect(cardLead(counts(1, 3), true)).toBe("Tu prueba muestra 1 de los 4. Con Particular los ves todos y te avisamos de los nuevos.");
     expect(cardLead(counts(0, 3), true)).toBe(cardLead(counts(0, 3)));
     expect(cardLead(counts(30, 48))).toContain("los primeros 30 que encontramos");
   });
@@ -117,7 +119,7 @@ describe("the complete variant's components", () => {
   it("puts the complete strip on the page, with the sheet closed until the browser opens it", () => {
     const html = renderToStaticMarkup(createElement(TrialHiddenOffer, { profileId: 7, offer: counts(45, 23), autoOpen: true, checkout, complete: 5 }));
     expect(html).toContain('data-testid="trial-offer-strip"');
-    expect(html).toContain('Tu prueba ya te mostró sus <b class="font-semibold">5</b> autos nuevos. Hay <b class="font-semibold">23</b> más que coinciden.');
+    expect(html).toContain('Ya te encontramos <b class="font-semibold">5</b> autos nuevos. Hay <b class="font-semibold">23</b> más que coinciden.');
     expect(html).toContain(">Seguir recibiendo</button>");
     expect(html).not.toContain("Ver todos");
     expect(html).not.toContain('data-testid="trial-offer-sheet"');
