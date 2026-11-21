@@ -1,157 +1,202 @@
-# Prueba gratis «40 + N»
+# Prueba gratis de 50 publicaciones
 
-Juan lo decidió y aprobó el plan el 20/11/2026. Todo sale apagado: lo prende él desde `/admin/config` cuando la migración esté aplicada y el worker desplegado.
+Juan aprobó el plan el 20/11/2026 («40 + N») y lo cambió el 21/11/2026 por esta regla: «45 no es un número, debería aparecer 50». Todo sale apagado. Juan lo prende desde `/admin/config` cuando las dos migraciones estén aplicadas y el worker desplegado.
 
 ## Por qué
 
-Con la reserva prendida desde el 14/11 (`docs/PRUEBA_HONESTA.md`), la prueba muestra hasta 30 autos ya publicados (los más nuevos) y deja el resto del cupo de 50 para autos nuevos. Dos problemas:
+La reserva está prendida desde el 14/11 (`docs/PRUEBA_HONESTA.md`). Con ella, la prueba muestra hasta 30 autos ya publicados (los más nuevos) y deja el resto del cupo de 50 para autos nuevos. Eso trae dos problemas.
 
-- **Cuándo pagar.** El cartel de los 50 (`FreeResultLimit`) abre cuando la cuenta usó su cupo, pero casi nadie está en la app en ese momento: hoy, 1 de las 32 cuentas que llegaron a 50 lo vio. La oferta del primer rato (`docs/OFERTA_PRUEBA.md`) abre sola antes de que la prueba haya mostrado su valor.
-- **Cuánto tarda.** Medido en producción: con 5 autos nuevos, el 41 % de las pruebas se completa dentro de las 72 h (mediana: 22 h). Con lo que queda del cupo de 50 casi ninguna lo completa.
+- **Cuándo pagar.** El cartel de los 50 (`FreeResultLimit`) abre cuando la cuenta usó su cupo, pero casi nadie está en la app en ese momento. Hasta hoy, 1 de las 32 cuentas que llegaron a 50 lo vio. Y la oferta del primer rato (`docs/OFERTA_PRUEBA.md`) abre sola antes de que la prueba haya mostrado su valor.
+- **Cuánto tarda.** Con lo que queda del cupo para autos nuevos, casi ninguna prueba llega a 50 dentro de las 72 h.
 
-La prueba pasa a ser: 40 autos ya publicados, elegidos al azar entre lo que encuentra la primera revisión, y después los próximos 5 autos nuevos de cualquier nivel. Con el 5.º sale un único aviso de pago: un mail y un cartel. Antes de eso no se abre nada solo.
+## La regla
 
-## Reglas
+- **La prueba se cuenta como «50 publicaciones».** Termina en una de dos formas:
+  - Llega a 50 resultados (`plan_limits.free.max_total_results`).
+  - Pasan los 3 días.
+- **Sin tope de nuevos.** Lo ya publicado entra hasta `backfill_max` (45 al prender), elegido al azar entre lo que encuentra la primera revisión. Los autos nuevos llenan el resto hasta 50.
+- **Completa = cupo lleno** (usados ≥ límite). Recién ahí aparecen el cartel y el mail `trial_complete`. Antes no se abre nada solo.
+- **Las pruebas que no llegan a 50** completan los 3 días de prueba gratis y siguen el camino de hoy (`trial_ended`).
+- **Qué no dice ningún texto al usuario:**
+  - el tope de lo ya publicado;
+  - cuántos autos nuevos hubo;
+  - cómo se arman los 50.
 
-- **El interruptor es `app_config.trial_reserve`.** La migración no lo toca. Con la fila como está hoy (`{"enabled": true, "backfill_max": 30}`) la base, los mails y la web hacen exactamente lo de hoy.
-- **Modo nuevo** = reserva prendida y un `new_max` válido.
-- **Los números no están en el código.** 40 y 5 salen de `backfill_max` y `new_max`.
-- **Un valor roto es apagado**, como los campos de antes: un `new_max` que no es un número de 0 o más es sin tope; un `random_stock` que no es `true` es apagado; un `notice_since` que no se puede leer es sin mail.
-- **Nunca quita** un resultado ya admitido.
-- **El tope total** (`plan_limits.free.max_total_results`, 50) sigue valiendo, y las 72 h también.
+  Términos es la excepción: dice el tope de lo ya publicado, como hoy.
 
-## Los tres campos nuevos de `trial_reserve`
+## Reglas del interruptor
+
+- **El interruptor es `app_config.trial_reserve`.** Las migraciones no lo tocan. Con la fila de producción (`{"enabled": true, "backfill_max": 30}`), la base, los mails y la web hacen exactamente lo de hoy (ver «Cómo se comprobó que no cambia nada»).
+- **Modo aviso** = reserva prendida y un `notice_since` que se puede leer. En la base es `trial_reserve_notice_since()`; en la web, `trialNoticeMode()`.
+- **Los números no están en el código.** 45 sale de `backfill_max` y 50 de `max_total_results`.
+- **Un valor roto es apagado,** como los campos de antes:
+  - un `random_stock` que no es `true` es apagado;
+  - un `notice_since` que no se puede leer es modo de hoy.
+- **Nunca se quita** un resultado ya admitido.
+
+## Los dos campos nuevos de `trial_reserve`
 
 | Campo | Qué es | Qué hace |
 | --- | --- | --- |
-| `new_max` | Entero de 0 o más | Tope de resultados nuevos por cuenta. Al llegar, la prueba está completa. |
-| `random_stock` | `true` | Los ya publicados de la primera revisión (y de cada re-revisión) se eligen al azar, no los más nuevos. |
-| `notice_since` | Fecha y hora ISO | El mail `trial_complete` va solo a pruebas empezadas desde ese momento. Sin este campo, no va a nadie. |
+| `random_stock` | `true` | Lo ya publicado de la primera revisión (y de cada re-revisión) se elige al azar, no por más nuevo. |
+| `notice_since` | Fecha y hora ISO | Prende el modo aviso. El mail `trial_complete` va solo a pruebas empezadas desde ese momento. |
 
-## Qué hace cada modo
+## Base de datos
 
-### Modo de hoy (sin `new_max`)
+Son dos migraciones.
 
-Sin cambios: los ya publicados entran por orden de llegada hasta `backfill_max`, los nuevos llenan el resto hasta 50, el cartel de la oferta se abre solo una vez por búsqueda (con 5 ocultos o más) y `FreeResultLimit` se abre a los 50. `FreeResultLimit` y estos caminos quedan como vuelta atrás; se borran cuando el modo nuevo esté confirmado.
+- **`20270109120000_trial_complete.sql`** está en producción desde el 21/11 a las 15:12 UTC y no se toca.
+- **`20270110120000_trial_fifty.sql`** la lleva a esta regla:
+  - Borra `trial_reserve_new_max()`.
+  - Saca de `admit_free_result` el tope de nuevos.
+  - Vuelve `my_plan_limits()` a la forma de 20261207, sin `free_new_used` ni `free_new_max`.
+- **Lo ya publicado al azar** (con `random_stock`) queda como estaba en 0109:
+  - Mientras una búsqueda espera su primera revisión o una re-revisión, lo ya publicado espera.
+  - Al terminar la revisión, el trigger `search_profiles_admit_free_stock_sample` admite de una vez una muestra al azar, hasta el lugar que queda.
+  - Un auto nuevo nunca espera.
+- **Cuándo se completó.** `trial_completed_at(cuenta)` es cuándo entró el resultado número `límite`, ordenado por `admitted_at` y `listing_id`. Vacío sin límite o si el cupo todavía no se llenó.
 
-### Modo nuevo
+## Mails (docs/MAILS_DE_PLAN.md)
 
-**Base de datos** (`20270109120000_trial_complete.sql`):
+- **`trial_complete`.** Se manda una vez por cuenta, 60 minutos después de llenar el cupo, solo si se cumplen todas estas condiciones:
+  - `lifecycle_emails.kinds.trial_complete` está en `true` (viene apagado en la migración, en el worker y en `/admin/config`);
+  - la prueba empezó desde `notice_since`;
+  - la cuenta sigue con cupo de prueba;
+  - la prueba sigue corriendo.
 
-- **Tope de nuevos.** `admit_free_result` no admite un resultado nuevo si la cuenta ya tiene `new_max` con `is_backfill = false`. Lo ya publicado sigue con su tope `backfill_max`.
-- **Ya publicados al azar** (con `random_stock`). Mientras una búsqueda espera su primera revisión o una re-revisión (`bootstrapped_at` vacío o `rematch_requested_at` puesto), lo ya publicado espera. Al terminar la revisión (`mark_bootstrapped`), el trigger `search_profiles_admit_free_stock_sample` admite de una vez una muestra al azar de lo ya publicado de esa búsqueda, con la publicación activa y todavía sin admitir, hasta el lugar que queda: `least(backfill_max - ya publicados admitidos, tope total - admitidos)`. Lo ya publicado que llega después, con la búsqueda lista, entra por orden de llegada. Un auto nuevo nunca espera. «Ya publicado» es la misma regla de siempre, ahora en una sola función (`trial_is_stock`). El worker no cambia para esto.
-- **Lo que lee la web.** `my_plan_limits()` suma `free_new_used` y `free_new_max` (este último vacío sin tope o sin cupo de prueba).
-- **Cuándo se completó.** `trial_completed_at(cuenta)`: cuándo entró el resultado nuevo número `new_max`. Vacío sin tope, con tope 0 o si todavía no llegó.
+  Una cuenta que pagó y una prueba terminada no lo reciben.
+- **Bienvenida.** En modo aviso, el payload suma `"trial_notice": true` y el texto cuenta la prueba como sus 50 publicaciones.
 
-**Mails** (docs/MAILS_DE_PLAN.md):
+## Página de resultados
 
-- **`trial_complete` (nuevo).** Una vez por cuenta, 60 minutos después de completar, solo con `lifecycle_emails.kinds.trial_complete` en `true` (apagado en la migración, en el worker y en `/admin/config`), solo a pruebas empezadas desde `notice_since`, mientras la cuenta tenga cupo de prueba y la prueba siga corriendo (una cuenta que pagó o una prueba terminada no lo reciben; para el final está `trial_ended`).
-- **Bienvenida.** Lo que le queda a la prueba son autos nuevos: «Tu prueba te va a mostrar los próximos {N} autos nuevos que coincidan.»
-
-**Página de resultados**:
-
-- **Antes de completar:** el cartel de la oferta ya no se abre solo. La franja, su botón «Ver todos» (que lo abre) y la tarjeta del final quedan como están.
-- **Al completar:** no aparece `FreeResultLimit`. El mismo cartel se abre en su variante «completa», una vez por pestaña y búsqueda (`sessionStorage`, clave `ea_trial_complete_opened:<id>`), y la franja lo vuelve a abrir. Aparece aunque la búsqueda no oculte nada. Tiene el camino «Enviar feedback» del cartel viejo.
-- **Otros textos** de la página que decían «50 resultados» dicen lo que pasó: «Tu prueba ya te mostró sus {N} autos nuevos».
-- **Qué {N}.** Los autos nuevos que la cuenta recibió de verdad (`free_new_used`), no el tope: en una prueba que ya corría al prender el modo pueden ser más (hasta 20). El mail usa el tope porque solo va a pruebas empezadas desde `notice_since`, donde son iguales.
-- **Completa es solo por el tope.** Una cuenta que llenó sus 50 sin llegar al tope de nuevos (por ejemplo, antes de prender el modo) sigue el camino de hoy en los dos modos: `FreeResultLimit` y «Tu prueba ya usó sus 50 resultados».
-- **La tarjeta del final** con `random_stock` ya no dice «los primeros {N} que encontramos» sino «Tu prueba muestra {N} de los {T}.».
-- **Planes y Términos** dicen los dos números.
+- **Antes de llenar el cupo:**
+  - El cartel de la oferta no se abre solo.
+  - La franja, su botón «Ver todos» (que lo abre) y la tarjeta del final dicen cuántos coinciden, no cuántos muestra la prueba.
+- **Con el cupo lleno:**
+  - No aparece `FreeResultLimit`.
+  - El cartel se abre en su variante «completa», una vez por pestaña y búsqueda (`sessionStorage`, clave `ea_trial_complete_opened:<id>`), y la franja lo vuelve a abrir.
+  - Aparece aunque la búsqueda no oculte nada.
+  - Tiene el camino «Enviar feedback» del cartel viejo.
+- **Los avisos honestos** quedan como en main: el cartel de preparación, los dos formularios de búsqueda nueva y la lista vacía dicen «Tu prueba ya usó sus 50 resultados…».
+- **Modo de hoy:** sin cambios. `FreeResultLimit` se abre a los 50, y la franja y el cartel son los de siempre. Con `random_stock`, la tarjeta del final usa la bajada corta.
 
 ## Textos
 
-Con `new_max` 5, 45 mostrados y 23 ocultos.
+Los ejemplos son con 50 publicaciones, 45 mostradas en la búsqueda y 23 ocultas.
+
+### Antes de llenar el cupo (modo aviso)
+
+| Lugar | Texto |
+| --- | --- |
+| Franja | Encontramos **68** autos que coinciden. · botón «Ver todos» (con 1: «Encontramos 1 auto que coincide.») |
+| Título del cartel | Encontramos 68 autos. (con 1: «Encontramos 1 auto.») |
+| Bajada del cartel | Con Particular los ves todos y te avisamos de los nuevos. (con 1: «Con Particular lo ves…») |
+| Botón de pago | El de siempre: «Ver los 68 · 7 días por $ 5.000» |
+| Salida | Ahora no |
+| Tarjeta del final | Título de siempre («Y 23 más que coinciden»). Bajada: «Con Particular los ves todos y te avisamos de los nuevos.» También con `random_stock` fuera del modo aviso. |
+
+### Cartel «completo» (versión A)
+
+| Lugar | Texto |
+| --- | --- |
+| Etiqueta | Prueba gratis completa |
+| Título | Ya recibiste tus 50 publicaciones. |
+| Bajada | ¿Querés seguir recibiendo? |
+| Botón de pago | Seguir recibiendo · 7 días por $ 5.000 (siempre, con ocultos o sin) |
+| Salida | Ahora no |
+| Feedback | Enviar feedback |
+| Franja | Ya recibiste tus **50** publicaciones. · botón «Seguir recibiendo» |
 
 ### Mail `trial_complete`
 
 | Parte | Texto |
 | --- | --- |
 | Encabezado | TU PRUEBA GRATIS |
-| Asunto y título | Ya encontramos 5 autos nuevos para tu búsqueda (con 1: «Ya encontramos 1 auto nuevo para tu búsqueda») |
-| Primera línea | Aparecieron desde que se activó tu búsqueda de Ford Focus y ya están en tu lista. (sin modelo: «…tu búsqueda y ya están en tu lista.»; con 1: «Apareció desde que se activó tu búsqueda de Ford Focus y ya está en tu lista.») |
-| Con ocultos | Hay 23 más que coinciden y tu prueba no muestra. (con 1: «Hay 1 más que coincide y tu prueba no muestra.»; con 0, no va) |
-| Oferta | Para seguir recibiendo los que aparezcan, Particular sale $5.000 por 7 días o $15.000 por 30, pago único. (precios y días de `pro_offer.pass_7` y `pro_offer.pass_30`; sin un pase de 7 días válido, la línea de 2.2: «…Particular sale $15.000 por 30 días, con 3 búsquedas y pago único.») |
-| Botón | Seguir recibiendo autos nuevos |
+| Asunto y título | Ya recibiste las 50 publicaciones de tu prueba |
+| Con ocultos | Hay 23 más que coinciden con tu búsqueda de Ford Focus. (con 1: «Hay 1 más que coincide…»; sin modelo: «…con tu búsqueda.»; con 0, no va) |
+| Oferta | Para seguir recibiendo, Particular sale $5.000 por 7 días o $15.000 por 30, pago único. (precios y días de `pro_offer.pass_7` y `pass_30`; sin un pase de 7 días válido, la línea `particular_offer`) |
+| Botón | Seguir recibiendo |
 | Pie | El de `trial_ended`. |
 
-Payload: `model`, `new` (el tope), `shown` (lo que la prueba muestra de esa búsqueda) y `hidden` (las coincidencias activas que oculta, como las cuenta `my_search_hidden_results`). La búsqueda es la que más muestra, como en `trial_ended`. Va a `/app/searches/<id>` (a `/app` si la cuenta no tiene búsquedas).
+El payload es `{model, total, shown, hidden}`:
 
-### Bienvenida en modo nuevo
+- `total` es el límite.
+- `shown` es lo que la prueba muestra de esa búsqueda.
+- `hidden` son las coincidencias activas que oculta.
 
-En lugar de cuántos resultados le quedan a la prueba:
+La búsqueda elegida es la que más muestra, como en `trial_ended`. El mail lleva a `/app/searches/<id>`, o a `/app` si la cuenta no tiene búsquedas. Un payload sin `total` no se manda: el worker lo rechaza.
 
-- con lugar: «Tu prueba te va a mostrar los próximos 5 autos nuevos que coincidan.» (con 1: «Tu prueba te va a mostrar el próximo auto nuevo que coincida.»);
-- sin lugar: «Tu prueba ya te mostró sus 5 autos nuevos, así que no vamos a avisarte de otros. Con Particular los ves todos y seguimos avisándote.» (con 1: «…ya te mostró su auto nuevo…»).
+### Bienvenida en modo aviso
 
-El payload lleva `trial_new` (el tope) y `trial_left` cuenta autos nuevos.
+- **Lo encontrado:** «Ya encontramos 68 autos que coinciden con tu búsqueda de Ford Focus.» Suma mostrados y ocultos, con la cola de «abajo del precio» de siempre y sin línea de ocultos. Sin nada encontrado, el texto de siempre.
+- **Con cupo:** «Tu prueba incluye 50 publicaciones: de las nuevas que coincidan te avisamos por email.»
+- **Con el cupo lleno:** «Ya recibiste las 50 publicaciones de tu prueba. Con Particular las ves todas y seguimos avisándote.»
 
-### Cartel «completo»
-
-| Lugar | Texto |
-| --- | --- |
-| Etiqueta | Prueba gratis completa |
-| Título | Ya te encontramos 5 autos nuevos. (con 1: «Ya te encontramos 1 auto nuevo.») |
-| Bajada con ocultos | Seguí recibiendo los que aparezcan y mirá los **23** más que coinciden. (con 1: «Seguí recibiendo los que aparezcan y mirá el otro que coincide.») |
-| Bajada sin ocultos | Seguí recibiendo los que aparezcan. |
-| Botón de pago con ocultos | Ver los 68 · 7 días por $ 5.000 |
-| Botón de pago sin ocultos | Seguir recibiendo · 7 días por $ 5.000 |
-| Salida | Seguir con mis 45 |
-| Feedback | Enviar feedback |
-| Franja | Ya te encontramos **5** autos nuevos. Hay **23** más que coinciden. · botón «Seguir recibiendo» (con 1 nuevo: «Ya te encontramos 1 auto nuevo.»; con 1 oculto: «Hay 1 más que coincide.»; sin ocultos, solo la primera frase) |
-
-### Otros textos de la página
-
-- Cartel de preparación: «Desde ahora: tu prueba ya te mostró sus 5 autos nuevos, así que no vamos a avisarte de otros.»
-- Formularios de búsqueda nueva (estructurado y asistido), con la prueba completa: «Tu prueba ya te mostró sus 5 autos nuevos, así que no vamos a avisarte de otros.» en lugar de «Desde entonces te avisamos de las nuevas.» / «Te avisamos por email cuando aparezca una publicación que coincida.»; tiene prioridad sobre «ya usó sus 50 resultados».
-- Lista vacía: «Todavía no hay publicaciones que coincidan. Tu prueba ya te mostró sus 5 autos nuevos: con Particular te avisamos de las nuevas.»
-- Tarjeta del final con `random_stock`: «Tu prueba muestra 45 de los 68. Con Particular los ves todos y te avisamos de los nuevos.» (con 0 mostrados, el texto de siempre)
+`trial_left` se calcula como siempre.
 
 ### Planes y Términos
 
-- Planes: «Hasta 40 autos ya publicados y los próximos 5 autos nuevos que aparezcan durante la prueba» (con 1: «…y el próximo auto nuevo que aparezca…»).
-- Términos dice como total lo que la prueba puede mostrar de verdad, `min(max_total_results, min(backfill_max, max_total_results) + new_max)`: «hasta 45 resultados en total durante la prueba» con 40 y 5. Después: «De ese cupo, como máximo 40 son publicaciones que ya estaban al activar la búsqueda, elegidas al azar entre las que encuentra la primera revisión, y después se suman las próximas 5 publicaciones nuevas que coincidan; con eso la prueba queda completa.» (sin `random_stock`, sin «elegidas al azar…»).
+- **Planes,** en modo aviso: «Hasta 50 publicaciones durante la prueba».
+- **Términos:** la frase de siempre, con total = el límite: «hasta 50 resultados en total durante la prueba. De ese cupo, como máximo 45 son publicaciones que ya estaban al activar la búsqueda».
+  - Con `random_stock` se le suma: «, elegidas al azar entre las que encuentra la primera revisión».
 
 ## Eventos
 
-Los de la oferta (`trial_offer_viewed`, `trial_offer_dismissed`, `trial_offer_plan_selected`), con `complete: true` en `props` para la variante completa. Las vistas de la variante completa se cuentan aparte (`sessionStorage` `ea_trial_offer_viewed:<superficie>:<id>:complete`). El mail registra `lifecycle_email_sent` y `lifecycle_email_clicked` como los demás.
+- **Cartel:** los de la oferta (`trial_offer_viewed`, `trial_offer_dismissed`, `trial_offer_plan_selected`), con `complete: true` en `props` para la variante completa.
+  - Las vistas de la variante completa se cuentan aparte (`sessionStorage` `ea_trial_offer_viewed:<superficie>:<id>:complete`).
+- **Mail:** registra `lifecycle_email_sent` y `lifecycle_email_clicked`, como los demás.
 
 ## Qué queda afuera
 
 - El largo de la prueba, los precios, los límites de los planes y los niveles de alerta.
 - `plan_limits.free.immediate_alerts_per_day`: se sube por configuración al prender, no en el código.
 - Planes pagos, admins y el piloto sin límites: sin cambios.
-- **Prueba extra de 7 días:** una cuenta que completó la prueba no recibe autos nuevos en la semana extra, igual que hoy una cuenta con el cupo lleno. No se cambia.
-- **Tope 0:** con `new_max` 0 la prueba muestra solo lo ya publicado y nunca queda «completa» (ni cartel ni mail: no hay «0 autos nuevos» que contar).
-- `FreeResultLimit` y los caminos del modo de hoy quedan como vuelta atrás. Se borran cuando el modo nuevo esté confirmado.
+- **Prueba extra de 7 días:** una cuenta con el cupo lleno no recibe autos nuevos en la semana extra, como hoy. No se cambia.
+- **El modo de hoy** queda como vuelta atrás: `FreeResultLimit` y sus caminos. Se borran cuando el modo aviso esté confirmado.
+
+## Cómo se comprobó que no cambia nada
+
+En un clon anterior a las dos migraciones (en 20270108) se corrió un escenario con `trial_reserve` `{"enabled": true, "backfill_max": 3}`, límite 8 y tres cuentas:
+
+- una con lo ya publicado esperando la revisión;
+- una con una re-revisión;
+- una solo con autos nuevos, con una publicación dada de baja.
+
+De cada una se guardó lo admitido, `my_plan_limits()` y el payload de la bienvenida. Después se aplicaron 0109 y 0110 en el mismo clon y se repitió el escenario. Lo único distinto fueron las horas de la transacción (`expires_at`, `trial_started_at`).
 
 ## Despliegue
 
-1. **Migración** `20270109120000_trial_complete.sql`, a mano con el OK de Juan: transacción más el insert de la versión exacta; antes, ver `max(version)` en prod (hoy `20270108120000`). Agrega un trigger en `search_profiles` y cambia `admit_free_result` (el trigger de `matches`): con el worker andando puede esperar locks; `lock_timeout` es de 5 s, si falla se reintenta.
-2. **Merge:** Vercel publica la web.
-3. **Worker en el VPS:** el tipo `trial_complete` y la bienvenida nueva.
+1. **Migración `20270110120000_trial_fifty.sql`.** Se aplica a mano con el OK de Juan: una transacción más el insert de la versión exacta.
+   - Antes, ver `max(version)` en prod: tiene que ser `20270109120000`.
+   - Cambia `admit_free_result` (el trigger de `matches`), así que con el worker andando puede esperar locks. `lock_timeout` es de 5 s; si falla, se reintenta.
+2. **Merge.** Vercel publica la web.
+3. **Worker en el VPS:** el mail `trial_complete` nuevo y la bienvenida en modo aviso.
 
-Sin la migración la web anda igual (sin `free_new_max` no hay modo nuevo). Sin el worker, el mail no sale y la bienvenida usa el texto de hoy.
+Las dos migraciones (0109 y 0110) tienen que estar en producción antes de prender.
 
 ## Encender
 
 En `/admin/config`, en este orden:
 
-1. `plan_limits.free.immediate_alerts_per_day`: de 3 al tope (5), para que los 5 nuevos puedan llegar en el momento.
+1. `plan_limits.free.immediate_alerts_per_day`: de 3 a 5.
 2. `lifecycle_emails.kinds.trial_complete`: `true` («Prueba completa»).
-3. `trial_reserve`: `{"enabled": true, "backfill_max": 40, "new_max": 5, "random_stock": true, "notice_since": "<hora de encendido, ej. 2026-11-21T15:00:00Z>"}`.
+3. `trial_reserve`: `{"enabled": true, "backfill_max": 45, "random_stock": true, "notice_since": "<hora de encendido, ej. 2026-11-22T15:00:00Z>"}`.
 
 Cada cambio queda en el historial de `/admin/config`.
 
 ## Volver atrás
 
-En `trial_reserve`, sacar `new_max`, `random_stock` y `notice_since` (y volver `backfill_max` a 30 si se quiere lo de antes). Lo admitido queda; desde ese momento la prueba vuelve a las reglas de hoy y `FreeResultLimit` vuelve a abrir a los 50. Apagar `kinds.trial_complete` corta el mail.
+1. Volver `trial_reserve` a `{"enabled": true, "backfill_max": 30}`.
+   - Lo ya admitido queda.
+   - Desde ese momento la prueba vuelve a las reglas de hoy y `FreeResultLimit` vuelve a abrir a los 50.
+2. Para cortar el mail, apagar `kinds.trial_complete`.
 
 ## Qué medir
 
 Comparar las pruebas empezadas desde `notice_since` con las de las dos semanas anteriores:
 
-- **Cuántas completan y cuándo:** `trial_completed_at(user_id)` menos `free_trial_started_at`, por cuenta; cuántas dentro de las 72 h.
-- **Cartel:** `trial_offer_viewed` con `props->>'complete' = 'true'` y `surface = 'sheet'`; cerrados (`trial_offer_dismissed`) y pases elegidos (`trial_offer_plan_selected`).
-- **Mail:** `lifecycle_emails` con `kind = 'trial_complete'` por estado (`sent`, `skipped`), aperturas y `lifecycle_email_clicked`.
+- **Cuántas completan y cuándo:** por cuenta, `trial_completed_at(user_id)` menos `free_trial_started_at`. Contar cuántas completan dentro de las 72 h.
+- **Cartel:** `trial_offer_viewed` con `props->>'complete' = 'true'` y `surface = 'sheet'`. Además, los cerrados (`trial_offer_dismissed`) y los pases elegidos (`trial_offer_plan_selected`).
+- **Mail:** `lifecycle_emails` con `kind = 'trial_complete'` por estado (`sent`, `skipped`), las aperturas y `lifecycle_email_clicked`.
 - **Pagos:** `checkout_started` y `commercial_payments` de esas cuentas, y cuántos llegan dentro de las 24 h del mail.
-- **Lo ya publicado:** `free_trial_results.is_backfill` por cuenta (debería quedar en 40 o menos).
+- **Lo ya publicado:** `free_trial_results.is_backfill` por cuenta. Debería quedar en 45 o menos.

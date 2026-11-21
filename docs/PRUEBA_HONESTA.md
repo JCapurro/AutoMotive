@@ -16,7 +16,7 @@ La prueba gratis muestra hasta 50 resultados por cuenta, para siempre (`20261118
 
 `app_config.trial_reserve = {"enabled": false, "backfill_max": 30}`. Se edita en `/admin/config`.
 
-Desde el 20/11 el mismo interruptor acepta tres campos más (`new_max`, `random_stock`, `notice_since`): la prueba «40 + N» de `docs/PRUEBA_COMPLETA.md`. Sin ellos, todo lo de esta sección sigue igual.
+Desde el 21/11 el mismo interruptor acepta dos campos más (`random_stock`, `notice_since`): la prueba de 50 publicaciones de `docs/PRUEBA_COMPLETA.md`. Sin ellos, todo lo de esta sección sigue igual.
 
 - **Prendida:** de los resultados de la prueba (`plan_limits.free.max_total_results`, 50), como máximo `backfill_max` son publicaciones que ya estaban. El resto queda para autos nuevos durante la prueba.
 - **Apagada:** la regla de antes, sin cambios. Entra lo primero que aparece hasta llenar el cupo.

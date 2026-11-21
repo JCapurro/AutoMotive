@@ -93,7 +93,10 @@ No lleva a pagar: es el primer mail que recibe la cuenta y existe para que los q
   - sin prueba con cupo: «De los nuevos que coincidan te avisamos por email.»;
   - en la prueba, con lugar: «Tu prueba muestra hasta {L} resultados y te quedan {R}: de los nuevos que coincidan te avisamos por email.»;
   - en la prueba, sin lugar: «Tu prueba ya usó sus {L} resultados, así que no vamos a avisarte de los nuevos. Con Particular los ves todos y seguimos avisándote.»
-  - en la prueba «40 + N» (`docs/PRUEBA_COMPLETA.md`, con `trial_reserve.new_max`), lo que queda son autos nuevos (`payload.trial_new` es el tope y `trial_left` cuenta nuevos): con lugar, «Tu prueba te va a mostrar los próximos {R} autos nuevos que coincidan.» (con 1: «…el próximo auto nuevo que coincida.»); sin lugar, «Tu prueba ya te mostró sus {N} autos nuevos, así que no vamos a avisarte de otros. Con Particular los ves todos y seguimos avisándote.»
+  - en la prueba de 50 publicaciones (`docs/PRUEBA_COMPLETA.md`, modo aviso: `trial_reserve.notice_since`; el payload lleva `"trial_notice": true`):
+    - lo encontrado: «Ya encontramos {mostrados + ocultos} autos que coinciden con tu búsqueda de {modelo}.», sin línea de ocultos;
+    - con lugar: «Tu prueba incluye {L} publicaciones: de las nuevas que coincidan te avisamos por email.»;
+    - sin lugar: «Ya recibiste las {L} publicaciones de tu prueba. Con Particular las ves todas y seguimos avisándote.»
 - **Lo que la prueba oculta.** X cuenta solo lo que la prueba muestra, en la búsqueda que más muestra. Si oculta coincidencias que siguen publicadas: «Hay {N} más que coinciden y tu prueba no muestra.» Si no muestra ninguna: «Encontramos {N} autos que coinciden con tu búsqueda de {modelo}, pero tu prueba no los muestra.», nunca «Todavía no apareció ninguno».
 - **Al final:** «Para que nuestras alertas no terminen en Spam o Promociones, agregá este remitente a tus contactos o mové este email a Principal.»
 - **Botón.** «Ver mis resultados», a `/app/searches/<id>` (la búsqueda activa que más muestra).
@@ -108,14 +111,15 @@ No lleva a pagar: es el primer mail que recibe la cuenta y existe para que los q
 
 ## Prueba completa (`trial_complete`)
 
-Solo en la prueba «40 + N» (`docs/PRUEBA_COMPLETA.md`). Apagado por defecto.
+Solo en la prueba de 50 publicaciones (`docs/PRUEBA_COMPLETA.md`). Apagado por defecto.
 
-- **A quién.** Una vez por cuenta (`event_key = 'complete'`), 60 minutos después de que la prueba admitió su auto nuevo número `trial_reserve.new_max` (`trial_completed_at`). Solo pruebas empezadas desde `trial_reserve.notice_since`, que reciben emails, siguen con cupo de prueba y con la prueba corriendo, al reservar y al enviar. Sin `new_max` o sin `notice_since`, nadie.
-- **Asunto y título.** «Ya encontramos {N} autos nuevos para tu búsqueda» (con 1: «Ya encontramos 1 auto nuevo para tu búsqueda»).
-- **Cuerpo.** «Aparecieron desde que se activó tu búsqueda de {modelo} y ya están en tu lista.» (con 1: «Apareció… y ya está en tu lista.»; sin modelo: «…tu búsqueda y ya…»). Con ocultos: «Hay {M} más que coinciden y tu prueba no muestra.» Después, los dos pases, el de 7 días primero: «Para seguir recibiendo los que aparezcan, Particular sale $5.000 por 7 días o $15.000 por 30, pago único.» (de `pro_offer`; sin un pase de 7 días válido, la oferta de Particular de 2.2).
-- **Botón.** «Seguir recibiendo autos nuevos», a `/app/searches/<id>` (la búsqueda que más muestra, como 2.2).
+- **A quién.** Una vez por cuenta (`event_key = 'complete'`), 60 minutos después de que la prueba llenó su cupo (`trial_completed_at`: cuándo entró el resultado número `plan_limits.free.max_total_results`). Solo pruebas empezadas desde `trial_reserve.notice_since`, que reciben emails, siguen con cupo de prueba y con la prueba corriendo, al reservar y al enviar. Sin `notice_since`, nadie.
+- **Asunto y título.** «Ya recibiste las {L} publicaciones de tu prueba» (`payload.total`, el límite; sin `total` el worker no lo manda).
+- **Cuerpo.** Con ocultos: «Hay {M} más que coinciden con tu búsqueda de {modelo}.» (con 1: «Hay 1 más que coincide…»; sin modelo: «…con tu búsqueda.»). Después, los dos pases, el de 7 días primero: «Para seguir recibiendo, Particular sale $5.000 por 7 días o $15.000 por 30, pago único.» (de `pro_offer`; sin un pase de 7 días válido, la oferta de Particular de 2.2).
+- **Botón.** «Seguir recibiendo», a `/app/searches/<id>` (la búsqueda que más muestra, como 2.2).
+- **Payload.** `{model, total, shown, hidden}`.
 - **Orden de reserva.** Justo después de la bienvenida.
-- **Código.** [`20270109120000_trial_complete.sql`](../supabase/migrations/20270109120000_trial_complete.sql): `claim_lifecycle_emails` y `lifecycle_email_eligible` de antes quedan como `*_cars` y `*_bonus`.
+- **Código.** [`20270109120000_trial_complete.sql`](../supabase/migrations/20270109120000_trial_complete.sql): `claim_lifecycle_emails` y `lifecycle_email_eligible` de antes quedan como `*_cars` y `*_bonus`. [`20270110120000_trial_fifty.sql`](../supabase/migrations/20270110120000_trial_fifty.sql) lo pasa a la regla de las 50 publicaciones.
 
 ## Remarketing: cuentas sin búsqueda
 

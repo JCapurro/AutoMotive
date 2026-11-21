@@ -2,7 +2,7 @@
 
 Juan aprobó el diseño el 14/11/2026, sobre el prototipo `design/variants/oferta-prueba/`. Eligió la variante A: un cartel que se abre solo una vez, una franja arriba de la lista y una tarjeta al final, con el pase de 7 días primero.
 
-> **Desde el 20/11 (`docs/PRUEBA_COMPLETA.md`):** con `trial_reserve.new_max` (modo «40 + N») el cartel ya no se abre solo antes de que la prueba se complete; al completarse se abre su variante «completa» en lugar de `FreeResultLimit`, una vez por pestaña y búsqueda. La franja y la tarjeta quedan. Con `random_stock`, la tarjeta dice «Tu prueba muestra {N} de los {T}. Con Particular los ves todos…» en lugar de «los primeros {N}». Sin `new_max`, todo lo de este documento sigue igual.
+> **Desde el 21/11 (`docs/PRUEBA_COMPLETA.md`):** en modo aviso (`trial_reserve.notice_since`, la prueba de 50 publicaciones) el cartel ya no se abre solo antes de que el cupo se llene. La franja dice «Encontramos {T} autos que coinciden.», el cartel «Encontramos {T} autos.» con «Con Particular los ves todos y te avisamos de los nuevos.» y la salida «Ahora no». Con el cupo lleno se abre su variante «completa» («Ya recibiste tus 50 publicaciones.» / «¿Querés seguir recibiendo?») en lugar de `FreeResultLimit`, una vez por pestaña y búsqueda. La tarjeta del final, en modo aviso o con `random_stock`, dice solo «Con Particular los ves todos y te avisamos de los nuevos.». Sin `notice_since`, todo lo de este documento sigue igual.
 
 ## Por qué
 
