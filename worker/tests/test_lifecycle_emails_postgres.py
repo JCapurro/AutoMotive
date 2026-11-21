@@ -29,7 +29,7 @@ pytestmark = [pytest.mark.db, requires_db]
 
 LINKS = Links("https://automotive.app")
 SENDER = "Ese Auto <hola@automotive.test>"
-CONFIG_KEYS = ("plan_limits", "commercial_pilot", "lifecycle_emails", "pro_offer")
+CONFIG_KEYS = ("plan_limits", "commercial_pilot", "lifecycle_emails", "pro_offer", "trial_reserve")
 
 
 def art(hour: int, minute: int = 0, *, days: int = 0) -> datetime:
@@ -789,6 +789,27 @@ class SearchActivatedTests(LifecycleCase):
         [body] = self.emails()
         self.assertIn("Tu prueba ya usó sus 50 resultados, así que no vamos a avisarte de los nuevos.", body["text"])
         self.assertNotIn("apenas", body["text"])
+
+    async def test_notice_mode_tells_the_trial_as_its_publicaciones(self):
+        # docs/PRUEBA_COMPLETA.md: with notice_since the welcome says how many match and the 50, no hidden line.
+        await self.rows("INSERT INTO app_config (key, value) VALUES ('trial_reserve', %s) "
+                        "ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+                        Jsonb({"enabled": True, "backfill_max": 45, "notice_since": "2026-01-01T00:00:00Z"}))
+        app_config.clear_config_cache()
+        user = await self.account(trial_ended_hours_ago=None)
+        profile = await self.first_search(user, minutes_ago=50)
+        for level in ("high", "good"):
+            await self.match(profile, level=level)
+        await self.match(profile, admitted=False)
+
+        self.assertEqual(await self.send(), 1)
+        row = await self.ledger(user, "search_activated")
+        self.assertEqual(row["payload"], {"model": "Ford Focus", "found": 2, "below": 1, "hidden": 1,
+                                          "trial_limit": 50, "trial_left": 48, "trial_notice": True})
+        [body] = self.emails()
+        self.assertIn("Ya encontramos 3 autos que coinciden con tu búsqueda de Ford Focus", body["text"])
+        self.assertIn("Tu prueba incluye 50 publicaciones: de las nuevas que coincidan te avisamos por email.", body["text"])
+        self.assertNotIn("45", body["text"])
 
     async def test_not_before_45_minutes_nor_for_a_paused_search_or_an_admin(self):
         early = await self.account(trial_ended_hours_ago=None)

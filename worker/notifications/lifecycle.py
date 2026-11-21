@@ -50,7 +50,7 @@ log = logging.getLogger("lifecycle")
 # gets and it is lost after window_hours. Claimed after trial_ended it starved
 # behind a full cap (14/11/2026: 194 welcomes for 480 accounts).
 # The extra trial's offer goes before 2.5: on day 7 it replaces that day's count.
-# trial_complete («40 + N», docs/PRUEBA_COMPLETA.md) is the pay notice while the
+# trial_complete (docs/PRUEBA_COMPLETA.md) is the pay notice while the
 # trial still runs: right after the welcome.
 KINDS = ("pass_expires_today", "search_activated", "trial_complete", "trial_ended", "bonus_trial_ended", "pass_expiring",
          "trial_no_matches", "bonus_trial_ending", "bonus_trial_offer", "count_after_expiry",

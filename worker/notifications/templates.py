@@ -563,16 +563,12 @@ WELCOME_TRIAL_LEFT = {1: "Tu prueba muestra hasta {limit} resultados y te queda 
                       "n": "Tu prueba muestra hasta {limit} resultados y te quedan {n}: de los nuevos que coincidan te avisamos por email."}
 WELCOME_TRIAL_FULL = ("Tu prueba ya usó sus {limit} resultados, así que no vamos a avisarte de los nuevos. "
                       "Con Particular los ves todos y seguimos avisándote.")
-# «40 + N» (docs/PRUEBA_COMPLETA.md): with payload.trial_new (the cap on new
-# results), what the trial has left is new cars, and trial_left counts those.
-WELCOME_TRIAL_NEW_LEFT = {1: "Tu prueba te va a mostrar el próximo auto nuevo que coincida.",
-                          "n": "Tu prueba te va a mostrar los próximos {n} autos nuevos que coincidan."}
-WELCOME_TRIAL_NEW_FULL = {1: ("Tu prueba ya te mostró su auto nuevo, así que no vamos a avisarte de otros. "
-                              "Con Particular los ves todos y seguimos avisándote."),
-                          "n": ("Tu prueba ya te mostró sus {n} autos nuevos, así que no vamos a avisarte de otros. "
-                                "Con Particular los ves todos y seguimos avisándote.")}
-WELCOME_TRIAL_NO_NEW = ("Tu prueba no suma autos nuevos, así que no vamos a avisarte de ellos. "
-                        "Con Particular los ves todos y seguimos avisándote.")
+# Notice mode (docs/PRUEBA_COMPLETA.md, payload.trial_notice): the trial is its
+# limit, «50 publicaciones»; the first line counts everything that matches and
+# nothing says what the trial shows or hides.
+WELCOME_NOTICE_LEFT = "Tu prueba incluye {limit} publicaciones: de las nuevas que coincidan te avisamos por email."
+WELCOME_NOTICE_FULL = ("Ya recibiste las {limit} publicaciones de tu prueba. "
+                       "Con Particular las ves todas y seguimos avisándote.")
 WELCOME_INBOX = ("Para que nuestras alertas no terminen en Spam o Promociones, agregá este remitente a tus "
                  "contactos o mové este email a Principal.")
 WELCOME_CTA = "Ver mis resultados"
@@ -605,15 +601,14 @@ TRIAL_ENDED_OFFER_FALLBACK = "Para seguir recibiendo avisos, elegí Particular."
 TRIAL_ENDED_KEEP = "Tu historial y tus favoritos quedan guardados."
 TRIAL_ENDED_CTA = "Seguir con Particular"
 
-# trial_complete («40 + N», docs/PRUEBA_COMPLETA.md): once, an hour after the
-# trial admitted its last new car (payload.new, the cap). shown and hidden are
+# trial_complete (docs/PRUEBA_COMPLETA.md): once, an hour after the trial used
+# its publicaciones (payload.total, the account's limit). shown and hidden are
 # the picked search's, as the page counts them.
-TRIAL_COMPLETE_TITLE = {1: "Ya encontramos 1 auto nuevo para tu búsqueda",
-                        "n": "Ya encontramos {n} autos nuevos para tu búsqueda"}
-TRIAL_COMPLETE_FOUND = {1: "Apareció desde que se activó tu búsqueda{model} y ya está en tu lista.",
-                        "n": "Aparecieron desde que se activó tu búsqueda{model} y ya están en tu lista."}
-TRIAL_COMPLETE_CTA = "Seguir recibiendo autos nuevos"
-TRIAL_COMPLETE_OFFER = ("Para seguir recibiendo los que aparezcan, Particular sale {price_7} por {days_7} días "
+TRIAL_COMPLETE_TITLE = "Ya recibiste las {total} publicaciones de tu prueba"
+TRIAL_COMPLETE_HIDDEN = {1: "Hay 1 más que coincide con tu búsqueda{model}.",
+                         "n": "Hay {n} más que coinciden con tu búsqueda{model}."}
+TRIAL_COMPLETE_CTA = "Seguir recibiendo"
+TRIAL_COMPLETE_OFFER = ("Para seguir recibiendo, Particular sale {price_7} por {days_7} días "
                         "o {price_30} por {days_30}, pago único.")
 
 PASS_SUBJECT = {"pass_expiring": "Te quedan 5 días de Ese Auto",
@@ -823,25 +818,23 @@ def lifecycle_content(kind: str, payload: Mapping[str, Any], url: str, *,
         hidden = _count(payload.get("hidden"))
         subject = WELCOME_SUBJECT.format(model=model) if model else WELCOME_SUBJECT_ANY
         of_model = f" de {model}" if model else ""
-        if found:
+        limit = _count(payload.get("trial_limit"))
+        notice = bool(limit) and payload.get("trial_notice") is True
+        if notice and found + hidden:
+            lines = [_plural(WELCOME_FOUND, found + hidden, model=of_model,
+                             below=_plural(WELCOME_BELOW, below) if below else "")]
+        elif found and not notice:
             lines = [_plural(WELCOME_FOUND, found, model=of_model, below=_plural(WELCOME_BELOW, below) if below else "")]
             if hidden:
                 lines.append(_plural(WELCOME_HIDDEN, hidden))
-        elif hidden:
+        elif hidden and not notice:
             lines = [_plural(WELCOME_ONLY_HIDDEN, hidden, model=of_model)]
         else:
             lines = [WELCOME_NONE.format(model=f" para tu búsqueda{of_model}")]
-        limit = _count(payload.get("trial_limit"))
-        new_cap = payload.get("trial_new")
         if not limit:
             lines.append(WELCOME_NEXT)
-        elif isinstance(new_cap, int) and not isinstance(new_cap, bool) and new_cap >= 0:
-            if left := _count(payload.get("trial_left")):
-                lines.append(_plural(WELCOME_TRIAL_NEW_LEFT, left))
-            elif new_cap:
-                lines.append(_plural(WELCOME_TRIAL_NEW_FULL, new_cap))
-            else:
-                lines.append(WELCOME_TRIAL_NO_NEW)
+        elif notice:
+            lines.append((WELCOME_NOTICE_LEFT if _count(payload.get("trial_left")) else WELCOME_NOTICE_FULL).format(limit=limit))
         elif left := _count(payload.get("trial_left")):
             lines.append(_plural(WELCOME_TRIAL_LEFT, left, limit=limit))
         else:
@@ -869,13 +862,11 @@ def lifecycle_content(kind: str, payload: Mapping[str, Any], url: str, *,
         subject = TRIAL_ENDED_SUBJECT.format(found=_cars(found)) if found else TRIAL_ENDED_TITLE
         return Content(TRIAL_ENDED_TITLE, subject, lines=lines, link=Link(TRIAL_ENDED_CTA, url)), TRIAL_ENDED_TITLE
     if kind == "trial_complete":
-        new, hidden = _count(payload.get("new")), _count(payload.get("hidden"))
-        if not new:
-            raise ValueError("trial_complete without new cars")
-        title = _plural(TRIAL_COMPLETE_TITLE, new)
-        lines = [_plural(TRIAL_COMPLETE_FOUND, new, model=f" de {model}" if model else "")]
-        if hidden:
-            lines.append(_plural(WELCOME_HIDDEN, hidden))
+        total, hidden = _count(payload.get("total")), _count(payload.get("hidden"))
+        if not total:
+            raise ValueError("trial_complete without its total")
+        title = TRIAL_COMPLETE_TITLE.format(total=total)
+        lines = [_plural(TRIAL_COMPLETE_HIDDEN, hidden, model=f" de {model}" if model else "")] if hidden else []
         lines.append(trial_complete_offer(offer, limits))
         return Content(title, title, lines=lines, link=Link(TRIAL_COMPLETE_CTA, url)), title
     if kind in PASS_SUBJECT:
