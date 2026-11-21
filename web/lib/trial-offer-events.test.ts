@@ -47,6 +47,18 @@ describe("trackTrialOffer", () => {
     expect(state.track.mock.calls[0][3]).toEqual({ search_profile_id: 7, surface: "strip", shown: 30, hidden: 48 });
   });
 
+  it("marks the complete variant of «40 + N» with complete: true, and only with a boolean", async () => {
+    await trackTrialOffer("viewed", 7, "sheet", { shown: 45, hidden: 0, complete: true });
+    await trackTrialOffer("plan_selected", 7, "sheet", { shown: 45, hidden: 0, complete: true }, "pass_7");
+    await trackTrialOffer("dismissed", 7, "sheet", { shown: 45, hidden: 0, complete: false });
+    await trackTrialOffer("viewed", 7, "sheet", { shown: 45, hidden: 0, complete: "yes" as never });
+    expect(state.track.mock.calls.map((c) => [c[2], c[3]])).toEqual([
+      ["trial_offer_viewed", { search_profile_id: 7, surface: "sheet", shown: 45, hidden: 0, complete: true }],
+      ["trial_offer_plan_selected", { search_profile_id: 7, surface: "sheet", shown: 45, hidden: 0, complete: true, plan: "pass_7" }],
+      ["trial_offer_dismissed", { search_profile_id: 7, surface: "sheet", shown: 45, hidden: 0 }],
+    ]);
+  });
+
   it("never throws: a failed event cannot get in the way of the checkout", async () => {
     const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
     state.requireUser.mockRejectedValueOnce(new Error("no session"));

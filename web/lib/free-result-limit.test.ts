@@ -12,7 +12,7 @@ describe("the free trial's cumulative results", () => {
     expect(resultsText(DEFAULT_PLAN_LIMITS.free)).toBe("Hasta 50 resultados en total durante la prueba");
   });
   it("opens the offer at exactly 50, even in an empty or newly edited search", () => {
-    expect(freeResultQuota(trial)).toEqual({ used: 50, limit: 50, reached: true, stockLeft: 0 });
+    expect(freeResultQuota(trial)).toEqual({ used: 50, limit: 50, reached: true, stockLeft: 0, newUsed: 0, newMax: null, complete: true });
     expect(freeResultQuota({ ...trial, free_results_used: 49 })?.reached).toBe(false);
   });
   it("admits less stock with the reserve on (app_config.trial_reserve), and the quota left with it off", () => {

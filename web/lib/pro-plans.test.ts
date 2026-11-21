@@ -188,3 +188,19 @@ it("opens Particular on 30 days, or on the pass a link asks for (/planes?plan=pa
   expect(week).toMatch(/aria-pressed="true"[^>]*>7 días</);
   expect(byDefault).toMatch(/aria-pressed="true"[^>]*>30 días</);
 });
+
+// «40 + N» (docs/PRUEBA_COMPLETA.md): with a cap on new results, Planes and Términos say both numbers.
+it("says both numbers of the trial in new mode, and today's text without a cap", async () => {
+  const reserve = { enabled: true, backfillMax: 40, newMax: 5, randomStock: true, noticeSince: null };
+  const cfg = { proOffer: DEFAULT_PRO_OFFER, planLimits: DEFAULT_PLAN_LIMITS, automaticPayments: true, commercialPilot: true };
+  const plans = renderToStaticMarkup(createElement(PublicPlans, { cfg: { ...cfg, trialReserve: reserve }, signedIn: false }));
+  expect(plans).toContain("Hasta 40 autos ya publicados y los próximos 5 autos nuevos que aparezcan durante la prueba");
+  mocks.config.mockResolvedValue({ ...cfg, trialReserve: reserve });
+  const terms = renderToStaticMarkup(await TermsPage());
+  expect(terms).toContain("hasta 50 resultados en total durante la prueba");
+  expect(terms).toContain("De ese cupo, como máximo 40 son publicaciones que ya estaban al activar la búsqueda, elegidas al azar entre las que encuentra la primera revisión, y después se suman las próximas 5 publicaciones nuevas que coincidan; con eso la prueba queda completa.");
+  mocks.config.mockResolvedValue({ ...cfg, trialReserve: { ...reserve, newMax: null, randomStock: false, backfillMax: 30 } });
+  const legacy = renderToStaticMarkup(await TermsPage());
+  expect(legacy).toContain("De ese cupo, como máximo 30 son publicaciones que ya estaban al activar la búsqueda; el resto queda para las nuevas.");
+  expect(legacy).not.toContain("queda completa");
+});
