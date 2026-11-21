@@ -101,10 +101,35 @@ it("new mode, complete: the complete variant opens instead of FreeResultLimit, e
   expect(await render({ f: "saved" })).toContain('data-auto-open="false"');
 });
 
-it("new mode, complete at the whole quota too: never FreeResultLimit", async () => {
-  Object.assign(state, { used: 50, count: 50, hidden: 4, newMax: 5, newUsed: 2 });
+it("new mode, quota filled before the cap was used: today's path, never the complete variant", async () => {
+  Object.assign(state, { used: 50, count: 50, hidden: 4, newMax: 5, newUsed: 0 });
+  const html = await render();
+  expect(html).toContain('data-quota-popup="50"');
+  expect(html).not.toContain('data-complete="');
+  expect(html).not.toContain("te mostró");
+  Object.assign(state, { count: 0, hidden: 0 });
+  const empty = await render();
+  expect(empty).toContain("Tu prueba ya usó sus 50 resultados");
+  expect(empty).not.toContain("te mostró");
+  Object.assign(state, { ready: false });
+  const preparing = await render();
+  expect(preparing).toContain("tu prueba ya usó sus 50 resultados");
+  expect(preparing).not.toContain("te mostró");
+});
+
+it("new mode, complete at the whole quota too: the complete variant, never FreeResultLimit", async () => {
+  Object.assign(state, { used: 50, count: 50, hidden: 4, newMax: 5, newUsed: 5 });
   const html = await render();
   expect(html).toContain('data-complete="5"');
+  expect(html).not.toContain("data-quota-popup");
+});
+
+it("new mode, a trial running at the switch-on got more new ones than the cap: says how many it got", async () => {
+  Object.assign(state, { used: 50, count: 0, hidden: 0, newMax: 5, newUsed: 12 });
+  const html = await render();
+  expect(html).toContain('data-complete="12"');
+  expect(html).toContain("Tu prueba ya te mostró sus 12 autos nuevos");
+  expect(html).not.toContain("sus 5 autos nuevos");
   expect(html).not.toContain("data-quota-popup");
 });
 

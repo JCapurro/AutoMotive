@@ -55,14 +55,18 @@ describe("trial_reserve's new fields", () => {
 
 describe("freeResultQuota in new mode", () => {
   const trial: PlanLimits = { plan: "free", enforced: true, state: "trial", limits: {}, free_results_used: 42, free_results_limit: 50 };
-  it("has no cap and completes only at the quota in legacy mode", () => {
+  it("has no cap and never completes in legacy mode: the full quota is `reached`", () => {
     expect(freeResultQuota({ ...trial, free_new_used: 7, free_new_max: null })).toMatchObject({ newUsed: 7, newMax: null, complete: false });
     expect(freeResultQuota(trial)).toMatchObject({ newUsed: 0, newMax: null, complete: false });
+    expect(freeResultQuota({ ...trial, free_results_used: 50 })).toMatchObject({ reached: true, complete: false });
   });
   it("completes at the cap on new results", () => {
     expect(freeResultQuota({ ...trial, free_new_used: 4, free_new_max: 5 })).toMatchObject({ newUsed: 4, newMax: 5, complete: false, reached: false });
     expect(freeResultQuota({ ...trial, free_new_used: 5, free_new_max: 5 })).toMatchObject({ complete: true, reached: false });
-    expect(freeResultQuota({ ...trial, free_results_used: 50, free_new_used: 1, free_new_max: 5 })).toMatchObject({ complete: true, reached: true });
+    // The quota filled before the cap was used (e.g. before the switch-on): reached, not complete.
+    expect(freeResultQuota({ ...trial, free_results_used: 50, free_new_used: 1, free_new_max: 5 })).toMatchObject({ complete: false, reached: true });
+    expect(freeResultQuota({ ...trial, free_results_used: 50, free_new_used: 5, free_new_max: 5 })).toMatchObject({ complete: true, reached: true });
+    expect(freeResultQuota({ ...trial, free_new_used: 12, free_new_max: 5 })).toMatchObject({ complete: true, newUsed: 12 });
     // A cap of 0 never completes by itself: there is no «0 autos nuevos» to announce.
     expect(freeResultQuota({ ...trial, free_new_used: 0, free_new_max: 0 })?.complete).toBe(false);
   });

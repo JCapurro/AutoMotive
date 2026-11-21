@@ -137,11 +137,14 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
     (!profile.bootstrapped_at || Date.parse(profile.bootstrapped_at) <= Date.parse(diagnosis.created_at));
   const quota = freeResultQuota(access);
   // «40 + N» (docs/PRUEBA_COMPLETA.md): with a cap on new results (new mode) the
-  // trial completes at the cap; then the offer's sheet, in its complete variant,
-  // takes FreeResultLimit's place. Without a cap (legacy), today's behaviour.
+  // trial completes when its cap on new ones is used; then the offer's sheet, in
+  // its complete variant, takes FreeResultLimit's place and says how many new
+  // ones the account got (more than the cap for a trial running at the
+  // switch-on). A quota reached without that keeps today's path, in both modes.
   const newMode = quota?.newMax != null;
-  const completeCap = quota != null && quota.newMax != null && quota.complete ? quota.newMax : null;
-  const checkoutConfig = quota?.reached && !newMode ? await webConfig() : null;
+  const completeCap = quota?.complete ? quota.newUsed : null;
+  const fullQuota = quota?.reached === true && !quota.complete;
+  const checkoutConfig = fullQuota ? await webConfig() : null;
   // Oferta cuando la prueba oculta autos (docs/OFERTA_PRUEBA.md): what the list shows of what
   // matches, and the passes one tap from the checkout. Counts only (my_search_hidden_results).
   const offer = trialOffer(count.all_count ?? 0, hidden);
@@ -221,13 +224,13 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
         />
       </header>
 
-      {quota?.reached && checkoutConfig ? <FreeResultLimit profileId={profileId} limit={quota.limit} opportunities={count.opportunities_count ?? 0} offer={checkoutConfig.proOffer} pro={checkoutConfig.planLimits.pro} automatic={checkoutConfig.automaticPayments} pilot={checkoutConfig.commercialPilot} /> : null}
+      {quota && fullQuota && checkoutConfig ? <FreeResultLimit profileId={profileId} limit={quota.limit} opportunities={count.opportunities_count ?? 0} offer={checkoutConfig.proOffer} pro={checkoutConfig.planLimits.pro} automatic={checkoutConfig.automaticPayments} pilot={checkoutConfig.commercialPilot} /> : null}
 
       {pending ? (
         <SearchPreparation
           email={user.email}
           trialEnds={access?.state === "trial" && access.expires_at ? accessDate(access.expires_at) : null}
-          trialFull={quota?.reached && !newMode ? quota.limit : null}
+          trialFull={fullQuota ? quota.limit : null}
           trialComplete={completeCap}
           immediate={includesImmediateAlerts(planLimits as PlanLimits | null)}
         />

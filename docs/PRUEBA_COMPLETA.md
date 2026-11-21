@@ -53,6 +53,8 @@ Sin cambios: los ya publicados entran por orden de llegada hasta `backfill_max`,
 - **Antes de completar:** el cartel de la oferta ya no se abre solo. La franja, su botón «Ver todos» (que lo abre) y la tarjeta del final quedan como están.
 - **Al completar:** no aparece `FreeResultLimit`. El mismo cartel se abre en su variante «completa», una vez por pestaña y búsqueda (`sessionStorage`, clave `ea_trial_complete_opened:<id>`), y la franja lo vuelve a abrir. Aparece aunque la búsqueda no oculte nada. Tiene el camino «Enviar feedback» del cartel viejo.
 - **Otros textos** de la página que decían «50 resultados» dicen lo que pasó: «Tu prueba ya te mostró sus {N} autos nuevos».
+- **Qué {N}.** Los autos nuevos que la cuenta recibió de verdad (`free_new_used`), no el tope: en una prueba que ya corría al prender el modo pueden ser más (hasta 20). El mail usa el tope porque solo va a pruebas empezadas desde `notice_since`, donde son iguales.
+- **Completa es solo por el tope.** Una cuenta que llenó sus 50 sin llegar al tope de nuevos (por ejemplo, antes de prender el modo) sigue el camino de hoy en los dos modos: `FreeResultLimit` y «Tu prueba ya usó sus 50 resultados».
 - **La tarjeta del final** con `random_stock` ya no dice «los primeros {N} que encontramos» sino «Tu prueba muestra {N} de ellos.».
 - **Planes y Términos** dicen los dos números.
 

@@ -321,7 +321,8 @@ export function visibleResults(total: number, limits: PlanLimits | null): { cap:
  * the quota left, or less with the reserve on (docs/PRUEBA_HONESTA.md).
  * «40 + N» (docs/PRUEBA_COMPLETA.md): `newMax` is the cap on new results
  * (null: legacy mode, no cap) and `newUsed` the new ones admitted; the trial
- * is `complete` when the quota is reached or a cap above 0 is.
+ * is `complete` only when a cap above 0 was used: an account that filled its
+ * quota with no new ones (e.g. before the switch-on) is `reached`, not complete.
  */
 export type FreeResultQuota = { used: number; limit: number; reached: boolean; stockLeft: number; newUsed: number; newMax: number | null; complete: boolean };
 export function freeResultQuota(access: PlanLimits | null): FreeResultQuota | null {
@@ -334,7 +335,7 @@ export function freeResultQuota(access: PlanLimits | null): FreeResultQuota | nu
   const newMax = typeof access.free_new_max === "number" && Number.isInteger(access.free_new_max) && access.free_new_max >= 0 ? access.free_new_max : null;
   const newUsed = access.free_new_used ?? 0;
   const reached = used >= limit;
-  return { used, limit, reached, stockLeft, newUsed, newMax, complete: reached || (newMax != null && newMax > 0 && newUsed >= newMax) };
+  return { used, limit, reached, stockLeft, newUsed, newMax, complete: newMax != null && newMax > 0 && newUsed >= newMax };
 }
 export function accessDate(value: string): string {
   return new Intl.DateTimeFormat("es-AR", { dateStyle: "medium", timeStyle: "short",
