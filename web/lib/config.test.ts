@@ -48,10 +48,10 @@ it("reads app_config.cost_estimator: null without the row or a valid as_of, part
 
 // Aviso de zona (docs/AVISO_ZONA.md): the switch, on only when enabled is true.
 it("reads app_config.trial_reserve: off without the row, null when app_config can't be read", async () => {
-  expect((await webConfig()).trialReserve).toEqual({ enabled: false, backfillMax: 0, newMax: null, randomStock: false, noticeSince: null });
+  expect((await webConfig()).trialReserve).toEqual({ enabled: false, backfillMax: 0, randomStock: false, noticeSince: null });
   expect(mock.keys).toContain("trial_reserve");
   mock.rows = [{ key: "trial_reserve", value: { enabled: true, backfill_max: 30 } }];
-  expect((await webConfig()).trialReserve).toEqual({ enabled: true, backfillMax: 30, newMax: null, randomStock: false, noticeSince: null });
+  expect((await webConfig()).trialReserve).toEqual({ enabled: true, backfillMax: 30, randomStock: false, noticeSince: null });
   mock.error = { message: "timeout" };
   expect((await webConfig()).trialReserve).toBeNull();
 });

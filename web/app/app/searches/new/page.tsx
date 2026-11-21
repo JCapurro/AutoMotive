@@ -39,9 +39,7 @@ export default async function NewSearchPage({ searchParams }: PageProps<"/app/se
   const maxLocations = locationCap(access);
   // A trial that used its quota gets no new alerts: the forms don't promise them (docs/PRUEBA_HONESTA.md).
   const quota = freeResultQuota(access);
-  // «40 + N» (docs/PRUEBA_COMPLETA.md): a trial complete by its cap gets no new cars either; the same split as the results page.
-  const trialComplete = quota?.complete ? quota.newUsed : null;
-  const trialFull = quota?.reached && !quota.complete ? quota.limit : null;
+  const trialFull = quota?.reached ? quota.limit : null;
   const limit: SearchLimit | null = access && capacity != null ? {
     capacity,
     maxProfiles: access.limits.max_profiles ?? capacity,
@@ -109,7 +107,6 @@ export default async function NewSearchPage({ searchParams }: PageProps<"/app/se
             sellerFilter={sellerFilter}
             lockedPro={lockedPro}
             trialFull={trialFull}
-            trialComplete={trialComplete}
           />
         </TabsContent>
         <TabsContent value="assisted" forceMount className="pt-3 data-[state=inactive]:hidden">
@@ -121,7 +118,6 @@ export default async function NewSearchPage({ searchParams }: PageProps<"/app/se
             approximateLocation={approximateLocation}
             limit={limit}
             trialFull={trialFull}
-            trialComplete={trialComplete}
             thresholdAlerts={thresholdAlerts}
             modelLessSearch={modelLessSearch}
             maxLocations={maxLocations}

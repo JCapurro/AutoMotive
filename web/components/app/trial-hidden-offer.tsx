@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { analyticsEvent } from "@/lib/google-analytics";
 import { pixel } from "@/lib/meta-pixel";
 import { OFFER_DAYS, PASS_GUARANTEE, PLAN_COPY, PLAN_NAMES, planPrice, type PassOffer, type ProOffer } from "@/lib/pro";
-import { cardLead, cardTitle, COMPLETE_BADGE, COMPLETE_STRIP_BUTTON, completeLead, completePayLabel, completeStripText, completeTitle, keepLabel, opensSheet, payLabel, seeAllLabel, type Segment, sheetLead, sheetTitle, stripText, type TrialOffer, type TrialOfferSurface } from "@/lib/trial-offer";
+import { cardLead, cardTitle, COMPLETE_BADGE, COMPLETE_STRIP_BUTTON, completeKeepLabel, completeLead, completePayLabel, completeStripText, completeTitle, keepLabel, NOTICE_KEEP_LABEL, noticeSheetLead, noticeSheetTitle, noticeStripText, opensSheet, payLabel, seeAllLabel, type Segment, sheetLead, sheetTitle, stripText, type TrialOffer, type TrialOfferSurface } from "@/lib/trial-offer";
 import { cn } from "@/lib/utils";
 
 /**
@@ -24,10 +24,11 @@ import { cn } from "@/lib/utils";
  *   - a card at the end of the list (TrialHiddenCard).
  * Only counts come from the server: nothing of a hidden listing is here.
  *
- * «40 + N» (docs/PRUEBA_COMPLETA.md): in new mode the sheet never opens by
- * itself until the trial completes (`complete`, the cap on new cars); then it
- * opens once per tab session and search in its "complete" variant, which
- * takes the place of FreeResultLimit, and the strip reopens it.
+ * Notice mode (docs/PRUEBA_COMPLETA.md): the texts say how many match, not
+ * what the trial shows, and the sheet never opens by itself until the quota
+ * fills (`complete`, the limit); then it opens once per tab session and search
+ * in its "complete" variant, which takes the place of FreeResultLimit, and the
+ * strip reopens it.
  */
 export type TrialCheckout = { offer: ProOffer; automatic: boolean };
 
@@ -161,11 +162,12 @@ export function TrialPassChoice({ offer, checkout, pending, error, onPay, label 
  * The strip and the sheet. `autoOpen`: the search is ready and nothing else is
  * asking for attention; then the sheet opens by itself the first time this
  * browser sees the search hide enough (opensSheet), and never again.
- * `complete`: the trial's cap on new cars, once it was reached (new mode); the
+ * `notice`: notice mode, before the quota fills: its texts, and no opening by itself.
+ * `complete`: the trial's limit, once the quota filled (notice mode); the
  * complete variant then opens with autoOpen once per tab session and search.
  */
-export function TrialHiddenOffer({ profileId, offer, autoOpen, checkout, complete = null }: {
-  profileId: number; offer: TrialOffer; autoOpen: boolean; checkout: TrialCheckout; complete?: number | null;
+export function TrialHiddenOffer({ profileId, offer, autoOpen, checkout, notice = false, complete = null }: {
+  profileId: number; offer: TrialOffer; autoOpen: boolean; checkout: TrialCheckout; notice?: boolean; complete?: number | null;
 }) {
   const done = complete != null;
   const [open, setOpen] = useState(false);
@@ -173,7 +175,7 @@ export function TrialHiddenOffer({ profileId, offer, autoOpen, checkout, complet
   const chosen = useRef(false);
   const content = useRef<HTMLDivElement>(null);
   const { choose, pending, error } = usePassCheckout(profileId, offer, "sheet", checkout, done);
-  const opens = autoOpen && (done || opensSheet(offer));
+  const opens = autoOpen && (done || (!notice && opensSheet(offer)));
   const counts = useRef(offer);
   useEffect(() => { counts.current = offer; });
 
@@ -209,7 +211,7 @@ export function TrialHiddenOffer({ profileId, offer, autoOpen, checkout, complet
 
   return <>
     <aside aria-label="Lo que tu prueba no muestra" data-testid="trial-offer-strip" className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-lg bg-muted px-4 py-3 text-sm">
-      <p className="min-w-0 flex-1 basis-56"><Marked segments={done ? completeStripText(offer, complete) : stripText(offer)} className="font-semibold" /></p>
+      <p className="min-w-0 flex-1 basis-56"><Marked segments={done ? completeStripText(complete) : notice ? noticeStripText(offer) : stripText(offer)} className="font-semibold" /></p>
       <Button size="sm" className="h-9 px-3.5" onClick={() => setOpen(true)}>{done ? COMPLETE_STRIP_BUTTON : seeAllLabel(offer)}</Button>
     </aside>
     <Dialog open={open} onOpenChange={changeOpen}>
@@ -224,15 +226,15 @@ export function TrialHiddenOffer({ profileId, offer, autoOpen, checkout, complet
               {feedback ? <><MessageSquare className="size-3.5" aria-hidden /> Tu experiencia</> : done ? COMPLETE_BADGE : "Prueba gratis"}
             </span>
             <DialogTitle className="max-w-[20ch] pr-6 text-2xl leading-[1.12] font-semibold tracking-tight sm:text-[28px]">
-              {feedback ? "¿Qué podemos mejorar?" : done ? completeTitle(complete) : sheetTitle(offer)}
+              {feedback ? "¿Qué podemos mejorar?" : done ? completeTitle(complete) : notice ? noticeSheetTitle(offer) : sheetTitle(offer)}
             </DialogTitle>
             <DialogDescription className="text-[15px] leading-relaxed">
-              {feedback ? "Contanos qué te faltó, qué no funcionó o qué te gustaría encontrar en Ese Auto." : <Marked segments={done ? completeLead(offer) : sheetLead(offer)} />}
+              {feedback ? "Contanos qué te faltó, qué no funcionó o qué te gustaría encontrar en Ese Auto." : <Marked segments={done ? completeLead() : notice ? noticeSheetLead(offer) : sheetLead(offer)} />}
             </DialogDescription>
           </DialogHeader>
           {feedback ? <div className="mt-4"><Suspense fallback={null}><ProductFeedback profileId={profileId} onBack={() => setFeedback(false)} /></Suspense></div> : <>
             <TrialPassChoice offer={offer} checkout={checkout} pending={pending} error={error} onPay={pay} label={done ? completePayLabel : payLabel} />
-            <Button type="button" variant="ghost" className="mt-1 h-11 w-full text-muted-foreground" onClick={() => changeOpen(false)}>{keepLabel(offer)}</Button>
+            <Button type="button" variant="ghost" className="mt-1 h-11 w-full text-muted-foreground" onClick={() => changeOpen(false)}>{done ? completeKeepLabel() : notice ? NOTICE_KEEP_LABEL : keepLabel(offer)}</Button>
             {/* The pop-up it replaces (FreeResultLimit) asks for feedback too. */}
             {done ? <Button type="button" variant="link" className="h-9 w-full gap-2 text-xs text-muted-foreground" onClick={() => setFeedback(true)}><MessageSquare className="size-3.5" aria-hidden /> Enviar feedback</Button> : null}
             <p className="text-center text-xs leading-relaxed text-muted-foreground">
@@ -248,9 +250,9 @@ export function TrialHiddenOffer({ profileId, offer, autoOpen, checkout, complet
 
 /**
  * The card where the list ends: what the trial shows, what it doesn't, and both passes.
- * `randomStock`: the trial shows a random sample of what was published (cardLead).
+ * `plain`: notice mode or a random sample of what was published: the lead says only what Particular gives (cardLead).
  */
-export function TrialHiddenCard({ profileId, offer, checkout, randomStock = false }: { profileId: number; offer: TrialOffer; checkout: TrialCheckout; randomStock?: boolean }) {
+export function TrialHiddenCard({ profileId, offer, checkout, plain = false }: { profileId: number; offer: TrialOffer; checkout: TrialCheckout; plain?: boolean }) {
   const id = useId();
   const ref = useRef<HTMLElement>(null);
   const { choose, pending, selected, error } = usePassCheckout(profileId, offer, "card", checkout);
@@ -273,7 +275,7 @@ export function TrialHiddenCard({ profileId, offer, checkout, randomStock = fals
 
   return <section ref={ref} aria-labelledby={`${id}-title`} data-testid="trial-hidden" className="rounded-xl border-2 border-foreground p-5">
     <h2 id={`${id}-title`} className="type-heading text-[22px] leading-tight"><Marked segments={cardTitle(offer)} className="mark" /></h2>
-    <p className="mt-2 text-muted-foreground">{cardLead(offer, randomStock)}</p>
+    <p className="mt-2 text-muted-foreground">{cardLead(offer, plain)}</p>
     <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
       {PASSES.map((plan, i) => {
         const price = planPrice(checkout.offer[plan].amount);

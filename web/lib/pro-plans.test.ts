@@ -189,24 +189,21 @@ it("opens Particular on 30 days, or on the pass a link asks for (/planes?plan=pa
   expect(byDefault).toMatch(/aria-pressed="true"[^>]*>30 días</);
 });
 
-// «40 + N» (docs/PRUEBA_COMPLETA.md): with a cap on new results, Planes and Términos say both numbers.
-it("says both numbers of the trial in new mode, and today's text without a cap", async () => {
-  const reserve = { enabled: true, backfillMax: 40, newMax: 5, randomStock: true, noticeSince: null };
+// Notice mode (docs/PRUEBA_COMPLETA.md): Planes says only the limit; Términos adds the random clause with random_stock.
+it("tells the trial as its 50 publicaciones in notice mode, and keeps today's text without it", async () => {
+  const reserve = { enabled: true, backfillMax: 45, randomStock: true, noticeSince: "2026-11-21T12:00:00Z" };
   const cfg = { proOffer: DEFAULT_PRO_OFFER, planLimits: DEFAULT_PLAN_LIMITS, automaticPayments: true, commercialPilot: true };
   const plans = renderToStaticMarkup(createElement(PublicPlans, { cfg: { ...cfg, trialReserve: reserve }, signedIn: false }));
-  expect(plans).toContain("Hasta 40 autos ya publicados y los próximos 5 autos nuevos que aparezcan durante la prueba");
+  expect(plans).toContain("Hasta 50 publicaciones durante la prueba");
+  expect(plans).not.toContain("ya publicados");
+  const legacyPlans = renderToStaticMarkup(createElement(PublicPlans, { cfg: { ...cfg, trialReserve: { ...reserve, noticeSince: null } }, signedIn: false }));
+  expect(legacyPlans).toContain("Hasta 50 resultados en total durante la prueba, hasta 45 ya publicados y el resto, autos nuevos");
   mocks.config.mockResolvedValue({ ...cfg, trialReserve: reserve });
   const terms = renderToStaticMarkup(await TermsPage());
-  // The total is what the trial can really show: 40 + 5, not the quota of 50.
-  expect(terms).toContain("hasta 45 resultados en total durante la prueba");
-  expect(terms).not.toContain("hasta 50 resultados");
-  expect(terms).toContain("De ese cupo, como máximo 40 son publicaciones que ya estaban al activar la búsqueda, elegidas al azar entre las que encuentra la primera revisión, y después se suman las próximas 5 publicaciones nuevas que coincidan; con eso la prueba queda completa.");
-  mocks.config.mockResolvedValue({ ...cfg, trialReserve: { ...reserve, newMax: null, randomStock: false, backfillMax: 30 } });
-  const legacy = renderToStaticMarkup(await TermsPage());
-  expect(legacy).toContain("De ese cupo, como máximo 30 son publicaciones que ya estaban al activar la búsqueda; el resto queda para las nuevas.");
-  expect(legacy).not.toContain("queda completa");
-  expect(legacy).toContain("hasta 50 resultados en total durante la prueba");
-  // Never above the quota: 48 + 5 still says 50.
-  mocks.config.mockResolvedValue({ ...cfg, trialReserve: { ...reserve, backfillMax: 48 } });
-  expect(renderToStaticMarkup(await TermsPage())).toContain("hasta 50 resultados en total durante la prueba");
+  expect(terms).toContain("hasta 50 resultados en total durante la prueba");
+  expect(terms).toContain("De ese cupo, como máximo 45 son publicaciones que ya estaban al activar la búsqueda, elegidas al azar entre las que encuentra la primera revisión; el resto queda para las nuevas.");
+  expect(terms).not.toContain("queda completa");
+  mocks.config.mockResolvedValue({ ...cfg, trialReserve: { ...reserve, randomStock: false, noticeSince: null, backfillMax: 30 } });
+  expect(renderToStaticMarkup(await TermsPage()))
+    .toContain("De ese cupo, como máximo 30 son publicaciones que ya estaban al activar la búsqueda; el resto queda para las nuevas.");
 });

@@ -81,13 +81,10 @@ export function cardTitle({ shown, hidden }: TrialOffer): Segment[] {
 
 /**
  * What the trial shows and what Particular adds. «Mejor oportunidad» is the list's default order (lib/sorts.ts).
- * `randomStock` (app_config.trial_reserve.random_stock): the trial shows a random sample, not the first ones found.
+ * `plain`: notice mode or a random sample (docs/PRUEBA_COMPLETA.md): no «muestra N de los T», only what Particular gives.
  */
-export function cardLead({ shown, total }: TrialOffer, randomStock = false): string {
-  // A random sample (docs/PRUEBA_COMPLETA.md): «Tu prueba muestra 45 de los 68.»
-  if (randomStock && shown > 0) {
-    return `Tu prueba muestra ${shown} de los ${total}. Con Particular los ves todos y te avisamos de los nuevos.`;
-  }
+export function cardLead({ shown, total }: TrialOffer, plain = false): string {
+  if (plain) return total === 1 ? NOTICE_LEAD_ONE : NOTICE_LEAD;
   const first = shown === 0 ? "Tu prueba no muestra ninguno."
     : shown === 1 ? "Tu prueba muestra el primero que encontramos." : `Tu prueba muestra los primeros ${shown} que encontramos.`;
   const all = total === 1 ? "lo ves" : `ves los ${total}, ordenados por mejor oportunidad,`;
@@ -105,49 +102,58 @@ export function keepLabel({ shown }: TrialOffer): string {
 }
 
 /*
- * «40 + N» (docs/PRUEBA_COMPLETA.md): the trial has shown its `newMax` new
- * cars and adds no more. The same sheet and strip, in a "complete" variant;
- * `offer` holds the search's counts (hidden may be 0 here).
+ * Notice mode (docs/PRUEBA_COMPLETA.md, lib/trial-reserve.ts trialNoticeMode):
+ * the trial is told as its 50 publicaciones, never as a cap on stock or a
+ * count of new cars. Before the quota fills, the strip and the sheet say how
+ * many match; once it fills, the "complete" variant takes FreeResultLimit's
+ * place. Juan picks among four versions of the complete texts on rendered
+ * screens: title, lead, pay label and exit stay separate to swap them.
  */
 
-/** «Tu prueba ya te mostró sus 5 autos nuevos», for the page's other notices. */
-export function trialCompleteText(newMax: number): string {
-  return newMax === 1 ? "Tu prueba ya te mostró su auto nuevo" : `Tu prueba ya te mostró sus ${newMax} autos nuevos`;
+const NOTICE_LEAD = "Con Particular los ves todos y te avisamos de los nuevos.";
+const NOTICE_LEAD_ONE = "Con Particular lo ves y te avisamos de los nuevos.";
+
+/** The strip before the quota fills: «Encontramos 78 autos que coinciden.» */
+export function noticeStripText({ total }: TrialOffer): Segment[] {
+  return total === 1 ? ["Encontramos 1 auto que coincide."] : ["Encontramos ", { mark: String(total) }, " autos que coinciden."];
 }
 
-/** For the new-search forms: «Tu prueba ya te mostró sus 5 autos nuevos, así que no vamos a avisarte de otros.» */
-export function trialCompleteNoAlerts(newUsed: number): string {
-  return `${trialCompleteText(newUsed)}, así que no vamos a avisarte de otros.`;
+/** The sheet's title before the quota fills: «Encontramos 78 autos.» */
+export function noticeSheetTitle({ total }: TrialOffer): string {
+  return total === 1 ? "Encontramos 1 auto." : `Encontramos ${autos(total)}.`;
 }
 
-/** The sheet's title: «Ya te encontramos 5 autos nuevos.» */
-export function completeTitle(newMax: number): string {
-  return `Ya te encontramos ${autos(newMax)} ${newMax === 1 ? "nuevo" : "nuevos"}.`;
+/** The sheet's lead before the quota fills. */
+export function noticeSheetLead({ total }: TrialOffer): Segment[] {
+  return [total === 1 ? NOTICE_LEAD_ONE : NOTICE_LEAD];
 }
 
-/** «Seguí recibiendo los que aparezcan y mirá los 23 más que coinciden.» */
-export function completeLead({ hidden }: TrialOffer): Segment[] {
-  const keep = "Seguí recibiendo los que aparezcan";
-  if (hidden === 0) return [`${keep}.`];
-  return hidden === 1
-    ? [`${keep} y mirá el otro que coincide.`]
-    : [`${keep} y mirá los `, { mark: String(hidden) }, " más que coinciden."];
+/** The sheet's way out in notice mode, before and after the quota fills. */
+export const NOTICE_KEEP_LABEL = "Ahora no";
+
+/** The complete sheet's title (version A): «Ya recibiste tus 50 publicaciones.» */
+export function completeTitle(limit: number): string {
+  return `Ya recibiste tus ${limit} publicaciones.`;
 }
 
-/** The pay button: payLabel with matches to see, «Seguir recibiendo · 7 días por $ 5.000» without. */
-export function completePayLabel(offer: TrialOffer, days: number, price: string): string {
-  return offer.hidden > 0 ? payLabel(offer, days, price) : `Seguir recibiendo · ${days} días por ${price}`;
+/** The complete sheet's lead (version A). */
+export function completeLead(): Segment[] {
+  return ["¿Querés seguir recibiendo?"];
 }
 
-/** The strip: «Ya te encontramos 5 autos nuevos. Hay 23 más que coinciden.» */
-export function completeStripText({ hidden }: TrialOffer, newMax: number): Segment[] {
-  const done: Segment[] = newMax === 1
-    ? ["Ya te encontramos 1 auto nuevo."]
-    : ["Ya te encontramos ", { mark: String(newMax) }, " autos nuevos."];
-  if (hidden === 0) return done;
-  return hidden === 1
-    ? [...done, " Hay 1 más que coincide."]
-    : [...done, " Hay ", { mark: String(hidden) }, " más que coinciden."];
+/** The complete sheet's pay button (version A), with or without hidden matches: «Seguir recibiendo · 7 días por $ 5.000». */
+export function completePayLabel(_offer: TrialOffer, days: number, price: string): string {
+  return `Seguir recibiendo · ${days} días por ${price}`;
+}
+
+/** The complete sheet's way out (version A). */
+export function completeKeepLabel(): string {
+  return NOTICE_KEEP_LABEL;
+}
+
+/** The strip once the quota fills: «Ya recibiste tus 50 publicaciones.» */
+export function completeStripText(limit: number): Segment[] {
+  return ["Ya recibiste tus ", { mark: String(limit) }, " publicaciones."];
 }
 
 /** The strip's button in the complete variant. */

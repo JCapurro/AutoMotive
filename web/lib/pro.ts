@@ -113,14 +113,10 @@ export function searchesText(caps: PlanCaps, upTo = true): string {
 }
 /**
  * `stockMax`: the trial's reserve on (app_config.trial_reserve), at most this many already published.
- * `newMax`: «40 + N» (docs/PRUEBA_COMPLETA.md), the cap on new results; with it, both numbers.
+ * `notice`: notice mode (docs/PRUEBA_COMPLETA.md, lib/trial-reserve.ts): the trial is only its limit, «50 publicaciones».
  */
-export function resultsText(caps: PlanCaps, stockMax: number | null = null, newMax: number | null = null): string {
-  if (caps.maxTotalResults != null && stockMax != null && newMax != null) {
-    const stock = Math.min(stockMax, caps.maxTotalResults);
-    const next = newMax === 1 ? "el próximo auto nuevo que aparezca" : `los próximos ${newMax} autos nuevos que aparezcan`;
-    return `Hasta ${stock} ${stock === 1 ? "auto ya publicado" : "autos ya publicados"} y ${next} durante la prueba`;
-  }
+export function resultsText(caps: PlanCaps, stockMax: number | null = null, notice = false): string {
+  if (caps.maxTotalResults != null && notice) return `Hasta ${caps.maxTotalResults} publicaciones durante la prueba`;
   if (caps.maxTotalResults != null) {
     const stock = stockMax != null && stockMax < caps.maxTotalResults ? `, hasta ${stockMax} ya publicados y el resto, autos nuevos` : "";
     return `Hasta ${caps.maxTotalResults} resultados en total durante la prueba${stock}`;
@@ -197,8 +193,6 @@ export type PlanLimits = {
   free_results_used?: number; free_results_limit?: number | null;
   /** Prueba gratis: stock admitted, and the reserve's cap on it (null with app_config.trial_reserve off). */
   free_backfill_used?: number; free_backfill_max?: number | null;
-  /** «40 + N» (docs/PRUEBA_COMPLETA.md): new results admitted, and their cap (null without one). */
-  free_new_used?: number; free_new_max?: number | null;
   limits: {
     max_profiles?: number; max_visible_results?: number; max_total_results?: number; immediate_alerts_per_day?: number; immediate_alerts?: boolean;
     threshold_alerts?: boolean; model_less_search?: boolean; max_locations?: number;
@@ -319,23 +313,15 @@ export function visibleResults(total: number, limits: PlanLimits | null): { cap:
  * Account usage, independent of this search's current filters, sort, or count.
  * `stockLeft`: what the trial still admits of listings already published —
  * the quota left, or less with the reserve on (docs/PRUEBA_HONESTA.md).
- * «40 + N» (docs/PRUEBA_COMPLETA.md): `newMax` is the cap on new results
- * (null: legacy mode, no cap) and `newUsed` the new ones admitted; the trial
- * is `complete` only when a cap above 0 was used: an account that filled its
- * quota with no new ones (e.g. before the switch-on) is `reached`, not complete.
  */
-export type FreeResultQuota = { used: number; limit: number; reached: boolean; stockLeft: number; newUsed: number; newMax: number | null; complete: boolean };
-export function freeResultQuota(access: PlanLimits | null): FreeResultQuota | null {
+export function freeResultQuota(access: PlanLimits | null): { used: number; limit: number; reached: boolean; stockLeft: number } | null {
   if (!access?.enforced || access.plan !== "free" || access.free_results_limit == null) return null;
   const limit = access.free_results_limit;
   const used = access.free_results_used ?? 0;
   const left = Math.max(limit - used, 0);
   const stockMax = access.free_backfill_max;
   const stockLeft = stockMax == null ? left : Math.min(left, Math.max(stockMax - (access.free_backfill_used ?? 0), 0));
-  const newMax = typeof access.free_new_max === "number" && Number.isInteger(access.free_new_max) && access.free_new_max >= 0 ? access.free_new_max : null;
-  const newUsed = access.free_new_used ?? 0;
-  const reached = used >= limit;
-  return { used, limit, reached, stockLeft, newUsed, newMax, complete: newMax != null && newMax > 0 && newUsed >= newMax };
+  return { used, limit, reached: used >= limit, stockLeft };
 }
 export function accessDate(value: string): string {
   return new Intl.DateTimeFormat("es-AR", { dateStyle: "medium", timeStyle: "short",

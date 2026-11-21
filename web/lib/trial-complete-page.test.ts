@@ -2,19 +2,19 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, expect, it, vi } from "vitest";
 
-// «40 + N» (docs/PRUEBA_COMPLETA.md) on the results page, in its three states:
-// legacy (no cap: lib/free-result-limit-page.test.ts has the rest), new mode
-// before the trial completes, and new mode once it did.
+// Prueba de 50 publicaciones (docs/PRUEBA_COMPLETA.md) on the results page, in
+// its states: legacy (lib/free-result-limit-page.test.ts has the rest), notice
+// mode before the quota fills, and notice mode once it did.
 const state = vi.hoisted(() => ({
   used: 30, count: 30, hidden: 0, ready: true,
-  newMax: null as number | null, newUsed: 0, randomStock: false,
+  noticeSince: null as string | null, randomStock: false,
 }));
 vi.mock("@/lib/cost-estimate-data", () => ({ costLinesFor: async () => new Map() }));
 vi.mock("@/lib/margin-data", () => ({ marginAccess: async () => null, marginLinesFor: async () => new Map(), marginTeasersFor: async () => new Set() }));
 vi.mock("@/lib/auth", () => ({ requireUser: async () => ({ id: "account" }) }));
 vi.mock("@/lib/config", () => ({ webConfig: async () => ({
   proOffer: {}, automaticPayments: true, commercialPilot: true, planLimits: { pro: { dealerMargin: true } }, zoneNotice: { enabled: true },
-  trialReserve: { enabled: true, backfillMax: 40, newMax: state.newMax, randomStock: state.randomStock, noticeSince: null },
+  trialReserve: { enabled: true, backfillMax: 45, randomStock: state.randomStock, noticeSince: state.noticeSince },
 }) }));
 vi.mock("@/lib/search-collection-server", () => ({ loadSearchCollection: async () => [] }));
 vi.mock("@/lib/zone-notice-server", () => ({ allCount: () => null, dismissedZones: async () => [], zoneNotice: async () => ({ state: "none" }) }));
@@ -31,10 +31,10 @@ vi.mock("@/components/app/free-result-limit", () => ({
   FreeResultLimit: ({ limit }: { limit: number }) => createElement("aside", { "data-quota-popup": limit }),
 }));
 vi.mock("@/components/app/trial-hidden-offer", () => ({
-  TrialHiddenOffer: ({ offer, autoOpen, complete = null }: { offer: { shown: number; hidden: number }; autoOpen: boolean; complete?: number | null }) =>
-    createElement("aside", { "data-trial-offer": `${offer.shown}/${offer.hidden}`, "data-auto-open": String(autoOpen), "data-complete": String(complete) }),
-  TrialHiddenCard: ({ offer, randomStock = false }: { offer: { shown: number; hidden: number }; randomStock?: boolean }) =>
-    createElement("section", { "data-trial-card": `${offer.shown}/${offer.hidden}`, "data-random": String(randomStock) }),
+  TrialHiddenOffer: ({ offer, autoOpen, notice = false, complete = null }: { offer: { shown: number; hidden: number }; autoOpen: boolean; notice?: boolean; complete?: number | null }) =>
+    createElement("aside", { "data-trial-offer": `${offer.shown}/${offer.hidden}`, "data-auto-open": String(autoOpen), "data-notice": String(notice), "data-complete": String(complete) }),
+  TrialHiddenCard: ({ offer, plain = false }: { offer: { shown: number; hidden: number }; plain?: boolean }) =>
+    createElement("section", { "data-trial-card": `${offer.shown}/${offer.hidden}`, "data-plain": String(plain) }),
 }));
 vi.mock("@/components/app/listing-card", () => ({
   LISTING_ROWS: "rows", ListingCard: () => createElement("article", { "data-result": true }),
@@ -48,8 +48,7 @@ vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({
   } }),
   rpc: async (name: string) => ({ data: name === "my_plan_limits" ? {
     plan: "free", enforced: true, state: "trial", expires_at: "2026-11-23T12:00:00Z",
-    free_results_used: state.used, free_results_limit: 50, free_new_used: state.newUsed, free_new_max: state.newMax,
-    limits: { max_visible_results: 50 },
+    free_results_used: state.used, free_results_limit: 50, limits: { max_visible_results: 50 },
   } : name === "search_result_counts" ? [{ all_count: state.count }] :
     name === "my_search_hidden_results" ? state.hidden :
     Array.from({ length: state.count }, (_, n) => ({ listing_id: n + 1 })) }),
@@ -57,100 +56,71 @@ vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({
 
 import SearchResultsPage from "@/app/app/searches/[id]/page";
 
-beforeEach(() => Object.assign(state, { used: 30, count: 30, hidden: 0, ready: true, newMax: null, newUsed: 0, randomStock: false }));
+const SINCE = "2026-11-21T12:00:00Z";
+beforeEach(() => Object.assign(state, { used: 30, count: 30, hidden: 0, ready: true, noticeSince: null, randomStock: false }));
 async function render(query: Record<string, string> = {}) {
   return renderToStaticMarkup(await SearchResultsPage({ params: Promise.resolve({ id: "1" }), searchParams: Promise.resolve(query) }));
 }
 
-it("legacy (no cap): the sheet opens by itself and FreeResultLimit asks at 50, as today", async () => {
+it("legacy: the legacy strip and card, and FreeResultLimit at 50, as on main", async () => {
   Object.assign(state, { hidden: 48 });
   const open = await render();
   expect(open).toContain('data-trial-offer="30/48"');
-  expect(open).toContain('data-auto-open="true"');
+  expect(open).toContain('data-notice="false"');
   expect(open).toContain('data-complete="null"');
+  expect(open).toContain('data-plain="false"');
   Object.assign(state, { used: 50, count: 50, hidden: 20 });
   const full = await render();
   expect(full).toContain('data-quota-popup="50"');
   expect(full).not.toContain("data-trial-offer");
 });
 
-it("new mode, not complete: nothing opens by itself; the strip and the card stay", async () => {
-  Object.assign(state, { used: 43, count: 43, hidden: 38, newMax: 5, newUsed: 3 });
+it("legacy with a random sample: the card's plain lead, nothing else changes", async () => {
+  Object.assign(state, { hidden: 48, randomStock: true });
+  const html = await render();
+  expect(html).toContain('data-plain="true"');
+  expect(html).toContain('data-notice="false"');
+});
+
+it("notice mode, quota not full: the notice strip and the plain card; FreeResultLimit never", async () => {
+  Object.assign(state, { used: 43, count: 43, hidden: 38, noticeSince: SINCE });
   const html = await render();
   expect(html).toContain('data-trial-offer="43/38"');
-  expect(html).toContain('data-auto-open="false"');
+  expect(html).toContain('data-notice="true"');
   expect(html).toContain('data-complete="null"');
   expect(html).toContain('data-trial-card="43/38"');
+  expect(html).toContain('data-plain="true"');
   expect(html).not.toContain("data-quota-popup");
 });
 
-it("new mode, complete: the complete variant opens instead of FreeResultLimit, even with nothing hidden", async () => {
-  Object.assign(state, { used: 45, count: 45, hidden: 23, newMax: 5, newUsed: 5 });
+it("notice mode, quota full: the complete variant with the limit, in place of FreeResultLimit", async () => {
+  Object.assign(state, { used: 50, count: 50, hidden: 23, noticeSince: SINCE });
   const html = await render();
-  expect(html).toContain('data-trial-offer="45/23"');
-  expect(html).toContain('data-complete="5"');
+  expect(html).toContain('data-trial-offer="50/23"');
+  expect(html).toContain('data-complete="50"');
   expect(html).toContain('data-auto-open="true"');
-  expect(html).toContain('data-trial-card="45/23"');
+  expect(html).toContain('data-trial-card="50/23"');
   expect(html).not.toContain("data-quota-popup");
   state.hidden = 0;
   const none = await render();
-  expect(none).toContain('data-trial-offer="45/0"');
-  expect(none).toContain('data-complete="5"');
+  expect(none).toContain('data-trial-offer="50/0"');
+  expect(none).toContain('data-complete="50"');
   expect(none).not.toContain("data-trial-card");
   // Over another filter it waits, as the sheet always did.
   expect(await render({ f: "saved" })).toContain('data-auto-open="false"');
 });
 
-it("new mode, quota filled before the cap was used: today's path, never the complete variant", async () => {
-  Object.assign(state, { used: 50, count: 50, hidden: 4, newMax: 5, newUsed: 0 });
-  const html = await render();
-  expect(html).toContain('data-quota-popup="50"');
-  expect(html).not.toContain('data-complete="');
-  expect(html).not.toContain("te mostró");
-  Object.assign(state, { count: 0, hidden: 0 });
+it("notice mode, quota full: the honest notices stay as on main", async () => {
+  Object.assign(state, { used: 50, count: 0, hidden: 0, noticeSince: SINCE });
   const empty = await render();
-  expect(empty).toContain("Tu prueba ya usó sus 50 resultados");
-  expect(empty).not.toContain("te mostró");
+  expect(empty).toContain("Todavía no hay publicaciones que coincidan. Tu prueba ya usó sus 50 resultados: con Particular te avisamos de las nuevas.");
   Object.assign(state, { ready: false });
   const preparing = await render();
   expect(preparing).toContain("tu prueba ya usó sus 50 resultados");
-  expect(preparing).not.toContain("te mostró");
+  expect(preparing).not.toContain("data-trial-offer");
 });
 
-it("new mode, complete at the whole quota too: the complete variant, never FreeResultLimit", async () => {
-  Object.assign(state, { used: 50, count: 50, hidden: 4, newMax: 5, newUsed: 5 });
-  const html = await render();
-  expect(html).toContain('data-complete="5"');
-  expect(html).not.toContain("data-quota-popup");
-});
-
-it("new mode, a trial running at the switch-on got more new ones than the cap: says how many it got", async () => {
-  Object.assign(state, { used: 50, count: 0, hidden: 0, newMax: 5, newUsed: 12 });
-  const html = await render();
-  expect(html).toContain('data-complete="12"');
-  expect(html).toContain("Tu prueba ya te mostró sus 12 autos nuevos");
-  expect(html).not.toContain("sus 5 autos nuevos");
-  expect(html).not.toContain("data-quota-popup");
-});
-
-it("new mode, complete: an empty list says what happened, never «50 resultados»", async () => {
-  Object.assign(state, { used: 45, count: 0, hidden: 0, newMax: 5, newUsed: 5 });
-  const html = await render();
-  expect(html).toContain("Todavía no hay publicaciones que coincidan. Tu prueba ya te mostró sus 5 autos nuevos: con Particular te avisamos de las nuevas.");
-  expect(html).not.toContain("50 resultados");
-});
-
-it("new mode, complete: the preparation notice says what happened", async () => {
-  Object.assign(state, { used: 45, count: 0, hidden: 0, newMax: 5, newUsed: 5, ready: false });
-  const html = await render();
-  expect(html).toContain("tu prueba ya te mostró sus 5 autos nuevos, así que no vamos a avisarte de otros.");
-  expect(html).not.toContain("50 resultados");
-  expect(html).not.toContain("data-trial-offer");
-});
-
-it("tells the card when the stock is a random sample", async () => {
-  Object.assign(state, { hidden: 38, randomStock: true });
-  expect(await render()).toContain('data-random="true"');
-  state.randomStock = false;
-  expect(await render()).toContain('data-random="false"');
+it("without notice_since: legacy, FreeResultLimit at 50", async () => {
+  Object.assign(state, { used: 50, count: 50, hidden: 4, noticeSince: null });
+  expect(await render()).toContain('data-quota-popup="50"');
 });

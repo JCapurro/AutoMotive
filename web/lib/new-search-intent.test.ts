@@ -34,18 +34,13 @@ vi.mock("@/app/app/searches/form-data", () => ({
   loadFormData: async () => ({ catalog: [], sources: [], defaultFrequency: "daily", thresholdAlerts: false, modelLessSearch: state.modelLessSearch }),
 }));
 vi.mock("@/components/app/search-form", () => ({
-  SearchForm: ({ approximateLocation, trialFull, trialComplete }: {
-    approximateLocation: DetectedLocation | null; trialFull?: number | null; trialComplete?: number | null;
-  }) => createElement("span", {
-    "data-form-zone": approximateLocation?.label, "data-form-full": trialFull ?? undefined, "data-form-complete": trialComplete ?? undefined,
-  }),
+  SearchForm: ({ approximateLocation }: { approximateLocation: DetectedLocation | null }) =>
+    createElement("span", { "data-form-zone": approximateLocation?.label }),
 }));
 vi.mock("@/components/app/assisted-search", () => ({
-  AssistedSearch: ({ initialText, approximateLocation, limit, modelLessSearch, trialFull, trialComplete }: {
+  AssistedSearch: ({ initialText, approximateLocation, limit, modelLessSearch }: {
     initialText: string; approximateLocation: DetectedLocation | null; limit: SearchLimit | null; modelLessSearch?: boolean;
-    trialFull?: number | null; trialComplete?: number | null;
   }) => createElement("textarea", {
-    "data-assisted-full": trialFull ?? undefined, "data-assisted-complete": trialComplete ?? undefined,
     defaultValue: initialText, "data-assisted-zone": approximateLocation?.label,
     "data-capacity": limit?.capacity, "data-upsell": limit?.upsell ?? undefined,
     "data-model-less": modelLessSearch ? "yes" : undefined,
@@ -131,35 +126,3 @@ it("records an email-only account without searches that arrives without its prom
   await NewSearchPage({ params: Promise.resolve({}), searchParams: Promise.resolve({}) });
   expect(state.tracked).toEqual([]);
 });
-
-// «40 + N» (docs/PRUEBA_COMPLETA.md): a trial complete by its cap is told so; a quota reached without it keeps «usó sus 50».
-it.each([
-  { name: "complete", used: 45, newUsed: 5, newMax: 5, full: null, complete: 5 },
-  { name: "complete and full", used: 50, newUsed: 6, newMax: 5, full: null, complete: 6 },
-  { name: "full, cap not used", used: 50, newUsed: 2, newMax: 5, full: 50, complete: null },
-  { name: "neither", used: 30, newUsed: 2, newMax: 5, full: null, complete: null },
-  { name: "legacy, full", used: 50, newUsed: 0, newMax: null, full: 50, complete: null },
-])("hands both forms the trial's state: $name", async ({ used, newUsed, newMax, full, complete }) => {
-  state.access = {
-    enforced: true, plan: "free", limits: {}, active_searches: 0,
-    free_results_used: used, free_results_limit: 50, free_new_used: newUsed, free_new_max: newMax,
-  };
-  const html = renderToStaticMarkup(await NewSearchPage({ params: Promise.resolve({}), searchParams: Promise.resolve({}) }));
-  const attr = (name: string, value: number | null) => (value == null ? expect(html).not.toContain(`${name}=`) : expect(html).toContain(`${name}="${value}"`));
-  attr("data-assisted-full", full);
-  attr("data-assisted-complete", complete);
-  // The structured tab is unmounted by Radix: its props, from the tree.
-  const tree = await NewSearchPage({ params: Promise.resolve({}), searchParams: Promise.resolve({}) });
-  const form = findProps(tree, "trialComplete");
-  expect(form?.trialFull ?? null).toBe(full);
-  expect(form?.trialComplete ?? null).toBe(complete);
-});
-
-function findProps(node: unknown, key: string): Record<string, unknown> | null {
-  if (!node || typeof node !== "object") return null;
-  if (Array.isArray(node)) { for (const n of node) { const r = findProps(n, key); if (r) return r; } return null; }
-  const props = (node as { props?: Record<string, unknown> }).props;
-  if (!props) return null;
-  if (key in props && "initial" in props) return props;
-  return findProps(props.children, key);
-}

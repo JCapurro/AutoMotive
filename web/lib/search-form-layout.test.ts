@@ -24,13 +24,6 @@ it("never promises new alerts to a trial that used its quota (docs/PRUEBA_HONEST
   const full = renderToStaticMarkup(createElement(SearchForm, { ...props, trialFull: 50 }));
   expect(full).toContain("Tu prueba ya usó sus 50 resultados, así que no vamos a avisarte de las nuevas.");
   expect(full).not.toContain("Desde entonces te avisamos");
-  // «40 + N» (docs/PRUEBA_COMPLETA.md): a trial complete by its cap, ahead of a full quota.
-  const complete = renderToStaticMarkup(createElement(SearchForm, { ...props, trialComplete: 5, trialFull: 50 }));
-  expect(complete).toContain("Tu prueba ya te mostró sus 5 autos nuevos, así que no vamos a avisarte de otros.");
-  expect(complete).not.toContain("Desde entonces te avisamos");
-  expect(complete).not.toContain("usó sus");
-  expect(renderToStaticMarkup(createElement(SearchForm, { ...props, trialComplete: 1 })))
-    .toContain("Tu prueba ya te mostró su auto nuevo, así que no vamos a avisarte de otros.");
 });
 
 it("keeps the submit button in the side column, next to the form", () => {
