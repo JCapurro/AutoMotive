@@ -112,7 +112,7 @@ Solo en la prueba «40 + N» (`docs/PRUEBA_COMPLETA.md`). Apagado por defecto.
 
 - **A quién.** Una vez por cuenta (`event_key = 'complete'`), 60 minutos después de que la prueba admitió su auto nuevo número `trial_reserve.new_max` (`trial_completed_at`). Solo pruebas empezadas desde `trial_reserve.notice_since`, que reciben emails, siguen con cupo de prueba y con la prueba corriendo, al reservar y al enviar. Sin `new_max` o sin `notice_since`, nadie.
 - **Asunto y título.** «Tu prueba gratis ya te mostró {N} autos nuevos» (con 1: «…1 auto nuevo»).
-- **Cuerpo.** «Desde que se activó tu búsqueda de {modelo} aparecieron {N} autos nuevos que coinciden, y ya están en tu lista.» «Ese es el límite de la prueba gratis: desde ahora no suma autos nuevos.» Con ocultos: «Hay {M} más que coinciden y tu prueba no muestra.» Después, la oferta de Particular de 2.2.
+- **Cuerpo.** «Desde que se activó tu búsqueda de {modelo} aparecieron {N} autos nuevos que coinciden, y ya están en tu lista.» «Ese es el límite de la prueba gratis: desde ahora no suma autos nuevos.» Con ocultos: «Hay {M} más que coinciden y tu prueba no muestra.» Después, los dos pases, el de 7 días primero: «Para seguir recibiendo avisos, Particular sale $5.000 por 7 días o $15.000 por 30, con 3 búsquedas y pago único.» (de `pro_offer` y `plan_limits.pass`; sin un pase de 7 días válido, la oferta de Particular de 2.2).
 - **Botón.** «Seguir recibiendo autos nuevos», a `/app/searches/<id>` (la búsqueda que más muestra, como 2.2).
 - **Orden de reserva.** Justo después de la bienvenida.
 - **Código.** [`20270109120000_trial_complete.sql`](../supabase/migrations/20270109120000_trial_complete.sql): `claim_lifecycle_emails` y `lifecycle_email_eligible` de antes quedan como `*_cars` y `*_bonus`.

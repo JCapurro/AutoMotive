@@ -84,8 +84,11 @@ export function cardTitle({ shown, hidden }: TrialOffer): Segment[] {
  * `randomStock` (app_config.trial_reserve.random_stock): the trial shows a random sample, not the first ones found.
  */
 export function cardLead({ shown, total }: TrialOffer, randomStock = false): string {
+  // A random sample (docs/PRUEBA_COMPLETA.md): «Tu prueba muestra 45 de los 68.»
+  if (randomStock && shown > 0) {
+    return `Tu prueba muestra ${shown} de los ${total}. Con Particular los ves todos, ordenados por mejor oportunidad, y te avisamos de los que aparezcan.`;
+  }
   const first = shown === 0 ? "Tu prueba no muestra ninguno."
-    : randomStock ? `Tu prueba muestra ${shown} de ellos.`
     : shown === 1 ? "Tu prueba muestra el primero que encontramos." : `Tu prueba muestra los primeros ${shown} que encontramos.`;
   const all = total === 1 ? "lo ves" : `ves los ${total}, ordenados por mejor oportunidad,`;
   return `${first} Con Particular ${all} y te avisamos de los que aparezcan.`;
@@ -119,10 +122,11 @@ export function completeTitle(newMax: number): string {
 
 /** «Hay 23 más que coinciden con lo que pediste y siguen publicados.», or that nothing new comes in. */
 export function completeLead({ hidden }: TrialOffer): Segment[] {
-  if (hidden === 0) return ["Desde ahora tu prueba no suma autos nuevos."];
+  const stopped = "Desde ahora tu prueba no suma autos nuevos.";
+  if (hidden === 0) return [stopped];
   return hidden === 1
-    ? ["Hay 1 más que coincide con lo que pediste y sigue publicado."]
-    : ["Hay ", { mark: String(hidden) }, " más que coinciden con lo que pediste y siguen publicados."];
+    ? [`${stopped} Hay 1 más que coincide con lo que pediste y sigue publicado.`]
+    : [`${stopped} Hay `, { mark: String(hidden) }, " más que coinciden con lo que pediste y siguen publicados."];
 }
 
 /** The pay button: payLabel with matches to see, «Seguir recibiendo · 7 días por $ 5.000» without. */

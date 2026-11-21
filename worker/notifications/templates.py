@@ -614,6 +614,8 @@ TRIAL_COMPLETE_FOUND = {1: "Desde que se activó tu búsqueda{model} apareció 1
                         "n": "Desde que se activó tu búsqueda{model} aparecieron {n} autos nuevos que coinciden, y ya están en tu lista."}
 TRIAL_COMPLETE_LIMIT = "Ese es el límite de la prueba gratis: desde ahora no suma autos nuevos."
 TRIAL_COMPLETE_CTA = "Seguir recibiendo autos nuevos"
+TRIAL_COMPLETE_OFFER = ("Para seguir recibiendo avisos, Particular sale {price_7} por {days_7} días o {price_30} por {days_30}, "
+                        "con {searches} búsquedas y pago único.")
 
 PASS_SUBJECT = {"pass_expiring": "Te quedan 5 días de Ese Auto",
                 "pass_expires_today": "Hoy vence tu acceso a Ese Auto"}
@@ -718,20 +720,40 @@ def particular_price(offer: Mapping[str, Any] | None) -> str | None:
     return None
 
 
+def _pass(offer: Mapping[str, Any] | None, key: str) -> tuple[str, int] | None:
+    """A pass's price and days from app_config.pro_offer ("$5.000", 7), or None if it isn't usable."""
+    price = offer.get(key) if isinstance(offer, Mapping) else None
+    if not (isinstance(price, Mapping) and price.get("currency") == "ARS"):
+        return None
+    amount, days = _pesos(price.get("amount")), price.get("days")
+    if amount and isinstance(days, int) and not isinstance(days, bool) and days > 0:
+        return amount, days
+    return None
+
+
+def _pass_searches(limits: Mapping[str, Any] | None) -> int:
+    """The pass plan's searches from app_config.plan_limits, 3 if unreadable."""
+    pass_limits = limits.get("pass") if isinstance(limits, Mapping) else None
+    searches = pass_limits.get("max_profiles") if isinstance(pass_limits, Mapping) else None
+    return searches if isinstance(searches, int) and not isinstance(searches, bool) and searches > 0 else 3
+
+
 def particular_offer(offer: Mapping[str, Any] | None, limits: Mapping[str, Any] | None) -> str:
     """Particular's price, days and searches from app_config (pro_offer,
     plan_limits); without a usable price, the plan without numbers (never a wrong one)."""
-    price = offer.get("pass_30") if isinstance(offer, Mapping) else None
-    amount = particular_price(offer)
-    if amount:
-        days = price.get("days")
-        if isinstance(days, int) and not isinstance(days, bool) and days > 0:
-            pass_limits = limits.get("pass") if isinstance(limits, Mapping) else None
-            searches = pass_limits.get("max_profiles") if isinstance(pass_limits, Mapping) else None
-            if not (isinstance(searches, int) and not isinstance(searches, bool) and searches > 0):
-                searches = 3
-            return TRIAL_ENDED_OFFER.format(price=amount, days=days, searches=searches)
+    month = _pass(offer, "pass_30")
+    if month:
+        return TRIAL_ENDED_OFFER.format(price=month[0], days=month[1], searches=_pass_searches(limits))
     return TRIAL_ENDED_OFFER_FALLBACK
+
+
+def trial_complete_offer(offer: Mapping[str, Any] | None, limits: Mapping[str, Any] | None) -> str:
+    """Both passes, the 7-day one first; without both usable, particular_offer's line."""
+    week, month = _pass(offer, "pass_7"), _pass(offer, "pass_30")
+    if week and month:
+        return TRIAL_COMPLETE_OFFER.format(price_7=week[0], days_7=week[1], price_30=month[0], days_30=month[1],
+                                           searches=_pass_searches(limits))
+    return particular_offer(offer, limits)
 
 
 def _missed(car: Any, found: int, below: int, link: Link) -> tuple[Content, str] | None:
@@ -856,7 +878,7 @@ def lifecycle_content(kind: str, payload: Mapping[str, Any], url: str, *,
         lines = [_plural(TRIAL_COMPLETE_FOUND, new, model=f" de {model}" if model else ""), TRIAL_COMPLETE_LIMIT]
         if hidden:
             lines.append(_plural(WELCOME_HIDDEN, hidden))
-        lines.append(particular_offer(offer, limits))
+        lines.append(trial_complete_offer(offer, limits))
         return Content(title, title, lines=lines, link=Link(TRIAL_COMPLETE_CTA, url)), title
     if kind in PASS_SUBJECT:
         found, below = _count(payload.get("found")), _count(payload.get("below"))

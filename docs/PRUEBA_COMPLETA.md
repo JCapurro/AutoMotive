@@ -55,7 +55,7 @@ Sin cambios: los ya publicados entran por orden de llegada hasta `backfill_max`,
 - **Otros textos** de la página que decían «50 resultados» dicen lo que pasó: «Tu prueba ya te mostró sus {N} autos nuevos».
 - **Qué {N}.** Los autos nuevos que la cuenta recibió de verdad (`free_new_used`), no el tope: en una prueba que ya corría al prender el modo pueden ser más (hasta 20). El mail usa el tope porque solo va a pruebas empezadas desde `notice_since`, donde son iguales.
 - **Completa es solo por el tope.** Una cuenta que llenó sus 50 sin llegar al tope de nuevos (por ejemplo, antes de prender el modo) sigue el camino de hoy en los dos modos: `FreeResultLimit` y «Tu prueba ya usó sus 50 resultados».
-- **La tarjeta del final** con `random_stock` ya no dice «los primeros {N} que encontramos» sino «Tu prueba muestra {N} de ellos.».
+- **La tarjeta del final** con `random_stock` ya no dice «los primeros {N} que encontramos» sino «Tu prueba muestra {N} de los {T}.».
 - **Planes y Términos** dicen los dos números.
 
 ## Textos
@@ -71,7 +71,7 @@ Con `new_max` 5, 45 mostrados y 23 ocultos.
 | Primera línea | Desde que se activó tu búsqueda de Ford Focus aparecieron 5 autos nuevos que coinciden, y ya están en tu lista. (sin modelo: «Desde que se activó tu búsqueda aparecieron…»; con 1: «…apareció 1 auto nuevo que coincide, y ya está en tu lista.») |
 | Segunda | Ese es el límite de la prueba gratis: desde ahora no suma autos nuevos. |
 | Con ocultos | Hay 23 más que coinciden y tu prueba no muestra. (con 1: «Hay 1 más que coincide y tu prueba no muestra.»; con 0, no va) |
-| Oferta | Para seguir recibiendo avisos, Particular sale $15.000 por 30 días, con 3 búsquedas y pago único. |
+| Oferta | Para seguir recibiendo avisos, Particular sale $5.000 por 7 días o $15.000 por 30, con 3 búsquedas y pago único. (precios, días y búsquedas de `pro_offer.pass_7`, `pro_offer.pass_30` y `plan_limits.pass`; sin un pase de 7 días válido, la línea de 2.2: «…Particular sale $15.000 por 30 días, con 3 búsquedas y pago único.») |
 | Botón | Seguir recibiendo autos nuevos |
 | Pie | El de `trial_ended`. |
 
@@ -92,7 +92,7 @@ El payload lleva `trial_new` (el tope) y `trial_left` cuenta autos nuevos.
 | --- | --- |
 | Etiqueta | Prueba gratis completa |
 | Título | Tu prueba ya te mostró 5 autos nuevos. (con 1: «…1 auto nuevo.») |
-| Bajada con ocultos | Hay **23** más que coinciden con lo que pediste y siguen publicados. (con 1: «Hay 1 más que coincide con lo que pediste y sigue publicado.») |
+| Bajada con ocultos | Desde ahora tu prueba no suma autos nuevos. Hay **23** más que coinciden con lo que pediste y siguen publicados. (con 1: «Desde ahora tu prueba no suma autos nuevos. Hay 1 más que coincide con lo que pediste y sigue publicado.») |
 | Bajada sin ocultos | Desde ahora tu prueba no suma autos nuevos. |
 | Botón de pago con ocultos | Ver los 68 · 7 días por $ 5.000 |
 | Botón de pago sin ocultos | Seguir recibiendo · 7 días por $ 5.000 |
@@ -104,12 +104,12 @@ El payload lleva `trial_new` (el tope) y `trial_left` cuenta autos nuevos.
 
 - Cartel de preparación: «Desde ahora: tu prueba ya te mostró sus 5 autos nuevos, así que no vamos a avisarte de otros.»
 - Lista vacía: «Todavía no hay publicaciones que coincidan. Tu prueba ya te mostró sus 5 autos nuevos: con Particular te avisamos de las nuevas.»
-- Tarjeta del final con `random_stock`: «Tu prueba muestra 40 de ellos. Con Particular ves los 78, ordenados por mejor oportunidad, y te avisamos de los que aparezcan.»
+- Tarjeta del final con `random_stock`: «Tu prueba muestra 45 de los 68. Con Particular los ves todos, ordenados por mejor oportunidad, y te avisamos de los que aparezcan.» (con 0 mostrados, el texto de siempre)
 
 ### Planes y Términos
 
 - Planes: «Hasta 40 autos ya publicados y los próximos 5 autos nuevos que aparezcan durante la prueba» (con 1: «…y el próximo auto nuevo que aparezca…»).
-- Términos, después de «hasta 50 resultados en total durante la prueba»: «De ese cupo, como máximo 40 son publicaciones que ya estaban al activar la búsqueda, elegidas al azar entre las que encuentra la primera revisión, y después se suman las próximas 5 publicaciones nuevas que coincidan; con eso la prueba queda completa.» (sin `random_stock`, sin «elegidas al azar…»).
+- Términos dice como total lo que la prueba puede mostrar de verdad, `min(max_total_results, min(backfill_max, max_total_results) + new_max)`: «hasta 45 resultados en total durante la prueba» con 40 y 5. Después: «De ese cupo, como máximo 40 son publicaciones que ya estaban al activar la búsqueda, elegidas al azar entre las que encuentra la primera revisión, y después se suman las próximas 5 publicaciones nuevas que coincidan; con eso la prueba queda completa.» (sin `random_stock`, sin «elegidas al azar…»).
 
 ## Eventos
 

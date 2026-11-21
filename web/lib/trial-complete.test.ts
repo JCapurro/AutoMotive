@@ -80,8 +80,9 @@ describe("the complete variant's copy", () => {
     expect(trialCompleteText(1)).toBe("Tu prueba ya te mostró su auto nuevo");
   });
   it("leads with what is hidden, or with what stops", () => {
-    expect(text(completeLead(counts(45, 23)))).toBe("Hay 23 más que coinciden con lo que pediste y siguen publicados.");
-    expect(text(completeLead(counts(45, 1)))).toBe("Hay 1 más que coincide con lo que pediste y sigue publicado.");
+    expect(text(completeLead(counts(45, 23)))).toBe("Desde ahora tu prueba no suma autos nuevos. Hay 23 más que coinciden con lo que pediste y siguen publicados.");
+    expect(completeLead(counts(45, 23))).toContainEqual({ mark: "23" });
+    expect(text(completeLead(counts(45, 1)))).toBe("Desde ahora tu prueba no suma autos nuevos. Hay 1 más que coincide con lo que pediste y sigue publicado.");
     expect(text(completeLead(counts(45, 0)))).toBe("Desde ahora tu prueba no suma autos nuevos.");
   });
   it("pays to see them all, or to keep receiving", () => {
@@ -98,8 +99,8 @@ describe("the complete variant's copy", () => {
     expect(COMPLETE_BADGE).toBe("Prueba gratis completa");
   });
   it("doesn't call a random sample «los primeros»", () => {
-    expect(cardLead(counts(40, 38), true)).toBe("Tu prueba muestra 40 de ellos. Con Particular ves los 78, ordenados por mejor oportunidad, y te avisamos de los que aparezcan.");
-    expect(cardLead(counts(1, 3), true)).toBe("Tu prueba muestra 1 de ellos. Con Particular ves los 4, ordenados por mejor oportunidad, y te avisamos de los que aparezcan.");
+    expect(cardLead(counts(45, 23), true)).toBe("Tu prueba muestra 45 de los 68. Con Particular los ves todos, ordenados por mejor oportunidad, y te avisamos de los que aparezcan.");
+    expect(cardLead(counts(1, 3), true)).toBe("Tu prueba muestra 1 de los 4. Con Particular los ves todos, ordenados por mejor oportunidad, y te avisamos de los que aparezcan.");
     expect(cardLead(counts(0, 3), true)).toBe(cardLead(counts(0, 3)));
     expect(cardLead(counts(30, 48))).toContain("los primeros 30 que encontramos");
   });
@@ -132,7 +133,7 @@ describe("the complete variant's components", () => {
   });
   it("ends the list without «los primeros» with a random sample", () => {
     const html = renderToStaticMarkup(createElement(TrialHiddenCard, { profileId: 7, offer: trialOffer(40, 38)!, checkout, randomStock: true }));
-    expect(html).toContain("Tu prueba muestra 40 de ellos.");
+    expect(html).toContain("Tu prueba muestra 40 de los 78.");
     expect(html).not.toContain("los primeros");
   });
   it("tells the preparation notice what happened, without «50 resultados»", () => {

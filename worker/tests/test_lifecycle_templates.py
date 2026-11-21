@@ -23,6 +23,7 @@ SNAPSHOTS = Path(__file__).parent / "snapshots" / "notifications"
 LINKS = Links("https://automotive.app")
 NOW = datetime(2026, 10, 20, 13, 0, tzinfo=timezone.utc)          # 10:00 in Argentina
 OFFER = {"version": "ars-launch-2026-10",
+         "pass_7": {"amount": 5000, "currency": "ARS", "days": 7},
          "pass_30": {"amount": 15000, "currency": "ARS", "days": 30},
          "pro_monthly": {"amount": 75000, "currency": "ARS", "days": 30}}
 LIMITS = {"enforced": True, "free": {"max_profiles": 1}, "pass": {"max_profiles": 3}, "pro": {"max_profiles": 20}}
@@ -461,7 +462,7 @@ class TrialCompleteEmailTests(unittest.TestCase):
             "Desde que se activó tu búsqueda de Ford Focus aparecieron 5 autos nuevos que coinciden, y ya están en tu lista.",
             "Ese es el límite de la prueba gratis: desde ahora no suma autos nuevos.",
             "Hay 23 más que coinciden y tu prueba no muestra.",
-            "Para seguir recibiendo avisos, Particular sale $15.000 por 30 días, con 3 búsquedas y pago único.",
+            "Para seguir recibiendo avisos, Particular sale $5.000 por 7 días o $15.000 por 30, con 3 búsquedas y pago único.",
             "Seguir recibiendo autos nuevos: https://automotive.app/m/41"])
         self.assertIn("TU PRUEBA GRATIS", msg.html)
         self.assertIn(templates.LIFECYCLE_FOOTER["trial_ended"], msg.text)
@@ -477,6 +478,26 @@ class TrialCompleteEmailTests(unittest.TestCase):
     def test_one_hidden_in_the_singular(self):
         msg = email("trial_complete", {"model": "Ford Ka", "new": 5, "hidden": 1})
         self.assertIn("Hay 1 más que coincide y tu prueba no muestra.", self.lines(msg))
+
+    def test_the_offer_reads_both_passes_from_the_config(self):
+        payload = {"model": "Ford Ka", "new": 5, "hidden": 0}
+        offer = {**OFFER, "pass_7": {"amount": 6500, "currency": "ARS", "days": 7},
+                 "pass_30": {"amount": 18000, "currency": "ARS", "days": 30}}
+        limits = {**LIMITS, "pass": {"max_profiles": 4}}
+        self.assertIn("Para seguir recibiendo avisos, Particular sale $6.500 por 7 días o $18.000 por 30, con 4 búsquedas y pago único.",
+                      self.lines(email("trial_complete", payload, offer=offer, limits=limits)))
+        # Without a usable 7-day pass, the trial_ended line.
+        today = "Para seguir recibiendo avisos, Particular sale $15.000 por 30 días, con 3 búsquedas y pago único."
+        for week in (None, {"amount": 5000, "currency": "USD", "days": 7}, {"amount": 5000, "currency": "ARS", "days": 0},
+                     {"amount": "x", "currency": "ARS", "days": 7}):
+            offer = {k: v for k, v in OFFER.items() if k != "pass_7"}
+            if week is not None:
+                offer["pass_7"] = week
+            self.assertIn(today, self.lines(email("trial_complete", payload, offer=offer)))
+        # Only trial_complete names both passes.
+        ended = email("trial_ended", MISSED)
+        self.assertIn(today, ended.text)
+        self.assertNotIn("por 7 días o", ended.text)
 
     def test_never_an_email_about_zero_new_cars(self):
         with self.assertRaises(ValueError):

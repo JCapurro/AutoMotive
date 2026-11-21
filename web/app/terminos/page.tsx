@@ -30,7 +30,9 @@ export default async function TermsPage() {
   const reserveTerms = newMax != null
     ? ` De ese cupo, como máximo ${stockShown} ${stockShown === 1 ? "es una publicación que ya estaba" : "son publicaciones que ya estaban"} al activar la búsqueda${trialReserve?.randomStock ? ", elegidas al azar entre las que encuentra la primera revisión" : ""}, y después se suman ${newMax === 1 ? "la próxima publicación nueva que coincida" : `las próximas ${newMax} publicaciones nuevas que coincidan`}; con eso la prueba queda completa.`
     : stockMax != null ? ` De ese cupo, como máximo ${stockMax} son publicaciones que ya estaban al activar la búsqueda; el resto queda para las nuevas.` : "";
-  const { free, pass, pro } = planLimits;
+  const { free: freeCaps, pass, pro } = planLimits;
+  // In new mode the total is what the trial can really show: the stock plus the new ones, within the quota.
+  const free = newMax != null && total != null ? { ...freeCaps, maxTotalResults: Math.min(total, stockShown + newMax) } : freeCaps;
   return (
     <LegalPage title="Términos de uso" updated="5 de noviembre de 2026">
       <p>
