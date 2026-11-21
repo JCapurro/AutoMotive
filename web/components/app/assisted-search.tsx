@@ -38,6 +38,7 @@ import { autoSaveValues, sameProposal } from "@/lib/assisted-autosave";
 import { roughDraft } from "@/lib/assisted-fallback";
 import { analyticsEvent } from "@/lib/google-analytics";
 import { createClient } from "@/lib/supabase/client";
+import { trialCompleteNoAlerts } from "@/lib/trial-offer";
 import { cn } from "@/lib/utils";
 import { type WidenTo, cardLead, searchFormKey, widenedDraft, widenedText } from "@/lib/zone-notice";
 
@@ -107,6 +108,7 @@ export function AssistedSearch({
   approximateLocation = null,
   limit = null,
   trialFull = null,
+  trialComplete = null,
   thresholdAlerts = false,
   modelLessSearch = false,
   maxLocations = null,
@@ -121,6 +123,8 @@ export function AssistedSearch({
   limit?: SearchLimit | null;
   /** The trial's quota, once used up: no new listing is announced (docs/PRUEBA_HONESTA.md). */
   trialFull?: number | null;
+  /** «40 + N»: the new cars a complete trial showed; no new listing is announced, ahead of trialFull (docs/PRUEBA_COMPLETA.md). */
+  trialComplete?: number | null;
   /** The plan's features, for every form below (as the structured tab's). */
   thresholdAlerts?: boolean;
   modelLessSearch?: boolean;
@@ -421,7 +425,9 @@ export function AssistedSearch({
               <div className="space-y-1">
                 <h2 ref={activeTitle} tabIndex={-1} className="text-base font-semibold outline-none">Búsqueda guardada y activa</h2>
                 <p aria-live="polite" className="text-sm">
-                  {notice ? cardLead(notice) : <>Ya estamos buscando «{draft.title}». {trialFull != null
+                  {notice ? cardLead(notice) : <>Ya estamos buscando «{draft.title}». {trialComplete != null
+                    ? trialCompleteNoAlerts(trialComplete)
+                    : trialFull != null
                     ? `Tu prueba ya usó sus ${trialFull} resultados, así que no vamos a avisarte de los autos nuevos.`
                     : "Te avisamos por email cuando aparezca una publicación que coincida."}</>}
                 </p>

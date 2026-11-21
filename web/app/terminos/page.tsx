@@ -24,7 +24,15 @@ export default async function TermsPage() {
   // Prueba gratis (docs/PRUEBA_HONESTA.md): with the reserve on, part of the quota waits for new listings.
   const total = planLimits.free.maxTotalResults;
   const stockMax = trialReserve?.enabled && total != null && trialReserve.backfillMax < total ? trialReserve.backfillMax : null;
-  const { free, pass, pro } = planLimits;
+  // «40 + N» (docs/PRUEBA_COMPLETA.md): with a cap on new results, both numbers.
+  const newMax = trialReserve?.enabled && total != null ? trialReserve.newMax : null;
+  const stockShown = trialReserve && total != null ? Math.min(trialReserve.backfillMax, total) : 0;
+  const reserveTerms = newMax != null
+    ? ` De ese cupo, como máximo ${stockShown} ${stockShown === 1 ? "es una publicación que ya estaba" : "son publicaciones que ya estaban"} al activar la búsqueda${trialReserve?.randomStock ? ", elegidas al azar entre las que encuentra la primera revisión" : ""}, y después se suman ${newMax === 1 ? "la próxima publicación nueva que coincida" : `las próximas ${newMax} publicaciones nuevas que coincidan`}; con eso la prueba queda completa.`
+    : stockMax != null ? ` De ese cupo, como máximo ${stockMax} son publicaciones que ya estaban al activar la búsqueda; el resto queda para las nuevas.` : "";
+  const { free: freeCaps, pass, pro } = planLimits;
+  // In new mode the total is what the trial can really show: the stock plus the new ones, within the quota.
+  const free = newMax != null && total != null ? { ...freeCaps, maxTotalResults: Math.min(total, stockShown + newMax) } : freeCaps;
   return (
     <LegalPage title="Términos de uso" updated="5 de noviembre de 2026">
       <p>
@@ -42,7 +50,7 @@ export default async function TermsPage() {
       <h2>Prueba y planes</h2>
       <p>La prueba gratis permite {searches(free)} durante 72 horas corridas desde su primera activación,
         una sola vez por email o cuenta, {resultsText(free).toLowerCase()}
-        {free.immediateAlertsPerDay > 0 ? `, ${alerts(free)} y resumen diario` : " y resumen diario"}. Cada publicación cuenta una sola vez.{stockMax != null ? ` De ese cupo, como máximo ${stockMax} son publicaciones que ya estaban al activar la búsqueda; el resto queda para las nuevas.` : ""} Editar, pausar o reemplazar la búsqueda no reinicia el plazo ni el cupo de resultados. Al completar el cupo podés consultar los resultados recibidos y adquirir un plan para recibir nuevas coincidencias.</p>
+        {free.immediateAlertsPerDay > 0 ? `, ${alerts(free)} y resumen diario` : " y resumen diario"}. Cada publicación cuenta una sola vez.{reserveTerms} Editar, pausar o reemplazar la búsqueda no reinicia el plazo ni el cupo de resultados. Al completar el cupo podés consultar los resultados recibidos y adquirir un plan para recibir nuevas coincidencias.</p>
       <p>Particular cuesta {planPrice(proOffer.pass_30.amount)} ARS por 30 días, permite {searches(pass)} y {alerts(pass)}, y no se renueva automáticamente.
         Si lo comprás con el acceso vigente, los 30 días se suman a tu vencimiento; si lo comprás después de vencer, rigen desde
         la aprobación del pago y reactivamos tus búsquedas anteriores, hasta {pass.maxProfiles}.

@@ -61,12 +61,14 @@ export async function trackTrialOffer(
   action: keyof typeof TRIAL_OFFER_EVENTS,
   profileId: number,
   surface: TrialOfferSurface,
-  counts: { shown: number; hidden: number },
+  /** `complete`: the complete variant of «40 + N» (docs/PRUEBA_COMPLETA.md); only `true` is recorded. */
+  counts: { shown: number; hidden: number; complete?: boolean },
   plan?: WaitlistPlan,
 ): Promise<void> {
   const count = (n: unknown) => typeof n === "number" && Number.isInteger(n) && n >= 0 && n <= 100_000;
   if (!(action in TRIAL_OFFER_EVENTS) || !Number.isInteger(profileId) || !TRIAL_OFFER_SURFACES.includes(surface)
-    || !counts || !count(counts.shown) || !count(counts.hidden)) return;
+    || !counts || !count(counts.shown) || !count(counts.hidden)
+    || (counts.complete !== undefined && typeof counts.complete !== "boolean")) return;
   try {
     const user = await requireUser();
     const supabase = await createClient();
@@ -75,6 +77,7 @@ export async function trackTrialOffer(
       surface,
       shown: counts.shown,
       hidden: counts.hidden,
+      ...(counts.complete === true ? { complete: true } : {}),
       ...(plan && isWaitlistPlan(plan) ? { plan } : {}),
     });
   } catch (error) {

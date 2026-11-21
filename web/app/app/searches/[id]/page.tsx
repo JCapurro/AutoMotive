@@ -34,7 +34,7 @@ import { wantsColor } from "@/lib/listing-color";
 import { pageListingIds } from "@/lib/list-position";
 import { FILTERS, type Filter, isResultFilter } from "@/lib/result-filters";
 import { createClient } from "@/lib/supabase/server";
-import { trialOffer } from "@/lib/trial-offer";
+import { trialCompleteText, trialOffer } from "@/lib/trial-offer";
 import type { Filters, Preferences } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { SEARCH_TITLE_ID, sameZone, zoneOf } from "@/lib/zone-notice";
@@ -136,11 +136,22 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
     (count.all_count ?? 0) <= diagnosis.max_results &&
     (!profile.bootstrapped_at || Date.parse(profile.bootstrapped_at) <= Date.parse(diagnosis.created_at));
   const quota = freeResultQuota(access);
-  const checkoutConfig = quota?.reached ? await webConfig() : null;
+  // «40 + N» (docs/PRUEBA_COMPLETA.md): with a cap on new results (new mode) the
+  // trial completes when its cap on new ones is used; then the offer's sheet, in
+  // its complete variant, takes FreeResultLimit's place and says how many new
+  // ones the account got (more than the cap for a trial running at the
+  // switch-on). A quota reached without that keeps today's path, in both modes.
+  const newMode = quota?.newMax != null;
+  const completeCap = quota?.complete ? quota.newUsed : null;
+  const fullQuota = quota?.reached === true && !quota.complete;
+  const checkoutConfig = fullQuota ? await webConfig() : null;
   // Oferta cuando la prueba oculta autos (docs/OFERTA_PRUEBA.md): what the list shows of what
   // matches, and the passes one tap from the checkout. Counts only (my_search_hidden_results).
   const offer = trialOffer(count.all_count ?? 0, hidden);
-  const offerCheckout = offer ? await webConfig().then((cfg) => ({ offer: cfg.proOffer, automatic: cfg.automaticPayments })) : null;
+  const completeOffer = completeCap != null ? offer ?? { shown: count.all_count ?? 0, hidden: 0, total: count.all_count ?? 0 } : null;
+  const offerCheckout = offer || completeOffer ? await webConfig().then((cfg) => ({ offer: cfg.proOffer, automatic: cfg.automaticPayments })) : null;
+  // A random sample of what was published: the card doesn't say «los primeros».
+  const randomStock = offer ? (await webConfig()).trialReserve?.randomStock === true : false;
   // §33: the free plan's visible results. Not enforced (the pilot): all of
   // them, and the database records plan_limit_hit. Enforced: capped.
   const limit = visibleResults(count.all_count ?? 0, (planLimits ?? null) as PlanLimits | null);
@@ -213,13 +224,14 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
         />
       </header>
 
-      {quota?.reached && checkoutConfig ? <FreeResultLimit profileId={profileId} limit={quota.limit} opportunities={count.opportunities_count ?? 0} offer={checkoutConfig.proOffer} pro={checkoutConfig.planLimits.pro} automatic={checkoutConfig.automaticPayments} pilot={checkoutConfig.commercialPilot} /> : null}
+      {quota && fullQuota && checkoutConfig ? <FreeResultLimit profileId={profileId} limit={quota.limit} opportunities={count.opportunities_count ?? 0} offer={checkoutConfig.proOffer} pro={checkoutConfig.planLimits.pro} automatic={checkoutConfig.automaticPayments} pilot={checkoutConfig.commercialPilot} /> : null}
 
       {pending ? (
         <SearchPreparation
           email={user.email}
           trialEnds={access?.state === "trial" && access.expires_at ? accessDate(access.expires_at) : null}
-          trialFull={quota?.reached ? quota.limit : null}
+          trialFull={fullQuota ? quota.limit : null}
+          trialComplete={completeCap}
           immediate={includesImmediateAlerts(planLimits as PlanLimits | null)}
         />
       ) : needsPreparation ? (
@@ -239,9 +251,12 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
         />
       ) : null}
 
-      {/* Once the search is ready (the counts move while it prepares) and short of the 50: there, FreeResultLimit asks. */}
-      {offer && offerCheckout && !needsPreparation && !quota?.reached ? (
-        <TrialHiddenOffer profileId={profileId} offer={offer} autoOpen={filter === "all"} checkout={offerCheckout} />
+      {/* Once the search is ready (the counts move while it prepares) and short of the 50: there, FreeResultLimit asks.
+          New mode: nothing opens by itself before the trial completes; then the complete variant does. */}
+      {completeOffer && offerCheckout && !needsPreparation ? (
+        <TrialHiddenOffer profileId={profileId} offer={completeOffer} autoOpen={filter === "all"} checkout={offerCheckout} complete={completeCap} />
+      ) : offer && offerCheckout && !needsPreparation && !quota?.reached ? (
+        <TrialHiddenOffer profileId={profileId} offer={offer} autoOpen={filter === "all" && !newMode} checkout={offerCheckout} />
       ) : null}
 
       {!needsPreparation || shown.length > 0 ? (
@@ -286,15 +301,16 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
           ))}
         </div>
       ) : needsPreparation ? null : filter === "all" && offer && offerCheckout ? (
-        <TrialHiddenCard profileId={profileId} offer={offer} checkout={offerCheckout} />
+        <TrialHiddenCard profileId={profileId} offer={offer} checkout={offerCheckout} randomStock={randomStock} />
       ) : (
         <p className="rounded-lg bg-muted p-8 text-center text-sm text-muted-foreground">
-          {filter === "all" && quota?.reached ? `Todavía no hay publicaciones que coincidan. Tu prueba ya usó sus ${quota.limit} resultados: con Particular te avisamos de las nuevas.` : EMPTY[filter]}
+          {filter === "all" && completeCap != null ? `Todavía no hay publicaciones que coincidan. ${trialCompleteText(completeCap)}: con Particular te avisamos de las nuevas.`
+            : filter === "all" && quota?.reached ? `Todavía no hay publicaciones que coincidan. Tu prueba ya usó sus ${quota.limit} resultados: con Particular te avisamos de las nuevas.` : EMPTY[filter]}
         </p>
       )}
 
       {shown.length > 0 && filter === "all" && offer && offerCheckout && !more ? (
-        <TrialHiddenCard profileId={profileId} offer={offer} checkout={offerCheckout} />
+        <TrialHiddenCard profileId={profileId} offer={offer} checkout={offerCheckout} randomStock={randomStock} />
       ) : null}
 
       {limit.over ? (

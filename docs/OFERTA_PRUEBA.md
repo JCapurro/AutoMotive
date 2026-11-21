@@ -2,6 +2,8 @@
 
 Juan aprobó el diseño el 14/11/2026, sobre el prototipo `design/variants/oferta-prueba/`. Eligió la variante A: un cartel que se abre solo una vez, una franja arriba de la lista y una tarjeta al final, con el pase de 7 días primero.
 
+> **Desde el 20/11 (`docs/PRUEBA_COMPLETA.md`):** con `trial_reserve.new_max` (modo «40 + N») el cartel ya no se abre solo antes de que la prueba se complete; al completarse se abre su variante «completa» en lugar de `FreeResultLimit`, una vez por pestaña y búsqueda. La franja y la tarjeta quedan. Con `random_stock`, la tarjeta dice «Tu prueba muestra {N} de los {T}. Con Particular los ves todos…» en lugar de «los primeros {N}». Sin `new_max`, todo lo de este documento sigue igual.
+
 ## Por qué
 
 Desde que se prendió la reserva de la prueba (`docs/PRUEBA_HONESTA.md`), la prueba muestra como máximo 30 autos ya publicados. El resto queda oculto, y la página solo lo decía en un renglón gris al final de la lista.
@@ -73,7 +75,7 @@ Los singulares y el caso «la prueba no muestra ninguno» están en `trial-offer
 | `trial_offer_dismissed` | Se cerró el cartel sin elegir un pase («Seguir con mis…», la X, Escape o tocar afuera). | ídem |
 | `trial_offer_plan_selected` | Se tocó un pase en el cartel o en la tarjeta. | ídem + `plan` (`pass_7` o `pass_30`) |
 
-`surface` es `sheet`, `strip` o `card`. La franja no tiene evento de clic propio: tocar «Ver todos» abre el cartel y suma un `trial_offer_viewed` con `surface = sheet` si es la primera vez en la pestaña.
+`surface` es `sheet`, `strip` o `card`. En la variante «completa» de `docs/PRUEBA_COMPLETA.md` los tres eventos llevan además `complete: true`. La franja no tiene evento de clic propio: tocar «Ver todos» abre el cartel y suma un `trial_offer_viewed` con `surface = sheet` si es la primera vez en la pestaña.
 
 Lo que sigue al pase elegido ya existía y no lleva `surface`:
 

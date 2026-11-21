@@ -2,6 +2,7 @@ import { BellRing, Check, Loader2 } from "lucide-react";
 
 import { AutoRefresh } from "@/components/app/auto-refresh";
 import { Button } from "@/components/ui/button";
+import { trialCompleteText } from "@/lib/trial-offer";
 
 export function SearchLoadingButton() {
   return (
@@ -18,12 +19,14 @@ export function SearchLoadingButton() {
  * pass as the whole value and nobody feels they must watch the page.
  * `email`: where its alerts go. `trialEnds`: the free trial's end, already formatted.
  */
-export function SearchPreparation({ email = null, trialEnds = null, trialFull = null, immediate = true }: {
+export function SearchPreparation({ email = null, trialEnds = null, trialFull = null, trialComplete = null, immediate = true }: {
   email?: string | null; trialEnds?: string | null;
   /** The plan includes immediate alerts (lib/pro.ts includesImmediateAlerts); without them, only the daily digest. */
   immediate?: boolean;
   /** The trial's quota, once used up: no new listing is announced (docs/PRUEBA_HONESTA.md). */
   trialFull?: number | null;
+  /** «40 + N» (docs/PRUEBA_COMPLETA.md): the cap on new cars, once the trial reached it. */
+  trialComplete?: number | null;
 } = {}) {
   const to = email ? <>a <span className="[overflow-wrap:anywhere]">{email}</span></> : "por email";
   return (
@@ -43,7 +46,9 @@ export function SearchPreparation({ email = null, trialEnds = null, trialFull = 
               <BellRing className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
               <span>
                 <strong className="font-semibold">Desde ahora:</strong>{" "}
-                {trialFull != null ? (
+                {trialComplete != null ? (
+                  <>{trialCompleteText(trialComplete).replace(/^T/, "t")}, así que no vamos a avisarte de otros.</>
+                ) : trialFull != null ? (
                   <>tu prueba ya usó sus {trialFull} resultados, así que no vamos a avisarte de los autos nuevos.</>
                 ) : trialEnds && !immediate ? (
                   <>los autos nuevos que encajen te llegan {to} en un resumen diario. No hace falta que vuelvas a entrar.</>
