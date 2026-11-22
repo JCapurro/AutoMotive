@@ -204,7 +204,13 @@ LOG_KEEP_DAYS = int(os.getenv("LOG_KEEP_DAYS", "14"))
 HEARTBEAT_SECONDS = int(os.getenv("HEARTBEAT_SECONDS", "60"))
 WATCHDOG_STALE_MINUTES = int(os.getenv("WATCHDOG_STALE_MINUTES", "10"))
 PLATFORM_HEALTH_EMAIL = os.getenv("PLATFORM_HEALTH_EMAIL", "").strip()
-PLATFORM_HEALTH_RUN_TIMEOUT_MINUTES = max(1, int(os.getenv("PLATFORM_HEALTH_RUN_TIMEOUT_MINUTES", "30")))
+# A run still running past this is "trabada": never before the collector may
+# end (COLLECTOR_TIMEOUT_SECONDS, 40 minutes) and ingest what it read, the same
+# 15 minutes the lane's lease adds (pipeline/crawl.py LEASE_SECONDS). 55 by
+# default; the variable can raise it, never bring it under that.
+RUN_STUCK_FLOOR_MINUTES = -(-COLLECTOR_TIMEOUT_SECONDS // 60) + 15
+PLATFORM_HEALTH_RUN_TIMEOUT_MINUTES = max(RUN_STUCK_FLOOR_MINUTES,
+                                          int(os.getenv("PLATFORM_HEALTH_RUN_TIMEOUT_MINUTES") or 0))
 PLATFORM_HEALTH_EMPTY_RUNS = max(0, int(os.getenv("PLATFORM_HEALTH_EMPTY_RUNS", "3")))
 # Percent of Resend's daily/monthly email quota that triggers the warning; 0 turns it off.
 PLATFORM_HEALTH_EMAIL_QUOTA_PCT = min(100, max(0, int(os.getenv("PLATFORM_HEALTH_EMAIL_QUOTA_PCT", "80"))))

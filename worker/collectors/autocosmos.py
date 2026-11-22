@@ -30,6 +30,14 @@ filters, reads the whole site for every search, make by make (the makes
 card's brand and model. Not /auto/usado itself: its order shifts during a
 long read, and past page 99 a page brought no card not seen before (4.752 of
 6.206 cars); the biggest make, Peugeot, had 20 pages (947 cars).
+
+Since 18/11/2026 the site goes half down for hours (503 with Retry-After: 30,
+or no answer in 60 s), for everyone: a failing make costs up to 4 minutes, and
+walking the 53 makes reached COLLECTOR_TIMEOUT_SECONDS, whose cut throws away
+everything read (16 runs in a week). So the whole-site read stops early, as a
+partial read that keeps what it read: when DOWN_FAILURES of the last
+DOWN_WINDOW makes failed (the site down), or when its time (time_budget(),
+TIME_MARGIN_SECONDS short of that cut) runs out before a page.
 """
 from __future__ import annotations
 import asyncio
@@ -37,6 +45,7 @@ import logging
 import re
 import time
 import unicodedata
+from collections import deque
 import urllib.parse
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
@@ -44,6 +53,8 @@ from email.utils import parsedate_to_datetime
 import httpx
 from http_clients import async_client
 from bs4 import BeautifulSoup
+
+import config
 
 from .base import BaseScraper, CollectorBlocked, Listing, ListingDetail, SearchResults
 from ._dates import publication_date
@@ -95,6 +106,10 @@ _model_pages: dict[str, tuple[float, frozenset[str]]] = {}
 _MODEL_LINK_RE = r'href="/auto/usado/{make}/([a-z0-9-]+)"'
 # The makes /auto/usado links to (/auto/usado/<make>, without a model).
 _MAKE_LINK_RE = re.compile(r'href="/auto/usado/([a-z0-9-]+)"')
+
+
+class _OutOfTime(Exception):
+    """The read's time (AutoCosmosScraper.time_budget) ran out before a page."""
 
 
 def _make_slug(make: str) -> str:
@@ -182,7 +197,34 @@ class AutoCosmosScraper(BaseScraper):
     MAX_RETRY_AFTER_SECONDS = 120.0
     # Pages take up to a minute to come back when the site is loaded.
     TIMEOUT = httpx.Timeout(60.0, connect=15.0)
+    # The read stops starting pages this long before COLLECTOR_TIMEOUT_SECONDS,
+    # whose cut keeps nothing: the page under way must end before it. A page
+    # takes 4 minutes at worst with the site down as on 18/11 (3 tries of 60 s,
+    # two Retry-After: 30), 7 with the longest Retry-After it waits for
+    # (MAX_RETRY_AFTER_SECONDS twice).
+    TIME_MARGIN_SECONDS = 600.0
+    # The site down: DOWN_FAILURES of the last DOWN_WINDOW makes read failed.
+    # Not "N in a row": with the site half down some makes still pass at
+    # their third try. One flaky make, or two, still reads all the others.
+    DOWN_WINDOW = 5
+    DOWN_FAILURES = 3
     transport: httpx.AsyncBaseTransport | None = None     # tests
+    clock = staticmethod(time.monotonic)                  # tests
+    _deadline: float | None = None
+
+    @classmethod
+    def time_budget(cls) -> float:
+        """How long a search may read: TIME_MARGIN_SECONDS short of
+        COLLECTOR_TIMEOUT_SECONDS (30 minutes of its 40), half of it at least."""
+        timeout = float(config.COLLECTOR_TIMEOUT_SECONDS)
+        return max(timeout / 2, timeout - cls.TIME_MARGIN_SECONDS)
+
+    def _check_time(self) -> None:
+        if self._deadline is not None and self.clock() >= self._deadline:
+            raise _OutOfTime()
+
+    def _out_of_time(self) -> str:
+        return f"autocosmos: se agotó el tiempo de la lectura ({self.time_budget() / 60:.0f} min)"
 
     def _build_url(self, f: dict, page: int = 1, model_slug: str | None = None) -> str:
         marca = _make_slug(f["marca"]) if f.get("marca") else ""
@@ -409,9 +451,11 @@ class AutoCosmosScraper(BaseScraper):
         410 (a model without stock); a 401, 403 or 429 anywhere is the site
         turning us away, not 0 results, and pauses the source. Any other
         page that fails or answers anything but 200 (a variant's 404 or 410
-        aside) makes the read partial."""
+        aside) makes the read partial, as does its time running out
+        (time_budget) before a page."""
         out: list[Listing] = []
         seen: set[str] = set()
+        self._deadline = self.clock() + self.time_budget()
         async with async_client(
             timeout=self.TIMEOUT, headers=HEADERS, follow_redirects=True, verify=True,
             transport=self.transport,
@@ -426,7 +470,10 @@ class AutoCosmosScraper(BaseScraper):
             for i, slug in enumerate(slugs):
                 if i:
                     await asyncio.sleep(self.PAGE_PAUSE_SECONDS)
-                reason = await self._read_model(cx, filters, slug, out, seen, first=i == 0)
+                try:
+                    reason = await self._read_model(cx, filters, slug, out, seen, first=i == 0)
+                except _OutOfTime:
+                    reason = self._out_of_time()
                 if reason:
                     return SearchResults(out, complete=False, reason=reason)
         return SearchResults(out)
@@ -436,7 +483,9 @@ class AutoCosmosScraper(BaseScraper):
         """The whole site, make by make: the makes /auto/usado links to, each
         one's pages (_read_model). /auto/usado must answer 200 with makes, or
         the run fails; a make that fails later makes the read partial, after
-        the other makes are read. The reason of the first one that did."""
+        the other makes are read: the reason of the first one that did. The
+        read stops there, partial, when DOWN_FAILURES of the last DOWN_WINDOW
+        makes failed, or when its time runs out (time_budget)."""
         r = await self._get(cx, self.BASE + "/auto/usado")
         if r.status_code in (401, 403, 429):
             raise CollectorBlocked(f"autocosmos: HTTP {r.status_code}")
@@ -447,10 +496,20 @@ class AutoCosmosScraper(BaseScraper):
         if not makes:
             raise RuntimeError("autocosmos: /auto/usado links to no make")
         first_reason = None
-        for make in makes:
-            await asyncio.sleep(self.PAGE_PAUSE_SECONDS)
-            reason = await self._read_model(cx, filters, None, out, seen, first=False, make=make)
+        recent: deque[bool] = deque(maxlen=self.DOWN_WINDOW)
+        for done, make in enumerate(makes):
+            try:
+                self._check_time()
+                await asyncio.sleep(self.PAGE_PAUSE_SECONDS)
+                reason = await self._read_model(cx, filters, None, out, seen, first=False, make=make)
+            except _OutOfTime:
+                return self._stopped(self._out_of_time(), done, makes, seen, first_reason)
             first_reason = first_reason or reason
+            recent.append(reason is not None)
+            if sum(recent) >= self.DOWN_FAILURES:
+                return self._stopped(
+                    f"autocosmos: sitio caído, fallaron {sum(recent)} de las últimas {len(recent)} marcas",
+                    done + 1, makes, seen, first_reason)
         log.info("autocosmos: %d makes, %d cards%s", len(makes), len(seen),
                  f", partial: {first_reason}" if first_reason else "")
         return first_reason
@@ -463,6 +522,7 @@ class AutoCosmosScraper(BaseScraper):
         url_filters = {**filters, "marca": make} if make else filters
         for p in range(1, self.MAX_PAGES + 1):
             if p > 1:
+                self._check_time()
                 await asyncio.sleep(self.PAGE_PAUSE_SECONDS)
             url = self._build_url(url_filters, page=p, model_slug=slug)
             try:
@@ -498,6 +558,15 @@ class AutoCosmosScraper(BaseScraper):
         log.warning("autocosmos: %s stops at %d pages with more to read, keeping the %d cards read",
                     self._build_url(url_filters, model_slug=slug), self.MAX_PAGES, len(seen))
         return None
+
+    @staticmethod
+    def _stopped(why: str, done: int, makes: list[str], seen: set[str], first_reason: str | None) -> str:
+        """The reason of a whole-site read stopped after `done` makes."""
+        reason = f"{why}; {done} de {len(makes)} marcas leídas"
+        if first_reason:
+            reason += f"; primera falla: {first_reason.removeprefix('autocosmos: ')}"
+        log.warning("autocosmos: stopping the read, keeping the %d cards read: %s", len(seen), reason)
+        return reason
 
     @staticmethod
     def _where(slug: str | None, p: int) -> str:

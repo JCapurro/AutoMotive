@@ -18,7 +18,7 @@ from collectors import v6 as v6_module
 from collectors.autocosmos import AutoCosmosScraper
 from collectors.base import CollectorBlocked
 from collectors.v6 import V6Scraper, stated_total
-from pipeline.crawl import derive_targets, scraper_filters
+from pipeline.crawl import derive_targets, retry_seconds, scraper_filters
 
 
 def v6_card(n: int) -> str:
@@ -180,6 +180,84 @@ class AutoCosmosInventoryTests(unittest.IsolatedAsyncioTestCase):
         site = AutoCosmosSite({"ford": {1: ac_page("ford", range(1, 5), more=False)}})
         found = await ac_scraper(site).search({"marca": "Ford", "modelo": "Fiesta"})
         self.assertNotIn(("", 1), site.asked)
+
+
+def ac_home(makes: list[str]) -> str:
+    return "".join(f'<a href="/auto/usado/{m}">{m}</a>' for m in makes)
+
+
+class AutoCosmosSiteDownTests(unittest.IsolatedAsyncioTestCase):
+    """With the site half down (18/11/2026) the whole-site read stops early,
+    partial, keeping what it read, instead of reaching COLLECTOR_TIMEOUT_SECONDS."""
+
+    MAKES = [f"m{i:02d}" for i in range(12)]
+
+    def site(self, failing: set[str]) -> AutoCosmosSite:
+        pages = {m: (503 if m in failing else {1: ac_page(m, range(i * 100, i * 100 + 3), more=False)})
+                 for i, m in enumerate(self.MAKES)}
+        return AutoCosmosSite(pages, home=ac_home(self.MAKES))
+
+    async def test_three_of_the_last_five_makes_failing_stops_the_read(self):
+        site = self.site({"m01", "m03", "m04"})          # pass, fail, pass, fail, fail
+        found = await ac_scraper(site).search({})
+        self.assertFalse(found.complete)
+        self.assertEqual(found.reason, "autocosmos: sitio caído, fallaron 3 de las últimas 5 marcas; "
+                                       "5 de 12 marcas leídas; primera falla: página 1 de m01 respondió 503")
+        self.assertEqual(len(found), 2 * 3)              # m00 and m02 kept
+        self.assertNotIn("m05", {make for make, _ in site.asked})
+
+    async def test_scattered_failures_still_read_every_make(self):
+        # Some makes pass at their third try: one or two failures in five never stop it.
+        site = self.site({"m01", "m02", "m06", "m07", "m11"})
+        found = await ac_scraper(site).search({})
+        self.assertFalse(found.complete)
+        self.assertEqual(found.reason, "autocosmos: página 1 de m01 respondió 503")
+        self.assertIn("m11", {make for make, _ in site.asked})
+        self.assertEqual(len(found), 7 * 3)
+
+    async def test_a_make_passing_at_its_third_try_counts_as_read(self):
+        tries: dict[str, int] = {}
+        site = self.site(set())
+
+        def handler(request):
+            make = request.url.path.strip("/").split("/")[2:3]
+            if make and make[0] in ("m01", "m02", "m03"):
+                tries[make[0]] = tries.get(make[0], 0) + 1
+                if tries[make[0]] < 3:
+                    return httpx.Response(503, text="")
+            return site(request)
+
+        s = ac_scraper(site)
+        s.transport = httpx.MockTransport(handler)
+        found = await s.search({})
+        self.assertTrue(found.complete, found.reason)
+        self.assertEqual(len(found), 12 * 3)
+
+    async def test_the_read_out_of_time_stops_before_the_next_make(self):
+        site = self.site(set())
+        now = [0.0]
+
+        def handler(request):
+            now[0] += 400                                  # a slow site: 400 s a page
+            return site(request)
+
+        s = ac_scraper(site)
+        s.transport = httpx.MockTransport(handler)
+        s.clock = lambda: now[0]
+        with patch("collectors.autocosmos.config.COLLECTOR_TIMEOUT_SECONDS", 2400):
+            found = await s.search({})
+        # Home at 400, m00 800, m01 1200, m02 1600, m03 2000: past 1800, m04 not started.
+        self.assertFalse(found.complete)
+        self.assertEqual(found.reason, "autocosmos: se agotó el tiempo de la lectura (30 min); 4 de 12 marcas leídas")
+        self.assertEqual(len(found), 4 * 3)
+        self.assertNotIn("m04", {make for make, _ in site.asked})
+
+    def test_a_partial_read_waits_for_the_whole_interval(self):
+        target = {"source": "autocosmos", "first_run_done": True, "crawl_interval_seconds": 3300,
+                  "query": {"inventory": True}}
+        with patch("pipeline.crawl.config.NEWS_PARTIAL_RETRY", True):
+            self.assertEqual(retry_seconds(target, reason="autocosmos: sitio caído", partial=True), 3300)
+        self.assertEqual(retry_seconds(target), 15 * 60)    # a failed run, as the 40-minute cut was
 
 
 class InventoryTargetTests(unittest.TestCase):
