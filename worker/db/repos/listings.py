@@ -246,6 +246,14 @@ async def mark_gone(cx: AsyncConnection, listing_id: int) -> bool:
     return cur.rowcount > 0
 
 
+async def unseen_for(cx: AsyncConnection, listing_id: int, hours: int) -> bool:
+    """True if no crawl has seen the listing in the last `hours`."""
+    row = await (await cx.execute(
+        "SELECT last_seen_at < now() - make_interval(hours => %s) FROM listings WHERE id = %s",
+        (hours, listing_id))).fetchone()
+    return bool(row and row[0])
+
+
 NOT_VEHICLE_REASON = "no es un auto"
 
 

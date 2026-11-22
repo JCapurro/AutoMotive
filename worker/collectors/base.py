@@ -115,6 +115,11 @@ class BaseScraper:
     # Collectors with verified stable search/detail IDs opt in. Validate before
     # applying detail data, including replay after the original URL redirected.
     STRICT_DETAIL_ID: bool = False
+    # With STRICT_DETAIL_ID: hours after which the stored URL serving another
+    # vehicle ends the stored one, if the crawl has not seen it since then
+    # (a source that reuses a sold car's URL for the next one). None: never,
+    # the mismatch stays an error.
+    REUSED_URL_GONE_AFTER_HOURS: int | None = None
     # Bump when parse_detail() changes what it reads: tools/reprocess.py --raw
     # --outdated re-parses the raw_pages stored with an older version.
     DETAIL_PARSER_VERSION: int = 1

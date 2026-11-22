@@ -18,7 +18,7 @@ from .base import CollectorBlocked, Listing, ListingDetail
 class CarOneScraper(PublicCatalogScraper):
     name = "carone"
     STRICT_DETAIL_ID = True
-    DETAIL_PARSER_VERSION = 2
+    DETAIL_PARSER_VERSION = 3
     BASE = "https://carone.com.ar"
     PAGE_SIZE = 50
     MAX_PAGES = 100
@@ -39,6 +39,21 @@ class CarOneScraper(PublicCatalogScraper):
         }
       }
     }"""
+
+    # A sold car's page still answers HTTP 200: the vehicle route calls Next.js
+    # notFound(), whose error row streams in the page's Flight data.
+    NOT_FOUND_ROW = re.compile(r'(?m)^[0-9a-f]+:E\{"digest":"NEXT_HTTP_ERROR_FALLBACK;404"\}')
+    # The catalog the crawl reads, asked for one URL in any stock state.
+    LOOKUP_QUERY = """query CarOneUrlKey($key:String!) {
+      products(search:"",pageSize:5,currentPage:1,filter:{url_key:{eq:$key}}) {
+        total_count items { id url_key stock_status }
+      }
+    }"""
+    LOOKUP_ID = "eseauto-carone-lookup"
+    NOT_FOUND_ID = "eseauto-carone-notfound"
+    # A URL Car One gave to another vehicle is the end of the stored one once
+    # the full catalog read has not seen it for this long (pipeline/enrich.py).
+    REUSED_URL_GONE_AFTER_HOURS = 6
 
     @staticmethod
     def _flight(html: str) -> str:
@@ -141,8 +156,11 @@ class CarOneScraper(PublicCatalogScraper):
         return [item for record in catalog["items"] if (item := cls._listing(record))]
 
     async def _catalog_page(self, page_number: int) -> dict:
-        variables = {"q": "", "pageSize": self.PAGE_SIZE, "currentPage": page_number,
-                     "sort": {"created_at": "DESC"}, "filter": {"stock_status": {"eq": "IN_STOCK"}}}
+        return await self._graphql(self.QUERY, {
+            "q": "", "pageSize": self.PAGE_SIZE, "currentPage": page_number,
+            "sort": {"created_at": "DESC"}, "filter": {"stock_status": {"eq": "IN_STOCK"}}})
+
+    async def _graphql(self, query: str, variables: dict) -> dict:
         async with async_client(headers=HEADERS, timeout=45, follow_redirects=False,
                                      transport=self.transport) as client:
             # The GraphQL gateway answers 502/504 now and then; the same page
@@ -151,7 +169,7 @@ class CarOneScraper(PublicCatalogScraper):
                 if attempt:
                     await asyncio.sleep(self.GATEWAY_RETRY_PAUSE * attempt)
                 response = await client.post(self.BASE + "/api/graphql",
-                                             json={"query": self.QUERY, "variables": variables})
+                                             json={"query": query, "variables": variables})
                 if response.status_code not in (502, 504):
                     break
         if response.is_redirect or urlparse(str(response.url)).hostname != urlparse(self.BASE).hostname:
@@ -217,11 +235,78 @@ class CarOneScraper(PublicCatalogScraper):
             raise RuntimeError("carone: own vehicle data missing or ambiguous")
         return records[0]
 
+    @staticmethod
+    def _slug(url: str) -> str:
+        path = urlparse(url).path.rstrip("/")
+        prefix = "/comprar/usados/"
+        slug = path[len(prefix):] if path.startswith(prefix) else ""
+        if not re.fullmatch(r"[a-z0-9-]+", slug):
+            raise RuntimeError("carone: invalid vehicle URL")
+        return slug
+
+    @staticmethod
+    def _script(element_id: str, data: dict) -> str:
+        return (f'<script type="application/json" id="{element_id}">'
+                + json.dumps(data, ensure_ascii=False).replace("<", "\\u003c") + "</script>")
+
+    @classmethod
+    def _stored(cls, html: str, element_id: str) -> dict | None:
+        tag = soup(html).select_one(f"script#{element_id}")
+        if tag is None:
+            return None
+        try:
+            data = json.loads(tag.string or "")
+        except ValueError as e:
+            raise RuntimeError(f"carone: malformed {element_id}") from e
+        if not isinstance(data, dict):
+            raise RuntimeError(f"carone: malformed {element_id}")
+        return data
+
+    @classmethod
+    def _page_not_found(cls, html: str, slug: str) -> bool:
+        """The vehicle route itself answered "not found" for this very slug:
+        Next.js's 404 error row in the Flight data, the route tree on that
+        slug, and no vehicle data at all. A challenge, a server error (another
+        digest) or a new layout misses at least one of the three."""
+        stored = cls._stored(html, cls.NOT_FOUND_ID)
+        if stored is not None:
+            return stored.get("slug") == slug
+        stream = cls._flight(html)
+        return (bool(cls.NOT_FOUND_ROW.search(stream))
+                and '["slug",' + json.dumps(slug) + ',"d"]' in stream
+                and not cls._objects(stream, "product"))
+
+    async def fetch_detail_page(self, url: str) -> Page:
+        page = await super().fetch_detail_page(url)
+        if page.status == 200 and self._page_not_found(page.html, slug := self._slug(url)):
+            # The page alone could be a passing fault of the site's backend:
+            # the catalog, asked for that URL in any stock state, has to agree.
+            catalog = await self._graphql(self.LOOKUP_QUERY, {"key": slug})
+            lookup = {"url_key": slug, "total_count": catalog["total_count"], "items": catalog["items"]}
+            # First: lxml drops what comes after </html>.
+            page = Page(page.status, page.url, self._script(self.LOOKUP_ID, lookup) + page.html)
+        return page
+
+    @classmethod
+    def _not_found_detail(cls, html: str, url: str, slug: str) -> ListingDetail:
+        lookup = cls._stored(html, cls.LOOKUP_ID)
+        if lookup is None or lookup.get("url_key") != slug:
+            raise RuntimeError("carone: vehicle page not found, catalog not asked")
+        items, total = lookup.get("items"), lookup.get("total_count")
+        if not isinstance(items, list) or not isinstance(total, int) or total != len(items):
+            raise RuntimeError("carone: malformed catalog lookup")
+        own = [i for i in items if isinstance(i, dict) and i.get("url_key") == slug]
+        if any(i.get("stock_status") != "OUT_OF_STOCK" for i in own):
+            raise RuntimeError("carone: vehicle page not found but the catalog still lists it")
+        return ListingDetail(url, gone=True, gone_reason="página del auto no encontrada y fuera del catálogo")
+
     @classmethod
     def parse_detail(cls, html: str, url: str, status: int = 200) -> ListingDetail:
         cls.check_status(status)
         if status in (404, 410):
             return ListingDetail(url, gone=True, gone_reason=f"HTTP {status}")
+        if cls._page_not_found(html, slug := cls._slug(url)):
+            return cls._not_found_detail(html, url, slug)
         record = cls._detail_record(html)
         if urlparse(url).path.rstrip("/") != "/comprar/usados/" + str(record.get("url_key") or ""):
             raise RuntimeError("carone: detail belongs to another vehicle")
@@ -235,6 +320,12 @@ class CarOneScraper(PublicCatalogScraper):
         if page.status in (404, 410):
             return slim_html(page.html)
         try:
+            slug = self._slug(page.url)
+            if self._page_not_found(page.html, slug):
+                # What parse_detail reads again: the not-found proof and the lookup.
+                lookup = self._stored(page.html, self.LOOKUP_ID)
+                return self._script(self.NOT_FOUND_ID, {"slug": slug}) + (
+                    self._script(self.LOOKUP_ID, lookup) if lookup is not None else "")
             record = self._detail_record(page.html)
         except RuntimeError:
             return slim_html(page.html)
@@ -245,4 +336,4 @@ class CarOneScraper(PublicCatalogScraper):
                    "carone_year", "carone_mileage", "carone_dealer_id", "carone_tags_data",
                    "carone_transmission_data", "carone_fuel_data", "carone_spyne_images", "carone_type_data"}
         data = {k: v for k, v in record.items() if k in allowed}
-        return '<script type="application/json" id="eseauto-carone-product">' + json.dumps(data, ensure_ascii=False).replace("<", "\\u003c") + "</script>"
+        return self._script("eseauto-carone-product", data)
