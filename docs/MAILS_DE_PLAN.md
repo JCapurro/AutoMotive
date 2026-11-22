@@ -93,6 +93,10 @@ No lleva a pagar: es el primer mail que recibe la cuenta y existe para que los q
   - sin prueba con cupo: «De los nuevos que coincidan te avisamos por email.»;
   - en la prueba, con lugar: «Tu prueba muestra hasta {L} resultados y te quedan {R}: de los nuevos que coincidan te avisamos por email.»;
   - en la prueba, sin lugar: «Tu prueba ya usó sus {L} resultados, así que no vamos a avisarte de los nuevos. Con Particular los ves todos y seguimos avisándote.»
+  - en la prueba de 50 publicaciones (`docs/PRUEBA_COMPLETA.md`, modo aviso: `trial_reserve.notice_since`; el payload lleva `"trial_notice": true`):
+    - lo encontrado: «Ya encontramos {mostrados + ocultos} autos que coinciden con tu búsqueda de {modelo}.», sin línea de ocultos;
+    - con lugar: «Tu prueba incluye {L} publicaciones: de las nuevas que coincidan te avisamos por email.»;
+    - sin lugar: «Ya recibiste las {L} publicaciones de tu prueba. Con Particular las ves todas y seguimos avisándote.»
 - **Lo que la prueba oculta.** X cuenta solo lo que la prueba muestra, en la búsqueda que más muestra. Si oculta coincidencias que siguen publicadas: «Hay {N} más que coinciden y tu prueba no muestra.» Si no muestra ninguna: «Encontramos {N} autos que coinciden con tu búsqueda de {modelo}, pero tu prueba no los muestra.», nunca «Todavía no apareció ninguno».
 - **Al final:** «Para que nuestras alertas no terminen en Spam o Promociones, agregá este remitente a tus contactos o mové este email a Principal.»
 - **Botón.** «Ver mis resultados», a `/app/searches/<id>` (la búsqueda activa que más muestra).
@@ -104,6 +108,18 @@ No lleva a pagar: es el primer mail que recibe la cuenta y existe para que los q
   - Sin autos para mostrar, el mail sale como antes.
 - **Orden de reserva (14/11/2026).** La bienvenida se reserva antes que el fin de prueba. Con el tope diario lleno salía lo que sobraba: 194 bienvenidas para 480 cuentas, y una bienvenida que no sale en `window_hours` se pierde.
 - **Código.** [`20261109130000_search_activated_email.sql`](../supabase/migrations/20261109130000_search_activated_email.sql): las funciones de reserva y re-chequeo de los demás tipos quedan como `*_base` y las nuevas las llaman. [`20261217120000_welcome_cars.sql`](../supabase/migrations/20261217120000_welcome_cars.sql) suma los autos.
+
+## Prueba completa (`trial_complete`)
+
+Solo en la prueba de 50 publicaciones (`docs/PRUEBA_COMPLETA.md`). Apagado por defecto.
+
+- **A quién.** Una vez por cuenta (`event_key = 'complete'`), 60 minutos después de que la prueba llenó su cupo (`trial_completed_at`: cuándo entró el resultado número `plan_limits.free.max_total_results`). Solo pruebas empezadas desde `trial_reserve.notice_since`, que reciben emails, siguen con cupo de prueba y con la prueba corriendo, al reservar y al enviar. Sin `notice_since`, nadie.
+- **Asunto y título.** «Ya recibiste las {L} publicaciones de tu prueba» (`payload.total`, el límite; sin `total` el worker no lo manda).
+- **Cuerpo.** Con ocultos: «Hay {M} más que coinciden con tu búsqueda de {modelo}.» (con 1: «Hay 1 más que coincide…»; sin modelo: «…con tu búsqueda.»). Después, los dos pases, el de 7 días primero: «Para seguir recibiendo, Particular sale $5.000 por 7 días o $15.000 por 30, pago único.» (de `pro_offer`; sin un pase de 7 días válido, la oferta de Particular de 2.2).
+- **Botón.** «Seguir recibiendo», a `/app/searches/<id>` (la búsqueda que más muestra, como 2.2).
+- **Payload.** `{model, total, shown, hidden}`.
+- **Orden de reserva.** Justo después de la bienvenida.
+- **Código.** [`20270109120000_trial_complete.sql`](../supabase/migrations/20270109120000_trial_complete.sql): `claim_lifecycle_emails` y `lifecycle_email_eligible` de antes quedan como `*_cars` y `*_bonus`. [`20270110120000_trial_fifty.sql`](../supabase/migrations/20270110120000_trial_fifty.sql) lo pasa a la regla de las 50 publicaciones.
 
 ## Remarketing: cuentas sin búsqueda
 
@@ -151,7 +167,7 @@ Se edita desde `/admin/config`. Un valor inválido se reemplaza por su valor por
 | Campo | Por defecto | Qué hace |
 | --- | --- | --- |
 | `enabled` | `true` | `false` apaga todos los tipos. |
-| `kinds` | Prendidos: 2.1, 2.2, 2.3, 2.5 y `search_activated` (bienvenida). Apagados: `search_abandoned`, `search_not_started` y `search_feedback` (remarketing) | Prende o apaga cada tipo. Apagar `count_after_expiry` también corta su rastreo. |
+| `kinds` | Prendidos: 2.1, 2.2, 2.3, 2.5 y `search_activated` (bienvenida). Apagados: `search_abandoned`, `search_not_started` y `search_feedback` (remarketing), los de la prueba extra y `trial_complete` (prueba completa) | Prende o apaga cada tipo. Apagar `count_after_expiry` también corta su rastreo. |
 | `send_from` / `send_until` | `"09:00"` / `"21:00"` | Horario de envío, hora argentina. |
 | `window_hours` | `48` | Plazo para mandar una fila reservada. Pasado ese plazo queda `skipped` (`outside_window`). Tiene que superar la noche sin envíos. |
 | `max_per_day` | `30` | Mails reservados por día calendario argentino, entre todos los tipos. Resend gratis permite 100 por día entre alertas y estos mails. En producción está en `100` desde el 14/11/2026 (decisión de Juan, con Resend pago): en 30 se llenaba todos los días desde el 01/11. |

@@ -5,6 +5,7 @@ import { PLAN_CARD, PlanFeatures } from "@/components/plan-card-parts";
 import { PassCard, PlanCarousel, type PassVariant } from "@/components/public-plans-client";
 import { Button } from "@/components/ui/button";
 import type { WebConfig } from "@/lib/config";
+import { trialNoticeMode } from "@/lib/trial-reserve";
 import { alertsText, CUSTOM_PLAN, inWords, type PassOffer, modelLessText, OFFER_DAYS, OFFER_TIER, PASS_GUARANTEE, PLAN_COPY, PLAN_NAMES, planFeatures, planPrice, resultsText, searchesText } from "@/lib/pro";
 import { cn } from "@/lib/utils";
 
@@ -45,7 +46,7 @@ export function PublicPlans({ cfg, signedIn, pass = "pass_30" }: { cfg: PricingC
     price: "Gratis",
     period: "por 3 días · sin tarjeta",
     pitch: "Probá cómo buscamos y comparamos autos antes de elegir un plan.",
-    features: [searchesText(trial, false), resultsText(trial, cfg.trialReserve?.enabled ? cfg.trialReserve.backfillMax : null), alertsText(trial), "Historial y favoritos"],
+    features: [searchesText(trial, false), resultsText(trial, cfg.trialReserve?.enabled ? cfg.trialReserve.backfillMax : null, trialNoticeMode(cfg.trialReserve)), alertsText(trial), "Historial y favoritos"],
     terms: "Las 72 horas empiezan al activar tu búsqueda. Sin contraseña: solo tu email. Una prueba por email, sin cobro automático. Al terminar te podemos escribir con opciones para seguir; te das de baja con un clic.",
     cta: "Probar gratis",
     href: start,

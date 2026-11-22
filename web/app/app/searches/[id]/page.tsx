@@ -35,6 +35,7 @@ import { pageListingIds } from "@/lib/list-position";
 import { FILTERS, type Filter, isResultFilter } from "@/lib/result-filters";
 import { createClient } from "@/lib/supabase/server";
 import { trialOffer } from "@/lib/trial-offer";
+import { trialNoticeMode } from "@/lib/trial-reserve";
 import type { Filters, Preferences } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { SEARCH_TITLE_ID, sameZone, zoneOf } from "@/lib/zone-notice";
@@ -136,11 +137,21 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
     (count.all_count ?? 0) <= diagnosis.max_results &&
     (!profile.bootstrapped_at || Date.parse(profile.bootstrapped_at) <= Date.parse(diagnosis.created_at));
   const quota = freeResultQuota(access);
-  const checkoutConfig = quota?.reached ? await webConfig() : null;
+  // Notice mode (docs/PRUEBA_COMPLETA.md): the trial is its 50 publicaciones; when
+  // the quota fills, the offer's sheet in its complete variant takes
+  // FreeResultLimit's place. Legacy mode keeps FreeResultLimit.
+  const reserve = quota ? (await webConfig()).trialReserve : null;
+  const notice = trialNoticeMode(reserve);
+  const completeLimit = notice && quota?.reached ? quota.limit : null;
+  const fullQuota = quota?.reached === true && completeLimit == null;
+  const checkoutConfig = fullQuota ? await webConfig() : null;
   // Oferta cuando la prueba oculta autos (docs/OFERTA_PRUEBA.md): what the list shows of what
   // matches, and the passes one tap from the checkout. Counts only (my_search_hidden_results).
   const offer = trialOffer(count.all_count ?? 0, hidden);
-  const offerCheckout = offer ? await webConfig().then((cfg) => ({ offer: cfg.proOffer, automatic: cfg.automaticPayments })) : null;
+  const completeOffer = completeLimit != null ? offer ?? { shown: count.all_count ?? 0, hidden: 0, total: count.all_count ?? 0 } : null;
+  const offerCheckout = offer || completeOffer ? await webConfig().then((cfg) => ({ offer: cfg.proOffer, automatic: cfg.automaticPayments })) : null;
+  // Notice mode or a random sample: the card says only what Particular gives, no «muestra N de los T».
+  const plainCard = notice || reserve?.randomStock === true;
   // §33: the free plan's visible results. Not enforced (the pilot): all of
   // them, and the database records plan_limit_hit. Enforced: capped.
   const limit = visibleResults(count.all_count ?? 0, (planLimits ?? null) as PlanLimits | null);
@@ -213,7 +224,7 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
         />
       </header>
 
-      {quota?.reached && checkoutConfig ? <FreeResultLimit profileId={profileId} limit={quota.limit} opportunities={count.opportunities_count ?? 0} offer={checkoutConfig.proOffer} pro={checkoutConfig.planLimits.pro} automatic={checkoutConfig.automaticPayments} pilot={checkoutConfig.commercialPilot} /> : null}
+      {quota && fullQuota && checkoutConfig ? <FreeResultLimit profileId={profileId} limit={quota.limit} opportunities={count.opportunities_count ?? 0} offer={checkoutConfig.proOffer} pro={checkoutConfig.planLimits.pro} automatic={checkoutConfig.automaticPayments} pilot={checkoutConfig.commercialPilot} /> : null}
 
       {pending ? (
         <SearchPreparation
@@ -239,9 +250,12 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
         />
       ) : null}
 
-      {/* Once the search is ready (the counts move while it prepares) and short of the 50: there, FreeResultLimit asks. */}
-      {offer && offerCheckout && !needsPreparation && !quota?.reached ? (
-        <TrialHiddenOffer profileId={profileId} offer={offer} autoOpen={filter === "all"} checkout={offerCheckout} />
+      {/* Once the search is ready (the counts move while it prepares) and short of the 50: there, FreeResultLimit asks.
+          Notice mode: nothing opens by itself before the quota fills; then the complete variant does. */}
+      {completeOffer && offerCheckout && !needsPreparation ? (
+        <TrialHiddenOffer profileId={profileId} offer={completeOffer} autoOpen={filter === "all"} checkout={offerCheckout} complete={completeLimit} />
+      ) : offer && offerCheckout && !needsPreparation && !quota?.reached ? (
+        <TrialHiddenOffer profileId={profileId} offer={offer} autoOpen={filter === "all"} checkout={offerCheckout} notice={notice} />
       ) : null}
 
       {!needsPreparation || shown.length > 0 ? (
@@ -286,7 +300,7 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
           ))}
         </div>
       ) : needsPreparation ? null : filter === "all" && offer && offerCheckout ? (
-        <TrialHiddenCard profileId={profileId} offer={offer} checkout={offerCheckout} />
+        <TrialHiddenCard profileId={profileId} offer={offer} checkout={offerCheckout} plain={plainCard} />
       ) : (
         <p className="rounded-lg bg-muted p-8 text-center text-sm text-muted-foreground">
           {filter === "all" && quota?.reached ? `Todavía no hay publicaciones que coincidan. Tu prueba ya usó sus ${quota.limit} resultados: con Particular te avisamos de las nuevas.` : EMPTY[filter]}
@@ -294,7 +308,7 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
       )}
 
       {shown.length > 0 && filter === "all" && offer && offerCheckout && !more ? (
-        <TrialHiddenCard profileId={profileId} offer={offer} checkout={offerCheckout} />
+        <TrialHiddenCard profileId={profileId} offer={offer} checkout={offerCheckout} plain={plainCard} />
       ) : null}
 
       {limit.over ? (

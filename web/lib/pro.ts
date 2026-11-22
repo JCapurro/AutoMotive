@@ -111,8 +111,12 @@ function counted(n: number, one: string, many: string): string {
 export function searchesText(caps: PlanCaps, upTo = true): string {
   return `${upTo ? "Hasta " : ""}${counted(caps.maxProfiles, "búsqueda activa", "búsquedas activas")}`;
 }
-/** `stockMax`: the trial's reserve on (app_config.trial_reserve), at most this many already published. */
-export function resultsText(caps: PlanCaps, stockMax: number | null = null): string {
+/**
+ * `stockMax`: the trial's reserve on (app_config.trial_reserve), at most this many already published.
+ * `notice`: notice mode (docs/PRUEBA_COMPLETA.md, lib/trial-reserve.ts): the trial is only its limit, «50 publicaciones».
+ */
+export function resultsText(caps: PlanCaps, stockMax: number | null = null, notice = false): string {
+  if (caps.maxTotalResults != null && notice) return `Hasta ${caps.maxTotalResults} publicaciones durante la prueba`;
   if (caps.maxTotalResults != null) {
     const stock = stockMax != null && stockMax < caps.maxTotalResults ? `, hasta ${stockMax} ya publicados y el resto, autos nuevos` : "";
     return `Hasta ${caps.maxTotalResults} resultados en total durante la prueba${stock}`;

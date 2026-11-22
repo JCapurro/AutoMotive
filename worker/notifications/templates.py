@@ -527,12 +527,13 @@ LIFECYCLE_EYEBROW = {"trial_no_matches": "TU PRUEBA GRATIS", "trial_ended": "TU 
                      "pass_expiring": "TU PLAN PARTICULAR", "pass_expires_today": "TU PLAN PARTICULAR",
                      "count_after_expiry": "TU BÚSQUEDA", "search_activated": "TU BÚSQUEDA",
                      "bonus_trial_offer": "7 DÍAS GRATIS", "bonus_trial_ending": "TUS 7 DÍAS GRATIS",
-                     "bonus_trial_ended": "TUS 7 DÍAS GRATIS"}
+                     "bonus_trial_ended": "TUS 7 DÍAS GRATIS", "trial_complete": "TU PRUEBA GRATIS"}
 # The free-trial ones reach email-only accounts too (nobody confirmed the
 # address), so they don't say the reader created the search.
 LIFECYCLE_FOOTER = {
     "trial_no_matches": "Recibís este email porque se activó una búsqueda gratis en Ese Auto con esta dirección.",
     "trial_ended": "Recibís este email porque se activó una búsqueda gratis en Ese Auto con esta dirección.",
+    "trial_complete": "Recibís este email porque se activó una búsqueda gratis en Ese Auto con esta dirección.",
     "pass_expiring": "Recibís este email porque tenés Particular en Ese Auto.",
     "pass_expires_today": "Recibís este email porque tenés Particular en Ese Auto.",
     "count_after_expiry": "Recibís este email porque hubo una búsqueda activa en Ese Auto con esta dirección.",
@@ -562,6 +563,12 @@ WELCOME_TRIAL_LEFT = {1: "Tu prueba muestra hasta {limit} resultados y te queda 
                       "n": "Tu prueba muestra hasta {limit} resultados y te quedan {n}: de los nuevos que coincidan te avisamos por email."}
 WELCOME_TRIAL_FULL = ("Tu prueba ya usó sus {limit} resultados, así que no vamos a avisarte de los nuevos. "
                       "Con Particular los ves todos y seguimos avisándote.")
+# Notice mode (docs/PRUEBA_COMPLETA.md, payload.trial_notice): the trial is its
+# limit, «50 publicaciones»; the first line counts everything that matches and
+# nothing says what the trial shows or hides.
+WELCOME_NOTICE_LEFT = "Tu prueba incluye {limit} publicaciones: de las nuevas que coincidan te avisamos por email."
+WELCOME_NOTICE_FULL = ("Ya recibiste las {limit} publicaciones de tu prueba. "
+                       "Con Particular las ves todas y seguimos avisándote.")
 WELCOME_INBOX = ("Para que nuestras alertas no terminen en Spam o Promociones, agregá este remitente a tus "
                  "contactos o mové este email a Principal.")
 WELCOME_CTA = "Ver mis resultados"
@@ -593,6 +600,16 @@ TRIAL_ENDED_OFFER = ("Para seguir recibiendo avisos, Particular sale {price} por
 TRIAL_ENDED_OFFER_FALLBACK = "Para seguir recibiendo avisos, elegí Particular."
 TRIAL_ENDED_KEEP = "Tu historial y tus favoritos quedan guardados."
 TRIAL_ENDED_CTA = "Seguir con Particular"
+
+# trial_complete (docs/PRUEBA_COMPLETA.md): once, an hour after the trial used
+# its publicaciones (payload.total, the account's limit). shown and hidden are
+# the picked search's, as the page counts them.
+TRIAL_COMPLETE_TITLE = "Ya recibiste las {total} publicaciones de tu prueba"
+TRIAL_COMPLETE_HIDDEN = {1: "Hay 1 más que coincide con tu búsqueda{model}.",
+                         "n": "Hay {n} más que coinciden con tu búsqueda{model}."}
+TRIAL_COMPLETE_CTA = "Seguir recibiendo"
+TRIAL_COMPLETE_OFFER = ("Para seguir recibiendo, Particular sale {price_7} por {days_7} días "
+                        "o {price_30} por {days_30}, pago único.")
 
 PASS_SUBJECT = {"pass_expiring": "Te quedan 5 días de Ese Auto",
                 "pass_expires_today": "Hoy vence tu acceso a Ese Auto"}
@@ -697,20 +714,39 @@ def particular_price(offer: Mapping[str, Any] | None) -> str | None:
     return None
 
 
+def _pass(offer: Mapping[str, Any] | None, key: str) -> tuple[str, int] | None:
+    """A pass's price and days from app_config.pro_offer ("$5.000", 7), or None if it isn't usable."""
+    price = offer.get(key) if isinstance(offer, Mapping) else None
+    if not (isinstance(price, Mapping) and price.get("currency") == "ARS"):
+        return None
+    amount, days = _pesos(price.get("amount")), price.get("days")
+    if amount and isinstance(days, int) and not isinstance(days, bool) and days > 0:
+        return amount, days
+    return None
+
+
+def _pass_searches(limits: Mapping[str, Any] | None) -> int:
+    """The pass plan's searches from app_config.plan_limits, 3 if unreadable."""
+    pass_limits = limits.get("pass") if isinstance(limits, Mapping) else None
+    searches = pass_limits.get("max_profiles") if isinstance(pass_limits, Mapping) else None
+    return searches if isinstance(searches, int) and not isinstance(searches, bool) and searches > 0 else 3
+
+
 def particular_offer(offer: Mapping[str, Any] | None, limits: Mapping[str, Any] | None) -> str:
     """Particular's price, days and searches from app_config (pro_offer,
     plan_limits); without a usable price, the plan without numbers (never a wrong one)."""
-    price = offer.get("pass_30") if isinstance(offer, Mapping) else None
-    amount = particular_price(offer)
-    if amount:
-        days = price.get("days")
-        if isinstance(days, int) and not isinstance(days, bool) and days > 0:
-            pass_limits = limits.get("pass") if isinstance(limits, Mapping) else None
-            searches = pass_limits.get("max_profiles") if isinstance(pass_limits, Mapping) else None
-            if not (isinstance(searches, int) and not isinstance(searches, bool) and searches > 0):
-                searches = 3
-            return TRIAL_ENDED_OFFER.format(price=amount, days=days, searches=searches)
+    month = _pass(offer, "pass_30")
+    if month:
+        return TRIAL_ENDED_OFFER.format(price=month[0], days=month[1], searches=_pass_searches(limits))
     return TRIAL_ENDED_OFFER_FALLBACK
+
+
+def trial_complete_offer(offer: Mapping[str, Any] | None, limits: Mapping[str, Any] | None) -> str:
+    """Both passes, the 7-day one first; without both usable, particular_offer's line."""
+    week, month = _pass(offer, "pass_7"), _pass(offer, "pass_30")
+    if week and month:
+        return TRIAL_COMPLETE_OFFER.format(price_7=week[0], days_7=week[1], price_30=month[0], days_30=month[1])
+    return particular_offer(offer, limits)
 
 
 def _missed(car: Any, found: int, below: int, link: Link) -> tuple[Content, str] | None:
@@ -782,17 +818,23 @@ def lifecycle_content(kind: str, payload: Mapping[str, Any], url: str, *,
         hidden = _count(payload.get("hidden"))
         subject = WELCOME_SUBJECT.format(model=model) if model else WELCOME_SUBJECT_ANY
         of_model = f" de {model}" if model else ""
-        if found:
+        limit = _count(payload.get("trial_limit"))
+        notice = bool(limit) and payload.get("trial_notice") is True
+        if notice and found + hidden:
+            lines = [_plural(WELCOME_FOUND, found + hidden, model=of_model,
+                             below=_plural(WELCOME_BELOW, below) if below else "")]
+        elif found and not notice:
             lines = [_plural(WELCOME_FOUND, found, model=of_model, below=_plural(WELCOME_BELOW, below) if below else "")]
             if hidden:
                 lines.append(_plural(WELCOME_HIDDEN, hidden))
-        elif hidden:
+        elif hidden and not notice:
             lines = [_plural(WELCOME_ONLY_HIDDEN, hidden, model=of_model)]
         else:
             lines = [WELCOME_NONE.format(model=f" para tu búsqueda{of_model}")]
-        limit = _count(payload.get("trial_limit"))
         if not limit:
             lines.append(WELCOME_NEXT)
+        elif notice:
+            lines.append((WELCOME_NOTICE_LEFT if _count(payload.get("trial_left")) else WELCOME_NOTICE_FULL).format(limit=limit))
         elif left := _count(payload.get("trial_left")):
             lines.append(_plural(WELCOME_TRIAL_LEFT, left, limit=limit))
         else:
@@ -819,6 +861,14 @@ def lifecycle_content(kind: str, payload: Mapping[str, Any], url: str, *,
         lines += [particular_offer(offer, limits), TRIAL_ENDED_KEEP]
         subject = TRIAL_ENDED_SUBJECT.format(found=_cars(found)) if found else TRIAL_ENDED_TITLE
         return Content(TRIAL_ENDED_TITLE, subject, lines=lines, link=Link(TRIAL_ENDED_CTA, url)), TRIAL_ENDED_TITLE
+    if kind == "trial_complete":
+        total, hidden = _count(payload.get("total")), _count(payload.get("hidden"))
+        if not total:
+            raise ValueError("trial_complete without its total")
+        title = TRIAL_COMPLETE_TITLE.format(total=total)
+        lines = [_plural(TRIAL_COMPLETE_HIDDEN, hidden, model=f" de {model}" if model else "")] if hidden else []
+        lines.append(trial_complete_offer(offer, limits))
+        return Content(title, title, lines=lines, link=Link(TRIAL_COMPLETE_CTA, url)), title
     if kind in PASS_SUBJECT:
         found, below = _count(payload.get("found")), _count(payload.get("below"))
         ended = payload.get("ended") is True

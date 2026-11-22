@@ -23,6 +23,7 @@ SNAPSHOTS = Path(__file__).parent / "snapshots" / "notifications"
 LINKS = Links("https://automotive.app")
 NOW = datetime(2026, 10, 20, 13, 0, tzinfo=timezone.utc)          # 10:00 in Argentina
 OFFER = {"version": "ars-launch-2026-10",
+         "pass_7": {"amount": 5000, "currency": "ARS", "days": 7},
          "pass_30": {"amount": 15000, "currency": "ARS", "days": 30},
          "pro_monthly": {"amount": 75000, "currency": "ARS", "days": 30}}
 LIMITS = {"enforced": True, "free": {"max_profiles": 1}, "pass": {"max_profiles": 3}, "pro": {"max_profiles": 20}}
@@ -33,7 +34,8 @@ BANNED = ("en tiempo real", "todos los portales", "el mas barato")
 ALL_ON = {"trial_no_matches": True, "trial_ended": True, "pass_expiring": True, "pass_expires_today": True,
           "count_after_expiry": True, "search_activated": True,
           "search_abandoned": False, "search_not_started": False, "search_feedback": False,
-          "bonus_trial_offer": False, "bonus_trial_ending": False, "bonus_trial_ended": False}
+          "bonus_trial_offer": False, "bonus_trial_ending": False, "bonus_trial_ended": False,
+          "trial_complete": False}
 
 
 def render(msg: templates.EmailMessage) -> str:
@@ -112,6 +114,11 @@ class PlanEmailSnapshotTests(unittest.TestCase):
                                                                  "ends_at": "2026-11-02T22:00:00+00:00"}),
                           "lifecycle_bonus_trial_ended": email("bonus_trial_ended",
                                                                {"model": "Ford Ka", "found": 12, "below": 1}),
+                          "lifecycle_trial_complete": email("trial_complete",
+                                                            {"model": "Ford Focus", "total": 50, "shown": 50, "hidden": 23}),
+                          "lifecycle_search_activated_trial_notice": email(
+                              "search_activated", {"model": "Ford Focus", "found": 40, "below": 2, "hidden": 38,
+                                                   "trial_limit": 50, "trial_left": 10, "trial_notice": True}),
                           }.items():
             with self.subTest(name=name):
                 text = render(msg)
@@ -441,6 +448,77 @@ class MissedCarEmailTests(unittest.TestCase):
                 self.assertEqual(msg.subject, "Aparecieron 9 autos nuevos para tu búsqueda de Ford Focus")
 
 
+class TrialCompleteEmailTests(unittest.TestCase):
+    """Prueba de 50 publicaciones (docs/PRUEBA_COMPLETA.md): the quota is used."""
+
+    def lines(self, msg: templates.EmailMessage) -> list[str]:
+        return msg.text.split("\n—\n")[0].splitlines()
+
+    def test_the_plans_document_copy(self):
+        msg = email("trial_complete", {"model": "Ford Focus", "total": 50, "shown": 50, "hidden": 23})
+        self.assertEqual(msg.subject, "Ya recibiste las 50 publicaciones de tu prueba")
+        self.assertEqual(self.lines(msg), [
+            "Ya recibiste las 50 publicaciones de tu prueba",
+            "Hay 23 más que coinciden con tu búsqueda de Ford Focus.",
+            "Para seguir recibiendo, Particular sale $5.000 por 7 días o $15.000 por 30, pago único.",
+            "Seguir recibiendo: https://automotive.app/m/41"])
+        self.assertIn("TU PRUEBA GRATIS", msg.html)
+        self.assertIn(templates.LIFECYCLE_FOOTER["trial_ended"], msg.text)
+        self.assertEqual(templates.LIFECYCLE_FOOTER["trial_complete"], templates.LIFECYCLE_FOOTER["trial_ended"])
+
+    def test_nothing_hidden_no_model_and_one_hidden(self):
+        lines = self.lines(email("trial_complete", {"total": 50, "shown": 50, "hidden": 0}))
+        self.assertEqual(lines[1], "Para seguir recibiendo, Particular sale $5.000 por 7 días o $15.000 por 30, pago único.")
+        self.assertFalse(any(line.startswith("Hay ") for line in lines))
+        self.assertIn("Hay 1 más que coincide con tu búsqueda.", self.lines(email("trial_complete", {"total": 50, "hidden": 1})))
+
+    def test_the_offer_reads_both_passes_from_the_config(self):
+        payload = {"model": "Ford Ka", "total": 50, "hidden": 0}
+        offer = {**OFFER, "pass_7": {"amount": 6500, "currency": "ARS", "days": 7},
+                 "pass_30": {"amount": 18000, "currency": "ARS", "days": 30}}
+        self.assertIn("Para seguir recibiendo, Particular sale $6.500 por 7 días o $18.000 por 30, pago único.",
+                      self.lines(email("trial_complete", payload, offer=offer)))
+        # Without a usable 7-day pass, the trial_ended line.
+        today = "Para seguir recibiendo avisos, Particular sale $15.000 por 30 días, con 3 búsquedas y pago único."
+        for week in (None, {"amount": 5000, "currency": "USD", "days": 7}, {"amount": 5000, "currency": "ARS", "days": 0},
+                     {"amount": "x", "currency": "ARS", "days": 7}):
+            offer = {k: v for k, v in OFFER.items() if k != "pass_7"}
+            if week is not None:
+                offer["pass_7"] = week
+            self.assertIn(today, self.lines(email("trial_complete", payload, offer=offer)))
+        # Only trial_complete names both passes.
+        ended = email("trial_ended", MISSED)
+        self.assertIn(today, ended.text)
+        self.assertNotIn("por 7 días o", ended.text)
+
+    def test_never_without_its_total(self):
+        for payload in ({"model": "Ford Ka", "hidden": 4}, {"model": "Ford Ka", "total": 0, "hidden": 4},
+                        {"model": "Ford Ka", "new": 5, "hidden": 4}):
+            with self.assertRaises(ValueError):
+                email("trial_complete", payload)
+
+    def test_the_welcome_in_notice_mode_counts_everything_that_matches(self):
+        welcome = lambda **kw: self.lines(email("search_activated", {"model": "Ford Ka", "trial_limit": 50, "trial_notice": True, **kw}))
+        left = welcome(found=40, below=2, hidden=38, trial_left=10)
+        self.assertEqual(left[1], "Ya encontramos 78 autos que coinciden con tu búsqueda de Ford Ka, y 2 están por debajo de publicaciones comparables.")
+        self.assertEqual(left[2], "Tu prueba incluye 50 publicaciones: de las nuevas que coincidan te avisamos por email.")
+        self.assertFalse(any("tu prueba no muestra" in line or "no los muestra" in line for line in left))
+        self.assertEqual(welcome(found=0, hidden=3, trial_left=50)[1], "Ya encontramos 3 autos que coinciden con tu búsqueda de Ford Ka.")
+        self.assertEqual(welcome(found=0, hidden=1, trial_left=50)[1], "Ya encontramos 1 auto que coincide con tu búsqueda de Ford Ka.")
+        self.assertEqual(welcome(found=0, hidden=0, trial_left=50)[1],
+                         "Ya estamos revisando las publicaciones para tu búsqueda de Ford Ka. Todavía no apareció ninguno que coincida.")
+        self.assertIn("Ya recibiste las 50 publicaciones de tu prueba. Con Particular las ves todas y seguimos avisándote.",
+                      welcome(found=50, hidden=4, trial_left=0))
+        # Without trial_notice (or with it but no trial_limit): as on main.
+        legacy = self.lines(email("search_activated", {"model": "Ford Ka", "found": 40, "hidden": 38, "trial_limit": 50, "trial_left": 10}))
+        self.assertIn("Hay 38 más que coinciden y tu prueba no muestra.", legacy)
+        self.assertIn("Tu prueba muestra hasta 50 resultados y te quedan 10: de los nuevos que coincidan te avisamos por email.", legacy)
+        self.assertIn("De los nuevos que coincidan te avisamos por email.",
+                      self.lines(email("search_activated", {"model": "Ford Ka", "found": 4, "trial_notice": True})))
+        self.assertIn("Tu prueba muestra hasta 50 resultados y te quedan 10: de los nuevos que coincidan te avisamos por email.",
+                      self.lines(email("search_activated", {"found": 40, "trial_limit": 50, "trial_left": 10, "trial_notice": "true"})))
+
+
 class PlanEmailCopyTests(unittest.TestCase):
     def test_no_banned_or_forbidden_words(self):
         for msg in (email("trial_no_matches", {"model": "Ford Focus"}),
@@ -450,7 +528,11 @@ class PlanEmailCopyTests(unittest.TestCase):
                     email("count_after_expiry", {"model": "Ford Focus", "found": 9, "below": 2}),
                     email("count_after_expiry", MISSED),
                     email("count_after_expiry", {**MISSED, "car": {**MISSED["car"], "gone": False}}),
-                    email("search_activated", {"model": "Ford Focus", "found": 14, "below": 2})):
+                    email("search_activated", {"model": "Ford Focus", "found": 14, "below": 2}),
+                    email("search_activated", {"found": 40, "hidden": 9, "trial_limit": 50, "trial_left": 0, "trial_notice": True}),
+                    email("search_activated", {"found": 40, "hidden": 9, "trial_limit": 50, "trial_left": 4, "trial_notice": True}),
+                    email("trial_complete", {"model": "Ford Focus", "total": 50, "shown": 50, "hidden": 23}),
+                    email("trial_complete", {"total": 50, "shown": 50, "hidden": 0})):
             text = normalize_text(f"{msg.subject} {msg.text} {msg.html}")
             for term in BANNED + FORBIDDEN_TERMS:
                 self.assertNotRegex(text, rf"\b{normalize_text(term)}\b", term)
@@ -481,6 +563,13 @@ class SettingsTests(unittest.TestCase):
                                   "pass_renewed": True}})
         self.assertEqual(cfg["kinds"], {**ALL_ON, "trial_no_matches": False, "pass_expiring": False,
                                         "count_after_expiry": False})
+
+    def test_trial_complete_is_off_until_turned_on_and_goes_right_after_the_welcome(self):
+        from notifications.lifecycle import KINDS
+        self.assertFalse(settings({})["kinds"]["trial_complete"])
+        self.assertFalse(settings({"kinds": {"trial_complete": "sí"}})["kinds"]["trial_complete"])
+        self.assertTrue(settings({"kinds": {"trial_complete": True}})["kinds"]["trial_complete"])
+        self.assertEqual(KINDS.index("trial_complete"), KINDS.index("search_activated") + 1)
 
     def test_the_window_outlasts_the_night(self):
         self.assertEqual(settings({"window_hours": 6})["window_hours"], 48.0)

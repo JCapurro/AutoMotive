@@ -182,10 +182,11 @@ describe("guided config validators", () => {
     expect(AdminLifecycleInput.safeParse({ window_hours: 721 }).success).toBe(false);
   });
   it("validates every supported email kind without enabling default-off kinds", () => {
-    expect(Object.keys(LIFECYCLE_KINDS)).toHaveLength(12);
+    expect(Object.keys(LIFECYCLE_KINDS)).toHaveLength(13);
     for (const kind of Object.keys(LIFECYCLE_KINDS)) expect(AdminLifecycleInput.safeParse({ kinds: { [kind]: "false" } }).success).toBe(false);
     expect(LIFECYCLE_KINDS.search_feedback.enabled).toBe(false);
     expect(LIFECYCLE_KINDS.bonus_trial_offer.enabled).toBe(false);
+    expect(LIFECYCLE_KINDS.trial_complete).toEqual({ label: "Prueba completa", enabled: false });
   });
   it("cannot enable the commercial pilot or enforced limits through generic config", () => {
     expect(validateConfigChange("commercial_pilot", {}, {})).toMatch(/Cobros/);

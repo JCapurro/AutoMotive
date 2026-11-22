@@ -43,6 +43,8 @@ export const LIFECYCLE_KINDS = {
   bonus_trial_offer: { label: "Oferta de prueba adicional", enabled: false },
   bonus_trial_ending: { label: "Prueba adicional por vencer", enabled: false },
   bonus_trial_ended: { label: "Fin de la prueba adicional", enabled: false },
+  // Prueba de 50 publicaciones (docs/PRUEBA_COMPLETA.md): sent only with trial_reserve.notice_since.
+  trial_complete: { label: "Prueba completa", enabled: false },
 } as const;
 export const LIFECYCLE_DEFAULTS = { enabled: true, send_from: "09:00", send_until: "21:00", window_hours: 48, max_per_day: 30 };
 const clock = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/, "Usá un horario HH:MM entre 00:00 y 23:59.");
@@ -137,8 +139,13 @@ export const UnmetDemandConfigInput = z.object({
   hour: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional(),
 }).passthrough();
 /** Prueba gratis: app_config.trial_reserve, room in the trial for new listings (lib/trial-reserve.ts). */
-export const TRIAL_RESERVE_CONFIG_MESSAGE = "trial_reserve necesita enabled (true/false) y backfill_max (entero de 0 a 1000).";
-export const TrialReserveConfigInput = z.object({ enabled: z.boolean(), backfill_max: z.number().int().min(0).max(1000) }).passthrough();
+export const TRIAL_RESERVE_CONFIG_MESSAGE = "trial_reserve necesita enabled (true/false) y backfill_max (entero de 0 a 1000); random_stock (true/false) y notice_since (fecha y hora ISO con zona, ej. 2026-11-21T12:00:00Z) son opcionales.";
+export const TrialReserveConfigInput = z.object({
+  enabled: z.boolean(), backfill_max: z.number().int().min(0).max(1000),
+  // Prueba de 50 publicaciones (docs/PRUEBA_COMPLETA.md).
+  random_stock: z.boolean().optional(),
+  notice_since: z.string().refine((v) => /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})$/.test(v) && !Number.isNaN(Date.parse(v))).optional(),
+}).passthrough();
 /** Agencias: app_config.dealer_program, the panel and the sales channel (lib/dealer-program.ts, public.dealer_program(), worker intelligence/config.py). Same ranges as the three readers. */
 export const DEALER_PROGRAM_CONFIG_MESSAGE = "dealer_program necesita enabled y channel_enabled (true/false), manual_confirm_days (entero de 1 a 60) y demand_min_count (entero de 3 a 50); si están, alerts_enabled, photo_import_enabled y sellers_enabled (true/false), alerts_every_hours (entero de 6 a 168), photo_import_daily_limit (entero de 1 a 50) y seller_requests_per_day (entero de 1 a 50).";
 export const DealerProgramConfigInput = z.object({
@@ -616,7 +623,7 @@ export function configFieldLabel(key: string, path: string): string {
     return ({ enabled: "Panel de agencias (/agencia)", channel_enabled: "Canal de venta: autos de agencia a compradores (Privacidad con OK de Juan)", manual_confirm_days: "Días para confirmar el stock cargado a mano", demand_min_count: "Mínimo de personas para mostrar un número de búsquedas", alerts_enabled: "Avisos por email a las agencias", alerts_every_hours: "Horas mínimas entre dos resúmenes de avisos", photo_import_enabled: "Lectura del stock con IA: planillas, fotos y PDF (cuesta por uso)", photo_import_daily_limit: "Lecturas con IA por agencia y día", sellers_enabled: "Vendedores: agencias piden contactar a quien vende su auto (antes: aviso al vendedor y textos con OK de Juan)", seller_requests_per_day: "Pedidos de contacto a vendedores por agencia y día" } as Record<string, string>)[path] ?? path;
   }
   if (key === "trial_reserve") {
-    return ({ enabled: "Reserva de la prueba para autos nuevos", backfill_max: "Máximo de resultados ya publicados" } as Record<string, string>)[path] ?? path;
+    return ({ enabled: "Reserva de la prueba para autos nuevos", backfill_max: "Máximo de resultados ya publicados", random_stock: "Ya publicados elegidos al azar", notice_since: "Prueba de 50 publicaciones: cartel y mail de prueba completa, para pruebas empezadas desde" } as Record<string, string>)[path] ?? path;
   }
   if (key === "score_model_f3") return SCORE_MODEL_F3_LABELS[path] ?? path;
   if (key === "lifecycle_emails") {
