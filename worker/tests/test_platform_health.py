@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta, timezone
+import importlib
 import json
+import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -7,6 +9,7 @@ from unittest.mock import patch
 
 import httpx
 
+import config
 from tools import platform_health as health
 from collectors._recency import POLICY_VERSION
 
@@ -41,6 +44,32 @@ class CollectorChecksTests(unittest.TestCase):
     def test_stalled_run_but_not_running_normally(self):
         self.assertIn('trabada', self.check(latest_status='running', started_at=NOW-timedelta(hours=1)))
         self.assertIsNone(self.check(latest_status='running', next_run_at=NOW-timedelta(hours=3)))
+
+    def test_a_slow_run_is_not_stalled_before_the_collector_may_end(self):
+        # The collector may take COLLECTOR_TIMEOUT_SECONDS (40 minutes) and then ingest.
+        self.assertGreater(config.PLATFORM_HEALTH_RUN_TIMEOUT_MINUTES * 60, config.COLLECTOR_TIMEOUT_SECONDS)
+        limit = timedelta(seconds=config.COLLECTOR_TIMEOUT_SECONDS)
+        self.assertIsNone(self.check(latest_status='running', started_at=NOW-limit-timedelta(minutes=5)))
+        # A run hung for real still alerts.
+        stuck = timedelta(minutes=config.PLATFORM_HEALTH_RUN_TIMEOUT_MINUTES + 1)
+        self.assertIn('trabada', self.check(latest_status='running', started_at=NOW-stuck))
+
+    def test_the_stalled_threshold_never_goes_under_the_collector_cut(self):
+        try:
+            with patch.dict(os.environ, {'PLATFORM_HEALTH_RUN_TIMEOUT_MINUTES': '30',
+                                         'COLLECTOR_TIMEOUT_SECONDS': '2400'}):
+                importlib.reload(config)
+                self.assertEqual(config.PLATFORM_HEALTH_RUN_TIMEOUT_MINUTES, 55)
+            with patch.dict(os.environ, {'PLATFORM_HEALTH_RUN_TIMEOUT_MINUTES': '90',
+                                         'COLLECTOR_TIMEOUT_SECONDS': '2400'}):
+                importlib.reload(config)
+                self.assertEqual(config.PLATFORM_HEALTH_RUN_TIMEOUT_MINUTES, 90)
+            with patch.dict(os.environ, {'PLATFORM_HEALTH_RUN_TIMEOUT_MINUTES': '',
+                                         'COLLECTOR_TIMEOUT_SECONDS': '3000'}):
+                importlib.reload(config)
+                self.assertEqual(config.PLATFORM_HEALTH_RUN_TIMEOUT_MINUTES, 65)
+        finally:
+            importlib.reload(config)
 
     def test_missed_cadence_and_never_started_target(self):
         self.assertIn('vencida', self.check(next_run_at=NOW-timedelta(hours=2)))

@@ -24,7 +24,8 @@ Configuración del `.env` operativo:
 
 ```dotenv
 PLATFORM_HEALTH_EMAIL=jcapurro97@gmail.com
-PLATFORM_HEALTH_RUN_TIMEOUT_MINUTES=30
+# vacío: 55 (COLLECTOR_TIMEOUT_SECONDS en minutos + 15); un valor menor no se toma
+PLATFORM_HEALTH_RUN_TIMEOUT_MINUTES=
 PLATFORM_HEALTH_EMPTY_RUNS=3
 PLATFORM_HEALTH_EMAIL_QUOTA_PCT=80
 ```
@@ -34,8 +35,9 @@ se incluyen en los avisos. El umbral de fallas es
 `app_config.collector_failure_alert_after` (3 por defecto).
 
 Detecta fallas por búsqueda, aunque otro target del mismo collector funcione,
-corridas que duran más de 30 minutos y búsquedas vencidas por más de dos cadencias
-(mínimo 30 minutos). Tres corridas vacías después de obtener resultados en los
+corridas que duran más de 55 minutos (el corte del collector,
+`COLLECTOR_TIMEOUT_SECONDS`, más 15 para guardar lo leído) y búsquedas vencidas
+por más de dos cadencias (mínimo esos 55 minutos). Tres corridas vacías después de obtener resultados en los
 últimos siete días generan un aviso de posible rotura del parser; se puede
 desactivar con `PLATFORM_HEALTH_EMPTY_RUNS=0`. Las fuentes deshabilitadas y los
 targets sin búsquedas activas con acceso vigente no generan falsas alarmas.

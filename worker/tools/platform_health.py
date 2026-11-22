@@ -134,7 +134,7 @@ def first_load(row: dict, now: datetime) -> bool:
 
 
 def collector_checks(rows: list[dict], now: datetime, *, failures: int = 3,
-                     timeout_minutes: int = 30, empty_runs: int = 3, partial_runs: int = PARTIAL_RUNS,
+                     timeout_minutes: int = config.PLATFORM_HEALTH_RUN_TIMEOUT_MINUTES, empty_runs: int = 3, partial_runs: int = PARTIAL_RUNS,
                      previous: dict[str, str | None] | None = None) -> dict[str, str | None]:
     checks: dict[str, str | None] = {}
     # A parser break empties every search of the source. When another target

@@ -387,5 +387,37 @@ class BlockedCrawlTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(site.asked, [1])
 
 
+class AutoCosmosTimeBudgetTests(unittest.IsolatedAsyncioTestCase):
+    """A search stops starting pages when its time runs out (time_budget),
+    short of COLLECTOR_TIMEOUT_SECONDS, whose cut would throw away the read."""
+
+    def test_the_budget_is_ten_minutes_short_of_the_collector_cut(self):
+        with patch.object(autocosmos.config, "COLLECTOR_TIMEOUT_SECONDS", 2400):
+            self.assertEqual(AutoCosmosScraper.time_budget(), 1800)
+        with patch.object(autocosmos.config, "COLLECTOR_TIMEOUT_SECONDS", 600):
+            self.assertEqual(AutoCosmosScraper.time_budget(), 300)       # half, at least
+
+    async def test_a_model_read_out_of_time_keeps_what_it_read(self):
+        site = Site({1: page(range(1, 49), more=True), 2: page(range(49, 97), more=True),
+                     3: page(range(97, 99), more=False)})
+        now = [0.0]
+
+        def handler(request):
+            now[0] += 1000                     # every request, the model list included
+            return site(request)
+
+        s = scraper(site)
+        s.transport = httpx.MockTransport(handler)
+        s.clock = lambda: now[0]
+        with patch.object(autocosmos.config, "COLLECTOR_TIMEOUT_SECONDS", 2400):
+            found = await s.search(FILTERS)
+
+        self.assertFalse(found.complete)
+        self.assertEqual(found.reason, "autocosmos: se agotó el tiempo de la lectura (30 min)")
+        self.assertIn(1, site.asked)
+        self.assertNotIn(3, site.asked)
+        self.assertGreaterEqual(len(found), 48)
+
+
 if __name__ == "__main__":
     unittest.main()
