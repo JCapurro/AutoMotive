@@ -9,6 +9,7 @@ Argentine send hours and the daily cap. Run with
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime, time, timedelta
 from uuid import uuid4
 
@@ -797,6 +798,9 @@ class SearchActivatedTests(LifecycleCase):
                         Jsonb({"enabled": True, "backfill_max": 45, "notice_since": "2026-01-01T00:00:00Z"}))
         app_config.clear_config_cache()
         user = await self.account(trial_ended_hours_ago=None)
+        # A footer token with «45» in it, so the check below always meets the case that once made it flaky.
+        await self.rows("UPDATE profiles SET email_unsubscribe_token = %s WHERE id = %s",
+                        f"{uuid4().hex[:8]}-4545-4545-4545-{uuid4().hex[:12]}", user)
         profile = await self.first_search(user, minutes_ago=50)
         for level in ("high", "good"):
             await self.match(profile, level=level)
@@ -809,7 +813,8 @@ class SearchActivatedTests(LifecycleCase):
         [body] = self.emails()
         self.assertIn("Ya encontramos 3 autos que coinciden con tu búsqueda de Ford Focus", body["text"])
         self.assertIn("Tu prueba incluye 50 publicaciones: de las nuevas que coincidan te avisamos por email.", body["text"])
-        self.assertNotIn("45", body["text"])
+        # The copy never states the stock cap; links carry tokens and ids, so only the sentences are checked.
+        self.assertNotRegex(re.sub(r"https?://\S+", "", body["text"]), r"\b45\b")
 
     async def test_not_before_45_minutes_nor_for_a_paused_search_or_an_admin(self):
         early = await self.account(trial_ended_hours_ago=None)
