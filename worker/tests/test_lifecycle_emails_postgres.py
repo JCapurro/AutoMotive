@@ -985,9 +985,12 @@ class BonusTrialTests(LifecycleCase):
         await self.config(kinds={**DEFAULTS["kinds"], **self.KINDS_ON})
         await self.config("bonus_trial", backfill_since=None)
 
-    async def ended_trial(self, days_ago: float) -> tuple[str, int]:
-        """An account whose trial ended `days_ago`, with a search that found something and that the end paused."""
+    async def ended_trial(self, days_ago: float, *, interested: bool = True) -> tuple[str, int]:
+        """An account whose trial ended `days_ago`, with a search that found something and that the end paused;
+        `interested`: it clicked an alert (showed_interest), which the offer needs."""
         user = await self.account(trial_ended_hours_ago=days_ago * 24)
+        if interested:
+            await self.event(user, "alert_clicked")
         profile = await self.search(user, "Ka")
         await self.match(profile, level="high", hours_ago=days_ago * 24 + 2)
         await self.match(profile, hours_ago=days_ago * 24 + 3)
@@ -1004,6 +1007,13 @@ class BonusTrialTests(LifecycleCase):
                 "VALUES ('mercadolibre', %s, %s, 'Ford Ka', 'Ford', 'Ka') RETURNING id", ref, f"https://example.test/{ref}")
             await self.rows("INSERT INTO expired_search_matches (search_profile_id, listing_id, access_ended_at, level) "
                             "VALUES (%s, %s, %s, 'good')", profile, listing["id"], row["t"])
+
+    async def event(self, user: str, name: str, *, at: str = "now()") -> None:
+        await self.rows(f"INSERT INTO events (user_id, name, props, created_at) VALUES (%s, %s, '{{}}', {at})", user, name)
+
+    async def offered(self, user: str) -> bool:
+        await self.send()
+        return await self.ledger(user, "bonus_trial_offer") is not None
 
     async def bonus(self, user: str, fn: str = "my_bonus_trial") -> dict:
         [row] = await self.rows(f"SELECT {fn}() AS v", actor=user)
@@ -1036,6 +1046,72 @@ class BonusTrialTests(LifecycleCase):
         self.assertEqual(await self.send(), 0)
         for user in (early, payer, empty):
             self.assertIsNone(await self.ledger(user, "bonus_trial_offer"))
+
+    # Only to accounts that showed interest (Juan, 23/11/2026; 20270112120000_bonus_offer_interest.sql).
+
+    async def test_no_interest_signal_no_offer(self):
+        user, _ = await self.ended_trial(8, interested=False)
+        self.assertFalse(await self.offered(user))
+        [row] = await self.rows("SELECT showed_interest(%s) AS v", user)
+        self.assertFalse(row["v"])
+
+    async def test_looking_at_a_car_alone_makes_it_due(self):
+        for name in ("alert_clicked", "listing_detail_viewed", "listing_outbound_clicked", "listing_saved",
+                     "listing_discarded"):
+            user, _ = await self.ended_trial(8, interested=False)
+            await self.event(user, name)
+            self.assertTrue(await self.offered(user), name)
+
+    async def test_a_clicked_notification_alone_makes_it_due(self):
+        user, _ = await self.ended_trial(8, interested=False)
+        async with db.connection() as cx:        # an alert from its trial: the plan guard drops new ones now
+            await cx.execute("SET LOCAL session_replication_role = replica")
+            await cx.execute("INSERT INTO notifications (user_id, kind, channel, status, dedupe_key, clicked_at) "
+                             "VALUES (%s, 'new_match', 'email', 'sent', %s, now() - interval '9 days')",
+                             (user, uuid4().hex))
+        self.assertTrue(await self.offered(user))
+
+    async def test_a_clicked_plan_email_alone_makes_it_due(self):
+        user, _ = await self.ended_trial(8, interested=False)
+        await self.event(user, "lifecycle_email_clicked")
+        self.assertTrue(await self.offered(user))
+
+    async def test_an_own_event_on_a_later_day_alone_makes_it_due(self):
+        user, _ = await self.ended_trial(8, interested=False)
+        await self.event(user, "search_profile_updated")
+        self.assertTrue(await self.offered(user))
+
+    async def test_system_events_on_a_later_day_do_not(self):
+        user, _ = await self.ended_trial(8, interested=False)
+        for name in ("alert_sent", "lifecycle_email_sent", "search_results_viewed", "bonus_trial_ended",
+                     "payment_confirmed", "searches_reactivated", "free_trial_enabled"):
+            await self.event(user, name)
+        self.assertFalse(await self.offered(user))
+
+    async def test_an_own_event_on_the_day_the_trial_started_does_not(self):
+        user, _ = await self.ended_trial(8, interested=False)
+        tz = "'America/Argentina/Buenos_Aires'"
+        same_day = (f"(SELECT (date_trunc('day', free_trial_started_at AT TIME ZONE {tz}) + interval '23 hours 59 minutes')"
+                    f" AT TIME ZONE {tz} FROM profiles WHERE id = '{user}')")
+        await self.event(user, "search_profile_updated", at=same_day)
+        await self.event(user, "search_created", at=same_day)
+        self.assertFalse(await self.offered(user))
+
+    async def test_a_row_claimed_while_interested_stays_eligible_at_send_time(self):
+        user, _ = await self.ended_trial(8)
+        [row] = await self.rows("SELECT count(*) AS n FROM claim_lifecycle_emails('bonus_trial_offer', interval '48 hours', 50) c "
+                                " WHERE c.user_id = %s", user)
+        self.assertEqual(row["n"], 1)
+        offer = await self.ledger(user, "bonus_trial_offer")
+        [ok] = await self.rows("SELECT lifecycle_email_eligible(%s) AS v", offer["id"])
+        self.assertTrue(ok["v"])
+        self.assertEqual(await self.send(), 1)
+        self.assertEqual((await self.ledger(user, "bonus_trial_offer"))["status"], "sent")
+
+    async def test_showed_interest_is_the_servers_only(self):
+        user, _ = await self.ended_trial(8)
+        with self.assertRaisesRegex(Exception, "permission denied"):
+            await self.rows("SELECT showed_interest(%s)", user, actor=user)
 
     async def test_the_backfill_reaches_trials_that_ended_long_ago(self):
         user, _ = await self.ended_trial(30)
