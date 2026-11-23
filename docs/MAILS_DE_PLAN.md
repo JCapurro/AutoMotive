@@ -141,7 +141,12 @@ No lleva a pagar: busca que la cuenta arme su primera búsqueda o que cuente por
 
 Para las pruebas de 72 h que terminaron sin compra: una vez por cuenta, 7 días más con su búsqueda. Al 25/10/2026 eran 14, y varias habían encontrado cientos de autos sin abrir un email.
 
-- **Oferta (`bonus_trial_offer`).** 7 días después de que terminó la prueba de 72 h, si nunca pagó (un pago devuelto cuenta como compra), no tiene un checkout en curso, nunca tuvo la prueba extra y su búsqueda encontró algo. Ese día **reemplaza al conteo del 2.5**: un conteo reservado mientras hay una oferta de menos de 5 días queda `skipped`. Los conteos de los días 14 y 21 siguen si no la aceptó.
+- **Oferta (`bonus_trial_offer`).** 7 días después de que terminó la prueba de 72 h, si nunca pagó (un pago devuelto cuenta como compra), no tiene un checkout en curso, nunca tuvo la prueba extra, su búsqueda encontró algo y **mostró interés** (desde el 23/11/2026, `showed_interest`, migración `20270112120000`). Mostró interés quien, en cualquier momento desde que tiene la cuenta, hizo al menos una de estas tres cosas:
+  1. **Miró un auto que le encontramos:** tocó un aviso, abrió una publicación o su link al portal, o guardó o descartó una.
+  2. **Tocó uno de nuestros mails de plan.**
+  3. **Usó la plataforma un día posterior al que empezó la prueba** (día de Argentina). No cuentan lo que el sistema escribe solo ni que se le muestre la página de resultados.
+
+  Sin interés no hay oferta. Si muestra interés más tarde, la oferta sale entonces, siempre que la prueba siga dentro de lo que se reserva (`bonus_trial.backfill_since`). El día de la oferta **reemplaza al conteo del 2.5**: un conteo reservado mientras hay una oferta de menos de 5 días queda `skipped`. Los conteos de los días 14 y 21 siguen si no la aceptó.
   - **Asunto.** «Te damos 7 días más para tu búsqueda de {modelo}».
   - **Línea.** «Desde que pausamos tu búsqueda aparecieron {N} autos nuevos. Reactivala gratis 7 días, sin tarjeta.» Sin nuevos: «En tu prueba encontramos {X} autos. …». Los autos los ve en la plataforma: el registro guarda hasta 3 en `payload.cars`, pero el mail no los muestra.
   - **Botón.** «Activar mis 7 días», a `/app/bonus` ([página](../web/app/app/bonus/page.tsx)). Abrirla no cambia nada: la prueba arranca con el botón de la página (`start_my_bonus_trial`). Reactivar sin que lo pidan mandaría alertas a quien no las quiere.

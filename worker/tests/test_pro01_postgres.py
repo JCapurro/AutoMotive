@@ -6,6 +6,7 @@ the strict filter dropped and took back. Run with
 """
 from __future__ import annotations
 
+import re
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -242,4 +243,5 @@ class ContactMessageDbTests(Pro01Case):
         await self.notifier.deliver()
         [mail] = [m for m in self.emails if m["subject"].startswith("🔥")]
         self.assertIn("Mensaje listo para mandar", mail["text"])
-        self.assertNotIn("5555", mail["text"])
+        # The phone of the bad template never reaches the email; links carry tokens and ids, so only the sentences.
+        self.assertNotRegex(re.sub(r"https?://\S+", "", mail["text"]), r"\b5555\b")
