@@ -46,6 +46,18 @@ describe("Usuarios and Búsquedas dashboards", () => {
     expect(html).toContain("sin resultados");
   });
 
+  it("shows a notice, not a 500, when the searches read times out", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    mocks.searches.mockRejectedValue(new Error("admin read failed: canceling statement due to statement timeout"));
+    const html = renderToStaticMarkup(await SearchesPage(props() as never));
+    expect(html).toContain("No se pudieron leer las búsquedas");
+  });
+
+  it("still lets the admin check's errors through on the searches page", async () => {
+    mocks.searches.mockRejectedValue(new Error("admin_required"));
+    await expect(SearchesPage(props() as never)).rejects.toThrow("admin_required");
+  });
+
   it("refuses a user page with a malformed id before reading anything", async () => {
     await expect(AdminUserPage({ params: Promise.resolve({ id: "1 or 1=1" }) } as never)).rejects.toThrow("not-found");
     expect(mocks.admin).not.toHaveBeenCalled();

@@ -2,6 +2,7 @@ import "server-only";
 
 import { cache } from "react";
 
+import { currentUser } from "@/lib/auth";
 import { webConfig } from "@/lib/config";
 import { type DealerCard, parseDealerCard } from "@/lib/dealer-contact";
 import { parseMarket } from "@/lib/dealer-insights";
@@ -54,6 +55,8 @@ function asDealer(raw: Json | null): MyDealer | null {
 
 /** The signed-in user's agency, or null (no agency, or the read failed). Once per request. */
 export const myDealer = cache(async (): Promise<MyDealer | null> => {
+  // my_dealer() is revoked from anon: without a session the call would only log a 42501.
+  if (!(await currentUser())) return null;
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("my_dealer");
   if (error) {

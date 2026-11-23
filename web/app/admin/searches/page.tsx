@@ -26,8 +26,24 @@ export default async function SearchesPage({ searchParams }: PageProps<"/admin/s
   const current = { periodo: one(params.periodo), vista: one(params.vista) };
   const days = periodDays(current.periodo);
   const periodKey = PERIODS.find((p) => p.days === days)!.key;
-  const { searches, notifications } = await loadSearchesInput();
-  const d = buildSearchesDashboard(searches, notifications, new Date(), days);
+  let input: Awaited<ReturnType<typeof loadSearchesInput>>;
+  try {
+    input = await loadSearchesInput();
+  } catch (e) {
+    // Only a failed read (timeout) becomes a notice; the admin check's redirect/404 must still propagate.
+    if (!(e instanceof Error) || !e.message.startsWith("admin read failed")) throw e;
+    console.error("admin searches:", e.message);
+    return (
+      <>
+        <PageHeader title="Búsquedas" description="No se pudieron leer las búsquedas." />
+        <p role="status" className="rounded-lg bg-muted p-4 text-sm">
+          La base tardó demasiado en responder. Recargá la página en un minuto; si sigue igual, avisá.
+        </p>
+      </>
+    );
+  }
+  const { searches, notifications } = input;
+  const d =buildSearchesDashboard(searches, notifications, new Date(), days);
   const { kpis } = d;
   const view = VIEWS.find((v) => v.key === current.vista)?.key ?? "todas";
   const listed = d.inPeriod
