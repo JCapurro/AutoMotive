@@ -173,8 +173,19 @@ async def ingest_detail(row: dict[str, Any], detail: ListingDetail, *, stage: st
         return result
 
     item = detail.listing
-    if getattr(REGISTRY.get(row["source"]), "STRICT_DETAIL_ID", False) and (
+    scraper = REGISTRY.get(row["source"])
+    if getattr(scraper, "STRICT_DETAIL_ID", False) and (
             item.source != row["source"] or str(item.listing_id) != str(row["external_id"])):
+        hours = getattr(scraper, "REUSED_URL_GONE_AFTER_HOURS", None)
+        if hours is not None and seen and item.source == row["source"]:
+            # The source gave the stored URL to another vehicle: the stored
+            # one has no page left, and the crawl stopped seeing it too.
+            async with db.connection() as cx:
+                unseen = await repo.unseen_for(cx, row["id"], hours)
+            if unseen:
+                return await ingest_detail(row, ListingDetail(
+                    detail.url, gone=True,
+                    gone_reason=f"la URL ahora es de otro auto ({item.listing_id})"), stage=stage)
         await log_error(stage, f"listing:{row['id']}",
                         f"Detail identity mismatch: expected {row['source']}:{row['external_id']}, "
                         f"received {item.source}:{item.listing_id}")
