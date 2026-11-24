@@ -321,8 +321,10 @@ class SearchState:
     @property
     def truncated(self) -> bool:
         """More results than the pages Mercado Libre serves."""
+        # A search with few results reports page_count 0 (no pagination block):
+        # its single page still shows them all.
         return (self.total is not None and self.page_count is not None
-                and self.total > self.page_count * PAGE_SIZE)
+                and self.total > max(self.page_count, 1) * PAGE_SIZE)
 
 
 def search_state(html: str) -> SearchState:
