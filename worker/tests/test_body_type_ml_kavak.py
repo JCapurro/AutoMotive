@@ -111,6 +111,8 @@ class MercadoLibreBodyTypeTests(unittest.TestCase):
 
         capped = ml.search_state(ml_page(total=29_263, page_count=42))
         self.assertTrue(capped.truncated)
+        # A few results come without a pagination block (page_count 0): one page shows them all.
+        self.assertFalse(ml.search_state(ml_page(total=3, page_count=0)).truncated)
         self.assertFalse(ml.search_state(ml_page(since="week")).applies("452759"))
         empty = ml.search_state(html("mercadolibre_search.html"))   # no embedded state
         self.assertEqual((empty.applied, empty.total, empty.page_count), (frozenset(), None, None))
