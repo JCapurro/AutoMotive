@@ -180,6 +180,20 @@ def config_number(key: str, raw: Any) -> int | float:
     return int(raw) if bound.integer else raw
 
 
+# Oportunidad creible (docs/OPORTUNIDAD_CREIBLE.md): app_config.opportunity_gate. Off by default; a missing or bad
+# key takes its default, one by one. Same bounds as the /admin/config validator (web/lib/admin-config.ts).
+DEFAULT_OPPORTUNITY_GATE = {"enabled": False, "min_pct": 15, "min_n": 10}
+_OPPORTUNITY_GATE_BOUNDS = {"min_pct": Bound(0, 100), "min_n": Bound(1, 1000, integer=True)}
+
+
+def opportunity_gate(raw: Any) -> dict[str, Any]:
+    """app_config.opportunity_gate as notifications.service.load_rules uses it: enabled (only a real true),
+    min_pct (the discount, %) and min_n (the comparables)."""
+    out = _merge(DEFAULT_OPPORTUNITY_GATE, raw, _OPPORTUNITY_GATE_BOUNDS)
+    out["enabled"] = isinstance(raw, Mapping) and raw.get("enabled") is True
+    return out
+
+
 @dataclass(frozen=True)
 class IntelligenceConfig:
     weights: dict[str, float] = field(default_factory=lambda: dict(DEFAULT_WEIGHTS))

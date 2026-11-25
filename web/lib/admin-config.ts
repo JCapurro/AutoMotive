@@ -125,6 +125,11 @@ export const SellIntentConfigInput = z.object({
 /** Aviso de zona: app_config.zone_notice, the notice's switch (lib/zone-notice.ts zoneNoticeConfig). */
 export const ZONE_NOTICE_CONFIG_MESSAGE = "zone_notice necesita enabled (true/false).";
 export const ZoneNoticeConfigInput = z.object({ enabled: z.boolean() }).passthrough();
+/** Oportunidad creible: app_config.opportunity_gate (docs/OPORTUNIDAD_CREIBLE.md), twin of worker intelligence/config.opportunity_gate. */
+export const OPPORTUNITY_GATE_CONFIG_MESSAGE = "opportunity_gate necesita enabled (true/false), min_pct (0 a 100) y min_n (entero de 1 a 1000).";
+export const OpportunityGateConfigInput = z
+  .object({ enabled: z.boolean(), min_pct: z.number().min(0).max(100), min_n: z.number().int().min(1).max(1000) })
+  .passthrough();
 /** Portada: app_config.landing_hero, the new hero's switch and the share of visitors who see it (lib/landing-hero.ts). */
 export const LANDING_HERO_CONFIG_MESSAGE = "landing_hero necesita enabled (true/false), share (entero de 0 a 100) y events_per_minute (entero de 0 a 10000).";
 export const LandingHeroConfigInput = z.object({ enabled: z.boolean(), share: z.number().int().min(0).max(100), events_per_minute: z.number().int().min(0).max(10000) }).passthrough();
@@ -495,6 +500,7 @@ export function validateConfigChange(key: string, value: unknown, current: unkno
   if (key === "dealer_margin" && !DealerMarginInput.safeParse(value).success) return DEALER_MARGIN_MESSAGE;
   if (key === "sell_intent" && !SellIntentConfigInput.safeParse(value).success) return SELL_INTENT_CONFIG_MESSAGE;
   if (key === "zone_notice" && !ZoneNoticeConfigInput.safeParse(value).success) return ZONE_NOTICE_CONFIG_MESSAGE;
+  if (key === "opportunity_gate" && !OpportunityGateConfigInput.safeParse(value).success) return OPPORTUNITY_GATE_CONFIG_MESSAGE;
   if (key === "unmet_demand" && !UnmetDemandConfigInput.safeParse(value).success) return UNMET_DEMAND_CONFIG_MESSAGE;
   if (key === "trial_reserve" && !TrialReserveConfigInput.safeParse(value).success) return TRIAL_RESERVE_CONFIG_MESSAGE;
   if (key === "landing_hero" && !LandingHeroConfigInput.safeParse(value).success) return LANDING_HERO_CONFIG_MESSAGE;
@@ -613,6 +619,9 @@ export function configFieldLabel(key: string, path: string): string {
     return ({ ask: "Pregunta «¿Tenés que vender tu auto?» (bienvenida y ficha)", agencies_contact: "Casilla «agencias me contacten» y su línea en Privacidad (solo con OK de Juan)", since: "Inicio de la prueba (métricas)" } as Record<string, string>)[path] ?? path;
   }
   if (key === "zone_notice" && path === "enabled") return "Aviso de zona visible (resultados y modo asistido)";
+  if (key === "opportunity_gate") {
+    return ({ enabled: "Oportunidad solo con descuento creíble", min_pct: "Descuento mínimo para llamarla oportunidad (%)", min_n: "Comparables mínimos" } as Record<string, string>)[path] ?? path;
+  }
   if (key === "landing_hero") {
     return ({ enabled: "Prueba de la portada nueva", share: "Visitantes que ven la portada nueva (%)", events_per_minute: "Tope de eventos de la portada por minuto" } as Record<string, string>)[path] ?? path;
   }
