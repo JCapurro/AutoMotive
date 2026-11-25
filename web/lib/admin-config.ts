@@ -125,6 +125,9 @@ export const SellIntentConfigInput = z.object({
 /** Aviso de zona: app_config.zone_notice, the notice's switch (lib/zone-notice.ts zoneNoticeConfig). */
 export const ZONE_NOTICE_CONFIG_MESSAGE = "zone_notice necesita enabled (true/false).";
 export const ZoneNoticeConfigInput = z.object({ enabled: z.boolean() }).passthrough();
+/** Trim blando: app_config.trim_soft_cap, the switch of the cap at «match» for a car of another version (docs/TRIM_BLANDO.md). */
+export const TRIM_SOFT_CAP_CONFIG_MESSAGE = "trim_soft_cap necesita enabled (true/false).";
+export const TrimSoftCapConfigInput = z.object({ enabled: z.boolean() }).passthrough();
 /** Oportunidad creible: app_config.opportunity_gate (docs/OPORTUNIDAD_CREIBLE.md), twin of worker intelligence/config.opportunity_gate. */
 export const OPPORTUNITY_GATE_CONFIG_MESSAGE = "opportunity_gate necesita enabled (true/false), min_pct (0 a 100) y min_n (entero de 1 a 1000).";
 export const OpportunityGateConfigInput = z
@@ -500,6 +503,7 @@ export function validateConfigChange(key: string, value: unknown, current: unkno
   if (key === "dealer_margin" && !DealerMarginInput.safeParse(value).success) return DEALER_MARGIN_MESSAGE;
   if (key === "sell_intent" && !SellIntentConfigInput.safeParse(value).success) return SELL_INTENT_CONFIG_MESSAGE;
   if (key === "zone_notice" && !ZoneNoticeConfigInput.safeParse(value).success) return ZONE_NOTICE_CONFIG_MESSAGE;
+  if (key === "trim_soft_cap" && !TrimSoftCapConfigInput.safeParse(value).success) return TRIM_SOFT_CAP_CONFIG_MESSAGE;
   if (key === "opportunity_gate" && !OpportunityGateConfigInput.safeParse(value).success) return OPPORTUNITY_GATE_CONFIG_MESSAGE;
   if (key === "unmet_demand" && !UnmetDemandConfigInput.safeParse(value).success) return UNMET_DEMAND_CONFIG_MESSAGE;
   if (key === "trial_reserve" && !TrialReserveConfigInput.safeParse(value).success) return TRIAL_RESERVE_CONFIG_MESSAGE;
@@ -619,6 +623,7 @@ export function configFieldLabel(key: string, path: string): string {
     return ({ ask: "Pregunta «¿Tenés que vender tu auto?» (bienvenida y ficha)", agencies_contact: "Casilla «agencias me contacten» y su línea en Privacidad (solo con OK de Juan)", since: "Inicio de la prueba (métricas)" } as Record<string, string>)[path] ?? path;
   }
   if (key === "zone_notice" && path === "enabled") return "Aviso de zona visible (resultados y modo asistido)";
+  if (key === "trim_soft_cap" && path === "enabled") return "Otra versión no alerta (tope en «coincide»)";
   if (key === "opportunity_gate") {
     return ({ enabled: "Oportunidad solo con descuento creíble", min_pct: "Descuento mínimo para llamarla oportunidad (%)", min_n: "Comparables mínimos" } as Record<string, string>)[path] ?? path;
   }

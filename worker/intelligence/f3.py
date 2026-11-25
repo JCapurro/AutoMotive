@@ -340,6 +340,7 @@ class F3:
     agency_voice: str | None = None   # the phrase, when the listing says «particular» and its text an agency's
     seller_mismatch: bool = False
     seller_capped: bool = False
+    trim_capped: bool = False         # f2's trim blando cap (docs/TRIM_BLANDO.md) was applied: max level `match`
     would_defer: bool = False         # an FB/ML card of a search that asks for a seller, without one (§4.1)
     would_defer_any_source: bool = False   # the same on any source: logged to weigh the broader rule offline
     version: str = F3_VERSION
@@ -362,6 +363,7 @@ class F3:
                        "strict": self.seller_strict, "effective": self.seller_effective,
                        "for_preference": self.seller_for_preference, "agency_voice": self.agency_voice,
                        "mismatch": self.seller_mismatch, "capped": self.seller_capped},
+            "trim": {"capped": self.trim_capped},
             "would_defer": self.would_defer, "would_defer_any_source": self.would_defer_any_source,
             "alternatives": dict(alternatives or {}),
         }
@@ -387,7 +389,7 @@ def _num(x: Any) -> float | None:
 
 def assess_f3(listing: Mapping[str, Any], profile: Mapping[str, Any], result: MatchResult,
               ref: PriceRef | None, diff_pct: float | None, cfg: Any, *, fx_rate: float | None = None,
-              f3cfg: Mapping[str, Any] | None = None) -> F3:
+              f3cfg: Mapping[str, Any] | None = None, trim_cap: bool = False) -> F3:
     """f3 for one (listing, profile). `diff_pct` is f2's d (Score.extra["diff_pct"]); `cfg` the
     IntelligenceConfig (guards, min_n, and .f3 unless `f3cfg` is given). Raises on malformed input:
     shadow() is the guarded entry point."""
@@ -482,7 +484,10 @@ def assess_f3(listing: Mapping[str, Any], profile: Mapping[str, Any], result: Ma
     level0 = level_f3(deal, fit_level, lv, excluded=excluded, flags=flags, has_price=has_price,
                       suspicious=suspicious, year_known=year is not None, credible=credible, d_eff=d_eff)
     capped = bool(rules["seller_cap"] and mismatch and level0 in (HIGH, GOOD))
-    level = MATCH if capped else level0
+    # f2 decides: its trim blando cap (a car of another version, non-strict search) caps f3's level too,
+    # so the shadow compares what f2 really alerts. f3's own mode is untouched.
+    trim_capped = bool(trim_cap and level0 in (HIGH, GOOD))
+    level = MATCH if capped or trim_capped else level0
 
     # Score (§3.4).
     deal_prime = deal if deal is not None else NO_DEAL_WITH_PRICE if has_price else NO_DEAL_WITHOUT_PRICE
@@ -501,7 +506,7 @@ def assess_f3(listing: Mapping[str, Any], profile: Mapping[str, Any], result: Ma
               fit_level=fit_level, fit_score=fit_score, unknown_hard=unknown_hard, prefs=values,
               flags=tuple(flags), a_verificar=a_verificar, seller_wanted=wanted, seller_strict=strict,
               seller_effective=effective, seller_for_preference=seller2, agency_voice=phrase,
-              seller_mismatch=mismatch, seller_capped=capped, would_defer=would_defer,
+              seller_mismatch=mismatch, seller_capped=capped, trim_capped=trim_capped, would_defer=would_defer,
               would_defer_any_source=waits)
 
 
@@ -511,7 +516,7 @@ def _with(p: Mapping[str, Any], group: str, **changes: Any) -> dict[str, Any]:
 
 def alternatives(main: F3, listing: Mapping[str, Any], profile: Mapping[str, Any], result: MatchResult,
                  ref: PriceRef | None, diff_pct: float | None, cfg: Any, *, fx_rate: float | None,
-                 f3cfg: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
+                 f3cfg: Mapping[str, Any], trim_cap: bool = False) -> dict[str, dict[str, Any]]:
     """{name: {level, score}} with one switch of §14 flipped, only where it can matter: the seller cap
     (a confirmed mismatch), the agency voice (it changed the seller of a search that asks for one), the
     placeholder price (one was detected) and Kavak's offset (a Kavak listing)."""
@@ -532,7 +537,7 @@ def alternatives(main: F3, listing: Mapping[str, Any], profile: Mapping[str, Any
         variants.append(("kavak_offset_0", _with(f3cfg, "deal", kavak_offset=0)))
     out: dict[str, dict[str, Any]] = {}
     for name, alt in variants:
-        a = assess_f3(listing, profile, result, ref, diff_pct, cfg, fx_rate=fx_rate, f3cfg=alt)
+        a = assess_f3(listing, profile, result, ref, diff_pct, cfg, fx_rate=fx_rate, f3cfg=alt, trim_cap=trim_cap)
         out[name] = {"level": a.level, "score": a.score}
     return out
 
@@ -546,8 +551,9 @@ def shadow(listing: Mapping[str, Any], profile: Mapping[str, Any], result: Match
         if not isinstance(p, Mapping) or p.get("mode") not in ("shadow", "live"):
             return None
         d = score.extra.get("diff_pct")
-        main = assess_f3(listing, profile, result, ref, d, cfg, fx_rate=fx_rate, f3cfg=p)
-        alts = alternatives(main, listing, profile, result, ref, d, cfg, fx_rate=fx_rate, f3cfg=p)
+        trim_cap = bool(score.extra.get("trim_capped"))
+        main = assess_f3(listing, profile, result, ref, d, cfg, fx_rate=fx_rate, f3cfg=p, trim_cap=trim_cap)
+        alts = alternatives(main, listing, profile, result, ref, d, cfg, fx_rate=fx_rate, f3cfg=p, trim_cap=trim_cap)
         return main.to_json(alts)
     except Exception:
         warn_limited(log, "f3.shadow", "f3 shadow failed (listing %s); f2 is unaffected",

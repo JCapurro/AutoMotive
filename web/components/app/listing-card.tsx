@@ -5,6 +5,7 @@ import { BODY_TYPE, MARGIN_TEASER, SELLER_UNKNOWN, isBodyType } from "@/lib/copy
 import { ageLine, firstImage, km, money, vehicle } from "@/lib/format";
 import { colorLine } from "@/lib/listing-color";
 import { type ListOrigin, listingHref } from "@/lib/list-position";
+import { OTHER_VERSION } from "@/lib/other-version";
 import { cardTrackLine, type PriceTrack } from "@/lib/price-track";
 import type { MatchCard } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -31,6 +32,7 @@ export function ListingCard({
   colorWanted = false,
   dealerName,
   listOrigin,
+  otherVersion = false,
 }: {
   card: Pick<
     MatchCard,
@@ -72,6 +74,8 @@ export function ListingCard({
   colorWanted?: boolean;
   /** Valor justo §6.3: the search, order, tab and place, only from a search's results list (src, ord, flt, pos on the link). */
   listOrigin?: ListOrigin | null;
+  /** Trim blando: the car is another version than the one the search names (matches.score_breakdown.trim_cap): a short tag. */
+  otherVersion?: boolean;
 }) {
   const image = firstImage(card.images);
   const name = vehicle(card);
@@ -99,6 +103,11 @@ export function ListingCard({
         <Link href={listingHref(card.listing_id, listOrigin)} className="after:absolute after:inset-0 group-hover:underline">
           {name}
         </Link>
+        {otherVersion ? (
+          <span data-testid="card-other-version" className="relative -top-0.5 ml-2 rounded bg-muted px-1.5 py-0.5 text-[11px] font-semibold whitespace-nowrap [font-stretch:100%] text-muted-foreground">
+            {OTHER_VERSION}
+          </span>
+        ) : null}
       </h3>
 
       {/* Flex so the price, its USD equivalent and the badge wrap on a phone instead of overflowing. */}

@@ -4,7 +4,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { FAIR_VALUE_DEFAULTS, FAIR_VALUE_LABELS, FAIR_VALUE_MODES, FairValueInput, fairValueProblem } from "@/lib/admin-config";
-import { OPPORTUNITY_GATE_CONFIG_MESSAGE, AdminLifecycleInput, AdminOfferInput, AdminPlanLimitsInput, configDifferences, configFieldLabel, CONFIRM_SOURCES_MESSAGE, DEALER_MARGIN_MESSAGE, LEVEL_THRESHOLDS_ORDER_MESSAGE, LIFECYCLE_KINDS, MAX_OFFER_ARS, RESCORE_EVERY_HOURS_MESSAGE, RESCORE_HOUR_MESSAGE, sameConfig, SCORE_GUARDS_ORDER_MESSAGE, SCORE_MODEL_F3_BOUNDS, SCORE_MODEL_F3_DEFAULTS, SCORE_MODEL_F3_LABELS, SCORE_MODEL_F3_MODES, SCORE_WEIGHTS_ZERO_MESSAGE, ScoreModelF3Input, scoreModelF3Problem, SourceUpdateInput, TRIAL_RESERVE_CONFIG_MESSAGE, validateConfigChange, visibleConfigRows, ZONE_NOTICE_CONFIG_MESSAGE, LANDING_HERO_CONFIG_MESSAGE, UNMET_DEMAND_CONFIG_MESSAGE, DEALER_PROGRAM_CONFIG_MESSAGE } from "@/lib/admin-config";
+import { OPPORTUNITY_GATE_CONFIG_MESSAGE, TRIM_SOFT_CAP_CONFIG_MESSAGE, AdminLifecycleInput, AdminOfferInput, AdminPlanLimitsInput, configDifferences, configFieldLabel, CONFIRM_SOURCES_MESSAGE, DEALER_MARGIN_MESSAGE, LEVEL_THRESHOLDS_ORDER_MESSAGE, LIFECYCLE_KINDS, MAX_OFFER_ARS, RESCORE_EVERY_HOURS_MESSAGE, RESCORE_HOUR_MESSAGE, sameConfig, SCORE_GUARDS_ORDER_MESSAGE, SCORE_MODEL_F3_BOUNDS, SCORE_MODEL_F3_DEFAULTS, SCORE_MODEL_F3_LABELS, SCORE_MODEL_F3_MODES, SCORE_WEIGHTS_ZERO_MESSAGE, ScoreModelF3Input, scoreModelF3Problem, SourceUpdateInput, TRIAL_RESERVE_CONFIG_MESSAGE, validateConfigChange, visibleConfigRows, ZONE_NOTICE_CONFIG_MESSAGE, LANDING_HERO_CONFIG_MESSAGE, UNMET_DEMAND_CONFIG_MESSAGE, DEALER_PROGRAM_CONFIG_MESSAGE } from "@/lib/admin-config";
 import { DEFAULT_PRO_OFFER } from "@/lib/pro";
 
 describe("guided config validators", () => {
@@ -521,6 +521,16 @@ describe("fair_value («valor justo», shadow)", () => {
       expect(FAIR_VALUE_LABELS[path], path).toBeTruthy();
       expect(configFieldLabel("fair_value", path)).toBe(FAIR_VALUE_LABELS[path]);
     }
+  });
+});
+
+describe("trim_soft_cap (trim blando)", () => {
+  it("is a true/false switch and is named", () => {
+    expect(validateConfigChange("trim_soft_cap", { enabled: true }, { enabled: false })).toBeNull();
+    for (const value of [{}, { enabled: "true" }, { enabled: null }]) {
+      expect(validateConfigChange("trim_soft_cap", value, { enabled: false })).toBe(TRIM_SOFT_CAP_CONFIG_MESSAGE);
+    }
+    expect(configFieldLabel("trim_soft_cap", "enabled")).toBe("Otra versión no alerta (tope en «coincide»)");
   });
 });
 

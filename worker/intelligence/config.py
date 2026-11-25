@@ -149,6 +149,11 @@ def _thresholds(raw: Any) -> dict[str, Any]:
     return out if out["high"] > out["good"] > out["match"] else dict(DEFAULT_THRESHOLDS)
 
 
+def switch_enabled(raw: Any) -> bool:
+    """An app_config {"enabled": true/false} switch: off unless it says a real `true`."""
+    return isinstance(raw, Mapping) and raw.get("enabled") is True
+
+
 def _curves(raw: Any) -> dict[str, dict[str, Any]]:
     raw = raw if isinstance(raw, Mapping) else {}
     out = {k: _merge(v, raw.get(k), _CURVES_BOUNDS[k]) for k, v in DEFAULT_CURVES.items()}
@@ -210,6 +215,9 @@ class IntelligenceConfig:
     # «Valor justo» in shadow (intelligence/fair_value.py): app_config.fair_value as
     # fair_value_config() normalizes it. Mode 'off' by default.
     fair_value: dict[str, Any] = field(default_factory=lambda: fair_value_config(None))
+    # Trim blando (docs/TRIM_BLANDO.md): app_config.trim_soft_cap.enabled. On, a car of another version than the
+    # one a non-strict search names is capped at level `match` (no alert). Off by default.
+    trim_soft_cap: bool = False
     # Ruido de avisos (docs/FB_DUPLICADOS_PLACEHOLDER_TERMINADOS.md): app_config.listing_noise as
     # listing_noise() normalizes it. Every switch off by default.
     noise: dict[str, bool] = field(default_factory=lambda: listing_noise(None))
@@ -245,6 +253,7 @@ class IntelligenceConfig:
             risk=risk(values.get("risk")),
             f3=f3,
             fair_value=fair_value_config(values.get("fair_value")),
+            trim_soft_cap=switch_enabled(values.get("trim_soft_cap")),
             noise=listing_noise(values.get("listing_noise")),
         )
 
@@ -252,7 +261,7 @@ class IntelligenceConfig:
     async def load(cls) -> "IntelligenceConfig":
         import db
         keys = ("score_weights", "level_thresholds", "comparables", "score_curves", "red_flags", "risk",
-                "score_model_f3", "fair_value", "listing_noise")
+                "score_model_f3", "fair_value", "listing_noise", "trim_soft_cap")
         return cls.from_app_config({k: await db.get_config(k) for k in keys})
 
 
