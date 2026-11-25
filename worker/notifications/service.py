@@ -474,7 +474,15 @@ class Notifier:
         return ids
 
     async def deliver(self) -> int:
-        return await dispatch.deliver_pending(self.channels)
+        return await dispatch.deliver_pending(self.channels, on_presend=self._after_presend)
+
+    async def _after_presend(self, result: Any) -> None:
+        """What the pre-send check read (dispatch.presend_check), as any
+        detail pass: re-score what changed, then its price_drop and
+        listing_gone go to the engine (sent on the next drain)."""
+        from pipeline.enrich import rescore_changed
+        await rescore_changed(result)
+        await self.on_listing_events(result.events)
 
 
 def _opportunity(c: MatchCandidate) -> bool:

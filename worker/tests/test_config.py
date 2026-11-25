@@ -20,6 +20,7 @@ class ConfigTests(unittest.TestCase):
             self.assertEqual(config.DETAIL_TIMEOUT_SECONDS, 180)
             self.assertEqual(config.ENRICH_TICK_SECONDS, 300)
             self.assertEqual(config.WATCHLIST_TICK_SECONDS, 3600)
+            self.assertEqual(config.MATCHED_TICK_SECONDS, 900)
             self.assertFalse(hasattr(config, "ALERT_RESCRAPE_INTERVAL_SECONDS"))
             self.assertEqual(config.LLM_PROVIDER, "openai")
             self.assertEqual(config.OPENAI_MODEL, "gpt-6-luna")

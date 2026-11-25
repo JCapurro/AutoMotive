@@ -5,7 +5,7 @@ only reads, locks and writes rows. Callers own the transaction.
 """
 from __future__ import annotations
 
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
 
 from psycopg import AsyncConnection
 from psycopg.types.json import Jsonb
@@ -30,6 +30,26 @@ _NUMERIC = ("price", "price_usd", "price_published")
 # F-02: written next to seller_name, from the value merge() resolved (an empty
 # incoming name never erases it). Not in COLUMNS: the pipeline never sets it.
 _KEY_COLUMN = "seller_key"
+
+
+# A detail check of a car the searches stopped showing this long ago counts
+# toward its back-off (matched_recheck_queue); a fresher one is an enrichment
+# of a car just crawled.
+_UNSEEN_FOR_BACKOFF = "6 hours"
+# Whether listings.alive_checked_at exists (migration 20270116120000), asked
+# once per process: a worker deployed before the migration keeps today's
+# behavior (no back-off, the age of last_seen_at).
+_has_alive: bool | None = None
+
+
+async def alive_columns(cx: AsyncConnection) -> bool:
+    global _has_alive
+    if _has_alive is None:
+        row = await (await cx.execute(
+            "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' "
+            "  AND table_name = 'listings' AND column_name = 'alive_unseen_checks') AS ok")).fetchone()
+        _has_alive = bool(row["ok"])
+    return _has_alive
 
 
 def _param(column: str, value: Any) -> Any:
@@ -87,6 +107,15 @@ async def update_listing(cx: AsyncConnection, listing_id: int, values: dict[str,
         params.append(seller_key(values["seller_name"]))
     if seen:
         sets += ["last_seen_at = now()", "status = 'active'"]
+        if await alive_columns(cx):
+            # Proven alive now (docs/PLAN_DELISTADOS.md, D). A detail page read
+            # while the searches no longer show the car counts one more check
+            # for matched_recheck_queue's back-off (SET reads the old
+            # last_seen_at); a search seeing it starts over.
+            sets.append("alive_checked_at = now()")
+            sets.append(f"alive_unseen_checks = CASE WHEN last_seen_at < now() - interval '{_UNSEEN_FOR_BACKOFF}' "
+                        "THEN least(alive_unseen_checks + 1, 100) ELSE alive_unseen_checks END" if detail
+                        else "alive_unseen_checks = 0")
     if detail and seen:
         sets += ["enriched_at = coalesce(enriched_at, now())", "detail_checked_at = now()"]
     await cx.execute(f"UPDATE listings SET {', '.join(sets)} WHERE id = %s", [*params, listing_id])
@@ -557,25 +586,83 @@ async def watchlist_queue(*, min_hours_between_checks: int = 20) -> list[dict]:
 
 
 async def matched_recheck_queue(*, unseen_hours: int, recheck_hours: int, max_age_days: int,
-                                per_source: int) -> list[dict]:
-    """Active listings with a match (above 'low') that the crawl stopped
-    seeing: past the pages a search reads, only their detail page tells a
-    price drop or the end of the ad (sección 5.6). Per source, the ones
-    checked longest ago first; enrichment_queue takes the never enriched."""
+                                per_source: int | Mapping[str, int], backoff_max_hours: int = 72,
+                                prefer_unseen: tuple[int, int] = (24, 120)) -> list[dict]:
+    """Active listings with a match (above 'low') in a live, enabled search
+    that the crawl stopped seeing: past the pages a search reads, only their
+    detail page tells a price drop or the end of the ad (sección 5.6;
+    docs/PLAN_DELISTADOS.md, B). enrichment_queue takes the never enriched.
+
+    `per_source`: how many per source, one number for all or a map by
+    source with a 'default' ({"mercadolibre": 150, "facebook": 5,
+    "default": 40}). Per source, what the users have most in view first:
+
+      * 8 a match of level high (the opportunities);
+      * 4 a search of a user who pays (Pase or Pro; admins count);
+      * 2 the car waits in a digest not sent yet;
+      * 1 unseen between `prefer_unseen` hours (24 to 120): likely over by
+        then, and still on the user's panel;
+
+    then the one checked longest ago. A car each check finds alive while the
+    searches still don't show it waits longer each time (alive_unseen_checks):
+    recheck_hours, twice that, four times, up to `backoff_max_hours`."""
+    limits = per_source if isinstance(per_source, Mapping) else {"default": int(per_source)}
     async with connection() as cx:
+        alive = await alive_columns(cx)
+        wait = ("least(%(recheck)s * power(2, greatest(l.alive_unseen_checks, 1) - 1), "
+                "      greatest(%(backoff_max)s, %(recheck)s))::int" if alive else "%(recheck)s")
         return await (await cx.execute(
-            LIVE_SEARCHES + "SELECT * FROM ("
+            LIVE_SEARCHES + ", cand AS ("
             "  SELECT l.id, l.source, l.external_id, l.url, l.make, l.model, l.published_at, "
-            "         l.first_seen_at, "
-            "         row_number() OVER (PARTITION BY l.source "
-            "           ORDER BY l.detail_checked_at NULLS FIRST, l.id) AS n "
+            "         l.first_seen_at, l.detail_checked_at, l.last_seen_at, "
+            "         bool_or(m.level = 'high') AS high, "
+            "         bool_or(p.role = 'admin' OR (p.plan <> 'free' "
+            "                 AND (p.plan_expires_at IS NULL OR p.plan_expires_at > now()))) AS paid "
             "    FROM listings l "
+            "    JOIN matches m ON m.listing_id = l.id AND m.level <> 'low' "
+            "    JOIN live ON live.id = m.search_profile_id "
+            "    JOIN search_profiles sp ON sp.id = m.search_profile_id AND sp.enabled "
+            "    JOIN profiles p ON p.id = sp.user_id "
             "   WHERE l.status = 'active' AND l.enriched_at IS NOT NULL "
-            "     AND l.last_seen_at < now() - make_interval(hours => %s) "
+            "     AND l.last_seen_at < now() - make_interval(hours => %(unseen)s) "
             "     AND (l.detail_checked_at IS NULL "
-            "          OR l.detail_checked_at < now() - make_interval(hours => %s)) "
-            "     AND l.first_seen_at >= now() - make_interval(days => %s) "
-            "     AND EXISTS (SELECT 1 FROM matches m JOIN live ON live.id = m.search_profile_id "
-            "                  WHERE m.listing_id = l.id AND m.level <> 'low')) q "
-            "WHERE n <= %s ORDER BY source, n",
-            (unseen_hours, recheck_hours, max_age_days, per_source))).fetchall()
+            f"         OR l.detail_checked_at < now() - make_interval(hours => {wait})) "
+            "     AND l.first_seen_at >= now() - make_interval(days => %(max_age)s) "
+            "   GROUP BY l.id) "
+            "SELECT * FROM ("
+            "  SELECT c.*, pr.priority, row_number() OVER (PARTITION BY c.source "
+            "           ORDER BY pr.priority DESC, c.detail_checked_at NULLS FIRST, c.id) AS n "
+            "    FROM cand c CROSS JOIN LATERAL (SELECT "
+            "           8 * c.high::int + 4 * c.paid::int "
+            "         + 2 * (EXISTS (SELECT 1 FROM notifications d WHERE d.listing_id = c.id "
+            "                          AND d.status = 'digest' AND d.digested_in IS NULL))::int "
+            "         + (c.last_seen_at BETWEEN now() - make_interval(hours => %(band_hi)s) "
+            "                               AND now() - make_interval(hours => %(band_lo)s))::int AS priority) pr) q "
+            "WHERE n <= coalesce((%(limits)s::jsonb ->> source)::int, (%(limits)s::jsonb ->> 'default')::int, 0) "
+            "ORDER BY source, n",
+            {"unseen": unseen_hours, "recheck": recheck_hours, "backoff_max": backoff_max_hours,
+             "max_age": max_age_days, "band_lo": prefer_unseen[0], "band_hi": prefer_unseen[1],
+             "limits": Jsonb({str(k): int(v) for k, v in limits.items()})})).fetchall()
+
+
+async def presend_stale(ids: Iterable[int], *, max_age_hours: float,
+                        sources: list[str] | None = None) -> list[dict]:
+    """Of these listings, the active ones without a sign of life in
+    `max_age_hours` (alive_checked_at, or last_seen_at before migration
+    20270116120000) and no detail check in that time either (one that failed
+    a moment ago isn't tried again on every dispatch): the pre-send check
+    (notifications/dispatch.py) reads their page before an alert goes out."""
+    ids = list(dict.fromkeys(i for i in ids if i is not None))
+    if not ids:
+        return []
+    async with connection() as cx:
+        alive = "coalesce(l.alive_checked_at, l.last_seen_at)" if await alive_columns(cx) else "l.last_seen_at"
+        return await (await cx.execute(
+            "SELECT l.id, l.source, l.external_id, l.url, l.make, l.model FROM listings l "
+            " WHERE l.id = ANY(%(ids)s) AND l.status = 'active' "
+            f"  AND {alive} < now() - make_interval(secs => %(age)s * 3600) "
+            "   AND (l.detail_checked_at IS NULL "
+            "        OR l.detail_checked_at < now() - make_interval(secs => %(age)s * 3600)) "
+            "   AND (%(sources)s::text[] IS NULL OR l.source = ANY(%(sources)s)) "
+            " ORDER BY l.source, l.id",
+            {"ids": ids, "age": float(max_age_hours), "sources": list(sources) if sources else None})).fetchall()

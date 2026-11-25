@@ -2192,8 +2192,8 @@ class MatchedRecheckTests(IngestCase):
         FakeSource.details[url] = ListingDetail(url, listing=card("1", precio=9_000.0,
                                                                    published_at=long_ago))
 
-        result = await watchlist.refresh_watchlist()
-        again = await watchlist.refresh_watchlist()          # checked: waits recheck_hours
+        result = await watchlist.refresh_matched()
+        again = await watchlist.refresh_matched()          # checked: waits recheck_hours
 
         # Not saved nor followed: no "lleva X días".
         self.assertEqual([e.kind for e in result.events], ["listing_updated", "price_drop"])
@@ -2205,7 +2205,7 @@ class MatchedRecheckTests(IngestCase):
             await cx.execute("UPDATE listings SET last_seen_at = now() - interval '1 day', "
                              "       detail_checked_at = now() - interval '1 day'")
         FakeSource.details[url] = ListingDetail(url, gone=True, gone_reason="404")
-        gone = await watchlist.refresh_watchlist()
+        gone = await watchlist.refresh_matched()
         self.assertEqual([e.kind for e in gone.events], ["listing_gone"])
         self.assertEqual((await self.listing("1"))["status"], "gone")
 

@@ -74,6 +74,9 @@ FB_NO_SESSION_FALLBACK = os.getenv("FB_NO_SESSION_FALLBACK", "1").strip().lower(
 # (sección 5.6) wake up this often; each listing is checked at most daily.
 ENRICH_TICK_SECONDS = int(os.getenv("ENRICH_TICK_SECONDS", "300"))
 WATCHLIST_TICK_SECONDS = int(os.getenv("WATCHLIST_TICK_SECONDS", "3600"))
+# The matched listings the crawl stopped seeing (pipeline/watchlist.refresh_matched,
+# docs/PLAN_DELISTADOS.md): their own tick, apart from the saved ones'.
+MATCHED_TICK_SECONDS = int(os.getenv("MATCHED_TICK_SECONDS", "900"))
 # Recommended listings whose `published_at` is older than this are dropped.
 # When the source doesn't expose a date, only the seen set (matches) + bootstrap apply.
 RECOMMENDED_MAX_AGE_DAYS = int(os.getenv("RECOMMENDED_MAX_AGE_DAYS", "15"))
