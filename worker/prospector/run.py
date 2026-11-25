@@ -230,7 +230,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--max-lookups", type=int, default=MAX_WEB_LOOKUPS)
     ap.add_argument("--solo-boton-ml", action="store_true",
                     help="prueba: solo vendedores de ML sin número en sus avisos (los del botón de WhatsApp)")
+    ap.add_argument("--min-avisos", type=int, default=sellers.MIN_LISTINGS,
+                    help=f"avisos activos mínimos del vendedor ({sellers.MIN_LISTINGS})")
+    ap.add_argument("--max-avisos", type=int, default=sellers.MAX_LISTINGS,
+                    help=f"avisos activos máximos del vendedor ({sellers.MAX_LISTINGS})")
     args = ap.parse_args(argv)
+    if not 1 <= args.min_avisos <= args.max_avisos:
+        ap.error("--min-avisos tiene que ser al menos 1 y no más que --max-avisos")
+    sellers.MIN_LISTINGS, sellers.MAX_LISTINGS = args.min_avisos, args.max_avisos
 
     db.load_env(args.env_file)
     STATE_DIR.mkdir(parents=True, exist_ok=True)
