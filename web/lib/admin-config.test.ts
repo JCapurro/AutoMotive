@@ -4,7 +4,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { FAIR_VALUE_DEFAULTS, FAIR_VALUE_LABELS, FAIR_VALUE_MODES, FairValueInput, fairValueProblem } from "@/lib/admin-config";
-import { TRIM_SOFT_CAP_CONFIG_MESSAGE, AdminLifecycleInput, AdminOfferInput, AdminPlanLimitsInput, configDifferences, configFieldLabel, CONFIRM_SOURCES_MESSAGE, DEALER_MARGIN_MESSAGE, LEVEL_THRESHOLDS_ORDER_MESSAGE, LIFECYCLE_KINDS, MAX_OFFER_ARS, RESCORE_EVERY_HOURS_MESSAGE, RESCORE_HOUR_MESSAGE, sameConfig, SCORE_GUARDS_ORDER_MESSAGE, SCORE_MODEL_F3_BOUNDS, SCORE_MODEL_F3_DEFAULTS, SCORE_MODEL_F3_LABELS, SCORE_MODEL_F3_MODES, SCORE_WEIGHTS_ZERO_MESSAGE, ScoreModelF3Input, scoreModelF3Problem, SourceUpdateInput, TRIAL_RESERVE_CONFIG_MESSAGE, validateConfigChange, visibleConfigRows, ZONE_NOTICE_CONFIG_MESSAGE, LANDING_HERO_CONFIG_MESSAGE, UNMET_DEMAND_CONFIG_MESSAGE, DEALER_PROGRAM_CONFIG_MESSAGE } from "@/lib/admin-config";
+import { OPPORTUNITY_GATE_CONFIG_MESSAGE, TRIM_SOFT_CAP_CONFIG_MESSAGE, AdminLifecycleInput, AdminOfferInput, AdminPlanLimitsInput, configDifferences, configFieldLabel, CONFIRM_SOURCES_MESSAGE, DEALER_MARGIN_MESSAGE, LEVEL_THRESHOLDS_ORDER_MESSAGE, LIFECYCLE_KINDS, MAX_OFFER_ARS, RESCORE_EVERY_HOURS_MESSAGE, RESCORE_HOUR_MESSAGE, sameConfig, SCORE_GUARDS_ORDER_MESSAGE, SCORE_MODEL_F3_BOUNDS, SCORE_MODEL_F3_DEFAULTS, SCORE_MODEL_F3_LABELS, SCORE_MODEL_F3_MODES, SCORE_WEIGHTS_ZERO_MESSAGE, ScoreModelF3Input, scoreModelF3Problem, SourceUpdateInput, TRIAL_RESERVE_CONFIG_MESSAGE, validateConfigChange, visibleConfigRows, ZONE_NOTICE_CONFIG_MESSAGE, LANDING_HERO_CONFIG_MESSAGE, UNMET_DEMAND_CONFIG_MESSAGE, DEALER_PROGRAM_CONFIG_MESSAGE } from "@/lib/admin-config";
 import { DEFAULT_PRO_OFFER } from "@/lib/pro";
 
 describe("guided config validators", () => {
@@ -531,5 +531,19 @@ describe("trim_soft_cap (trim blando)", () => {
       expect(validateConfigChange("trim_soft_cap", value, { enabled: false })).toBe(TRIM_SOFT_CAP_CONFIG_MESSAGE);
     }
     expect(configFieldLabel("trim_soft_cap", "enabled")).toBe("Otra versión no alerta (tope en «coincide»)");
+  });
+});
+
+describe("opportunity_gate (oportunidad creíble)", () => {
+  const ok = { enabled: true, min_pct: 15, min_n: 10 };
+  it("takes the seeded row and rejects bad values", () => {
+    expect(validateConfigChange("opportunity_gate", ok, { enabled: false, min_pct: 15, min_n: 10 })).toBeNull();
+    for (const value of [{}, { ...ok, enabled: "true" }, { ...ok, min_pct: 101 }, { ...ok, min_pct: -1 }, { ...ok, min_n: 0 }, { ...ok, min_n: 2.5 }, { ...ok, min_pct: "15" }]) {
+      expect(validateConfigChange("opportunity_gate", value, ok)).toBe(OPPORTUNITY_GATE_CONFIG_MESSAGE);
+    }
+  });
+  it("names its fields", () => {
+    expect(configFieldLabel("opportunity_gate", "enabled")).toBe("Oportunidad solo con descuento creíble");
+    expect(configFieldLabel("opportunity_gate", "min_n")).toBe("Comparables mínimos");
   });
 });

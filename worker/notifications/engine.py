@@ -4,14 +4,24 @@
 
 | Event                             | Condition                                         | kind          |
 |-----------------------------------|---------------------------------------------------|---------------|
-| new match (not backfill)          | level = high and high ≥ notify_min_level          | opportunity   |
-| new match (not backfill)          | level ≥ notify_min_level                          | new_match     |
+| new match (not backfill)          | level = high and high ≥ notify_min_level, and     | opportunity   |
+|                                   | (gate off, or credible discount: diff ≥ min_pct   |               |
+|                                   | and n ≥ min_n comparables; a Pro threshold hit)   |               |
+| new match (not backfill)          | level ≥ notify_min_level (also a high that fails  | new_match     |
+|                                   | the gate: it is alerted, only the kind changes)   |               |
 | new match                         | level < notify_min_level                          | — (web, digest)|
 | new match with probable_repost_of | by level                                          | new_match, "re-publicado" |
 | price_drop                        | saved, or a match of level ≥ match; drop ≥ min %  | price_drop    |
 | listing_gone                      | saved or followed                                 | listing_gone (digest) |
 
 Rules:
+  * opportunity gate (app_config.opportunity_gate, off by default; docs/OPORTUNIDAD_CREIBLE.md): with it on,
+    `opportunity` asks for a credible discount, the diff_pct f2 already computes (payload.match.diff_pct, the
+    one f3's deal.diff_pct carries) of at least min_pct (15) over at least min_n (10) comparables
+    (payload.match.price_ref.n). A high that doesn't reach it is still alerted, as `new_match` with the usual
+    text: no alert is lost, only its kind changes. The gate does not touch who is alerted, when or how many
+    (same plan, delivery, cap and dedupe_key), nor the Pro thresholds below: an event that reaches one keeps its
+    kind (the user's own definition of opportunity).
   * frequency: `immediate` → status 'queued' (sent right away); `daily` →
     'digest'. price_drop of a saved listing is always immediate.
   * daily cap over immediate alerts: the user's plan sets it
@@ -116,6 +126,10 @@ class Event:
 class Rules:
     alerts_max_per_user_day: int = 10
     price_drop_min_pct: float = 3.0
+    # Opportunity gate (app_config.opportunity_gate): off by default.
+    opportunity_gate: bool = False
+    opportunity_min_pct: float = 15.0
+    opportunity_min_n: int = 10
 
 
 @dataclass(frozen=True)
@@ -159,6 +173,22 @@ def below_comparables(event: Event) -> float | None:
     return float(diff) if isinstance(diff, (int, float)) and not isinstance(diff, bool) else None
 
 
+def comparables_n(event: Event) -> int | None:
+    """How many comparables the price reference had (payload.match.price_ref.n), or None."""
+    n = ((event.payload.get("match") or {}).get("price_ref") or {}).get("n")
+    return int(n) if isinstance(n, (int, float)) and not isinstance(n, bool) else None
+
+
+def credible_opportunity(event: Event, rules: Rules) -> bool:
+    """Whether a high may be called an opportunity: the gate is off, or its discount is real (diff_pct at
+    least min_pct) over enough comparables (n at least min_n). Without either number it is not."""
+    if not rules.opportunity_gate:
+        return True
+    diff, n = below_comparables(event), comparables_n(event)
+    return (diff is not None and diff >= rules.opportunity_min_pct
+            and n is not None and n >= rules.opportunity_min_n)
+
+
 def margin_low(event: Event) -> float | None:
     """PRO-02: the estimated margin's low end in USD, unrounded
     (payload.margin.usd_low, margin.threshold_low), or None. Never usd_min:
@@ -193,12 +223,14 @@ def classify(event: Event, rules: Rules) -> _Plan | None:
     if event.kind == MATCH:
         if event.backfill or event.level is None:
             return None
-        kind = "opportunity" if event.level == "high" and not event.repost else "new_match"
+        high = event.level == "high" and not event.repost
         key = f"match:{event.listing_id}"
         if _has_threshold(a) and _reaches(event):
-            return _Plan(kind, key, by_frequency, False, threshold=True)
+            # The user's own threshold: the kind is the one it always was.
+            return _Plan("opportunity" if high else "new_match", key, by_frequency, False, threshold=True)
         if not at_least(event.level, a.min_level):
             return None
+        kind = "opportunity" if high and credible_opportunity(event, rules) else "new_match"
         return _Plan(kind, key, DIGEST if _has_threshold(a) else by_frequency, True)
 
     if event.kind == PRICE_DROP:
