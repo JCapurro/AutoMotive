@@ -19,6 +19,7 @@ import {
   type SearchValues,
   isModelLess,
   matchingChanged,
+  previousFiltersProps,
   modelBodyTypes,
   sellerForPlan,
   sortKeys,
@@ -275,7 +276,7 @@ async function save(id: number | null, raw: SearchInput, origin?: SaveOrigin): P
     .eq("id", id);
   if (error && isDuplicate(error)) return { error: DUPLICATE_ACTIVE };
   if (error) return modelLessError(error.message) ?? { error: "No pudimos guardar los cambios. Probá de nuevo." };
-  await track(supabase, user.id, "search_profile_updated", { profile_id: id, filters_changed: rematch });
+  await track(supabase, user.id, "search_profile_updated", { profile_id: id, filters_changed: rematch, ...previousFiltersProps(before, columns) });
   const sellerTypes = storedSellerTypes(columns.filters);
   if (JSON.stringify(sellerTypes) !== JSON.stringify(storedSeller)) {
     await track(supabase, user.id, "seller_filter_set", { profile_id: id, seller_types: sellerTypes, mode: "edit" });

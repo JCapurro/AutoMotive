@@ -30,6 +30,8 @@ export async function saveReview(input: unknown): Promise<AuditActionResult> {
     p_reasons: verdict === "good" ? [] : reasons,
     p_note: note?.trim() ? note.trim() : null,
     p_actor_id: actor.id,
+    // This screen is a signed-in admin session: it is the one caller that declares a person.
+    p_reviewer_kind: "person",
   });
   if (error) return { error: "No pudimos guardar el veredicto. Recargá la página y probá de nuevo." };
   refresh();
