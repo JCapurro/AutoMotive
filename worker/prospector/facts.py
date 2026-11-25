@@ -54,7 +54,7 @@ PRODUCT = {
     "que_hace": ("Ese Auto lee los avisos nuevos de Mercado Libre, Marketplace, deRuedas, RosarioGarage, "
                  "Autocosmos y sitios de agencias, los compara con autos parecidos y avisa cuando aparece uno "
                  "por debajo del resto."),
-    "prueba_sin_costo_dias": 7,
+    "prueba_sin_costo_dias": 15,
 }
 
 
