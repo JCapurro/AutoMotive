@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  byLevel, bySource, byWeek, criteriaLines, nextPending, overall, parseQueue, parseStats, progress, shareText, topReasons, verdictProblem,
+  byLevel, bySource, byWeek, criteriaLines, nextPending, overall, parseQueue, parseStats, progress, reviewerCounts, reviewerLabel, shareText, topReasons, verdictProblem,
   type ReviewItem, type StatsRow,
 } from "./admin-match-audit";
 
 const item = (id: number, verdict: ReviewItem["verdict"] = null): ReviewItem => ({
-  id, matchId: id, level: "good", source: "kavak", score: 80, verdict, reasons: [], note: "", listing: null, search: null,
+  id, matchId: id, level: "good", source: "kavak", score: 80, verdict, reasons: [], note: "", reviewer: verdict ? { id: "u1", kind: null, email: null } : null, listing: null, search: null,
 });
 
 describe("verdictProblem", () => {
@@ -109,5 +109,34 @@ describe("statistics", () => {
   it("prints a share with its sample", () => {
     expect(shareText(13, 25)).toBe("52 % (13 de 25)");
     expect(shareText(0, 0)).toBe("—");
+  });
+});
+
+describe("who reviewed", () => {
+  it("parses the reviewer only for reviewed rows, and only a declared kind", () => {
+    const rows = parseQueue([
+      { id: 1, level: "good", verdict: "good", reviewer_id: "u1", reviewer_kind: "person", reviewer_email: "a@x.test" },
+      { id: 2, level: "good", verdict: "bad", reasons: ["zone"], reviewer_id: "u1", reviewer_kind: "automated" },
+      { id: 3, level: "good", verdict: "fair", reasons: ["zone"], reviewer_id: "u1", reviewer_kind: "robot" },
+      { id: 4, level: "good", verdict: null, reviewer_id: "u1", reviewer_kind: "person" },
+    ]);
+    expect(rows[0].reviewer).toEqual({ id: "u1", kind: "person", email: "a@x.test" });
+    expect(rows[1].reviewer?.kind).toBe("automated");
+    expect(rows[2].reviewer?.kind).toBeNull();
+    expect(rows[3].reviewer).toBeNull();
+  });
+
+  it("says a person did it only when the reviewer declared it", () => {
+    expect(reviewerLabel(null)).toBeNull();
+    expect(reviewerLabel({ id: "u1", kind: "person", email: "a@x.test" }, "u2")).toEqual({ text: "Revisó una persona: a@x.test", person: true });
+    expect(reviewerLabel({ id: "u1", kind: "person", email: null }, "u1")?.text).toBe("Revisó una persona: vos");
+    expect(reviewerLabel({ id: "u1", kind: "automated", email: null })).toMatchObject({ person: false });
+    expect(reviewerLabel({ id: "u1", kind: null, email: null })).toMatchObject({ person: null });
+    expect(reviewerLabel({ id: "u1", kind: null, email: null })?.text).toMatch(/No se sabe/);
+  });
+
+  it("counts people, scripts and unknown", () => {
+    const rev = (kind: "person" | "automated" | null): ReviewItem => ({ ...item(1, "good"), reviewer: { id: "u", kind, email: null } });
+    expect(reviewerCounts([rev("person"), rev("person"), rev("automated"), rev(null), item(9)])).toEqual({ person: 2, automated: 1, unknown: 1 });
   });
 });

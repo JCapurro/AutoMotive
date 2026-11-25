@@ -48,6 +48,8 @@ export type ReviewItem = {
   verdict: Verdict | null;
   reasons: Reason[];
   note: string;
+  /** Quién guardó el veredicto (null mientras no esté revisado). */
+  reviewer: Reviewer | null;
   listing: {
     id: number; title: string; make: string | null; model: string | null; trim: string | null; year: number | null;
     priceUsd: number | null; price: number | null; currency: string | null; mileageKm: number | null;
@@ -55,6 +57,9 @@ export type ReviewItem = {
   } | null;
   search: { id: number; name: string; filters: Record<string, unknown>; rawQuery: string | null; radiusKm: number | null } | null;
 };
+
+/** `kind` es lo que declaró quien guardó: persona, automático o null (no declarado, p. ej. antes del campo). */
+export type Reviewer = { id: string | null; kind: "person" | "automated" | null; email: string | null };
 
 type Obj = Record<string, unknown>;
 const obj = (v: unknown): Obj | null => (v && typeof v === "object" && !Array.isArray(v) ? (v as Obj) : null);
@@ -81,6 +86,9 @@ export function parseQueue(json: unknown): ReviewItem[] {
       verdict: isVerdict(r.verdict) ? r.verdict : null,
       reasons: Array.isArray(r.reasons) ? r.reasons.filter(isReason) : [],
       note: str(r.note) ?? "",
+      reviewer: isVerdict(r.verdict)
+        ? { id: str(r.reviewer_id), kind: r.reviewer_kind === "person" || r.reviewer_kind === "automated" ? r.reviewer_kind : null, email: str(r.reviewer_email) }
+        : null,
       listing: l && num(l.id) != null
         ? {
             id: num(l.id)!, title: str(l.title) ?? "Sin título", make: str(l.make), model: str(l.model), trim: str(l.trim),
@@ -94,6 +102,32 @@ export function parseQueue(json: unknown): ReviewItem[] {
     });
   }
   return items;
+}
+
+/**
+ * Who reviewed, in words. `person` is true only when the reviewer declared it (the web screen does; scripts say
+ * `automated`); a review without a declared kind is `null`: it is not known whether a person did it.
+ */
+export function reviewerLabel(r: Reviewer | null, viewerId?: string | null): { text: string; person: boolean | null } | null {
+  if (!r) return null;
+  if (r.kind === "automated") return { text: "Revisión automática: no la hizo una persona", person: false };
+  if (r.kind === "person") {
+    const who = r.id && r.id === viewerId ? "vos" : (r.email ?? "una cuenta admin");
+    return { text: `Revisó una persona: ${who}`, person: true };
+  }
+  return { text: "No se sabe si la hizo una persona (se guardó sin declarar quién)", person: null };
+}
+
+/** How many reviewed items were done by a person, by a script, or are unknown. */
+export function reviewerCounts(items: readonly ReviewItem[]): { person: number; automated: number; unknown: number } {
+  const out = { person: 0, automated: 0, unknown: 0 };
+  for (const i of items) {
+    if (!i.reviewer) continue;
+    if (i.reviewer.kind === "person") out.person++;
+    else if (i.reviewer.kind === "automated") out.automated++;
+    else out.unknown++;
+  }
+  return out;
 }
 
 /** «12 de 60»: how many are reviewed, and the first one still pending (or null). */

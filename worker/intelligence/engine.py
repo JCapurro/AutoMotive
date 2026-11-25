@@ -83,7 +83,14 @@ def assess(listing: Mapping[str, Any], profile: Mapping[str, Any], *,
     """Match, score, flags and questions whether or not it matches (explain_match).
     `guide`: the published model guide whose questions the listing gets (PAR-04)."""
     result = evaluate_filters(listing, profile, fx_rate=fx_rate)
-    s = compute_score(listing, profile, result, price_ref, cfg, now=now)
+    # Placeholder price (listing_noise.placeholder_f2): f2 scores it as «sin precio» and caps the level
+    # at `match`; f3's shadow keeps reading the plain f2 score, so f3 is the same with the switch on or off.
+    s_plain = compute_score(listing, profile, result, price_ref, cfg, now=now)
+    # An exclusion of plain f2 (a down payment) stays: the switch only caps what would match.
+    placeholder = (bool(cfg.noise.get("placeholder_f2")) and not s_plain.excluded
+                   and f3.placeholder_price(listing.get("price")))
+    s = compute_score(listing, profile, result, None, cfg, now=now, placeholder=True) if placeholder else s_plain
+    price_ref_f2 = None if placeholder else price_ref
     flags = red_flags(listing, diff_pct=s.extra.get("diff_pct"), guard=s.guard,
                       timing_belt=timing_belt, cfg=cfg, now=now)
     items = question_items(listing, flags, timing_belt=timing_belt, now=now, guide=guide, guide_limit=guide_limit)
@@ -91,9 +98,9 @@ def assess(listing: Mapping[str, Any], profile: Mapping[str, Any], *,
     # question_texts: the specific ones, without the questions every seller gets.
     contact = [q.text for q in items if q.key not in GENERIC_KEYS][:3]
     # f3 after f2 is complete, for f2's matches only (f3's exclusion is f2's); never raises.
-    shadow = (f3.shadow(listing, profile, result, price_ref, s, cfg, fx_rate=fx_rate)
-              if result.is_match and not s.excluded else None)
-    return result, s, Evaluation(result, s, price_ref, flags, questions, contact_questions=contact,
+    shadow = (f3.shadow(listing, profile, result, price_ref, s_plain, cfg, fx_rate=fx_rate)
+              if result.is_match and not s_plain.excluded else None)
+    return result, s, Evaluation(result, s, price_ref_f2, flags, questions, contact_questions=contact,
                                  question_origins=[q.origin_json() for q in items], shadow_f3=shadow)
 
 
