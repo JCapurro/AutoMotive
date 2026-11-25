@@ -291,7 +291,7 @@ def build_prospects(rows: Iterable[Mapping[str, Any]], *, contacted: Contacted,
         p = Prospect(sellers=group)
         reason = exclusion_reason(p)
         if not reason and len(p.listings) > MAX_LISTINGS:
-            reason = "más de 60 avisos al juntar perfiles"      # Juan's range is the business's, not a profile's
+            reason = f"más de {MAX_LISTINGS} avisos al juntar perfiles"   # Juan's range is the business's, not a profile's
         if reason:
             dropped[reason] += 1
             continue
@@ -299,6 +299,9 @@ def build_prospects(rows: Iterable[Mapping[str, Any]], *, contacted: Contacted,
             dropped["ya contactado a mano"] += 1
             continue
         p.kind = classify(p)
+        if p.kind == "persona" and len(p.listings) < 3:
+            dropped["persona con menos de 3 avisos"] += 1   # two cars without a business: likely selling their own
+            continue
         found = phone_from_listings(p, banned=banned_phones)
         if found:
             p.phone, p.phone_evidence = found
