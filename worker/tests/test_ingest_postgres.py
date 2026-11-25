@@ -1631,6 +1631,16 @@ class FindReappearedTests(NotNewsCase):
             await cx.execute("UPDATE listings SET last_seen_at = now() - interval '61 days'")
         self.assertIsNone(await self.old_copy(self.car("new")))
 
+    async def test_unseen_for_reads_the_row_the_pool_returns(self):
+        # The pool hands back dict rows: reading row[0] raised KeyError in production (CarOne gone check).
+        await ingest([self.car("old")], geocode=None)
+        async with db.connection() as cx:
+            lid = (await (await cx.execute("SELECT id FROM listings")).fetchone())["id"]
+            self.assertFalse(await repo_listings.unseen_for(cx, lid, 24))
+            await cx.execute("UPDATE listings SET last_seen_at = now() - interval '48 hours'")
+            self.assertTrue(await repo_listings.unseen_for(cx, lid, 24))
+            self.assertFalse(await repo_listings.unseen_for(cx, lid + 1000000, 24))
+
     async def test_under_1000_km_never_reappears(self):
         # Many 0 km cars look alike.
         self.assertIsNone(await self.old_copy(self.car("new", km=500), self.car("old", km=500)))
