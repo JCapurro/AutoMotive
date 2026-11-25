@@ -1302,7 +1302,7 @@ isOneToOne: false
         Returns: Json
       }
       admin_match_review_save: {
-        Args: { p_id: number; p_verdict: string; p_reasons: string[]; p_note: string | null; p_actor_id: string }
+        Args: { p_id: number; p_verdict: string; p_reasons: string[]; p_note: string | null; p_actor_id: string; p_reviewer_kind?: string | null }
         Returns: Json
       }
       admin_match_review_stats: {

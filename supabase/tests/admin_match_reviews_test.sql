@@ -10,7 +10,7 @@ select ok(not has_table_privilege('authenticated', 'public.admin_match_reviews',
 select ok(not has_table_privilege('anon', 'public.admin_match_reviews', 'insert'), 'anon cannot write reviews');
 select ok(not has_function_privilege('authenticated', 'public.admin_match_review_draw(date,integer)', 'execute'), 'authenticated cannot draw');
 select ok(not has_function_privilege('anon', 'public.admin_match_review_stats(integer)', 'execute'), 'anon cannot read stats');
-select ok(has_function_privilege('service_role', 'public.admin_match_review_save(bigint,text,text[],text,uuid)', 'execute'), 'service role can save');
+select ok(has_function_privilege('service_role', 'public.admin_match_review_save(bigint,text,text[],text,uuid,text)', 'execute'), 'service role can save');
 select ok(not (select prosecdef from pg_proc where oid = 'public.admin_match_review_draw(date,integer)'::regprocedure), 'draw is security invoker');
 
 -- Fixtures: skip lifecycle triggers; the RPCs themselves run normally.
@@ -85,6 +85,17 @@ select is((select note from public.admin_match_reviews order by id offset 1 limi
 select lives_ok($$select public.admin_match_review_save((select min(id) from public.admin_match_reviews), 'fair', '{year}', null, 'ac000000-0000-4000-8000-0000000000aa')$$, 'a verdict can be changed');
 select is((select reasons from public.admin_match_reviews order by id limit 1), array['year'], 'changed verdict replaces the reasons');
 select throws_ok($$update public.admin_match_reviews set verdict = 'bad' where id = (select max(id) from public.admin_match_reviews)$$, '23514', null, 'table refuses a verdict without time or reasons');
+
+-- Quién revisó: persona, automático o sin declarar.
+select ok((select reviewer_kind is null from public.admin_match_reviews order by id limit 1), 'a save that declares nothing leaves the kind unknown');
+select throws_ok($$select public.admin_match_review_save((select min(id) from public.admin_match_reviews), 'good', '{}', null, 'ac000000-0000-4000-8000-0000000000aa', 'robot')$$, '22023', 'invalid_reviewer_kind', 'the kind is person or automated');
+select lives_ok($$select public.admin_match_review_save((select min(id) from public.admin_match_reviews), 'fair', '{year}', null, 'ac000000-0000-4000-8000-0000000000aa', 'person')$$, 'a person can sign a review');
+select is((select reviewer_kind from public.admin_match_reviews order by id limit 1), 'person', 'the kind is stored');
+select is((public.admin_match_review_queue()->0->>'reviewer_kind'), 'person', 'the queue carries the kind');
+select is((public.admin_match_review_queue()->0->>'reviewer_id'), 'ac000000-0000-4000-8000-0000000000aa', 'the queue carries the reviewer');
+select lives_ok($$select public.admin_match_review_save((select min(id) from public.admin_match_reviews), 'fair', '{year}', null, 'ac000000-0000-4000-8000-0000000000aa', 'automated')$$, 'a script can say it is automated');
+select is((public.admin_match_review_queue()->0->>'reviewer_kind'), 'automated', 'the kind follows the last save');
+select lives_ok($$select public.admin_match_review_save((select min(id) from public.admin_match_reviews), 'fair', '{year}', null, 'ac000000-0000-4000-8000-0000000000aa')$$, 'the five-argument call still works');
 
 -- Stats: one good, one fair so far.
 select is((select sum((r->>'good')::int) from jsonb_array_elements(public.admin_match_review_stats()->'rows') r), 1::bigint, 'stats count one good');

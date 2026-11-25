@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { SearchInput, defaultName, fromProfile, isModelLess, matchingChanged, modelBodyTypes, toColumns, toFilters } from "./search-form";
+import { SearchInput, defaultName, fromProfile, isModelLess, matchingChanged, modelBodyTypes, previousFiltersProps, toColumns, toFilters } from "./search-form";
 import type { SearchProfile } from "./types";
 
 const ALL = ["mercadolibre", "kavak", "v6", "facebook", "autocosmos"];
@@ -151,5 +151,42 @@ describe("body types (docs/CARROCERIA.md)", () => {
     expect(modelBodyTypes([])).toEqual([]);
     expect(modelBodyTypes(undefined)).toEqual([]);
     expect(modelBodyTypes(["suv", "camioneta"])).toEqual([]);
+  });
+});
+
+describe("previousFiltersProps: what an edit changed (docs/AUDITORIA_MATCHES.md)", () => {
+  const stored = (values: typeof input) =>
+    ({ ...toColumns(values, ALL), id: 1, notification_frequency: "immediate", notify_min_level: "good" }) as unknown as SearchProfile;
+
+  it("records the old value of each structured filter that changed, and nothing else", () => {
+    const before = stored(input);
+    const out = previousFiltersProps(before, toColumns({ ...input, price_max: 9000, km_max: null, fuel: "diesel" }, ALL));
+    expect(out.previous_filters).toEqual({ price_max: 11500, km_max: 150000, fuel: null });
+    expect(out.changed_keys.sort()).toEqual(["fuel", "km_max", "price_max"]);
+    expect(out.zone_changed).toBe(false);
+    expect(out.preferences_changed).toBe(false);
+  });
+
+  it("records nothing for an unchanged search", () => {
+    const out = previousFiltersProps(stored(input), toColumns(input, ALL));
+    expect(out).toEqual({ previous_filters: {}, changed_keys: [], zone_changed: false, preferences_changed: false });
+  });
+
+  it("flags a zone or preferences change without copying place names or free text", () => {
+    const before = stored(input);
+    const moved = previousFiltersProps(before, toColumns({ ...input, location: { label: "Rosario", lat: -32.9, lon: -60.6, radius_km: 30 } }, ALL));
+    expect(moved.zone_changed).toBe(true);
+    expect(JSON.stringify(moved)).not.toContain("AMBA");
+    const prefs = previousFiltersProps(before, toColumns({ ...input, km_target: 90000 }, ALL));
+    expect(prefs.preferences_changed).toBe(true);
+    expect(prefs.previous_filters).toEqual({});
+  });
+
+  it("keeps only the first 10 entries of a list and 40 characters of a text", () => {
+    const long = "x".repeat(80);
+    const before = { ...stored(input), filters: { make: long, trims: Array.from({ length: 15 }, (_, i) => `v${i}`) } } as unknown as SearchProfile;
+    const out = previousFiltersProps(before, toColumns({ ...input, make: "Ford", trim: "Titanium" }, ALL));
+    expect((out.previous_filters.make as string).length).toBe(40);
+    expect((out.previous_filters.trims as string[]).length).toBe(10);
   });
 });
