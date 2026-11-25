@@ -196,6 +196,9 @@ class IntelligenceConfig:
     # «Valor justo» in shadow (intelligence/fair_value.py): app_config.fair_value as
     # fair_value_config() normalizes it. Mode 'off' by default.
     fair_value: dict[str, Any] = field(default_factory=lambda: fair_value_config(None))
+    # Ruido de avisos (docs/FB_DUPLICADOS_PLACEHOLDER_TERMINADOS.md): app_config.listing_noise as
+    # listing_noise() normalizes it. Every switch off by default.
+    noise: dict[str, bool] = field(default_factory=lambda: listing_noise(None))
 
     @property
     def flag_order(self) -> tuple[str, ...]:
@@ -228,14 +231,31 @@ class IntelligenceConfig:
             risk=risk(values.get("risk")),
             f3=f3,
             fair_value=fair_value_config(values.get("fair_value")),
+            noise=listing_noise(values.get("listing_noise")),
         )
 
     @classmethod
     async def load(cls) -> "IntelligenceConfig":
         import db
         keys = ("score_weights", "level_thresholds", "comparables", "score_curves", "red_flags", "risk",
-                "score_model_f3", "fair_value")
+                "score_model_f3", "fair_value", "listing_noise")
         return cls.from_app_config({k: await db.get_config(k) for k in keys})
+
+
+# Ruido de avisos (docs/FB_DUPLICADOS_PLACEHOLDER_TERMINADOS.md): app_config.listing_noise, three
+# independent switches, all off by default (and when the row is missing or malformed):
+#   placeholder_f2  f2 treats a placeholder price (f3.placeholder_price) as «sin precio»: no price
+#                   credit, level capped at `match`, so it never alerts as good or opportunity.
+#   repost_groups   one alert per car (notifications/service._commit): the reposts of a listing the
+#                   user was already alerted about, and all but the best of a group in a batch, get none.
+#   ended_guard     an alert for a listing that is no longer active is not created.
+LISTING_NOISE_KEYS = ("placeholder_f2", "repost_groups", "ended_guard")
+
+
+def listing_noise(raw: Any) -> dict[str, bool]:
+    """app_config.listing_noise as the worker uses it. Never raises: only a JSON true turns a switch on."""
+    src = raw if isinstance(raw, Mapping) else {}
+    return {k: src.get(k) is True for k in LISTING_NOISE_KEYS}
 
 
 # F-02 (docs/superpowers/specs/2026-10-30-f02-vendedor-design.md): the seller
