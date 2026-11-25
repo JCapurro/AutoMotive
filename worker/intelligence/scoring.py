@@ -26,8 +26,8 @@ from typing import Any, Mapping
 from intelligence import copy
 from intelligence.comparables import PriceRef, diff_pct
 from intelligence.config import COMPONENTS, SCORING_VERSION, IntelligenceConfig
-from intelligence.levels import level_for
-from intelligence.matching import OK, MatchResult, preferred_trims, trim_matches
+from intelligence.levels import level_for, rank
+from intelligence.matching import OK, MatchResult, other_trim_soft, preferred_trims, trim_matches
 
 
 @dataclass(frozen=True)
@@ -57,6 +57,9 @@ class Score:
         out["scoring_version"] = SCORING_VERSION
         if self.guard:
             out["guard"] = self.guard
+        if self.extra.get("trim_capped"):
+            # The results list orders these after the versions asked for (search_results) and the card says «Otra versión».
+            out["trim_cap"] = True
         return out
 
 
@@ -219,5 +222,9 @@ def score(listing: Mapping[str, Any], profile: Mapping[str, Any], result: MatchR
         # (a 2012 Camaro next to a 2023 one): no 🔥 on it, as f3's «credible»
         # asks too. Listing 66971, a 1:24 scale Camaro read as USD 40.000.
         guard, cap = "no_year", "good"
+    # Trim blando: another version than the one asked for (non-strict search) never alerts: top level `match`.
+    trim_capped = bool(cfg.trim_soft_cap and other_trim_soft(result, profile))
+    if trim_capped and (cap is None or rank(cap) > rank("match")):
+        cap = "match"
     return Score(value, level_for(value, cfg.thresholds, cap=cap), components, weights,
-                 guard=guard, excluded=excluded, extra={"diff_pct": d})
+                 guard=guard, excluded=excluded, extra={"diff_pct": d, "trim_capped": trim_capped})

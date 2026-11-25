@@ -553,7 +553,7 @@ class ShadowJsonTests(unittest.TestCase):
     def test_contract_keys(self):
         _, js = run(with_json=True)
         self.assertEqual(set(js), {"v", "mode", "params", "level", "level_uncapped", "score", "raw", "deal", "fit",
-                                   "flags", "a_verificar", "seller", "would_defer", "would_defer_any_source",
+                                   "flags", "a_verificar", "seller", "trim", "would_defer", "would_defer_any_source",
                                    "alternatives"})
         self.assertEqual(set(js["deal"]), {"value", "raw", "r", "diff_pct", "d", "d_eff", "d_full", "s_lo", "n",
                                            "level_used", "kavak", "placeholder", "has_price", "credible", "tier"})

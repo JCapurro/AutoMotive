@@ -29,6 +29,7 @@ import { describeVehicle } from "@/lib/search";
 import { collectionPending } from "@/lib/search-collection";
 import { loadSearchCollection } from "@/lib/search-collection-server";
 import { storedSellerTypes } from "@/lib/search-form";
+import { loadOtherVersionMatchIds } from "@/lib/other-version";
 import { effectiveSort, type Sort, sortsFor } from "@/lib/sorts";
 import { wantsColor } from "@/lib/listing-color";
 import { pageListingIds } from "@/lib/list-position";
@@ -159,6 +160,8 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
   const reach = limit.cap != null ? Math.min(PAGE_SIZE * page, limit.cap) : PAGE_SIZE * page;
   const more = rows.length > reach && reach === PAGE_SIZE * page;
   const shown = rows.slice(0, reach);
+  // Trim blando: the cards of another version than the search names carry a short tag.
+  const otherVersion = await loadOtherVersionMatchIds(supabase, shown.map((card) => card.match_id));
   // Aviso de zona's switch (app_config.zone_notice): off, the page neither counts nor shows it.
   const zoneSwitch = (await webConfig()).zoneNotice;
   // PAR-03: the drops of the listings on this page only, in one call; on error, no drop line.
@@ -296,6 +299,7 @@ export default async function SearchResultsPage({ params, searchParams }: PagePr
               marginLine={card.listing_id != null ? marginLines.get(card.listing_id) : null}
               marginTeaser={card.listing_id != null && marginTeasers.has(card.listing_id)}
               colorWanted={wantsColor(filters)}
+              otherVersion={card.match_id != null && otherVersion.has(card.match_id)}
             />
           ))}
         </div>

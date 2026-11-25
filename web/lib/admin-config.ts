@@ -125,6 +125,9 @@ export const SellIntentConfigInput = z.object({
 /** Aviso de zona: app_config.zone_notice, the notice's switch (lib/zone-notice.ts zoneNoticeConfig). */
 export const ZONE_NOTICE_CONFIG_MESSAGE = "zone_notice necesita enabled (true/false).";
 export const ZoneNoticeConfigInput = z.object({ enabled: z.boolean() }).passthrough();
+/** Trim blando: app_config.trim_soft_cap, the switch of the cap at «match» for a car of another version (docs/TRIM_BLANDO.md). */
+export const TRIM_SOFT_CAP_CONFIG_MESSAGE = "trim_soft_cap necesita enabled (true/false).";
+export const TrimSoftCapConfigInput = z.object({ enabled: z.boolean() }).passthrough();
 /** Portada: app_config.landing_hero, the new hero's switch and the share of visitors who see it (lib/landing-hero.ts). */
 export const LANDING_HERO_CONFIG_MESSAGE = "landing_hero necesita enabled (true/false), share (entero de 0 a 100) y events_per_minute (entero de 0 a 10000).";
 export const LandingHeroConfigInput = z.object({ enabled: z.boolean(), share: z.number().int().min(0).max(100), events_per_minute: z.number().int().min(0).max(10000) }).passthrough();
@@ -495,6 +498,7 @@ export function validateConfigChange(key: string, value: unknown, current: unkno
   if (key === "dealer_margin" && !DealerMarginInput.safeParse(value).success) return DEALER_MARGIN_MESSAGE;
   if (key === "sell_intent" && !SellIntentConfigInput.safeParse(value).success) return SELL_INTENT_CONFIG_MESSAGE;
   if (key === "zone_notice" && !ZoneNoticeConfigInput.safeParse(value).success) return ZONE_NOTICE_CONFIG_MESSAGE;
+  if (key === "trim_soft_cap" && !TrimSoftCapConfigInput.safeParse(value).success) return TRIM_SOFT_CAP_CONFIG_MESSAGE;
   if (key === "unmet_demand" && !UnmetDemandConfigInput.safeParse(value).success) return UNMET_DEMAND_CONFIG_MESSAGE;
   if (key === "trial_reserve" && !TrialReserveConfigInput.safeParse(value).success) return TRIAL_RESERVE_CONFIG_MESSAGE;
   if (key === "landing_hero" && !LandingHeroConfigInput.safeParse(value).success) return LANDING_HERO_CONFIG_MESSAGE;
@@ -613,6 +617,7 @@ export function configFieldLabel(key: string, path: string): string {
     return ({ ask: "Pregunta «¿Tenés que vender tu auto?» (bienvenida y ficha)", agencies_contact: "Casilla «agencias me contacten» y su línea en Privacidad (solo con OK de Juan)", since: "Inicio de la prueba (métricas)" } as Record<string, string>)[path] ?? path;
   }
   if (key === "zone_notice" && path === "enabled") return "Aviso de zona visible (resultados y modo asistido)";
+  if (key === "trim_soft_cap" && path === "enabled") return "Otra versión no alerta (tope en «coincide»)";
   if (key === "landing_hero") {
     return ({ enabled: "Prueba de la portada nueva", share: "Visitantes que ven la portada nueva (%)", events_per_minute: "Tope de eventos de la portada por minuto" } as Record<string, string>)[path] ?? path;
   }

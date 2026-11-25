@@ -412,6 +412,18 @@ def _trim(listing, profile) -> Reason | None:
     return Reason(FAIL, copy.REASON["trim_other"].format(trim=trim, wanted=" / ".join(wanted)), hard=hard)
 
 
+def other_trim_soft(result: MatchResult, profile: Mapping[str, Any]) -> bool:
+    """The search names a version (filters.trims) without demanding it (no trim_strict) and the car is
+    another one: the trim reason is a soft FAIL. An unknown version (UNKNOWN) is not «otra versión», and a
+    version that only comes from preferences.preferred_trims is a taste, not the version asked for.
+    docs/TRIM_BLANDO.md: with app_config.trim_soft_cap on, such a car never goes above `match`."""
+    f = profile.get("filters") or {}
+    if not f.get("trims") or f.get("trim_strict"):
+        return False
+    reason = result.reasons.get("trim")
+    return reason is not None and reason.result == FAIL and not reason.hard
+
+
 # ---------------------------------------------------------------------------
 # Soft preferences (they feed the score, never discard)
 # ---------------------------------------------------------------------------
