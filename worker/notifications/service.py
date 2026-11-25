@@ -27,7 +27,8 @@ from intelligence import dealer as dealer_rules
 from intelligence.matching import strict_seller_unknown
 from intelligence.guides import GuideIndex, pick as pick_guide
 from intelligence.seller_questions import question_texts
-from notifications import decision_log, dispatch
+from intelligence.config import listing_noise
+from notifications import decision_log, dispatch, repost_groups
 from notifications.channels.base import Channel
 from notifications.engine import (LISTING_GONE, MATCH, NONE, PRICE_DROP, R_HIDDEN_TRIAL, Audience, Event, Outcome,
                                   Rules, decide_all)
@@ -49,6 +50,21 @@ class MatchCandidate:
     match_id: int | None
     evaluation: Mapping[str, Any]        # Evaluation.row(): score, level, price_ref, red_flags
     repost: bool = False
+
+
+async def load_noise() -> dict[str, bool]:
+    """app_config.listing_noise: the switches of notifications' ruido de avisos (all off when unset).
+    Never raises: a config read that fails leaves the alerts as they were."""
+    try:
+        return listing_noise(await db.get_config("listing_noise"))
+    except Exception:
+        log.warning("notifications: listing_noise unreadable, switches off", exc_info=True)
+        return listing_noise(None)
+
+
+def active(row: Mapping[str, Any] | None) -> bool:
+    """A listing row that is no longer active (status gone) is never announced as a match or a drop."""
+    return row is None or row.get("status") in (None, "active")
 
 
 async def load_rules() -> Rules:
@@ -296,6 +312,8 @@ class Notifier:
         when = now or datetime.now(timezone.utc)
         candidates = [c for c in candidates
                       if c.listing_id not in rows or visible(rows[c.listing_id], program, when)]
+        if candidates and (await load_noise())["ended_guard"]:
+            candidates = [c for c in candidates if active(rows.get(c.listing_id))]
         if not candidates:
             return []
         audiences = await repo.profile_audiences(c.profile_id for c in candidates)
@@ -379,6 +397,11 @@ class Notifier:
         ids = list(dict.fromkeys(e.listing_id for e in wanted))
         async with db.connection() as cx:
             rows = await listings_repo.rows_for_scoring(cx, ids)
+        if (await load_noise())["ended_guard"]:
+            # A drop of a listing that already ended is no news (listing_gone itself stays).
+            wanted = [e for e in wanted if e.kind == LISTING_GONE or active(rows.get(e.listing_id))]
+            if not wanted:
+                return []
         by_listing: dict[int, list[dict[str, Any]]] = {}
         for a in await repo.listing_audiences(ids, matched_before=matched_before):
             by_listing.setdefault(a["listing_id"], []).append(a)
@@ -420,6 +443,18 @@ class Notifier:
                 if (e.audience.user_id, e.listing_id) in hidden:
                     outcomes[id(e)] = Outcome(NONE, R_HIDDEN_TRIAL)
         events = [e for e in events if (e.audience.user_id, e.listing_id) not in hidden]
+        if events and (await load_noise())["repost_groups"]:
+            # One alert per car (notifications/repost_groups.py); the dropped ones are logged, not stored.
+            matches = [e for e in events if e.kind == MATCH]
+            twins = await repo.repost_twins(e.listing_id for e in matches)
+            alerted = await repo.alerted_twins({e.audience.user_id for e in matches},
+                                               {e.listing_id for e in matches})
+            events, dropped = repost_groups.collapse(events, twins, alerted)
+            if outcomes is not None:
+                outcomes.update(dropped)
+            if dropped:
+                log.info("notifications: %d match events dropped as reposts of a car already alerted or "
+                         "better placed in the batch", len(dropped))
         if not events:
             return []
         now = now or datetime.now(timezone.utc)
