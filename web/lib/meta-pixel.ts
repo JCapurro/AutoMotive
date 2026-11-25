@@ -43,7 +43,8 @@ export type PixelEvent =
   | "InitiateCheckout"
   | "Purchase"
   | "SearchCreated"
-  | "ListingClick";
+  | "ListingClick"
+  | "PaywallViewed";
 
 const STANDARD = new Set<PixelEvent>([
   "PageView",
@@ -75,4 +76,17 @@ export function pixel(event: PixelEvent, params?: PixelParams, id?: string, trie
     return;
   }
   fbq(STANDARD.has(event) ? "track" : "trackCustom", event, params ?? {}, id ? { eventID: id } : undefined);
+}
+
+/** Where the payment screen was seen: the trial offer's surfaces, or the free-limit popup. */
+export type PaywallSurface = "sheet" | "strip" | "card" | "quota_popup";
+
+/**
+ * The person saw a payment screen (custom event, so ads can be read and
+ * audiences built on it). Fired next to the Supabase `trial_offer_viewed` /
+ * `quota_popup_viewed`, after the same once-per-tab dedupe; the eventID keeps
+ * Meta from counting a repeat of the same surface and search twice.
+ */
+export function paywallPixel(surface: PaywallSurface, profileId: number): void {
+  pixel("PaywallViewed", { content_name: surface }, `paywall:${surface}:${profileId}`);
 }

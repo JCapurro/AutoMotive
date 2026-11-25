@@ -77,6 +77,8 @@ Los singulares y el caso «la prueba no muestra ninguno» están en `trial-offer
 
 `surface` es `sheet`, `strip` o `card`. En la variante «completa» de `docs/PRUEBA_COMPLETA.md` los tres eventos llevan además `complete: true`. La franja no tiene evento de clic propio: tocar «Ver todos» abre el cartel y suma un `trial_offer_viewed` con `surface = sheet` si es la primera vez en la pestaña.
 
+Cada `trial_offer_viewed` (y cada `quota_popup_viewed` del aviso de límite) también va al píxel de Meta como evento personalizado `PaywallViewed`, con `content_name` = la superficie (`sheet`, `strip`, `card` o `quota_popup`) y eventID `paywall:<superficie>:<search_profile_id>`. Sirve para ver en Meta qué anuncios traen gente que llega a la pantalla de pago y para armar audiencias con quienes la vieron y no pagaron. No lleva datos de la persona. No va a X: X necesita un evento creado en su Events Manager.
+
 Lo que sigue al pase elegido ya existía y no lleva `surface`:
 
 - `checkout_started` (`props.offer`, `props.checkout_id`): se creó el checkout de Mercado Pago.
