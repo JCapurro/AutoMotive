@@ -17,7 +17,7 @@ Regla en la cabecera de `worker/notifications/engine.py` (tabla de 7.1) y en `cl
 
 ## Interruptor y vuelta atrás
 
-`app_config.opportunity_gate = {"enabled": false, "min_pct": 15, "min_n": 10}` (migración `20270113120100_opportunity_gate.sql`): **apagado** al migrar; inerte hasta prenderlo en `/admin/config`. Apagarlo vuelve al comportamiento anterior al próximo lote de avisos, sin deploy. Los avisos ya enviados no se tocan. El worker lee la fila en cada lote (`notifications.service.load_rules`); una clave faltante o mala toma su valor por defecto.
+`app_config.opportunity_gate = {"enabled": false, "min_pct": 15, "min_n": 10}` (migración `20270115120100_opportunity_gate.sql`): **apagado** al migrar; inerte hasta prenderlo en `/admin/config`. Apagarlo vuelve al comportamiento anterior al próximo lote de avisos, sin deploy. Los avisos ya enviados no se tocan. El worker lee la fila en cada lote (`notifications.service.load_rules`); una clave faltante o mala toma su valor por defecto.
 
 ## Qué no cambia
 

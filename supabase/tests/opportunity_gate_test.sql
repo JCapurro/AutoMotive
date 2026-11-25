@@ -1,4 +1,4 @@
--- Oportunidad creible (migration 20270113120100_opportunity_gate.sql). Run with: supabase test db
+-- Oportunidad creible (migration 20270115120100_opportunity_gate.sql). Run with: supabase test db
 -- app_config.opportunity_gate exists, off, with the 15 % and 10 comparables of Juan's decision.
 begin;
 create extension if not exists pgtap with schema extensions;
