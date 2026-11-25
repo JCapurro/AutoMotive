@@ -52,10 +52,13 @@ class MatchCandidate:
 
 
 async def load_rules() -> Rules:
+    gate = config.opportunity_gate(await db.get_config("opportunity_gate"))
     return Rules(alerts_max_per_user_day=int(config.config_number(
                      "alerts_max_per_user_day", await db.get_config("alerts_max_per_user_day"))),
                  price_drop_min_pct=float(config.config_number(
-                     "price_drop_min_pct", await db.get_config("price_drop_min_pct"))))
+                     "price_drop_min_pct", await db.get_config("price_drop_min_pct"))),
+                 opportunity_gate=gate["enabled"], opportunity_min_pct=float(gate["min_pct"]),
+                 opportunity_min_n=int(gate["min_n"]))
 
 
 def start_of_day(now: datetime) -> datetime:
