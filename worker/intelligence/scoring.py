@@ -191,7 +191,10 @@ def offers_financing(listing: Mapping[str, Any]) -> bool:
 
 
 def score(listing: Mapping[str, Any], profile: Mapping[str, Any], result: MatchResult,
-          ref: PriceRef | None, cfg: IntelligenceConfig, *, now: datetime) -> Score:
+          ref: PriceRef | None, cfg: IntelligenceConfig, *, now: datetime, placeholder: bool = False) -> Score:
+    """`placeholder`: the published price is a filler (f3.placeholder_price) and
+    listing_noise.placeholder_f2 is on. The caller then passes ref=None (the price says nothing:
+    «sin precio», no credit) and the level is capped at `match`, as f3's."""
     price, d = price_component(listing, ref, cfg)
     components = {
         "price": price,
@@ -226,5 +229,9 @@ def score(listing: Mapping[str, Any], profile: Mapping[str, Any], result: MatchR
     trim_capped = bool(cfg.trim_soft_cap and other_trim_soft(result, profile))
     if trim_capped and (cap is None or rank(cap) > rank("match")):
         cap = "match"
+    if placeholder and guard is None:
+        guard = "placeholder"
+    if placeholder:
+        cap = "match"          # never above f3's ceiling for a placeholder (lower than any guard's)
     return Score(value, level_for(value, cfg.thresholds, cap=cap), components, weights,
                  guard=guard, excluded=excluded, extra={"diff_pct": d, "trim_capped": trim_capped})

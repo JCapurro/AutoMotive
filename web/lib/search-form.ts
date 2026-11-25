@@ -10,6 +10,7 @@ import {
   BODY_TYPE_CODES, type BodyType, COLOR_CODES, type ColorCode, type Level, SELLER_STRICT, bodyTypeCodes, bodyTypesText, colorCodes, isBodyType, isColor,
 } from "@/lib/copy";
 import { money, number } from "@/lib/format";
+import type { Json } from "@/types/database";
 import type { Filters, Preferences, SearchProfile, SellerType } from "@/lib/types";
 
 /** Hard ceiling on places added to a search, whatever the plan (the plan's own cap is lower or none). */
@@ -335,6 +336,48 @@ export function matchingChanged(
     radius_km: number | null;
   }) => JSON.stringify([sortKeys(x.filters), sortKeys(x.preferences), x.origin_lat, x.origin_lon, x.radius_km]);
   return key(before) !== key(after);
+}
+
+/** Filter keys whose previous value `search_profile_updated` records: structured ones only (no free text, no place names). */
+const HISTORY_KEYS = [
+  "make", "model", "trims", "trim_strict", "year_min", "year_max", "price_min", "price_max", "currency",
+  "km_min", "km_max", "transmission", "fuel", "body_types", "colors", "sources", "seller_types",
+] as const;
+
+function historyValue(value: unknown): Json {
+  if (typeof value === "string") return value.slice(0, 40);
+  if (Array.isArray(value)) return value.slice(0, 10).map((v) => (typeof v === "string" ? v.slice(0, 40) : v));
+  return value as Json;
+}
+
+/**
+ * What an edit changed, for the `search_profile_updated` event (docs/AUDITORIA_MATCHES.md): `previous_filters`
+ * holds the OLD value of each structured filter that differs (null = it was not set), plus flags for the parts
+ * not copied (zone, preferences). With it an intentional edit can be told from a system error. No user text:
+ * preferences and place names are never copied, only whether they changed.
+ */
+export function previousFiltersProps(
+  before: Pick<SearchProfile, "filters" | "preferences" | "origin_lat" | "origin_lon" | "radius_km">,
+  after: ReturnType<typeof toColumns>,
+): { previous_filters: Record<string, Json>; changed_keys: string[]; zone_changed: boolean; preferences_changed: boolean } {
+  const was = (before.filters ?? {}) as Record<string, unknown>;
+  const now = (after.filters ?? {}) as Record<string, unknown>;
+  const previous: Record<string, Json> = {};
+  for (const key of HISTORY_KEYS) {
+    if (JSON.stringify(sortKeys(was[key] ?? null)) !== JSON.stringify(sortKeys(now[key] ?? null))) {
+      previous[key] = was[key] == null ? null : historyValue(was[key]);
+    }
+  }
+  const zone = (x: { filters: unknown; origin_lat: number | null; origin_lon: number | null; radius_km: number | null }) => {
+    const f = (x.filters ?? {}) as Record<string, unknown>;
+    return JSON.stringify([x.origin_lat, x.origin_lon, x.radius_km, sortKeys(f.location_label ?? null), sortKeys(f.extra_locations ?? null)]);
+  };
+  return {
+    previous_filters: previous,
+    changed_keys: Object.keys(previous),
+    zone_changed: zone(before) !== zone(after),
+    preferences_changed: JSON.stringify(sortKeys(before.preferences ?? null)) !== JSON.stringify(sortKeys(after.preferences ?? null)),
+  };
 }
 
 /** The same value with every object's keys in one order: jsonb hands keys back in its own order, so compare through this. */

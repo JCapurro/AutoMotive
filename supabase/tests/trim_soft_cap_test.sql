@@ -1,4 +1,4 @@
--- Trim blando (migration 20270113120000_trim_soft_cap.sql). Run with: supabase test db
+-- Trim blando (migration 20270115120000_trim_soft_cap.sql). Run with: supabase test db
 -- app_config.trim_soft_cap is off by default; search_results (default order) puts the matches the worker marked
 -- score_breakdown.trim_cap after the rest, and is the order it was without the mark.
 -- Run in an isolated local database; all fixtures roll back.

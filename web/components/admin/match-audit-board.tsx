@@ -7,7 +7,7 @@ import { Pill, TextLink } from "@/components/admin/ui";
 import { LevelBadge } from "@/components/app/badges";
 import { Button } from "@/components/ui/button";
 import {
-  criteriaLines, nextPending, progress, REASON_LABEL, REASONS, type Reason, type ReviewItem, verdictProblem, type Verdict, VERDICT_LABEL,
+  criteriaLines, nextPending, progress, REASON_LABEL, reviewerLabel, REASONS, type Reason, type ReviewItem, verdictProblem, type Verdict, VERDICT_LABEL,
 } from "@/lib/admin-match-audit";
 import { km, money, vehicle } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -23,7 +23,7 @@ const typing = (t: EventTarget | null) => t instanceof HTMLElement && (t.tagName
 type Saved = { verdict: Verdict; reasons: Reason[]; note: string };
 
 /** One match at a time: the search's criteria next to the listing, three buttons, and the reasons. */
-export function MatchAuditBoard({ initial }: { initial: ReviewItem[] }) {
+export function MatchAuditBoard({ initial, viewerId = null }: { initial: ReviewItem[]; viewerId?: string | null }) {
   const [items, setItems] = useState(initial);
   const [index, setIndex] = useState(() => progress(initial).firstPending ?? 0);
   const total = items.length;
@@ -33,12 +33,12 @@ export function MatchAuditBoard({ initial }: { initial: ReviewItem[] }) {
   const go = useCallback((i: number) => setIndex(Math.min(Math.max(i, 0), Math.max(total - 1, 0))), [total]);
   const saved = useCallback(
     (id: number, v: Saved) => {
-      const next = items.map((i) => (i.id === id ? { ...i, ...v } : i));
+      const next = items.map((i) => (i.id === id ? { ...i, ...v, reviewer: { id: viewerId, kind: "person" as const, email: null } } : i));
       setItems(next);
       const n = nextPending(next, index);
       if (n !== null) setIndex(n);
     },
-    [items, index],
+    [items, index, viewerId],
   );
 
   useEffect(() => {
@@ -70,7 +70,7 @@ export function MatchAuditBoard({ initial }: { initial: ReviewItem[] }) {
       <div className="h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden>
         <div className="h-full bg-foreground/70" style={{ width: `${total ? (done / total) * 100 : 0}%` }} />
       </div>
-      <ReviewCard key={item.id} item={item} onSaved={saved} />
+      <ReviewCard key={item.id} item={item} onSaved={saved} viewerId={viewerId} />
       <div className="flex flex-wrap gap-1">
         {items.map((it, i) => (
           <button
@@ -94,7 +94,7 @@ export function MatchAuditBoard({ initial }: { initial: ReviewItem[] }) {
   );
 }
 
-function ReviewCard({ item, onSaved }: { item: ReviewItem; onSaved: (id: number, v: Saved) => void }) {
+function ReviewCard({ item, onSaved, viewerId }: { item: ReviewItem; onSaved: (id: number, v: Saved) => void; viewerId: string | null }) {
   const [verdict, setVerdict] = useState<Verdict | null>(item.verdict);
   const [reasons, setReasons] = useState<Reason[]>(item.reasons);
   const [note, setNote] = useState(item.note);
@@ -148,6 +148,7 @@ function ReviewCard({ item, onSaved }: { item: ReviewItem; onSaved: (id: number,
 
   const l = item.listing;
   const criteria = criteriaLines(item.search);
+  const reviewed = reviewerLabel(item.reviewer, viewerId);
   const needsReasons = verdict === "fair" || verdict === "bad";
   const changed = item.verdict !== null && (verdict !== item.verdict || note.trim() !== item.note || reasons.join() !== item.reasons.join());
 
@@ -228,6 +229,20 @@ function ReviewCard({ item, onSaved }: { item: ReviewItem; onSaved: (id: number,
             </button>
           ))}
           {item.verdict ? <span className="text-xs text-muted-foreground">Ya revisado: podés cambiarlo.</span> : null}
+          {reviewed ? (
+            <span
+              data-testid="audit-reviewer"
+              data-person={String(reviewed.person)}
+              className={cn(
+                "rounded-md border px-2 py-0.5 text-xs font-medium",
+                reviewed.person === true && "border-emerald-300 bg-emerald-50 text-emerald-900",
+                reviewed.person === false && "border-amber-300 bg-amber-50 text-amber-950",
+                reviewed.person === null && "border-border bg-muted text-muted-foreground",
+              )}
+            >
+              {reviewed.text}
+            </span>
+          ) : null}
         </div>
 
         {needsReasons ? (

@@ -154,6 +154,59 @@ async def existing_keys(user_ids: Iterable[str], listing_ids: Iterable[int]) -> 
     return {(r["user_id"], r["dedupe_key"]) for r in rows}
 
 
+# The same car: a fingerprint or probable_repost_of link, or the same seller on the same source with the same
+# make, model and year, a price within `tol` % and a km that does not contradict (a missing one never does).
+# Not for a dealer (declared or inferred): two identical units of its stock are two cars (45 of the 52 repeats
+# only this clause found, since 09/11, were dealers').
+# The fingerprint alone misses the Facebook reposts without km (notifications/repost_groups.py).
+REPOST_PRICE_TOL_PCT = 3.0
+REPOST_KM_TOL_PCT = 2.0
+_TWIN = (
+    "(  (a.fingerprint IS NOT NULL AND a.fingerprint = t.fingerprint) "
+    "   OR a.probable_repost_of = t.id OR t.probable_repost_of = a.id "
+    "   OR (a.probable_repost_of IS NOT NULL AND a.probable_repost_of = t.probable_repost_of) "
+    "   OR (a.source = t.source AND a.seller_key IS NOT NULL AND a.seller_key = t.seller_key "
+    "       AND coalesce(a.seller_type::text, '') <> 'dealer' AND NOT coalesce(a.dealer_inferred, false) "
+    "       AND coalesce(t.seller_type::text, '') <> 'dealer' AND NOT coalesce(t.dealer_inferred, false) "
+    "       AND a.year IS NOT NULL AND a.year = t.year "
+    "       AND lower(a.make) = lower(t.make) AND lower(a.model) = lower(t.model) "
+    "       AND a.price_usd > 0 AND t.price_usd > 0 "
+    "       AND abs(a.price_usd - t.price_usd) <= %(ptol)s / 100.0 * greatest(a.price_usd, t.price_usd) "
+    "       AND (a.mileage_km IS NULL OR t.mileage_km IS NULL "
+    "            OR abs(a.mileage_km - t.mileage_km) <= %(ktol)s / 100.0 * greatest(a.mileage_km, t.mileage_km)))) "
+)
+
+
+async def repost_twins(listing_ids: Iterable[int]) -> list[tuple[int, int]]:
+    """Pairs (listing, twin) where both are among `listing_ids`: the same car listed twice in one batch."""
+    ids = list(dict.fromkeys(listing_ids))
+    if len(ids) < 2:
+        return []
+    async with connection() as cx:
+        rows = await (await cx.execute(
+            "SELECT a.id AS a, t.id AS b FROM listings a JOIN listings t ON t.id > a.id "
+            " WHERE a.id = ANY(%(ids)s) AND t.id = ANY(%(ids)s) AND " + _TWIN,
+            {"ids": ids, "ptol": REPOST_PRICE_TOL_PCT, "ktol": REPOST_KM_TOL_PCT})).fetchall()
+    return [(r["a"], r["b"]) for r in rows]
+
+
+async def alerted_twins(user_ids: Iterable[str], listing_ids: Iterable[int]) -> set[tuple[str, int]]:
+    """(user, listing) of these where the user already got a new_match or opportunity alert
+    (not a skipped one) about another listing that is the same car, whatever that listing's status."""
+    users, ids = list(dict.fromkeys(user_ids)), list(dict.fromkeys(listing_ids))
+    if not users or not ids:
+        return set()
+    async with connection() as cx:
+        rows = await (await cx.execute(
+            "SELECT DISTINCT n.user_id::text AS user_id, a.id AS listing_id "
+            "  FROM listings a JOIN listings t ON t.id <> a.id AND " + _TWIN +
+            "  JOIN notifications n ON n.listing_id = t.id "
+            " WHERE a.id = ANY(%(ids)s) AND n.user_id = ANY(%(users)s::uuid[]) "
+            "   AND n.kind IN ('new_match', 'opportunity') AND n.status <> 'skipped'",
+            {"ids": ids, "users": users, "ptol": REPOST_PRICE_TOL_PCT, "ktol": REPOST_KM_TOL_PCT})).fetchall()
+    return {(r["user_id"], r["listing_id"]) for r in rows}
+
+
 async def sent_today(user_ids: Iterable[str], since: datetime) -> dict[str, int]:
     """Immediate alerts per user since `since` (the start of the day, ART):
     distinct dedupe keys, so one alert on three channels counts once. Alerts

@@ -5,8 +5,9 @@ import { MatchAuditBoard } from "@/components/admin/match-audit-board";
 import { Card } from "@/components/admin/dash";
 import { PageHeader, Stat, TextLink } from "@/components/admin/ui";
 import {
-  byLevel, bySource, byWeek, overall, parseQueue, parseStats, progress, SAMPLE_SIZE, shareText, topReasons,
+  byLevel, bySource, byWeek, overall, parseQueue, parseStats, progress, reviewerCounts, SAMPLE_SIZE, shareText, topReasons,
 } from "@/lib/admin-match-audit";
+import { currentUser } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const metadata: Metadata = { title: "Auditoría de matches" };
@@ -19,12 +20,14 @@ export default async function MatchAuditPage() {
     admin.rpc("admin_match_review_stats", { p_weeks: 12 }),
     admin.rpc("admin_match_review_week", {}),
   ]);
+  const viewerId = (await currentUser())?.id ?? null;
   const items = parseQueue(queueRes.data);
   const stats = parseStats(statsRes.data);
   const week = typeof weekRes.data === "string" ? weekRes.data : null;
   const failed = queueRes.error || statsRes.error;
 
   const { done, total } = progress(items);
+  const counts = reviewerCounts(items);
   const weeks = byWeek(stats.rows);
   const current = weeks.find((w) => w.key === week);
   const windowRows = stats.rows;
@@ -87,10 +90,15 @@ export default async function MatchAuditPage() {
             <p className="text-xs text-muted-foreground" data-testid="audit-summary">
               {total ? `${done} de ${total} revisados.` : "Todavía no se sorteó la muestra de esta semana."}
             </p>
+            {done ? (
+              <p className="text-xs text-muted-foreground" data-testid="audit-reviewers">
+                Quién revisó: {counts.person} persona{counts.person === 1 ? "" : "s"} · {counts.automated} automática{counts.automated === 1 ? "" : "s"} · {counts.unknown} sin declarar
+              </p>
+            ) : null}
           </div>
           <DrawButton have={total} target={SAMPLE_SIZE} />
         </div>
-        {items.length ? <MatchAuditBoard initial={items} /> : null}
+        {items.length ? <MatchAuditBoard initial={items} viewerId={viewerId} /> : null}
       </section>
     </>
   );

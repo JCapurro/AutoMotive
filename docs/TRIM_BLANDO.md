@@ -11,7 +11,7 @@ Si una búsqueda **nombra versión** (`filters.trims` no vacío) y **no es estri
 - El score no cambia (sigue siendo el mismo número, para ordenar); solo el nivel. Si otro tope ya lo dejaba más abajo, se queda donde estaba.
 - **f3 (sombra)**: el tope aplica al f2 que decide y f3 lo refleja sin cambiar su modo: `score_breakdown.shadow_f3.level` también queda en `match` y `shadow_f3.trim.capped` dice si el tope movió su nivel (`level_uncapped` guarda el de antes). `mode`, `params` y la medición de la sombra no se tocan.
 
-Dónde: `worker/intelligence/matching.py` (`other_trim_soft`), `scoring.py` (el tope y `score_breakdown.trim_cap`), `f3.py` (`trim_cap`), `config.py` (`trim_soft_cap`), `supabase/migrations/20270113120000_trim_soft_cap.sql` (la fila y el orden de `search_results`), `web/lib/other-version.ts` y `web/components/app/listing-card.tsx` (la etiqueta).
+Dónde: `worker/intelligence/matching.py` (`other_trim_soft`), `scoring.py` (el tope y `score_breakdown.trim_cap`), `f3.py` (`trim_cap`), `config.py` (`trim_soft_cap`), `supabase/migrations/20270115120000_trim_soft_cap.sql` (la fila y el orden de `search_results`), `web/lib/other-version.ts` y `web/components/app/listing-card.tsx` (la etiqueta).
 
 ## Interruptor y vuelta atrás
 
