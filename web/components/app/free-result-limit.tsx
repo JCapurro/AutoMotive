@@ -8,7 +8,7 @@ import { joinWaitlist, trackQuotaPopup } from "@/app/app/pro/actions";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { analyticsEvent } from "@/lib/google-analytics";
-import { pixel } from "@/lib/meta-pixel";
+import { paywallPixel, pixel } from "@/lib/meta-pixel";
 import { CUSTOM_PLAN, OFFER_DAYS, PASS_GUARANTEE, PLAN_COPY, PLAN_NAMES, planPrice, proSummary, type PassOffer, type PlanCaps, type ProOffer, type WaitlistPlan } from "@/lib/pro";
 import { cn } from "@/lib/utils";
 import { ProductFeedback } from "@/components/app/product-feedback";
@@ -138,6 +138,7 @@ export function FreeResultLimit({ limit, profileId, opportunities = 0, ...checko
       // No storage (private mode): count it every time rather than never.
     }
     void trackQuotaPopup("viewed", profileId);
+    paywallPixel("quota_popup", profileId);
   }, [open, profileId]);
   function changeOpen(next: boolean) {
     // Closing without having picked a plan is the signal; picking one navigates away.

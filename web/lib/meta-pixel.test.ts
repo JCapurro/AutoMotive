@@ -1,4 +1,4 @@
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 
 import { trackingAllowed, untrackedPath } from "@/lib/meta-pixel";
 
@@ -20,4 +20,22 @@ it("keeps tracking off the pages whose URL carries a secret", () => {
   expect(untrackedPath("/")).toBe(false);
   expect(untrackedPath("/app/searches/new")).toBe(false);
   expect(untrackedPath("/bajas")).toBe(false);
+});
+
+it("sends the payment screen as a custom event, one id per surface and search", async () => {
+  vi.resetModules();
+  vi.stubEnv("NEXT_PUBLIC_META_PIXEL_ID", "123");
+  const fbq = vi.fn();
+  vi.stubGlobal("window", { fbq, setTimeout });
+  try {
+    const { paywallPixel } = await import("@/lib/meta-pixel");
+    paywallPixel("sheet", 42);
+    paywallPixel("quota_popup", 7);
+    expect(fbq).toHaveBeenNthCalledWith(1, "trackCustom", "PaywallViewed", { content_name: "sheet" }, { eventID: "paywall:sheet:42" });
+    expect(fbq).toHaveBeenNthCalledWith(2, "trackCustom", "PaywallViewed", { content_name: "quota_popup" }, { eventID: "paywall:quota_popup:7" });
+  } finally {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  }
 });

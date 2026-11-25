@@ -10,7 +10,7 @@ import { startPayment } from "@/app/app/pro/billing-actions";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { analyticsEvent } from "@/lib/google-analytics";
-import { pixel } from "@/lib/meta-pixel";
+import { paywallPixel, pixel } from "@/lib/meta-pixel";
 import { OFFER_DAYS, PASS_GUARANTEE, PLAN_COPY, PLAN_NAMES, planPrice, type PassOffer, type ProOffer } from "@/lib/pro";
 import { cardLead, cardTitle, COMPLETE_BADGE, COMPLETE_STRIP_BUTTON, completeKeepLabel, completeLead, completePayLabel, completeStripText, completeTitle, keepLabel, NOTICE_KEEP_LABEL, noticeSheetLead, noticeSheetTitle, noticeStripText, opensSheet, payLabel, seeAllLabel, type Segment, sheetLead, sheetTitle, stripText, type TrialOffer, type TrialOfferSurface } from "@/lib/trial-offer";
 import { cn } from "@/lib/utils";
@@ -69,6 +69,7 @@ function recordView(profileId: number, surface: TrialOfferSurface, offer: TrialO
     // No storage (private mode): count it every time rather than never.
   }
   void trackTrialOffer("viewed", profileId, surface, eventCounts(offer, complete));
+  paywallPixel(surface, profileId);
 }
 
 function Marked({ segments, className = "mark font-semibold text-foreground" }: { segments: Segment[]; className?: string }) {
