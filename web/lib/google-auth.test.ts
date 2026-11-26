@@ -4,7 +4,8 @@ import { NextRequest } from "next/server";
 const mocks = vi.hoisted(() => ({
   fetch: vi.fn(), signInWithOAuth: vi.fn(), exchangeCodeForSession: vi.fn(), afterSignIn: vi.fn(), completeWithGoogle: vi.fn(),
 }));
-vi.mock("@/lib/env", () => ({ supabaseUrl: "https://auth.example.com", supabaseAnonKey: "public-key" }));
+vi.mock("server-only", () => ({}));
+vi.mock("@/lib/env", () =>({ supabaseUrl: "https://auth.example.com", supabaseAnonKey: "public-key" }));
 vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ auth: mocks }) }));
 vi.mock("@/lib/signup", () => ({ afterSignIn: mocks.afterSignIn }));
 vi.mock("@/lib/entry-code", () => ({ verifyEntryCode: vi.fn() }));
