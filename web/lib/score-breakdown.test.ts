@@ -91,10 +91,13 @@ describe("score_breakdown.shadow_f3 in the web", () => {
       expect(files.filter((file) => code(readFileSync(file, "utf-8")).includes(key)).map((file) => path.relative(ROOT, file)), key).toEqual([]);
     }
     const readers = files.filter((file) => readFileSync(file, "utf-8").includes("score_breakdown"));
-    // The listing page (ScoreInWords) and the inspector read it, by COMPONENTS and named keys (guard) only; the
-    // /admin/config hint and lib/types.ts only name it. A new file here needs the same check by hand.
-    expect(readers.map((file) => path.relative(ROOT, file)).sort()).toEqual([
-      "app/admin/config/page.tsx", "app/app/listings/[id]/page.tsx", "components/admin/inspector.tsx", "lib/types.ts",
+    // The listing page (ScoreInWords) and the inspector read it, by COMPONENTS and named keys (guard) only, and
+    // lib/other-version.ts selects trim_cap alone; the /admin/config hint, the card's comment and lib/types.ts
+    // only name it. A new file here needs the same check by hand.
+    // With / on every system: path.relative gives \ on Windows.
+    expect(readers.map((file) => path.relative(ROOT, file).split(path.sep).join("/")).sort()).toEqual([
+      "app/admin/config/page.tsx", "app/app/listings/[id]/page.tsx", "components/admin/inspector.tsx",
+      "components/app/listing-card.tsx", "lib/other-version.ts", "lib/types.ts",
     ]);
     for (const file of readers) {
       const text = code(readFileSync(file, "utf-8"));
