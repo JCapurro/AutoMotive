@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-  blurred, builderPicking, builderPrompt, builderText, EMPTY_BUILDER, feedAgo, feedPlace, HERE, HERO_MODELS, heroBucket, heroModels,
+  blurred, type Builder, builderPicking, builderPrompt, builderText, EMPTY_BUILDER, feedAgo, feedPlace, HERE, HERO_MODELS, heroBucket, heroModels,
   heroVariant, landingHeroConfig, modelLabel, NATIONWIDE, parseLandingFeed, pickBudget, pickModel, pickOther, pickZone, typed,
 } from "./landing-hero";
 import { clearHere, storeHere, takeHere } from "./landing-here";
@@ -124,6 +124,26 @@ describe("the search built by tapping", () => {
     expect(s).toMatchObject({ budget: 0, zone: "", shown: "" });
     expect(builderText(s)).toBe("Busco Ford Focus 2015 en adelante hasta USD 12.500 en AMBA");
     expect(blurred(s)).toBe(s);
+  });
+
+  it("keeps every space as it is typed, key by key", () => {
+    // The box is controlled: each key starts from what it showed after the last one.
+    const type = (s: Builder, keys: string, at = builderText(s).length) => {
+      for (const key of keys) {
+        const text = builderText(s);
+        s = typed(s, text.slice(0, at) + key + text.slice(at));
+        at++;
+      }
+      return s;
+    };
+    expect(builderText(type(EMPTY_BUILDER, "un Gol blanco "))).toBe("un Gol blanco ");
+    expect(builderText(type(pickModel(EMPTY_BUILDER, "Ford Focus"), " 2015"))).toBe("Busco Ford Focus 2015");
+    // In front of the chips' tail, which stays theirs.
+    const s = type(pickBudget(pickModel(EMPTY_BUILDER, "Ford Focus"), 12000), " 2015", "Busco Ford Focus".length);
+    expect(builderText(s)).toBe("Busco Ford Focus 2015 hasta USD 12.000");
+    expect(s.budget).toBe(12000);
+    // A tapped option doesn't double the space left at the end.
+    expect(builderText(pickBudget(type(pickOther(EMPTY_BUILDER), "Peugeot 208 "), 14000))).toBe("Peugeot 208 hasta USD 14.000");
   });
 
   it("shows «cerca de mi ubicación» but never sends it to be read", () => {

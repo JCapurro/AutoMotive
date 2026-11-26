@@ -153,11 +153,15 @@ function tail(s: Pick<Builder, "budget" | "zone">, withHere = true): string {
   return (s.budget ? ` hasta ${usd(s.budget)}` : "") + zone;
 }
 
-const write = (s: Builder): Builder => ({ ...s, shown: s.base.trim() ? tail(s) : "" });
+const write = (s: Builder): Builder => ({ ...s, base: s.base.trimEnd(), shown: s.base.trim() ? tail(s) : "" });
 
-/** What the box shows. */
+/**
+ * What the box shows. The box is controlled, so `base` goes in as typed:
+ * trimming it here would swallow every space the moment it is typed.
+ */
 export function builderText(s: Builder): string {
-  return s.base.trim() ? s.base.trimEnd() + s.shown : "";
+  if (!s.shown) return s.base;
+  return s.base.trim() ? s.base + s.shown : "";
 }
 
 /**
